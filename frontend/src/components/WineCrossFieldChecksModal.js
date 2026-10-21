@@ -49,6 +49,8 @@ function WineCrossFieldChecksModal({ apiFetch, onClose }) {
   const [pendingUndo, setPendingUndo] = useState(null); // { wine } — last "Looks fine"
   const [successMsg, setSuccessMsg] = useState(null);
   const successTimer = useRef(null);
+  // Net rows this session has removed from the outstanding set (see fetchPage).
+  const resolvedDelta = useRef(0);
 
   const showSuccess = (msg) => {
     clearTimeout(successTimer.current);
@@ -61,7 +63,15 @@ function WineCrossFieldChecksModal({ apiFetch, onClose }) {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page: p, limit: PAGE_SIZE });
+      // Address by explicit offset, not page (as WineLowConfidenceModal does).
+      // In the default view a row leaves the set the moment it is cleared, so
+      // the set shrinks underneath us: a fixed page*limit offset would step
+      // over the rows that shifted up. Subtracting the rows cleared keeps the
+      // offset on the first row this session has not seen. (With
+      // includeCleared the set never shrinks.)
+      const drained = includeCleared ? 0 : resolvedDelta.current;
+      const offset = Math.max(0, (p - 1) * PAGE_SIZE - drained);
+      const params = new URLSearchParams({ offset, limit: PAGE_SIZE });
       if (checkFilter) params.set('check', checkFilter);
       if (includeCleared) params.set('includeCleared', '1');
       const res = await adminGetCrossFieldChecks(apiFetch, params);
@@ -87,6 +97,11 @@ function WineCrossFieldChecksModal({ apiFetch, onClose }) {
       setLoading(false);
     }
   }, [apiFetch, checkFilter, includeCleared]);
+
+  // A different rule or the audit view is a different set: the drain counter
+  // from the previous one no longer describes it. Declared before the fetch
+  // effect so the first fetch of the new set already reads 0.
+  useEffect(() => { resolvedDelta.current = 0; }, [checkFilter, includeCleared]);
 
   useEffect(() => { fetchPage(page); }, [fetchPage, page]);
 
@@ -125,7 +140,7 @@ function WineCrossFieldChecksModal({ apiFetch, onClose }) {
         showSuccess(t('admin.wines.crossField.cleared', { name: wine.name }));
         setPendingUndo({ wine });
         if (includeCleared) fetchPage(page); // audit view keeps the row, now badged
-        else removeRow(wine._id);
+        else { resolvedDelta.current += 1; removeRow(wine._id); }
       } else {
         setRowError(wine._id, data.error || `Failed (${res.status})`);
       }
@@ -145,6 +160,8 @@ function WineCrossFieldChecksModal({ apiFetch, onClose }) {
       const res = await adminUnclearCrossChecks(apiFetch, [wine._id], checks);
       if (res.ok) {
         setPendingUndo(null);
+        // The row is back in the set: give back the drain its clear took.
+        if (!includeCleared) resolvedDelta.current = Math.max(0, resolvedDelta.current - 1);
         fetchPage(page);
       } else {
         // Row may already be gone from the list, so surface at modal level —

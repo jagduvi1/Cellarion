@@ -15,6 +15,7 @@ vi.mock('react-i18next', () => ({
 
 const {
   adminGetProducerInNameWines,
+  adminStripProducerFromName,
   adminVerifyWineChecks,
   adminUnverifyWineChecks,
 } = await import('../api/admin');
@@ -107,7 +108,7 @@ test('the rule picker scopes the fetch with ?check=', async () => {
   await waitFor(() => {
     const lastParams = adminGetProducerInNameWines.mock.calls.at(-1)[1];
     expect(lastParams.get('check')).toBe('name-equals-producer-estate.v1');
-    expect(lastParams.get('page')).toBe('1');
+    expect(lastParams.get('offset')).toBe('0');
   });
 });
 
@@ -129,6 +130,59 @@ test('the audit checkbox requests includeVerified=1 and cleared rows swap to Unv
   expect(await screen.findByText('admin.wines.producerInName.unverifyBtn')).toBeInTheDocument();
   expect(screen.getByText('admin.wines.producerInName.verifiedBadge')).toBeInTheDocument();
   expect(screen.queryByText('admin.wines.producerInName.verifyBtn')).not.toBeInTheDocument();
+});
+
+// A full first page, so "Next" is reachable and the drain is observable.
+const fullPage = () => ({
+  ...PAYLOAD,
+  wines: Array.from({ length: 50 }, (_, i) => ({ ...OPUS, _id: `w${i}`, proposedName: `Proposed ${i}` })),
+  total: 120,
+  pages: 3,
+});
+
+test('paging after resolving rows offsets by the rows drained, not by a fixed page size', async () => {
+  adminGetProducerInNameWines.mockResolvedValue(ok(fullPage()));
+  adminVerifyWineChecks.mockResolvedValue(ok({ updated: 1, notFlagged: [] }));
+  renderModal();
+
+  await screen.findAllByText('admin.wines.producerInName.verifyBtn');
+  expect(adminGetProducerInNameWines.mock.calls.at(-1)[1].get('offset')).toBe('0');
+
+  // Two rows leave the flagged set, shifting everything after them up by 2.
+  fireEvent.click(screen.getAllByText('admin.wines.producerInName.verifyBtn')[0]);
+  await waitFor(() => expect(adminVerifyWineChecks).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getAllByText('admin.wines.producerInName.verifyBtn')[0]);
+  await waitFor(() => expect(adminVerifyWineChecks).toHaveBeenCalledTimes(2));
+
+  fireEvent.click(screen.getByText('common.next'));
+
+  // A page-number offset would be 50 and skip the two rows now at 48 and 49.
+  await waitFor(() =>
+    expect(adminGetProducerInNameWines.mock.calls.at(-1)[1].get('offset')).toBe('48'));
+});
+
+test('in the audit view a "Looks fine" keeps the row in the set, a strip still drains it', async () => {
+  adminGetProducerInNameWines.mockResolvedValue(ok(fullPage()));
+  adminVerifyWineChecks.mockResolvedValue(ok({ updated: 1, notFlagged: [] }));
+  adminStripProducerFromName.mockResolvedValue(ok({ wine: { name: 'Proposed 0' } }));
+  renderModal();
+
+  await screen.findAllByText('admin.wines.producerInName.verifyBtn');
+  fireEvent.click(screen.getByRole('checkbox'));
+  await waitFor(() =>
+    expect(adminGetProducerInNameWines.mock.calls.at(-1)[1].get('includeVerified')).toBe('1'));
+  await screen.findAllByText('admin.wines.producerInName.verifyBtn');
+
+  fireEvent.click(screen.getAllByText('admin.wines.producerInName.verifyBtn')[0]);
+  await waitFor(() => expect(adminVerifyWineChecks).toHaveBeenCalledTimes(1));
+  await screen.findAllByText('admin.wines.producerInName.stripBtn');
+  fireEvent.click(screen.getAllByText('admin.wines.producerInName.stripBtn')[0]);
+  await waitFor(() => expect(adminStripProducerFromName).toHaveBeenCalledTimes(1));
+
+  fireEvent.click(screen.getByText('common.next'));
+
+  await waitFor(() =>
+    expect(adminGetProducerInNameWines.mock.calls.at(-1)[1].get('offset')).toBe('49'));
 });
 
 test('reason pills render from the server\'s label-key map', async () => {

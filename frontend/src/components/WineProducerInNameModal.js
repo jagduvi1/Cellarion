@@ -48,6 +48,8 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
   const [pendingUndo, setPendingUndo] = useState(null); // { wine } — last "Looks fine"
   const [successMsg, setSuccessMsg] = useState(null);
   const successTimer = useRef(null);
+  // Net rows this session has removed from the flagged set (see fetchPage).
+  const resolvedDelta = useRef(0);
 
   const showSuccess = (msg) => {
     clearTimeout(successTimer.current);
@@ -60,7 +62,14 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page: p, limit: PAGE_SIZE });
+      // Address by explicit offset, not page (as WineLowConfidenceModal does).
+      // A strip or delete takes the row out of the flagged set, and so does
+      // "Looks fine" in the default view: the set shrinks underneath us, and
+      // a fixed page*limit offset would step over the rows that shifted up.
+      // Subtracting the rows resolved keeps the offset on the first row this
+      // session has not seen.
+      const offset = Math.max(0, (p - 1) * PAGE_SIZE - resolvedDelta.current);
+      const params = new URLSearchParams({ offset, limit: PAGE_SIZE });
       if (checkFilter) params.set('check', checkFilter);
       if (includeVerified) params.set('includeVerified', '1');
       const res = await adminGetProducerInNameWines(apiFetch, params);
@@ -84,6 +93,11 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
       setLoading(false);
     }
   }, [apiFetch, checkFilter, includeVerified]);
+
+  // A different rule or the audit view is a different set: the drain counter
+  // from the previous one no longer describes it. Declared before the fetch
+  // effect so the first fetch of the new set already reads 0.
+  useEffect(() => { resolvedDelta.current = 0; }, [checkFilter, includeVerified]);
 
   useEffect(() => { fetchPage(page); }, [fetchPage, page]);
 
@@ -118,6 +132,7 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
           from: wine.name,
           to: data.wine?.name || wine.proposedName,
         }));
+        resolvedDelta.current += 1;
         removeRow(wine._id);
       } else {
         setRowError(wine._id, data.error || `Failed (${res.status})`);
@@ -143,7 +158,7 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
         showSuccess(t('admin.wines.producerInName.verified', { name: wine.name }));
         setPendingUndo({ wine });
         if (includeVerified) fetchPage(page); // audit view keeps the row, now badged
-        else removeRow(wine._id);
+        else { resolvedDelta.current += 1; removeRow(wine._id); }
       } else {
         setRowError(wine._id, data.error || `Failed (${res.status})`);
       }
@@ -162,6 +177,8 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
       const res = await adminUnverifyWineChecks(apiFetch, [wine._id], wine.checks);
       if (res.ok) {
         setPendingUndo(null);
+        // The row is back in the set: give back the drain its verify took.
+        if (!includeVerified) resolvedDelta.current = Math.max(0, resolvedDelta.current - 1);
         fetchPage(page);
         onChanged?.();
       }
@@ -201,6 +218,7 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         showSuccess(t('admin.wines.producerInName.deleted', { name: wine.name }));
+        resolvedDelta.current += 1;
         removeRow(wine._id);
       } else {
         // Blocked deletes (bottles reference the wine) surface the backend error
