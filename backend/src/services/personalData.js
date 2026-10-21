@@ -25,8 +25,11 @@ const PersonalDataEntry = require('../models/PersonalDataEntry');
 const SavedDashboard = require('../models/SavedDashboard');
 const SavedView = require('../models/SavedView');
 const User = require('../models/User');
+const Bottle = require('../models/Bottle');
+const Cellar = require('../models/Cellar');
 const { isValidId } = require('../utils/validation');
 const { validateValue, validateKeyDefinition, TYPES } = require('../utils/personalDataTypes');
+const { bumpDataVersion } = require('./dataVersion');
 
 // Caps — this is user-writable storage (GDPR data-minimisation + abuse bound).
 const KEYS_PER_USER = 100;
@@ -116,6 +119,176 @@ async function listForBottle(bottle, cellar) {
     bottleEntries: bottleEntries.map(serializeEntry),
     wineEntries: wineEntries.map(serializeEntry),
   };
+}
+
+const idStr = (v) => (v && v._id ? String(v._id) : v ? String(v) : null);
+// What listForBottles reads of an entry: who, which key, where, which vintage, the value.
+const ENTRY_LIST_SELECT = 'author key targetType bottle wineDefinition vintage value createdAt';
+
+/**
+ * listForBottle for many bottles at once — EXACTLY its visibility rules, in a
+ * bounded number of queries whatever the bottle count (two finds with their
+ * key populate, one author lookup), for GET /api/inventory:
+ *  - a bottle's bottle-level entries, by anyone;
+ *  - the wine-level entries on its wine authored by a CURRENT member (or the
+ *    owner) of that bottle's cellar, vintage null or equal to the bottle's.
+ * The wine-level query is one $or arm per cellar (its wines × its members),
+ * so a member's entries are never even read for a cellar they are not in.
+ * Caller has already resolved access to every bottle and cellar passed.
+ *
+ * @param {Array<{ _id, cellar, wineDefinition, vintage }>} bottles  wineDefinition/cellar as ids or populated docs
+ * @param {Array<{ _id, user, members }>} cellars  the cellars those bottles are in
+ * @returns {Promise<Map<string, Array<{ key, type, unit, value, level, by }>>>}  bottle id → entries
+ *   (bottle-level first, then wine-level, each oldest first — the listForBottle order);
+ *   every bottle passed has an entry, [] when nothing is visible.
+ */
+async function listForBottles(bottles, cellars) {
+  const out = new Map();
+  if (!Array.isArray(bottles) || bottles.length === 0) return out;
+  for (const b of bottles) out.set(String(b._id), []);
+
+  const cellarById = new Map((cellars || []).map((c) => [String(c._id), c]));
+  const membersOf = new Map();
+  for (const [id, c] of cellarById) membersOf.set(id, new Set(cellarMemberIds(c).map(String)));
+
+  // Each cellar's wines: the wine-level arm for that cellar reads exactly those.
+  const winesByCellar = new Map();
+  for (const b of bottles) {
+    const cid = idStr(b.cellar);
+    const wid = idStr(b.wineDefinition);
+    if (!wid || !cid || !cellarById.has(cid)) continue;
+    if (!winesByCellar.has(cid)) winesByCellar.set(cid, new Set());
+    winesByCellar.get(cid).add(wid);
+  }
+  const wineArms = [...winesByCellar].map(([cid, wines]) => ({
+    wineDefinition: { $in: [...wines] },
+    author: { $in: [...membersOf.get(cid)] },
+  }));
+
+  const [bottleEntries, wineEntries] = await Promise.all([
+    PersonalDataEntry.find({ bottle: { $in: bottles.map((b) => b._id) } })
+      .select(ENTRY_LIST_SELECT)
+      .sort({ createdAt: 1 })
+      .populate('key', 'name type unit')
+      .lean(),
+    wineArms.length
+      ? PersonalDataEntry.find({ $or: wineArms })
+        .select(ENTRY_LIST_SELECT)
+        .sort({ createdAt: 1 })
+        .populate('key', 'name type unit')
+        .lean()
+      : [],
+  ]);
+
+  // Authors' usernames in one query. Not a populate: the raw author id is
+  // what the member check below compares, exactly as listForBottle's query.
+  const authorIds = [...new Set([...bottleEntries, ...wineEntries].map((e) => idStr(e.author)).filter(Boolean))];
+  const usernames = new Map();
+  if (authorIds.length) {
+    for (const u of await User.find({ _id: { $in: authorIds } }).select('username').lean()) {
+      usernames.set(String(u._id), u.username || null);
+    }
+  }
+
+  const shape = (e) => ({
+    key: e.key.name,
+    type: e.key.type || null,
+    unit: e.key.unit || null,
+    value: e.value,
+    level: e.targetType,
+    by: usernames.get(idStr(e.author)) || null,
+  });
+
+  for (const e of bottleEntries) {
+    // An entry whose key is gone has no name to show (a key with entries
+    // cannot be deleted, so this is a leftover, never a live entry).
+    if (!e.key || !e.key.name) continue;
+    const list = out.get(idStr(e.bottle));
+    if (list) list.push(shape(e));
+  }
+
+  // Wine-level: per bottle, the same three conditions listForBottle queries.
+  const byWine = new Map();
+  for (const e of wineEntries) {
+    if (!e.key || !e.key.name) continue;
+    const wid = idStr(e.wineDefinition);
+    if (!byWine.has(wid)) byWine.set(wid, []);
+    byWine.get(wid).push(e);
+  }
+  for (const b of bottles) {
+    const wid = idStr(b.wineDefinition);
+    const candidates = wid ? byWine.get(wid) : null;
+    if (!candidates) continue;
+    const members = membersOf.get(idStr(b.cellar));
+    if (!members) continue;
+    const vintage = b.vintage || null;
+    const list = out.get(String(b._id));
+    for (const e of candidates) {
+      if (!members.has(idStr(e.author))) continue;
+      if (e.vintage != null && e.vintage !== vintage) continue;
+      list.push(shape(e));
+    }
+  }
+  return out;
+}
+
+/**
+ * Move the data version (services/dataVersion) of everyone whose view of
+ * personal data this write changes, so GET /api/inventory's ETag — and the
+ * other version-keyed caches — move with it. Who that is:
+ *  - the author, always (their own cellars, and the tag of every member of
+ *    a cellar they own includes their version);
+ *  - for bottle-level entries, the owner of each bottle's cellar (every
+ *    member's tag includes the owner's version);
+ *  - for wine-level entries, the owners of every cellar the author is a
+ *    member of — a superset of "the cellars where those entries show".
+ * Never throws: a version that does not move is a refresh that comes at the
+ * tag's max age, never a failed write.
+ *
+ * @param {*} authorId
+ * @param {{ cellarIds?: Array, bottleIds?: Array, wineLevel?: boolean }} audience
+ */
+async function bumpPersonalDataViewers(authorId, { cellarIds = [], bottleIds = [], wineLevel = false } = {}) {
+  try {
+    bumpDataVersion(authorId);
+    const cellars = new Set(cellarIds.map(idStr).filter(Boolean));
+    const bottleList = bottleIds.filter(Boolean);
+    if (bottleList.length) {
+      for (const c of await Bottle.distinct('cellar', { _id: { $in: bottleList } })) if (c) cellars.add(String(c));
+    }
+    const owners = new Set();
+    if (cellars.size) {
+      for (const o of await Cellar.distinct('user', { _id: { $in: [...cellars] } })) if (o) owners.add(String(o));
+    }
+    if (wineLevel) {
+      for (const o of await Cellar.distinct('user', { 'members.user': authorId, deletedAt: null })) if (o) owners.add(String(o));
+    }
+    owners.delete(String(authorId));
+    for (const o of owners) bumpDataVersion(o);
+  } catch (err) {
+    console.error('Personal data version bump failed:', err.message);
+  }
+}
+
+/** bumpPersonalDataViewers' audience for one stored entry (or its raw target refs). */
+function entryAudience(entry) {
+  return entry.targetType === 'wine' || (!entry.bottle && entry.wineDefinition)
+    ? { wineLevel: true }
+    : { bottleIds: [entry.bottle] };
+}
+
+/** The audience of every entry under one key — for a rename, which shows on all of them. */
+async function bumpKeyViewers(userId, keyId) {
+  try {
+    const [bottleIds, wineEntry] = await Promise.all([
+      PersonalDataEntry.distinct('bottle', { key: keyId, targetType: 'bottle' }),
+      PersonalDataEntry.exists({ key: keyId, targetType: 'wine' }),
+    ]);
+    await bumpPersonalDataViewers(userId, { bottleIds, wineLevel: !!wineEntry });
+  } catch (err) {
+    bumpDataVersion(userId);
+    console.error('Personal data version bump failed:', err.message);
+  }
 }
 
 /**
@@ -282,6 +455,9 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
     value: checked.value,
   });
   await entry.populate([{ path: 'key' }, { path: 'author', select: AUTHOR_SELECT }]);
+  await bumpPersonalDataViewers(userId, level === 'wine'
+    ? { wineLevel: true }
+    : { cellarIds: [bottle.cellar], bottleIds: bottle.cellar ? [] : [bottle._id] });
   return { ok: true, entry: serializeEntry(entry), keyCreated };
 }
 
@@ -302,6 +478,7 @@ async function updateEntry(userId, entryId, value) {
   entry.value = checked.value;
   await entry.save();
   await entry.populate('author', AUTHOR_SELECT);
+  await bumpPersonalDataViewers(userId, entryAudience(entry));
   return { ok: true, entry: serializeEntry(entry), prevValue };
 }
 
@@ -311,6 +488,7 @@ async function deleteEntry(userId, entryId) {
   const entry = await PersonalDataEntry.findOneAndDelete({ _id: { $eq: String(entryId) }, author: userId })
     .populate('key');
   if (!entry) return fail('not_found', 'Entry not found');
+  await bumpPersonalDataViewers(userId, entryAudience(entry));
   return {
     ok: true,
     entry: serializeEntry(entry),
@@ -403,6 +581,8 @@ async function updateKey(userId, keyId, { name, unit } = {}) {
     }
     throw err;
   }
+  // The name (and unit) shows on every entry under the key.
+  await bumpKeyViewers(userId, key._id);
   return { ok: true, key: serializeKey(key), prev };
 }
 
@@ -445,6 +625,8 @@ async function deleteKey(userId, keyId) {
     await PersonalDataKey.create({ user: userId, ...definition });
     return fail('in_use', `"${key.name}" received ${late} entr${late === 1 ? 'y' : 'ies'} while being deleted — it was kept`);
   }
+  // An empty key shows nowhere; the author's own version still moves.
+  await bumpPersonalDataViewers(userId);
   return { ok: true, key: serializeKey(key), definition };
 }
 
@@ -452,6 +634,9 @@ module.exports = {
   KEYS_PER_USER,
   ENTRIES_PER_TARGET,
   listForBottle,
+  listForBottles,
+  bumpPersonalDataViewers,
+  bumpKeyViewers,
   createEntry,
   updateEntry,
   deleteEntry,

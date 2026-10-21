@@ -27,7 +27,20 @@ async function unclaim(rowId) {
   await McpActionLog.updateOne({ _id: rowId }, { $set: { reversed: false } }).catch(() => {});
 }
 
-const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
+// An undone personal-data write changes what shared-cellar members see, so
+// it moves their data version like the forward write did (services/
+// personalData.bumpPersonalDataViewers — the inventory ETag). Lazy-required
+// and never throws: a version that does not move must not fail an undo.
+async function bumpPersonalData(userId, audience, keyId = null) {
+  try {
+    const personalData = require('../services/personalData');
+    if (keyId) await personalData.bumpKeyViewers(userId, keyId);
+    else await personalData.bumpPersonalDataViewers(userId, audience);
+  } catch { /* the tag still moves at its max age */ }
+}
+const entryAudienceOf = (level, bottle) => (level === 'wine' ? { wineLevel: true } : { bottleIds: [bottle] });
+
+const CONSUME_REVERSIBLE =['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'lot_update', 'bulk_add', 'arrive', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
@@ -414,6 +427,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
       if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
       const del = await PersonalDataEntry.findOneAndDelete({ _id: d.entryId, author: ctx.user.id });
+      if (del) await bumpPersonalData(ctx.user.id, entryAudienceOf(del.targetType, del.bottle));
       const envelope = {
         summary: `Undid personal data add${del ? ` — "${d.key}" removed` : ' — entry was already gone'}`,
         data: { undone: 'add_personal_data', entry_removed: !!del },
@@ -435,6 +449,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         if (err?.name === 'VersionError') return fail('conflict', 'The entry changed mid-undo — retry.');
         throw err;
       }
+      await bumpPersonalData(ctx.user.id, entryAudienceOf(entry.targetType, entry.bottle));
       const envelope = {
         summary: `Undid personal data update — "${d.key}" restored to ${JSON.stringify(row.prev?.value)}`,
         data: { undone: 'update_personal_data', entry_id: d.entryId, restored: row.prev?.value },
@@ -465,8 +480,9 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         await unclaim(row._id); // failed → let the undo be retried
         throw err;
       }
+      await bumpPersonalData(ctx.user.id, entryAudienceOf(prev.level, prev.bottle));
       const envelope = {
-        summary: `Undid personal data delete — "${d.key}" recreated`,
+        summary: `Undid personal data delete —"${d.key}" recreated`,
         data: { undone: 'delete_personal_data', entry_id: recreated._id },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
@@ -502,8 +518,9 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         if (err?.code === 11000) return fail('conflict', `A key called "${prev.name}" exists again — rename it first, then retry.`);
         throw err;
       }
+      await bumpPersonalData(ctx.user.id, null, key._id);
       const envelope = {
-        summary: `Undid key change — "${key.name}"${restoresUnit ? ` (unit ${JSON.stringify(key.unit || null)})` : ''} restored`,
+        summary: `Undid key change —"${key.name}"${restoresUnit ? ` (unit ${JSON.stringify(key.unit || null)})` : ''} restored`,
         data: { undone: 'update_personal_key', key_id: key._id, restored: { name: key.name, unit: key.unit || null } },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
@@ -527,8 +544,9 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         if (err?.code === 11000) return fail('conflict', `A key called "${prev.name}" exists again; nothing was recreated.`);
         throw err;
       }
+      await bumpPersonalData(ctx.user.id);
       const envelope = {
-        summary: `Undid key delete — "${recreated.name}" recreated`,
+        summary: `Undid key delete —"${recreated.name}" recreated`,
         data: { undone: 'delete_personal_key', key_id: recreated._id },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, detail: { undid: String(row._id) }, result: envelope });

@@ -12,6 +12,7 @@
 jest.mock('../services/personalData', () => ({
   listForBottle: jest.fn(), createEntry: jest.fn(), updateEntry: jest.fn(),
   deleteEntry: jest.fn(), listKeys: jest.fn(), updateKey: jest.fn(), deleteKey: jest.fn(),
+  bumpPersonalDataViewers: jest.fn(), bumpKeyViewers: jest.fn(),
   KEYS_PER_USER: 100, ENTRIES_PER_TARGET: 20,
 }));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), aggregate: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
@@ -181,6 +182,9 @@ describe('update_personal_key / delete_personal_key (ticket 6aa6c95e)', () => {
     }, CTX, okHelpers);
     expect(parse(del)).toMatchObject({ undone: 'delete_personal_key', key_id: KEY_ID });
     expect(PersonalDataKey.create).toHaveBeenCalledWith(expect.objectContaining({ _id: KEY_ID, user: ME, name: 'Falstaff', type: 'decimal', unit: '/100' }));
+    // An undo moves the data version like the forward write (the inventory ETag).
+    expect(svc.bumpKeyViewers).toHaveBeenCalledWith(ME, KEY_ID);
+    expect(svc.bumpPersonalDataViewers).toHaveBeenCalledWith(ME, undefined);
   });
 });
 

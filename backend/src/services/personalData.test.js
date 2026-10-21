@@ -16,7 +16,12 @@ jest.mock('../models/PersonalDataKey', () => ({
 jest.mock('../models/PersonalDataEntry', () => ({
   find: jest.fn(), findOne: jest.fn(), findOneAndDelete: jest.fn(),
   create: jest.fn(), countDocuments: jest.fn(),
+  distinct: jest.fn(async () => []), exists: jest.fn(async () => null),
 }));
+// The data-version bump after a write resolves cellar owners
+// (personalData.listForBottles.test.js pins who is bumped).
+jest.mock('../models/Cellar', () => ({ distinct: jest.fn(async () => []) }));
+jest.mock('../models/Bottle', () => ({ distinct: jest.fn(async () => []) }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/SavedDashboard', () => ({ find: jest.fn() }));
 jest.mock('../models/SavedView', () => ({ find: jest.fn() }));

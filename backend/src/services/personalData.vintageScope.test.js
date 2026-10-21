@@ -15,6 +15,9 @@ jest.mock('../models/PersonalDataEntry', () => {
 });
 jest.mock('../models/PersonalDataKey', () => ({ findOne: jest.fn(), create: jest.fn(), countDocuments: jest.fn(), find: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
+// The data-version bump after a write resolves cellar owners (never a real model here).
+jest.mock('../models/Cellar', () => ({ distinct: jest.fn(async () => []) }));
+jest.mock('../models/Bottle', () => ({ distinct: jest.fn(async () => []) }));
 
 const User = require('../models/User');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
