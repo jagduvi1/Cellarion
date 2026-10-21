@@ -88,11 +88,24 @@ describe('PATCH /api/superadmin/features/:key', () => {
     expect(body.feature.state).toBe('everyone');
     expect(body.notified).toEqual({ announced: 0, thanked: 4 });
     expect(earlyAccess.changeFlag).toHaveBeenCalledWith('pickLists', { state: 'everyone' }, 'admin-1');
-    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'superadmin.feature_flag', { type: 'feature', id: 'pickLists' }, {
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'superadmin.feature_flag', { type: 'feature' }, {
+      key: 'pickLists',
       from: { state: 'beta', forumPath: null },
       to: { state: 'everyone', forumPath: null },
       notified: { announced: 0, thanked: 4 },
     });
+  });
+
+  test('the audit row is one the AuditLog model can store: the flag key is in detail, not in resource.id', async () => {
+    await call('PATCH', '/api/superadmin/features/pickLists', { state: 'everyone' });
+    const [, action, resource, detail] = logAudit.mock.calls[0];
+    // resource.id is an ObjectId on the model; a flag key there failed the
+    // cast and the row was never written.
+    const AuditLog = require('../models/AuditLog');
+    const row = new AuditLog({ action, resource, detail });
+    expect(row.validateSync()).toBeUndefined();
+    expect(row.toObject().resource).toEqual(resource);
+    expect(row.detail.key).toBe('pickLists');
   });
 
   test('a full forum link to this site is saved as its path; one to another site is refused before anything is saved', async () => {

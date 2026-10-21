@@ -301,7 +301,8 @@ registerTool({
       throw err;
     }
 
-    logAudit(ctx.req, 'winelist.entry.add', { wineList: list._id }, { wine: String(wine._id), vintage, via: 'mcp' });
+    // Same resource shape as the REST routes, so the row is findable per list and per cellar.
+    logAudit(ctx.req, 'winelist.entry.add', { type: 'winelist', id: list._id, cellarId: list.cellar }, { wine: String(wine._id), vintage, via: 'mcp' });
     const currency = list.layout?.currency || 'USD';
     const priceBits = [
       args.list_price != null ? `${args.list_price} ${currency}` : 'no bottle price',
@@ -402,7 +403,7 @@ registerTool({
       throw err;
     }
 
-    logAudit(ctx.req, 'winelist.entry.update', { wineList: list._id }, { wine: String(args.wine_id), via: 'mcp' });
+    logAudit(ctx.req, 'winelist.entry.update', { type: 'winelist', id: list._id, cellarId: list.cellar }, { wine: String(args.wine_id), via: 'mcp' });
     const currency = list.layout?.currency || 'USD';
     const envelope = {
       summary: `Updated pricing on "${list.name}" — bottle ${entry.listPrice ?? '—'} ${currency}${entry.byGlass ? `, glass ${entry.glassPrice ?? '—'} ${currency}` : ', not by glass'}`,

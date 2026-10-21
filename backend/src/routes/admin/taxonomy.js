@@ -1304,13 +1304,19 @@ router.get('/bottle-sizes', async (req, res) => {
 router.post('/bottle-sizes/remap', async (req, res) => {
   try {
     const result = await remap(req.body.from, req.body.to);
+    // from/to in detail: resource is a typed sub-document, so keys it does
+    // not know are dropped from the stored row.
     logAudit(req, 'admin.bottleSize.remap',
-      { from: result.from, to: result.to },
-      { modified: result.modified }
+      { type: 'bottleSize' },
+      { from: result.from, to: result.to, modified: result.modified }
     );
     res.json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || 'Remap failed' });
+    // Bad input is the caller's to fix (400, with the reason); anything else
+    // is ours (500, logged, no internals sent back).
+    if (error.status === 400) return res.status(400).json({ error: error.message });
+    console.error('Remap bottle size error:', error);
+    res.status(500).json({ error: 'Remap failed' });
   }
 });
 

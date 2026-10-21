@@ -838,7 +838,10 @@ router.patch('/features/:key', async (req, res) => {
     const result = await earlyAccess.changeFlag(key, patch, req.user.id);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     const { before, after, notified } = result;
-    logAudit(req, 'superadmin.feature_flag', { type: 'feature', id: key }, {
+    // The flag key goes in detail: resource.id is an ObjectId on the model,
+    // and a string there fails the cast, so the row would never be written.
+    logAudit(req, 'superadmin.feature_flag', { type: 'feature' }, {
+      key,
       from: { state: before.state, forumPath: before.forumPath },
       to: { state: after.state, forumPath: after.forumPath },
       notified,

@@ -117,7 +117,8 @@ router.put('/:id/resolve', async (req, res) => {
         throw err;
       }
       searchService.indexWine(wine._id).catch(() => {});
-      applied = { field: report.suggestedField, from: previous, to: report.suggestedValue };
+      // What was stored, after the normalizers above — not the raw suggestion.
+      applied = { field: report.suggestedField, from: previous, to: wine[report.suggestedField] };
       logAudit(req, 'admin.wine.update',
         { type: 'wine', id: wine._id },
         { via: 'wine-report', field: applied.field, from: applied.from, to: applied.to });

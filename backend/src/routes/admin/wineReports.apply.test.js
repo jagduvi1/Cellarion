@@ -79,6 +79,22 @@ describe('resolve with applySuggestion', () => {
     expect(w.name).toMatch(/Sylvaner/);
   });
 
+  test('the response and the audit row report the value that was stored, not the raw suggestion', async () => {
+    const r = report({ suggestedField: 'name', suggestedValue: 'Cave de Ribeauville Sylvaner  Grand 2022' });
+    const w = wine();
+    WineReport.findById.mockResolvedValue(r);
+    WineDefinition.findById.mockResolvedValue(w);
+
+    const res = await resolve({ applySuggestion: true });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(w.name).not.toBe(r.suggestedValue);
+    expect(body.applied).toEqual({ field: 'name', from: 'Sylvaner', to: w.name });
+    const update = logAudit.mock.calls.find(([, action]) => action === 'admin.wine.update');
+    expect(update[3]).toMatchObject({ via: 'wine-report', field: 'name', from: 'Sylvaner', to: w.name });
+  });
+
   test('applies the field, recomputes normalizedKey, saves, reindexes, audits both actions', async () => {
     const r = report();
     const w = wine();

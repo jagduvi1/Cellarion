@@ -261,6 +261,29 @@ describe('update_list_pricing', () => {
   });
 });
 
+describe('audit rows', () => {
+  test('add_to_list and update_list_pricing audit the list and its cellar, as the REST routes do, in a row the model can store', async () => {
+    WineList.findOne.mockResolvedValue(makeList());
+    await tool('add_to_list').handler({ list_id: LIST, wine_id: WINE, vintage: '2019', list_price: 100 }, CTX);
+    WineList.findOne.mockResolvedValue(makeList({
+      autoGroupEntries: [{ wine: WINE, vintage: '2019', bottleSize: '750ml', listPrice: 80, byGlass: false }],
+    }));
+    await tool('update_list_pricing').handler({ list_id: LIST, wine_id: WINE, list_price: 90 }, CTX);
+
+    const rows = logAudit.mock.calls.filter(([, action]) => action.startsWith('winelist.entry.'));
+    expect(rows.map(([, action]) => action)).toEqual(['winelist.entry.add', 'winelist.entry.update']);
+    const AuditLog = require('../models/AuditLog');
+    for (const [, action, resource, detail] of rows) {
+      expect(resource).toEqual({ type: 'winelist', id: LIST, cellarId: oid('c') });
+      // The model's resource is a strict typed sub-document: a key it does
+      // not know is dropped without an error, so compare what it keeps.
+      const row = new AuditLog({ action, resource, detail });
+      expect(row.validateSync()).toBeUndefined();
+      expect(JSON.parse(JSON.stringify(row.toObject().resource))).toEqual({ type: 'winelist', id: LIST, cellarId: oid('c') });
+    }
+  });
+});
+
 describe('undo (revertLedgerRow branches)', () => {
   const helpers = { ok: (summary, data) => ({ ok: true, summary, data }), fail: (code, message) => ({ ok: false, code, message }) };
   const row = (action, extra = {}) => ({

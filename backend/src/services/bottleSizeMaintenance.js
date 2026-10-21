@@ -44,11 +44,18 @@ async function normalizeAll() {
   return { changed, unparseable };
 }
 
+/** An input error the route answers with 400 and this message. */
+function badInput(message) {
+  const err = new Error(message);
+  err.status = 400;
+  return err;
+}
+
 /** Bulk-remap one stored value to a canonical code (admin manual fix). */
 async function remap(from, to) {
-  if (typeof from !== 'string' || from === '') throw new Error('"from" value is required');
+  if (typeof from !== 'string' || from === '') throw badInput('"from" value is required');
   const target = normalizeBottleSize(to);
-  if (!target) throw new Error('"to" must be a valid size (e.g. 750ml or 1.5L)');
+  if (!target) throw badInput('"to" must be a valid size (e.g. 750ml or 1.5L)');
   const res = await Bottle.updateMany({ bottleSize: from }, { $set: { bottleSize: target } });
   return { from, to: target, modified: res.modifiedCount || 0 };
 }
