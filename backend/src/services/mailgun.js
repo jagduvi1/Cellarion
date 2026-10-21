@@ -1,5 +1,6 @@
 const FormData = require('form-data');
 const Mailgun = require('mailgun.js');
+const { isHostedCellarion } = require('../config/hostedInstance');
 
 const EMAIL_VERIFICATION_ENABLED = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
 
@@ -21,6 +22,18 @@ if (EMAIL_VERIFICATION_ENABLED) {
 
 const DOMAIN = process.env.MAILGUN_DOMAIN;
 const FROM = process.env.MAILGUN_FROM || `Cellarion <no-reply@${DOMAIN}>`;
+
+/**
+ * Reply-To for the emails that promise a person reads the answer (support
+ * answers, the supporter thank-you). SUPPORT_REPLY_TO when the install sets
+ * it. Otherwise the hosted inbox, but on the hosted cellarion.app only: any
+ * other install answers with its own From address, so its users' replies
+ * stay on its own domain and never reach the hosted service.
+ */
+function supportReplyTo() {
+  if (process.env.SUPPORT_REPLY_TO) return process.env.SUPPORT_REPLY_TO;
+  return isHostedCellarion() ? 'info@cellarion.app' : FROM;
+}
 
 /**
  * Send an email verification link to a newly registered user.
@@ -536,7 +549,7 @@ async function sendSecurityAlertEmail(toEmail, trigger) {
  *                                      the wrong thing after a tier switch
  */
 async function sendSupporterThankYou(toEmail, username, tier) {
-  const replyTo = process.env.SUPPORT_REPLY_TO || 'info@cellarion.app';
+  const replyTo = supportReplyTo();
 
   await mg.messages.create(DOMAIN, {
     from: FROM,
@@ -606,7 +619,7 @@ async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticket
   await mg.messages.create(DOMAIN, {
     from: FROM,
     to: [toEmail],
-    'h:Reply-To': process.env.SUPPORT_REPLY_TO || 'info@cellarion.app',
+    'h:Reply-To': supportReplyTo(),
     subject: `Reply to your support ticket: ${topic}`,
     text: [
       `Hello ${recipientName},`,

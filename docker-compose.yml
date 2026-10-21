@@ -149,6 +149,7 @@ services:
       - MAILGUN_DOMAIN=${MAILGUN_DOMAIN:-}
       - MAILGUN_FROM=${MAILGUN_FROM:-}
       - MAILGUN_API_URL=${MAILGUN_API_URL:-}
+      - SUPPORT_REPLY_TO=${SUPPORT_REPLY_TO:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
       # Self-hosted AI provider (issue #698) — optional; unset keeps Anthropic.

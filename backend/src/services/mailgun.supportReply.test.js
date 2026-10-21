@@ -37,7 +37,8 @@ test('sends the answer itself, a link back to the ticket, a Reply-To and the uns
   expect(domain).toBe('mg.test');
   expect(msg.to).toEqual(['anna@example.com']);
   expect(msg.subject).toBe('Reply to your support ticket: Import from CellarTracker?');
-  expect(msg['h:Reply-To']).toBe('info@cellarion.app');
+  // A non-hosted install answers with its own From (mailgun.replyTo.test.js).
+  expect(msg['h:Reply-To']).toBe('Cellarion <no-reply@mg.test>');
   expect(msg.text).toContain('Yes, it can.\n1. Create a cellar.');
   expect(msg.text).toContain('https://cellarion.test/support');
   expect(msg.text).toContain('https://cellarion.test/api/users/unsubscribe?token=tok-u1');
