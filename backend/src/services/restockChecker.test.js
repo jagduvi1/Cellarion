@@ -131,6 +131,29 @@ test('a wine without a stored vector is embedded once, with the active model', a
   expect(vectorStore.search.mock.calls[0][0]).toEqual([0.5, 0.5, 0.5]);
 });
 
+// A consume made with an API or OAuth token (Home Assistant, a connected AI)
+// must never spend AI money (Johan, 2026-10-21): bottleOps passes
+// storedVectorOnly, and then a wine without a stored vector is skipped
+// silently instead of embedded.
+test('stored vectors only (a token consume): no vector → no embedding call, no alert', async () => {
+  vectorStore.getVector.mockResolvedValue(null);
+  embedding.embedSingle.mockResolvedValue([0.5, 0.5, 0.5]);
+  await checkRestockGap('u1', 'b1', 'c1', { storedVectorOnly: true });
+  expect(vectorStore.getVector).toHaveBeenCalledTimes(1);
+  expect(embedding.embedSingle).not.toHaveBeenCalled();
+  expect(embedding.buildEmbeddingText).not.toHaveBeenCalled();
+  expect(vectorStore.search).not.toHaveBeenCalled();
+  expect(RestockAlert.create).not.toHaveBeenCalled();
+});
+
+test('stored vectors only, with a stored vector: the check runs as usual — still no embedding call', async () => {
+  vectorStore.search.mockResolvedValueOnce([]).mockResolvedValueOnce([{ wineDefinitionId: 'wBarbaresco', vintage: '2016', score: 0.86 }]);
+  await checkRestockGap('u1', 'b1', 'c1', { storedVectorOnly: true });
+  expect(vectorStore.search.mock.calls[0][0]).toBe(VECTOR);
+  expect(embedding.embedSingle).not.toHaveBeenCalled();
+  expect(RestockAlert.create).toHaveBeenCalledWith(expect.objectContaining({ wine: 'wBarolo', similarWineIds: ['wBarbaresco'] }));
+});
+
 test('an active alert for the same wine is not duplicated', async () => {
   vectorStore.search.mockResolvedValueOnce([]).mockResolvedValueOnce([{ wineDefinitionId: 'wX', vintage: 'NV', score: 0.8 }]);
   RestockAlert.findOne.mockResolvedValue({ _id: 'existing' });

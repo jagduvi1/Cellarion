@@ -24,8 +24,14 @@ const TOP_K = 10;
  *  4. Save the alert and send a notification suggesting they restock
  *
  * Fire-and-forget — errors are caught and logged, never thrown.
+ *
+ * storedVectorOnly: compare with the wine's STORED vector and skip the check
+ * when it has none — never a paid embedding call. Set for every consume made
+ * with an API or OAuth token (Home Assistant, a connected AI): nothing a
+ * token can reach may spend AI money (Johan, 2026-10-21). A wine without a
+ * vector simply gets no restock suggestion from that consume.
  */
-async function runCheck(userId, bottleId, cellarId) {
+async function runCheck(userId, bottleId, cellarId, { storedVectorOnly = false } = {}) {
   try {
     // Check if embedding infra is available
     if (!embedding || !vectorStore) return;
@@ -51,6 +57,7 @@ async function runCheck(userId, bottleId, cellarId) {
 
     // The drunk wine's stored vector (free), else embed it (one Voyage call).
     let queryVector = await vectorStore.getVector(wine._id, vintage, { model, indexVersion });
+    if (!queryVector && storedVectorOnly) return;
     if (!queryVector) {
       const searchText = embedding.buildEmbeddingText(wine, vintage);
       queryVector = await embedding.embedSingle(searchText, { model });
@@ -176,10 +183,14 @@ const MAX_QUEUED = 500;
 let queue = Promise.resolve();
 let queued = 0;
 
-function checkRestockGap(userId, bottleId, cellarId) {
+/**
+ * Queue a restock-gap check (runCheck). opts.storedVectorOnly: never embed —
+ * see runCheck; consumeBottle sets it for token-authenticated requests.
+ */
+function checkRestockGap(userId, bottleId, cellarId, opts = {}) {
   if (queued >= MAX_QUEUED) return Promise.resolve();
   queued += 1;
-  const run = queue.then(() => runCheck(userId, bottleId, cellarId)).finally(() => { queued -= 1; });
+  const run = queue.then(() => runCheck(userId, bottleId, cellarId, opts)).finally(() => { queued -= 1; });
   queue = run.catch(() => {});
   return run;
 }

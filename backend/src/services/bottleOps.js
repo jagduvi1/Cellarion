@@ -124,9 +124,12 @@ async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingSca
   // un-cached (wine, vintage) pair this fires a paid Voyage embedding call,
   // which would breach the demo's "zero AI spend" guarantee.
   // skipRestockCheck: the bulk route runs one check per wine+vintage itself.
+  // A consume made with an API or OAuth token (req.apiToken — Home Assistant,
+  // a connected AI) compares stored vectors only and never embeds: nothing a
+  // token can reach may spend AI money. The web app's session is unchanged.
   if (reason === 'drank' && !skipRestockCheck && !req?.user?.isDemo) {
     const { checkRestockGap } = require('./restockChecker');
-    checkRestockGap(req.user.id, bottle._id, bottle.cellar).catch(() => {});
+    checkRestockGap(req.user.id, bottle._id, bottle.cellar, { storedVectorOnly: !!req?.apiToken }).catch(() => {});
   }
 
   return { bottle };

@@ -1573,8 +1573,10 @@ router.post('/bulk', async (req, res) => {
     // fires a paid embedding call.
     if (action === 'consume' && consumeArgs.reason === 'drank' && !req.user.isDemo && restockPairs.size) {
       const { checkRestockGap } = require('../services/restockChecker');
+      // Same no-AI rule for a token as consumeBottle (this route is not on
+      // the token allowlist today; the option keeps it safe if it ever is).
       for (const b of restockPairs.values()) {
-        checkRestockGap(req.user.id, b._id, b.cellar).catch(() => {});
+        checkRestockGap(req.user.id, b._id, b.cellar, { storedVectorOnly: !!req.apiToken }).catch(() => {});
       }
     }
 

@@ -62,11 +62,21 @@ describe('consumeBottle', () => {
     expect(checkRestockGap).not.toHaveBeenCalled();
 
     await consumeBottle(freshBottle(), { reason: 'drank' }, REQ);
-    expect(checkRestockGap).toHaveBeenCalledWith('u1', 'b1', 'c1');
+    expect(checkRestockGap).toHaveBeenCalledWith('u1', 'b1', 'c1', { storedVectorOnly: false });
 
     checkRestockGap.mockClear();
     await consumeBottle(freshBottle(), { reason: 'drank' }, { user: { id: 'd1', isDemo: true }, headers: {} });
     expect(checkRestockGap).not.toHaveBeenCalled();
+  });
+
+  // Nothing a token can reach may spend AI money (Johan, 2026-10-21): a
+  // consume from Home Assistant or a connected AI (an API or OAuth token —
+  // req.apiToken) compares stored vectors only and never embeds. A session
+  // consume from the web app keeps the full check.
+  test('a token consume asks the restock check for stored vectors only', async () => {
+    const TOKEN_REQ = { ...REQ, apiToken: { id: 't1', scopes: ['consume'] } };
+    await consumeBottle(freshBottle(), { reason: 'drank' }, TOKEN_REQ);
+    expect(checkRestockGap).toHaveBeenCalledWith('u1', 'b1', 'c1', { storedVectorOnly: true });
   });
 });
 
