@@ -7,15 +7,17 @@
  *
  * "Unused" means no reference from ANY of: Bottle, WishlistItem, WineList
  * entries (sections + auto), Discussion, RestockAlert, JournalEntry,
- * Recommendation, Review, BottleImage, PriceTrackingRequest. A wine on a
- * wishlist is by definition not owned as a bottle — checking bottles alone
- * would delete exactly those wines and orphan the wishlist entries.
+ * Recommendation, Review, BottleImage, PriceTrackingRequest,
+ * PersonalDataEntry. A wine on a wishlist is by definition not owned as a
+ * bottle — checking bottles alone would delete exactly those wines and orphan
+ * the wishlist entries.
  *
  * For genuinely unused wines, also cascades:
  *   - WineVintageProfile / WineVintagePrice records
  *   - WineEmbedding rows (they hold the vectors for similarity search)
  *   - CommunityWinePrice rows
  *   - WineNotDuplicate pairs involving the wine
+ *   - RegistryDataValue rows (the wine's registry data)
  *   - Meilisearch index entries
  *
  * DRY-RUN BY DEFAULT — prints what would be deleted. Pass --apply to delete.
@@ -34,6 +36,8 @@ const WineEmbedding = require('../models/WineEmbedding');
 const CommunityWinePrice = require('../models/CommunityWinePrice');
 const WineNotDuplicate = require('../models/WineNotDuplicate');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+const PersonalDataEntry = require('../models/PersonalDataEntry');
+const RegistryDataValue = require('../models/RegistryDataValue');
 const Bottle = require('../models/Bottle');
 const DeletedBottle = require('../models/DeletedBottle');
 const WishlistItem = require('../models/WishlistItem');
@@ -75,6 +79,8 @@ const WINE_REF_SOURCES = [
   [Review, 'wineDefinition'],
   [BottleImage, 'wineDefinition'],
   [PriceTrackingRequest, 'wineDefinition'],
+  // A member's wine-level personal data entries: their data keeps the wine.
+  [PersonalDataEntry, 'wineDefinition'],
 ];
 
 async function run() {
@@ -105,6 +111,7 @@ async function run() {
       [WineEmbedding, { wineDefinition: { $in: unusedIds } }, 'embeddings'],
       [CommunityWinePrice, { wineDefinition: { $in: unusedIds } }, 'community prices'],
       [WineNotDuplicate, { $or: [{ wineA: { $in: unusedIds } }, { wineB: { $in: unusedIds } }] }, 'not-duplicate pairs'],
+      [RegistryDataValue, { wineDefinition: { $in: unusedIds } }, 'registry data values'],
     ];
     for (const [Model, filter, label] of cascade) {
       const r = await Model.deleteMany(filter);

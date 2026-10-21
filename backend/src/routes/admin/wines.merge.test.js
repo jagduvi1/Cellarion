@@ -7,11 +7,9 @@
  * so "delete the source last" is what makes a failed merge safe to re-run.
  *
  * Every model write is recorded in `calls` in the order it was made, so the
- * ordering is asserted, not assumed.
- *
- * Not pinned here on purpose: a known defect with a fix of its own, which
- * adds its cases to this file — the PersonalDataEntry / RegistryDataValue
- * rows a merge or delete leaves behind.
+ * ordering is asserted, not assumed. utils/wineRefs lists every model that
+ * references a wine; a test below checks that reassignWineRefs touches each
+ * one it claims to handle.
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -44,6 +42,8 @@ jest.mock('../../models/JournalEntry', () => mockModel('updateMany', 'countDocum
 jest.mock('../../models/Recommendation', () => mockModel('updateMany', 'countDocuments'));
 jest.mock('../../models/RestockAlert', () => mockModel('updateMany', 'deleteMany'));
 jest.mock('../../models/WineRequest', () => mockModel('updateMany'));
+jest.mock('../../models/PersonalDataEntry', () => mockModel('distinct', 'updateMany', 'countDocuments'));
+jest.mock('../../models/RegistryDataValue', () => mockModel('find', 'updateMany', 'updateOne', 'deleteOne', 'deleteMany'));
 jest.mock('../../models/Country', () => mockModel('findById'));
 jest.mock('../../services/dataVersion', () => ({ bumpDataVersion: jest.fn() }));
 jest.mock('../../services/wineCorrectionNotify', () => ({ closePendingForWine: jest.fn() }));
@@ -83,11 +83,14 @@ const MODELS = {
   Recommendation: require('../../models/Recommendation'),
   RestockAlert: require('../../models/RestockAlert'),
   WineRequest: require('../../models/WineRequest'),
+  PersonalDataEntry: require('../../models/PersonalDataEntry'),
+  RegistryDataValue: require('../../models/RegistryDataValue'),
 };
 const {
   WineDefinition, Bottle, DeletedBottle, BottleImage, WineVintageProfile, WineVintagePrice, WineReport,
   Review, Discussion, DiscussionReply, WineEmbedding, WineNotDuplicate, WineList, WishlistItem,
   PriceTrackingRequest, PriceTrackingSkip, CommunityWinePrice, JournalEntry, Recommendation, RestockAlert, WineRequest,
+  PersonalDataEntry, RegistryDataValue,
 } = MODELS;
 const { bumpDataVersion } = require('../../services/dataVersion');
 const { closePendingForWine } = require('../../services/wineCorrectionNotify');
@@ -561,7 +564,7 @@ describe('DELETE /api/admin/wines/:id', () => {
       error: 'Cannot delete wine. User content references it (2 bottles, 1 reviews, 1 wineLists). Merge it into another wine instead.',
       references: {
         bottles: 2, recentlyDeletedBottles: 0, wishlistItems: 0, reviews: 1, discussions: 0,
-        discussionReplies: 0, journalEntries: 0, wineLists: 1, recommendations: 0,
+        discussionReplies: 0, journalEntries: 0, wineLists: 1, recommendations: 0, personalDataEntries: 0,
       },
       bottleCount: 2,
     });
@@ -687,5 +690,88 @@ describe('a wine never merges into itself, and a private draft never takes part'
     docs[S] = wine(S, { draft: true });
     expect(await send('POST', '/merge', { keeperId: K, sourceIds: [S] })).toEqual({ status: 404, body: { error: 'No source wines found' } });
     expect(Bottle.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// ── Personal data entries and registry values ───────────────────────────────
+
+describe('members\' personal entries and the registry values follow a merge; a delete keeps them safe', () => {
+  test('wine-level personal entries move to the keeper, and their authors\' data version moves too', async () => {
+    stub(Bottle.distinct, async (field) => (field === 'user' ? ['owner1'] : []));
+    stub(PersonalDataEntry.distinct, async () => ['author1', 'author2']);
+
+    await reassignWineRefs(S, K);
+
+    expect(PersonalDataEntry.distinct).toHaveBeenCalledWith('author', { wineDefinition: S });
+    expect(PersonalDataEntry.updateMany).toHaveBeenCalledWith({ wineDefinition: S }, { $set: { wineDefinition: K } });
+    expect(bumpDataVersion.mock.calls.map((c) => c[0]).sort()).toEqual(['author1', 'author2', 'owner1']);
+  });
+
+  test('registry values: rejected rows move; a suggested or published row moves unless the keeper holds that slot', async () => {
+    const sourceRows = [
+      { _id: 'v1', key: 'abv', vintage: null, status: 'published' }, // keeper's abv/default is only rejected: moves
+      { _id: 'v2', key: 'closure', status: 'published' }, // no vintage field = the default slot; keeper holds it: dropped
+      { _id: 'v3', key: 'abv', vintage: '2019', status: 'suggested' }, // free slot: moves
+    ];
+    const keeperRows = [
+      { key: 'closure', vintage: null, status: 'published' },
+      { key: 'abv', vintage: null, status: 'rejected' },
+    ];
+    stub(RegistryDataValue.find, (filter) => chain(String(filter.wineDefinition) === S ? sourceRows : keeperRows));
+
+    await reassignWineRefs(S, K);
+
+    expect(RegistryDataValue.updateMany).toHaveBeenCalledWith({ wineDefinition: S, status: 'rejected' }, { $set: { wineDefinition: K } });
+    expect(calls.indexOf('RegistryDataValue.updateMany')).toBeLessThan(calls.indexOf('RegistryDataValue.find'));
+    expect(RegistryDataValue.updateOne.mock.calls).toEqual([
+      [{ _id: 'v1' }, { $set: { wineDefinition: K } }],
+      [{ _id: 'v3' }, { $set: { wineDefinition: K } }],
+    ]);
+    expect(RegistryDataValue.deleteOne.mock.calls).toEqual([[{ _id: 'v2' }]]);
+  });
+
+  test('a merge moves both before it deletes the source', async () => {
+    docs[S] = wine(S);
+    docs[K] = wine(K, { image: 'keeper.webp' });
+
+    await performWineMerge(S, K, REQ);
+
+    const deleted = calls.indexOf(`deleteOne:${S}`);
+    expect(deleted).toBeGreaterThan(-1);
+    for (const write of ['PersonalDataEntry.updateMany', 'RegistryDataValue.updateMany']) {
+      expect(calls).toContain(write);
+      expect(calls.lastIndexOf(write)).toBeLessThan(deleted);
+    }
+  });
+
+  test('reassignWineRefs touches every model utils/wineRefs says it handles', async () => {
+    const { WINE_REF_HANDLED } = require('../../utils/wineRefs');
+    await reassignWineRefs(S, K);
+    const touched = new Set(calls.map((c) => c.split('.')[0]));
+    expect(WINE_REF_HANDLED.filter((name) => !touched.has(name))).toEqual([]);
+    expect(WINE_REF_HANDLED.filter((name) => !MODELS[name])).toEqual([]);
+  });
+
+  test('DELETE refuses a wine that members still hold personal entries on, and deletes nothing', async () => {
+    docs[S] = wine(S);
+    stub(PersonalDataEntry.countDocuments, async () => 2);
+
+    const res = await send('DELETE', `/${S}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Cannot delete wine. User content references it (2 personalDataEntries). Merge it into another wine instead.');
+    expect(res.body.references.personalDataEntries).toBe(2);
+    expect(PersonalDataEntry.countDocuments).toHaveBeenCalledWith({ wineDefinition: S });
+    expect(RegistryDataValue.deleteMany).not.toHaveBeenCalled();
+    expect(docs[S].deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('DELETE of a wine with no user content removes its registry values with it', async () => {
+    docs[S] = wine(S);
+
+    expect(await send('DELETE', `/${S}`)).toEqual({ status: 200, body: { message: 'Wine deleted successfully' } });
+
+    expect(RegistryDataValue.deleteMany).toHaveBeenCalledWith({ wineDefinition: S });
+    expect(calls.indexOf('RegistryDataValue.deleteMany')).toBeLessThan(calls.indexOf(`deleteOne:${S}`));
   });
 });

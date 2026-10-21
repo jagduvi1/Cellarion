@@ -48,6 +48,8 @@ const JournalEntry = require('../../models/JournalEntry');
 const Recommendation = require('../../models/Recommendation');
 const RestockAlert = require('../../models/RestockAlert');
 const WineRequest = require('../../models/WineRequest');
+const PersonalDataEntry = require('../../models/PersonalDataEntry');
+const RegistryDataValue = require('../../models/RegistryDataValue');
 const { unlinkImageFiles } = require('../../services/imageProcessor');
 const { embedSinglePair, reembedActiveVintages } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
@@ -1610,11 +1612,13 @@ router.put('/:id', async (req, res) => {
 //
 // Refuses while USER-AUTHORED content references the wine (bottles, wishlist
 // items, reviews, discussions/replies, journal pairings, wine-list entries,
-// recommendations) — deleting under those would orphan or silently vanish
-// other people's data; merge re-points references and is the right tool.
+// recommendations, members' wine-level personal data entries) — deleting
+// under those would orphan or silently vanish other people's data; merge
+// re-points references and is the right tool.
 // Registry-side/derived data that only exists FOR the wine (maturity
 // profiles, price snapshots/opt-ins, community prices, embeddings with their
-// vectors, restock alerts, reports) is cascade-deleted with it.
+// vectors, restock alerts, reports, registry data values) is cascade-deleted
+// with it.
 router.delete('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -1625,7 +1629,7 @@ router.delete('/:id', async (req, res) => {
     }
     const id = wine._id;
 
-    const [bottles, recentlyDeletedBottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations] = await Promise.all([
+    const [bottles, recentlyDeletedBottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations, personalDataEntries] = await Promise.all([
       Bottle.countDocuments({ wineDefinition: id }),
       // Bottles in a "Recently deleted" (services/bottleTrash) can still be
       // restored onto this wine; a merge re-points them, a delete would strand them.
@@ -1637,8 +1641,11 @@ router.delete('/:id', async (req, res) => {
       JournalEntry.countDocuments({ 'pairings.wine': id }),
       WineList.countDocuments({ $or: [{ 'sections.entries.wine': id }, { 'autoGroupEntries.wine': id }] }),
       Recommendation.countDocuments({ wine: id }),
+      // A member's own typed entries on the wine (bottle-level entries carry
+      // no wine ref and follow their bottle).
+      PersonalDataEntry.countDocuments({ wineDefinition: id }),
     ]);
-    const references = { bottles, recentlyDeletedBottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations };
+    const references = { bottles, recentlyDeletedBottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations, personalDataEntries };
     const blocking = Object.entries(references).filter(([, n]) => n > 0);
     if (blocking.length > 0) {
       return res.status(400).json({
@@ -1663,6 +1670,9 @@ router.delete('/:id', async (req, res) => {
       WineReport.updateMany({ duplicateOf: id }, { $unset: { duplicateOf: '' } }),
       WineRequest.updateMany({ linkedWineDefinition: id }, { $unset: { linkedWineDefinition: '' } }),
       WineNotDuplicate.deleteMany({ $or: [{ wineA: id }, { wineB: id }] }),
+      // Registry data values (suggested, published, rejected) describe only
+      // this wine; nothing can read or review them once it is gone.
+      RegistryDataValue.deleteMany({ wineDefinition: id }),
       // Pending correction proposals on (or targeting) a deleted wine would
       // dangle in the review queue forever — same closure as performWineMerge.
       // Through the shared closer, so a user who filed one is told (the wine is
@@ -2182,6 +2192,25 @@ async function reassignWineRefs(sourceId, keeperId) {
     reassignRestockSimilar(sourceId, keeperId),
     WineReport.updateMany({ duplicateOf: sourceId }, { $set: { duplicateOf: keeperId } }),
     WineRequest.updateMany({ linkedWineDefinition: sourceId }, { $set: { linkedWineDefinition: keeperId } }),
+    // Members' wine-level personal data entries follow their bottles (they are
+    // read through the bottle's wine). No unique index on (author, wine), so a
+    // plain re-point cannot collide: a member with entries on both wines may
+    // see a key twice, a removable duplicate over silent loss (same policy as
+    // wishlist items). The authors' data version moves like the bottle
+    // owners' — analyze_cellar reads personal keys behind that cache.
+    (async () => {
+      const authors = await PersonalDataEntry.distinct('author', { wineDefinition: sourceId });
+      await PersonalDataEntry.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } });
+      authors.forEach(bumpDataVersion);
+    })(),
+    // Registry data values. Rejected rows sit outside the unique
+    // (wine, key, vintage, status) index and move plainly; a suggested or
+    // published row moves unless the keeper already holds one for that slot,
+    // which wins (the source's row is dropped).
+    (async () => {
+      await RegistryDataValue.updateMany({ wineDefinition: sourceId, status: 'rejected' }, { $set: { wineDefinition: keeperId } });
+      await reassignKeyedRefs(RegistryDataValue, sourceId, keeperId, ['key', 'vintage', 'status']);
+    })(),
   ]);
   return bottleRes.modifiedCount || 0;
 }
