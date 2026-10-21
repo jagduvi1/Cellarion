@@ -4,7 +4,7 @@
 **Client:** [ha-cellarion](https://github.com/jagduvi1/ha-cellarion) v1.2.0+ (client side already shipped for both, auto-detects server support)
 **Author:** requested by Johan, drafted 2026-07-10
 
-This doc covers three things the HA integration needs from the backend:
+This doc covers four things the HA integration needs from the backend:
 
 1. **Push events (SSE)** — new endpoint, spec below.
 2. **Consume from HA** — no new endpoint (HA already calls the existing
@@ -14,6 +14,8 @@ This doc covers three things the HA integration needs from the backend:
    account password in HA. See [§3 API tokens](#3-api-tokens-scoped).
    Biggest win of the three: kills the bcrypt-per-poll cost *and* the
    password-in-HA-config risk in one move.
+4. **Inventory** — one read of every bottle with where it is, for the
+   card's search and "find and take out". See [§4 Inventory](#4-inventory).
 
 # 1. Push events (SSE)
 
@@ -259,7 +261,7 @@ auth; JWT sessions implicitly have all scopes. Initial scopes:
 
 | Scope | Grants |
 |-------|--------|
-| `read` | all GETs the HA integration uses (stats, cellars, bottles, notifications, events stream, and the rack list `GET /api/racks?cellar=<id>&summary=1` — summary form only: slot bottle ids, details via `GET /api/bottles/:id`) + `GET /api/auth/whoami` (own account id, no PII — for reauth same-account verification) |
+| `read` | all GETs the HA integration uses (stats, cellars, bottles, notifications, events stream, and the rack list `GET /api/racks?cellar=<id>&summary=1` — summary form only: slot bottle ids, details via `GET /api/bottles/:id`) + `GET /api/inventory` (exact path — §4) + `GET /api/auth/whoami` (own account id, no PII — for reauth same-account verification) |
 | `consume` | `POST /api/bottles/:id/consume` only |
 
 **Management endpoints + settings UI**
@@ -304,3 +306,130 @@ working). Nothing here blocks §1 or §2 — this can ship in any order.
   exponential backoff (jittered); >90 s without heartbeat = disconnect.
 - On 401 at connect: one re-login attempt, then defers to the polling
   path (which drives HA's reauth flow).
+
+# 4. Inventory
+
+**Status: backend implemented (`routes/inventory.js`); client in
+pycellarion 0.2.0 (`get_inventory`) and ha-cellarion (`cellarion.get_bottles`).**
+The HA card's search box and its "find a
+bottle and take it out" sheet need every bottle at once — with its wine,
+its drink window and *where it is* — not the urgency ladder's top five.
+One endpoint, read with the same `read` token, kept cheap by a
+conditional request.
+
+## Endpoint contract
+
+```
+GET /api/inventory
+Authorization: Bearer cel_…        (read scope; a normal session works too)
+If-None-Match: <the ETag of the copy the client holds>   (optional)
+```
+
+| Status | Meaning |
+|--------|---------|
+| 200 | the inventory (a JSON **object**), with `ETag` and `Cache-Control: no-store` |
+| 304 | nothing the inventory holds has changed since that ETag — no body, nothing built |
+| 401 | invalid / revoked token (existing re-login / reauth logic) |
+| 403 | token without the `read` scope — or an **old server** (the allowlist is default-deny) |
+| 404 | an **old server** without the route |
+| 429 | per-user limiter (below) |
+
+Clients treat **403 and 404 on this path as "not supported"** and keep
+working from the endpoints in §2–3, so the feature can ship on either side
+first, like §1.
+
+- **ETag / 304:** the validator is the offline snapshot's
+  (`snapshotTag` in `services/offlineSnapshot.js`) salted with
+  `inventory:1`, so an inventory tag never equals a snapshot tag. It moves
+  with the caller's data version, the version of every owner whose cellar
+  is shared with them, which cellars those are, and at least every
+  30 minutes (registry edits, curated windows and finished photos reach the
+  client within that). Personal-data writes (REST, MCP and their undos) move
+  the author's version and the owners' of the cellars where the entry
+  shows. The tag is read **before** building; a matching `If-None-Match`
+  answers 304 after one small query.
+- **Limiter:** 60 requests per user per 10 minutes, 304s included
+  (`routes/inventory.js`); 429 beyond that.
+- **Scope:** every non-deleted cellar the user owns or is a member of, and
+  the bottles still in them (status not in `NOT_IN_CELLAR_STATUSES` — drunk,
+  gifted, sold, other and on-order bottles are left out). Nothing about
+  other users beyond what the cellar views already show: the username on a
+  personal-data entry, as on the bottle page.
+- **No AI, ever.** The route is database reads only: no AI provider, no
+  embedding, no label scan, no semantic search, no enrichment, no
+  Meilisearch. The tasting profile is the one already stored; a wine without
+  one gets `null`. (Johan's rule for everything reachable from Home
+  Assistant; the consume route follows it too — a token consume's restock
+  check compares stored vectors only and never embeds.)
+
+## Response 200
+
+```jsonc
+{
+  "schema": 1,
+  "generatedAt": "2026-10-21T12:00:00.000Z",
+  "cellars": [
+    { "id": "6aa4…", "name": "Home", "role": "owner" }        // owner | editor | viewer
+  ],
+  "racks": [
+    { "id": "6ab0…", "cellar": "6aa4…", "name": "Left cabinet" }
+  ],
+  "wines": {                                                   // each wine once; bottles reference it by id
+    "<wineId>": {
+      "name": "Château X", "producer": "Château X",
+      "type": "red",                  // as stored, or null
+      "colour": null,                 // colour of a sparkling/dessert/fortified wine, or null
+      "country": "France", "region": "Pauillac", "appellation": "Pauillac", "classification": null,
+      "grapes": ["Cabernet Sauvignon", "Merlot"],              // display names (regional label), [] when none
+      "image": "/api/uploads/thumbs/processed/<uuid>.webp.webp", // registry image as a thumbnail path, or null
+      "profile": {                    // stored descriptors only; null when none or held — never the description
+        "body": "full", "acidity": "medium", "sweetness": "dry", "tannin": "high",
+        "flavors": ["blackcurrant", "cedar"], "foodPairings": ["lamb"]   // ≤ 12 each
+      }
+    }
+  },
+  "bottles": [
+    {
+      "id": "6ac1…",
+      "wine": "<wineId>",             // null while the bottle waits on a wine request
+      "pending": null,                // { "name", "producer" } of that request when wine is null
+      "cellar": "6aa4…",
+      "vintage": "2015", "size": "750ml",
+      "price": 350, "currency": "SEK",
+      "rating": 92, "ratingScale": "100",   // ratingScale only beside a rating, else null
+      "notes": "…", "purchaseDate": "2024-05-01", "purchaseLocation": "Systembolaget",
+      "addedAt": "2025-01-02T10:00:00.000Z",
+      "opened": false,
+      "maturity": "peak",             // not-ready | early | peak | late | declining, or null
+      "window": { "drinkFrom": 2024, "peakFrom": 2027, "peakUntil": 2032, "drinkTo": 2038 },  // each int or null
+      "location": {                   // null when the bottle is in no rack
+        "rack": "6ab0…", "rackName": "Left cabinet", "position": 14,
+        "shelf": 2, "row": 1, "col": 3
+      },
+      "place": "Basement, box 3",     // the bottle's free-text location, or null
+      "image": "/api/uploads/thumbs/processed/<uuid>.webp.webp",   // the card picture as a thumbnail path, or null
+      "personal": [
+        { "key": "Closure", "type": "enum", "unit": null, "value": "cork", "level": "bottle", "by": "johan" }
+      ]
+    }
+  ]
+}
+```
+
+Where each field comes from (`services/integrationInventory.js`):
+
+| Field | Source |
+|-------|--------|
+| `role` | `getCellarRole` (`utils/cellarAccess.js`) |
+| `maturity` | `classifyMaturity` over `buildProfileMap` — the same status the bottle lists and `GET /api/bottles?maturity=` use |
+| `window` | `resolveEffectiveWindow` (`utils/maturityUtils.js`): the bottle's own window when any of it is set, else the reviewed sommelier profile; `drinkFrom` = early-from (else peak-from), `drinkTo` = late-until (else peak-until) |
+| `location` | the rack slot holding the bottle; `shelf` / `row` / `col` from `slotLocation` (`utils/rackGeometry.js`): cabinets → shelf (1 = top), row within the shelf (1 = on the plank, counting up; two deep: 1 front, 2 back, 3 the next level's front …), col (slot in that row, left to right); grids → row and col of the row-major grid (a double-height row's top layer: that row, and its place in the top layer); other rack types and modular racks → `null`s, `position` still set |
+| `image` (bottle) | the cellar list's resolver (`attachBottleImageUrls`), in the card's order: chosen default → the user's own photo of this bottle or vintage → the vintage's official photo → the registry image → the user's photo of another vintage |
+| `image` (both) | thumbnail paths only: `/api/uploads/(processed\|originals)/<name>.<png\|jpg\|jpeg\|webp>` on this instance → `/api/uploads/thumbs/<dir>/<name>.<ext>.webp` (`utils/thumbPath.js`). An external link, an inline `data:` image or another host's upload → `null`, so a client never fetches a URL someone stored. The uploads mount is public: fetch the path without credentials |
+| `personal` | `personalData.listForBottles` — exactly the bottle page's rules: bottle-level entries by anyone; wine-level entries by current members of the bottle's cellar, vintage-scoped ones only on bottles of that vintage |
+
+Loaded lean: every query names its fields, so the heavy bottle fields
+(cellar history, pours, barcode, purchase URL …), slot RFID tags and the
+registry's prose and curation bookkeeping are never read.
+
+Deep link to a bottle in the app: `{instance}/cellars/{bottle.cellar}/bottles/{bottle.id}`.

@@ -32,7 +32,7 @@ const utcDay = (d) => d.toISOString().slice(0, 10);
  * Scopes (docs/ha-push-events.md §3; climate: docs/climate-monitoring.md):
  *   read    — the GETs the Home Assistant integration uses: stats, cellars,
  *             bottles, notifications, the rack list (summary form only),
- *             the SSE event stream, and /auth/whoami
+ *             the SSE event stream, the inventory, and /auth/whoami
  *             (its own account id, for reauth same-account verification — id
  *             only, no PII, unlike /auth/me). Also POST /api/mcp: the Model
  *             Context Protocol endpoint, whose per-tool authorization is
@@ -53,6 +53,13 @@ const SCOPE_ALLOWLIST = {
     // populated form to tokens, since an integration may poll it.
     { method: 'GET', pattern: /^\/api\/racks$/ },
     { method: 'GET', pattern: /^\/api\/events\/stream$/ },
+    // The integrations' inventory (routes/inventory, docs/ha-push-events.md
+    // §4) — exact-anchored. It returns the caller's own cellars plus the
+    // cellars shared with them, exactly the offline snapshot's scope: no
+    // collaborator emails, IPs or audit rows; of other people only the
+    // username on a personal-data entry, as the bottle page shows it.
+    // Database reads only — it can never spend AI money.
+    { method: 'GET', pattern: /^\/api\/inventory$/ },
     // Exact match only — the caller's own account id (id, no PII). Anchored so
     // it can never widen to /api/auth/me or any other /api/auth/* route.
     { method: 'GET', pattern: /^\/api\/auth\/whoami$/ },

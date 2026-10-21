@@ -162,6 +162,19 @@ describe('snapshotTag', () => {
     const a = await snapshotTag('tag-me', T);
     expect(await snapshotTag('tag-me', T + TAG_MAX_AGE_MS)).not.toBe(a);
   });
+
+  // GET /api/inventory reuses the validator with a salt: a tag of one
+  // document must never be answered 304 by the other.
+  test('a salt gives its own tag space, moving with the same changes; no salt = the tag as before', async () => {
+    const plain = await snapshotTag('tag-me', T);
+    expect(await snapshotTag('tag-me', T, {})).toBe(plain);
+    const salted = await snapshotTag('tag-me', T, { salt: 'inventory:1' });
+    expect(salted).toMatch(/^W\/"[A-Za-z0-9_-]{27}"$/);
+    expect(salted).not.toBe(plain);
+    expect(await snapshotTag('tag-me', T, { salt: 'inventory:1' })).toBe(salted);
+    bumpDataVersion('tag-friend');
+    expect(await snapshotTag('tag-me', T, { salt: 'inventory:1' })).not.toBe(salted);
+  });
 });
 
 // The copy's size (scaling audit 2026-09-25, item 11): taxonomy rows cut to

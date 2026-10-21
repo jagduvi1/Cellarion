@@ -41,11 +41,16 @@ const TAG_MAX_AGE_MS = 30 * 60 * 1000;
  * every TAG_MAX_AGE_MS. One small query instead of the ~13 a snapshot takes.
  * Read BEFORE building the snapshot: a change landing mid-build moves it on,
  * so the next check rebuilds instead of keeping a copy that misses it.
+ *
+ * `salt` gives another document built from the same data its own tag space
+ * (GET /api/inventory passes 'inventory:1'): a tag from one can then never
+ * be answered 304 by the other. Without it the tag is exactly as before.
  */
-async function snapshotTag(userId, now = Date.now()) {
+async function snapshotTag(userId, now = Date.now(), { salt = null } = {}) {
   const shared = await Cellar.find({ 'members.user': userId, deletedAt: null }).select('user').lean();
   const owners = [...new Set(shared.map((c) => String(c.user)))].sort();
   const parts = [
+    ...(salt ? [salt] : []),
     SNAPSHOT_SCHEMA,
     BOOT_ID,
     Math.floor(now / TAG_MAX_AGE_MS),

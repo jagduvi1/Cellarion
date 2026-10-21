@@ -46,6 +46,7 @@ const importReceiptRoute = require('./routes/importReceipt');
 const cellarImportRoute = require('./routes/cellarImport');
 const racksRoute = require('./routes/racks');
 const offlineRoute = require('./routes/offline');
+const inventoryRoute = require('./routes/inventory');
 const cellarLayoutRoute = require('./routes/cellarLayout');
 const imagesRoute = require('./routes/images');
 const sommMaturityRoute = require('./routes/somm/maturity');
@@ -370,6 +371,9 @@ app.use('/api/bottles/import', importRoute);
 app.use('/api/cellar-import', cellarImportRoute);
 app.use('/api/racks', racksRoute);
 app.use('/api/offline', offlineRoute);
+// The integrations' inventory (Home Assistant): read-only, token-reachable
+// with the read scope, database reads only (docs/ha-push-events.md §4).
+app.use('/api/inventory', inventoryRoute);
 app.use('/api/cellar-layout', cellarLayoutRoute);
 app.use('/api/images', imagesRoute);
 app.use('/api/somm/maturity', sommMaturityRoute);

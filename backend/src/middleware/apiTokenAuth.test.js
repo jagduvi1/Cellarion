@@ -67,6 +67,7 @@ describe('isRequestAllowed (default-deny)', () => {
     ['GET', '/api/notifications'],
     ['GET', '/api/racks'],
     ['GET', '/api/events/stream'],
+    ['GET', '/api/inventory'],
     ['GET', '/api/auth/whoami'],
     ['POST', '/api/mcp'],
   ])('read scope allows %s %s', (method, path) => {
@@ -116,6 +117,26 @@ describe('isRequestAllowed (default-deny)', () => {
     ['DELETE', '/api/users/me'],
   ])('read scope denies %s %s', (method, path) => {
     expect(isRequestAllowed(READ, method, path)).toBe(false);
+  });
+
+  // The integrations' inventory (docs/ha-push-events.md §4): the caller's own
+  // and shared cellars, database reads only. Exact-anchored to GET; no other
+  // scope reaches it, and an OAuth token (MCP audience) never does.
+  test('GET /api/inventory: read scope only, exact path, GET/HEAD only', () => {
+    expect(isRequestAllowed(READ, 'GET', '/api/inventory')).toBe(true);
+    expect(isRequestAllowed(READ, 'GET', '/api/inventory/')).toBe(true);
+    expect(isRequestAllowed(READ, 'HEAD', '/api/inventory')).toBe(true);
+    for (const p of ['/api/inventory/x', '/api/inventoryx', '/api/inventory/' + oid]) {
+      expect(isRequestAllowed(READ, 'GET', p)).toBe(false);
+    }
+    for (const m of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      expect(isRequestAllowed(READ, m, '/api/inventory')).toBe(false);
+    }
+    expect(isRequestAllowed(CONSUME, 'GET', '/api/inventory')).toBe(false);
+    expect(isRequestAllowed(['write'], 'GET', '/api/inventory')).toBe(false);
+    expect(isRequestAllowed(['climate'], 'GET', '/api/inventory')).toBe(false);
+    // The offline snapshot it borrows its scope from stays session-only.
+    expect(isRequestAllowed(READ, 'GET', '/api/offline/snapshot')).toBe(false);
   });
 
   test('consume scope allows exactly POST /api/bottles/:id/consume', () => {
