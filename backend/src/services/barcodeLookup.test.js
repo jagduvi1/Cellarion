@@ -35,6 +35,19 @@ it('groups by wine and counts distinct owners, most confirmed first', async () =
   expect(pipeline[3]).toEqual({ $sort: { owners: -1, last: -1 } });
 });
 
+it('never loads who contributed the wine, except createdBy for the visibility gate', async () => {
+  Bottle.aggregate.mockResolvedValue([{ _id: 'w1', owners: 1, vintages: [], last: new Date() }]);
+  const query = chain(wine('w1'));
+  WineDefinition.findById.mockReturnValue(query);
+
+  const out = await lookupBarcode('4006381333931', VIEWER);
+
+  const fields = query.select.mock.calls[0][0].split(/\s+/);
+  expect(fields).toEqual(expect.arrayContaining(['-contribution', '-createdVia', '-canary', '-identityProvenance']));
+  expect(fields).not.toContain('-createdBy');
+  expect(out.wine).not.toHaveProperty('createdBy');
+});
+
 it('suggests the vintage only when two or more owners agree on one', async () => {
   Bottle.aggregate.mockResolvedValue([{ _id: 'w1', owners: 2, vintages: [['2019'], ['2019']], last: new Date() }]);
   WineDefinition.findById.mockReturnValue(chain(wine('w1')));

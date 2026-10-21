@@ -7,6 +7,7 @@ const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { createWineRequest } = require('../services/accountOps');
 const { originFrom } = require('../utils/contributionOrigin');
+const { WINE_LIST_SELECT } = require('../config/constants');
 
 const router = express.Router();
 
@@ -89,8 +90,10 @@ router.get('/', async (req, res) => {
       filter.status = status;
     }
 
+    // The linked wine as a bottle list carries it: no member-hidden field
+    // (who contributed it, the curation internals) and no aiProfile.
     const requests = await WineRequest.find(filter)
-      .populate('linkedWineDefinition')
+      .populate('linkedWineDefinition', WINE_LIST_SELECT)
       .populate('resolvedBy', 'username')
       .sort({ createdAt: -1 });
 

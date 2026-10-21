@@ -20,6 +20,7 @@ const { findBestMatch } = require('../services/wineMatching');
 const { conflictingStyleTerms } = require('../utils/styleTerms');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
+const { MEMBER_WINE_HIDDEN_FIELDS, MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require('../config/constants');
 // Read-surface decoration: each populated grape gains `displayName` — the
 // regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
 // while `name` stays canonical. Storage/filters/stats are untouched.
@@ -316,14 +317,11 @@ async function mongoSearch(filter, sort, limit, offset, search) {
 // GET /api/wines - Search/list wines (auth required)
 // Regular users: search term mandatory, results capped at USER_SEARCH_LIMIT.
 // Admin / somm: full browse and unlimited results.
-// Curation internals a member's search result never needs: the same list
-// GET /:id strips for non-curators, plus createdBy — the search path used to
-// answer with whole documents, so every result named the member who
-// contributed the row (audit 2026-10-14). Curators keep the full document.
-const MEMBER_HIDDEN_FIELDS = [
-  'scanImage', 'scanImageBack', 'scanFieldConflicts', 'normalizedKey', 'canonicalKey',
-  'verifiedChecks', 'identityProvenance', 'productNumber', 'previousSlugs', 'canary', 'createdBy',
-];
+// Curation internals a member's search result never needs: the shared member
+// list (config/constants), createdBy and contribution included — the search
+// path answers with whole documents, so without it every result names the
+// member who contributed the row. Curators keep the full document.
+const MEMBER_HIDDEN_FIELDS = MEMBER_WINE_HIDDEN_FIELDS;
 const forMember = (isCurator) => (wine) => {
   if (isCurator || !wine) return wine;
   for (const f of MEMBER_HIDDEN_FIELDS) delete wine[f];
@@ -1140,12 +1138,14 @@ router.get('/:id', requireAuth, async (req, res) => {
     // Registry lockdown (2026-09-06, L5): the dedup keys, verification record
     // and provenance are curation internals. Nothing a member's screens render
     // needs them, and together they are the part of a copy that is hardest to
-    // rebuild. Curators keep the full document. pendingIdentity/createdBy stay
-    // selected for the gate below and are then dropped from the response.
+    // rebuild. Who contributed the row (contribution, createdVia) is never a
+    // member's business either. Curators keep the full document.
+    // pendingIdentity/createdBy stay selected for the gate below and are then
+    // dropped from the response.
     const isCurator = req.user.roles.includes('admin') || req.user.roles.includes('somm');
     const select = isCurator
       ? '-scanImage -scanImageBack -scanFieldConflicts'
-      : '-scanImage -scanImageBack -scanFieldConflicts -normalizedKey -canonicalKey -verifiedChecks -identityProvenance -productNumber -previousSlugs -canary';
+      : MEMBER_WINE_EXCLUDE_KEEP_CREATOR;
     const wine = await WineDefinition.findById(req.params.id)
       .select(select)
       .populate(['country', 'region', 'grapes']);

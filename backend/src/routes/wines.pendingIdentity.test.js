@@ -107,6 +107,30 @@ describe('GET /api/wines/:id — pending rows are visible to their creator and t
   });
 });
 
+describe('GET /api/wines/:id — a member never receives who contributed the row', () => {
+  const PUBLISHED = { _id: W1, name: 'Kaefferkopf', producer: 'Cave', grapes: [], createdBy: CREATOR };
+
+  test('the member select drops contribution, createdVia and the curation internals, and keeps createdBy for the gate', async () => {
+    const query = populateChain(PUBLISHED);
+    WineDefinition.findById.mockReturnValue(query);
+    const res = await getWine(tokenFor(STRANGER));
+    expect(res.status).toBe(200);
+    const fields = query.select.mock.calls[0][0].split(/\s+/);
+    expect(fields).toEqual(expect.arrayContaining([
+      '-contribution', '-createdVia', '-canary', '-identityProvenance', '-normalizedKey', '-scanImage',
+    ]));
+    expect(fields).not.toContain('-createdBy');
+    expect(await res.json()).not.toHaveProperty('wine.createdBy');
+  });
+
+  test.each([['somm'], ['admin']])('%s still reads the whole row: the select drops only the scan evidence', async (role) => {
+    const query = populateChain(PUBLISHED);
+    WineDefinition.findById.mockReturnValue(query);
+    expect((await getWine(tokenFor(STRANGER, [role]))).status).toBe(200);
+    expect(query.select.mock.calls[0][0]).toBe('-scanImage -scanImageBack -scanFieldConflicts');
+  });
+});
+
 describe('GET /api/wines/:idOrSlug/public — nobody to compare against, so simply excluded', () => {
   test('the query itself carries the exclusion', async () => {
     WineDefinition.findOne.mockReturnValue({

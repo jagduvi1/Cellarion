@@ -145,6 +145,16 @@ test('a member\'s results carry no curation internals and no createdBy, on both 
   for (const w of body.wines) expect(w).not.toHaveProperty('createdBy');
 });
 
+test("a member's results never say who contributed the row", async () => {
+  WineDefinition.find.mockReset();
+  WineDefinition.find.mockReturnValue(chain([{ ...wine(), contribution: { user: USER_ID }, createdVia: 'ui' }]));
+  const { body } = await get('/api/wines?search=blanc');
+  expect(body.wines).toHaveLength(1);
+  expect(body.wines[0].name).toBe('Blanc');
+  expect(body.wines[0]).not.toHaveProperty('contribution');
+  expect(body.wines[0]).not.toHaveProperty('createdVia');
+});
+
 test('without ownHidden=1 (a forum wine tag, a wine-request link) nothing hidden is looked up', async () => {
   WineDefinition.find.mockReset();
   WineDefinition.find.mockReturnValue(chain([wine()]));

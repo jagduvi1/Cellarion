@@ -19,10 +19,12 @@ const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const { canSeeWine } = require('./wineVisibility');
 const { decorateGrapes } = require('../utils/grapeDisplay');
+const { MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require('../config/constants');
 
-// Curation internals a member's screens never need (mirrors GET /api/wines/:id
-// for non-curators).
-const MEMBER_SELECT = '-scanImage -scanImageBack -scanFieldConflicts -normalizedKey -canonicalKey -verifiedChecks -identityProvenance -productNumber -previousSlugs -canary';
+// Curation internals a member's screens never need (the same select as
+// GET /api/wines/:id for non-curators). createdBy stays loaded for canSeeWine
+// and is deleted from the payload below.
+const MEMBER_SELECT = MEMBER_WINE_EXCLUDE_KEEP_CREATOR;
 
 const CANDIDATES = 5;
 const MIN_OWNERS_FOR_VINTAGE = 2;

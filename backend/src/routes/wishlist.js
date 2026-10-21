@@ -8,6 +8,7 @@ const { escapeRegex } = require('../utils/sanitize');
 // /api/bottles) — findOrCreateWine itself is lazy-required inside the service.
 const { resolveOrMintWine } = require('../services/wineCommit');
 const { findVisibleWine } = require('../services/wineVisibility');
+const { MEMBER_WINE_HIDDEN_FIELDS } = require('../config/constants');
 
 const router = express.Router();
 
@@ -96,15 +97,13 @@ router.get('/', async (req, res) => {
           as: 'wineDefinition.grapes'
         }
       },
-      // Same rule as the populates below: the list endpoint returned the whole
-      // registry document too. None of these is ever part of a wishlist answer,
-      // and normalizedKey carries a pending row's creator id verbatim. The two
-      // scan pointers and the front/back disagreements are CURATION evidence —
-      // they belong to the pending queue, not to a reader's wishlist.
-      { $unset: [
-        'wineDefinition.createdBy', 'wineDefinition.scanImage', 'wineDefinition.scanImageBack',
-        'wineDefinition.scanFieldConflicts', 'wineDefinition.normalizedKey', 'wineDefinition.canonicalKey',
-      ] }
+      // Same rule as the populates below: the list endpoint returns the whole
+      // registry document, so it drops every member-hidden field
+      // (config/constants). None of these is ever part of a wishlist answer:
+      // createdBy and contribution name the contributing member, normalizedKey
+      // carries a pending row's creator id verbatim, and the scan pointers and
+      // front/back disagreements are CURATION evidence.
+      { $unset: MEMBER_WINE_HIDDEN_FIELDS.map((f) => `wineDefinition.${f}`) }
     ];
 
     // Free-text search on wine name or producer. Guard the type: an object/array

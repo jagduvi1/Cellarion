@@ -36,18 +36,32 @@ const WINE_POPULATE = [
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
 
+// The registry fields a member (anyone but admin/somm) never receives from a
+// wine read: the label-scan evidence, the dedup keys, the verification record,
+// the identity provenance, the canary flag, and who contributed the row and
+// how (createdBy, contribution, createdVia — the registry never shows who
+// contributed). Curators read them through their own surfaces. Every member
+// wine read builds on this one list: GET /api/wines and /:id, the wishlist
+// list, the barcode lookup, the wine-request list and WINE_LIST_SELECT.
+const MEMBER_WINE_HIDDEN_FIELDS = [
+  'scanImage', 'scanImageBack', 'scanFieldConflicts', 'normalizedKey', 'canonicalKey',
+  'verifiedChecks', 'identityProvenance', 'productNumber', 'previousSlugs', 'canary',
+  'createdBy', 'contribution', 'createdVia',
+];
+const excludeFields = (fields) => fields.map((f) => `-${f}`).join(' ');
+const MEMBER_WINE_EXCLUDE = excludeFields(MEMBER_WINE_HIDDEN_FIELDS);
+// For a read that runs the visibility gate (services/wineVisibility) on the
+// loaded document: createdBy stays loaded for the gate, and the route deletes
+// it from the payload afterwards.
+const MEMBER_WINE_EXCLUDE_KEEP_CREATOR = excludeFields(MEMBER_WINE_HIDDEN_FIELDS.filter((f) => f !== 'createdBy'));
+
 // List/stats variant of WINE_POPULATE: excludes the heavy fields no list view
 // or aggregate reads (aiProfile alone is several KB of prose per wine). A page
 // of 30 bottles ships the same card data at a fraction of the payload. Detail
 // routes (GET /api/bottles/:id etc.) keep the full WINE_POPULATE — the bottle
-// page renders aiProfile.
-//
-// Also left out: the registry's internal bookkeeping no card reads and no
-// cellar member — a viewer included — has any business with: who contributed
-// the wine and from which instance (contribution), how it was created
-// (createdVia), the canary flag and the identity provenance (release audit
-// 2026-09-27, L; the registry-UI rule: never show who contributed).
-const WINE_LIST_SELECT = `-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy -contribution -createdVia -canary -identityProvenance ${SCAN_EVIDENCE_EXCLUDE}`;
+// page renders aiProfile. Also left out: every member-hidden field above, which
+// no card reads and no cellar member — a viewer included — has any business with.
+const WINE_LIST_SELECT = `-aiProfile -lwin -productNumberShort ${MEMBER_WINE_EXCLUDE}`;
 const WINE_POPULATE_LIST = [
   {
     path: 'wineDefinition',
@@ -170,6 +184,8 @@ module.exports = {
   WINE_POPULATE_LIST,
   WINE_POPULATE_CARDS,
   WINE_LIST_SELECT,
+  MEMBER_WINE_HIDDEN_FIELDS,
+  MEMBER_WINE_EXCLUDE_KEEP_CREATOR,
   IMPORT_EXACT_THRESHOLD,
   IMPORT_FUZZY_THRESHOLD,
   MAX_IMPORT_SIZE,
