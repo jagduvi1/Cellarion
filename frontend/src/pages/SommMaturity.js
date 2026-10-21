@@ -167,15 +167,16 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
 
   // For an NV profile not yet migrated to relative (offset) mode, start the
   // window blank so the somm enters durations fresh rather than stale years
-  // that would fail the 0–100 offset validation.
+  // that would fail the 0–100 offset validation. `??`, not `||`: an NV offset
+  // of 0 ("drink from purchase") is a stored value and must show as 0.
   const seed = (isNv && !profile.relative) ? {} : profile;
   const [form, setForm] = useState({
-    earlyFrom:  seed.earlyFrom  || '',
-    earlyUntil: seed.earlyUntil || '',
-    peakFrom:   seed.peakFrom   || '',
-    peakUntil:  seed.peakUntil  || '',
-    lateFrom:   seed.lateFrom   || '',
-    lateUntil:  seed.lateUntil  || '',
+    earlyFrom:  seed.earlyFrom  ?? '',
+    earlyUntil: seed.earlyUntil ?? '',
+    peakFrom:   seed.peakFrom   ?? '',
+    peakUntil:  seed.peakUntil  ?? '',
+    lateFrom:   seed.lateFrom   ?? '',
+    lateUntil:  seed.lateUntil  ?? '',
     sommNotes:  profile.sommNotes  || ''
   });
 
