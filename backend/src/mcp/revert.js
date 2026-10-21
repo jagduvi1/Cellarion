@@ -40,7 +40,7 @@ async function bumpPersonalData(userId, audience, keyId = null) {
 }
 const entryAudienceOf = (level, bottle) => (level === 'wine' ? { wineLevel: true } : { bottleIds: [bottle] });
 
-const CONSUME_REVERSIBLE =['consume', 'restore', 'open', 'pour', 'close'];
+const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'lot_update', 'bulk_add', 'arrive', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
@@ -482,7 +482,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       }
       await bumpPersonalData(ctx.user.id, entryAudienceOf(prev.level, prev.bottle));
       const envelope = {
-        summary: `Undid personal data delete —"${d.key}" recreated`,
+        summary: `Undid personal data delete — "${d.key}" recreated`,
         data: { undone: 'delete_personal_data', entry_id: recreated._id },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
@@ -520,7 +520,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       }
       await bumpPersonalData(ctx.user.id, null, key._id);
       const envelope = {
-        summary: `Undid key change —"${key.name}"${restoresUnit ? ` (unit ${JSON.stringify(key.unit || null)})` : ''} restored`,
+        summary: `Undid key change — "${key.name}"${restoresUnit ? ` (unit ${JSON.stringify(key.unit || null)})` : ''} restored`,
         data: { undone: 'update_personal_key', key_id: key._id, restored: { name: key.name, unit: key.unit || null } },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
@@ -546,7 +546,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       }
       await bumpPersonalData(ctx.user.id);
       const envelope = {
-        summary: `Undid key delete —"${recreated.name}" recreated`,
+        summary: `Undid key delete — "${recreated.name}" recreated`,
         data: { undone: 'delete_personal_key', key_id: recreated._id },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
