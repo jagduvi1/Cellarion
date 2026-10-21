@@ -445,7 +445,7 @@
       "scope_read": "read",
       "scope_consume": "consume",
       "scope_climate": "climate device",
-      "scopeDesc_read": "Read — view cellars, bottles, racks, statistics, and notifications",
+      "scopeDesc_read": "Read — view your cellars and the ones shared with you: bottles, racks, personal fields, statistics and notifications",
       "scopeDesc_consume": "Consume — drink or take bottles out of the cellar",
       "passwordLabel": "Confirm with your password",
       "passwordHint": "Creating a token requires your account password.",
