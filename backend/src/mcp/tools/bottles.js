@@ -13,6 +13,7 @@ const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
 const { WINE_POPULATE, WINE_POPULATE_LIST, CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../../config/constants');
 const { registerTool } = require('../registry');
+const { slotLocation } = require('../../utils/rackGeometry');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess,
@@ -224,7 +225,7 @@ registerTool({
   title: 'Get one bottle',
   description:
     'Full detail for one bottle: wine (incl. tasting profile when enriched), vintage, price, ratings, personal drink ' +
-    'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement, cellar, ' +
+    'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement (position, and shelf / row / col where the rack has them), cellar, ' +
     'consumption info if consumed, and photos — every photo that applies to the bottle with its state (queued, ' +
     'processing, awaiting_review, published, rejected), so an upload can be confirmed and a duplicate avoided; ' +
     'photos.label_scans lists the frames the user scanned to identify the wine. The URLs are for people; to SEE ' +
@@ -252,8 +253,11 @@ async function buildBottleDetail(userId, bottleId) {
   }
   const { cellar, role } = access;
   const b = await Bottle.findById(access.bottle._id).populate(WINE_POPULATE).lean();
+  // The rack's geometry too: placement says shelf / row / col, not only the
+  // position (utils/rackGeometry.slotLocation — the same words GET
+  // /api/inventory uses), so nobody has to count positions by hand.
   const rack = await Rack.findOne({ 'slots.bottle': b._id, deletedAt: null })
-    .select('name slots.position slots.bottle').lean();
+    .select('name type rows cols typeConfig isModular modules.type slots.position slots.bottle').lean();
   const slot = rack ? rack.slots.find((s) => String(s.bottle) === String(b._id)) : null;
   const wd = b.wineDefinition;
   // Every photo that applies, with its state, from this viewer's side.
@@ -339,7 +343,9 @@ async function buildBottleDetail(userId, bottleId) {
             rating_scale: b.consumedRating != null ? b.consumedRatingScale : null,
           }
         : null,
-      placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position } : null,
+      // shelf: cabinets only (1 = top); row: from the plank up on a cabinet
+      // shelf, the grid row on a grid; col: left to right. null elsewhere.
+      placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position, ...slotLocation(rack, slot.position) } : null,
       photos,
       cellar: { cellar_id: cellar._id, name: cellar.name, your_role: role },
       added_at: b.addedToCellarAt || b.createdAt,

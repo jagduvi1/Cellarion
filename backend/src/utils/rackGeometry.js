@@ -480,7 +480,62 @@ function getMaxPosition(rack) {
   return totalSlots(rack.type || 'grid', rack.rows, rack.cols, rack.typeConfig);
 }
 
+/**
+ * Where a slot position is, in the words someone at the rack uses — the
+ * reverse of the POSITION NUMBERING CONTRACTS above:
+ *   cabinet — shelf (1 = the top bay), row within that shelf (1 = resting on
+ *             the plank, counting up; two deep: 1 front, 2 back, 3 the next
+ *             level's front, …) and col (the slot in that row, left to right).
+ *             The walk is cabinetRows, so alternating, narrower and stacked
+ *             one-deep-with-a-bottle-across shelves land in their real cell.
+ *   grid    — row and col of the row-major base grid (the cellar export's
+ *             rackRow / rackCol). A top-layer position of a double-height row
+ *             (appended after rows × cols) reports that row and its place in
+ *             the top layer, left to right (1..cols−1).
+ * Every other type, a modular rack, and a position the rack does not have
+ * answer all nulls — the position itself is still the caller's to report.
+ * Shared by GET /api/inventory and the MCP get_bottle placement.
+ *
+ * @param {{ type?: string, rows: number, cols: number, typeConfig?: object,
+ *   isModular?: boolean, modules?: Array }} rack
+ * @param {number} position 1-based slot position
+ * @returns {{ shelf: number|null, row: number|null, col: number|null }}
+ */
+function slotLocation(rack, position) {
+  const none = { shelf: null, row: null, col: null };
+  if (!rack || !Number.isInteger(position) || position < 1) return none;
+  if (rack.isModular && Array.isArray(rack.modules) && rack.modules.length > 0) return none;
+  const { rows, cols } = rack;
+  if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return none;
+  const type = rack.type || 'grid';
+
+  if (type === 'cabinet') {
+    for (const r of cabinetRows(rows, cols, rack.typeConfig)) {
+      if (position > r.start && position <= r.start + r.width) {
+        return { shelf: r.shelfIndex + 1, row: r.row, col: position - r.start };
+      }
+    }
+    return none;
+  }
+
+  if (type === 'grid') {
+    const base = rows * cols;
+    if (position <= base) {
+      return { shelf: null, row: Math.ceil(position / cols), col: ((position - 1) % cols) + 1 };
+    }
+    let start = base;
+    for (const row of validDoubleHeightRows(rows, cols, rack.typeConfig?.doubleHeightRows)) {
+      if (position <= start + cols - 1) return { shelf: null, row, col: position - start };
+      start += cols - 1;
+    }
+    return none;
+  }
+
+  return none;
+}
+
 module.exports = {
+  slotLocation,
   totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows,
   cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
   cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetBayOpts, cabinetRows,

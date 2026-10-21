@@ -41,7 +41,8 @@ jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineOwnerInquiry', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
 }));
-jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
+// The real slotLocation: get_bottle's placement reports shelf / row / col.
+jest.mock('../utils/rackGeometry', () => ({ ...jest.requireActual('../utils/rackGeometry'), getMaxPosition: jest.fn(() => 12) }));
 // Lazy-required inside handlers; jest still intercepts by resolved path.
 jest.mock('../services/search', () => ({
   getIsAvailable: jest.fn(() => false), search: jest.fn(),
@@ -185,6 +186,38 @@ describe('ownership scoping', () => {
     expect(body.data.placement).toBeNull();
     // No curator question waiting → the field is absent, not null.
     expect(body.data).not.toHaveProperty('open_curator_question');
+  });
+
+  // Placement in the words someone at the rack uses (utils/rackGeometry.
+  // slotLocation): the model no longer counts positions itself.
+  test('get_bottle placement carries shelf / row / col for a cabinet, row / col for a grid', async () => {
+    const cellarId = new mongoose.Types.ObjectId(oid('c'));
+    const bottle = {
+      _id: oid('d'), cellar: cellarId, vintage: '2015', status: 'active',
+      wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'X', grapes: [] }, pours: [],
+    };
+    Bottle.findById.mockReturnValue(chain(bottle));
+    Cellar.findById.mockReturnValue(chain({ _id: cellarId, user: ME, members: [], deletedAt: null, name: 'Mine' }));
+    // Shelves of 1, 2 and 1 rows, 6 across: position 14 = shelf 2, row 2, slot 2.
+    Rack.findOne.mockReturnValue(chain({
+      _id: oid('e'), name: 'Fridge', type: 'cabinet', rows: 3, cols: 6, typeConfig: { shelfRows: [1, 2, 1] },
+      slots: [{ position: 14, bottle: oid('d') }],
+    }));
+    let body = parse(await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX));
+    expect(body.data.placement).toEqual({ rack_id: oid('e'), rack_name: 'Fridge', position: 14, shelf: 2, row: 2, col: 2 });
+    expect(Rack.findOne.mock.results[0].value.select).toHaveBeenCalledWith(expect.stringContaining('typeConfig'));
+
+    Rack.findOne.mockReturnValue(chain({
+      _id: oid('e'), name: 'Wall', type: 'grid', rows: 4, cols: 6, slots: [{ position: 8, bottle: oid('d') }],
+    }));
+    body = parse(await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX));
+    expect(body.data.placement).toMatchObject({ position: 8, shelf: null, row: 2, col: 2 });
+
+    Rack.findOne.mockReturnValue(chain({
+      _id: oid('e'), name: 'Honeycomb', type: 'hex', rows: 4, cols: 6, slots: [{ position: 8, bottle: oid('d') }],
+    }));
+    body = parse(await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX));
+    expect(body.data.placement).toMatchObject({ position: 8, shelf: null, row: null, col: null });
   });
 
   // The owner has the bottle in view — the moment they can read the back
