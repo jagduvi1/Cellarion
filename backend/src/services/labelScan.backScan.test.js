@@ -137,6 +137,28 @@ describe('scanLabelBack — the front context reaches the prompt SANITISED', () 
     expect(front.grapes).toHaveLength(20);
   });
 
+  test('front grape names reach the prompt whole', async () => {
+    const create = clientReturning('{}');
+    await scanLabelBack({
+      backImage: BACK,
+      frontExtracted: { name: 'Grand Vin', grapes: ['Cabernet Sauvignon', 'Merlot'] },
+    });
+
+    const front = JSON.parse(promptFrom(create).match(/\{"name".*?\]\}/s)[0]);
+    expect(front.grapes).toEqual(['Cabernet Sauvignon', 'Merlot']);
+  });
+
+  test('the 20-entry cap keeps the FIRST twenty names, unshortened', async () => {
+    const create = clientReturning('{}');
+    await scanLabelBack({
+      backImage: BACK,
+      frontExtracted: { grapes: Array.from({ length: 40 }, (_, i) => `grape${i}`) },
+    });
+
+    const front = JSON.parse(promptFrom(create).match(/\{"name".*?\]\}/s)[0]);
+    expect(front.grapes).toEqual(Array.from({ length: 20 }, (_, i) => `grape${i}`));
+  });
+
   test('both images are sent, front first, each captioned so the model knows which is which', async () => {
     const create = clientReturning('{}');
     await scanLabelBack({

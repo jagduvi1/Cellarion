@@ -23,7 +23,7 @@ jest.mock('../config/aiConfig', () => ({
 
 const aiProvider = require('./aiProvider');
 const aiConfig = require('../config/aiConfig');
-const { identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice } = require('./labelScan');
+const { identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice, suggestProfile } = require('./labelScan');
 
 const TAIL = 'Rules: be terse. Never invent awards.';
 const IMPORT_TPL = ['Identify.', 'Wine: {{name}}', 'Producer: {{producer}}', '{{vintage}}{{country}}', TAIL].join('\n');
@@ -96,6 +96,34 @@ describe('prompt builders insert user text literally (audit 2026-09-02 D10-9)', 
     const prompt = sentPrompt();
     expect(prompt).toContain("Price for $'$' by P 2019 $& (Syrah)");
     expect(tails(prompt)).toBe(1);
+  });
+});
+
+describe('suggestProfile: every grape name reaches the prompt whole', () => {
+  const PROFILE_TPL = ['Profile {{name}} by {{producer}} ({{grapes}})', TAIL].join('\n');
+
+  beforeEach(() => {
+    aiConfig.get.mockReturnValue({ enrichmentPrompt: PROFILE_TPL, enrichmentModel: 'test-model' });
+  });
+
+  test('a blend lists each variety in full', async () => {
+    await suggestProfile({ name: 'Grand Vin', producer: 'P', region: 'Bordeaux', grapes: ['Cabernet Sauvignon', 'Merlot'] });
+    expect(sentPrompt()).toContain('Profile Grand Vin by P (Cabernet Sauvignon, Merlot)');
+  });
+
+  test('a single variety on a record with no region is named, not reported missing', async () => {
+    await suggestProfile({ name: 'Langhe', producer: 'P', grapes: ['Nebbiolo'] });
+    const prompt = sentPrompt();
+    expect(prompt).toContain('(Nebbiolo)');
+    expect(prompt).toContain('This record carries no region and no appellation.');
+    expect(prompt).not.toContain('no grape varieties');
+  });
+
+  test('each name is still capped at 200 characters', async () => {
+    await suggestProfile({ name: 'X', producer: 'P', region: 'R', grapes: ['G'.repeat(300), 'Syrah'] });
+    const prompt = sentPrompt();
+    expect(prompt).toContain(`(${'G'.repeat(200)}, Syrah)`);
+    expect(prompt).not.toContain('G'.repeat(201));
   });
 });
 

@@ -322,7 +322,7 @@ async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontIma
   // Per NAME, not on a joined string — capping a join can cut a varietal
   // mid-word (suggestProfile carries the same note for the same reason).
   const grapes = (Array.isArray(frontExtracted.grapes) ? frontExtracted.grapes : [])
-    .map(field)
+    .map((g) => field(g))
     .filter(Boolean)
     .slice(0, 20);
 
@@ -811,7 +811,7 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   // large blend and could cut a varietal mid-word before it reached a prompt
   // whose answer is written back to the shared registry.
   const grapeList = (Array.isArray(grapes) ? grapes : [grapes])
-    .map(field)
+    .map((g) => field(g))
     .filter(Boolean)
     .slice(0, 20)
     .join(', ');
