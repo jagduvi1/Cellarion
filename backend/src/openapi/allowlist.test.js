@@ -6,7 +6,8 @@
  */
 const { buildOpenApiDocument } = require('./document');
 const { createValidator } = require('./validator');
-const { isRequestAllowed, SCOPE_ALLOWLIST } = require('../middleware/apiTokenAuth');
+const { isRequestAllowed, classifyRequest, SCOPE_ALLOWLIST } = require('../middleware/apiTokenAuth');
+const { DEPRECATED_RULES } = require('../config/apiDeprecations');
 const { TOKEN_SCOPES } = require('../models/ApiToken');
 
 const v = createValidator(buildOpenApiDocument({ version: 'test' }));
@@ -37,6 +38,20 @@ test('every allowlist rule is a documented operation', () => {
     }
   }
   expect(uncovered).toEqual([]);
+});
+
+test('no documented operation is on its way out', () => {
+  for (const o of tokenOps) {
+    const scopes = o.scopes.flat().length ? o.scopes.flat() : TOKEN_SCOPES; // [] = any token
+    for (const scope of scopes) {
+      expect([o.operationId, classifyRequest([scope], o.method, concrete(o.path))]).toEqual([o.operationId, 'allowed']);
+    }
+  }
+});
+
+test('deprecated rules only ever admit read-scope GETs', () => {
+  expect(Object.keys(DEPRECATED_RULES)).toEqual(['read']);
+  expect(DEPRECATED_RULES.read.every((r) => r.method === 'GET')).toBe(true);
 });
 
 test('operations without a token are the public ones', () => {

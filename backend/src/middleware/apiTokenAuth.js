@@ -1,6 +1,8 @@
 const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
+const { DEPRECATED_RULES } = require('../config/apiDeprecations');
+const { setDeprecationHeaders, recordDeprecatedUse } = require('../services/apiDeprecation');
 
 const { TOKEN_PREFIX } = ApiToken;
 
@@ -47,10 +49,15 @@ const utcDay = (d) => d.toISOString().slice(0, 10);
  */
 const SCOPE_ALLOWLIST = {
   read: [
-    { method: 'GET', pattern: /^\/api\/stats(\/|$)/ },
-    { method: 'GET', pattern: /^\/api\/cellars(\/|$)/ },
-    { method: 'GET', pattern: /^\/api\/bottles(\/|$)/ },
-    { method: 'GET', pattern: /^\/api\/notifications(\/|$)/ },
+    // Exactly the documented reads. The other GETs under these prefixes that
+    // tokens used to reach are deprecated (config/apiDeprecations: still
+    // answered, with Deprecation and Sunset headers, until the sunset date).
+    { method: 'GET', pattern: /^\/api\/stats\/overview$/ },
+    { method: 'GET', pattern: /^\/api\/cellars$/ },
+    { method: 'GET', pattern: /^\/api\/bottles$/ },
+    { method: 'GET', pattern: /^\/api\/bottles\/[a-f0-9]{24}$/ },
+    { method: 'GET', pattern: /^\/api\/notifications$/ },
+    { method: 'GET', pattern: /^\/api\/notifications\/unread-count$/ },
     // The rack LIST only — exact-anchored, so no rack sub-route (edits, slot
     // moves, arrange, the NFC lookup) is reachable. A token gets the light
     // summary form (layout + slot bottle ids); routes/racks.js refuses the
@@ -145,17 +152,25 @@ const SELF_REVOKE = { method: 'DELETE', pattern: /^\/api\/tokens\/self$/ };
 
 /** Default-deny scope check. Exported for direct unit testing. */
 function isRequestAllowed(scopes, method, path) {
+  return classifyRequest(scopes, method, path) !== 'denied';
+}
+
+/**
+ * 'allowed' (the allowlist), 'deprecated' (only a deprecated rule admits it:
+ * answered with Deprecation and Sunset headers, config/apiDeprecations) or
+ * 'denied'. Exported for direct unit testing.
+ */
+function classifyRequest(scopes, method, path) {
   // Normalize: Express treats HEAD as GET, and a trailing slash as the same route.
   const m = method === 'HEAD' ? 'GET' : method;
   const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
-  if (m === SELF_REVOKE.method && SELF_REVOKE.pattern.test(p)) return true;
-  if (TOKEN_EXCLUSIONS.some(rule => rule.test(p))) return false;
-  for (const scope of scopes || []) {
-    for (const rule of SCOPE_ALLOWLIST[scope] || []) {
-      if (rule.method === m && rule.pattern.test(p)) return true;
-    }
-  }
-  return false;
+  if (m === SELF_REVOKE.method && SELF_REVOKE.pattern.test(p)) return 'allowed';
+  if (TOKEN_EXCLUSIONS.some(rule => rule.test(p))) return 'denied';
+  const matches = (rules) => (scopes || []).some((scope) =>
+    (rules[scope] || []).some((rule) => rule.method === m && rule.pattern.test(p)));
+  if (matches(SCOPE_ALLOWLIST)) return 'allowed';
+  if (matches(DEPRECATED_RULES)) return 'deprecated';
+  return 'denied';
 }
 
 /**
@@ -202,8 +217,13 @@ async function authenticateApiToken(req, res, next, rawToken) {
       return res.status(403).json({ error: 'This token is only valid for the MCP endpoint' });
     }
 
-    if (!isRequestAllowed(token.scopes, req.method, path)) {
+    const verdict = classifyRequest(token.scopes, req.method, path);
+    if (verdict === 'denied') {
       return res.status(403).json({ error: 'API token scope insufficient for this request' });
+    }
+    if (verdict === 'deprecated') {
+      setDeprecationHeaders(res);
+      recordDeprecatedUse(req.method === 'HEAD' ? 'GET' : req.method, path);
     }
 
     // Same effective-plan downgrade as the JWT path in requireAuth.
@@ -242,6 +262,7 @@ module.exports = {
   isApiTokenCredential,
   authenticateApiToken,
   isRequestAllowed,
+  classifyRequest,
   isMcpEndpoint,
   SCOPE_ALLOWLIST,
   TOKEN_EXCLUSIONS,

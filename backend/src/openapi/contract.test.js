@@ -143,6 +143,8 @@ describeWithMongo('public API contract', () => {
     }
     const errors = v.validateResponse(operationId, res);
     if (errors.length) throw new Error(`${operationId} ${status} does not match the document:\n  ${errors.join('\n  ')}`);
+    // A documented operation is never on its way out.
+    if (res.headers.deprecation) throw new Error(`${operationId} ${status} answered with a Deprecation header`);
     seen.add(`${operationId} ${status}`);
     return res;
   }
@@ -221,7 +223,6 @@ describeWithMongo('public API contract', () => {
     const one = await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('b1') } });
     expect(one.body.rackInfo).toMatchObject({ position: 5 });
     await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('b4') } });
-    await expectContract('getBottle', 400, { token: 'read', params: { bottleId: 'not-an-id' } });
     await expectContract('getBottle', 401, { token: 'revoked', params: { bottleId: b('b1') } });
     await expectContract('getBottle', 403, { token: 'consume', params: { bottleId: b('b1') } });
     await expectContract('getBottle', 404, { token: 'read', params: { bottleId: ID_ZERO } });
@@ -291,6 +292,24 @@ describeWithMongo('public API contract', () => {
     expect(res.body.id).toBe(String(world.tokens.selfRevoke.doc._id));
     await expectContract('revokeOwnToken', 401, { token: 'selfRevoke' });
     await expectContract('revokeOwnToken', 403, { token: 'climate' });
+  });
+
+  test('an undocumented route a token used to reach still answers, announces its end, and is counted', async () => {
+    const ApiDeprecatedUse = require('../models/ApiDeprecatedUse');
+    const { SUNSET } = require('../config/apiDeprecations');
+    const home = String(world.cellars.home._id);
+    const res = await fetch(`${base}/api/cellars/${home}/statistics`, {
+      headers: { Authorization: `Bearer ${world.tokens.read.raw}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('deprecation')).toMatch(/^@\d+$/);
+    expect(res.headers.get('sunset')).toBe(SUNSET.toUTCString());
+    expect(res.headers.get('link')).toMatch(/\/developers>; rel="deprecation"/);
+    await new Promise((resolve) => setTimeout(resolve, 200)); // the count is fire-and-forget
+    const row = await ApiDeprecatedUse.findOne({ route: 'GET /api/cellars/:id/statistics' }).lean();
+    expect(row).toMatchObject({ count: 1, day: new Date().toISOString().slice(0, 10) });
+    // Counts only: nothing about who.
+    expect(Object.keys(row).filter((k) => k !== '_id' && k !== '__v').sort()).toEqual(['count', 'createdAt', 'day', 'route']);
   });
 
   test('every documented status was exercised, or says why not', () => {

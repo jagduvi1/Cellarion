@@ -9,7 +9,10 @@
  * document shows its own address in every example.
  */
 
+const { DEPRECATED_SINCE, SUNSET } = require('../config/apiDeprecations');
+
 const H = (base) => `-H "Authorization: Bearer $CELLARION_TOKEN" "${base}`;
+const longDate = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 function guideMarkdown(base) {
   return `
@@ -110,6 +113,10 @@ What is in this reference is **stable**:
 - Anything a token can reach that is **not** in this reference is internal and may change without notice. Please don't build on it. If you need something that isn't here, [open an issue](https://github.com/jagduvi1/Cellarion/issues).
 
 **Self-hosted servers** update on their owner's schedule, so they can be older than cellarion.app. Read a server's version from \`GET /api/health\`, or treat a \`404\` or \`403\` on a documented endpoint as "not supported on this server" and carry on without it.
+
+### Being removed
+
+Until now a \`read\` token could also reach other \`GET\` routes under \`/api/cellars\`, \`/api/bottles\`, \`/api/stats\` and \`/api/notifications\` that are not in this reference, such as \`/api/cellars/{id}\` or \`/api/stats/value-history\`. They are deprecated from ${longDate(DEPRECATED_SINCE)}: their answers carry \`Deprecation\`, \`Sunset\` and \`Link\` headers, and **from ${longDate(SUNSET)} they answer tokens with \`403\`**. \`GET /api/inventory\` covers most of what they were used for; if something you need is missing, [open an issue](https://github.com/jagduvi1/Cellarion/issues) before then.
 
 ## Security
 

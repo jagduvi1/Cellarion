@@ -30,7 +30,9 @@ const {
   isApiTokenCredential,
   authenticateApiToken,
   isRequestAllowed,
+  classifyRequest,
 } = require('./apiTokenAuth');
+const { SUNSET } = require('../config/apiDeprecations');
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -256,6 +258,36 @@ describe('isRequestAllowed (default-deny)', () => {
 // ---------------------------------------------------------------------------
 // authenticateApiToken
 // ---------------------------------------------------------------------------
+describe('classifyRequest: the documented reads, and the ones on their way out', () => {
+  const oid = 'a'.repeat(24);
+  const READ = ['read'];
+
+  test.each([
+    '/api/stats/overview', '/api/cellars', '/api/bottles', `/api/bottles/${oid}`,
+    '/api/notifications', '/api/notifications/unread-count', '/api/racks',
+    '/api/inventory', '/api/events/stream', '/api/auth/whoami',
+  ])('GET %s is allowed', (path) => {
+    expect(classifyRequest(READ, 'GET', path)).toBe('allowed');
+  });
+
+  test.each([
+    '/api/stats', '/api/stats/value-history', `/api/cellars/${oid}`, `/api/cellars/${oid}/statistics`,
+    '/api/cellars/multi/bottles', '/api/bottles/trash', `/api/bottles/${oid}/lot-history`, '/api/bottles/notanid',
+  ])('GET %s is deprecated: still answered, until the sunset', (path) => {
+    expect(classifyRequest(READ, 'GET', path)).toBe('deprecated');
+    expect(isRequestAllowed(READ, 'GET', path)).toBe(true);
+  });
+
+  test('what was never reachable stays denied', () => {
+    expect(classifyRequest(READ, 'GET', `/api/cellars/${oid}/members`)).toBe('denied');
+    expect(classifyRequest(READ, 'GET', `/api/cellars/${oid}/audit`)).toBe('denied');
+    expect(classifyRequest(READ, 'GET', '/api/bottles/import/sessions')).toBe('denied');
+    expect(classifyRequest(READ, 'POST', `/api/cellars/${oid}`)).toBe('denied');
+    expect(classifyRequest(['consume'], 'GET', `/api/cellars/${oid}`)).toBe('denied');
+    expect(classifyRequest(['write'], 'GET', '/api/stats/value-history')).toBe('denied');
+  });
+});
+
 describe('authenticateApiToken', () => {
   const RAW = 'cel_' + 'f'.repeat(64);
   const userId = { toString: () => 'u1' };
@@ -287,6 +319,24 @@ describe('authenticateApiToken', () => {
     expect(req.user).toEqual({ id: 'u1', roles: ['user'], plan: 'free', planExpiresAt: null });
     expect(req.apiToken).toEqual({ id: 't1', scopes: ['read'] });
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('a deprecated route is answered with Deprecation, Sunset and Link; a documented one without', async () => {
+    const headersFor = async (baseUrl, path) => {
+      ApiToken.findOne.mockResolvedValue(activeToken());
+      User.findById.mockReturnValue(selectable(activeUser()));
+      const headers = {};
+      const res = { ...mockRes(), setHeader: jest.fn((k, val) => { headers[k] = val; }) };
+      const next = jest.fn();
+      await authenticateApiToken(mockReq('GET', baseUrl, path), res, next, RAW);
+      expect(next).toHaveBeenCalled();
+      return headers;
+    };
+    const old = await headersFor('/api/stats', '/value-history');
+    expect(old.Deprecation).toMatch(/^@\d+$/);
+    expect(old.Sunset).toBe(SUNSET.toUTCString());
+    expect(old.Link).toMatch(/\/developers>; rel="deprecation"/);
+    expect(await headersFor('/api/stats', '/overview')).toEqual({});
   });
 
   test('unknown or revoked token → 401 (findOne filters revokedAt null)', async () => {

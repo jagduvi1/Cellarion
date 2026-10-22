@@ -768,7 +768,7 @@ const paths = {
           bottle: exampleBottle, userRole: 'owner', rackInfo: { rackId: ID.rack, rackName: 'Wine fridge', position: 5 },
           defaultImageUrl: null, vintageImageUrl: null, pendingImageUrl: null, otherVintageImageUrl: null,
         }),
-        ...errors(400, 401, 403, 404),
+        ...errors(401, 403, 404),
       },
     },
   },
