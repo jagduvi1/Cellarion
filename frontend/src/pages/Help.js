@@ -196,6 +196,9 @@ function Help() {
         <p className="help-connect-ai">
           <Link to="/connect-ai">{t('help.connectAiLink')} &rarr;</Link>
         </p>
+        <p className="help-connect-ai">
+          <Link to="/developers">{t('help.developersLink')} &rarr;</Link>
+        </p>
       </div>
     </div>
   );

@@ -28,6 +28,7 @@ Allow: /countries/
 Allow: /grapes/
 Allow: /help
 Allow: /connect-ai
+Allow: /developers
 Allow: /privacy
 Allow: /terms
 Allow: /community
@@ -78,6 +79,7 @@ Allow: /countries/
 Allow: /grapes/
 Allow: /help
 Allow: /connect-ai
+Allow: /developers
 Allow: /privacy
 Allow: /community
 Allow: /api/sitemap.xml

@@ -313,6 +313,22 @@ router.get('/help', ogLimiter, (req, res) => {
 // copy is deliberately duplicated from the frontend's `connectAi` locale block
 // (short, stable, and the backend has no access to frontend locales) — keep the
 // two in sync when either changes.
+// GET /og/developers — the /developers page for crawlers: the guide and the
+// API reference, both rendered from the OpenAPI document (openapi/crawlerPage).
+router.get('/developers', ogLimiter, (req, res) => {
+  try {
+    const { developersPageHtml } = require('../openapi/crawlerPage');
+    const { siteBaseUrl } = require('../utils/siteUrl');
+    const { version } = require('../../package.json');
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(developersPageHtml({ siteUrl: siteBaseUrl(), version }));
+  } catch (err) {
+    console.error('[og] developers page error:', err.message);
+    res.status(500).send('Error generating page');
+  }
+});
+
 router.get('/connect-ai', ogLimiter, (req, res) => {
   try {
     const pageUrl = `${SITE_URL}/connect-ai`;

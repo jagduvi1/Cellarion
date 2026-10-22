@@ -1,0 +1,66 @@
+/* /developers: Redoc renders inside .developers-redoc. Redoc takes its colours
+   and fonts from the theme tokens at init (Developers.js); the rules below
+   cover what its theme options don't reach, so dark mode reads right.
+   Redoc's own styles are injected at runtime, after this file: selectors here
+   start at .developers-page to outrank them. */
+
+/* The layout's main area clips sideways overflow with overflow-x: hidden,
+   which makes it a scroll container: Redoc's sticky menu then sticks to
+   <main> (which never scrolls) instead of the window, and scrolls away.
+   clip cuts the overflow the same way without being a scroll container. */
+.main-content:has(.developers-page) {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.developers-page {
+  /* Redoc's three panels need the full width of the main area. */
+  margin: -1.5rem -2rem 0;
+}
+
+.developers-status {
+  padding: 2rem;
+  color: var(--color-text);
+}
+
+.developers-status h1 {
+  font-family: var(--font-heading);
+  margin: 0 0 0.75rem;
+}
+
+.developers-status a {
+  color: var(--color-primary);
+}
+
+.developers-redoc {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Markdown tables in the guide: Redoc paints rows a fixed white and grey. */
+.developers-page .developers-redoc table tr,
+.developers-page .developers-redoc table tr:nth-child(2n) {
+  background: transparent;
+}
+
+.developers-page .developers-redoc table th,
+.developers-page .developers-redoc table td {
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+/* The selected code-sample tab is white on the always-dark right panel; its
+   label must stay dark in both themes. */
+.developers-page .developers-redoc .react-tabs__tab--selected {
+  color: #263238;
+}
+
+@media (max-width: 768px) {
+  .developers-page {
+    margin: -1rem -1rem 0;
+  }
+
+  .developers-status {
+    padding: 1.25rem 1rem;
+  }
+}

@@ -461,7 +461,9 @@
       "errorWrongPassword": "Your password is incorrect.",
       "errorRateLimited": "Too many attempts. Please wait a few minutes and try again.",
       "scope_write": "write",
-      "scopeDesc_write": "Write (AI agent) — let a connected AI add, edit and organise bottles via MCP. Broadest scope; grant only to an assistant you trust."
+      "scopeDesc_write": "Write (AI agent) — let a connected AI add, edit and organise bottles via MCP. Broadest scope; grant only to an assistant you trust.",
+      "developersLink": "Building an integration? Read the API guide for developers",
+      "scopesHelpLink": "What each scope allows (API guide, opens in a new tab)"
     },
     "bridge": {
       "title": "Connect a self-hosted Cellarion",
@@ -3561,6 +3563,7 @@
     "noResults": "No matching topics found. Try a different search term.",
     "goTo": "Go to {{name}}",
     "connectAiLink": "Run your cellar from Claude, ChatGPT or any AI assistant",
+    "developersLink": "Build your own integration with the Cellarion API",
     "sections": {
       "cellars": {
         "title": "Cellars",
@@ -3877,6 +3880,7 @@
     "openCellar": "Open My Cellar",
     "footerSourceLink": "Source on GitHub",
     "footerConnectAi": "Connect your AI",
+    "footerDevelopers": "Developers",
     "footerHelp": "Help",
     "footerTranslate": "Translate Cellarion",
     "footerCopy": "Cellarion",

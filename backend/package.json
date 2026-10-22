@@ -30,6 +30,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mailgun.js": "^12.7.0",
+    "marked": "^18.1.0",
     "meilisearch": "^0.58.0",
     "mongoose": "^8.0.3",
     "multer": "^2.4.0",
@@ -61,7 +62,7 @@
   },
   "jest": {
     "transform": {
-      "node_modules[\\\\/](?:.*[\\\\/])?(htmlparser2|domhandler|domutils|dom-serializer|entities|domelementtype)[\\\\/].+\\.js$": [
+      "node_modules[\\\\/](?:.*[\\\\/])?(htmlparser2|domhandler|domutils|dom-serializer|entities|domelementtype|marked)[\\\\/].+\\.js$": [
         "babel-jest",
         {
           "plugins": [
@@ -73,7 +74,7 @@
       "\\.[jt]sx?$": "babel-jest"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(?:.*/)?(htmlparser2|domhandler|domutils|dom-serializer|entities|domelementtype)/)",
+      "/node_modules/(?!(?:.*/)?(htmlparser2|domhandler|domutils|dom-serializer|entities|domelementtype|marked)/)",
       "\\.pnp\\.[^\\/]+$"
     ]
   }

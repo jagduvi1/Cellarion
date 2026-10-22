@@ -11,3 +11,7 @@
 # Windows-1252) and line endings (CRLF vs LF) are the thing under test.
 # Never normalize them.
 frontend/src/utils/__fixtures__/** -text
+
+# The vendored Redoc viewer is checked by its sha256 (pages/Developers.vendor.test.js):
+# its bytes must be the same on every checkout.
+frontend/public/developers/redoc/** -text

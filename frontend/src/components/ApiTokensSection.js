@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
 import SetPasswordNotice from './SetPasswordNotice';
@@ -126,6 +127,9 @@ function ApiTokensSection() {
     <div className="card settings-card">
       <h2 className="settings-section-title">{t('settings.apiTokens.title')}</h2>
       <p className="settings-hint">{t('settings.apiTokens.hint')}</p>
+      <p className="settings-hint">
+        <Link to="/developers">{t('settings.apiTokens.developersLink')}</Link>
+      </p>
 
       {listError && <div className="alert alert-error">{listError}</div>}
 
@@ -207,6 +211,10 @@ function ApiTokensSection() {
                     {' '}{t(`settings.apiTokens.scopeDesc_${scope}`)}
                   </label>
                 ))}
+                {/* A new tab, so the half-filled dialog stays. */}
+                <a className="settings-hint" href="/developers" target="_blank" rel="noopener noreferrer">
+                  {t('settings.apiTokens.scopesHelpLink')}
+                </a>
               </div>
               {user?.hasPassword === false ? (
                 // SSO-only account: nothing to confirm with — offer the email

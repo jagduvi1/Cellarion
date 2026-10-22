@@ -90,6 +90,7 @@ async function buildPages() {
     { loc: '/help', priority: '0.6', changefreq: 'monthly' },
     { loc: '/connect-ai', priority: '0.7', changefreq: 'monthly' },
     { loc: '/connect-ai/claude', priority: '0.7', changefreq: 'monthly' },
+    { loc: '/developers', priority: '0.6', changefreq: 'monthly' },
     { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
   ];
 

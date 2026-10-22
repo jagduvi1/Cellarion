@@ -6,6 +6,7 @@
 - [Home](https://cellarion.app/): what Cellarion is, the full feature list, and FAQ.
 - [Help](https://cellarion.app/help): how to track a wine collection, drink windows, racks, sharing, import/export.
 - [Connect your AI](https://cellarion.app/connect-ai): set-up instructions for Claude, ChatGPT, VS Code, Cursor, Gemini CLI and any other MCP client.
+- [Developers](https://cellarion.app/developers): the REST API for your own cellar data: personal API tokens, a one-call inventory with ETag caching, live update events, and the OpenAPI 3.1 reference (https://cellarion.app/api/openapi.json).
 - [Blog](https://cellarion.app/blog): guides on wine storage, ageing, drink windows, and cellar management.
 - [Community](https://cellarion.app/community): discussions among wine collectors and enthusiasts.
 

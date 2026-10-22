@@ -191,6 +191,7 @@ describe('the pages part', () => {
       `${SITE}/`,
       `${SITE}/blog`,
       `${SITE}/community/discussions`,
+      `${SITE}/developers`,
       `${SITE}/blog/offline-mode`,
       `${SITE}/countries/italy`,
       `${SITE}/regions/piemonte`,
