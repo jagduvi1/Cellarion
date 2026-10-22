@@ -8,17 +8,30 @@
  * per-row failure doesn't abort the rest.
  */
 
+process.env.JWT_SECRET = 'test-secret';
+
 jest.mock('../../services/search', () => ({ fullSync: jest.fn(), indexWine: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => ({
-  findById: jest.fn(), findOne: jest.fn(), findFreeSlug: jest.fn(),
+  findById: jest.fn(), findOne: jest.fn(), findFreeSlug: jest.fn(), bulkWrite: jest.fn(),
 }));
 jest.mock('../../models/Country', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../../models/Region', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../../models/Appellation', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateRegion: jest.fn(), regionForAppellation: jest.fn() }));
+jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (n) => n) }));
+jest.mock('../../services/producerSpelling', () => ({ resolveCanonicalProducerSpelling: jest.fn(async (p) => p) }));
 
+const express = require('express');
+const http = require('http');
+const jwt = require('jsonwebtoken');
 const WineDefinition = require('../../models/WineDefinition');
-const { finalizeMintedWines } = require('./import');
+const Country = require('../../models/Country');
+const Appellation = require('../../models/Appellation');
+const searchService = require('../../services/search');
+const { findOrCreateRegion, regionForAppellation } = require('../../services/findOrCreateWine');
+const importRouter = require('./import');
+const { finalizeMintedWines } = importRouter;
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
 
 const doc = (over = {}) => ({
@@ -131,5 +144,115 @@ describe('finalizeMintedWines', () => {
   test('a vanished id is skipped without counting', async () => {
     WineDefinition.findById.mockReturnValue(selectChain(null));
     expect(await finalizeMintedWines(['gone'])).toBe(0);
+  });
+});
+
+// The import resolves a row's region the way findOrCreateWine does — through
+// the shared helpers — instead of upserting a Region by exact name (which
+// re-minted merged-away regions and skipped the mint gates). The real router
+// takes a real multipart CSV; taxonomy and the bulkWrite are mocked.
+describe('POST /api/admin/import/wines — region resolution', () => {
+  const USER_ID = '64b000000000000000000001';
+  const COUNTRY_ID = '64b0000000000000000000c1';
+  const REGION_ID = '64b0000000000000000000d1';
+  const CHABLIS_REGION_ID = '64b0000000000000000000d2';
+
+  const adminToken = () =>
+    jwt.sign({ id: USER_ID, roles: ['admin'] }, 'test-secret', { algorithm: 'HS256', expiresIn: '1h' });
+
+  function postCsv(csv) {
+    const app = express();
+    app.use('/api/admin/import', importRouter);
+    const boundary = 'importRegionTestBoundary';
+    const body = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="wines.csv"\r\n` +
+      `Content-Type: text/csv\r\n\r\n${csv}\r\n--${boundary}--\r\n`
+    );
+    return new Promise((resolve) => {
+      const server = http.createServer(app);
+      server.listen(0, () => {
+        const req = http.request({
+          port: server.address().port,
+          path: '/api/admin/import/wines',
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${adminToken()}`,
+            'content-type': `multipart/form-data; boundary=${boundary}`,
+            'content-length': body.length,
+          },
+        }, (res) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => {
+            server.close();
+            const text = Buffer.concat(chunks).toString();
+            resolve({ status: res.statusCode, body: text ? JSON.parse(text) : null });
+          });
+        });
+        req.on('error', () => { server.close(); resolve({ status: 0 }); });
+        req.end(body);
+      });
+    });
+  }
+
+  const opSet = (n) => WineDefinition.bulkWrite.mock.calls[0][0][n].updateOne.update[0].$set;
+
+  beforeEach(() => {
+    Country.findOneAndUpdate.mockResolvedValue({ _id: COUNTRY_ID });
+    Appellation.findOneAndUpdate.mockResolvedValue({ _id: 'a1' });
+    regionForAppellation.mockResolvedValue(null);
+    findOrCreateRegion.mockImplementation(async (name) => (name === 'Bourgogne' ? { _id: REGION_ID } : null));
+    WineDefinition.bulkWrite.mockImplementation(async (ops) => ({ upsertedCount: ops.length, modifiedCount: 0, upsertedIds: {} }));
+    searchService.fullSync.mockResolvedValue(undefined);
+  });
+
+  const CSV = [
+    'Producer,Wine,Country,Region,Appellation,WineType',
+    'Domaine Un,Cuvee A,France,Bourgogne,,Red',
+    'Domaine Deux,Cuvee B,France,Bourgogne,,Red',
+    'Domaine Trois,Cuvee C,France,"Bordeaux, Haut-Medoc",,Red',
+  ].join('\r\n');
+
+  test('a region cell is resolved through findOrCreateRegion and its id is stored on the wine op', async () => {
+    const { status, body } = await postCsv(CSV);
+
+    expect(status).toBe(200);
+    expect(findOrCreateRegion).toHaveBeenCalledWith('Bourgogne', COUNTRY_ID, USER_ID);
+    expect(opSet(0).region).toEqual({ $ifNull: ['$region', REGION_ID] });
+    expect(opSet(1).region).toEqual({ $ifNull: ['$region', REGION_ID] });
+    expect(body.stats.errors).toEqual([]);
+  });
+
+  test('a region findOrCreateRegion refuses (null) leaves the region unset and still creates the wine', async () => {
+    const { status, body } = await postCsv(CSV);
+
+    expect(status).toBe(200);
+    expect(findOrCreateRegion).toHaveBeenCalledWith('Bordeaux, Haut-Medoc', COUNTRY_ID, USER_ID);
+    expect(WineDefinition.bulkWrite.mock.calls[0][0]).toHaveLength(3);
+    expect(opSet(2)).not.toHaveProperty('region');
+    expect(opSet(2).name).toEqual({ $ifNull: ['$name', { $literal: 'Cuvee C' }] });
+    expect(body.stats.created).toBe(3);
+  });
+
+  test('the second row with the same region cell does not call findOrCreateRegion again', async () => {
+    await postCsv(CSV);
+
+    const bourgogneCalls = findOrCreateRegion.mock.calls.filter(([name]) => name === 'Bourgogne');
+    expect(bourgogneCalls).toHaveLength(1);
+    expect(findOrCreateRegion).toHaveBeenCalledTimes(2);
+  });
+
+  test('an appellation that names a known region wins over the region cell, as in findOrCreateWine', async () => {
+    regionForAppellation.mockImplementation(async (app) => (app === 'Chablis' ? { _id: CHABLIS_REGION_ID } : null));
+
+    const { status } = await postCsv([
+      'Producer,Wine,Country,Region,Appellation,WineType',
+      'Domaine Un,Cuvee A,France,Bourgogne,Chablis,White',
+    ].join('\r\n'));
+
+    expect(status).toBe(200);
+    expect(regionForAppellation).toHaveBeenCalledWith('Chablis', COUNTRY_ID);
+    expect(findOrCreateRegion).not.toHaveBeenCalled();
+    expect(opSet(0).region).toEqual({ $ifNull: ['$region', CHABLIS_REGION_ID] });
   });
 });

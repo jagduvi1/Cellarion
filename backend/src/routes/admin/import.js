@@ -8,10 +8,10 @@ const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
 const WineDefinition = require('../../models/WineDefinition');
 const Country = require('../../models/Country');
-const Region = require('../../models/Region');
 const Appellation = require('../../models/Appellation');
 const { logAudit } = require('../../services/audit');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
+const { findOrCreateRegion, regionForAppellation } = require('../../services/findOrCreateWine');
 const searchService = require('../../services/search');
 
 const router = express.Router();
@@ -200,29 +200,30 @@ async function getOrCreateCountry(name, userId, cache) {
 }
 
 /**
- * Find or create a Region document by name + country.
- * Returns null when name is falsy.
+ * Resolve the Region id for a row, the way findOrCreateWine does: an
+ * appellation that names a known region wins (regionForAppellation), then the
+ * region cell goes through the shared findOrCreateRegion (synonyms, so a
+ * merged-away region is not re-minted; appellation-in-region-column redirect;
+ * comma / country-name mint gates; createdByUser on a new region).
+ * Returns null when nothing resolves — the schema's "unknown region".
  */
-async function getOrCreateRegion(name, countryId, userId, cache) {
-  if (!name || isUnknownName(name) || !countryId) return null;
+async function getOrCreateRegion(name, countryId, userId, cache, appellation) {
+  if (!countryId) return null;
+  if (appellation) {
+    const appKey = `appellation:${countryId}:${appellation.toLowerCase().trim()}`;
+    if (!cache.has(appKey)) {
+      const doc = await regionForAppellation(appellation, countryId);
+      cache.set(appKey, doc ? doc._id : null);
+    }
+    if (cache.get(appKey)) return cache.get(appKey);
+  }
+  if (!name || isUnknownName(name)) return null;
   const key = `${countryId}:${name.toLowerCase().trim()}`;
   if (cache.has(key)) return cache.get(key);
 
-  const normalized = normalizeString(name);
-  const doc = await Region.findOneAndUpdate(
-    { country: countryId, normalizedName: normalized },
-    {
-      $setOnInsert: {
-        name: sanitizeTaxonomyName(name),
-        normalizedName: normalized,
-        country: countryId,
-        createdBy: userId,
-      },
-    },
-    { upsert: true, new: true }
-  );
-  cache.set(key, doc._id);
-  return doc._id;
+  const doc = await findOrCreateRegion(name, countryId, userId);
+  cache.set(key, doc ? doc._id : null);
+  return cache.get(key);
 }
 
 /**
@@ -518,7 +519,7 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         // the same-string stage, matching findOrCreateWine.
         const preResolveProducer = mapped.producer;
         mapped.producer = await resolveImportProducer(mapped.producer, countryId, producerSpellingCache);
-        const regionId = await getOrCreateRegion(mapped.region, countryId, userId, regionCache);
+        const regionId = await getOrCreateRegion(mapped.region, countryId, userId, regionCache, mapped.appellation);
         await getOrCreateAppellation(mapped.appellation, countryId, regionId, userId, appellationCache);
         const normalizedKey = generateWineKey(mapped.name, mapped.producer, mapped.appellation || '');
         // Resolution moves the dedup key ("… Yecla DO" → "… Yecla"; producer
