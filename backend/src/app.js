@@ -46,6 +46,7 @@ const importReceiptRoute = require('./routes/importReceipt');
 const cellarImportRoute = require('./routes/cellarImport');
 const racksRoute = require('./routes/racks');
 const offlineRoute = require('./routes/offline');
+const openapiRoute = require('./routes/openapi');
 const inventoryRoute = require('./routes/inventory');
 const cellarLayoutRoute = require('./routes/cellarLayout');
 const imagesRoute = require('./routes/images');
@@ -326,6 +327,8 @@ app.use('/api/uploads', uploadsGuard, express.static('/app/uploads', { setHeader
 
 // Routes
 app.use('/api/health', healthRoute);
+// The public API contract (openapi/document.js), for /developers and tools.
+app.use('/api/openapi.json', openapiRoute);
 app.use('/api/site', siteRoute);
 app.use('/api/auth', authRoute);
 // SSO / OAuth endpoints (Google) live under the same /api/auth prefix. Mounted

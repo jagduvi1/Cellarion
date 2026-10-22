@@ -1,6 +1,6 @@
 # Home Assistant integration — backend asks (push events + consume support)
 
-**Status:** spec — backend work pending (§1 SSE endpoint, §2 one-line stats change)
+**Status:** shipped (§1–§4). The public, stable contract for these endpoints is the OpenAPI document at `/api/openapi.json`, rendered at https://cellarion.app/developers (source: `backend/src/openapi/document.js`). This doc keeps the design notes behind it.
 **Client:** [ha-cellarion](https://github.com/jagduvi1/ha-cellarion) v1.2.0+ (client side already shipped for both, auto-detects server support)
 **Author:** requested by Johan, drafted 2026-07-10
 
@@ -39,7 +39,7 @@ plain HTTP through every proxy, and the client is 30 lines of aiohttp.
 
 ```
 GET /api/events/stream
-Authorization: Bearer <access token>     (same JWT as the REST API)
+Authorization: Bearer cel_…             (a read-scope API token; a session JWT also works)
 Accept: text/event-stream
 ```
 
@@ -93,7 +93,7 @@ is not critical.
 
 ## Auth & lifetime rules
 
-- Validate the JWT **at connect** with the existing `requireAuth` logic.
+- Validate the credential (API token or JWT) **at connect** with the existing `requireAuth` logic.
 - **Do NOT terminate the stream when the access token expires.** Killing
   it at 15 min forces a fresh bcrypt login every 15 min per household —
   worse than the polling we're replacing. The stream carries no data,

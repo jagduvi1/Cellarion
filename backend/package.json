@@ -49,6 +49,8 @@
   "devDependencies": {
     "@babel/plugin-transform-export-namespace-from": "^7.29.7",
     "@babel/plugin-transform-modules-commonjs": "^7.29.7",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "jest": "^30.2.0",
     "nodemon": "^3.0.2",
     "pino-pretty": "^13.1.3"

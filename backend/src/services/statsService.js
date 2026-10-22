@@ -439,12 +439,12 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   };
 }
 
-function buildEmptyStats(currency) {
+function buildEmptyStats(currency, targetRatingScale) {
   return {
     overview: {
       totalBottles: 0, totalConsumed: 0, uniqueWines: 0, totalCellars: 0,
       totalCountries: 0, totalGrapes: 0, totalValue: 0, currency,
-      avgPrice: 0, avgRating: null, avgConsumedRating: null,
+      avgPrice: 0, avgRating: null, avgConsumedRating: null, targetRatingScale,
       oldestVintage: null, newestVintage: null, avgVintageAge: null,
       bottlesDrunk: 0, bottlesGifted: 0, bottlesSold: 0,
       healthScore: null, healthGrade: null, regretIndex: 0,

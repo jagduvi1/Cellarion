@@ -53,7 +53,7 @@ router.get('/overview', async (req, res) => {
     const cellarIds = cellars.map(c => c._id);
 
     if (cellarIds.length === 0) {
-      return res.json({ stats: buildEmptyStats(targetCurrency) });
+      return res.json({ stats: buildEmptyStats(targetCurrency, targetRatingScale) });
     }
 
     const scope = { user: req.user.id, cellar: { $in: cellarIds } };

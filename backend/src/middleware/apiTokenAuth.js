@@ -29,6 +29,10 @@ const utcDay = (d) => d.toISOString().slice(0, 10);
  * (req.baseUrl + req.path), not req.originalUrl, so query strings and
  * percent-encoding cannot influence matching.
  *
+ * The public, stable contract for these routes is openapi/document.js
+ * (GET /api/openapi.json, cellarion.app/developers); openapi/allowlist.test.js
+ * fails when a rule here and the document disagree.
+ *
  * Scopes (docs/ha-push-events.md §3; climate: docs/climate-monitoring.md):
  *   read    — the GETs the Home Assistant integration uses: stats, cellars,
  *             bottles, notifications, the rack list (summary form only),
