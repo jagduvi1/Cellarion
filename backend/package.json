@@ -1,6 +1,6 @@
 {
   "name": "wine-cellar-backend",
-  "version": "1.275.0",
+  "version": "1.276.0",
   "license": "AGPL-3.0",
   "description": "Wine cellar management backend",
   "main": "server.js",
