@@ -22,6 +22,8 @@
  * a client can count on being present.
  */
 
+const { guideMarkdown, codeSamples } = require('./guide');
+
 const OBJECT_ID = { type: 'string', pattern: '^[a-f0-9]{24}$', examples: ['66f0c0ffee0123456789abcd'] };
 const nullable = (schema) => ({ ...schema, type: [schema.type, 'null'] });
 const NULL_ID = { type: ['string', 'null'], pattern: '^[a-f0-9]{24}$' };
@@ -1033,16 +1035,29 @@ function buildOpenApiDocument({ version, serverUrl = 'https://cellarion.app' } =
       title: 'Cellarion API',
       version: version || '0.0.0',
       summary: 'Read your cellar, take bottles out, post sensor readings.',
-      description: 'The stable REST API for your own Cellarion data, reached with a personal API token. The guide is at https://cellarion.app/developers. Everything a token can reach that is not in this document is internal and may change without notice.',
+      description: guideMarkdown(serverUrl),
       license: { name: 'AGPL-3.0', identifier: 'AGPL-3.0-only' },
       contact: { name: 'Cellarion', url: 'https://github.com/jagduvi1/Cellarion' },
     },
     servers: [{ url: serverUrl }],
     security: [{ apiToken: [] }],
     tags: TAGS,
-    paths,
+    paths: withSamples(serverUrl),
     components,
   };
+}
+
+/** The operations with their curl and Python samples for this base URL. */
+function withSamples(base) {
+  const samples = codeSamples(base);
+  const out = {};
+  for (const [path, item] of Object.entries(paths)) {
+    out[path] = {};
+    for (const [method, op] of Object.entries(item)) {
+      out[path][method] = { ...op, 'x-codeSamples': samples[op.operationId] || [] };
+    }
+  }
+  return out;
 }
 
 module.exports = { buildOpenApiDocument };

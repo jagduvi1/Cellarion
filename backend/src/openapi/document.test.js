@@ -38,6 +38,19 @@ test('every operation has a unique id, a known tag, a summary and described resp
   expect([...tags].filter((t) => !ops.some((o) => o.op.tags.includes(t)))).toEqual([]);
 });
 
+test('every operation has a curl and a Python sample, on this server\'s address', () => {
+  for (const o of v.operations()) {
+    const samples = o.op['x-codeSamples'] || [];
+    expect([o.operationId, samples.map((s) => s.label)]).toEqual([o.operationId, ['curl', 'Python']]);
+    for (const s of samples) {
+      const urls = s.source.match(/https?:\/\/[^\s"/]+/g) || [];
+      expect([o.operationId, urls.filter((u) => u !== 'https://cellar.example.org')]).toEqual([o.operationId, []]);
+    }
+  }
+  expect(doc.info.description).toContain('## Getting started');
+  expect(doc.info.description).toContain('curl -H "Authorization: Bearer $CELLARION_TOKEN" "https://cellar.example.org/api/inventory"');
+});
+
 test('every $ref resolves', () => {
   const refs = JSON.stringify(doc).match(/"\$ref":"[^"]+"/g) || [];
   const broken = refs
