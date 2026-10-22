@@ -1037,6 +1037,7 @@ function buildOpenApiDocument({ version, serverUrl = 'https://cellarion.app' } =
       version: version || '0.0.0',
       summary: 'Read your cellar, take bottles out, post sensor readings.',
       description: guideMarkdown(serverUrl),
+      termsOfService: `${serverUrl}/developers#section/Terms-of-use`,
       license: { name: 'AGPL-3.0', identifier: 'AGPL-3.0-only' },
       contact: { name: 'Cellarion', url: 'https://github.com/jagduvi1/Cellarion' },
     },

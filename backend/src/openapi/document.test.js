@@ -48,6 +48,8 @@ test('every operation has a curl and a Python sample, on this server\'s address'
     }
   }
   expect(doc.info.description).toContain('## Getting started');
+  expect(doc.info.description).toContain('## Terms of use');
+  expect(doc.info.termsOfService).toBe('https://cellar.example.org/developers#section/Terms-of-use');
   expect(doc.info.description).toContain('curl -H "Authorization: Bearer $CELLARION_TOKEN" "https://cellar.example.org/api/inventory"');
 });
 

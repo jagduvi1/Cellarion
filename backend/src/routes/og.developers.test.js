@@ -39,7 +39,7 @@ describe('GET /api/og/developers', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/text\/html/);
     expect(html).toContain('<h1>Cellarion API</h1>');
-    for (const heading of ['Getting started', 'Authentication and scopes', 'Errors', 'Rate limits', 'Stability and versioning', 'Security']) {
+    for (const heading of ['Getting started', 'Authentication and scopes', 'Errors', 'Rate limits', 'Stability and versioning', 'Security', 'Terms of use']) {
       expect(html).toContain(`>${heading}</h2>`);
     }
     expect(html).toContain('<table>');

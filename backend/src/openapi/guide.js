@@ -125,6 +125,17 @@ Until now a \`read\` token could also reach other \`GET\` routes under \`/api/ce
 - Revoke tokens you no longer use under *Settings → API tokens*, and revoke your integration's token when it is removed.
 - Call \`https://\` addresses only, so the token never crosses the network in the clear.
 - Image paths in answers point at the same server; fetch only paths of the documented shape.
+
+## Terms of use
+
+Build whatever helps you and others enjoy a cellar. A few ground rules keep it fair:
+
+- **Personal and open-source use is welcome.** Use the API for yourself, or share what you build for free as open source, like the Home Assistant integration.
+- **Keep it free.** Don't charge for a product or service built on the Cellarion API, or for access to Cellarion data. Have a commercial idea? Talk to us first.
+- **If other people use your service,** keep it free and open source and say clearly that it isn't run by Cellarion. Never ask anyone for their Cellarion password, only for a token, which you keep safe and its owner can remove. You are responsible for the data your service receives.
+- **Play nice.** Stay within the rate limits, don't copy the shared wine registry in bulk (see the [Registry Data Terms](/terms)), and don't present your project as an official Cellarion product.
+
+We may revoke a token or block access that breaks these terms or puts users or the service at risk. These terms cover cellarion.app: the owner of a self-hosted server sets their own, and the Cellarion software stays open source under the AGPL-3.0.
 `.trim();
 }
 
