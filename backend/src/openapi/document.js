@@ -82,7 +82,7 @@ const ID = {
   token: '66f0a1b2c3d4e5f6a7b8c90c',
 };
 const THUMB = '/api/uploads/thumbs/processed/3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b.webp.webp';
-const PHOTO = 'https://cellarion.app/api/uploads/processed/3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b.webp';
+const PHOTO = '/api/uploads/processed/3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b.webp';
 
 const exampleWineSummary = {
   _id: ID.wine,
