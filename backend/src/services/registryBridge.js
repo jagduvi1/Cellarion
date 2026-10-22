@@ -245,17 +245,46 @@ async function applyValues(wineId, values, userId, now, syncedAt = null) {
     const name = f?.key?.name;
     if (!name) continue;
     const nameKey = String(name).trim().toLowerCase();
-    let key = await RegistryDataKey.findOne({ nameKey, status: 'accepted' });
-    if (!key) {
-      key = await RegistryDataKey.create({
-        name: String(name).trim(),
-        type: VALUE_TYPES.includes(f.key.type) ? f.key.type : 'text',
-        unit: f.key.unit || null,
-        enumOptions: Array.isArray(f.key.enumOptions) ? f.key.enumOptions.slice(0, 20) : undefined,
-        rationale: `${REGISTRY_NOTE}: accepted there, copied here with the first wine that carries it.`,
-        status: 'accepted', proposedBy: userId, decidedBy: userId, decidedAt: now,
-      });
+    // The unique nameKey index spans PROPOSED keys too, so a local member's
+    // proposal of this name already claims it: look both up, never create a
+    // second one. The registry has accepted the key, which is what the
+    // proposer asked for, so a local proposal is promoted. Its own type and
+    // unit stay: the proposer's definition is not overwritten.
+    const live = { nameKey, status: { $in: ['proposed', 'accepted'] } };
+    let key = await RegistryDataKey.findOne(live);
+    let vocabChanged = false;
+    if (key && key.status === 'proposed') {
+      const sentType = VALUE_TYPES.includes(f.key.type) ? f.key.type : 'text';
+      if (key.type !== sentType || (key.unit || null) !== (f.key.unit || null)) {
+        console.warn(`[bridge] key "${key.name}" promoted with its local definition (${key.type}${key.unit ? ` ${key.unit}` : ''}); the registry sends ${sentType}${f.key.unit ? ` ${f.key.unit}` : ''}`);
+      }
+      key.status = 'accepted';
+      key.decidedBy = userId;
+      key.decidedAt = now;
+      key.rationale = [key.rationale, `${REGISTRY_NOTE}: accepted there.`].filter(Boolean).join('\n');
+      await key.save();
+      vocabChanged = true;
+    } else if (!key) {
+      try {
+        key = await RegistryDataKey.create({
+          name: String(name).trim(),
+          type: VALUE_TYPES.includes(f.key.type) ? f.key.type : 'text',
+          unit: f.key.unit || null,
+          enumOptions: Array.isArray(f.key.enumOptions) ? f.key.enumOptions.slice(0, 20) : undefined,
+          rationale: `${REGISTRY_NOTE}: accepted there, copied here with the first wine that carries it.`,
+          status: 'accepted', proposedBy: userId, decidedBy: userId, decidedAt: now,
+        });
+        vocabChanged = true;
+      } catch (err) {
+        // Another write claimed the name between the read and the create.
+        if (err?.code !== 11000) throw err;
+        key = await RegistryDataKey.findOne(live);
+        if (!key) throw err;
+      }
     }
+    // The accepted-key vocabulary is cached for a minute; a key that just
+    // joined it must be readable at once (get_wine_public_data, analytics).
+    if (vocabChanged) require('./registryDataOps').invalidateVocabCache();
     const publish = async (vintage, value) => {
       if (value === undefined || value === null) return;
       const existing = await RegistryDataValue.findOne({ wineDefinition: wineId, key: key._id, vintage, status: 'published' });

@@ -38,6 +38,7 @@ jest.mock('./findOrCreateWine', () => ({
   findOrCreateGrapes: jest.fn(async (names) => names.map((n) => `grape:${n}`)),
 }));
 jest.mock('./search', () => ({ indexWine: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('./registryDataOps', () => ({ invalidateVocabCache: jest.fn() }));
 
 const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
@@ -73,6 +74,70 @@ beforeEach(() => {
   RegistryDataValue.findOne.mockResolvedValue(null);
   SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
   delete process.env.REGISTRY_BRIDGE_REFRESH;
+});
+
+describe('adoptWine — registry keys this install only knows as a proposal', () => {
+  const { invalidateVocabCache } = require('./registryDataOps');
+  const LIVE = { nameKey: 'abv', status: { $in: ['proposed', 'accepted'] } };
+  const keyDoc = (over) => ({ _id: 'keyP', name: 'ABV', nameKey: 'abv', type: 'decimal', unit: '%', status: 'proposed', rationale: 'Proposed by a member.', save: jest.fn().mockResolvedValue(undefined), ...over });
+  const publishedKeys = () => RegistryDataValue.findOneAndUpdate.mock.calls.map((c) => c[0].key);
+
+  test('a locally PROPOSED key of the same name is promoted to accepted and used — no second key, no E11000', async () => {
+    const proposed = keyDoc();
+    RegistryDataKey.findOne.mockResolvedValue(proposed);
+    client.fetchWine.mockResolvedValue(registryWine());
+
+    const r = await bridge.adoptWine(RID, USER);
+
+    expect(r.ok).toBe(true);
+    expect(RegistryDataKey.findOne).toHaveBeenCalledWith(LIVE);
+    expect(RegistryDataKey.create).not.toHaveBeenCalled();
+    expect(proposed).toMatchObject({ status: 'accepted', decidedBy: USER });
+    expect(proposed.decidedAt).toBeInstanceOf(Date);
+    expect(proposed.save).toHaveBeenCalled();
+    expect(publishedKeys()).toEqual(['keyP', 'keyP']);
+    expect(invalidateVocabCache).toHaveBeenCalled();
+  });
+
+  test('a promoted key keeps the local type and unit when they differ, and says so in the log', async () => {
+    const proposed = keyDoc({ type: 'text', unit: null });
+    RegistryDataKey.findOne.mockResolvedValue(proposed);
+    client.fetchWine.mockResolvedValue(registryWine());
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await bridge.adoptWine(RID, USER);
+
+    expect(proposed).toMatchObject({ status: 'accepted', type: 'text', unit: null });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ABV'));
+    warn.mockRestore();
+  });
+
+  test('a create that loses the race (E11000) re-reads the key and still publishes the values', async () => {
+    RegistryDataKey.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(keyDoc({ _id: 'keyR', status: 'accepted' }));
+    RegistryDataKey.create.mockRejectedValueOnce(Object.assign(new Error('dup key'), { code: 11000 }));
+    client.fetchWine.mockResolvedValue(registryWine());
+
+    const r = await bridge.adoptWine(RID, USER);
+
+    expect(r.ok).toBe(true);
+    expect(publishedKeys()).toEqual(['keyR', 'keyR']);
+  });
+
+  test('a key minted here clears the vocabulary cache at once', async () => {
+    client.fetchWine.mockResolvedValue(registryWine());
+    await bridge.adoptWine(RID, USER);
+    expect(RegistryDataKey.create).toHaveBeenCalled();
+    expect(invalidateVocabCache).toHaveBeenCalled();
+  });
+
+  test('an already ACCEPTED key is used as is: nothing saved, the cache left alone', async () => {
+    const accepted = keyDoc({ status: 'accepted' });
+    RegistryDataKey.findOne.mockResolvedValue(accepted);
+    client.fetchWine.mockResolvedValue(registryWine());
+    await bridge.adoptWine(RID, USER);
+    expect(accepted.save).not.toHaveBeenCalled();
+    expect(invalidateVocabCache).not.toHaveBeenCalled();
+  });
 });
 
 describe('adoptWine', () => {
