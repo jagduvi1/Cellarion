@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, normalizeString, normalizeWineName, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 
 // A private draft's untouched clock (models/WineDefinition.draftExpiresAt):
 // reset by every edit and bottle add, swept hourly by services/wineDraftExpiryJob.
@@ -612,9 +612,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       return { wine: canonicalSiblings[0], created: false };
     }
     if (canonicalSiblings.length === 0) {
+      // The name part is keyed like every stored key (normalizeWineName):
+      // normalizeString drops a star grade, so "Auslese***" would probe the
+      // plain "Auslese" row's prefix and land on it.
       const siblingPrefix = producerMissing
-        ? `${pendingProducerKey(userId)}:${normalizeString(trimmedName)}:`
-        : `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
+        ? `${pendingProducerKey(userId)}:${normalizeWineName(trimmedName)}:`
+        : `${normalizeString(trimmedProducer)}:${normalizeWineName(trimmedName)}:`;
       const siblings = (await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`), ...isolation })
         .limit(2)
         .populate(POPULATE)).filter((c) => !pendingBlocked(c));
@@ -951,7 +954,20 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       if (siblings.length > 0) {
         const grapeDocs = await Grape.find({}).select('name normalizedName normalizedSynonyms').lean();
         const gTokens = grapeTokenSet(buildSurfaceForms(grapeDocs));
-        const query = { name: trimmedName, appellation: trimmedAppellation, grapes };
+        // isLabelVariant compares grape IDS (the candidate is populated); the
+        // caller sends grape NAMES. Resolve them the way findOrCreateGrapes
+        // does, without minting: a name the taxonomy doesn't know is dropped,
+        // so it counts as silence rather than as a disagreement.
+        const grapeIdByKey = new Map();
+        for (const g of grapeDocs) {
+          grapeIdByKey.set(g.normalizedName, String(g._id));
+          for (const s of g.normalizedSynonyms || []) grapeIdByKey.set(s, String(g._id));
+        }
+        const queryGrapeIds = [...new Set((Array.isArray(grapes) ? grapes : [])
+          .map(sanitizeTaxonomyName).filter(Boolean)
+          .map((n) => grapeIdByKey.get(normalizeString(resolveGrapeName(n))))
+          .filter(Boolean))];
+        const query = { name: trimmedName, appellation: trimmedAppellation, grapes: queryGrapeIds };
         for (const cand of siblings) {
           if (conflictsCountry(cand)) continue;
           const verdict = isLabelVariant(query, cand, gTokens);

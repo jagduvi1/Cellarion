@@ -1488,3 +1488,80 @@ describe('findOrCreateWine — a ripeness Prädikat is not an appellation (audit
     expect(WineDefinition.mock.calls[0][0].classification).toBe('VDP.Gutswein');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The raw-key sibling probe keys the name the way every stored key does
+// (normalizeWineName, star grades spelled out), so a star-graded add can't
+// land on the plain sibling of the same producer.
+// ---------------------------------------------------------------------------
+describe('findOrCreateWine — the sibling probe keys star grades like stored keys', () => {
+  test('"Auslese***" probes the star-graded prefix, never the plain Auslese', async () => {
+    primeFind({ siblings: [] });
+
+    await findOrCreateWine({ ...INPUT, name: 'Auslese***', appellation: 'Mosel' }, USER_ID);
+
+    const call = WineDefinition.find.mock.calls.find((c) => c[0] && c[0].normalizedKey);
+    const regex = call[0].normalizedKey;
+    expect('paul avril:auslese 3star:mosel').toMatch(regex);
+    expect('paul avril:auslese:mosel').not.toMatch(regex);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The label-variant stage compares grape IDS. Callers send grape NAMES, so the
+// query's names are resolved to the taxonomy's ids first (the same resolution
+// findOrCreateGrapes uses); a name the taxonomy doesn't know counts as silence.
+// ---------------------------------------------------------------------------
+describe('findOrCreateWine — label variants with grapes on both sides', () => {
+  const GRAPES = [
+    { _id: 'g-cs', name: 'Cabernet Sauvignon', normalizedName: 'cabernet sauvignon', normalizedSynonyms: [] },
+    { _id: 'g-syrah', name: 'Syrah', normalizedName: 'syrah', normalizedSynonyms: ['shiraz'] },
+    { _id: 'g-riesling', name: 'Riesling', normalizedName: 'riesling', normalizedSynonyms: [] },
+  ];
+  const existing = (name, grapeIds) => ({
+    _id: `wine-${name}`, name, producer: 'HALL', appellation: 'Napa Valley',
+    grapes: grapeIds.map((id) => GRAPES.find((g) => g._id === id)),
+  });
+  const typed = (name, grapes) => ({ name, producer: 'HALL', country: 'United States', appellation: 'Napa Valley', grapes });
+
+  beforeEach(() => {
+    Grape.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(GRAPES) }) });
+    scoreAllMatches.mockReturnValue([]);
+  });
+
+  test('the same variety by name links to the existing row', async () => {
+    primeFind({ producerRows: [existing('The North End', ['g-cs'])] });
+
+    const result = await findOrCreateWine(typed('The North End Cabernet Sauvignon', ['Cabernet Sauvignon']), USER_ID);
+
+    expect(result.created).toBe(false);
+    expect(result.labelVariantOf).toBe('The North End');
+  });
+
+  test('a synonym resolves to the same variety and links', async () => {
+    primeFind({ producerRows: [existing('Bin 389', ['g-syrah'])] });
+
+    const result = await findOrCreateWine(typed('Bin 389 Shiraz', ['Shiraz']), USER_ID);
+
+    expect(result.created).toBe(false);
+    expect(result.labelVariantOf).toBe('Bin 389');
+  });
+
+  test('a different variety does not link: the stored grape lists disagree', async () => {
+    primeFind({ producerRows: [existing('The North End', ['g-cs'])] });
+
+    const result = await findOrCreateWine(typed('The North End Riesling', ['Riesling']), USER_ID);
+
+    expect(result.created).toBe(true);
+    expect(result.labelVariantOf).toBeUndefined();
+  });
+
+  test('a grape name the taxonomy does not know counts as silence', async () => {
+    primeFind({ producerRows: [existing('The North End', ['g-cs'])] });
+
+    const result = await findOrCreateWine(typed('The North End Cabernet Sauvignon', ['Notagrape']), USER_ID);
+
+    expect(result.created).toBe(false);
+    expect(result.labelVariantOf).toBe('The North End');
+  });
+});
