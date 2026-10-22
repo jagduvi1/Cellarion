@@ -310,6 +310,15 @@ describeWithMongo('public API contract', () => {
     expect(row).toMatchObject({ count: 1, day: new Date().toISOString().slice(0, 10) });
     // Counts only: nothing about who.
     expect(Object.keys(row).filter((k) => k !== '_id' && k !== '__v').sort()).toEqual(['count', 'createdAt', 'day', 'route']);
+
+    // A made-up path under a deprecated prefix answers an error and leaves
+    // no row: the key is the matched route, never the requested path.
+    const junk = await fetch(`${base}/api/cellars/${home}/made-up-${Date.now()}`, {
+      headers: { Authorization: `Bearer ${world.tokens.read.raw}` },
+    });
+    expect(junk.status).toBeGreaterThanOrEqual(400);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await ApiDeprecatedUse.countDocuments()).toBe(1);
   });
 
   test('every documented status was exercised, or says why not', () => {

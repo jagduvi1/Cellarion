@@ -8,30 +8,39 @@ const ApiDeprecatedUse = require('../models/ApiDeprecatedUse');
 const { DEPRECATED_SINCE, SUNSET } = require('../config/apiDeprecations');
 const { siteBaseUrl } = require('../utils/siteUrl');
 
-/** '/api/cellars/66f…/vintages/66f…/2015' → '/api/cellars/:id/vintages/:id/:n' */
-function routeKey(path) {
-  return path
-    .split('/')
-    .map((seg) => (/^[a-f0-9]{24}$/i.test(seg) ? ':id' : /^\d+$/.test(seg) ? ':n' : seg))
-    .join('/');
-}
-
 function setDeprecationHeaders(res) {
   res.setHeader('Deprecation', `@${Math.floor(DEPRECATED_SINCE.getTime() / 1000)}`);
   res.setHeader('Sunset', SUNSET.toUTCString());
   res.setHeader('Link', `<${siteBaseUrl()}/developers>; rel="deprecation"; type="text/html"`);
 }
 
-/** Count one use. Fire-and-forget: counting must never slow or fail a request. */
-function recordDeprecatedUse(method, path, now = new Date()) {
+/**
+ * The route Express matched, as declared ('GET /api/cellars/:id/statistics'),
+ * or null when no route answered. Never built from the request path: the
+ * caller writes that, and every made-up path would become a row of its own.
+ */
+function matchedRoute(req) {
+  if (!req.route || req.route.path === undefined) return null;
+  const method = req.method === 'HEAD' ? 'GET' : req.method;
+  return `${method} ${req.baseUrl || ''}${String(req.route.path)}`;
+}
+
+/**
+ * Count one answered use (call on the response's 'finish'). Only a real route
+ * that answered successfully counts. Fire-and-forget: counting must never
+ * slow or fail a request.
+ */
+function recordDeprecatedUse(req, res, now = new Date()) {
+  const route = matchedRoute(req);
+  if (!route || res.statusCode >= 400) return Promise.resolve();
   // Without a live connection Mongoose would queue the write for seconds.
   if (mongoose.connection.readyState !== 1) return Promise.resolve();
   const day = now.toISOString().slice(0, 10);
   return ApiDeprecatedUse.updateOne(
-    { day, route: `${method} ${routeKey(path)}` },
+    { day, route },
     { $inc: { count: 1 }, $setOnInsert: { createdAt: now } },
     { upsert: true },
   ).catch(() => {});
 }
 
-module.exports = { routeKey, setDeprecationHeaders, recordDeprecatedUse };
+module.exports = { matchedRoute, setDeprecationHeaders, recordDeprecatedUse };

@@ -223,7 +223,9 @@ async function authenticateApiToken(req, res, next, rawToken) {
     }
     if (verdict === 'deprecated') {
       setDeprecationHeaders(res);
-      recordDeprecatedUse(req.method === 'HEAD' ? 'GET' : req.method, path);
+      // Counted once answered, under the route Express matched — never the
+      // raw path, which the caller writes (a made-up path would be a new row).
+      res.on('finish', () => recordDeprecatedUse(req, res));
     }
 
     // Same effective-plan downgrade as the JWT path in requireAuth.

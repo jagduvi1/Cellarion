@@ -326,7 +326,7 @@ describe('authenticateApiToken', () => {
       ApiToken.findOne.mockResolvedValue(activeToken());
       User.findById.mockReturnValue(selectable(activeUser()));
       const headers = {};
-      const res = { ...mockRes(), setHeader: jest.fn((k, val) => { headers[k] = val; }) };
+      const res = { ...mockRes(), setHeader: jest.fn((k, val) => { headers[k] = val; }), on: jest.fn() };
       const next = jest.fn();
       await authenticateApiToken(mockReq('GET', baseUrl, path), res, next, RAW);
       expect(next).toHaveBeenCalled();
