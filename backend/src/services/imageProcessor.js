@@ -238,7 +238,7 @@ async function runProcessImage(imageId) {
         await BottleImage.updateOne({ _id: imageId }, { status: 'approved' });
       }
       const WineDefinition = require('../models/WineDefinition');
-      await WineDefinition.findByIdAndUpdate(official.wineDefinition, { image: image.processedUrl });
+      await WineDefinition.findByIdAndUpdate(official.wineDefinition, { image: image.processedUrl, updatedAt: new Date() });
       require('./search').indexWine(official.wineDefinition);
     }
 

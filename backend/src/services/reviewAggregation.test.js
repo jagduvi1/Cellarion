@@ -117,6 +117,13 @@ describe('updateWineCommunityRating (author dedup — M-3)', () => {
     expect(writtenRating()).toEqual({ avg: 40, count: 1 });
   });
 
+  it('stamps updatedAt with the rating — the Bridge change check reads nothing else', async () => {
+    givenReviews([review('a', 90, '2026-01-01')]);
+    await updateWineCommunityRating(WINE_ID);
+    const [, update] = WineDefinition.updateOne.mock.calls[0];
+    expect(update.$set.updatedAt).toBeInstanceOf(Date);
+  });
+
   it('averages across distinct authors using each author\'s latest review', async () => {
     givenReviews([
       review('alice', 100, '2026-01-01'),

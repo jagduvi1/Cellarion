@@ -191,7 +191,7 @@ describe('attachOfficialWineImage', () => {
     expect(BottleImage.updateMany).toHaveBeenCalledWith(
       { wineDefinition: 'w1', assignedToWine: true }, { assignedToWine: false });
     expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith('w1',
-      expect.objectContaining({ imageCredit: 'Photo: Systembolaget' }));
+      expect.objectContaining({ imageCredit: 'Photo: Systembolaget', updatedAt: expect.any(Date) }));
     expect(searchService.indexWine).toHaveBeenCalledWith('w1');
   });
 

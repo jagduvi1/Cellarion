@@ -67,7 +67,7 @@ describe('inheritAiProfile', () => {
       { _id: 's2', aiProfile: ai('High', 0.9) },
     ]);
     expect(keeper.aiProfile.description).toBe('High');
-    expect(WineDefinition.updateOne).toHaveBeenCalledWith({ _id: 'k' }, { $set: { aiProfile: expect.objectContaining({ description: 'High' }) } });
+    expect(WineDefinition.updateOne).toHaveBeenCalledWith({ _id: 'k' }, { $set: { aiProfile: expect.objectContaining({ description: 'High' }), updatedAt: expect.any(Date) } });
   });
 
   test('a curator-reviewed donor replaces the keeper\'s unreviewed AI profile, review stamp included', async () => {
@@ -78,7 +78,7 @@ describe('inheritAiProfile', () => {
     expect(keeper.aiProfile.description).toBe('Curated text');
     expect(keeper.profileReviewedAt).toBe(reviewedAt);
     expect(WineDefinition.updateOne).toHaveBeenCalledWith({ _id: 'k' }, {
-      $set: { aiProfile: expect.objectContaining({ source: 'curator' }), profileReviewedAt: reviewedAt },
+      $set: { aiProfile: expect.objectContaining({ source: 'curator' }), profileReviewedAt: reviewedAt, updatedAt: expect.any(Date) },
     });
   });
 

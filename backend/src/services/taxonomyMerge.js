@@ -82,7 +82,9 @@ async function mergeGrapes(fromId, toId, { resync = true, synonyms = true } = {}
 
   // Two-step swap: a wine may already list both grapes, so $addToSet first
   // (no duplicate), then $pull the old id from every wine that has it.
-  await WineDefinition.updateMany({ grapes: from._id }, { $addToSet: { grapes: to._id } });
+  // updatedAt on every wine re-pointed below: the Bridge sends taxonomy and its
+  // change check reads updatedAt, which only save() stamps.
+  await WineDefinition.updateMany({ grapes: from._id }, { $addToSet: { grapes: to._id }, $set: { updatedAt: new Date() } });
   await WineDefinition.updateMany({ grapes: from._id }, { $pull: { grapes: from._id } });
 
   let regionsUpdated = 0;
@@ -142,7 +144,7 @@ async function mergeRegions(fromId, toId, { resync = true, synonyms = true } = {
  *  mergeCountries needs this for name collisions across the two countries). */
 async function mergeRegionDocs(from, to, { resync = true, synonyms = true } = {}) {
   const affectedWines = await WineDefinition.find({ region: from._id }).select('_id').lean();
-  await WineDefinition.updateMany({ region: from._id }, { $set: { region: to._id } });
+  await WineDefinition.updateMany({ region: from._id }, { $set: { region: to._id, updatedAt: new Date() } });
 
   const children = await Region.updateMany({ parentRegion: from._id }, { $set: { parentRegion: to._id } });
   const apps = await Appellation.updateMany({ region: from._id }, { $set: { region: to._id } });
@@ -214,7 +216,7 @@ async function mergeCountries(fromId, toId, { resync = true } = {}) {
   }
 
   const affectedWines = await WineDefinition.find({ country: from._id }).select('_id').lean();
-  await WineDefinition.updateMany({ country: from._id }, { $set: { country: to._id } });
+  await WineDefinition.updateMany({ country: from._id }, { $set: { country: to._id, updatedAt: new Date() } });
   const apps = await Appellation.updateMany({ country: from._id }, { $set: { country: to._id } });
 
   // Country-level grape regional display names follow the country merge.

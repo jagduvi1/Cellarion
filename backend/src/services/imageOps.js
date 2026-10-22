@@ -205,6 +205,9 @@ async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null
     image: image.processedUrl || image.originalUrl,
     // The GATED credit from the shared pipeline — never the raw caller input.
     imageCredit: image.credit,
+    // Atomic writes skip the save hook that stamps updatedAt, and the Bridge's
+    // change check reads only updatedAt.
+    updatedAt: new Date(),
   });
   require('./search').indexWine(wineDefinitionId);
 

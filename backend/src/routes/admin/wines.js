@@ -1871,6 +1871,8 @@ async function performWineMerge(sourceId, targetId, req) {
       await WineDefinition.findByIdAndUpdate(targetId, {
         image: sourceUrl,
         imageCredit: source.imageCredit || null,
+        // Atomic writes skip the save hook; the Bridge's change check reads updatedAt.
+        updatedAt: new Date(),
       });
       imageAction = 'adopted_from_source';
     } else {
@@ -2002,7 +2004,8 @@ async function inheritAiProfile(keeper, sources) {
   }
   keeper.aiProfile = profile;
   if ('profileReviewedAt' in set) keeper.profileReviewedAt = set.profileReviewedAt;
-  await WineDefinition.updateOne({ _id: keeper._id }, { $set: set });
+  // updatedAt: the keeper's profile changed, and the Bridge sends it.
+  await WineDefinition.updateOne({ _id: keeper._id }, { $set: { ...set, updatedAt: new Date() } });
 }
 
 // Re-embed every active vintage the keeper now owns so the vector store reflects

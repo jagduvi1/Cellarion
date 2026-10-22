@@ -137,7 +137,7 @@ async function approveImage({ imageId, actorId, visibility = 'public', official 
       await image.save();
 
       const imageUrl = image.processedUrl || image.originalUrl;
-      await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null });
+      await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null, updatedAt: new Date() });
       search().indexWine(wineDefId);
       madeOfficial = true;
       // The explicit choice is the set-official click in one step, so it
@@ -302,7 +302,7 @@ async function setOfficialImage({ imageId, actorId, replaceMain = true, clearRep
   await discardOriginal(image);
   await image.save();
 
-  await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null });
+  await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null, updatedAt: new Date() });
   search().indexWine(wineDefId);
 
   // Reward the uploader the first time their image becomes official.

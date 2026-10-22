@@ -174,7 +174,7 @@ describe('a published bottle photo belongs to the wine', () => {
     expect(Bottle.findById).toHaveBeenCalledWith(BOTTLE_ID);
     expect(image.wineDefinition).toBe(WINE_ID);
     expect(image.assignedToWine).toBe(true);
-    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null });
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null, updatedAt: expect.any(Date) });
   });
 
   test('approved public when the wine already has a picture: linked to the wine, not made its picture', async () => {

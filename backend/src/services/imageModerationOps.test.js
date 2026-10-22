@@ -103,7 +103,7 @@ describe('approveImage — which photo becomes the wine\'s picture', () => {
 
     expect(r.madeOfficial).toBe(true);
     expect(image.assignedToWine).toBe(true);
-    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null });
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null, updatedAt: expect.any(Date) });
     const detail = logAudit.mock.calls[0][3];
     expect(detail).not.toHaveProperty('via');
     expect(detail).not.toHaveProperty('official');
@@ -136,7 +136,7 @@ describe('approveImage — which photo becomes the wine\'s picture', () => {
     expect(r).toMatchObject({ ok: true, madeOfficial: true, replacedImage: OTHER });
     expect(BottleImage.updateMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID, assignedToWine: true }, { assignedToWine: false });
     expect(image.assignedToWine).toBe(true);
-    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null });
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null, updatedAt: expect.any(Date) });
   });
 
   test('official:true on a photo with no wine at all is a conflict, nothing written', async () => {
@@ -262,6 +262,6 @@ describe('setOfficialImage', () => {
 
     expect(r).toMatchObject({ ok: true, replacedImage: OTHER });
     expect(image.assignedToWine).toBe(true);
-    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null });
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null, updatedAt: expect.any(Date) });
   });
 });

@@ -81,7 +81,7 @@ describe('mergeGrapes', () => {
 
     // addToSet strictly before pull — order guards wines that hold both ids
     const calls = WineDefinition.updateMany.mock.calls;
-    expect(calls[0]).toEqual([{ grapes: 'g-dup' }, { $addToSet: { grapes: 'g-canon' } }]);
+    expect(calls[0]).toEqual([{ grapes: 'g-dup' }, { $addToSet: { grapes: 'g-canon' }, $set: { updatedAt: expect.any(Date) } }]);
     expect(calls[1]).toEqual([{ grapes: 'g-dup' }, { $pull: { grapes: 'g-dup' } }]);
 
     // both region grape arrays get the same two-step swap
@@ -191,7 +191,7 @@ describe('mergeRegions', () => {
 
     const summary = await mergeRegions('r-dup', 'r-canon');
 
-    expect(WineDefinition.updateMany).toHaveBeenCalledWith({ region: 'r-dup' }, { $set: { region: 'r-canon' } });
+    expect(WineDefinition.updateMany).toHaveBeenCalledWith({ region: 'r-dup' }, { $set: { region: 'r-canon', updatedAt: expect.any(Date) } });
     expect(Region.updateMany).toHaveBeenCalledWith({ parentRegion: 'r-dup' }, { $set: { parentRegion: 'r-canon' } });
     expect(Appellation.updateMany).toHaveBeenCalledWith({ region: 'r-dup' }, { $set: { region: 'r-canon' } });
     expect(to.synonyms).toEqual(['Piemonte']);
@@ -258,9 +258,9 @@ describe('mergeCountries', () => {
     // colliding region folded into the existing doc — never moved (unique index)
     expect(Region.updateOne).not.toHaveBeenCalledWith({ _id: 'r-coll' }, expect.anything());
     expect(colliding.deleteOne).toHaveBeenCalled();
-    expect(WineDefinition.updateMany).toHaveBeenCalledWith({ region: 'r-coll' }, { $set: { region: 'r-existing' } });
+    expect(WineDefinition.updateMany).toHaveBeenCalledWith({ region: 'r-coll' }, { $set: { region: 'r-existing', updatedAt: expect.any(Date) } });
 
-    expect(WineDefinition.updateMany).toHaveBeenCalledWith({ country: 'c-dup' }, { $set: { country: 'c-canon' } });
+    expect(WineDefinition.updateMany).toHaveBeenCalledWith({ country: 'c-dup' }, { $set: { country: 'c-canon', updatedAt: expect.any(Date) } });
     expect(Appellation.updateMany).toHaveBeenCalledWith({ country: 'c-dup' }, { $set: { country: 'c-canon' } });
     expect(from.deleteOne).toHaveBeenCalled();
     expect(summary).toMatchObject({ winesUpdated: 3, regionsMoved: 1, regionsMerged: 1 });

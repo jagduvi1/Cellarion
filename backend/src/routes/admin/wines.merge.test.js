@@ -384,7 +384,7 @@ describe('performWineMerge', () => {
     expect(BottleImage.findOne).toHaveBeenCalledWith({ wineDefinition: S, assignedToWine: true });
     expect(calls.indexOf('BottleImage.findOne')).toBeLessThan(calls.indexOf('Bottle.updateMany'));
     expect(result.imageAction).toBe('adopted_from_source');
-    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(K, { image: 'p.webp', imageCredit: 'Photo: Source' });
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(K, { image: 'p.webp', imageCredit: 'Photo: Source', updatedAt: expect.any(Date) });
     expect(searchService.indexWine).toHaveBeenCalledWith(K);
   });
 

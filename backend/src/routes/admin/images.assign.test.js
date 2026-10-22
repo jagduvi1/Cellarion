@@ -114,7 +114,7 @@ describe('PUT /api/admin/images/:id/assign-to-wine on a bottle photo with no win
     expect(Bottle.findById).toHaveBeenCalledWith(BOTTLE_ID);
     expect(image.wineDefinition).toBe(WINE_ID);
     expect(image.assignedToWine).toBe(true);
-    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: '/api/uploads/abc.png', imageCredit: null });
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: '/api/uploads/abc.png', imageCredit: null, updatedAt: expect.any(Date) });
   });
 
   test('with neither a wine nor a bottle it is still a 400', async () => {
@@ -150,7 +150,7 @@ describe('PUT /api/admin/images/:id/assign-to-wine visibility (L-7)', () => {
       .toBeLessThan(WineDefinition.findByIdAndUpdate.mock.invocationCallOrder[0]);
     expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(
       WINE_ID,
-      { image: '/api/uploads/abc.png', imageCredit: null }
+      { image: '/api/uploads/abc.png', imageCredit: null, updatedAt: expect.any(Date) }
     );
   });
 

@@ -435,7 +435,7 @@ router.put('/:id/assign-to-wine', async (req, res) => {
 
     // Update WineDefinition.image to the processed URL (or original if not processed)
     const imageUrl = image.processedUrl || image.originalUrl;
-    await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null });
+    await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null, updatedAt: new Date() });
 
     // Update search index
     searchService.indexWine(wineDefId);

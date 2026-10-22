@@ -49,7 +49,9 @@ async function updateWineCommunityRating(wineDefinitionId) {
     const { avg, count } = summarizeAuthorRatings(rows);
     await WineDefinition.updateOne(
       { _id: wineDefinitionId },
-      { $set: { 'communityRating.averageNormalized': avg, 'communityRating.reviewCount': count } }
+      // updatedAt: the Bridge sends communityRating, and its change check reads
+      // updatedAt, which only save() stamps.
+      { $set: { 'communityRating.averageNormalized': avg, 'communityRating.reviewCount': count, updatedAt: new Date() } }
     );
   } catch (err) {
     console.error('Failed to update community rating for wine', wineDefinitionId, err.message);

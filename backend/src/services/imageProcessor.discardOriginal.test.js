@@ -39,6 +39,8 @@ jest.mock('./thumbnails', () => ({
   ...jest.requireActual('./thumbnails'),
   warmThumbFor: jest.fn().mockResolvedValue(true),
 }));
+jest.mock('../models/WineDefinition', () => ({ findByIdAndUpdate: jest.fn().mockResolvedValue(null) }));
+jest.mock('./search', () => ({ indexWine: jest.fn() }));
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -145,6 +147,20 @@ describe('processImage', () => {
   // Release audit 2026-09-27 (L): the settled status was computed when the job
   // started, so an admin approving the photo while rembg ran had the approval
   // overwritten with 'processed' a moment later.
+  test("the wine's official picture moves to the processed file and the wine's updatedAt moves with it", async () => {
+    const WineDefinition = require('../models/WineDefinition');
+    const doc = makeDoc();
+    BottleImage.findById.mockReset();
+    BottleImage.findById
+      .mockResolvedValueOnce(doc)
+      .mockImplementation(() => ({ select: jest.fn().mockResolvedValue({ assignedToWine: true, wineDefinition: 'w1', status: 'approved' }) }));
+    rembg();
+
+    await processImage('img1');
+
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith('w1', { image: PROC, updatedAt: expect.any(Date) });
+  });
+
   test('an approval that lands while rembg runs is kept, not overwritten with processed', async () => {
     const doc = makeDoc();
     BottleImage.findById.mockReset();
