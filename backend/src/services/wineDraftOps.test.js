@@ -180,6 +180,14 @@ describe('updateDraft', () => {
     expect(w.normalizedKey).toBe(`draft~${ME}:amisfield:pinot noir:alsace`);
   });
 
+  test('an edit refused on an unknown grape never touches the region taxonomy', async () => {
+    const { findOrCreateRegion } = require('./findOrCreateWine');
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Blaufränkischx'] });
+    const res = await ops.updateDraft(draft(), { regionName: 'Burgenland', grapeNames: ['Blaufränkischx'] }, ME);
+    expect(res).toMatchObject({ ok: false, code: 'invalid_input' });
+    expect(findOrCreateRegion).not.toHaveBeenCalled();
+  });
+
   test('E11000 → conflict ("you already have a draft of this wine")', async () => {
     const w = draft();
     w.save = jest.fn().mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));

@@ -239,3 +239,32 @@ describe('cross-field override', () => {
     expect(res.ok).toBe(false);
   });
 });
+
+// findOrCreateRegion may MINT a Region, so it runs after every check that can
+// refuse the fix: a refused fix leaves no Region behind.
+describe('the region is resolved only once nothing can refuse the fix', () => {
+  const { findOrCreateRegion } = require('./findOrCreateWine');
+  const { resolveGrapeIdsStrict } = require('./wineProfileOps');
+
+  test('a fix refused on an unknown grape never touches the region taxonomy', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Blaufränkischx'] });
+    const res = await applyPendingFix(pendingWine(), { producer: 'Weingut Test', regionName: 'Burgenland', grapeNames: ['Blaufränkischx'] }, CURATOR);
+    expect(res.ok).toBe(false);
+    expect(findOrCreateRegion).not.toHaveBeenCalled();
+  });
+
+  test('a fix refused by the cross-field gate never touches the region taxonomy', async () => {
+    detectCrossFieldForValues.mockResolvedValue([{ check: 'producer-is-region.v1', detail: 'Tokaj' }]);
+    const res = await applyPendingFix(pendingWine({ name: 'Aszú' }), { producer: 'Tokaji', regionName: 'Tokaj-Hegyalja' }, CURATOR);
+    expect(res.ok).toBe(false);
+    expect(findOrCreateRegion).not.toHaveBeenCalled();
+  });
+
+  test('an accepted fix still resolves the region and stores its id', async () => {
+    const wine = pendingWine();
+    const res = await applyPendingFix(wine, { producer: 'Weingut Test', regionName: 'Burgenland' }, CURATOR);
+    expect(res.ok).toBe(true);
+    expect(findOrCreateRegion).toHaveBeenCalledWith('Burgenland', 'country-1', CURATOR);
+    expect(wine.region).toBe('region-1');
+  });
+});

@@ -381,17 +381,9 @@ async function applyPendingFix(wine, clean, userId) {
     }
     wine.country = countryDoc._id;
   }
-  if (clean.regionName !== undefined) {
-    if (!clean.regionName) {
-      wine.region = null;
-    } else {
-      // Lazy require: findOrCreateWine top-requires services/search → the
-      // ESM-only meilisearch package jest cannot parse (the #702 failure mode).
-      const { findOrCreateRegion } = require('./findOrCreateWine');
-      const regionDoc = await findOrCreateRegion(clean.regionName, countryDoc?._id || wine.country, userId);
-      wine.region = regionDoc?._id || null;
-    }
-  }
+  // The region is resolved further down, after every check that can refuse
+  // this fix: findOrCreateRegion may MINT a Region, and a refused fix must
+  // not leave one behind.
   let grapeNames = null;
   if (clean.grapeNames !== undefined) {
     if (clean.grapeNames.length === 0) {
@@ -466,6 +458,21 @@ async function applyPendingFix(wine, clean, userId) {
       // Returned to the caller so the override lands in the audit log with the
       // rule it overrode, not as a bare boolean nobody can interpret later.
       crossFieldOverridden = hits.map((h) => ({ check: h.check, detail: String(h.detail) }));
+    }
+  }
+
+  // Region last among the refusable steps (the proposal approve does the same):
+  // findOrCreateRegion may mint, and nothing above may refuse after a mint.
+  // wine.region is not an input to the cross-field gate.
+  if (clean.regionName !== undefined) {
+    if (!clean.regionName) {
+      wine.region = null;
+    } else {
+      // Lazy require: findOrCreateWine top-requires services/search → the
+      // ESM-only meilisearch package jest cannot parse (the #702 failure mode).
+      const { findOrCreateRegion } = require('./findOrCreateWine');
+      const regionDoc = await findOrCreateRegion(clean.regionName, countryDoc?._id || wine.country, userId);
+      wine.region = regionDoc?._id || null;
     }
   }
 

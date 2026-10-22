@@ -218,17 +218,8 @@ async function updateDraft(wine, clean, userId) {
     }
     wine.country = countryDoc._id;
   }
-  if (clean.regionName !== undefined) {
-    if (!clean.regionName) {
-      wine.region = null;
-    } else {
-      // Lazy require: findOrCreateWine top-requires services/search (ESM-only
-      // meilisearch client) — same reason pendingWineOps requires it lazily.
-      const { findOrCreateRegion } = require('./findOrCreateWine');
-      const regionDoc = await findOrCreateRegion(clean.regionName, countryDoc?._id || wine.country, userId);
-      wine.region = regionDoc?._id || null;
-    }
-  }
+  // The region is resolved after the grape check below: findOrCreateRegion may
+  // MINT a Region, and a refused edit must not leave one behind.
   let grapeNames = null;
   if (clean.grapeNames !== undefined) {
     if (clean.grapeNames.length === 0) {
@@ -242,6 +233,17 @@ async function updateDraft(wine, clean, userId) {
       }
       wine.grapes = resolved.ids;
       grapeNames = resolved.names;
+    }
+  }
+  if (clean.regionName !== undefined) {
+    if (!clean.regionName) {
+      wine.region = null;
+    } else {
+      // Lazy require: findOrCreateWine top-requires services/search (ESM-only
+      // meilisearch client) — same reason pendingWineOps requires it lazily.
+      const { findOrCreateRegion } = require('./findOrCreateWine');
+      const regionDoc = await findOrCreateRegion(clean.regionName, countryDoc?._id || wine.country, userId);
+      wine.region = regionDoc?._id || null;
     }
   }
 
