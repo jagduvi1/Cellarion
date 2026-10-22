@@ -60,6 +60,16 @@
     margin: -1rem -1rem 0;
   }
 
+  /* Redoc's floating menu button (the element right after its menu) and the
+     opened menu sit above the app's bottom bar, not under it. */
+  .developers-page .developers-redoc .menu-content + div {
+    bottom: calc(var(--bottom-nav-height) + 16px + env(safe-area-inset-bottom));
+  }
+
+  .developers-page .developers-redoc .menu-content {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+  }
+
   .developers-status {
     padding: 1.25rem 1rem;
   }

@@ -278,6 +278,27 @@ describe('classifyRequest: the documented reads, and the ones on their way out',
     expect(isRequestAllowed(READ, 'GET', path)).toBe(true);
   });
 
+  test('a path in another letter case is checked as Express routes it (case-insensitively)', () => {
+    // Express routes /api/cellars/:id/Members to the members route: the
+    // exclusions must see it too, whatever the case.
+    expect(classifyRequest(READ, 'GET', `/api/cellars/${oid}/Members`)).toBe('denied');
+    expect(classifyRequest(READ, 'GET', `/api/cellars/${oid}/AUDIT/`)).toBe('denied');
+    expect(classifyRequest(READ, 'GET', '/api/bottles/IMPORT/sessions')).toBe('denied');
+    expect(classifyRequest(['write'], 'GET', '/API/STATS/OVERVIEW')).toBe('denied');
+    // Case changes nothing that was allowed or deprecated.
+    expect(classifyRequest(READ, 'GET', '/API/Inventory')).toBe('allowed');
+    expect(classifyRequest(READ, 'GET', `/api/bottles/${oid.toUpperCase()}`)).toBe('allowed');
+    expect(classifyRequest(READ, 'GET', '/api/Stats/Value-History')).toBe('deprecated');
+  });
+
+  test('from the sunset on, a deprecated route is denied', () => {
+    const path = '/api/stats/value-history';
+    expect(classifyRequest(READ, 'GET', path, SUNSET.getTime() - 1)).toBe('deprecated');
+    expect(classifyRequest(READ, 'GET', path, SUNSET.getTime())).toBe('denied');
+    // The documented reads are untouched by the date.
+    expect(classifyRequest(READ, 'GET', '/api/stats/overview', SUNSET.getTime() + 1)).toBe('allowed');
+  });
+
   test('what was never reachable stays denied', () => {
     expect(classifyRequest(READ, 'GET', `/api/cellars/${oid}/members`)).toBe('denied');
     expect(classifyRequest(READ, 'GET', `/api/cellars/${oid}/audit`)).toBe('denied');

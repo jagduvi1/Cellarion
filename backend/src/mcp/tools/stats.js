@@ -59,7 +59,7 @@ async function buildStats(userId, currencyOverride) {
   if (cellars.length === 0) {
     // Same data shape as the populated case (by_type is an OBJECT map in
     // statsService) so the model never sees two envelopes.
-    const empty = buildEmptyStats(targetCurrency);
+    const empty = buildEmptyStats(targetCurrency, targetRatingScale);
     return {
       summary: 'No cellars yet',
       data: {

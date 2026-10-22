@@ -10,8 +10,9 @@
  *    no user or token stored, so we know what would break;
  *  - /developers says so (openapi/guide.js).
  *
- * After SUNSET: delete DEPRECATED_RULES and what reads it — the routes then
- * answer tokens 403 like any other route outside the allowlist.
+ * From SUNSET on, middleware/apiTokenAuth refuses them by itself (403, like
+ * any route outside the allowlist), also on a server that is never updated.
+ * Deleting DEPRECATED_RULES and what reads it afterwards is cleanup.
  */
 const DEPRECATED_SINCE = new Date('2026-11-01T00:00:00Z');
 const SUNSET = new Date('2027-05-01T00:00:00Z');

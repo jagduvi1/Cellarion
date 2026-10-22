@@ -77,7 +77,12 @@ export function redocOptions() {
     requiredPropsFirst: true,
     jsonSampleExpandLevel: 3,
     nativeScrollbars: true,
-    scrollYOffset: '.navbar',
+    // A function, read on every scroll: the navbar's height changes (the
+    // install prompt above it comes and goes), a selector is measured once.
+    scrollYOffset: () => {
+      const navbar = document.querySelector('.navbar');
+      return navbar ? navbar.getBoundingClientRect().bottom : 0;
+    },
     theme: {
       colors: {
         primary: { main: primary },
@@ -100,24 +105,48 @@ export function redocOptions() {
   };
 }
 
+/**
+ * Leaving the page. Redoc cannot be unmounted: its store keeps a scroll
+ * listener on window that rewrites the address (history.replaceState with a
+ * #section) on whatever page comes next, wiping React Router's state. So the
+ * page is a hard boundary: the next page is loaded fresh, which discards
+ * Redoc with the old document. Only when the path really changed — React's
+ * development double-mount unmounts on the same path.
+ */
+export function leaveDevelopers(loc = window.location) {
+  if (!/^\/developers\/?$/.test(loc.pathname)) loc.replace(loc.href);
+}
+
 export default function Developers() {
   const { theme } = useTheme();
   const container = useRef(null);
+  const firstTheme = useRef(theme);
   const [state, setState] = useState('loading');
 
   useEffect(() => {
     let cancelled = false;
-    setState('loading');
     loadRedoc()
       .then((Redoc) => {
         if (cancelled || !container.current) return;
-        Redoc.init(SPEC_URL, redocOptions(), container.current, () => {
-          if (!cancelled) setState('ready');
+        // Redoc calls back with the error when the document did not load.
+        Redoc.init(SPEC_URL, redocOptions(), container.current, (err) => {
+          if (!cancelled) setState(err ? 'error' : 'ready');
         });
       })
       .catch(() => { if (!cancelled) setState('error'); });
-    return () => { cancelled = true; };
-    // Re-render with the new colours when the theme changes.
+    return () => {
+      cancelled = true;
+      leaveDevelopers();
+    };
+  }, []);
+
+  // A theme switch reloads the page in the new colours (a second Redoc.init
+  // would leave the first instance's listeners behind). After the theme
+  // provider has stored the choice, which runs after this effect.
+  useEffect(() => {
+    if (theme === firstTheme.current) return undefined;
+    const t = setTimeout(() => window.location.reload(), 0);
+    return () => clearTimeout(t);
   }, [theme]);
 
   return (

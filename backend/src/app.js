@@ -192,6 +192,9 @@ app.use('/api/bridge/v1/wines/changes', express.json({ limit: '256kb' }));
 // front and, since #1460, back — each up to the same 500,000-character cap a
 // request has here (services/accountOps).
 app.use('/api/bridge/v1/requests', express.json({ limit: '1200kb' }));
+// A climate post may carry 100 readings (routes/climate INGEST_MAX_READINGS):
+// with timestamps and long channel names that passes 10 kB.
+app.use('/api/climate/ingest', express.json({ limit: '32kb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {

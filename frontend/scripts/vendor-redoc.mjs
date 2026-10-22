@@ -24,7 +24,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +42,9 @@ const work = mkdtempSync(join(tmpdir(), 'redoc-'));
 
 try {
   const integrity = execFileSync(npm, ['view', `redoc@${version}`, 'dist.integrity'], { encoding: 'utf8', shell: process.platform === 'win32' }).trim();
-  const tgzName = execFileSync(npm, ['pack', `redoc@${version}`, '--pack-destination', work, '--silent'], { encoding: 'utf8', shell: process.platform === 'win32' }).trim().split(/\r?\n/).pop();
+  // Packed inside the temporary folder: no path argument, so a space in the
+  // path cannot break the Windows shell call.
+  const tgzName = execFileSync(npm, ['pack', `redoc@${version}`, '--silent'], { cwd: work, encoding: 'utf8', shell: process.platform === 'win32' }).trim().split(/\r?\n/).pop();
   const tgz = join(work, tgzName);
 
   const [algo, expected] = integrity.split(/-(.*)/s);
@@ -59,6 +61,9 @@ try {
   const patched = bundle.replace(LOGO, '');
 
   const out = join(frontend, 'public', 'developers', 'redoc', version);
+  // A version's URL is cached for a year (nginx, the service worker): never
+  // change the bytes behind one. A new patch needs a new version folder.
+  if (existsSync(out)) throw new Error(`${out} already exists: a version that has shipped must not change. Delete it only if it never shipped.`);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'redoc.standalone.js'), patched);
   writeFileSync(join(out, 'LICENSE.txt'), [

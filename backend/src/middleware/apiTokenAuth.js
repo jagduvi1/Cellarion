@@ -1,7 +1,7 @@
 const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
-const { DEPRECATED_RULES } = require('../config/apiDeprecations');
+const { DEPRECATED_RULES, SUNSET } = require('../config/apiDeprecations');
 const { setDeprecationHeaders, recordDeprecatedUse } = require('../services/apiDeprecation');
 
 const { TOKEN_PREFIX } = ApiToken;
@@ -137,8 +137,19 @@ function isApiTokenCredential(credential) {
  * could then never stream from or terminate. Exported for direct unit testing.
  */
 function isMcpEndpoint(method, path) {
+  return (method === 'POST' || method === 'GET' || method === 'DELETE') && /^\/api\/mcp$/.test(normalizePath(path));
+}
+
+/**
+ * The path as Express routes it: case-insensitively (the app keeps Express's
+ * default; "case sensitive routing" is off), and with a trailing slash the
+ * same route. Every rule here is written in lower case, so a path must be
+ * compared in lower case too — otherwise /api/cellars/:id/Members reaches the
+ * members route while the exclusion for /members never matches.
+ */
+function normalizePath(path) {
   const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
-  return (method === 'POST' || method === 'GET' || method === 'DELETE') && /^\/api\/mcp$/.test(p);
+  return p.toLowerCase();
 }
 
 /**
@@ -160,16 +171,18 @@ function isRequestAllowed(scopes, method, path) {
  * answered with Deprecation and Sunset headers, config/apiDeprecations) or
  * 'denied'. Exported for direct unit testing.
  */
-function classifyRequest(scopes, method, path) {
-  // Normalize: Express treats HEAD as GET, and a trailing slash as the same route.
+function classifyRequest(scopes, method, path, now = Date.now()) {
+  // Express treats HEAD as GET; normalizePath matches its path rules.
   const m = method === 'HEAD' ? 'GET' : method;
-  const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  const p = normalizePath(path);
   if (m === SELF_REVOKE.method && SELF_REVOKE.pattern.test(p)) return 'allowed';
   if (TOKEN_EXCLUSIONS.some(rule => rule.test(p))) return 'denied';
   const matches = (rules) => (scopes || []).some((scope) =>
     (rules[scope] || []).some((rule) => rule.method === m && rule.pattern.test(p)));
   if (matches(SCOPE_ALLOWLIST)) return 'allowed';
-  if (matches(DEPRECATED_RULES)) return 'deprecated';
+  // From the sunset on, a deprecated route is just another route outside the
+  // allowlist — what /developers and the Sunset header promised.
+  if (now < SUNSET.getTime() && matches(DEPRECATED_RULES)) return 'deprecated';
   return 'denied';
 }
 

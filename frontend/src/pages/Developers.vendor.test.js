@@ -22,7 +22,8 @@ describe('vendored Redoc', () => {
     const license = readFileSync(`${publicDir}/developers/redoc/${REDOC_VERSION}/LICENSE.txt`, 'utf8');
     expect(license).toContain(`redoc@${REDOC_VERSION}`);
     expect(license).toMatch(/MIT License/i);
-    expect(readdirSync(`${publicDir}/developers/redoc`)).toEqual([REDOC_VERSION]);
+    // Dotfiles (a Finder .DS_Store) are not versions.
+    expect(readdirSync(`${publicDir}/developers/redoc`).filter((n) => !n.startsWith('.'))).toEqual([REDOC_VERSION]);
     expect(existsSync(`${publicDir}/developers/redoc/${REDOC_VERSION}/redoc.standalone.js.map`)).toBe(false);
   });
 });

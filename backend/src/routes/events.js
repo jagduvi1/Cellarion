@@ -31,6 +31,7 @@ router.get('/stream', requireAuth, (req, res) => {
   const tokenId = req.apiToken?.id || null;
   const registered = eventBus.register(req.user.id, res, tokenId);
   if (!registered.ok) {
+    res.set('Retry-After', '60');
     return res.status(429).json({ error: 'Too many event streams' });
   }
 

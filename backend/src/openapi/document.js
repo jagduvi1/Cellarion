@@ -342,14 +342,14 @@ const schemas = {
       vintage: { type: 'string', examples: ['2015', 'NV'] },
       bottleSize: { type: 'string', examples: ['750ml'] },
       price: { type: ['number', 'null'] },
-      currency: { type: 'string' },
+      currency: { type: ['string', 'null'] },
       rating: { type: ['number', 'null'] },
-      ratingScale: RATING_SCALE,
+      ratingScale: { ...RATING_SCALE, type: ['string', 'null'], enum: ['5', '20', '100', null] },
       status: BOTTLE_STATUS,
-      location: { type: 'string', description: 'Free-text location.' },
-      notes: { type: 'string' },
+      location: { type: ['string', 'null'], description: 'Free-text location.' },
+      notes: { type: ['string', 'null'] },
       purchaseDate: { type: ['string', 'null'], format: 'date-time' },
-      purchaseLocation: { type: 'string' },
+      purchaseLocation: { type: ['string', 'null'] },
       drinkFrom: YEAR,
       peakFrom: YEAR,
       peakUntil: YEAR,
@@ -458,7 +458,7 @@ const schemas = {
               totalValue: { type: 'number', description: 'In `currency`, from the bottles\' purchase prices.' },
               currency: { type: 'string', description: 'The caller\'s preferred currency.' },
               avgPrice: { type: 'number' },
-              avgRating: { type: ['number', 'null'], description: 'In `targetRatingScale`.' },
+              avgRating: { type: ['number', 'null'], minimum: 0, maximum: 100, description: 'The average of the bottles\' own ratings on a 0–100 scale, whatever scale each was given in. For display in `targetRatingScale`: × 5 / 100 for stars, × 20 / 100 for points out of 20.' },
               targetRatingScale: RATING_SCALE,
               oldestVintage: { type: ['integer', 'null'] },
               newestVintage: { type: ['integer', 'null'] },
@@ -562,7 +562,7 @@ const schemas = {
     properties: {
       reason: { type: 'string', enum: ['drank', 'gifted', 'sold', 'other'], default: 'drank' },
       rating: { type: 'number', description: 'Your rating of the bottle, in `consumedRatingScale`.' },
-      consumedRatingScale: { ...RATING_SCALE, description: 'The scale of `rating`. Defaults to your preferred scale.' },
+      consumedRatingScale: { ...RATING_SCALE, description: 'The scale of `rating`. Defaults to `"5"` (stars) when left out.' },
       note: { type: 'string', maxLength: 1000 },
       consumedAt: { type: 'string', description: 'When it was drunk, if not now: a date or date-time, not in the future.' },
       ifActive: {
@@ -745,7 +745,7 @@ const paths = {
         { $ref: '#/components/parameters/Offset' },
         { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'all', 'ordered', 'drank', 'gifted', 'sold', 'other', 'consumed'], default: 'active' }, description: '`consumed` = drank, gifted, sold or other.' },
         { name: 'maturity', in: 'query', schema: { type: 'string', examples: ['peak', 'late,declining'] }, description: 'One or more of `not-ready`, `early`, `peak`, `late`, `declining`, `none`, comma-separated.' },
-        { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Words in the wine name, producer, region or notes; typo-tolerant.' },
+        { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Words that must all appear (accents ignored) in the wine name, producer, grapes, country, region, appellation, type, notes or location.' },
         { name: 'type', in: 'query', schema: { type: 'string' }, description: 'Wine type, e.g. `red`. Comma-separated for several.' },
         { name: 'vintage', in: 'query', schema: { type: 'string' }, description: 'One or more vintages, comma-separated.' },
         { name: 'sort', in: 'query', schema: { type: 'string', enum: ['createdAt', '-createdAt', 'vintage', '-vintage', 'price', '-price', 'rating', '-rating', 'name', '-name', 'maturity', '-maturity'], default: '-createdAt' }, description: 'A leading `-` sorts descending.' },
@@ -825,7 +825,7 @@ const paths = {
           stats: {
             overview: {
               totalBottles: 42, totalConsumed: 17, uniqueWines: 30, totalCellars: 1, totalCountries: 6, totalGrapes: 12,
-              totalValue: 15420, currency: 'SEK', avgPrice: 367.14, avgRating: 3.9, targetRatingScale: '5',
+              totalValue: 15420, currency: 'SEK', avgPrice: 367.14, avgRating: 78, targetRatingScale: '5',
               oldestVintage: 2005, newestVintage: 2023, bottlesDrunk: 15, bottlesGifted: 2, bottlesSold: 0,
             },
             maturity: { declining: 1, late: 3, peak: 12, early: 9, notReady: 10, noProfile: 7 },
@@ -930,6 +930,7 @@ const paths = {
       responses: {
         200: { description: 'A WebP image.', content: { 'image/webp': { schema: { type: 'string', contentMediaType: 'image/webp' } } } },
         404: { description: 'No such image.', content: json(ref('Error'), { error: 'Not found' }) },
+        503: { description: 'The thumbnail is being rendered; try again after `Retry-After` seconds.' },
       },
     },
   },
@@ -1047,14 +1048,22 @@ function buildOpenApiDocument({ version, serverUrl = 'https://cellarion.app' } =
   };
 }
 
-/** The operations with their curl and Python samples for this base URL. */
+/**
+ * The operations with their curl and Python samples for this base URL, and a
+ * 429 on every one: every route passes the global per-address limiter
+ * (app.js apiLimiter), whatever its own limits.
+ */
 function withSamples(base) {
   const samples = codeSamples(base);
   const out = {};
   for (const [path, item] of Object.entries(paths)) {
     out[path] = {};
     for (const [method, op] of Object.entries(item)) {
-      out[path][method] = { ...op, 'x-codeSamples': samples[op.operationId] || [] };
+      out[path][method] = {
+        ...op,
+        responses: { ...op.responses, ...(op.responses['429'] ? {} : errors(429)) },
+        'x-codeSamples': samples[op.operationId] || [],
+      };
     }
   }
   return out;

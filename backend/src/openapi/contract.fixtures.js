@@ -106,6 +106,10 @@ async function seedContractData() {
     ...common, wineDefinition: white._id, vintage: '2016', bottleSize: '750ml', price: 20, currency: 'EUR',
     drinkFrom: 2017, peakFrom: 2018, peakUntil: year - 2, drinkTo: year + 1,
   });
+  // Text fields an edit cleared: they come back as null.
+  const cleared = await Bottle.create({
+    ...common, wineDefinition: white._id, vintage: '2017', location: null, notes: null, purchaseLocation: null,
+  });
   const bobs = await Bottle.create({ user: bob._id, cellar: shared._id, wineDefinition: white._id, vintage: '2021' });
 
   // A wine fridge: 2 shelves × 3 bottles; and a 2 × 3 grid.
@@ -146,7 +150,7 @@ async function seedContractData() {
     cellars: { home, shared },
     racks: { fridge, grid },
     wines: { red, white },
-    bottles: { b1, b2, b3, b4, drunk, ordered, consumable, late, bobs },
+    bottles: { b1, b2, b3, b4, drunk, ordered, consumable, late, cleared, bobs },
     tokens,
   };
 }

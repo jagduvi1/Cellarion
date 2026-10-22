@@ -39,7 +39,7 @@ function mockTrap(name, actual, spending, overrides = {}) {
   return out;
 }
 jest.mock('../services/aiProvider', () => mockTrap('aiProvider', jest.requireActual('../services/aiProvider'),
-  ['getChatClient'], { isConfigured: () => true }));
+  ['getChatClient'], { isConfigured: () => true, assertConfigured: () => {} }));
 jest.mock('../services/embedding', () => mockTrap('embedding', jest.requireActual('../services/embedding'),
   ['embed', 'embedSingle'], { isEmbeddingConfigured: () => true }));
 jest.mock('../services/labelScan', () => mockTrap('labelScan', jest.requireActual('../services/labelScan'),
@@ -71,10 +71,12 @@ const v = createValidator(doc);
 const NOT_EXERCISED = {
   'getHealth 503': 'only while the process drains or has lost its database',
   'getThumbnail 200': 'needs a photo file in the uploads volume',
-  'consumeBottle 429': 'the shared write limiter (express-rate-limit); getInventory 429 exercises the 429 shape',
-  'ingestClimate 429': 'per-device quota and limiter; getInventory 429 exercises the 429 shape',
-  'streamEvents 429': 'needs six open streams',
+  'getThumbnail 503': 'only while the thumbnail renderer is saturated',
 };
+
+// Every operation documents 429 (the global per-address limiter); the
+// inventory's own limiter exercises the 429 shape below.
+const NOT_EXERCISED_ANY_429 = (key) => key.endsWith(' 429');
 
 const ID_ZERO = '0123456789abcdef01234567';
 
@@ -223,6 +225,8 @@ describeWithMongo('public API contract', () => {
     const one = await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('b1') } });
     expect(one.body.rackInfo).toMatchObject({ position: 5 });
     await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('b4') } });
+    const cleared = await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('cleared') } });
+    expect(cleared.body.bottle).toMatchObject({ location: null, notes: null, purchaseLocation: null });
     await expectContract('getBottle', 401, { token: 'revoked', params: { bottleId: b('b1') } });
     await expectContract('getBottle', 403, { token: 'consume', params: { bottleId: b('b1') } });
     await expectContract('getBottle', 404, { token: 'read', params: { bottleId: ID_ZERO } });
@@ -321,9 +325,18 @@ describeWithMongo('public API contract', () => {
     expect(await ApiDeprecatedUse.countDocuments()).toBe(1);
   });
 
+  test('a path in another letter case cannot reach what tokens are kept from', async () => {
+    // Express routes case-insensitively; the token checks must too.
+    const home = String(world.cellars.home._id);
+    for (const path of [`/api/cellars/${home}/Members`, `/api/cellars/${home}/AUDIT`, '/api/bottles/IMPORT/sessions']) {
+      const res = await fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${world.tokens.read.raw}` } });
+      expect([path, res.status]).toEqual([path, 403]);
+    }
+  });
+
   test('every documented status was exercised, or says why not', () => {
     const documented = v.operations().flatMap((o) => o.statuses.map((s) => `${o.operationId} ${s}`));
-    const missing = documented.filter((k) => !seen.has(k) && !NOT_EXERCISED[k]);
+    const missing = documented.filter((k) => !seen.has(k) && !NOT_EXERCISED[k] && !NOT_EXERCISED_ANY_429(k));
     expect(missing).toEqual([]);
     expect(Object.keys(NOT_EXERCISED).filter((k) => !documented.includes(k))).toEqual([]);
     expect([...seen].filter((k) => NOT_EXERCISED[k])).toEqual([]);
