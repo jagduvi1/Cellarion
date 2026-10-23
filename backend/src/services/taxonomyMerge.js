@@ -29,6 +29,11 @@ const Appellation = require('../models/Appellation');
 const searchService = require('./search');
 const { normalizeString } = require('../utils/normalize');
 
+// Rows this install owns vs copies adopted over the Bridge (registryId set;
+// absent on every row of the hosted registry). See mergeGrapes.
+const OWN_ROWS = { registryId: null };
+const ADOPTED_ROWS = { registryId: { $ne: null } };
+
 /** Load + validate the from/to pair for any taxonomy model. */
 async function loadPair(Model, label, fromId, toId) {
   if (String(fromId) === String(toId)) {
@@ -82,9 +87,12 @@ async function mergeGrapes(fromId, toId, { resync = true, synonyms = true } = {}
 
   // Two-step swap: a wine may already list both grapes, so $addToSet first
   // (no duplicate), then $pull the old id from every wine that has it.
-  // updatedAt on every wine re-pointed below: the Bridge sends taxonomy and its
-  // change check reads updatedAt, which only save() stamps.
-  await WineDefinition.updateMany({ grapes: from._id }, { $addToSet: { grapes: to._id }, $set: { updatedAt: new Date() } });
+  // updatedAt on every wine re-pointed below that this install owns: the Bridge
+  // sends taxonomy and its change check reads updatedAt, which only save()
+  // stamps. Never on an ADOPTED copy (registryId): there it reads as "edited
+  // here" and the Bridge would skip the registry's next identity update.
+  await WineDefinition.updateMany({ grapes: from._id, ...OWN_ROWS }, { $addToSet: { grapes: to._id }, $set: { updatedAt: new Date() } });
+  await WineDefinition.updateMany({ grapes: from._id, ...ADOPTED_ROWS }, { $addToSet: { grapes: to._id } });
   await WineDefinition.updateMany({ grapes: from._id }, { $pull: { grapes: from._id } });
 
   let regionsUpdated = 0;
@@ -144,7 +152,8 @@ async function mergeRegions(fromId, toId, { resync = true, synonyms = true } = {
  *  mergeCountries needs this for name collisions across the two countries). */
 async function mergeRegionDocs(from, to, { resync = true, synonyms = true } = {}) {
   const affectedWines = await WineDefinition.find({ region: from._id }).select('_id').lean();
-  await WineDefinition.updateMany({ region: from._id }, { $set: { region: to._id, updatedAt: new Date() } });
+  await WineDefinition.updateMany({ region: from._id, ...OWN_ROWS }, { $set: { region: to._id, updatedAt: new Date() } });
+  await WineDefinition.updateMany({ region: from._id, ...ADOPTED_ROWS }, { $set: { region: to._id } });
 
   const children = await Region.updateMany({ parentRegion: from._id }, { $set: { parentRegion: to._id } });
   const apps = await Appellation.updateMany({ region: from._id }, { $set: { region: to._id } });
@@ -216,7 +225,8 @@ async function mergeCountries(fromId, toId, { resync = true } = {}) {
   }
 
   const affectedWines = await WineDefinition.find({ country: from._id }).select('_id').lean();
-  await WineDefinition.updateMany({ country: from._id }, { $set: { country: to._id, updatedAt: new Date() } });
+  await WineDefinition.updateMany({ country: from._id, ...OWN_ROWS }, { $set: { country: to._id, updatedAt: new Date() } });
+  await WineDefinition.updateMany({ country: from._id, ...ADOPTED_ROWS }, { $set: { country: to._id } });
   const apps = await Appellation.updateMany({ country: from._id }, { $set: { country: to._id } });
 
   // Country-level grape regional display names follow the country merge.

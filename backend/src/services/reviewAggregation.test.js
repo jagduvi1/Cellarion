@@ -2,7 +2,7 @@ jest.mock('../models/Review', () => ({
   aggregate: jest.fn(),
 }));
 jest.mock('../models/WineDefinition', () => ({
-  updateOne: jest.fn().mockResolvedValue({}),
+  updateOne: jest.fn().mockResolvedValue({ matchedCount: 1 }),
 }));
 
 const Review = require('../models/Review');
@@ -56,7 +56,7 @@ function givenReviews(docs) {
 function writtenRating() {
   expect(WineDefinition.updateOne).toHaveBeenCalledTimes(1);
   const [filter, update] = WineDefinition.updateOne.mock.calls[0];
-  expect(filter).toEqual({ _id: WINE_ID });
+  expect(filter).toEqual({ _id: WINE_ID, registryId: null });
   return {
     avg: update.$set['communityRating.averageNormalized'],
     count: update.$set['communityRating.reviewCount'],
@@ -103,7 +103,7 @@ describe('summarizeAuthorRatings', () => {
 describe('updateWineCommunityRating (author dedup — M-3)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    WineDefinition.updateOne.mockResolvedValue({});
+    WineDefinition.updateOne.mockResolvedValue({ matchedCount: 1 });
   });
 
   it('counts N reviews by one author exactly once, latest rating wins', async () => {
@@ -122,6 +122,19 @@ describe('updateWineCommunityRating (author dedup — M-3)', () => {
     await updateWineCommunityRating(WINE_ID);
     const [, update] = WineDefinition.updateOne.mock.calls[0];
     expect(update.$set.updatedAt).toBeInstanceOf(Date);
+  });
+
+  // Release audit 2026-10-23: on a self-hosted install a stamp on an ADOPTED
+  // copy reads as "edited here" and the Bridge skips the registry's next
+  // identity update; an install sends no rating anywhere. The rating still lands.
+  it('an adopted copy (registryId) gets the rating without the updatedAt stamp', async () => {
+    givenReviews([review('a', 90, '2026-01-01')]);
+    WineDefinition.updateOne.mockResolvedValueOnce({ matchedCount: 0 });
+    await updateWineCommunityRating(WINE_ID);
+    expect(WineDefinition.updateOne).toHaveBeenCalledTimes(2);
+    const [filter, update] = WineDefinition.updateOne.mock.calls[1];
+    expect(filter).toEqual({ _id: WINE_ID });
+    expect(update).toEqual({ $set: { 'communityRating.averageNormalized': 90, 'communityRating.reviewCount': 1 } });
   });
 
   it('averages across distinct authors using each author\'s latest review', async () => {

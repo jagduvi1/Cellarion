@@ -47,12 +47,19 @@ async function updateWineCommunityRating(wineDefinitionId) {
   try {
     const rows = await Review.aggregate(buildLatestPerAuthorPipeline(wineDefinitionId));
     const { avg, count } = summarizeAuthorRatings(rows);
-    await WineDefinition.updateOne(
-      { _id: wineDefinitionId },
-      // updatedAt: the Bridge sends communityRating, and its change check reads
-      // updatedAt, which only save() stamps.
-      { $set: { 'communityRating.averageNormalized': avg, 'communityRating.reviewCount': count, updatedAt: new Date() } }
+    const rating = { 'communityRating.averageNormalized': avg, 'communityRating.reviewCount': count };
+    // updatedAt: the Bridge sends communityRating, and its change check reads
+    // updatedAt, which only save() stamps. Only on a row this install owns: on a
+    // self-hosted install an ADOPTED copy (registryId) whose updatedAt passes
+    // registrySyncedAt reads as "edited here" and the Bridge skips the
+    // registry's next identity update — and an install sends no rating anywhere.
+    const own = await WineDefinition.updateOne(
+      { _id: wineDefinitionId, registryId: null },
+      { $set: { ...rating, updatedAt: new Date() } }
     );
+    if (!own.matchedCount) {
+      await WineDefinition.updateOne({ _id: wineDefinitionId }, { $set: rating });
+    }
   } catch (err) {
     console.error('Failed to update community rating for wine', wineDefinitionId, err.message);
   }
