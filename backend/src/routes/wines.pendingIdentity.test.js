@@ -16,7 +16,10 @@ process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/Discussion', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../services/search', () => ({ getIsAvailable: () => false, search: jest.fn(), indexWine: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: () => false, search: jest.fn(), indexWine: jest.fn() }));
+// The page around the wine has its own tests; here it would query models
+// this suite does not mock.
+jest.mock('../services/winePageContext', () => ({ buildWinePageContext: jest.fn(async () => null) }));
 jest.mock('../services/labelScan', () => ({ scanLabelFull: jest.fn(), identifyWineFromQuery: jest.fn() }));
 jest.mock('../services/imageSanitizer', () => ({
   sanitizeImageBuffer: jest.fn(async (b) => b),

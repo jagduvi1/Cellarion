@@ -13,7 +13,10 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
 jest.mock('../services/search', () => ({
   indexWine: jest.fn(), removeWine: jest.fn(), getIsAvailable: jest.fn(() => false), search: jest.fn(),
-}));
+}));
+// The page around the wine has its own tests; here it would query models
+// this suite does not mock.
+jest.mock('../services/winePageContext', () => ({ buildWinePageContext: jest.fn(async () => null) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn(), scanLabel: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn(), findOrCreateRegion: jest.fn() }));

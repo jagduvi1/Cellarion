@@ -33,6 +33,9 @@ jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }
 jest.mock('../services/wineMatching', () => ({ findBestMatch: jest.fn() }));
 jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../services/communityPrice', () => ({ getReleaseCurve: jest.fn() }));
+// The page around the wine has its own tests; here it would query models
+// this suite does not mock.
+jest.mock('../services/winePageContext', () => ({ buildWinePageContext: jest.fn(async () => null) }));
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());
 jest.mock('../services/aiBudget', () => ({
   tryDebitAi: jest.fn().mockResolvedValue({ ok: true, refund: jest.fn() }),
