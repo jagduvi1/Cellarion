@@ -282,9 +282,12 @@ router.delete('/:id', async (req, res) => {
     // deleted file.
     if (image.assignedToWine && image.wineDefinition) {
       const wineDefId = image.wineDefinition;
-      const imageUrl = image.processedUrl || image.originalUrl;
+      // Either file of the record can be the wine's picture (an original kept
+      // beside its processed file, or a picture set before processing ran), and
+      // unlinkImageFiles below removes both — so match against both.
+      const imageUrls = [image.processedUrl, image.originalUrl].filter(Boolean);
       const wine = await WineDefinition.findById(wineDefId);
-      if (wine && wine.image === imageUrl) {
+      if (wine && wine.image && imageUrls.includes(wine.image)) {
         if (survivor) {
           // Mirrors the set-official promotion.
           await BottleImage.updateOne(
