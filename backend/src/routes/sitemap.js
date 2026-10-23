@@ -26,7 +26,7 @@ const { countWinesBy } = require('./taxonomy');
  */
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
-const MIN_WINES = 3;
+const { MIN_WINES } = require('../config/taxonomyPages');
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 

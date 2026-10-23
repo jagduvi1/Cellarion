@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const rateLimitsConfig = require('../config/rateLimits');
 const { rateLimitKey } = require('../utils/clientIp');
 const { tierWinePayload } = require('../services/registryTiering');
+const { buildWinePageContext } = require('../services/winePageContext');
 const registryBridge = require('../services/registryBridge');
 const { gateAnonymousRead, CAP_MESSAGE } = require('../services/registryReadTracker');
 const { logAudit } = require('../services/audit');
@@ -1075,7 +1076,19 @@ router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res
     if (wine.canary === true) res.set('X-Robots-Tag', 'noindex, nofollow');
     const payload = tierWinePayload(decorateGrapes(wine), { full: !!req.user });
     delete payload.canary;
-    res.json({ wine: payload });
+    // The page around the wine (links, region and grape notes, related
+    // wines, drink windows for members only), behind the same counted read.
+    // Optional: when it fails the wine itself still answers.
+    let context = null;
+    try {
+      context = await buildWinePageContext(
+        typeof wine.toObject === 'function' ? wine.toObject() : wine,
+        { full: !!req.user },
+      );
+    } catch (err) {
+      console.error('Wine page context error:', err.message);
+    }
+    res.json({ wine: payload, context });
   } catch (error) {
     console.error('Get public wine error:', error);
     res.status(500).json({ error: 'Failed to get wine' });

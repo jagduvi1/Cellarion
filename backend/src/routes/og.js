@@ -3,7 +3,7 @@ const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const { recordRead, readerFor } = require('../services/registryReadTracker');
 const { publicProfileSummary } = require('../services/registryTiering');
-const WineVintageProfile = require('../models/WineVintageProfile');
+const { buildWinePageContext } = require('../services/winePageContext');
 const BlogPost = require('../models/BlogPost');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
@@ -649,29 +649,20 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     // schema.org AggregateRating into search-engine structured data.
     const hasAggregate = wine.communityRating?.reviewCount >= 2;
 
-    // Pull the most authoritative vintage profile so we can include real drink-window
-    // dates in the prose and FAQ. Prefer reviewed profiles, then most recent vintage.
-    // Relative (NV) profiles are excluded outright: they store year-OFFSETS from each
-    // bottle's purchase, and this page has no bottle to anchor them to — quoting them
-    // would print "peak maturity from 2 to 5" as if those were dates. The byte-wise
-    // vintage sort makes it worse ('NV' > every year string), so without the filter a
-    // reviewed NV profile would WIN the pick whenever one exists (audit 2026-08-10).
-    let profile = null;
+    // The page around the wine, the same as the page people see
+    // (services/winePageContext): links, region and grape notes, related
+    // wines, and how many vintages have a reviewed drink window. Never the
+    // window years: those are for members.
+    let context = null;
     try {
-      profile = await WineVintageProfile.findOne({
-        wineDefinition: wine._id,
-        status: 'reviewed',
-        relative: { $ne: true }
-      }).sort({ vintage: -1 }).select('vintage peakFrom peakUntil earlyFrom earlyUntil lateFrom lateUntil').lean();
+      context = await buildWinePageContext(wine, { full: false });
     } catch (e) {
-      // Profile is optional — failure here shouldn't break the page render.
+      // Optional — failure here shouldn't break the page render.
     }
-    const peakFrom = profile?.peakFrom;
-    const peakUntil = profile?.peakUntil;
-    const peakKnown = peakFrom && peakUntil;
+    const reviewedVintages = context?.reviewedVintages || 0;
 
     // Generate a prose paragraph (template, not LLM) — AI engines extract from prose,
-    // not from key-value lists. ~80–150 words including drink-window text when known.
+    // not from key-value lists.
     const typeWord = wine.type ? wine.type.toLowerCase() : 'wine';
     const placeWords = [wine.appellation, wine.region?.name, wine.country?.name].filter(Boolean).join(', ');
     const grapesPhrase = grapeNames.length === 0
@@ -682,10 +673,9 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     const classificationPhrase = wine.classification
       ? ` Classified as ${wine.classification}.`
       : '';
-    const drinkPhrase = peakKnown
-      ? (profile.vintage
-          ? ` The ${profile.vintage} vintage is at peak maturity from ${peakFrom} to ${peakUntil}.`
-          : ` Peak maturity is from ${peakFrom} to ${peakUntil}.`)
+    const vintagesWord = reviewedVintages === 1 ? 'vintage' : 'vintages';
+    const drinkPhrase = reviewedVintages > 0
+      ? ` Cellarion's sommeliers have reviewed the drink window of ${reviewedVintages} ${vintagesWord}; members see when each one is ready.`
       : '';
     const ratingPhrase = hasRating
       ? ` Cellarion users rate it ${fromNormalized(wine.communityRating.averageNormalized, '5').toFixed(1)} out of 5 across ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}.`
@@ -695,12 +685,6 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     // Per-wine FAQ — only emit a question when the underlying data exists. AI engines
     // love quoting Q&A pairs verbatim; this is what shows up in chat answers.
     const faqs = [];
-    if (peakKnown) {
-      faqs.push({
-        q: `When should I drink ${wine.name}?`,
-        a: `${wine.name}${profile.vintage ? ` ${profile.vintage}` : ''} reaches peak maturity between ${peakFrom} and ${peakUntil}. Outside that window, expect either underdeveloped tannins (too early) or fading fruit (too late).`
-      });
-    }
     if (placeWords) {
       faqs.push({
         q: `Where is ${wine.name} from?`,
@@ -765,6 +749,27 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     }
     const jsonLd = { '@context': 'https://schema.org', '@graph': graph };
 
+    // Links and sections from the page context; a place or grape whose page
+    // does not exist stays plain text.
+    const linkTo = (entry, name) => (entry?.path
+      ? `<a href="${esc(SITE_URL + entry.path)}">${esc(entry.name)}</a>`
+      : esc(name));
+    const grapeEntries = new Map((context?.grapes || []).map((g) => [g.name, g]));
+    const regionNote = context?.region?.excerpt
+      ? `<p><strong>${linkTo(context.region, context.region.name)}</strong>${wine.country?.name ? `, ${esc(wine.country.name)}` : ''}. ${esc(context.region.excerpt)}</p>`
+      : '';
+    const grapeNotes = (context?.grapes || []).filter((g) => g.excerpt)
+      .map((g) => `<p><strong>${linkTo(g, g.name)}</strong>: ${esc(g.excerpt)}</p>`).join('');
+    const whereFromHtml = regionNote || grapeNotes
+      ? `<section><h2>Where it comes from</h2>${regionNote}${grapeNotes}</section>`
+      : '';
+    const wineItems = (list) => list.map((w) => `<li><a href="${esc(SITE_URL + w.path)}">${esc(w.name)}</a> — ${esc(w.producer)}${w.place ? `, ${esc(w.place)}` : ''}</li>`).join('');
+    const sameProducer = context?.sameProducer || [];
+    const similar = context?.similar || [];
+    const moreWinesHtml = sameProducer.length || similar.length
+      ? `<section><h2>More wines</h2>${sameProducer.length ? `<h3>From ${esc(wine.producer)}</h3><ul>${wineItems(sameProducer)}</ul>` : ''}${similar.length ? `<h3>More ${esc(typeWord)} wines from ${esc(wine.region?.name || '')}</h3><ul>${wineItems(similar)}</ul>` : ''}</section>`
+      : '';
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -795,13 +800,15 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     ${wine.type ? `<p><strong>Type:</strong> ${esc(wine.type.charAt(0).toUpperCase() + wine.type.slice(1))}</p>` : ''}
     ${wine.appellation ? `<p><strong>Appellation:</strong> ${esc(wine.appellation)}</p>` : ''}
     ${wine.classification ? `<p><strong>Classification:</strong> ${esc(wine.classification)}</p>` : ''}
-    ${wine.region?.name ? `<p><strong>Region:</strong> ${esc(wine.region.name)}</p>` : ''}
-    ${wine.country?.name ? `<p><strong>Country:</strong> ${esc(wine.country.name)}</p>` : ''}
-    ${grapeNames.length > 0 ? `<p><strong>Grapes:</strong> ${esc(grapeNames.join(', '))}</p>` : ''}
-    ${peakKnown ? `<p><strong>Drink window:</strong> ${peakFrom}–${peakUntil}${profile.vintage ? ` (${esc(profile.vintage)} vintage)` : ''}</p>` : ''}
+    ${wine.region?.name ? `<p><strong>Region:</strong> ${linkTo(context?.region, wine.region.name)}</p>` : ''}
+    ${wine.country?.name ? `<p><strong>Country:</strong> ${linkTo(context?.country, wine.country.name)}</p>` : ''}
+    ${grapeNames.length > 0 ? `<p><strong>Grapes:</strong> ${grapeNames.map((n) => linkTo(grapeEntries.get(n), n)).join(', ')}</p>` : ''}
     ${hasRating && ratingOn5 != null ? `<p><strong>Community rating:</strong> ${ratingOn5.toFixed(1)}/5 from ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}</p>` : ''}
     ${wine.image ? `<img src="${esc(imageUrl)}" alt="${esc(wine.name)}" width="300" />` : ''}
     ${tasting ? `<section><h2>Tasting profile${tasting.source === 'ai' ? ' (AI-generated)' : ''}</h2>${tasting.style ? `<p><strong>Structure:</strong> ${esc(tasting.style)}</p>` : ''}<p>${esc(tasting.description)}</p></section>` : ''}
+    ${reviewedVintages > 0 ? `<section><h2>When to drink</h2><p>Cellarion's sommeliers have reviewed the drink window of ${reviewedVintages} ${vintagesWord} of ${esc(wine.name)}. <a href="${esc(SITE_URL)}/login?mode=register">Sign up free</a> to see when each one is ready.</p></section>` : ''}
+    ${whereFromHtml}
+    ${moreWinesHtml}
     ${faqs.length > 0 ? `<section><h2>Frequently asked questions</h2>${faqs.map(({ q, a }) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}</section>` : ''}
   </main>
   <footer>

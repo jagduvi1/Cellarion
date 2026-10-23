@@ -22,7 +22,7 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
-const MIN_WINES = 3; // gate: don't render pages with fewer wines
+const { MIN_WINES } = require('../config/taxonomyPages'); // gate: don't render pages with fewer wines
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
