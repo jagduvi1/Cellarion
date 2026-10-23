@@ -488,6 +488,9 @@ function Login() {
                   </Trans>
                 </span>
               </label>
+              <small className="form-hint">
+                {t('auth.drinkWindowEmailNotice', 'When bottles in your cellar reach their best, we email you, at most once a week. You can turn this off in Settings, or with the link in each email.')}
+              </small>
             </div>
           )}
           {mode === 'login' && (

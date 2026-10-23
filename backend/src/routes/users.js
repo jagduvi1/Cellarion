@@ -700,6 +700,10 @@ router.get('/unsubscribe/support-replies', scopedUnsubscribe('supportReply', 'su
 // and the bottle page).
 router.get('/unsubscribe/owner-questions', scopedUnsubscribe('ownerInquiry', 'owner-questions'));
 
+// GET /api/users/unsubscribe/drink-window?token=:token — stop emailing me
+// drink-window alerts (they stay on the bell, and push as set).
+router.get('/unsubscribe/drink-window', scopedUnsubscribe('drinkWindow', 'drink-window'));
+
 // ── "Delete my account" from an email link (no login) ──────────────────────
 // The link (utils/accountDeletionLink, good for 14 days) opens the frontend
 // page /delete-account, which asks these two routes. Opening the link never

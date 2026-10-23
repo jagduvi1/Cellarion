@@ -3,11 +3,14 @@ import { useTranslation, Trans } from 'react-i18next';
 
 // Where the one-click unsubscribe links land. `?only=support` comes from the
 // support-reply email's "stop emailing me answers" link, `?only=owner-questions`
-// from the owner-question email's "stop emailing me questions" link; each
+// from the owner-question email's "stop emailing me questions" link,
+// `?only=drink-window` from the drink-window email's "stop emailing me
+// drink-window alerts" link; each
 // turned off that one email and nothing else — the page must not claim more.
 const ONLY_MESSAGES = {
   support: 'unsubscribed.messageSupport',
   'owner-questions': 'unsubscribed.messageOwnerQuestions',
+  'drink-window': 'unsubscribed.messageDrinkWindow',
 };
 
 function Unsubscribed() {

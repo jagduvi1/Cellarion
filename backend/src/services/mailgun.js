@@ -155,6 +155,10 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   // every email. FRONTEND_URL is already required for CORS so it's guaranteed
   // present in any working production setup.
   const unsubLink = `${frontendUrl}/api/users/unsubscribe?token=${unsubToken}`;
+  // One click, no login: stop only these emails (the bell keeps the alerts).
+  const { createScopedUnsubscribeToken } = require('../utils/unsubscribe');
+  const stopLink = `${frontendUrl}/api/users/unsubscribe/drink-window?token=${createScopedUnsubscribeToken(userId, 'drinkWindow')}`;
+  const settingsLink = `${frontendUrl}/settings#notifications`;
 
   const statusLabel = (s) =>
     s === 'peak'      ? 'Entered peak — drink now'
@@ -188,7 +192,10 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
       '',
       `View your cellar: ${frontendUrl}/cellars`,
       '',
-      `You can manage these alerts in Settings > Notifications, or unsubscribe here: ${unsubLink}`
+      'You get at most one of these emails a week.',
+      `Stop emailing me drink-window alerts: ${stopLink}`,
+      `Choose which emails you get: ${settingsLink}`,
+      `Unsubscribe from all Cellarion emails: ${unsubLink}`
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
@@ -213,8 +220,10 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
         </p>
         <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
         <p style="color:#9A9484;font-size:0.85em;">
-          You can manage these alerts in Settings &gt; Notifications.
-          <br /><a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all emails</a>
+          You get at most one of these emails a week.
+          <a href="${stopLink}" style="color:#9A9484;">Stop emailing me drink-window alerts</a> ·
+          <a href="${settingsLink}" style="color:#9A9484;">Choose which emails you get</a> ·
+          <a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all Cellarion emails</a>
         </p>
       </div>
     `

@@ -132,6 +132,17 @@ connectDB().then(async () => {
     console.error('[migration] Owner-question opt-out backfill failed (will retry next boot):', err.message);
   }
 
+  // Migration: new accounts get drink-window email and push on by default.
+  // Older accounts with nothing stored for them get it stored off, so the new
+  // default never switches anyone on. Idempotent.
+  try {
+    const { storeDrinkWindowDefaultsOff } = require('./src/services/drinkWindowNotifier');
+    const n = await storeDrinkWindowDefaultsOff();
+    if (n > 0) console.log(`[migration] Drink-window email/push stored off on ${n} older value(s)`);
+  } catch (err) {
+    console.error('[migration] Drink-window default backfill failed (will retry next boot):', err.message);
+  }
+
   // Migration: a wine name's star grade is part of its keys ("Auslese**" and
   // "Auslese***" are two wines). Re-keys the few names that carry stars. The
   // scan is an unanchored regex over the whole registry, so it runs ONCE: a

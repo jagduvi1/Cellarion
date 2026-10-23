@@ -67,13 +67,14 @@ function verifyUnsubscribeToken(token) {
 /**
  * A SCOPED unsubscribe token turns off one category only (the support-reply
  * email links "stop emailing me answers" next to "unsubscribe from all", the
- * owner-question email "stop emailing me questions about my wines").
+ * owner-question email "stop emailing me questions about my wines", the
+ * drink-window email "stop emailing me drink-window alerts").
  * base64url(userId:timestamp:scope:hmac), the HMAC over all three fields — so
  * it is four parts where the all-categories token is three, and neither kind
  * verifies as the other: an all-token can't be replayed on a scoped link, and
  * a scoped token can't unsubscribe someone from everything.
  */
-const UNSUBSCRIBE_SCOPES = ['supportReply', 'ownerInquiry'];
+const UNSUBSCRIBE_SCOPES = ['supportReply', 'ownerInquiry', 'drinkWindow'];
 
 function createScopedUnsubscribeToken(userId, scope) {
   if (!UNSUBSCRIBE_SCOPES.includes(scope)) throw new Error(`Unknown unsubscribe scope: ${scope}`);

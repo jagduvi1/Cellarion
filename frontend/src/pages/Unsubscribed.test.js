@@ -26,6 +26,14 @@ test('the owner-questions link says only curator questions stopped', () => {
   expect(screen.queryByText('unsubscribed.message')).toBeNull();
 });
 
+// The drink-window email (on by default for new accounts) has its own stop
+// link too; the page must say only those emails stopped.
+test('the drink-window link says only drink-window emails stopped', () => {
+  at('/unsubscribed?only=drink-window');
+  expect(screen.getByText('unsubscribed.messageDrinkWindow')).toBeInTheDocument();
+  expect(screen.queryByText('unsubscribed.message')).toBeNull();
+});
+
 test('an unknown only= value falls back to the all-categories message', () => {
   at('/unsubscribed?only=whatever');
   expect(screen.getByText('unsubscribed.message')).toBeInTheDocument();

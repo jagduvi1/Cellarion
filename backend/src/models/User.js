@@ -162,16 +162,21 @@ const userSchema = new mongoose.Schema({
       // they're a pull surface, not interruptive. The toggles below gate
       // outbound channels (email, push) per category.
       //
-      // Defaults: drink-window stays opt-in (existing behaviour); community
-      // categories default ON for push (push is already explicit-subscription
-      // gated, so it's safe to opt in once subscribed) and OFF for email
-      // (email is the more intrusive channel — opt in if you want it).
+      // Defaults: drink-window alerts are about the member's own bottles, so
+      // a NEW account gets them by email (at most one a week) and push. An
+      // account created before that change keeps its stored off — the boot
+      // step drinkWindowNotifier.storeDrinkWindowDefaultsOff stores off where
+      // nothing was stored, so the new default never switches anyone on.
+      // Community categories default ON for push (push is already
+      // explicit-subscription gated, so it's safe to opt in once subscribed)
+      // and OFF for email (email is the more intrusive channel — opt in if
+      // you want it).
       drinkWindow: {
         // Master toggle (back-compat with the old single boolean — still drives
         // the in-app bell; the email/push children gate outbound channels).
         enabled: { type: Boolean, default: true },
-        email:   { type: Boolean, default: false },
-        push:    { type: Boolean, default: false }
+        email:   { type: Boolean, default: true },
+        push:    { type: Boolean, default: true }
       },
       communityReply: {
         // Reply to your discussion, or someone quoted your reply.
@@ -307,6 +312,13 @@ const userSchema = new mongoose.Schema({
   // 2026-09-27 M7). Cleared when they turn any email back on in Settings
   // (services/accountOps): from then on the per-category switches decide.
   emailOptOutAt: {
+    type: Date,
+    default: null
+  },
+  // When the last drink-window email went out (services/drinkWindowNotifier).
+  // At most one a week: changes in between wait in the bell and come together
+  // in the next one.
+  drinkWindowEmailedAt: {
     type: Date,
     default: null
   },

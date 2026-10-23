@@ -162,6 +162,7 @@
     "newPassword": "New password",
     "confirmPassword": "Confirm password",
     "passwordRequirements": "Must be at least 12 characters with uppercase, lowercase, number, and special character.",
+    "drinkWindowEmailNotice": "When bottles in your cellar reach their best, we email you, at most once a week. You can turn this off in Settings, or with the link in each email.",
     "resetting": "Resetting...",
     "resetPasswordBtn": "Reset password",
     "emailVerification": "Email Verification",
@@ -4517,6 +4518,7 @@
     "message": "You have been unsubscribed from every Cellarion email and push notification category.",
     "messageSupport": "We won't email you answers to your support tickets any more. They still appear on the Support page and under the bell, and your other email settings are unchanged.",
     "messageOwnerQuestions": "We won't email you curators' questions about your wines any more. They still appear under the bell and on your bottle, and your other email settings are unchanged.",
+    "messageDrinkWindow": "We won't email you drink-window alerts any more. They still appear under the bell, and your other email settings are unchanged.",
     "reEnable": "You can re-enable individual categories at any time from <1>Settings</1>."
   },
   "deleteAccountLink": {

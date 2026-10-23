@@ -2,8 +2,9 @@
  * Drink-window notifier — runs daily via the scheduler.
  *
  * Checks all users' active bottles against WineVintageProfile drink windows
- * and creates in-app (+ push / email) notifications when a bottle transitions
- * to a new maturity status.
+ * and creates in-app (+ push) notifications when a bottle transitions to a new
+ * maturity status. The email gathers them: at most one a week
+ * (maybeSendDrinkWindowEmail).
  *
  * First run is a "silent seed": it records each bottle's current status
  * without sending notifications, so only future transitions trigger alerts.
@@ -20,9 +21,10 @@ const { createNotification } = require('./notifications');
 const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun');
 
 /**
- * Whether the daily drink-window email digest should be sent to this user.
+ * Whether this user gets drink-window emails at all (the weekly cap is in
+ * maybeSendDrinkWindowEmail).
  *
- * The opt-in lives at `preferences.notifications.drinkWindow.email` — there is
+ * The switch lives at `preferences.notifications.drinkWindow.email` — there is
  * NO top-level `notifications.email` flag (see utils/notifications.js). Reading
  * the wrong leaf previously evaluated to `undefined` for everyone and silently
  * disabled the entire digest. Extracted as a pure, testable predicate so that
@@ -63,7 +65,7 @@ async function runDrinkWindowCheck() {
       { 'preferences.notifications.drinkWindow.enabled': { $ne: false } },
       { 'preferences.notifications.drinkWindow': { $ne: false } }
     ]
-  }).select('_id email username displayName preferences.notifications emailVerified emailOptOutAt').lean();
+  }).select('_id email username displayName preferences.notifications emailVerified emailOptOutAt createdAt drinkWindowEmailedAt').lean();
 
   let totalNotified = 0;
   let failedUsers = 0;
@@ -97,6 +99,13 @@ async function runDrinkWindowCheck() {
       totalNotified += await processArrivals(user);
     } catch (err) {
       console.error(`[drinkWindowNotifier] Arrival check failed for user ${user._id}:`, err.message);
+    }
+    if (!isFirstRun) {
+      try {
+        await maybeSendDrinkWindowEmail(user);
+      } catch (err) {
+        console.error(`[drinkWindowNotifier] Email failed for ${user._id}:`, err.message);
+      }
     }
   }
 
@@ -272,27 +281,15 @@ async function processUser(user, isFirstRun) {
   for (const alert of uniqueAlerts) {
     const { title, message, type } = buildNotification(alert);
     const link = `/cellars/${alert.cellarId}?search=${encodeURIComponent(alert.name)}`;
-    // Pass the 'drinkWindow' category so the push gate honours the opt-in
+    // Pass the 'drinkWindow' category so the push gate honours the
     // drinkWindow.push preference. Without it, createNotification falls back to
     // the permissive "any push toggle on" path and pushes even when the user
-    // left drinkWindow.push (default false) off.
+    // turned drinkWindow.push off.
     await createNotification(user._id, type, title, message, link, 'drinkWindow');
   }
 
-  // Send email digest if opted in (preferences.notifications.drinkWindow.email).
-  if (shouldSendDigestEmail(user)) {
-    try {
-      await sendDrinkWindowDigest(
-        user.email,
-        user.displayName || user.username,
-        uniqueAlerts,
-        user._id
-      );
-    } catch (err) {
-      console.error(`[drinkWindowNotifier] Email failed for ${user._id}:`, err.message);
-    }
-  }
-
+  // The email is NOT sent here: maybeSendDrinkWindowEmail sends at most one a
+  // week, built from every bottle notified since the last one.
   return uniqueAlerts.length;
 }
 
@@ -477,4 +474,76 @@ function buildNotification(alert) {
   }
 }
 
-module.exports = { runDrinkWindowCheck, processUser, processOpenBottles, processReservations, processArrivals, shouldSendDigestEmail };
+const EMAIL_GAP_MS = 7 * 24 * 60 * 60 * 1000;
+// Stored bottle markers that a notification announced, and how the email
+// words them: 'late' was announced as 'declining' (see processUser).
+const EMAILED_STATUS = { peak: 'peak', ending: 'ending', late: 'declining', declining: 'declining' };
+const EMAIL_ORDER = ['declining', 'ending', 'peak'];
+
+/**
+ * The drink-window email: at most one a week per member. It lists every wine
+ * whose bottles were announced (in the bell) since the last email, or since the
+ * account was created, but never further back than a week; bottles drunk or
+ * moved out since are left out. Nothing is sent in an account's first week —
+ * the new-member email (services/newMemberEmails) already says what is ready.
+ *
+ * @returns {Promise<number>} wines listed (0 = nothing sent)
+ */
+async function maybeSendDrinkWindowEmail(user, now = new Date()) {
+  if (!shouldSendDigestEmail(user)) return 0;
+  const last = user.drinkWindowEmailedAt || user.createdAt;
+  if (last && now.getTime() - new Date(last).getTime() < EMAIL_GAP_MS) return 0;
+  const since = new Date(Math.max(last ? new Date(last).getTime() : 0, now.getTime() - EMAIL_GAP_MS));
+
+  const cellarIds = await Cellar.distinct('_id', { user: user._id, deletedAt: null });
+  if (cellarIds.length === 0) return 0;
+  const bottles = await Bottle.find({
+    user: user._id,
+    cellar: { $in: cellarIds },
+    status: { $nin: NOT_IN_CELLAR_STATUSES },
+    drinkWindowNotifiedAt: { $gt: since },
+    drinkWindowNotifiedStatus: { $in: Object.keys(EMAILED_STATUS) },
+  }).populate({ path: 'wineDefinition', select: 'name' }).lean();
+
+  const lines = new Map();
+  for (const b of bottles) {
+    if (!b.wineDefinition) continue;
+    const status = EMAILED_STATUS[b.drinkWindowNotifiedStatus];
+    const key = `${b.wineDefinition._id}:${b.vintage}:${status}`;
+    if (!lines.has(key)) lines.set(key, { name: b.wineDefinition.name || 'Unknown wine', vintage: b.vintage, status });
+  }
+  if (lines.size === 0) return 0;
+  const list = [...lines.values()].sort((a, b) => EMAIL_ORDER.indexOf(a.status) - EMAIL_ORDER.indexOf(b.status));
+
+  await sendDrinkWindowDigest(user.email, user.displayName || user.username, list, user._id);
+  await User.updateOne({ _id: user._id }, { $set: { drinkWindowEmailedAt: now } });
+  return list.length;
+}
+
+/**
+ * Boot step (server.js), idempotent. New accounts get drink-window email and
+ * push on by default; an older account with nothing stored for them read as
+ * off. Store that off explicitly, so the new default can never switch an older
+ * account on (a later non-lean save would write the default). A legacy scalar
+ * `drinkWindow: false` is left alone — that account is off already. Later
+ * boots find nothing: accounts store their values when they are created.
+ *
+ * @returns {Promise<number>} values stored
+ */
+async function storeDrinkWindowDefaultsOff() {
+  let stored = 0;
+  for (const leaf of ['email', 'push']) {
+    const path = `preferences.notifications.drinkWindow.${leaf}`;
+    const res = await User.updateMany(
+      { [path]: { $exists: false }, 'preferences.notifications.drinkWindow': { $not: { $type: 'bool' } } },
+      { $set: { [path]: false } },
+    );
+    stored += res.modifiedCount || 0;
+  }
+  return stored;
+}
+
+module.exports = {
+  runDrinkWindowCheck, processUser, processOpenBottles, processReservations, processArrivals,
+  shouldSendDigestEmail, maybeSendDrinkWindowEmail, storeDrinkWindowDefaultsOff, EMAIL_GAP_MS,
+};
