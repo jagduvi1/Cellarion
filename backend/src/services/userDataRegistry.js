@@ -838,6 +838,8 @@ const REGISTRY = [
               myResponse: mine?.response || null,
               respondedAt: mine?.respondedAt || null,
               notifiedAt: mine?.notifiedAt || null,
+              // When the question was also emailed to them (ownerInquiryEmail).
+              emailedAt: mine?.emailedAt || null,
               // Only reaches them if they answered — same rule as the card.
               curatorReply: (mine?.response && i.ownerReply) || null,
               createdAt: i.createdAt,

@@ -14,13 +14,13 @@ jest.mock('./mailgun', () => ({
   EMAIL_VERIFICATION_ENABLED: true,
   sendOwnerInquiryEmail: jest.fn(async () => {}),
 }));
-jest.mock('../models/User', () => ({ find: jest.fn() }));
+jest.mock('../models/User', () => ({ find: jest.fn(), updateMany: jest.fn() }));
 jest.mock('../models/WineOwnerInquiry', () => ({ find: jest.fn(), updateOne: jest.fn() }));
 
 const User = require('../models/User');
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
 const { sendOwnerInquiryEmail } = require('./mailgun');
-const { emailInquiryRecipients, EMAIL_GAP_MS } = require('./ownerInquiryEmail');
+const { emailInquiryRecipients, storeOptedOutOwnerQuestions, EMAIL_GAP_MS } = require('./ownerInquiryEmail');
 
 const oid = (c) => c.repeat(24);
 const NOW = new Date('2026-10-20T08:00:00Z');
@@ -90,6 +90,67 @@ test('a failed send is not recorded and does not throw', async () => {
   expect(res).toEqual({ emailed: 1 });
   expect(WineOwnerInquiry.updateOne.mock.calls[0][2].arrayFilters[0]['r.user'].$in).toEqual([oid('2')]);
   spy.mockRestore();
+});
+
+// Release audit 2026-10-23: the daily cap read the stamps, but a stamp was
+// written only after Mailgun answered and each run is a background job, so a
+// curator asking about three wines of one import seconds apart emailed the
+// same owner three times. Runs are now serialized in-process.
+test('two questions created moments apart email an owner once', async () => {
+  usersAre([ok('1')]);
+  const stamps = [];
+  WineOwnerInquiry.updateOne.mockImplementation(async (filter, update, opts) => {
+    for (const user of opts.arrayFilters[0]['r.user'].$in) {
+      stamps.push({ inquiry: filter._id, user, emailedAt: update.$set['recipients.$[r].emailedAt'] });
+    }
+    return {};
+  });
+  WineOwnerInquiry.find.mockImplementation((q) => ({ select: () => ({ lean: () => Promise.resolve(
+    stamps.filter((s) => s.inquiry !== q._id.$ne).map((s) => ({ recipients: [{ user: s.user, emailedAt: s.emailedAt }] })),
+  ) }) }));
+
+  const second = { ...INQUIRY, _id: oid('f') };
+  const [a, b] = await Promise.all([
+    run(),
+    emailInquiryRecipients({ inquiry: second, wineLabel: 'Pira — Barolo', questionPath: `/questions/${oid('f')}`, now: NOW }),
+  ]);
+
+  expect(sendOwnerInquiryEmail).toHaveBeenCalledTimes(1);
+  expect(a.emailed + b.emailed).toBe(1);
+});
+
+test('a send that timed out still counts for the daily cap (Mailgun may deliver it late)', async () => {
+  jest.useFakeTimers();
+  try {
+    usersAre([ok('1')]);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    sendOwnerInquiryEmail.mockReturnValueOnce(new Promise(() => {}));
+    const pending = run();
+    await jest.advanceTimersByTimeAsync(10 * 1000 + 1);
+    expect(await pending).toEqual({ emailed: 0 });
+    expect(WineOwnerInquiry.updateOne.mock.calls[0][2].arrayFilters[0]['r.user'].$in).toEqual([oid('1')]);
+    warn.mockRestore();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('an account scheduled for deletion is not emailed', async () => {
+  usersAre([ok('1', { deletionScheduledFor: new Date('2026-10-25') }), ok('2')]);
+  expect(await run()).toEqual({ emailed: 1 });
+  expect(sendOwnerInquiryEmail.mock.calls[0][0]).toBe('2@example.com');
+});
+
+// Release audit 2026-10-23: an account that unsubscribed from all email before
+// this category existed has no flag stored, so Settings showed it on and a save
+// withdrew the unsubscribe. The boot backfill stores it off.
+test('the boot backfill stores the category off for unsubscribed accounts with no flag, and only those', async () => {
+  User.updateMany.mockResolvedValue({ modifiedCount: 6 });
+  expect(await storeOptedOutOwnerQuestions()).toBe(6);
+  expect(User.updateMany).toHaveBeenCalledWith(
+    { emailOptOutAt: { $ne: null }, 'preferences.notifications.ownerInquiry.email': { $exists: false } },
+    { $set: { 'preferences.notifications.ownerInquiry.email': false } },
+  );
 });
 
 test('nobody eligible: nothing is sent and nothing is written', async () => {

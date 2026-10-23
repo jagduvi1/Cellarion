@@ -121,6 +121,17 @@ connectDB().then(async () => {
     console.error('[migration] Photo vintage backfill failed (will retry next boot):', err.message);
   }
 
+  // Migration: accounts that unsubscribed from all email before owner-question
+  // emails existed get that category stored off, so Settings shows it off and
+  // a later save cannot withdraw their unsubscribe. Idempotent.
+  try {
+    const { storeOptedOutOwnerQuestions } = require('./src/services/ownerInquiryEmail');
+    const n = await storeOptedOutOwnerQuestions();
+    if (n > 0) console.log(`[migration] Owner-question emails stored off for ${n} unsubscribed account(s)`);
+  } catch (err) {
+    console.error('[migration] Owner-question opt-out backfill failed (will retry next boot):', err.message);
+  }
+
   // Migration: a wine name's star grade is part of its keys ("Auslese**" and
   // "Auslese***" are two wines). Re-keys the few names that carry stars. The
   // scan is an unanchored regex over the whole registry, so it runs ONCE: a

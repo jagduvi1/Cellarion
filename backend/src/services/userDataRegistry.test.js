@@ -321,6 +321,7 @@ describe('WineOwnerInquiry — recipient-entry erasure + asker nulling', () => {
         myResponse: 'Label says E. Pira e Figli',
         respondedAt: 'r1',
         notifiedAt: 'n1',
+        emailedAt: null,
         curatorReply: 'Thank you — the producer is now recorded as E. Pira e Figli.',
         createdAt: 'c1',
         resolvedAt: 'r0',
