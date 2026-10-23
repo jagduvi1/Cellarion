@@ -1,6 +1,8 @@
 /* Analytics dashboard (#987 R-E). Two-column grid on desktop; ONE column on
    mobile — a scrollable feed of answers is the phone-first surface the wide
-   table cannot be. */
+   table cannot be.
+   Class prefix is "dash-", never "ad-": ad blockers hide .ad-widget,
+   .ad-grid, .ad-head … and the whole page goes blank. */
 
 .analytics-dashboard {
   max-width: 1100px;
@@ -11,27 +13,27 @@
   gap: 12px;
 }
 
-.ad-head {
+.dash-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
-.ad-head h1 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.4rem; }
-.ad-head-actions { display: flex; align-items: center; gap: 8px; }
-.ad-save-note { font-size: 0.8rem; color: var(--color-text-secondary); }
-.ad-save-error { color: var(--color-danger); }
+.dash-head h1 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.4rem; }
+.dash-head-actions { display: flex; align-items: center; gap: 8px; }
+.dash-save-note { font-size: 0.8rem; color: var(--color-text-secondary); }
+.dash-save-error { color: var(--color-danger); }
 
-.ad-hint { margin: 0; font-size: 0.82rem; color: var(--color-text-secondary); }
+.dash-hint { margin: 0; font-size: 0.82rem; color: var(--color-text-secondary); }
 
-.ad-grid {
+.dash-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-.ad-widget {
+.dash-widget {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -41,12 +43,12 @@
   gap: 8px;
   min-width: 0; /* charts must shrink inside the grid track */
 }
-.ad-full { grid-column: 1 / -1; }
+.dash-full { grid-column: 1 / -1; }
 
-.ad-widget-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.ad-widget-title { font-weight: 600; font-size: 0.95rem; }
-.ad-widget-title em { font-style: normal; font-weight: 400; font-size: 0.78rem; color: var(--color-text-secondary); }
-.ad-x {
+.dash-widget-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dash-widget-title { font-weight: 600; font-size: 0.95rem; }
+.dash-widget-title em { font-style: normal; font-weight: 400; font-size: 0.78rem; color: var(--color-text-secondary); }
+.dash-x {
   background: none;
   border: none;
   color: var(--color-text-secondary);
@@ -54,32 +56,32 @@
   cursor: pointer;
   padding: 0 4px;
 }
-.ad-x:hover { color: var(--color-danger); }
+.dash-x:hover { color: var(--color-danger); }
 
-.ad-kpis { display: flex; gap: 18px; flex-wrap: wrap; padding: 6px 2px; }
-.ad-kpi { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
-.ad-kpi-value { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.ad-kpi-label { font-size: 0.78rem; color: var(--color-text-secondary); }
+.dash-kpis { display: flex; gap: 18px; flex-wrap: wrap; padding: 6px 2px; }
+.dash-kpi { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+.dash-kpi-value { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dash-kpi-label { font-size: 0.78rem; color: var(--color-text-secondary); }
 
-.ad-empty, .ad-error {
+.dash-empty, .dash-error {
   padding: 14px;
   text-align: center;
   font-size: 0.85rem;
   color: var(--color-text-secondary);
 }
-.ad-error { color: var(--color-danger); }
+.dash-error { color: var(--color-danger); }
 
 @media (max-width: 768px) {
-  .ad-grid { grid-template-columns: 1fr; }
+  .dash-grid { grid-template-columns: 1fr; }
 }
 
 /* Audit UX-4: containment for the mini table + the board selector. */
-.ad-mini-scroll { overflow-x: auto; }
-.ad-mini-scroll table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.ad-mini-scroll td { padding: 4px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-.ad-mini-scroll tr:last-child td { border-bottom: none; }
-.ad-more { padding: 6px 8px 2px; font-size: 0.78rem; color: var(--color-text-secondary); }
-.ad-board-select {
+.dash-mini-scroll { overflow-x: auto; }
+.dash-mini-scroll table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.dash-mini-scroll td { padding: 4px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.dash-mini-scroll tr:last-child td { border-bottom: none; }
+.dash-more { padding: 6px 8px 2px; font-size: 0.78rem; color: var(--color-text-secondary); }
+.dash-board-select {
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
@@ -93,12 +95,12 @@
 
 /* Tabs: Boards (the pages you just look at) | Table (where views are built,
    since the table moved here from the cellar page). */
-.ad-tabs {
+.dash-tabs {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--color-border);
 }
-.ad-tab {
+.dash-tab {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -109,5 +111,5 @@
   color: var(--color-text-secondary);
   cursor: pointer;
 }
-.ad-tab:hover { color: var(--color-text); }
-.ad-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.dash-tab:hover { color: var(--color-text); }
+.dash-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
