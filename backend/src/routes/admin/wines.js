@@ -704,8 +704,17 @@ router.post('/:id/non-wine', async (req, res) => {
     if (req.body.value === true) await purgeSourceVectors(wine._id);
     else if (wasNonWine) reembedActiveVintages(wine._id).catch(() => {});
 
+    // Completes the quarantine for the somm queue, the same rule as the
+    // proposal path's non_wine apply: PENDING maturity rows go (auto-seeded
+    // stubs); REVIEWED windows are curated data and stay with the record.
+    let pendingRemoved = 0;
+    if (req.body.value === true && !wasNonWine) {
+      const del = await WineVintageProfile.deleteMany({ wineDefinition: wine._id, status: 'pending' });
+      pendingRemoved = del.deletedCount || 0;
+    }
+
     // A restore gives back the maturity-queue rows the quarantine removed
-    // (wineProposals' non_wine apply deletes the PENDING ones), seeded from
+    // (both quarantine paths delete the PENDING ones), seeded from
     // the bottles in cellars — the same re-seed a pending wine gets when it
     // is promoted. Bottles on order are queued when they arrive.
     if (wasNonWine && req.body.value === false) {
@@ -718,7 +727,7 @@ router.post('/:id/non-wine', async (req, res) => {
     }
 
     logAudit(req, 'admin.wine.nonWine', { type: 'wine', id: wine._id },
-      { value: req.body.value, name: wine.name, producer: wine.producer });
+      { value: req.body.value, name: wine.name, producer: wine.producer, ...(req.body.value === true ? { pendingRemoved } : {}) });
     res.json({ message: req.body.value ? 'Quarantined as non-wine' : 'Restored as wine', nonWine: wine.nonWine });
   } catch (error) {
     console.error('Non-wine toggle error:', error);

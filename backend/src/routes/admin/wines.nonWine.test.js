@@ -20,7 +20,7 @@ jest.mock('../../models/WineDefinition', () => {
 });
 jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn(), countDocuments: jest.fn(), distinct: jest.fn() }));
 jest.mock('../../models/BottleImage', () => ({}));
-jest.mock('../../models/WineVintageProfile', () => ({}));
+jest.mock('../../models/WineVintageProfile', () => ({ deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 }) }));
 jest.mock('../../models/WineVintagePrice', () => ({}));
 jest.mock('../../models/WineReport', () => ({}));
 jest.mock('../../models/Review', () => ({}));
@@ -146,6 +146,41 @@ test('setting false on a row that was never quarantined re-seeds nothing', async
   expect(res.status).toBe(200);
   expect(Bottle.distinct).not.toHaveBeenCalled();
   expect(require('../../services/embeddingJob').reembedActiveVintages).not.toHaveBeenCalled();
+});
+
+// The maturity queue: quarantine from Admin → Wines drops the PENDING rows,
+// the same rule as a quarantine through a correction proposal (before, only
+// the proposal path did, so a non-wine kept its stubs in the somm queue while
+// the restore below already assumed they were gone). Reviewed windows stay.
+describe('the maturity queue on a quarantine', () => {
+  const WineVintageProfile = require('../../models/WineVintageProfile');
+
+  test('quarantine deletes the pending rows only and audits how many', async () => {
+    WineDefinition.findById.mockResolvedValue(wineDoc());
+    WineVintageProfile.deleteMany.mockResolvedValueOnce({ deletedCount: 3 });
+
+    const res = await toggle(WINE_ID, { value: true });
+    expect(res.status).toBe(200);
+    expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID, status: 'pending' });
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'admin.wine.nonWine', { type: 'wine', id: WINE_ID },
+      expect.objectContaining({ value: true, pendingRemoved: 3 }));
+  });
+
+  test('quarantining an already quarantined row deletes nothing', async () => {
+    WineDefinition.findById.mockResolvedValue({ ...wineDoc(), nonWine: true, save: jest.fn() });
+    const res = await toggle(WINE_ID, { value: true });
+    expect(res.status).toBe(200);
+    expect(WineVintageProfile.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('a restore deletes nothing (it re-seeds instead)', async () => {
+    WineDefinition.findById.mockResolvedValue({ ...wineDoc(), nonWine: true, save: jest.fn() });
+    Bottle.distinct.mockResolvedValue(['2019']);
+    const res = await toggle(WINE_ID, { value: false });
+    expect(res.status).toBe(200);
+    expect(WineVintageProfile.deleteMany).not.toHaveBeenCalled();
+    expect(ensurePendingVintageProfile).toHaveBeenCalledWith(WINE_ID, '2019');
+  });
 });
 
 test.each([
