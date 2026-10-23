@@ -8,6 +8,9 @@ const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
+const { submitUrls } = require('../../services/indexNow');
+const { reembedActiveVintages } = require('../../services/embeddingJob');
+const { profileInputsSnapshot, reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 const { closeWineReport, validateResponse } = require('../../services/wineReportOps');
@@ -90,6 +93,8 @@ router.put('/:id/resolve', async (req, res) => {
       if (!wine) return res.status(404).json({ error: 'The reported wine no longer exists' });
 
       const previous = wine[report.suggestedField] ?? null;
+      // Before the assignment: the re-enrich below runs on a REAL change only.
+      const beforeProfileInputs = profileInputsSnapshot(wine);
       // Run the suggestion through the SAME field normalizers the write
       // pipeline applies — a raw assignment would let a one-click apply
       // reintroduce the exact defect classes the registry campaign closed:
@@ -117,6 +122,12 @@ router.put('/:id/resolve', async (req, res) => {
         throw err;
       }
       searchService.indexWine(wine._id).catch(() => {});
+      // The follow-through an identity edit gets on the admin PUT and the
+      // proposal approve: IndexNow (the public page changed), the embedding
+      // text, and the AI profile when a profile input really changed.
+      submitUrls(`/wines/${wine._id}`);
+      reembedActiveVintages(wine._id).catch(() => {});
+      reenrichAfterRecordEdit(wine, profileInputsSnapshot(wine) !== beforeProfileInputs);
       // What was stored, after the normalizers above — not the raw suggestion.
       applied = { field: report.suggestedField, from: previous, to: wine[report.suggestedField] };
       logAudit(req, 'admin.wine.update',

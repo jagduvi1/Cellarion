@@ -16,6 +16,13 @@ jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellat
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
+jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
+jest.mock('../../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/enrichmentJob', () => ({
+  reenrichAfterRecordEdit: jest.fn(),
+  // The real snapshot: pure, and the decision under test.
+  profileInputsSnapshot: jest.requireActual('../../services/enrichmentJob').profileInputsSnapshot,
+}));
 
 const express = require('express');
 const http = require('http');
@@ -150,5 +157,49 @@ describe('resolve with applySuggestion', () => {
     expect(res.status).toBe(200);
     expect(WineDefinition.findById).not.toHaveBeenCalled();
     expect(r2.status).toBe('resolved');
+  });
+});
+
+// An applied correction gets the follow-through the admin PUT and the proposal
+// approve give an identity edit: IndexNow, the embedding text, and a re-enrich
+// when a profile input really changed. Before, a report-applied rename left
+// search engines, embeddings and the AI profile on the old identity.
+describe('resolve with applySuggestion — follow-through', () => {
+  const { submitUrls } = require('../../services/indexNow');
+  const { reembedActiveVintages } = require('../../services/embeddingJob');
+  const { reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
+
+  test('a name correction is announced, re-embedded and re-enriched', async () => {
+    const r = report({ suggestedField: 'name', suggestedValue: 'Sylvaner Vieilles Vignes' });
+    const w = wine();
+    WineReport.findById.mockResolvedValue(r);
+    WineDefinition.findById.mockResolvedValue(w);
+
+    const res = await resolve({ applySuggestion: true });
+    expect(res.status).toBe(200);
+    expect(submitUrls).toHaveBeenCalledWith(`/wines/${WINE_ID}`);
+    expect(reembedActiveVintages).toHaveBeenCalledWith(WINE_ID);
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(w, true);
+  });
+
+  test('a correction that leaves every profile input as it was re-enriches with changed=false', async () => {
+    const r = report({ suggestedField: 'type', suggestedValue: 'white' });
+    const w = wine({ type: 'white' });
+    WineReport.findById.mockResolvedValue(r);
+    WineDefinition.findById.mockResolvedValue(w);
+
+    await resolve({ applySuggestion: true });
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(w, false);
+  });
+
+  test('a collision (409) runs none of it', async () => {
+    const r = report();
+    WineReport.findById.mockResolvedValue(r);
+    WineDefinition.findById.mockResolvedValue(wine({ save: jest.fn().mockRejectedValue({ code: 11000 }) }));
+
+    expect((await resolve({ applySuggestion: true })).status).toBe(409);
+    expect(submitUrls).not.toHaveBeenCalled();
+    expect(reembedActiveVintages).not.toHaveBeenCalled();
+    expect(reenrichAfterRecordEdit).not.toHaveBeenCalled();
   });
 });

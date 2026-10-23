@@ -31,6 +31,7 @@ jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: je
 // The new producer gate (v1.111.0 audit MED-3) is DB-backed; unmocked it
 // buffers on mongoose for 10s. Its verdicts have their own suites.
 jest.mock('../../services/crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(async () => null) }));
+jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
@@ -215,4 +216,42 @@ test('a request with no recorded surface still names the contributor, and never 
   // Rows predating the origin fields fall back to the surface that has always
   // filed requests in a browser.
   expect(doc.contribution.via).toBe('ui');
+});
+
+// A wine minted by an approval is a creation like Admin → Wines create: it is
+// audited as one and announced to IndexNow. Before, only the request's own
+// resolve row existed (it links the wine, it does not say one was created).
+describe('an approval that creates the wine', () => {
+  const { logAudit } = require('../../services/audit');
+  const { submitUrls } = require('../../services/indexNow');
+
+  test('is audited as admin.wine.create (via wine-request) and pinged to IndexNow', async () => {
+    const res = await resolve({ ...CREATE_BODY, confirmCreate: true });
+    expect(res.status).toBe(200);
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'admin.wine.create',
+      { type: 'wine', id: 'wine-new' },
+      { name: 'Barolo del Comune', producer: 'Cantina Rossi', via: 'wine-request', requestId: REQUEST_ID });
+    expect(submitUrls).toHaveBeenCalledWith('/wines/wine-new');
+  });
+
+  test('the duplicate-key path links an existing wine: no creation row, no ping', async () => {
+    WineDefinition.mockImplementation(function (doc) {
+      Object.assign(this, doc);
+      this._id = 'wine-new';
+      this.save = jest.fn().mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
+    });
+    WineDefinition.findOne.mockResolvedValue({ _id: 'wine-existing', name: 'Barolo del Comune', producer: 'Cantina Rossi' });
+
+    const res = await resolve({ ...CREATE_BODY, confirmCreate: true });
+    expect(res.status).toBe(200);
+    expect(logAudit.mock.calls.some(([, action]) => action === 'admin.wine.create')).toBe(false);
+    expect(submitUrls).not.toHaveBeenCalled();
+  });
+
+  test('an unknown colour is refused with 400 like Admin → Wines create, nothing created', async () => {
+    const res = await resolve({ ...CREATE_BODY, confirmCreate: true, wineData: { ...CREATE_BODY.wineData, type: 'sparkling', colour: 'rossé' } });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/^Colour must be one of:/);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
 });

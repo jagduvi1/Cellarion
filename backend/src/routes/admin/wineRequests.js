@@ -10,6 +10,7 @@ const { findOrCreateWine } = require('../../services/findOrCreateWine');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
+const { submitUrls } = require('../../services/indexNow');
 const { completeRequestResolve, completeRequestReject } = require('../../services/wineRequestOps');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
@@ -121,6 +122,11 @@ router.put('/:id/resolve', async (req, res) => {
       }
       if (!isValidId(String(country))) {
         return res.status(400).json({ error: 'Invalid country' });
+      }
+      // An unknown colour is refused like on Admin → Wines create, not
+      // dropped: a silent drop hides the typo from the approving admin.
+      if (colour != null && colour !== '' && !WINE_COLOURS.includes(colour)) {
+        return res.status(400).json({ error: `Colour must be one of: ${WINE_COLOURS.join(', ')}` });
       }
       {
         // Same rule as the admin wine editor: refuse a colour the type cannot
@@ -278,6 +284,17 @@ router.put('/:id/resolve', async (req, res) => {
         } else {
           throw err;
         }
+      }
+
+      // A wine minted here is a creation like Admin → Wines create: audited as
+      // one (the request's own resolve row only links it) and announced to
+      // IndexNow. The duplicate-key path above linked an existing wine — neither.
+      if (createdHere) {
+        logAudit(req, 'admin.wine.create',
+          { type: 'wine', id: linkedWine._id },
+          { name: linkedWine.name, producer: linkedWine.producer, via: 'wine-request', requestId: String(wineRequest._id) }
+        );
+        submitUrls(`/wines/${linkedWine._id}`);
       }
 
       // Sync to search index (fire-and-forget)
