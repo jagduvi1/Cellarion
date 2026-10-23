@@ -1013,6 +1013,56 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     // read "the true producing estate is unclear to me" with nothing left to
     // qualify it, and no lever existed to correct it.
     describe('the producerNote goes with the flag it explains', () => {
+      // Projection-aware for this block: the handler only ever sees the fields
+      // its .select() asked for, as with the real query. The outer mock hands
+      // back the whole doc, which is how a select without producerNote let
+      // every case below pass while the note was never cleared in production.
+      const pickPaths = (doc, proj) => {
+        const out = { _id: doc._id };
+        for (const p of String(proj || '').split(/\s+/).filter(Boolean)) {
+          const parts = p.split('.');
+          let src = doc;
+          for (const k of parts) src = src == null ? undefined : src[k];
+          if (src === undefined) continue;
+          let dst = out;
+          for (const k of parts.slice(0, -1)) dst = (dst[k] = dst[k] || {});
+          dst[parts.at(-1)] = src;
+        }
+        return out;
+      };
+      const selectChain = (doc) => ({ select: jest.fn((proj) => Promise.resolve(pickPaths(doc, proj))) });
+
+      test('the select asks for aiProfile.producerNote', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerNote: 'x' })));
+        await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX);
+        expect(WineDefinition.findById.mock.results[0].value.select)
+          .toHaveBeenCalledWith(expect.stringContaining('aiProfile.producerNote'));
+      });
+
+      test('the reply says the note went with the flag, never that it stays', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerNote: 'unclear producer' })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        expect(body.summary).toMatch(/suspect flag is CLEARED/);
+        expect(body.summary).toMatch(/producer note went with the flag/);
+        expect(body.summary).not.toMatch(/stays/);
+      });
+
+      test('an unknown-only confirm never claims a suspect flag was cleared', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerSuspect: false, producerUnknown: true })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        expect(body.summary).not.toMatch(/suspect flag is CLEARED/);
+        expect(body.summary).toMatch(/producer placed/);
+      });
+
+      test('a rule-downgraded confirm names the rule tag it cleared', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({
+          producerSuspect: false, producerUnknown: false, suspectDowngradedBy: 'note_doubts_cuvee_not_producer',
+        })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        expect(body.summary).toMatch(/note_doubts_cuvee_not_producer tag is cleared/);
+        expect(body.summary).not.toMatch(/suspect flag is CLEARED/);
+      });
+
       test('confirm clears the note alongside producerSuspect', async () => {
         WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({
           producerNote: 'This appears to be a branded line rather than a wine made by Donnafugata.',

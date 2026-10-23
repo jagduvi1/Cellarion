@@ -1849,7 +1849,9 @@ registerTool({
     // semantics (and the stamp rule) cannot fork.
     const decideOne = async (id) => {
       const wine = await WineDefinition.findById(id)
-        .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.suspectDowngradedBy aiProfile.description aiProfile.generatedAt aiProfile.source');
+        // producerNote: the confirm below clears it with the flag it explains,
+        // and can only do that if it was loaded.
+        .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.suspectDowngradedBy aiProfile.producerNote aiProfile.description aiProfile.generatedAt aiProfile.source');
       if (!wine) return { wine_id: id, error: 'not_found' };
       const ap = wine.aiProfile || {};
       const held = !!ap.heldAt;
@@ -2033,7 +2035,13 @@ registerTool({
         : r.decision === 'confirm'
           ? (r.state === 'held'
             ? `Confirmed the hold on ${r.label} — it stays unpublished (owners see "Not yet assessed") and leaves the queue.`
-            : `Confirmed ${r.label} as published — the suspect flag is CLEARED (a human adjudicated the doubt); producer_note stays for context.`)
+            // Built from what this confirm actually cleared, not one sentence
+            // for every published state.
+            : `Confirmed ${r.label} as published` +
+              (r.suspect_cleared ? ' — the suspect flag is CLEARED (a human adjudicated the doubt)' : '') +
+              (r.unknown_cleared ? ' — producer placed (producerUnknown cleared)' : '') +
+              (r.rule_cleared ? ` — the ${r.rule_cleared} tag is cleared; it leaves list_rule_downgrades` : '') +
+              (r.producer_note_cleared ? '; the producer note went with the flag (kept in the audit row).' : '.'))
           : r.decision === 'uphold'
             ? `Upheld the flag on ${r.label} — stays published WITH the caveat, review stamped; the row is now honest residue, not queue.`
             : aiConfig.get().enrichmentOnAdd === 'off'
