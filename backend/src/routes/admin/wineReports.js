@@ -125,7 +125,8 @@ router.put('/:id/resolve', async (req, res) => {
       // The follow-through an identity edit gets on the admin PUT and the
       // proposal approve: IndexNow (the public page changed), the embedding
       // text, and the AI profile when a profile input really changed.
-      submitUrls(`/wines/${wine._id}`);
+      // Not for a pending or non-wine row: its public page answers 404.
+      if (wine.pendingIdentity !== true && wine.nonWine !== true) submitUrls(`/wines/${wine._id}`);
       reembedActiveVintages(wine._id).catch(() => {});
       reenrichAfterRecordEdit(wine, profileInputsSnapshot(wine) !== beforeProfileInputs);
       // What was stored, after the normalizers above — not the raw suggestion.

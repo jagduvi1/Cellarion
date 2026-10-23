@@ -192,6 +192,18 @@ describe('resolve with applySuggestion — follow-through', () => {
     expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(w, false);
   });
 
+  // Release audit 2026-10-23: a pending row's creator can report it, and that
+  // row's public page answers 404 for everyone else — never announced.
+  test('a pending or non-wine row is corrected but not announced to IndexNow', async () => {
+    for (const flag of [{ pendingIdentity: true }, { nonWine: true }]) {
+      submitUrls.mockClear();
+      WineReport.findById.mockResolvedValue(report({ suggestedField: 'name', suggestedValue: 'Sylvaner Vieilles Vignes' }));
+      WineDefinition.findById.mockResolvedValue(wine(flag));
+      expect((await resolve({ applySuggestion: true })).status).toBe(200);
+      expect(submitUrls).not.toHaveBeenCalled();
+    }
+  });
+
   test('a collision (409) runs none of it', async () => {
     const r = report();
     WineReport.findById.mockResolvedValue(r);
