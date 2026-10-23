@@ -1130,18 +1130,22 @@ registerTool({
       sommNotes: args.somm_notes?.trim() || undefined,
       setBy: ctx.user.id,
     });
+    // Today's rate snapshot before the save, as on REST: the snapshot's setAt
+    // date anchors later currency conversions. Non-fatal.
+    try { await require('../../utils/exchangeRates').getOrCreateDailySnapshot(); } catch { /* as on REST */ }
     await entry.save();
 
-    require('../../utils/exchangeRates').getOrCreateDailySnapshot().catch(() => {});
-    // Notify requesters exactly like REST (best-effort).
+    // Requesters: the same title, body and link as routes/somm/prices.js
+    // (best-effort). The link is the public wine page — requesters are members,
+    // and the somm prices page answers them with Access Denied.
     PriceTrackingRequest.findOne({ wineDefinition: wine._id, vintage: entry.vintage }).lean()
       .then((reqDoc) => {
         if (!reqDoc?.requesters?.length) return;
         const { createNotification } = require('../../services/notifications');
+        const wineLabel = [wine.producer, wine.name].filter(Boolean).join(' — ');
+        const body = `A sommelier just added a market price for ${wineLabel} ${entry.vintage}: ${entry.currency} ${entry.price}.`;
         for (const { user } of reqDoc.requesters) {
-          createNotification(user, 'price_tracked', 'Price added',
-            `${wine.name} ${entry.vintage}: ${entry.price} ${entry.currency}`,
-            '/somm/prices', 'community').catch(() => {}); // link parity with REST
+          createNotification(user, 'price_tracked', 'Market price updated', body, `/wines/${wine._id}`).catch(() => {});
         }
       }).catch(() => {});
 

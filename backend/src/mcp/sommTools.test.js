@@ -686,6 +686,38 @@ describe('set_vintage_price', () => {
     expect(body.error.code).toBe('invalid_input');
     expect(WineVintagePrice).not.toHaveBeenCalled();
   });
+
+  // One notification from either door: the REST route's title and body, and a
+  // link a requester (a member, not a sommelier) can open. The MCP tool used
+  // its own wording and the somm-only /somm/prices page (Access Denied).
+  test('requesters get the REST wording and the public wine page link', async () => {
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Barolo Castiglione', producer: 'Vietti' }));
+    const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+    PriceTrackingRequest.findOne.mockReturnValue(chain({ requesters: [{ user: oid('b') }] }));
+    const body = parse(await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: '2019', price: 45, currency: 'EUR' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    await new Promise((r) => setImmediate(r));
+    const { createNotification } = require('../services/notifications');
+    expect(createNotification).toHaveBeenCalledWith(oid('b'), 'price_tracked', 'Market price updated',
+      'A sommelier just added a market price for Vietti — Barolo Castiglione 2019: EUR 45.', `/wines/${oid('f')}`);
+    expect(createNotification.mock.calls[0]).toHaveLength(5); // no category argument
+  });
+
+  test('the day\'s rate snapshot is taken before the save, and its failure does not fail the tool', async () => {
+    const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Barolo', producer: 'P' }));
+    const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+    PriceTrackingRequest.findOne.mockReturnValue(chain(null));
+
+    await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: '2019', price: 40 }, SOMM_CTX);
+    const save = WineVintagePrice.mock.instances[0].save;
+    expect(getOrCreateDailySnapshot.mock.invocationCallOrder[0]).toBeLessThan(save.mock.invocationCallOrder[0]);
+
+    getOrCreateDailySnapshot.mockRejectedValueOnce(new Error('rates down'));
+    const body = parse(await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: '2019', price: 40 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineVintagePrice.mock.instances[1].save).toHaveBeenCalled();
+  });
 });
 
 describe('list_price_tracking_requests', () => {

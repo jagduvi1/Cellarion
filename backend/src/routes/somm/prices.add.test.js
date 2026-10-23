@@ -110,6 +110,21 @@ test('a whitespace-only vintage is refused, not stored as NV', async () => {
   expect(WineVintagePrice).not.toHaveBeenCalled();
 });
 
+// Requesters are members: /somm/prices answers them with Access Denied, so the
+// notification links to the public wine page instead.
+test('requesters are notified with a link to the public wine page', async () => {
+  const { createNotification } = require('../../services/notifications');
+  PriceTrackingRequest.findOne.mockReturnValue(chain({
+    requesters: [{ user: '64b000000000000000000002' }],
+    wineDefinition: { name: 'Barolo Castiglione', producer: 'Vietti' },
+  }));
+  const res = await addPrice({ wineDefinition: WINE_ID, vintage: '2019', price: 45, currency: 'EUR' });
+  expect(res.status).toBe(201);
+  await new Promise((r) => setImmediate(r));
+  expect(createNotification).toHaveBeenCalledWith('64b000000000000000000002', 'price_tracked', 'Market price updated',
+    'A sommelier just added a market price for Vietti — Barolo Castiglione 2019: EUR 45.', `/wines/${WINE_ID}`);
+});
+
 test('an ordinary year is stored unchanged', async () => {
   const res = await addPrice({ wineDefinition: WINE_ID, vintage: ' 2016 ', price: 55 });
   expect(res.status).toBe(201);

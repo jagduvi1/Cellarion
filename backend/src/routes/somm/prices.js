@@ -330,8 +330,10 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
           : 'wine';
         const title = 'Market price updated';
         const body = `A sommelier just added a market price for ${wineLabel} ${safeVintage}: ${entry.currency} ${entry.price}.`;
+        // The public wine page: requesters are members, and /somm/prices
+        // answers them with Access Denied.
         for (const r of request.requesters) {
-          createNotification(r.user, 'price_tracked', title, body, '/somm/prices');
+          createNotification(r.user, 'price_tracked', title, body, `/wines/${wineDefId}`);
         }
       })
       .catch(err => console.error('Notify price requesters failed:', err.message));
