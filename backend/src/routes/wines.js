@@ -25,6 +25,7 @@ const { MEMBER_WINE_HIDDEN_FIELDS, MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require(
 // regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
 // while `name` stays canonical. Storage/filters/stats are untouched.
 const { decorateGrapes } = require('../utils/grapeDisplay');
+const { wineVisibilityFilter, isCurator: isCuratorRole } = require('../services/wineVisibility');
 const { normalizeBarcode } = require('../utils/barcode');
 const { lookupBarcode } = require('../services/barcodeLookup');
 const { findOwnHiddenWineIds } = require('../services/ownHiddenWines');
@@ -203,15 +204,21 @@ function sendAiBudgetExhausted(res, debit) {
  *
  * @returns {Promise<{wine, confidence}|null>}
  */
-async function matchScannedIdentity({ name, producer, appellation }) {
+async function matchScannedIdentity({ name, producer, appellation }, viewer) {
   // Both fields are needed before the registry is consulted at all: with one of
   // them missing the exact key cannot be generated and the fuzzy query degrades
   // to a single token, which matches everything and therefore nothing useful.
   if (!name || !producer) return null;
 
+  // What registry search hides, a scan must not match either: quarantined
+  // non-wines, canaries, and pending rows (drafts included) that are not this
+  // viewer's — the shared visibility rule. The Meili branch below is clean at
+  // index time; the two MongoDB lookups get it here.
+  const visible = { nonWine: { $ne: true }, canary: { $ne: true }, ...wineVisibilityFilter(viewer) };
+
   // 1. Exact normalizedKey match
   const normalizedKey = generateWineKey(name, producer, appellation);
-  const wine = await WineDefinition.findOne({ normalizedKey })
+  const wine = await WineDefinition.findOne({ normalizedKey, ...visible })
     .populate(['country', 'region', 'grapes']);
   if (wine) return { wine, confidence: 1.0 };
 
@@ -233,7 +240,7 @@ async function matchScannedIdentity({ name, producer, appellation }) {
 
   if (candidates.length === 0) {
     try {
-      candidates = await WineDefinition.find({ $text: { $search: searchQuery } })
+      candidates = await WineDefinition.find({ $text: { $search: searchQuery }, ...visible })
         .populate(['country', 'region', 'grapes'])
         .limit(20);
     } catch {
@@ -327,6 +334,12 @@ const forMember = (isCurator) => (wine) => {
   for (const f of MEMBER_HIDDEN_FIELDS) delete wine[f];
   return wine;
 };
+
+// A scan's matched wine leaves the route like a search result does: grape
+// display names on, curation internals off for a member.
+const scanMatchPayload = (match, roles) => (match
+  ? { ...match, wine: forMember(isCuratorRole(roles))(decorateGrapes(match.wine)) }
+  : match);
 
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -587,7 +600,7 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
     // Run the match on whatever the extraction produced: the shared helper is
     // the one place that decides what a half-read identity can and cannot
     // match (see matchScannedIdentity).
-    const match = await matchScannedIdentity(extracted);
+    const match = await matchScannedIdentity(extracted, { userId: req.user.id, roles: req.user.roles });
 
     // A producer the cross-field rules say is not a producer makes this a
     // HALF-READ label, whatever the model filled the box with — the same
@@ -602,7 +615,7 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
     // (tryDebitAi refuses them above), so no throwaway account writes files.
     const scanImage = await persistLabelScan({ buffer: safeBuffer, userId: req.user.id, side: 'front' });
 
-    res.json({ extracted, match, labelImage, scanImageId: scanImage ? String(scanImage._id) : null });
+    res.json({ extracted, match: scanMatchPayload(match, req.user.roles), labelImage, scanImageId: scanImage ? String(scanImage._id) : null });
   } catch (err) {
     console.error('Label scan match error:', err.message);
     res.status(500).json({ error: 'Label scan failed' });
@@ -745,7 +758,7 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
 
     // Re-run the registry lookup on the MERGED identity — the whole point of
     // the rescue is that the wine may now be identifiable when it was not.
-    const match = await matchScannedIdentity(merged);
+    const match = await matchScannedIdentity(merged, { userId: req.user.id, roles: req.user.roles });
 
     // The rescue can also FILL the producer box with a string that is not a
     // producer (the back label's "Produit de France" line is the classic), and
@@ -763,7 +776,7 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
       merged,
       conflicts,
       filled,
-      match,
+      match: scanMatchPayload(match, req.user.roles),
       backScanImageId: backScan ? String(backScan._id) : null,
       // Echoed, not re-derived: the client threads both ids into the commit,
       // and this keeps the two halves of that payload coming from one response.
