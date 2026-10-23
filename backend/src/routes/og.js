@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const { recordRead, readerFor } = require('../services/registryReadTracker');
+const { publicProfileSummary } = require('../services/registryTiering');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const BlogPost = require('../models/BlogPost');
 const Country = require('../models/Country');
@@ -569,7 +570,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
-      .select('name producer slug country region appellation classification grapes type image communityRating canary')
+      .select('name producer slug country region appellation classification grapes type image communityRating canary aiProfile')
       .lean();
 
     if (!wine) {
@@ -614,9 +615,21 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
       wine.region?.name,
       wine.country?.name
     ].filter(Boolean).join(' · ');
-    // Keep meta description under 160 chars
-    const fullDesc = `${fullTitle}. ${details}. Discover, track, and manage your wine cellar with Cellarion.`;
-    const description = fullDesc.length > 160 ? fullDesc.slice(0, 157) + '...' : fullDesc;
+    // The prose tasting profile a signed-out visitor sees on this wine's page
+    // (registryTiering: the description and a style sentence, never the
+    // structured arrays), so search engines read the page people read.
+    const tasting = publicProfileSummary(wine.aiProfile);
+    // Meta description under 160 chars, cut on a word. With tasting prose it
+    // is this wine's own text instead of the line every wine page shares.
+    const fullDesc = tasting
+      ? `${fullTitle}. ${tasting.description}`
+      : `${fullTitle}. ${details}. Discover, track, and manage your wine cellar with Cellarion.`;
+    let description = fullDesc;
+    if (fullDesc.length > 160) {
+      const cut = fullDesc.slice(0, 157);
+      const lastSpace = cut.lastIndexOf(' ');
+      description = (lastSpace > 100 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:]+$/, '') + '…';
+    }
     const pageUrl = `${SITE_URL}/wines/${slugOrId}`;
     // wine.image may be a bare filename, an /api/ path, or (legacy admin data)
     // an already-absolute URL — the last must not get API_URL prepended.
@@ -788,6 +801,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     ${peakKnown ? `<p><strong>Drink window:</strong> ${peakFrom}–${peakUntil}${profile.vintage ? ` (${esc(profile.vintage)} vintage)` : ''}</p>` : ''}
     ${hasRating && ratingOn5 != null ? `<p><strong>Community rating:</strong> ${ratingOn5.toFixed(1)}/5 from ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}</p>` : ''}
     ${wine.image ? `<img src="${esc(imageUrl)}" alt="${esc(wine.name)}" width="300" />` : ''}
+    ${tasting ? `<section><h2>Tasting profile${tasting.source === 'ai' ? ' (AI-generated)' : ''}</h2>${tasting.style ? `<p><strong>Structure:</strong> ${esc(tasting.style)}</p>` : ''}<p>${esc(tasting.description)}</p></section>` : ''}
     ${faqs.length > 0 ? `<section><h2>Frequently asked questions</h2>${faqs.map(({ q, a }) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}</section>` : ''}
   </main>
   <footer>
