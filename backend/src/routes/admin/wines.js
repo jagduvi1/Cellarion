@@ -1498,6 +1498,52 @@ router.put('/:id', async (req, res) => {
       const colourErr = colourTypeConflict(type || wine.type, colour);
       if (colourErr) return res.status(400).json({ error: colourErr });
     }
+    // The create route's input checks, before anything is changed: a bad id or
+    // a non-string field is a 400, not a cast error turned into a 500.
+    if ((name != null && typeof name !== 'string') || (producer != null && typeof producer !== 'string')) {
+      return res.status(400).json({ error: 'Name and producer must be strings' });
+    }
+    if (appellation != null && typeof appellation !== 'string') {
+      return res.status(400).json({ error: 'Appellation must be a string' });
+    }
+    if (country && !isValidId(String(country))) {
+      return res.status(400).json({ error: 'Invalid country' });
+    }
+    if (region && !isValidId(String(region))) {
+      return res.status(400).json({ error: 'Invalid region' });
+    }
+    if (grapes !== undefined && (!Array.isArray(grapes) || !grapes.every((g) => isValidId(String(g))))) {
+      return res.status(400).json({ error: 'Invalid grapes' });
+    }
+    // A bare Prädikat is not a place. Create (built for scans) moves it into
+    // the classification; an edit is a person at a form, so it is refused
+    // rather than moved behind their back.
+    if (appellation && appellation.trim() && splitPradikatFromAppellation(appellation, null, '').appellation === null) {
+      return res.status(400).json({
+        error: `"${appellation.trim()}" is a Prädikat (ripeness level), not an appellation — a bare Prädikat is never stored as the appellation`,
+      });
+    }
+    const nextAppellation = appellation !== undefined
+      ? await resolveCanonicalAppellation(normalizeAppellation(appellation?.trim()))
+      : wine.appellation;
+
+    // Name and producer: the same step-0 canon and producer gate as create,
+    // run only when one of them really changes (the edit form re-sends every
+    // field on save, so an unrelated save never renames or blocks an old row).
+    // No producer-spelling resolve: that would undo a curator's deliberate rename.
+    const typedName = name && name.trim() ? name.trim() : wine.name;
+    const nextProducer = producer && producer.trim() ? producer.trim() : wine.producer;
+    let nextName = wine.name;
+    if (typedName !== wine.name || nextProducer !== wine.producer) {
+      nextName = canonicalizeWineName(typedName, nextProducer) || typedName;
+      const { detectBlockingProducerIssue } = require('../../services/crossFieldScan');
+      const blocked = await detectBlockingProducerIssue({ name: nextName, producer: nextProducer, appellation: nextAppellation || '' });
+      if (blocked) {
+        return res.status(400).json({
+          error: `"${nextProducer}" is not a usable producer name — cross-field rule ${blocked.check} matched "${blocked.detail}", which belongs in a different field`,
+        });
+      }
+    }
 
     // Snapshot the profile-feeding fields BEFORE any mutation — the re-enrich
     // decision below compares against this, so only a REAL change (not the
@@ -1506,13 +1552,11 @@ router.put('/:id', async (req, res) => {
     const beforeProfileInputs = profileInputsSnapshot(wine);
 
     // Update fields
-    if (name) wine.name = name.trim();
-    if (producer) wine.producer = producer.trim();
+    wine.name = nextName;
+    wine.producer = nextProducer;
     if (country) wine.country = country;
     if (region !== undefined) wine.region = region || null;
-    if (appellation !== undefined) {
-      wine.appellation = await resolveCanonicalAppellation(normalizeAppellation(appellation?.trim()));
-    }
+    if (appellation !== undefined) wine.appellation = nextAppellation;
     if (grapes !== undefined) wine.grapes = grapes;
     if (type) wine.type = type;
     // Absent = leave alone; '' or null = clear. The model hook drops it again
