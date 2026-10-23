@@ -1113,6 +1113,8 @@ registerTool({
     // The bottles' canonical vintage ("nv" → "NV", a malformed or impossible
     // year refused), so the snapshot matches the bottles and the request it
     // answers. An unknown vintage has no vintage price.
+    // The helper reads a blank value as NV; for a price that is a missing vintage.
+    if (!String(args.vintage).trim()) return fail('invalid_input', 'vintage is required: a year or NV.');
     const vintage = parseAndValidateVintage(args.vintage);
     if (!vintage.ok) return fail('invalid_input', vintage.error);
     if (vintage.value === 'Unknown') return fail('invalid_input', 'A price needs a vintage year or NV.');

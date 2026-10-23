@@ -273,6 +273,8 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     // The bottles' canonical vintage ("nv" → "NV", a malformed or impossible
     // year refused), so the snapshot matches the bottles and the request it
     // answers. An unknown vintage has no vintage price.
+    // The helper reads a blank value as NV; for a price that is a missing vintage.
+    if (!vintage.trim()) return res.status(400).json({ error: 'wineDefinition and vintage are required' });
     const parsedVintage = parseAndValidateVintage(vintage);
     if (!parsedVintage.ok) return res.status(400).json({ error: parsedVintage.error });
     if (parsedVintage.value === 'Unknown') return res.status(400).json({ error: 'A price needs a vintage year or NV' });

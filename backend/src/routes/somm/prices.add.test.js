@@ -102,6 +102,14 @@ test('an unknown vintage has no vintage price', async () => {
   expect(WineVintagePrice).not.toHaveBeenCalled();
 });
 
+// Release audit 2026-10-23: the helper reads a blank value as NV, so a
+// whitespace-only vintage was stored as an NV price instead of being refused.
+test('a whitespace-only vintage is refused, not stored as NV', async () => {
+  const res = await addPrice({ wineDefinition: WINE_ID, vintage: '   ', price: 40 });
+  expect(res.status).toBe(400);
+  expect(WineVintagePrice).not.toHaveBeenCalled();
+});
+
 test('an ordinary year is stored unchanged', async () => {
   const res = await addPrice({ wineDefinition: WINE_ID, vintage: ' 2016 ', price: 55 });
   expect(res.status).toBe(201);

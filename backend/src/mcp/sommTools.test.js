@@ -675,6 +675,12 @@ describe('set_vintage_price', () => {
     expect(require('../services/notifications').createNotification).not.toHaveBeenCalled();
   });
 
+  test('a whitespace-only vintage is refused, not stored as NV (release audit 2026-10-23)', async () => {
+    const body = parse(await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: ' ', price: 40 }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(WineVintagePrice).not.toHaveBeenCalled();
+  });
+
   test('an unknown vintage has no vintage price', async () => {
     const body = parse(await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: 'unknown', price: 40 }, SOMM_CTX));
     expect(body.error.code).toBe('invalid_input');
