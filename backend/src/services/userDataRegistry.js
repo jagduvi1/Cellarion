@@ -176,6 +176,10 @@ const REGISTRY = [
           // simply absent from a subject access request — and "we emailed you
           // on this date" is processing history the user is entitled to see.
           supporterThankYouSentAt: u.supporterThankYouSentAt || null,
+          // The one email sent to a new member two days after joining
+          // (services/newMemberEmails) — when, and which of the two.
+          newMemberEmailSentAt: u.newMemberEmailSentAt || null,
+          newMemberEmailKind: u.newMemberEmailKind || null,
           preferences: u.preferences,
           profileVisibility: u.profileVisibility,
           emailVerified: u.emailVerified,

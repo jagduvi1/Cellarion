@@ -739,6 +739,155 @@ async function sendOwnerInquiryEmail(toEmail, recipientName, recipientId, wineLa
   });
 }
 
+// Shared footer pieces of the two new-member emails (services/newMemberEmails).
+function newMemberLinks(recipientId) {
+  const { createUnsubscribeToken } = require('../utils/unsubscribe');
+  const { deleteAccountLink } = require('../utils/accountDeletionLink');
+  // See sendDrinkWindowDigest for why this uses FRONTEND_URL not BACKEND_URL.
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  return {
+    frontendUrl,
+    unsubLink: `${frontendUrl}/api/users/unsubscribe?token=${createUnsubscribeToken(recipientId)}`,
+    deleteLink: deleteAccountLink(recipientId),
+  };
+}
+const NEW_MEMBER_BUTTON = 'padding:10px 22px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;';
+const bottlesWord = (n) => (n === 1 ? '1 bottle' : `${n} bottles`);
+const readyLine = (r) => `${r.wine}${r.vintage ? ` ${r.vintage}` : ''}${r.count > 1 ? ` (×${r.count})` : ''}`;
+
+/**
+ * "Your cellar so far" — two days after joining, to someone who added bottles
+ * and has not come back since (services/newMemberEmails decides who, once
+ * per account). What is in the cellar, what is ready to drink now, a link back,
+ * and the one habit that keeps a cellar right: marking a bottle as drunk.
+ *
+ * @param {string} toEmail
+ * @param {string} recipientName  display/username (greeting)
+ * @param {string} recipientId    user ObjectId (unsubscribe + delete links)
+ * @param {object} summary        { bottles, readyCount, readyWines, ready: [{ wine, vintage, count }], cellarPath }
+ */
+async function sendNewMemberCellarEmail(toEmail, recipientName, recipientId, summary) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+  const { frontendUrl, unsubLink, deleteLink } = newMemberLinks(recipientId);
+  const cellarUrl = `${frontendUrl}${summary.cellarPath || '/cellars'}`;
+  const ready = summary.ready || [];
+  // "among them" only when more ready wines exist than the list shows.
+  const more = (summary.readyWines || ready.length) > ready.length ? ', among them' : '';
+  let readyIntro;
+  if (summary.bottles === 1) readyIntro = 'It is ready to drink now:';
+  else if (summary.readyCount === summary.bottles) readyIntro = `All ${summary.bottles} are ready to drink now${more}:`;
+  else if (summary.readyCount === 1) readyIntro = '1 of them is ready to drink now:';
+  else readyIntro = `${summary.readyCount} of them are ready to drink now${more}:`;
+  // Nothing ready can also mean no drink window is known yet, so this never
+  // claims "not ready".
+  const notYet = summary.bottles === 1
+    ? 'Cellarion works out when it is at its best.'
+    : 'Cellarion works out when each of them is at its best.';
+  const readyText = ready.length
+    ? [readyIntro, ...ready.map((r) => `- ${readyLine(r)}`)]
+    : [notYet];
+  const readyHtml = ready.length
+    ? `<p>${escapeHtml(readyIntro)}</p>
+       <ul style="margin:0 0 1rem;padding-left:1.25rem;">${ready.map((r) => `<li>${escapeHtml(readyLine(r))}</li>`).join('')}</ul>`
+    : `<p>${escapeHtml(notYet)}</p>`;
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    'h:Reply-To': supportReplyTo(),
+    subject: `Your Cellarion cellar so far: ${bottlesWord(summary.bottles)}`,
+    text: [
+      `Hello ${recipientName},`,
+      '',
+      `You added ${bottlesWord(summary.bottles)} to Cellarion a couple of days ago.`,
+      ...readyText,
+      '',
+      `Open your cellar: ${cellarUrl}`,
+      '',
+      'Tip: when you open a bottle, choose Drink on it, and your cellar stays right.',
+      '',
+      'You get this email once, two days after joining.',
+      `Changed your mind? Delete your account: ${deleteLink}`,
+      `Unsubscribe from all Cellarion emails: ${unsubLink}`
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
+        <p>Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p>You added ${escapeHtml(bottlesWord(summary.bottles))} to Cellarion a couple of days ago.</p>
+        ${readyHtml}
+        <p style="margin:1.5rem 0;">
+          <a href="${cellarUrl}" style="background:#7B9E88;color:#0d0d0d;${NEW_MEMBER_BUTTON}">Open your cellar</a>
+        </p>
+        <p style="color:#555;">Tip: when you open a bottle, choose <strong>Drink</strong> on it, and your cellar stays right.</p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          You get this email once, two days after joining.
+          <a href="${deleteLink}" style="color:#9A9484;">Changed your mind? Delete your account</a> ·
+          <a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all Cellarion emails</a>
+        </p>
+      </div>
+    `
+  });
+}
+
+/**
+ * "Your cellar is still empty" — two days after joining, to someone with no
+ * bottles who has not come back (services/newMemberEmails, once per account).
+ * Two equal choices: add the first bottle, or delete the account. Nobody is
+ * talked into staying.
+ *
+ * @param {string} toEmail
+ * @param {string} recipientName  display/username (greeting)
+ * @param {string} recipientId    user ObjectId (unsubscribe + delete links)
+ */
+async function sendNewMemberEmptyEmail(toEmail, recipientName, recipientId) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+  const { frontendUrl, unsubLink, deleteLink } = newMemberLinks(recipientId);
+  const addUrl = `${frontendUrl}/cellars`;
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    'h:Reply-To': supportReplyTo(),
+    subject: 'Your Cellarion cellar is still empty',
+    text: [
+      `Hello ${recipientName},`,
+      '',
+      'You joined Cellarion a couple of days ago, but there are no bottles in your cellar yet.',
+      '',
+      'The quickest way in: scan a wine label with your phone, and Cellarion fills in the details. You can also import a list from a spreadsheet or another wine app.',
+      `Add your first bottle: ${addUrl}`,
+      '',
+      'Not for you? That is fine. You can delete your account and everything in it (you then have 7 days to change your mind):',
+      deleteLink,
+      '',
+      'You get this email once, two days after joining.',
+      `Unsubscribe from all Cellarion emails: ${unsubLink}`
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
+        <p>Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p>You joined Cellarion a couple of days ago, but there are no bottles in your cellar yet.</p>
+        <p>The quickest way in: scan a wine label with your phone, and Cellarion fills in the details.
+           You can also import a list from a spreadsheet or another wine app.</p>
+        <p style="margin:1.5rem 0;">
+          <a href="${addUrl}" style="background:#7B9E88;color:#0d0d0d;${NEW_MEMBER_BUTTON}">Add your first bottle</a>
+        </p>
+        <p>Not for you? That is fine. You can delete your account and everything in it
+           (you then have 7 days to change your mind).</p>
+        <p style="margin:1.5rem 0;">
+          <a href="${deleteLink}" style="background:#ffffff;color:#2a2a2a;border:1px solid #bbb;${NEW_MEMBER_BUTTON}">Delete my account</a>
+        </p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          You get this email once, two days after joining.
+          <a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all Cellarion emails</a>
+        </p>
+      </div>
+    `
+  });
+}
+
 /**
  * Warn the site admin that today's AI calls reached a share of the site-wide
  * daily cap (services/aiCapAlertJob). At the cap every AI feature is off for
@@ -819,4 +968,4 @@ async function sendAiCapAlertEmail(toEmail, alert) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, sendOwnerInquiryEmail, EMAIL_VERIFICATION_ENABLED };
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, sendOwnerInquiryEmail, sendNewMemberCellarEmail, sendNewMemberEmptyEmail, EMAIL_VERIFICATION_ENABLED };

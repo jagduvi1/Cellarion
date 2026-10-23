@@ -117,6 +117,19 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // The one email a new member may get two days after joining, when they have
+  // not come back since their first day (services/newMemberEmails): 'cellar'
+  // (what they added) or 'empty' (no bottles; offers to delete the account).
+  // Claimed before the send and never cleared, so nobody gets it twice.
+  newMemberEmailSentAt: {
+    type: Date,
+    default: null
+  },
+  newMemberEmailKind: {
+    type: String,
+    enum: ['cellar', 'empty'],
+    default: null
+  },
   preferences: {
     currency: {
       type: String,

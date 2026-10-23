@@ -496,6 +496,20 @@ export const adminSaveContactEmail = (apiFetch, contactEmail) =>
     body: JSON.stringify({ contactEmail }),
   });
 
+// ── Settings (new-member emails) ──────────────────────────────────────────────
+// The one email a new member gets two days after joining (backend
+// services/newMemberEmails). GET → { enabled, since, mailConfigured,
+// sentLast30Days: { cellar, empty } }; PATCH { enabled } → { enabled, since }.
+export const adminGetNewMemberEmails = (apiFetch) =>
+  apiFetch('/api/admin/settings/new-member-emails');
+
+export const adminSaveNewMemberEmails = (apiFetch, enabled) =>
+  apiFetch('/api/admin/settings/new-member-emails', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ enabled }),
+  });
+
 // ── Registry Bridge (keys, readers, admin revocation) ────────────────────────
 export const adminGetBridgeKeys = (apiFetch, days = 7) =>
   apiFetch(`/api/admin/bridge/keys?days=${days}`);

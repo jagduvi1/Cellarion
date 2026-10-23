@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { runDrinkWindowCheck } = require('./drinkWindowNotifier');
+const { runNewMemberEmails } = require('./newMemberEmails');
 const { runCellarValueSnapshots } = require('./cellarValueSnapshotJob');
 const { runCommunityPriceAggregation } = require('./communityPriceJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
@@ -33,6 +34,16 @@ function startScheduler() {
       await runDrinkWindowCheck();
     } catch (err) {
       console.error('[scheduler] Drink window check failed:', err);
+    }
+  });
+
+  // New-member emails: daily at 17:00 UTC, early evening in Europe, when most
+  // members use the app. Off until an admin turns them on (newMemberEmails).
+  cron.schedule('0 17 * * *', async () => {
+    try {
+      await runNewMemberEmails();
+    } catch (err) {
+      console.error('[scheduler] New-member emails failed:', err);
     }
   });
 
