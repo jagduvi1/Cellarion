@@ -261,7 +261,11 @@ async function applyValues(wineId, values, userId, now, syncedAt = null) {
       key.status = 'accepted';
       key.decidedBy = userId;
       key.decidedAt = now;
-      key.rationale = [key.rationale, `${REGISTRY_NOTE}: accepted there.`].filter(Boolean).join('\n');
+      // The note joins the proposer's own rationale only when it fits the
+      // field's 1000-character limit; a longer text stays as written rather
+      // than failing validation and breaking the adoption.
+      const noted = [key.rationale, `${REGISTRY_NOTE}: accepted there.`].filter(Boolean).join('\n');
+      if (noted.length <= 1000) key.rationale = noted;
       await key.save();
       vocabChanged = true;
     } else if (!key) {

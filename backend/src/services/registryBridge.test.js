@@ -112,6 +112,25 @@ describe('adoptWine — registry keys this install only knows as a proposal', ()
     warn.mockRestore();
   });
 
+  // Release audit 2026-10-23: proposals allow a 1000-character rationale, and
+  // appending the registry note past that failed validation on save — after the
+  // wine was already saved, so the adoption answered 500 and its values never
+  // landed.
+  test('a rationale near the 1000-character limit stays as written and the promotion still saves', async () => {
+    const long = 'x'.repeat(990);
+    const proposed = keyDoc({ rationale: long });
+    RegistryDataKey.findOne.mockResolvedValue(proposed);
+    client.fetchWine.mockResolvedValue(registryWine());
+
+    const r = await bridge.adoptWine(RID, USER);
+
+    expect(r.ok).toBe(true);
+    expect(proposed.status).toBe('accepted');
+    expect(proposed.rationale.length).toBeLessThanOrEqual(1000);
+    expect(proposed.rationale).toBe(long);
+    expect(proposed.save).toHaveBeenCalled();
+  });
+
   test('a create that loses the race (E11000) re-reads the key and still publishes the values', async () => {
     RegistryDataKey.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(keyDoc({ _id: 'keyR', status: 'accepted' }));
     RegistryDataKey.create.mockRejectedValueOnce(Object.assign(new Error('dup key'), { code: 11000 }));
