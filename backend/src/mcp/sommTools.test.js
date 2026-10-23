@@ -652,6 +652,34 @@ describe('set_vintage_price', () => {
     const { createNotification } = require('../services/notifications');
     expect(createNotification).not.toHaveBeenCalled(); // no requesters on this pair
   });
+
+  // The snapshot is stored with the bottles' canonical vintage, so it matches
+  // the bottles (value report) and the request it answers. It used to be
+  // stored as typed: "nv" never matched NV bottles, "2O15" matched nothing.
+  test('"nv" is stored and looked up as NV', async () => {
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Barolo' }));
+    const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+    PriceTrackingRequest.findOne.mockReturnValue(chain(null));
+    const body = parse(await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: 'nv', price: 40 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineVintagePrice.mock.calls[0][0].vintage).toBe('NV');
+    expect(PriceTrackingRequest.findOne).toHaveBeenCalledWith({ wineDefinition: oid('f'), vintage: 'NV' });
+  });
+
+  test('a malformed year is refused: nothing saved, nobody notified', async () => {
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Barolo' }));
+    const body = parse(await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: '2O15', price: 40 }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/Invalid vintage "2O15"/);
+    expect(WineVintagePrice).not.toHaveBeenCalled();
+    expect(require('../services/notifications').createNotification).not.toHaveBeenCalled();
+  });
+
+  test('an unknown vintage has no vintage price', async () => {
+    const body = parse(await tool('set_vintage_price').handler({ wine_id: oid('f'), vintage: 'unknown', price: 40 }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(WineVintagePrice).not.toHaveBeenCalled();
+  });
 });
 
 describe('list_price_tracking_requests', () => {

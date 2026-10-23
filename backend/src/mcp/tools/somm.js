@@ -25,7 +25,7 @@ const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { bumpWineOwners } = require('../../services/dataVersion');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
-const { isValidId } = require('../../utils/validation');
+const { isValidId, parseAndValidateVintage } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
 const { normalizeString, sanitizeTaxonomyName, resolveCountryName } = require('../../utils/normalize');
 const { otherProducerSpellings, displaySpelling } = require('../../services/producerSpelling');
@@ -1110,12 +1110,18 @@ registerTool({
       return fail('invalid_input', `Unsupported currency ${currency}. Supported: ${SUPPORTED_CURRENCIES.join(', ')}`);
     }
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
+    // The bottles' canonical vintage ("nv" → "NV", a malformed or impossible
+    // year refused), so the snapshot matches the bottles and the request it
+    // answers. An unknown vintage has no vintage price.
+    const vintage = parseAndValidateVintage(args.vintage);
+    if (!vintage.ok) return fail('invalid_input', vintage.error);
+    if (vintage.value === 'Unknown') return fail('invalid_input', 'A price needs a vintage year or NV.');
     const wine = await WineDefinition.findById(args.wine_id).select('name producer draft');
     if (!wine || wine.draft === true) return fail('not_found', 'No registry wine with that id.');
 
     const entry = new WineVintagePrice({
       wineDefinition: wine._id,
-      vintage: String(args.vintage).trim(),
+      vintage: vintage.value,
       price: args.price,
       currency,
       source: args.source?.trim() || undefined,

@@ -10,6 +10,7 @@ const { getOrCreateDailySnapshot, getSnapshotsForDates } = require('../../utils/
 const { createNotification } = require('../../services/notifications');
 const { logAudit } = require('../../services/audit');
 const { stripHtml } = require('../../utils/sanitize');
+const { parseAndValidateVintage } = require('../../utils/validation');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 
 const aiConfig = require('../../config/aiConfig');
@@ -269,7 +270,13 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
       return res.status(400).json({ error: 'vintage must be a string' });
     }
     const wineDefId = String(wineDefinition);
-    const safeVintage = vintage.trim();
+    // The bottles' canonical vintage ("nv" → "NV", a malformed or impossible
+    // year refused), so the snapshot matches the bottles and the request it
+    // answers. An unknown vintage has no vintage price.
+    const parsedVintage = parseAndValidateVintage(vintage);
+    if (!parsedVintage.ok) return res.status(400).json({ error: parsedVintage.error });
+    if (parsedVintage.value === 'Unknown') return res.status(400).json({ error: 'A price needs a vintage year or NV' });
+    const safeVintage = parsedVintage.value;
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum < 0) {
       return res.status(400).json({ error: 'price must be a non-negative number' });
