@@ -200,6 +200,16 @@ describe('optionalAuth', () => {
     expect(req.user).toMatchObject({ id: 'u1', roles: ['admin'], plan: 'patron' });
   });
 
+  test('carries the public-demo flag, so member-only content can tell a demo apart', async () => {
+    const res = makeRes();
+    const demo = makeReq({ headers: { authorization: `Bearer ${signToken({ id: 'd1', roles: ['user'], isDemo: true })}` } });
+    await optionalAuth(demo, res, jest.fn());
+    expect(demo.user.isDemo).toBe(true);
+    const member = makeReq({ headers: { authorization: `Bearer ${signToken({ id: 'u1', roles: ['user'] })}` } });
+    await optionalAuth(member, res, jest.fn());
+    expect(member.user.isDemo).toBe(false);
+  });
+
   test('downgrades expired plan to free (matches requireAuth behavior)', async () => {
     const expired = new Date(Date.now() - 60000).toISOString();
     const token = signToken({ id: 'u4', roles: ['user'], plan: 'patron', planExpiresAt: expired });

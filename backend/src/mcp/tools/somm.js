@@ -262,7 +262,7 @@ registerTool({
   description:
     'Lists wine+vintage pairs awaiting drink-window review (every added bottle seeds one). Pending first, newest ' +
     'first. Call when the somm asks "anything in my maturity queue?" or before a review session. Pass wine_id ' +
-    '(and optionally vintage) to fetch ONE wine\'s rows — including curator notes, which the public drink_window_for ' +
+    '(and optionally vintage) to fetch ONE wine\'s rows — including curator notes, which drink_window_for ' +
     'deliberately omits; a wine-scoped call defaults to status "all" so reviewed rows show without paginating the ' +
     'whole queue. Use the returned profile_id with set_vintage_maturity (which also accepts wine_id + vintage directly). ' +
     'THIS QUEUE IS A TWO-OUTPUT PASS: the research you do to set a drink window — the producer, the vintage, the ' +
@@ -346,7 +346,7 @@ registerTool({
       // `source` tells the model whether a human has already vetted this.
       tasting_profile: profileLite(p.wineDefinition?.aiProfile, p.wineDefinition),
       // Somm-gated tool, so the curator's own note comes back with the row.
-      // Kept out of drink_window_for, which is public — see publicContent.js.
+      // Kept out of drink_window_for, which any reader may call — see publicContent.js.
       somm_notes: p.sommNotes || null,
     }));
     return ok(`${pending} pending in the maturity queue (showing ${data.length} of ${total} ${status})`, data, {

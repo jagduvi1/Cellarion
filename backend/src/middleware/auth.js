@@ -102,6 +102,9 @@ const optionalAuth = async (req, res, next) => {
       roles,
       plan: effectivePlan,
       planExpiresAt: decoded.planExpiresAt || null,
+      // Same flag requireAuth sets: a public-demo session reads public pages
+      // as a visitor where the content is for members (routes/wines /public).
+      isDemo: decoded.isDemo === true,
     };
   } catch {
     req.user = null;

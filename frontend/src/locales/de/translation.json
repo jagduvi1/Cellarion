@@ -235,7 +235,6 @@
       }
     },
     "publicTitle": "Das öffentliche Weinregister – kein Konto nötig",
-    "publicBody": "Cellarion betreibt auch einen öffentlichen Endpunkt, den jede KI ohne Anmeldung nutzen kann. Er stellt das gemeinsame Weinregister, Rebsorten- und Regionsprofile, Sommelier-Trinkfenster und unsere veröffentlichten Anleitungen bereit. Er enthält keine persönlichen Daten und verändert nichts.",
     "rawTitle": "Rohes Protokoll-Details",
     "rawBody": "Für alles, was MCP direkt spricht.",
     "selfHostNote": "Diese URLs zeigen auf diese Installation. Alle OAuth-Discovery-URLs werden von FRONTEND_URL abgeleitet, setze sie also auf die Adresse, die deine Nutzer tatsächlich erreichen.",

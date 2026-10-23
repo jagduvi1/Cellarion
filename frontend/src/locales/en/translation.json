@@ -271,7 +271,7 @@
       }
     },
     "publicTitle": "The open wine registry — no account needed",
-    "publicBody": "Cellarion also runs a public endpoint that any AI can use without signing up. It serves the shared wine registry, grape and region profiles and our published guides. It holds no personal data and changes nothing.",
+    "publicBody": "Cellarion also runs a public endpoint that any AI can use without signing up. It serves the shared wine registry (each wine with its grapes and region), similar wines and our published guides. It holds no personal data and changes nothing.",
     "rawTitle": "Raw protocol details",
     "rawBody": "For anything that speaks MCP directly.",
     "selfHostNote": "These URLs point at this install. All OAuth discovery URLs are derived from FRONTEND_URL, so set it to the address your users actually reach.",
@@ -3438,7 +3438,15 @@
     "moreAbout": "More about {{name}}",
     "moreWines": "More wines",
     "fromProducer": "From {{producer}}",
-    "moreFromRegion": "More {{type}} wines from {{region}}"
+    "moreFromRegion": "More wines from {{region}}",
+    "moreFromRegion_red": "More red wines from {{region}}",
+    "moreFromRegion_white": "More white wines from {{region}}",
+    "moreFromRegion_rosé": "More rosé wines from {{region}}",
+    "moreFromRegion_sparkling": "More sparkling wines from {{region}}",
+    "moreFromRegion_dessert": "More dessert wines from {{region}}",
+    "moreFromRegion_fortified": "More fortified wines from {{region}}",
+    "windowReviewedTitle": "A sommelier has reviewed these drink windows",
+    "windowShowAll": "Show all {{count}} vintages"
   },
   "taxonomy": {
     "loading": "Loading…",

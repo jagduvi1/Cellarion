@@ -235,7 +235,6 @@
       }
     },
     "publicTitle": "Le registre des vins ouvert — sans compte",
-    "publicBody": "Cellarion propose aussi un point d'accès public que n'importe quelle IA peut utiliser sans inscription. Il sert le registre des vins partagé, les profils de cépages et de régions, les fenêtres de dégustation établies par les sommeliers et nos guides publiés. Il ne contient aucune donnée personnelle et ne modifie rien.",
     "rawTitle": "Détails bruts du protocole",
     "rawBody": "Pour tout ce qui parle MCP directement.",
     "selfHostNote": "Ces URL pointent vers cette installation. Toutes les URL de découverte OAuth sont dérivées de FRONTEND_URL : règle-la sur l'adresse que tes utilisateurs utilisent réellement.",

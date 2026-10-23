@@ -305,9 +305,28 @@
   color: var(--color-text);
 }
 .wd-ctx-list li > .wd-ctx-sub:last-child { margin-left: auto; text-align: right; }
+/* Type pill of a related wine: its own rules, because .wine-type-pill lives
+   in page stylesheets that may not have loaded on this page. */
 .wd-ctx-pill {
   flex: none;
   font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--radius-full, 999px);
+  background: var(--color-surface-raised, #f3f3f3);
+  color: var(--color-text);
+}
+.wd-ctx-pill--red { background: var(--wine-red); }
+.wd-ctx-pill--white { background: var(--wine-white); }
+.wd-ctx-pill--rose { background: var(--wine-rose); }
+.wd-ctx-pill--sparkling { background: var(--wine-sparkling); }
+.wd-ctx-pill--dessert { background: var(--wine-dessert); }
+.wd-ctx-pill--fortified { background: var(--wine-fortified); }
+.wd-ctx-showall { margin-top: 0.6rem; }
+/* Same as BottleDetail.css: that stylesheet is not loaded on this page. */
+.bd-ai-tag--curator {
+  background: var(--color-success-bg, rgba(46, 125, 50, 0.12));
+  color: var(--color-success, #2e7d32);
 }
 .wd-detail-link {
   color: var(--color-primary);

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 // The public wine page shows what the server's `context` holds around the
@@ -62,7 +62,8 @@ test('a visitor sees how many vintages are reviewed and a sign-up link, never th
   renderPage();
   expect(await screen.findByText('wineDetail.whenToDrink')).toBeInTheDocument();
   expect(screen.getByText('wineDetail.windowTeaser|{"count":1}')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'wineDetail.windowTeaserCta →' })).toHaveAttribute('href', '/login?mode=register');
+  // The arrow is decoration, hidden from screen readers: the link's name is the words.
+  expect(screen.getByRole('link', { name: 'wineDetail.windowTeaserCta' })).toHaveAttribute('href', '/login?mode=register');
   expect(document.body.textContent).not.toMatch(/2027|2029/);
 });
 
@@ -73,6 +74,17 @@ test('a member sees the drink windows', async () => {
   expect(await screen.findByText('2025')).toBeInTheDocument();
   expect(screen.getByText('wineDetail.windowBest|{"from":2027,"until":2029}')).toBeInTheDocument();
   expect(screen.queryByText('wineDetail.windowTeaserCta')).not.toBeInTheDocument();
+});
+
+test('a member with many reviewed vintages sees six, then all on request', async () => {
+  auth = { apiFetch: fetchWine, user: { id: 'u1', preferences: {} } };
+  const windows = Array.from({ length: 8 }, (_, i) => ({ ...WINDOW, vintage: String(2020 - i) }));
+  body = { wine: WINE, context: { ...CONTEXT, reviewedVintages: 8, drinkWindows: windows } };
+  renderPage();
+  expect(await screen.findByText('2020')).toBeInTheDocument();
+  expect(screen.queryByText('2014')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'wineDetail.windowShowAll|{"count":8}' }));
+  expect(screen.getByText('2014')).toBeInTheDocument();
 });
 
 test('places and grapes link to their pages only when the page exists; related wines link to their pages', async () => {

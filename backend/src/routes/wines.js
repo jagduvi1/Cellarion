@@ -1001,6 +1001,15 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
 const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification aiProfile canary';
+// The populated places and grapes on the public page carry their public
+// fields only: a bare populate also sent createdBy / reviewedBy, the ids of
+// the members who added or reviewed a region or grape. Descriptions feed the
+// page context (services/winePageContext), regionalNames the grape display.
+const PUBLIC_TAXONOMY_POPULATE = [
+  { path: 'country', select: 'name slug code translations' },
+  { path: 'region', select: 'name slug description country translations' },
+  { path: 'grapes', select: 'name slug color description regionalNames translations' },
+];
 
 // Anti-enumeration limit for the ONE wine endpoint that needs no account.
 //
@@ -1061,7 +1070,7 @@ router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res
       : { ...WineDefinition.slugFilter(idOrSlug), ...hidden };
 
     const wine = await WineDefinition.findOne(filter)
-      .populate(['country', 'region', 'grapes'])
+      .populate(PUBLIC_TAXONOMY_POPULATE)
       .select(PUBLIC_PROJECTION);
 
     if (!wine) {
@@ -1074,7 +1083,13 @@ router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res
     }
     // A canary page must never be indexed — and must never say it is one.
     if (wine.canary === true) res.set('X-Robots-Tag', 'noindex, nofollow');
-    const payload = tierWinePayload(decorateGrapes(wine), { full: !!req.user });
+    // The answer depends on who asks (members get more), so no shared cache
+    // may serve one reader's copy to another.
+    res.set('Vary', 'Authorization');
+    // A public-demo session is signed in but is not a member: the full tier
+    // and the drink windows are for real accounts.
+    const member = !!req.user && !req.user.isDemo;
+    const payload = tierWinePayload(decorateGrapes(wine), { full: member });
     delete payload.canary;
     // The page around the wine (links, region and grape notes, related
     // wines, drink windows for members only), behind the same counted read.
@@ -1083,7 +1098,7 @@ router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res
     try {
       context = await buildWinePageContext(
         typeof wine.toObject === 'function' ? wine.toObject() : wine,
-        { full: !!req.user },
+        { full: member },
       );
     } catch (err) {
       console.error('Wine page context error:', err.message);

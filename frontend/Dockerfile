@@ -45,11 +45,14 @@ COPY nginx-main.conf /etc/nginx/nginx.conf
 # environment wins over the file.
 ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 # The one host search engines may index; every other host answers with
-# X-Robots-Tag: noindex (the $robots_tag map in nginx.conf). A self-hoster who
-# wants their own public install in search results sets this to its host name
-# (lower case, no scheme or port) in the frontend's environment.
+# X-Robots-Tag: noindex (the $robots_tag map in robots-tag.conf). A self-hoster
+# who wants their own public install in search results sets this to its bare
+# host name (no scheme, no port) in the frontend's environment.
 ENV CELLARION_INDEXABLE_HOST=cellarion.app
 COPY nginx.conf /etc/nginx/templates/default.conf.template
+# Rendered first (00-), next to default.conf: defines $robots_tag even for an
+# install that mounts its own nginx.conf.
+COPY robots-tag.conf /etc/nginx/templates/00-robots-tag.conf.template
 # Shared security-header snippet, include'd by every HTML-serving location.
 # Lives outside conf.d/ so nginx does not auto-load it a second time at the
 # http{} level.

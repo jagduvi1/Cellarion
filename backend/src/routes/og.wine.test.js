@@ -14,24 +14,27 @@ let mockCount = 5;
 let mockProfiles = [];
 let mockRelated = { sameProducer: [], similar: [] };
 
+// A query stand-in: chainable like a Mongoose Query, awaitable to `value`.
+function mockQuery(value) {
+  const q = {
+    select: () => q, populate: () => q, sort: () => q, limit: () => q, maxTimeMS: () => q, lean: () => q,
+    then: (res, rej) => Promise.resolve(value).then(res, rej),
+  };
+  return q;
+}
+
 jest.mock('../models/WineDefinition', () => ({
   findOne: jest.fn(() => {
     const q = { populate: () => q, select: () => q, lean: () => Promise.resolve(mockWine) };
     return q;
   }),
   slugFilter: (slug) => ({ slug }),
-  countDocuments: jest.fn(() => Promise.resolve(mockCount)),
-  find: jest.fn((filter) => {
-    const rows = filter.region ? mockRelated.similar : mockRelated.sameProducer;
-    const q = { select: () => q, populate: () => q, sort: () => q, limit: () => q, lean: () => Promise.resolve(rows) };
-    return q;
-  }),
+  countDocuments: jest.fn(() => mockQuery(mockCount)),
+  find: jest.fn((filter) => mockQuery(filter.region ? mockRelated.similar : mockRelated.sameProducer)),
 }));
 jest.mock('../models/WineVintageProfile', () => ({
-  find: jest.fn(() => {
-    const q = { select: () => q, sort: () => q, limit: () => q, lean: () => Promise.resolve(mockProfiles) };
-    return q;
-  }),
+  countDocuments: jest.fn(() => mockQuery(mockProfiles.length)),
+  find: jest.fn(() => mockQuery(mockProfiles)),
 }));
 jest.mock('../services/registryReadTracker', () => ({
   recordRead: jest.fn(),
@@ -132,7 +135,10 @@ describe('GET /api/og/wines/:idOrSlug', () => {
     expect(html).toContain('reviewed the drink window of 2 vintages');
     expect(html).not.toMatch(/peak maturity|Drink window:/);
     const WineVintageProfile = require('../models/WineVintageProfile');
-    expect(WineVintageProfile.find).toHaveBeenCalledWith({ wineDefinition: 'aaaaaaaaaaaaaaaaaaaaaaaa', status: 'reviewed' });
+    expect(WineVintageProfile.countDocuments).toHaveBeenCalledWith({ wineDefinition: 'aaaaaaaaaaaaaaaaaaaaaaaa', status: 'reviewed' });
+    // The crawler page never reads the window rows themselves.
+    expect(WineVintageProfile.find).not.toHaveBeenCalled();
+    expect(html).toContain('members see when each one is ready');
   });
 
   test('links the region, country and grape pages that exist, with a sentence about each', async () => {

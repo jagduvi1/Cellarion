@@ -105,6 +105,13 @@ function VintagePage() {
   return <CellarVintage key={`${id}/${wineId}/${vintage}`} />;
 }
 
+// A public wine page links to other wines ("More wines"); keyed by the
+// address so the next one starts fresh — no earlier wine, error or scroll.
+function WinePage() {
+  const { idOrSlug } = useParams();
+  return <WineDetail key={idOrSlug} />;
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth();
 
@@ -463,7 +470,7 @@ function AppRoutes() {
 
         {/* Public content — no auth required */}
         <Route path="/menu/:token" element={<PublicWineList />} />
-        <Route path="/wines/:idOrSlug" element={<WineDetail />} />
+        <Route path="/wines/:idOrSlug" element={<WinePage />} />
         <Route path="/wines/type/:type" element={<WineTypeDetail />} />
         <Route path="/regions/:slug" element={<RegionDetail />} />
         <Route path="/countries/:slug" element={<CountryDetail />} />

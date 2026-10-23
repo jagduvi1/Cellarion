@@ -39,6 +39,10 @@ export default function WineDetail() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // The page is keyed by the address (App.js), so a link to another wine
+    // starts a fresh page: open it at the top, not where the last one ended.
+    window.scrollTo(0, 0);
+    let ignore = false;
     const fetchWine = async () => {
       try {
         // Signed in: send the session along so the same endpoint returns the
@@ -46,8 +50,10 @@ export default function WineDetail() {
         // lockdown 2026-09-06).
         const url = `${API_URL}/api/wines/${encodeURIComponent(idOrSlug)}/public`;
         const res = user ? await apiFetch(url) : await fetch(url);
+        if (ignore) return;
         if (res.ok) {
           const data = await res.json();
+          if (ignore) return;
           setWine(data.wine);
           setContext(data.context || null);
           // If we landed on an ObjectId URL but the wine has a slug, transparently
@@ -60,11 +66,12 @@ export default function WineDetail() {
           setError(t('wineDetail.wineNotFound'));
         }
       } catch {
-        setError(t('wineDetail.wineNotFound'));
+        if (!ignore) setError(t('wineDetail.wineNotFound'));
       }
-      setLoading(false);
+      if (!ignore) setLoading(false);
     };
     fetchWine();
+    return () => { ignore = true; };
   }, [idOrSlug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="wd-loading">Loading...</div>;

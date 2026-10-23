@@ -244,7 +244,6 @@
       }
     },
     "publicTitle": "Det öppna vinregistret — inget konto behövs",
-    "publicBody": "Cellarion kör också en öppen endpoint som vilken AI som helst kan använda utan att registrera sig. Den ger det delade vinregistret, druv- och regionprofiler, sommelierernas dricktidsfönster och våra publicerade guider. Den innehåller inga personuppgifter och ändrar ingenting.",
     "rawTitle": "Tekniska protokolluppgifter",
     "rawBody": "För allt som talar MCP direkt.",
     "selfHostNote": "Dessa adresser pekar på den här installationen. Alla OAuth-adresser härleds från FRONTEND_URL, så sätt den till adressen dina användare faktiskt når.",

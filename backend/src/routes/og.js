@@ -19,7 +19,11 @@ const { rateLimitKey } = require('../utils/clientIp');
 const { CRAWLER_LANGUAGES } = require('../config/languages');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
-const MIN_WINES = 3;
+const { MIN_WINES } = require('../config/taxonomyPages');
+// The crawler taxonomy pages list what the API's first pages list: never a
+// canary (they sit only in the API's deep pages, routes/taxonomy.js), so the
+// two cannot be compared to pick the canaries out.
+const TAXONOMY_LISTED = { nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true } };
 
 /**
  * Serialize a JSON-LD object for safe embedding inside a <script
@@ -365,7 +369,7 @@ router.get('/connect-ai', ogLimiter, (req, res) => {
       },
       {
         title: 'No account needed',
-        text: `A public endpoint at ${publicEndpoint} serves the shared wine registry, grape and region profiles and published guides to any AI, with no sign-up and no personal data.`,
+        text: `A public endpoint at ${publicEndpoint} serves the shared wine registry (each wine with its grapes and region), similar wines and published guides to any AI, with no sign-up and no personal data.`,
       },
     ];
 
@@ -674,8 +678,9 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
       ? ` Classified as ${wine.classification}.`
       : '';
     const vintagesWord = reviewedVintages === 1 ? 'vintage' : 'vintages';
+    const whenReady = reviewedVintages === 1 ? 'when it is ready' : 'when each one is ready';
     const drinkPhrase = reviewedVintages > 0
-      ? ` Cellarion's sommeliers have reviewed the drink window of ${reviewedVintages} ${vintagesWord}; members see when each one is ready.`
+      ? ` Cellarion's sommeliers have reviewed the drink window of ${reviewedVintages} ${vintagesWord}; members see ${whenReady}.`
       : '';
     const ratingPhrase = hasRating
       ? ` Cellarion users rate it ${fromNormalized(wine.communityRating.averageNormalized, '5').toFixed(1)} out of 5 across ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}.`
@@ -806,7 +811,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     ${hasRating && ratingOn5 != null ? `<p><strong>Community rating:</strong> ${ratingOn5.toFixed(1)}/5 from ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}</p>` : ''}
     ${wine.image ? `<img src="${esc(imageUrl)}" alt="${esc(wine.name)}" width="300" />` : ''}
     ${tasting ? `<section><h2>Tasting profile${tasting.source === 'ai' ? ' (AI-generated)' : ''}</h2>${tasting.style ? `<p><strong>Structure:</strong> ${esc(tasting.style)}</p>` : ''}<p>${esc(tasting.description)}</p></section>` : ''}
-    ${reviewedVintages > 0 ? `<section><h2>When to drink</h2><p>Cellarion's sommeliers have reviewed the drink window of ${reviewedVintages} ${vintagesWord} of ${esc(wine.name)}. <a href="${esc(SITE_URL)}/login?mode=register">Sign up free</a> to see when each one is ready.</p></section>` : ''}
+    ${reviewedVintages > 0 ? `<section><h2>When to drink</h2><p>Cellarion's sommeliers have reviewed the drink window of ${reviewedVintages} ${vintagesWord} of ${esc(wine.name)}. <a href="${esc(SITE_URL)}/login?mode=register">Sign up free</a> to see ${whenReady}.</p></section>` : ''}
     ${whereFromHtml}
     ${moreWinesHtml}
     ${faqs.length > 0 ? `<section><h2>Frequently asked questions</h2>${faqs.map(({ q, a }) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}</section>` : ''}
@@ -1154,7 +1159,7 @@ router.get('/regions/:slug', ogLimiter, async (req, res) => {
       .lean();
     if (!region) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ region: region._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+    const wines = await WineDefinition.find({ region: region._id, ...TAXONOMY_LISTED })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)
@@ -1215,7 +1220,7 @@ router.get('/countries/:slug', ogLimiter, async (req, res) => {
       .lean();
     if (!country) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ country: country._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+    const wines = await WineDefinition.find({ country: country._id, ...TAXONOMY_LISTED })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)
@@ -1265,7 +1270,7 @@ router.get('/grapes/:slug', ogLimiter, async (req, res) => {
       .lean();
     if (!grape) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ grapes: grape._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+    const wines = await WineDefinition.find({ grapes: grape._id, ...TAXONOMY_LISTED })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)
@@ -1328,7 +1333,7 @@ router.get('/wine-types/:type', ogLimiter, async (req, res) => {
     const type = String(req.params.type).toLowerCase();
     if (!WINE_TYPES.includes(type)) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ type, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+    const wines = await WineDefinition.find({ type, ...TAXONOMY_LISTED })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)

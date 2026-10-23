@@ -19,7 +19,7 @@
 ## Connect your AI (MCP)
 - Cellarion has a built-in MCP (Model Context Protocol) server. Connect Claude, ChatGPT, or any MCP-capable assistant to your account to search your cellar, ask what to open tonight, pair wines with dishes, add and consume bottles, and organise racks — with scoped permissions, a reviewable activity trail, and one-click undo. Set it up under Settings → Connect your AI, or follow the per-client guides at https://cellarion.app/connect-ai.
 - Personal endpoint: https://cellarion.app/api/mcp (Streamable HTTP; OAuth 2.1 with PKCE, or a personal `cel_` bearer token). Discovery: https://cellarion.app/.well-known/oauth-protected-resource/api/mcp
-- AI clients can also use Cellarion anonymously: a public MCP endpoint at https://cellarion.app/api/mcp/public serves the shared wine registry, grape and region profiles, and guides — no account required, no personal data involved. Sommelier drink windows per vintage need a signed-in connection.
+- AI clients can also use Cellarion anonymously: a public MCP endpoint at https://cellarion.app/api/mcp/public serves the shared wine registry (each wine with its grapes and region), similar wines and guides — no account required, no personal data involved. Sommelier drink windows per vintage need a signed-in connection.
 - A stdio bridge is published on npm as `cellarion-mcp` for clients that cannot speak remote HTTP: `npx -y cellarion-mcp`.
 
 ## Registry data terms

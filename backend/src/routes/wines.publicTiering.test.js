@@ -13,7 +13,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
 jest.mock('../services/search', () => ({
   indexWine: jest.fn(), removeWine: jest.fn(), getIsAvailable: jest.fn(() => false), search: jest.fn(),
-}));
+}));
 // The page around the wine has its own tests; here it would query models
 // this suite does not mock.
 jest.mock('../services/winePageContext', () => ({ buildWinePageContext: jest.fn(async () => null) }));
@@ -80,6 +80,20 @@ test('a signed-in member gets the full profile on the same endpoint', async () =
   expect(status).toBe(200);
   expect(body.wine.aiProfile).toEqual(PROFILE);
   expect(mockGate).toHaveBeenCalledTimes(1);
+});
+
+test('a public-demo session reads as a visitor: prose-only profile, no drink windows', async () => {
+  const { buildWinePageContext } = require('../services/winePageContext');
+  const demo = jwt.sign({ id: 'd'.repeat(24), roles: ['user'], plan: 'free', isDemo: true }, process.env.JWT_SECRET, { expiresIn: '5m' });
+  const res = await fetch(`${base}/api/wines/barolo/public`, { headers: { authorization: `Bearer ${demo}` } });
+  const body = await res.json();
+  expect(body.wine.aiProfile).toEqual({ description: PROFILE.description, style: 'full-bodied, firm tannin, high acidity, dry', source: 'curator' });
+  expect(buildWinePageContext.mock.calls[0][1]).toEqual({ full: false });
+  expect(res.headers.get('vary')).toMatch(/Authorization/i);
+
+  buildWinePageContext.mockClear();
+  await get({ authorization: `Bearer ${memberToken()}` });
+  expect(buildWinePageContext.mock.calls[0][1]).toEqual({ full: true });
 });
 
 test('every read is counted, and an anonymous address past the daily cap is refused', async () => {
