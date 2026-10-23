@@ -12,6 +12,7 @@ import SITE_URL from '../config/siteUrl';
 import WineImage from '../components/WineImage';
 import WineDiscussionsPanel from '../components/WineDiscussionsPanel';
 import AddToCellarButton from '../components/AddToCellarButton';
+import { WhenToDrinkCard, WhereFromCard, MoreWinesCard } from '../components/WineContextCards';
 import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
@@ -30,6 +31,9 @@ export default function WineDetail() {
   const { idOrSlug } = useParams();
   const { user, apiFetch } = useAuth();
   const [wine, setWine] = useState(null);
+  // Links, region and grape notes, related wines and drink windows around the
+  // wine (backend services/winePageContext); null when the server sent none.
+  const [context, setContext] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -45,6 +49,7 @@ export default function WineDetail() {
         if (res.ok) {
           const data = await res.json();
           setWine(data.wine);
+          setContext(data.context || null);
           // If we landed on an ObjectId URL but the wine has a slug, transparently
           // upgrade the URL bar to the slug so users see + share the pretty form.
           // replaceState avoids a navigation event and preserves history.
@@ -84,14 +89,29 @@ export default function WineDetail() {
     wine.region?.name,
     wine.country?.name
   ].filter(Boolean).join(' · ');
-  const fullDesc = `${fullTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
-  const metaDescription = fullDesc.length > 160 ? fullDesc.slice(0, 157) + '...' : fullDesc;
+  // Same rule as the crawler page (backend og.js): the tasting prose makes the
+  // description this wine's own; cut on a word.
+  const fullDesc = wine.aiProfile?.description
+    ? `${fullTitle}. ${wine.aiProfile.description}`
+    : `${fullTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
+  let metaDescription = fullDesc;
+  if (fullDesc.length > 160) {
+    const cut = fullDesc.slice(0, 157);
+    const lastSpace = cut.lastIndexOf(' ');
+    metaDescription = (lastSpace > 100 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:]+$/, '') + '…';
+  }
   const pageUrl = `${SITE_URL}${winePath}`;
   const wineImageSrc = getWineImageUrl(wine.image);
   const imageUrl = wineImageSrc || `${SITE_URL}/cellarion-logo.jpg`;
   // Prefer the regionally correct label when the backend resolved one
   // ("Tinta Roriz" on a Douro Port); g.name stays the canonical variety.
   const grapeNames = wine.grapes?.map(g => g.displayName || g.name).filter(Boolean) || [];
+  // A region, country or grape links to its page when the server says one
+  // exists (context entries carry a path); otherwise it stays plain text.
+  const grapeEntries = new Map((context?.grapes || []).map((g) => [g.name, g]));
+  const placeLink = (entry, label) => (entry?.path
+    ? <Link to={entry.path} className="wd-detail-link">{label}</Link>
+    : label);
 
   const ratingScale = user?.preferences?.ratingScale || '5';
   const hasRating = wine.communityRating?.reviewCount > 0;
@@ -175,19 +195,26 @@ export default function WineDetail() {
             {wine.region?.name && (
               <div className="wd-detail">
                 <span className="wd-detail-label">{t('wineDetail.region')}</span>
-                <span className="wd-detail-value">{wine.region.name}</span>
+                <span className="wd-detail-value">{placeLink(context?.region, wine.region.name)}</span>
               </div>
             )}
             {wine.country?.name && (
               <div className="wd-detail">
                 <span className="wd-detail-label">{t('wineDetail.country')}</span>
-                <span className="wd-detail-value">{wine.country.name}</span>
+                <span className="wd-detail-value">{placeLink(context?.country, wine.country.name)}</span>
               </div>
             )}
             {grapeNames.length > 0 && (
               <div className="wd-detail">
                 <span className="wd-detail-label">{t('wineDetail.grapes')}</span>
-                <span className="wd-detail-value">{grapeNames.join(', ')}</span>
+                <span className="wd-detail-value">
+                  {(wine.grapes || []).filter((g) => g.displayName || g.name).map((g, i) => (
+                    <span key={g.name || i}>
+                      {i > 0 && ', '}
+                      {placeLink(grapeEntries.get(g.name), g.displayName || g.name)}
+                    </span>
+                  ))}
+                </span>
               </div>
             )}
           </div>
@@ -286,6 +313,8 @@ export default function WineDetail() {
         </div>
       )}
 
+      <WhenToDrinkCard context={context} signedIn={!!user} />
+
       {/* CTA banner for non-authenticated visitors */}
       {!user && (
         <div className="wd-cta">
@@ -317,6 +346,9 @@ export default function WineDetail() {
           </button>
         </div>
       )}
+
+      <WhereFromCard context={context} countryName={wine.country?.name} />
+      <MoreWinesCard context={context} wine={wine} />
 
       {showReport && (
         <Suspense fallback={null}>

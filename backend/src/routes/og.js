@@ -756,10 +756,10 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
       : esc(name));
     const grapeEntries = new Map((context?.grapes || []).map((g) => [g.name, g]));
     const regionNote = context?.region?.excerpt
-      ? `<p><strong>${linkTo(context.region, context.region.name)}</strong>${wine.country?.name ? `, ${esc(wine.country.name)}` : ''}. ${esc(context.region.excerpt)}</p>`
+      ? `<h3>${linkTo(context.region, context.region.name)}${wine.country?.name ? `, ${esc(wine.country.name)}` : ''}</h3><p>${esc(context.region.excerpt)}</p>`
       : '';
     const grapeNotes = (context?.grapes || []).filter((g) => g.excerpt)
-      .map((g) => `<p><strong>${linkTo(g, g.name)}</strong>: ${esc(g.excerpt)}</p>`).join('');
+      .map((g) => `<h3>${linkTo(g, g.name)}</h3><p>${esc(g.excerpt)}</p>`).join('');
     const whereFromHtml = regionNote || grapeNotes
       ? `<section><h2>Where it comes from</h2>${regionNote}${grapeNotes}</section>`
       : '';

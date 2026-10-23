@@ -255,3 +255,62 @@
     text-align: center;
   }
 }
+
+/* ── Cards around the wine (components/WineContextCards) ── */
+.wd-ctx-card {
+  margin-top: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+.wd-ctx-block + .wd-ctx-block {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--color-border, #e5e5e5);
+}
+.wd-ctx-text {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+.wd-ctx-text strong { color: var(--color-text); }
+.wd-ctx-grape + .wd-ctx-grape { margin-top: 0.5rem; }
+.wd-ctx-more { font-size: 0.85rem; }
+.wd-ctx-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+.wd-ctx-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--color-border, #e5e5e5);
+  font-size: 0.92rem;
+}
+.wd-ctx-list li:first-child { border-top: 0; }
+.wd-ctx-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.wd-ctx-sub {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+.wd-ctx-vintage {
+  font-weight: 700;
+  min-width: 3.2rem;
+  color: var(--color-text);
+}
+.wd-ctx-list li > .wd-ctx-sub:last-child { margin-left: auto; text-align: right; }
+.wd-ctx-pill {
+  flex: none;
+  font-size: 0.7rem;
+}
+.wd-detail-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}

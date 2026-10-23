@@ -3426,7 +3426,19 @@
     "structure": "Structure",
     "flavours": "Flavours",
     "pairsWith": "Pairs with",
-    "reportIssue": "Report an issue"
+    "reportIssue": "Report an issue",
+    "whenToDrink": "When to drink",
+    "windowReviewedTag": "Sommelier-reviewed",
+    "windowTeaser_one": "Our sommeliers have reviewed when to drink {{count}} vintage of this wine.",
+    "windowTeaser_other": "Our sommeliers have reviewed when to drink {{count}} vintages of this wine.",
+    "windowTeaserCta": "Sign up free to see when it’s ready",
+    "windowBest": "Best {{from}}–{{until}}",
+    "windowBestRelative": "Best {{from}}–{{until}} years after purchase",
+    "whereFrom": "Where it comes from",
+    "moreAbout": "More about {{name}}",
+    "moreWines": "More wines",
+    "fromProducer": "From {{producer}}",
+    "moreFromRegion": "More {{type}} wines from {{region}}"
   },
   "taxonomy": {
     "loading": "Loading…",
