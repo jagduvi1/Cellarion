@@ -18,7 +18,6 @@ const RestockAlert = require('../models/RestockAlert');
 const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const WineList = require('../models/WineList');
-const PendingShare = require('../models/PendingShare');
 const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
 const DiscussionReaction = require('../models/DiscussionReaction');
@@ -36,7 +35,7 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { updatePreferences, updateProfile, buildPreferencesUpdate } = require('../services/accountOps');
 const { buildUserExport } = require('../services/userDataRegistry');
 const { sanitizeSignupSource } = require('../utils/signupSource');
-const { revokeAllSessions } = require('../services/authTokens');
+const { scheduleAccountDeletion } = require('../services/accountDeletion');
 const {
   buildCellarDataExport,
   IMAGE_EXPORT_COOLDOWN_MS,
@@ -46,7 +45,6 @@ const {
 } = require('../services/cellarExport');
 const { safeUploadPath } = require('../services/imageProcessor');
 const { logAudit } = require('../services/audit');
-const eventBus = require('../services/eventBus');
 const rateLimit = require('express-rate-limit');
 const { rateLimitKey } = require('../utils/clientIp');
 
@@ -577,35 +575,7 @@ router.delete('/me', requireAuth, requireNonDemo, async (req, res) => {
       });
     }
 
-    const now = new Date();
-    const scheduledFor = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    // Cancel Stripe subscription immediately if active
-    if (user.stripeSubscriptionId && process.env.STRIPE_SECRET_KEY) {
-      try {
-        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
-        user.stripeSubscriptionId = null;
-        user.plan = 'free';
-      } catch (stripeErr) {
-        console.error('Failed to cancel Stripe subscription during deletion:', stripeErr.message);
-      }
-    }
-
-    user.deletionRequestedAt = now;
-    user.deletionScheduledFor = scheduledFor;
-    // Revoke every device session on the deletion request so a refresh token
-    // captured before deletion can't keep minting access tokens through the
-    // 7-day window. The user simply re-authenticates to use the account (or to
-    // cancel the deletion) — matching change-password / password-reset.
-    revokeAllSessions(user);
-    eventBus.dropUser(user._id); // and force-close open SSE event streams
-    await user.save();
-
-    // Clean up pending cellar invites sent by this user
-    PendingShare.deleteMany({ invitedBy: userId }).catch(() => {});
-
-    logAudit(req, 'user.deletion_requested', { type: 'user', id: user._id });
+    const scheduledFor = await scheduleAccountDeletion(user, req);
 
     res.json({
       message: 'Account deletion scheduled. Your account and all data will be permanently deleted in 7 days. You can cancel this from Settings.',
@@ -729,5 +699,63 @@ router.get('/unsubscribe/support-replies', scopedUnsubscribe('supportReply', 'su
 // curators' questions about wines I own (2026-10-20; they stay on the bell
 // and the bottle page).
 router.get('/unsubscribe/owner-questions', scopedUnsubscribe('ownerInquiry', 'owner-questions'));
+
+// ── "Delete my account" from an email link (no login) ──────────────────────
+// The link (utils/accountDeletionLink, good for 14 days) opens the frontend
+// page /delete-account, which asks these two routes. Opening the link never
+// deletes anything — mail scanners open links on their own — only the button
+// on that page does, and then through the same 7-day scheduled deletion as
+// Settings. The token travels in the body, never the URL, so it stays out of
+// access logs. Every failure answers the same 400, so a link reveals nothing
+// about an account it doesn't belong to.
+const LINK_INVALID = { error: 'This link is no longer valid.', code: 'LINK_INVALID' };
+
+async function userFromDeleteLink(req, select) {
+  const { verifyDeleteAccountToken } = require('../utils/accountDeletionLink');
+  const userId = verifyDeleteAccountToken(req.body?.token);
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) return null;
+  const query = User.findById(userId);
+  const user = await (select ? query.select(select) : query);
+  return user && !user.isDemo ? user : null;
+}
+
+// POST /api/users/delete-account/preview — body { token }: which account the
+// link deletes and what is in it, so the page can say so before the button.
+router.post('/delete-account/preview', async (req, res) => {
+  try {
+    const user = await userFromDeleteLink(req, 'username isDemo deletionScheduledFor stripeSubscriptionId');
+    if (!user) return res.status(400).json(LINK_INVALID);
+    const cellarIds = await Cellar.distinct('_id', { user: user._id, deletedAt: null });
+    const bottles = cellarIds.length
+      ? await Bottle.countDocuments({ cellar: { $in: cellarIds }, status: { $in: ['active', 'ordered'] } })
+      : 0;
+    res.json({
+      username: user.username,
+      bottles,
+      supporter: !!user.stripeSubscriptionId,
+      deletionScheduledFor: user.deletionScheduledFor || null,
+    });
+  } catch (error) {
+    console.error('Delete-link preview error:', error);
+    res.status(500).json({ error: 'Failed to check the link' });
+  }
+});
+
+// POST /api/users/delete-account — body { token }: schedule the deletion.
+// Pressing it again on an already scheduled account changes nothing.
+router.post('/delete-account', async (req, res) => {
+  try {
+    const user = await userFromDeleteLink(req);
+    if (!user) return res.status(400).json(LINK_INVALID);
+    if (user.deletionScheduledFor) {
+      return res.json({ deletionScheduledFor: user.deletionScheduledFor, alreadyScheduled: true });
+    }
+    const deletionScheduledFor = await scheduleAccountDeletion(user, req, { via: 'email-link' });
+    res.json({ deletionScheduledFor });
+  } catch (error) {
+    console.error('Delete-link deletion error:', error);
+    res.status(500).json({ error: 'Failed to schedule deletion' });
+  }
+});
 
 module.exports = router;

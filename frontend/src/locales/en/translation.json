@@ -4519,6 +4519,25 @@
     "messageOwnerQuestions": "We won't email you curators' questions about your wines any more. They still appear under the bell and on your bottle, and your other email settings are unchanged.",
     "reEnable": "You can re-enable individual categories at any time from <1>Settings</1>."
   },
+  "deleteAccountLink": {
+    "title": "Delete your Cellarion account",
+    "checking": "Checking the link…",
+    "intro": "This deletes the account <strong>{{username}}</strong> and everything in it.",
+    "bottles_one": "That includes the {{count}} bottle in your cellar, with its notes, photos and history.",
+    "bottles_other": "That includes the {{count}} bottles in your cellar, with their notes, photos and history.",
+    "noBottles": "There are no bottles in it yet.",
+    "supporter": "Your supporter subscription is cancelled too.",
+    "grace": "Nothing is removed straight away: you have 7 days to change your mind. Log in before then and cancel it in Settings.",
+    "failed": "Something went wrong. Please try again.",
+    "confirm": "Delete my account",
+    "deleting": "Deleting…",
+    "keep": "Keep my account",
+    "scheduled": "Your account will be deleted on <strong>{{date}}</strong>.",
+    "changeMind": "Changed your mind? Log in before then and choose Cancel deletion in Settings.",
+    "logIn": "Log in",
+    "invalid": "This link no longer works. The links in our emails work for 14 days.",
+    "useSettings": "You can still delete your account from Settings after you log in."
+  },
   "wishlist": {
     "title": "Wishlist",
     "subtitle": "Wines you want to buy",

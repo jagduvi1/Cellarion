@@ -78,6 +78,7 @@ const PickLists            = lazy(() => import('./pages/PickLists'));
 const PickList             = lazy(() => import('./pages/PickList'));
 const CuratorQuestion      = lazy(() => import('./pages/CuratorQuestion'));
 const Unsubscribed         = lazy(() => import('./pages/Unsubscribed'));
+const DeleteAccountLink    = lazy(() => import('./pages/DeleteAccountLink'));
 const Recommendations      = lazy(() => import('./pages/Recommendations'));
 const Journal              = lazy(() => import('./pages/Journal'));
 const Restock              = lazy(() => import('./pages/Restock'));
@@ -133,6 +134,7 @@ function AppRoutes() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<RegistryTerms />} />
         <Route path="/unsubscribed" element={<Unsubscribed />} />
+        <Route path="/delete-account" element={<DeleteAccountLink />} />
 
         {/* Protected routes wrapped in Layout */}
         <Route path="/" element={<LandingPage />} />

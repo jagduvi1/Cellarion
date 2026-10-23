@@ -33,6 +33,7 @@ const EXCLUDED_PREFIXES = [
   '/users',
   '/reset-password',
   '/verify-email',
+  '/delete-account',
   '/connect-ai/authorize',
 ];
 
