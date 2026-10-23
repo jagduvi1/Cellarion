@@ -207,7 +207,38 @@ describe('PUT validates like create', () => {
     expect(wine.name).toBe('Block 3');
     const { generateWineKey } = require('../../utils/normalize');
     expect(wine.normalizedKey).toBe(generateWineKey('Block 3', 'Felton Road', 'Central Otago'));
-    expect(detectBlockingProducerIssue).toHaveBeenCalledWith({ name: 'Block 3', producer: 'Felton Road', appellation: 'Central Otago' });
+    // The producer did not change, so it is not re-judged (release audit
+    // 2026-10-23: a cleared false positive must not block a name fix).
+    expect(detectBlockingProducerIssue).not.toHaveBeenCalled();
+  });
+
+  test('a producer change runs the producer gate on the new producer', async () => {
+    const wine = mkWine({ name: 'Block 5', producer: 'Felton Road', appellation: 'Central Otago' });
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await put({ name: 'Block 5', producer: 'Felton Road Wines' });
+    expect(res.status).toBe(200);
+    expect(detectBlockingProducerIssue).toHaveBeenCalledWith({ name: 'Block 5', producer: 'Felton Road Wines', appellation: 'Central Otago' });
+  });
+
+  test('a producer-only change does not rename the stored name (release audit 2026-10-23)', async () => {
+    const wine = mkWine({ name: 'Felton Road Block 3', producer: 'Felton Road' });
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await put({ name: 'Felton Road Block 3', producer: 'Felton Road Wines' });
+    expect(res.status).toBe(200);
+    expect(wine.producer).toBe('Felton Road Wines');
+    expect(wine.name).toBe('Felton Road Block 3');
+  });
+
+  test('an unchanged bare-Prädikat appellation re-sent by the form still saves (release audit 2026-10-23)', async () => {
+    // An older row stored with one must stay editable and mergeable.
+    const wine = mkWine({ name: 'Riesling', producer: 'Dönnhoff', appellation: 'Kabinett' });
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await put({ name: 'Riesling', producer: 'Dönnhoff', appellation: 'Kabinett', type: 'white' });
+    expect(res.status).toBe(200);
+    expect(wine.type).toBe('white');
   });
 
   test('an unchanged name and producer re-sent by the form are left alone: no canon, no gate', async () => {

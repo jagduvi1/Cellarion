@@ -1517,8 +1517,11 @@ router.put('/:id', async (req, res) => {
     }
     // A bare Prädikat is not a place. Create (built for scans) moves it into
     // the classification; an edit is a person at a form, so it is refused
-    // rather than moved behind their back.
-    if (appellation && appellation.trim() && splitPradikatFromAppellation(appellation, null, '').appellation === null) {
+    // rather than moved behind their back. Only when the appellation CHANGES:
+    // the form re-sends every field, and an older row stored with one must
+    // stay editable (and mergeable from the cluster modal).
+    if (appellation && appellation.trim() && appellation.trim() !== (wine.appellation || '')
+      && splitPradikatFromAppellation(appellation, null, '').appellation === null) {
       return res.status(400).json({
         error: `"${appellation.trim()}" is a Prädikat (ripeness level), not an appellation — a bare Prädikat is never stored as the appellation`,
       });
@@ -1528,14 +1531,16 @@ router.put('/:id', async (req, res) => {
       : wine.appellation;
 
     // Name and producer: the same step-0 canon and producer gate as create,
-    // run only when one of them really changes (the edit form re-sends every
-    // field on save, so an unrelated save never renames or blocks an old row).
+    // each run only when its own field really changes (the edit form re-sends
+    // every field on save, so an unrelated save never renames or blocks an old
+    // row): the canon on a name change, the producer gate on a producer change.
     // No producer-spelling resolve: that would undo a curator's deliberate rename.
     const typedName = name && name.trim() ? name.trim() : wine.name;
     const nextProducer = producer && producer.trim() ? producer.trim() : wine.producer;
-    let nextName = wine.name;
-    if (typedName !== wine.name || nextProducer !== wine.producer) {
-      nextName = canonicalizeWineName(typedName, nextProducer) || typedName;
+    const nextName = typedName !== wine.name
+      ? (canonicalizeWineName(typedName, nextProducer) || typedName)
+      : wine.name;
+    if (nextProducer !== wine.producer) {
       const { detectBlockingProducerIssue } = require('../../services/crossFieldScan');
       const blocked = await detectBlockingProducerIssue({ name: nextName, producer: nextProducer, appellation: nextAppellation || '' });
       if (blocked) {
