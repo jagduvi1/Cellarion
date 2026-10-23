@@ -21,7 +21,7 @@ function PrivacyPolicy() {
       </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: 24 October 2026 — Version 2026-10-24</p>
+        <p className="privacy-updated">Last updated: 23 October 2026 — Version 2026-10-23.2</p>
 
         <p>
           Cellarion ("we", "us", or "our") operates the Cellarion wine cellar management
