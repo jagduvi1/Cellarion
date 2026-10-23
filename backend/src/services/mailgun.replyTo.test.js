@@ -1,6 +1,7 @@
 /**
  * Where a reply goes when someone answers one of the emails that promise a
- * person reads it: a support answer, or the supporter thank-you.
+ * person reads it: a support answer, the supporter thank-you, or a curator's
+ * question to a wine's owner.
  *
  * SUPPORT_REPLY_TO decides when the install sets it. Without it, only the
  * hosted cellarion.app uses the hosted inbox; any other install answers with
@@ -38,29 +39,30 @@ async function replyTos(env) {
     const mail = require('./mailgun');
     await mail.sendSupportReplyEmail('anna@example.com', 'Anna', 'u1', 'Question', 'Answer');
     await mail.sendSupporterThankYou('anna@example.com', 'Anna', 'supporter');
+    await mail.sendOwnerInquiryEmail('anna@example.com', 'Anna', 'u1', 'Wine', 'A question?', '/questions/q1');
     out = mockCreate.mock.calls.map(([, msg]) => msg['h:Reply-To']);
   });
-  return { supportAnswer: out[0], thankYou: out[1] };
+  return { supportAnswer: out[0], thankYou: out[1], ownerQuestion: out[2] };
 }
 
 test('a self-hosted install without SUPPORT_REPLY_TO uses its own MAILGUN_FROM, never the hosted inbox', async () => {
   const r = await replyTos({ FRONTEND_URL: 'https://wine.example.org', MAILGUN_FROM: 'Our Cellar <help@example.org>' });
-  expect(r).toEqual({ supportAnswer: 'Our Cellar <help@example.org>', thankYou: 'Our Cellar <help@example.org>' });
+  expect(r).toEqual({ supportAnswer: 'Our Cellar <help@example.org>', thankYou: 'Our Cellar <help@example.org>', ownerQuestion: 'Our Cellar <help@example.org>' });
 });
 
 test('a self-hosted install with neither set answers with its own From (the no-reply default on its domain)', async () => {
   const r = await replyTos({ FRONTEND_URL: 'http://localhost' });
-  expect(r).toEqual({ supportAnswer: 'Cellarion <no-reply@mg.example.org>', thankYou: 'Cellarion <no-reply@mg.example.org>' });
+  expect(r).toEqual({ supportAnswer: 'Cellarion <no-reply@mg.example.org>', thankYou: 'Cellarion <no-reply@mg.example.org>', ownerQuestion: 'Cellarion <no-reply@mg.example.org>' });
 });
 
 test('the hosted cellarion.app keeps the hosted inbox', async () => {
   const r = await replyTos({ FRONTEND_URL: 'https://cellarion.app' });
-  expect(r).toEqual({ supportAnswer: 'info@cellarion.app', thankYou: 'info@cellarion.app' });
+  expect(r).toEqual({ supportAnswer: 'info@cellarion.app', thankYou: 'info@cellarion.app', ownerQuestion: 'info@cellarion.app' });
 });
 
 test('SUPPORT_REPLY_TO wins on any install', async () => {
   const self = await replyTos({ FRONTEND_URL: 'https://wine.example.org', MAILGUN_FROM: 'Our Cellar <help@example.org>', SUPPORT_REPLY_TO: 'team@example.org' });
-  expect(self).toEqual({ supportAnswer: 'team@example.org', thankYou: 'team@example.org' });
+  expect(self).toEqual({ supportAnswer: 'team@example.org', thankYou: 'team@example.org', ownerQuestion: 'team@example.org' });
   const hosted = await replyTos({ FRONTEND_URL: 'https://cellarion.app', SUPPORT_REPLY_TO: 'team@example.org' });
-  expect(hosted).toEqual({ supportAnswer: 'team@example.org', thankYou: 'team@example.org' });
+  expect(hosted).toEqual({ supportAnswer: 'team@example.org', thankYou: 'team@example.org', ownerQuestion: 'team@example.org' });
 });

@@ -40,7 +40,9 @@ test('sends the question itself, a button to it in the app and a Reply-To that r
   expect(domain).toBe('mg.test');
   expect(msg.to).toEqual(['anna@example.com']);
   expect(msg.subject).toBe('A question about your Domaine Exemple — Cuvée Test');
-  expect(msg['h:Reply-To']).toBe('info@cellarion.app');
+  // This test install is not the hosted one, so an answer goes to its own From
+  // (supportReplyTo; the hosted inbox case is pinned in mailgun.replyTo.test.js).
+  expect(msg['h:Reply-To']).toBe('Cellarion <no-reply@mg.test>');
   expect(msg.text).toContain(QUESTION);
   expect(msg.text).toContain('https://cellarion.test/questions/q1');
   expect(msg.html).toContain('Does your label print the word &quot;Réserve&quot;?<br>One word settles it.');

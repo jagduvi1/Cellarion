@@ -696,7 +696,7 @@ async function sendOwnerInquiryEmail(toEmail, recipientName, recipientId, wineLa
   await mg.messages.create(DOMAIN, {
     from: FROM,
     to: [toEmail],
-    'h:Reply-To': process.env.SUPPORT_REPLY_TO || 'info@cellarion.app',
+    'h:Reply-To': supportReplyTo(),
     subject: `A question about your ${wine}`,
     text: [
       `Hello ${recipientName},`,
