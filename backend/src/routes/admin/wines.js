@@ -55,7 +55,7 @@ const { embedSinglePair, reembedActiveVintages } = require('../../services/embed
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
-const { isValidId } = require('../../utils/validation');
+const { isValidId, coerceStringQuery } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
 const { stripProducerName, stripProducerKeyPrefix, canonicalizeWineName } = require('../../utils/producerPrefix');
@@ -910,7 +910,13 @@ router.get('/low-confidence', async (req, res) => {
 
 router.get('/duplicates', async (req, res) => {
   try {
-    const { name, producer, appellation, threshold = 0.75 } = req.query;
+    // A repeated query param arrives as an array: coerced to '' it hits the 400
+    // below instead of a .split() TypeError (500).
+    const name = coerceStringQuery(req.query.name);
+    const producer = coerceStringQuery(req.query.producer);
+    const appellation = coerceStringQuery(req.query.appellation) || undefined;
+    const parsedThreshold = parseFloat(coerceStringQuery(req.query.threshold));
+    const threshold = Number.isFinite(parsedThreshold) ? parsedThreshold : 0.75;
 
     if (!name || !producer) {
       return res.status(400).json({ error: 'Name and producer are required' });
@@ -974,11 +980,10 @@ router.get('/duplicates', async (req, res) => {
           appellationSimilarity = 0.5;
         }
 
-        // Overall similarity: name and producer weighted heavily
-        const overallSimilarity =
-          nameCombined * 0.45 +
-          producerCombined * 0.45 +
-          appellationSimilarity * 0.1;
+        // Overall: the shared scorer every add flow uses (producer keys,
+        // star grades, label abbreviations). The breakdown above stays as
+        // the per-algorithm detail.
+        const overallSimilarity = scoreWineMatch(wine, { name, producer, appellation }, { redistribute: false });
 
         return {
           wine,
@@ -1001,12 +1006,12 @@ router.get('/duplicates', async (req, res) => {
           }
         };
       })
-      .filter(item => item.similarity >= parseFloat(threshold))
+      .filter(item => item.similarity >= threshold)
       .sort((a, b) => b.similarity - a.similarity);
 
     res.json({
       count: candidates.length,
-      threshold: parseFloat(threshold),
+      threshold,
       query: { name, producer, appellation },
       candidates
     });
