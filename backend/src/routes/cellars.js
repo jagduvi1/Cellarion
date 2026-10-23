@@ -18,7 +18,10 @@ const { createNotification } = require('../services/notifications');
 const { transferCellarOwnership } = require('../services/cellarTransfer');
 const { sendCellarInviteEmail } = require('../services/mailgun');
 const { toNormalized, ratingBand, filterByRating } = require('../utils/ratingUtils');
-const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
+const {
+  classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter,
+  buildMaturitySortKeys, compareMaturitySortKeys,
+} = require('../utils/maturityUtils');
 const { isReserved } = require('../utils/reservationUtils');
 const {
   normalizeTaxonomyQuery, parseExtraBottleFilters, applyExtraBottleFilters, groupIdenticalBottles,
@@ -312,8 +315,6 @@ async function resolveAccessibleCellars(userId) {
   }).lean();
 }
 
-const MATURITY_RANK_MULTI = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
-
 // `history` (historyPaging's answer) pages a history instead of `paginate`.
 async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginate = true, history = null, version }) {
   // Coerce every query param to a string up front: Express turns repeated
@@ -425,10 +426,12 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   // list), and a band is exactly the statistics' band (utils/ratingUtils).
   bottles = filterByRating(bottles, { minRating, maxRating, ratingBand: ratingBandParam });
   let maturityStatusMap;
+  let maturitySortKeys;
   if (needsMaturity) {
     const profileMap = await buildProfileMap(bottles);
     maturityStatusMap = new Map();
     for (const b of bottles) maturityStatusMap.set(b._id.toString(), classifyMaturity(b, profileMap));
+    if (sortField === 'maturity') maturitySortKeys = buildMaturitySortKeys(bottles, profileMap, maturityStatusMap);
   }
   if (maturityFilter && maturityStatusMap) {
     bottles = bottles.filter(b => matchesMaturityFilter(maturityStatusMap.get(b._id.toString()), maturityFilter));
@@ -442,12 +445,9 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     bottles.sort((a, b) => sortDir * byWineName(a, b));
   } else if (sortField === QUANTITY_SORT) {
     bottles.sort(byWineName);
-  } else if (sortField === 'maturity' && maturityStatusMap) {
-    bottles.sort((a, b) => {
-      const av = maturityStatusMap.get(a._id.toString());
-      const bv = maturityStatusMap.get(b._id.toString());
-      return ((av != null ? MATURITY_RANK_MULTI[av] : 5) - (bv != null ? MATURITY_RANK_MULTI[bv] : 5)) * sortDir;
-    });
+  } else if (sortField === 'maturity' && maturitySortKeys) {
+    bottles.sort((a, b) => sortDir * compareMaturitySortKeys(
+      maturitySortKeys.get(a._id.toString()), maturitySortKeys.get(b._id.toString())));
   } else if (!found) {
     // The search ranked its hits (relevance, then the sort); a list sorts here.
     bottles.sort((a, b) => {
@@ -1436,7 +1436,6 @@ router.get('/:id', async (req, res) => {
 
     // Whether we need in-memory post-processing that neither the search nor MongoDB can do
     const needsMaturity = !!(maturityFilter || sortField === 'maturity');
-    const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
 
     // ── Search: free text or a wine filter (type, country, region, appellation, grapes, vintage) ──
     const hasSearchFilters = !!(search || type || country || region || grapes || vintage || appellation);
@@ -1562,29 +1561,14 @@ router.get('/:id', async (req, res) => {
         totalCount = await Bottle.countDocuments(filter);
       }
 
-      // In-memory sort for fields that require populated data
-      if (needsInMemorySort) {
-        let maturityStatusMap_;
-        if (sortField === 'maturity') {
-          const profileMap = await buildProfileMap(bottles);
-          maturityStatusMap_ = new Map();
-          for (const b of bottles) {
-            maturityStatusMap_.set(b._id.toString(), classifyMaturity(b, profileMap));
-          }
-        }
+      // In-memory sort for fields that require populated data. Maturity sorts
+      // after the shared post-filters below, on both paths.
+      if (needsInMemorySort && sortField !== 'maturity') {
         bottles.sort((a, b) => {
-          let aVal, bVal;
           if (sortField === QUANTITY_SORT) return byWineName(a, b);
           if (sortField === 'name') return sortDir * byWineName(a, b);
-          if (sortField === 'maturity' && maturityStatusMap_) {
-            const aStatus = maturityStatusMap_.get(a._id.toString());
-            const bStatus = maturityStatusMap_.get(b._id.toString());
-            aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
-            bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
-          } else {
-            aVal = a.createdAt;
-            bVal = b.createdAt;
-          }
+          const aVal = a.createdAt;
+          const bVal = b.createdAt;
           if (aVal < bVal) return -sortDir;
           if (aVal > bVal) return sortDir;
           return 0;
@@ -1605,29 +1589,25 @@ router.get('/:id', async (req, res) => {
     bottles = filterByRating(bottles, { minRating, maxRating, ratingBand: ratingBandParam });
 
     let maturityStatusMap;
+    let maturitySortKeys;
     if (needsMaturity) {
       const profileMap = await buildProfileMap(bottles);
       maturityStatusMap = new Map();
       for (const b of bottles) {
         maturityStatusMap.set(b._id.toString(), classifyMaturity(b, profileMap));
       }
+      if (sortField === 'maturity') maturitySortKeys = buildMaturitySortKeys(bottles, profileMap, maturityStatusMap);
     }
 
     if (maturityFilter && maturityStatusMap) {
       bottles = bottles.filter(b => matchesMaturityFilter(maturityStatusMap.get(b._id.toString()), maturityFilter));
     }
 
-    // The search ranks by relevance and a stored field; maturity needs vintage
-    // profiles, so a maturity sort on the search path is applied here, mirroring
-    // the list path's comparator.
-    if (sortField === 'maturity' && found && maturityStatusMap) {
-      bottles.sort((a, b) => {
-        const aStatus = maturityStatusMap.get(a._id.toString());
-        const bStatus = maturityStatusMap.get(b._id.toString());
-        const aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
-        const bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
-        return (aVal - bVal) * sortDir;
-      });
+    // Maturity needs the vintage profiles, so neither the search nor MongoDB
+    // can order by it: both paths sort here (stage, then the year it ends).
+    if (maturitySortKeys) {
+      bottles.sort((a, b) => sortDir * compareMaturitySortKeys(
+        maturitySortKeys.get(a._id.toString()), maturitySortKeys.get(b._id.toString())));
     }
 
     // Group identical bottles (same wine + vintage), or paginate normally.

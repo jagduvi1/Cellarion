@@ -111,7 +111,13 @@ function sortBottles(list, sort) {
     // Quantity: bottles in name order (A to Z, whichever direction); the
     // grouped list then orders its cards by size (cellarDetail).
     if (field === 'quantity') return norm(b.wineDefinition?.name || b.pendingWineRequest?.wineName) || '\uffff';
-    if (field === 'maturity') return b.maturityStatus != null && b.maturityStatus in MATURITY_RANK ? MATURITY_RANK[b.maturityStatus] : 5;
+    if (field === 'maturity') {
+      // Stage, then the year it ends, then the window's end — the server's
+      // order (backend utils/maturityUtils); a missing year sorts last.
+      const rank = b.maturityStatus != null && b.maturityStatus in MATURITY_RANK ? MATURITY_RANK[b.maturityStatus] : 5;
+      const year = (y) => (Number.isFinite(y) ? y : 9999);
+      return rank * 1e8 + year(b.maturityDue) * 1e4 + year(b.maturityEnd);
+    }
     if (field === 'vintage') return b.vintage && /^\d+$/.test(b.vintage) ? Number(b.vintage) : null;
     if (field === 'price' || field === 'rating') return typeof b[field] === 'number' ? b[field] : null;
     return b.createdAt || '';

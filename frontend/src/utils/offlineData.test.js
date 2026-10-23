@@ -63,6 +63,21 @@ describe('offline answers — cellar detail', () => {
     expect(ids(get(`/api/cellars/${C1}?sort=maturity`).body.bottles.items)[0]).toMatch(/b0+[12]$/); // peak before early
   });
 
+  it('maturity: inside a stage the stage ending first comes first, as on the server', () => {
+    const snap = {
+      ...SNAP,
+      bottles: [
+        { ...SNAP.bottles[0], maturityDue: 2034, maturityEnd: 2040 }, // peak, ends 2034
+        { ...SNAP.bottles[1], maturityDue: 2026, maturityEnd: 2028 }, // peak, ends this year
+        SNAP.bottles[2],                                              // early
+        // an older device copy has no years: last among the peaks
+        { ...SNAP.bottles[0], _id: b9, createdAt: '2026-05-01' },
+      ],
+    };
+    const items = answerOffline(indexSnapshot(snap), `/api/cellars/${C1}?sort=maturity`).body.bottles.items;
+    expect(ids(items)).toEqual([b2, b1, b9, b3]);
+  });
+
   it('search matches wine, producer, grape and region words, accent-insensitive', () => {
     expect(ids(get(`/api/cellars/${C1}?search=fevre`).body.bottles.items)).toEqual([b3]);
     expect(ids(get(`/api/cellars/${C1}?search=nebbiolo%202016`).body.bottles.items).sort()).toEqual([b1, b2]);

@@ -8,6 +8,7 @@ jest.mock('../models/Rack', () => ({ find: jest.fn() }));
 jest.mock('../utils/maturityUtils', () => ({
   buildProfileMap: jest.fn(async () => new Map()),
   classifyMaturity: jest.fn((b) => (b._id === 'b1' ? 'peak' : null)),
+  buildMaturitySortKeys: jest.fn((bottles) => new Map(bottles.map((b) => [String(b._id), b._id === 'b1' ? { rank: 2, due: 2027, end: 2031 } : { rank: 5, due: null, end: null }]))),
 }));
 
 const Cellar = require('../models/Cellar');
@@ -35,6 +36,7 @@ describe('assembleSnapshot', () => {
       { _id: 'r2', cellar: 'c-deleted', slots: [] },
     ],
     maturity: new Map([['b1', 'peak']]),
+    maturitySort: new Map([['b1', { rank: 2, due: 2027, end: 2031 }]]),
     now: new Date('2026-09-24T12:00:00Z'),
   });
 
@@ -63,6 +65,12 @@ describe('assembleSnapshot', () => {
     const s = snapshot();
     expect(s.bottles.find((b) => b._id === 'b1').maturityStatus).toBe('peak');
     expect(s.bottles.find((b) => b._id === 'b2').maturityStatus).toBeNull();
+  });
+
+  test('bottles carry the years the maturity sort orders a stage by', () => {
+    const s = snapshot();
+    expect(s.bottles.find((b) => b._id === 'b1')).toMatchObject({ maturityDue: 2027, maturityEnd: 2031 });
+    expect(s.bottles.find((b) => b._id === 'b2')).toMatchObject({ maturityDue: null, maturityEnd: null });
   });
 
   test('nothing from outside the user\'s cellars (a soft-deleted cellar\'s leftovers)', () => {
@@ -97,7 +105,7 @@ describe('buildOfflineSnapshot', () => {
     expect(bottleQuery.status.$nin).toEqual(expect.arrayContaining(['drank', 'gifted', 'sold']));
     expect(Rack.find).toHaveBeenCalledWith({ cellar: { $in: ['c1'] }, deletedAt: null });
     expect(attach).toHaveBeenCalledWith(expect.any(Array), ME);
-    expect(s.bottles[0]).toMatchObject({ _id: 'b1', wineDefinition: 'w1', defaultImageUrl: '/api/uploads/processed/x.png', maturityStatus: 'peak' });
+    expect(s.bottles[0]).toMatchObject({ _id: 'b1', wineDefinition: 'w1', defaultImageUrl: '/api/uploads/processed/x.png', maturityStatus: 'peak', maturityDue: 2027, maturityEnd: 2031 });
   });
 
   test('a user with no cellars gets an empty snapshot without further queries', async () => {

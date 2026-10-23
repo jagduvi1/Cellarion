@@ -183,6 +183,52 @@ function resolveEffectiveWindow(bottle, profileMap) {
   };
 }
 
+// "Maturity (Drink Soon→Later)": the stage first — declining, late, peak,
+// early, not ready, then bottles without data — and inside a stage the year
+// that stage ends, so a peak ending this year comes before a peak running
+// another decade (support ticket 2026-10-19: the stage alone left a long peak
+// above one ending now). Then the end of the whole window.
+const MATURITY_SORT_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
+const NO_MATURITY_SORT_RANK = 5;
+const STAGE_ENDS = {
+  'not-ready': (w) => w.drinkFrom ?? w.peakFrom, // becomes drinkable
+  early: (w) => w.peakFrom ?? w.drinkTo,         // its peak begins
+  peak: (w) => w.peakUntil ?? w.drinkTo,         // its peak ends
+  late: (w) => w.drinkTo,                        // its window closes
+  declining: (w) => w.drinkTo ?? w.peakUntil,    // its window closed
+};
+
+/**
+ * The sort key of one bottle: { rank, due, end }. `due` is the year its
+ * current stage ends and `end` the year its window ends, null when unknown.
+ * `window` is resolveEffectiveWindow's answer for the bottle.
+ */
+function maturitySortKey(status, window) {
+  const rank = MATURITY_SORT_RANK[status] ?? NO_MATURITY_SORT_RANK;
+  const w = window || {};
+  const due = STAGE_ENDS[status] ? STAGE_ENDS[status](w) : null;
+  return { rank, due: Number.isFinite(due) ? due : null, end: Number.isFinite(w.drinkTo) ? w.drinkTo : null };
+}
+
+/** Bottle id → sort key; `statusMap` (id → classifyMaturity) saves classifying twice. */
+function buildMaturitySortKeys(bottles, profileMap, statusMap = null) {
+  const keys = new Map();
+  for (const b of bottles) {
+    const id = b._id.toString();
+    const status = statusMap ? statusMap.get(id) : classifyMaturity(b, profileMap);
+    keys.set(id, maturitySortKey(status, status ? resolveEffectiveWindow(b, profileMap) : null));
+  }
+  return keys;
+}
+
+// An unknown year sorts after every known one in the same stage.
+const compareYears = (x, y) => (x === y ? 0 : x == null ? 1 : y == null ? -1 : x - y);
+
+/** Ascending comparator over two maturitySortKey results ("drink soon" first). */
+function compareMaturitySortKeys(a, b) {
+  return a.rank - b.rank || compareYears(a.due, b.due) || compareYears(a.end, b.end);
+}
+
 /** Build and return a WineVintageProfile lookup map for a set of active bottles. */
 async function buildProfileMap(activeBottles) {
   const seenPairs = new Set();
@@ -323,4 +369,5 @@ module.exports = {
   classifyMaturity, classifyPersonalWindow, buildProfileMap, maturityLabel,
   bottleAnchorYear, resolveWindow, resolveWindowForBottle, resolveEffectiveWindow,
   MATURITY_FILTER_VALUES, parseMaturityFilter, matchesMaturityFilter,
+  maturitySortKey, buildMaturitySortKeys, compareMaturitySortKeys,
 };

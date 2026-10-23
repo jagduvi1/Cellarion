@@ -31,7 +31,10 @@ const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
 const { buildCaseJourneys } = require('../services/insightsService');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { bottleRating, filterByRating } = require('../utils/ratingUtils');
-const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
+const {
+  classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter,
+  buildMaturitySortKeys, compareMaturitySortKeys,
+} = require('../utils/maturityUtils');
 const { parsePagination } = require('../utils/pagination');
 const personalData = require('../services/personalData');
 // Read-surface decoration: populated grapes gain `displayName` — the
@@ -360,6 +363,7 @@ router.get('/', async (req, res) => {
 
     // ── Maturity post-filter / sort (needs WineVintageProfile lookup) ─────────
     let maturityMap = null;
+    let maturitySortKeys = null;
     const needsMaturity = !!(maturityFilter || sortField === 'maturity');
     if (needsMaturity) {
       const profileMap = await buildProfileMap(bottles);
@@ -367,6 +371,7 @@ router.get('/', async (req, res) => {
       for (const b of bottles) {
         maturityMap.set(b._id.toString(), classifyMaturity(b, profileMap));
       }
+      if (sortField === 'maturity') maturitySortKeys = buildMaturitySortKeys(bottles, profileMap, maturityMap);
     }
 
     if (maturityFilter && maturityMap) {
@@ -375,8 +380,12 @@ router.get('/', async (req, res) => {
 
     // ── In-memory sort for fields we couldn't sort in the DB ──────────────────
     if (!canSortInDb) {
-      const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
       bottles.sort((a, b) => {
+        // Stage, then the year that stage ends (utils/maturityUtils).
+        if (maturitySortKeys) {
+          return sortDir * compareMaturitySortKeys(
+            maturitySortKeys.get(a._id.toString()), maturitySortKeys.get(b._id.toString()));
+        }
         let aVal, bVal;
         if (sortField === 'name') {
           aVal = a.wineDefinition?.name || '';
@@ -385,11 +394,6 @@ router.get('/', async (req, res) => {
           // Unrated last when sorting high to low, as the database sorts nulls.
           aVal = bottleRating(a) ?? -1;
           bVal = bottleRating(b) ?? -1;
-        } else if (sortField === 'maturity' && maturityMap) {
-          const aStatus = maturityMap.get(a._id.toString());
-          const bStatus = maturityMap.get(b._id.toString());
-          aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
-          bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
         } else {
           aVal = a.createdAt;
           bVal = b.createdAt;

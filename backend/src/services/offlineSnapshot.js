@@ -13,14 +13,14 @@
  * and the client joins them back (six bottles of a wine used to mean six copies
  * of its registry record). Bottles carry exactly what the cellar list gives
  * them: the list-weight wine populate, their resolved card image, and their
- * maturity status.
+ * maturity status, plus the two years the maturity sort orders a stage by.
  */
 const crypto = require('crypto');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { classifyMaturity, buildProfileMap, buildMaturitySortKeys } = require('../utils/maturityUtils');
 const { NOT_IN_CELLAR_STATUSES, WINE_POPULATE_CARDS } = require('../config/constants');
 const { getDataVersion } = require('./dataVersion');
 
@@ -86,9 +86,10 @@ function userColorOf(cellar, userId) {
 /**
  * Pure: shape loaded documents into the snapshot. Exported for tests.
  * `bottles` are populated (wineDefinition as an object) and already carry
- * their image URLs; `maturity` maps bottle id → status.
+ * their image URLs; `maturity` maps bottle id → status and `maturitySort`
+ * bottle id → maturitySortKey.
  */
-function assembleSnapshot({ userId, cellars, bottles, racks, maturity = new Map(), now = new Date() }) {
+function assembleSnapshot({ userId, cellars, bottles, racks, maturity = new Map(), maturitySort = new Map(), now = new Date() }) {
   const cellarIds = new Set(cellars.map((c) => String(c._id)));
   const wines = {};
   const outBottles = [];
@@ -100,6 +101,10 @@ function assembleSnapshot({ userId, cellars, bottles, racks, maturity = new Map(
       ...b,
       wineDefinition: wine ? String(wine._id) : idOf(b.wineDefinition),
       maturityStatus: maturity.get(String(b._id)) || null,
+      // "Drink Soon→Later" inside a stage, offline as online: the year the
+      // stage ends, then the year the window ends (utils/maturityUtils).
+      maturityDue: maturitySort.get(String(b._id))?.due ?? null,
+      maturityEnd: maturitySort.get(String(b._id))?.end ?? null,
     });
   }
   const bottleIds = new Set(outBottles.map((b) => String(b._id)));
@@ -151,9 +156,10 @@ async function buildOfflineSnapshot(userId, { attachBottleImageUrls }) {
 
   const profileMap = await buildProfileMap(bottles);
   const maturity = new Map(bottles.map((b) => [String(b._id), classifyMaturity(b, profileMap) || null]));
+  const maturitySort = buildMaturitySortKeys(bottles, profileMap, maturity);
   const withImages = await attachBottleImageUrls(bottles, userId);
 
-  return assembleSnapshot({ userId, cellars, bottles: withImages, racks, maturity });
+  return assembleSnapshot({ userId, cellars, bottles: withImages, racks, maturity, maturitySort });
 }
 
 module.exports = { buildOfflineSnapshot, assembleSnapshot, snapshotTag, SNAPSHOT_SCHEMA, SNAPSHOT_WINE_POPULATE, TAG_MAX_AGE_MS };

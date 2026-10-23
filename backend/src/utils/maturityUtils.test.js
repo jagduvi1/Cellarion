@@ -758,3 +758,64 @@ describe('parseMaturityFilter + matchesMaturityFilter (multi-select, OR)', () =>
     expect(MATURITY_FILTER_VALUES).toEqual(['declining', 'late', 'peak', 'early', 'not-ready', 'none']);
   });
 });
+
+// ─── maturity sort (stage, then the year it ends) ────────────────────────────
+
+describe('maturity sort keys — "Drink Soon→Later"', () => {
+  const { maturitySortKey, buildMaturitySortKeys, compareMaturitySortKeys } = require('./maturityUtils');
+  const W = 'b'.repeat(24);
+  // Clock: 2026. One vintage per profile, so each bottle reads its own.
+  const PROFILES = {
+    J: { peakFrom: 2010, peakUntil: 2015, lateFrom: 2016, lateUntil: 2020 }, // declining, closed 2020
+    K: { peakFrom: 2015, peakUntil: 2020, lateFrom: 2021, lateUntil: 2024 }, // declining, closed 2024
+    D: { peakFrom: 2018, peakUntil: 2024, lateFrom: 2025, lateUntil: 2027 }, // late until 2027
+    E: { peakFrom: 2018, peakUntil: 2023, lateFrom: 2024, lateUntil: 2030 }, // late until 2030
+    B: { peakFrom: 2022, peakUntil: 2026, lateFrom: 2027, lateUntil: 2029 }, // peak ends THIS year
+    B2: { peakFrom: 2021, peakUntil: 2026, lateFrom: 2027, lateUntil: 2027 }, // peak ends this year, window too
+    A: { peakFrom: 2020, peakUntil: 2035, lateFrom: 2036, lateUntil: 2040 }, // long peak, to 2035
+    G: { earlyFrom: 2024, earlyUntil: 2026, peakFrom: 2027, peakUntil: 2032 }, // early, peak from 2027
+    F: { earlyFrom: 2025, earlyUntil: 2027, peakFrom: 2028, peakUntil: 2035 }, // early, peak from 2028
+    I: { earlyFrom: 2029, peakFrom: 2031, peakUntil: 2036 }, // not ready until 2029
+    H: { earlyFrom: 2030, peakFrom: 2033, peakUntil: 2040 }, // not ready until 2030
+  };
+  const vintageOf = (name) => String(1990 + Object.keys(PROFILES).indexOf(name));
+  const map = new Map(Object.entries(PROFILES).map(([name, p]) => [`${W}:${vintageOf(name)}`, { status: 'reviewed', ...p }]));
+  const bottle = (name) => ({ _id: name, wineDefinition: { _id: W }, vintage: vintageOf(name) });
+  const order = (bottles) => {
+    const keys = buildMaturitySortKeys(bottles, map);
+    return [...bottles].sort((a, b) => compareMaturitySortKeys(keys.get(a._id), keys.get(b._id))).map((b) => b._id);
+  };
+
+  test('inside a stage, the stage ending first comes first — a long peak no longer outranks one ending now', () => {
+    const bottles = [
+      { _id: 'U', vintage: '2019' }, // no data
+      ...['A', 'H', 'B', 'F', 'K', 'E', 'I', 'G', 'D', 'J', 'B2'].map(bottle),
+      // a personal window (no peak pair): the whole span is peak, ending 2027
+      { _id: 'C', drinkFrom: 2020, drinkTo: 2027, wineDefinition: { _id: W }, vintage: vintageOf('A') },
+    ];
+    expect(order(bottles)).toEqual(['J', 'K', 'D', 'E', 'B2', 'B', 'C', 'A', 'G', 'F', 'I', 'H', 'U']);
+  });
+
+  test('the key: stage rank, the year the stage ends, the year the window ends', () => {
+    const keys = buildMaturitySortKeys(['B', 'G', 'I', 'J'].map(bottle), map);
+    expect(keys.get('B')).toEqual({ rank: 2, due: 2026, end: 2029 });
+    expect(keys.get('G')).toEqual({ rank: 3, due: 2027, end: 2032 });
+    expect(keys.get('I')).toEqual({ rank: 4, due: 2029, end: 2036 });
+    expect(keys.get('J')).toEqual({ rank: 0, due: 2020, end: 2020 });
+  });
+
+  test('no data, or a stage with no year, sorts after the known years', () => {
+    expect(maturitySortKey(null, null)).toEqual({ rank: 5, due: null, end: null });
+    const known = maturitySortKey('peak', { peakUntil: 2030, drinkTo: 2032 });
+    const open = maturitySortKey('peak', { drinkFrom: 2020 });
+    expect(open).toEqual({ rank: 2, due: null, end: null });
+    expect(compareMaturitySortKeys(known, open)).toBeLessThan(0);
+    expect(compareMaturitySortKeys(open, known)).toBeGreaterThan(0);
+    expect(compareMaturitySortKeys(open, { ...open })).toBe(0);
+  });
+
+  test('a status map passed in is used instead of classifying again', () => {
+    const keys = buildMaturitySortKeys([bottle('A')], map, new Map([['A', 'late']]));
+    expect(keys.get('A')).toEqual({ rank: 1, due: 2040, end: 2040 });
+  });
+});
