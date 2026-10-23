@@ -1,8 +1,9 @@
-// Public/growth tools (plan Phase 6 §3.9): the anonymous-safe surface beyond
-// the registry lookups — curated drink windows for a named wine, and the blog
-// guides (cornerstone AEO content). Everything here is data the PUBLIC website
-// already serves (wine pages / OG crawler pages / the blog), never user data,
-// and never an AI call ($0 rule for the anonymous endpoint is absolute).
+// Public/growth tools (plan Phase 6 §3.9): the blog guides (cornerstone AEO
+// content), data the public website already serves, never user data and never
+// an AI call ($0 rule for the anonymous endpoint is absolute). Curated drink
+// windows live here too but are for signed-in connections only (scope 'read'):
+// they are the registry data most worth protecting, so the anonymous surface
+// does not list the tool.
 const { z } = require('zod');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
@@ -17,37 +18,31 @@ registerTool({
     'maturity, with where the vintage stands right now. Call for "when should I drink <wine> <vintage>", aging ' +
     'questions, or buy-now-drink-later advice. Only sommelier-REVIEWED vintages are returned — an empty result ' +
     'means no curated window exists yet (reason from grape/region/structure yourself, and say it is an estimate).',
-  scope: 'public',
+  scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     wine_id: z.string().describe('Registry wine id (from search_registry)'),
     vintage: z.string().max(10).optional().describe('One vintage year; omit for all curated vintages of the wine'),
   },
-  handler: async (args, ctx) => {
+  handler: async (args) => {
     // Lazy model requires keep the registry load path lean (file convention).
     const WineDefinition = require('../../models/WineDefinition');
     const WineVintageProfile = require('../../models/WineVintageProfile');
-    // Registry lockdown (2026-09-06, L3): the anonymous surface gets the peak
-    // window per vintage — the answer to "when should I drink it" — while the
-    // early/late bounds, the curated table a copier wants, stay with signed-in
-    // connections.
-    const anonymous = !!ctx?.anonymous || !ctx?.user;
 
     if (!isValidId(String(args.wine_id || ''))) {
       return fail('invalid_input', 'wine_id must be a 24-hex id from search_registry.');
     }
     const wine = await WineDefinition.findById(args.wine_id).select('name producer type pendingIdentity').lean();
-    // Public tool, no caller identity to compare — a pendingIdentity row is not
-    // registry content yet (and has no reviewed maturity rows anyway, since it
-    // never enters the somm queue). Same not_found a missing id gets.
+    // A pendingIdentity row is not registry content yet (and has no reviewed
+    // maturity rows anyway, since it never enters the somm queue). Same
+    // not_found a missing id gets.
     if (!wine || wine.pendingIdentity === true) {
       return fail('not_found', 'No such registry wine. Use search_registry for valid ids.');
     }
 
     const filter = { wineDefinition: wine._id, status: 'reviewed' };
     if (args.vintage) filter.vintage = String(args.vintage).trim();
-    // Same field boundary as the public OG pages: window years only — never
-    // sommNotes or curator identity.
+    // Window years only — never sommNotes or curator identity.
     const profiles = await WineVintageProfile.find(filter)
       .select('vintage relative earlyFrom earlyUntil peakFrom peakUntil lateFrom lateUntil')
       .sort({ vintage: -1 }).limit(30).lean();
@@ -57,13 +52,11 @@ registerTool({
       // `relative` profiles (NV wines) hold year-OFFSETS from purchase, not
       // calendar years — without a bottle there is no anchor, so report the
       // offsets as such and no now-status.
-      const windows = anonymous
-        ? { peak: { from: p.peakFrom ?? null, until: p.peakUntil ?? null } }
-        : {
-          early: { from: p.earlyFrom ?? null, until: p.earlyUntil ?? null },
-          peak: { from: p.peakFrom ?? null, until: p.peakUntil ?? null },
-          late: { from: p.lateFrom ?? null, until: p.lateUntil ?? null },
-        };
+      const windows = {
+        early: { from: p.earlyFrom ?? null, until: p.earlyUntil ?? null },
+        peak: { from: p.peakFrom ?? null, until: p.peakUntil ?? null },
+        late: { from: p.lateFrom ?? null, until: p.lateUntil ?? null },
+      };
       let now = null;
       if (!p.relative) {
         if (p.peakFrom && currentYear < p.peakFrom) now = (p.earlyFrom && currentYear >= p.earlyFrom) ? 'early' : 'not_ready';

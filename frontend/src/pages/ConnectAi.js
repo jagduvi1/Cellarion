@@ -236,7 +236,7 @@ function ConnectAi() {
           <p>
             {t(
               'connectAi.publicBody',
-              'Cellarion also runs a public endpoint that any AI can use without signing up. It serves the shared wine registry, grape and region profiles, sommelier drink windows and our published guides. It holds no personal data and changes nothing.',
+              'Cellarion also runs a public endpoint that any AI can use without signing up. It serves the shared wine registry, grape and region profiles and our published guides. It holds no personal data and changes nothing.',
             )}
           </p>
           <Snippet text={publicUrl} copyLabel={copyLabel} copiedLabel={copiedLabel} />

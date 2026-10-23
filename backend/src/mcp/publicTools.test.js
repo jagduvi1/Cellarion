@@ -79,9 +79,14 @@ describe('the anonymous surface is structural', () => {
   test('scopes [] exposes EXACTLY the public tool set — nothing personal', () => {
     const names = toolsForScopes([], []).map((t) => t.name).sort();
     expect(names).toEqual([
-      'drink_window_for', 'find_similar_wines', 'get_source_info', 'get_wine',
+      'find_similar_wines', 'get_source_info', 'get_wine',
       'list_guides', 'read_guide', 'search_registry',
     ]);
+  });
+
+  test('drink windows are for signed-in connections: the read scope lists drink_window_for, no scope does not', () => {
+    expect(toolsForScopes([], []).map((t) => t.name)).not.toContain('drink_window_for');
+    expect(toolsForScopes(['read'], []).map((t) => t.name)).toContain('drink_window_for');
   });
 
   test('every public tool is read-only (the anonymous surface can never mutate)', () => {
@@ -108,14 +113,15 @@ describe('find_similar_wines anonymous guard', () => {
 });
 
 describe('drink_window_for', () => {
+  const SIGNED_IN = { user: { id: oid('a') }, scopes: ['read'] };
   const WINE = { _id: new mongoose.Types.ObjectId(oid('f')), name: 'Barolo X', producer: 'P', type: 'red' };
 
-  test('reviewed-only, OG field boundary (no sommNotes), status_now mapping', async () => {
+  test('reviewed-only, the full early/peak/late table, no sommNotes, status_now mapping', async () => {
     WineDefinition.findById.mockReturnValue(chain(WINE));
     WineVintageProfile.find.mockReturnValue(chain([
       { vintage: '2015', relative: false, earlyFrom: 2018, earlyUntil: 2021, peakFrom: THIS_YEAR - 2, peakUntil: THIS_YEAR + 3, lateFrom: THIS_YEAR + 4, lateUntil: THIS_YEAR + 8 },
     ]));
-    const res = await tool('drink_window_for').handler({ wine_id: oid('f') }, ANON);
+    const res = await tool('drink_window_for').handler({ wine_id: oid('f') }, SIGNED_IN);
     const body = parse(res);
     expect(WineVintageProfile.find).toHaveBeenCalledWith({ wineDefinition: WINE._id, status: 'reviewed' });
     const v = body.data.vintages[0];
@@ -130,7 +136,7 @@ describe('drink_window_for', () => {
     WineVintageProfile.find.mockReturnValue(chain([
       { vintage: 'NV', relative: true, peakFrom: 0, peakUntil: 3 },
     ]));
-    const res = await tool('drink_window_for').handler({ wine_id: oid('f') }, ANON);
+    const res = await tool('drink_window_for').handler({ wine_id: oid('f') }, SIGNED_IN);
     const v = parse(res).data.vintages[0];
     expect(v.unit).toBe('years_after_purchase');
     expect(v.status_now).toBeNull();
@@ -139,16 +145,16 @@ describe('drink_window_for', () => {
   test('no curated profile → honest empty with estimate warning; bad/missing wine handled', async () => {
     WineDefinition.findById.mockReturnValue(chain(WINE));
     WineVintageProfile.find.mockReturnValue(chain([]));
-    let res = await tool('drink_window_for').handler({ wine_id: oid('f'), vintage: '1999' }, ANON);
+    let res = await tool('drink_window_for').handler({ wine_id: oid('f'), vintage: '1999' }, SIGNED_IN);
     let body = parse(res);
     expect(body.data).toEqual([]);
     expect(body.warnings.join(' ')).toMatch(/estimate/i);
 
-    res = await tool('drink_window_for').handler({ wine_id: 'junk' }, ANON);
+    res = await tool('drink_window_for').handler({ wine_id: 'junk' }, SIGNED_IN);
     expect(parse(res).error.code).toBe('invalid_input');
 
     WineDefinition.findById.mockReturnValue(chain(null));
-    res = await tool('drink_window_for').handler({ wine_id: oid('9') }, ANON);
+    res = await tool('drink_window_for').handler({ wine_id: oid('9') }, SIGNED_IN);
     expect(parse(res).error.code).toBe('not_found');
   });
 });

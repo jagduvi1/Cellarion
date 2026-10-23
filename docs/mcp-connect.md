@@ -13,7 +13,7 @@ Connect your AI**.
 |---|---|---|---|
 | One-click connector | `POST /api/mcp` | OAuth 2.1 (see [mcp-oauth.md](mcp-oauth.md)) | claude.ai / ChatGPT custom connectors |
 | Personal token | `POST /api/mcp` | `Authorization: Bearer cel_…` | stdio bridges, scripts, self-rolled agents |
-| Anonymous public | `POST /api/mcp/public` | none | registry lookups, drink windows, guides — no account, no PII, strict rate limit |
+| Anonymous public | `POST /api/mcp/public` | none | registry lookups, grape and region profiles, guides — no account, no PII, strict rate limit (drink windows need a signed-in connection) |
 
 Transport is stateless Streamable HTTP; a client that `initialize`s may be
 granted a stateful session (`Mcp-Session-Id`) with a GET/SSE stream for

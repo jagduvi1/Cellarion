@@ -134,7 +134,7 @@ async function main() {
   const sv = anon.getServerVersion();
   if (sv.name !== 'cellarion-public') throw new Error(`anon server should announce cellarion-public, got ${sv.name}`);
   const anonTools = (await anon.listTools()).tools.map((t) => t.name).sort();
-  const EXPECT_ANON = ['drink_window_for', 'find_similar_wines', 'get_source_info', 'get_wine', 'list_guides', 'read_guide', 'search_registry'];
+  const EXPECT_ANON = ['find_similar_wines', 'get_source_info', 'get_wine', 'list_guides', 'read_guide', 'search_registry'];
   if (JSON.stringify(anonTools) !== JSON.stringify(EXPECT_ANON)) {
     throw new Error(`anon tool surface wrong: ${anonTools.join(', ')}`);
   }

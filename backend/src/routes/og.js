@@ -364,7 +364,7 @@ router.get('/connect-ai', ogLimiter, (req, res) => {
       },
       {
         title: 'No account needed',
-        text: `A public endpoint at ${publicEndpoint} serves the shared wine registry, grape and region profiles, sommelier drink windows and published guides to any AI, with no sign-up and no personal data.`,
+        text: `A public endpoint at ${publicEndpoint} serves the shared wine registry, grape and region profiles and published guides to any AI, with no sign-up and no personal data.`,
       },
     ];
 

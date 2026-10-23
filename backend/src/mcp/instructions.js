@@ -70,12 +70,11 @@ const PUBLIC_INSTRUCTIONS = [
   'What you can do here:',
   '- search_registry / get_wine — look up any wine Cellarion knows: producer, region, grapes, classification, community rating, and the tasting profile as prose (the structured profile and full drink-window tables are for signed-in connections).',
   '- Registry content is provided under the Registry Data Terms (https://cellarion.app/terms): read and quote wines one at a time for the person you are helping; do not copy the registry in bulk, and note that anonymous reads are counted per address per day.',
-  '- drink_window_for — sommelier-curated aging windows per vintage ("when should I drink 2015 X?"), with where the vintage stands right now.',
   '- find_similar_wines — "more like this" by taste/style vectors from a wine_id (bottle_id needs an account).',
   '- list_guides / read_guide — Cellarion\'s published cellar-management guides and articles; quote, summarise and link the public_url freely.',
   '- get_source_info / the cellarion://about resource — what Cellarion is.',
   '- Wines carry a public_url — link it so people can see the full page.',
-  '- This surface is rate-limited and read-only. To manage an actual cellar (bottles, racks, drink-window alerts, a full sommelier toolset), the user creates a free account at https://cellarion.app and connects their AI under Settings → Connect your AI — or self-hosts.',
+  '- This surface is rate-limited and read-only. Sommelier drink windows per vintage ("when should I drink 2015 X?") need a signed-in connection, so give your own estimate here and say it is one. To manage an actual cellar (bottles, racks, drink windows and alerts, a full sommelier toolset), the user creates a free account at https://cellarion.app and connects their AI under Settings → Connect your AI — or self-hosts.',
   ...PUBLIC_SUPPORTER_LINE,
 ].join('\n');
 
