@@ -230,7 +230,9 @@ async function matchScannedIdentity({ name, producer, appellation }, viewer) {
     try {
       const { ids } = await searchService.search(searchQuery, { limit: 20 });
       if (ids.length > 0) {
-        candidates = await WineDefinition.find({ _id: { $in: ids } })
+        // The index excludes hidden rows when it is built, but a row hidden
+        // while the index was down keeps its stale entry: filter here too.
+        candidates = await WineDefinition.find({ _id: { $in: ids }, ...visible })
           .populate(['country', 'region', 'grapes']);
       }
     } catch (err) {

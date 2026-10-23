@@ -13,8 +13,8 @@
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../services/search', () => ({
-  getIsAvailable: () => false,
-  search: async () => ({ ids: [] }),
+  getIsAvailable: jest.fn(() => false),
+  search: jest.fn(async () => ({ ids: [] })),
 }));
 jest.mock('../services/labelScan', () => ({
   scanLabelFull: jest.fn(),
@@ -108,6 +108,23 @@ describe('POST /api/wines/scan-label — the registry match', () => {
     expect(status).toBe(200);
     expect(WineDefinition.find).toHaveBeenCalledWith({ $text: { $search: 'Prapò Paolo Scavino' }, ...HIDDEN, ...MEMBER_PENDING });
     expect(body.match.wine._id).toBe('64b0000000000000000000c2');
+  });
+
+  // Release audit 2026-10-23: a row quarantined or made a canary while
+  // Meilisearch was down keeps its stale index entry, so the ids the index
+  // returns are filtered again.
+  test('the Meilisearch candidates are re-filtered by the same visibility rule', async () => {
+    const searchService = require('../services/search');
+    searchService.getIsAvailable.mockReturnValue(true);
+    searchService.search.mockResolvedValueOnce({ ids: ['64b0000000000000000000c3'] });
+    try {
+      exactHit(null);
+      WineDefinition.find.mockReturnValue({ populate: () => Promise.resolve([]) });
+      await postScan(app, ['user']);
+      expect(WineDefinition.find).toHaveBeenCalledWith({ _id: { $in: ['64b0000000000000000000c3'] }, ...HIDDEN, ...MEMBER_PENDING });
+    } finally {
+      searchService.getIsAvailable.mockReturnValue(false);
+    }
   });
 
   test('a member\'s match carries no curation internals', async () => {
