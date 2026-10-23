@@ -26,6 +26,7 @@ const { parseExpectedArrival } = require('../../utils/onOrder');
 const { ORDERED_STATUS } = require('../../config/constants');
 const { findLotSiblings, pickLotFields, LOT_FIELDS, LOT_FIELDS_ON_REQUEST, LOT_LIMIT } = require('../../services/bottleLot');
 const { logAudit } = require('../../services/audit');
+const { announceMintedWine } = require('../../services/wineCommit');
 const { isValidId } = require('../../utils/validation');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { parseCurrency } = require('../../config/currencies');
@@ -225,6 +226,8 @@ registerTool({
             ...(result.producerRejected
               ? { rejectedProducer: result.producerRejected.producer, rejectedByCheck: result.producerRejected.check }
               : {}) });
+        // The REST mint's IndexNow rule (pending rows and drafts excluded).
+        announceMintedWine(wineDoc);
       }
     }
 

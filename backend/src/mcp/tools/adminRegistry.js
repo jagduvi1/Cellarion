@@ -17,6 +17,7 @@ const { z } = require('zod');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
+const { announceMintedWine } = require('../../services/wineCommit');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, wineSummary } = require('../toolUtil');
 const { safeFetchImage } = require('../../utils/safeImageFetch');
@@ -98,6 +99,7 @@ registerTool({
         logAudit(ctx.req, 'wine.create',
           { type: 'wine', id: wineDoc._id },
           { via: 'mcp', admin: true, name: wineDoc.name, producer: wineDoc.producer });
+        announceMintedWine(wineDoc);
       }
     }
 

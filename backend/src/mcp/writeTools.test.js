@@ -35,6 +35,7 @@ jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), build
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), removeFromRacks: jest.fn(),
@@ -295,5 +296,37 @@ describe('add_bottle — private drafts (2026-09-12)', () => {
     const plain = parse(await tool('add_bottle').handler({ cellar_id: oid('c'), new_wine: { name: 'New Wine', producer: 'P', country: 'France' } }, CTX));
     expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ draft: false });
     expect(plain.data.wine_draft).toBeUndefined();
+  });
+});
+
+// An MCP mint announces its public page to IndexNow like the REST mint does
+// (services/wineCommit.announceMintedWine). A pending row or a draft has no
+// public page, so it is never announced.
+describe('add_bottle — IndexNow for a minted wine', () => {
+  const { submitUrls } = require('../services/indexNow');
+  const add = async (wine, created = true) => {
+    ownCellar();
+    findOrCreateWine.mockResolvedValue({ wine: { grapes: [], ...wine }, created });
+    bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: '2019', cellar: oid('c') } });
+    return parse(await tool('add_bottle').handler({
+      cellar_id: oid('c'), new_wine: { name: wine.name, producer: 'P', country: 'France' }, confirm_new_wine: true, vintage: '2019',
+    }, CTX));
+  };
+
+  test('a published mint is announced at its public page', async () => {
+    const body = await add({ _id: oid('f'), name: 'New Wine', producer: 'P', slug: 'new-wine' });
+    expect(body.data.wine_created).toBe(true);
+    expect(submitUrls).toHaveBeenCalledWith('/wines/new-wine');
+  });
+
+  test('a pending mint and a draft are not announced', async () => {
+    await add({ _id: oid('f'), name: 'Half Read', producer: '', pendingIdentity: true });
+    await add({ _id: oid('f'), name: 'Draft Wine', producer: 'P', draft: true, pendingIdentity: true });
+    expect(submitUrls).not.toHaveBeenCalled();
+  });
+
+  test('a wine that already existed is not announced', async () => {
+    await add({ _id: oid('f'), name: 'Known', producer: 'P', slug: 'known' }, false);
+    expect(submitUrls).not.toHaveBeenCalled();
   });
 });

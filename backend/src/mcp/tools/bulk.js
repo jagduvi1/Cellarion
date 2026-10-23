@@ -18,6 +18,7 @@ const McpActionLog = require('../../models/McpActionLog');
 const { registerTool } = require('../registry');
 const { addBottle } = require('../../services/bottleOps');
 const { logAudit } = require('../../services/audit');
+const { announceMintedWine } = require('../../services/wineCommit');
 const { isValidId } = require('../../utils/validation');
 const { parseAndValidateVintage, parseDrinkYear } = require('../../utils/validation');
 const { resolveRating } = require('../../utils/ratingUtils');
@@ -255,6 +256,7 @@ registerTool({
           if (res.created) {
             winesCreated.push(String(wineDoc._id));
             logAudit(ctx.req, 'wine.create', { type: 'wine', id: wineDoc._id }, { via: 'mcp', bulk: true, name: wineDoc.name, producer: wineDoc.producer || null, ...(wineDoc.pendingIdentity && !wineDoc.draft ? { pendingIdentity: true } : {}), ...(wineDoc.draft ? { draft: true } : {}), ...(res.producerRejected ? { rejectedProducer: res.producerRejected.producer, rejectedByCheck: res.producerRejected.check } : {}) });
+            announceMintedWine(wineDoc); // pending rows and drafts excluded
           }
         }
         const result = await addBottle(access.cellar, wineDoc, {

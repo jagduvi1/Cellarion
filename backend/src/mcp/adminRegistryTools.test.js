@@ -18,6 +18,7 @@ jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WRITE_WINDOW_MS: 900000 }));
 jest.mock('../services/imageOps', () => ({ ingestBottleImage: jest.fn(), attachOfficialWineImage: jest.fn() }));
 jest.mock('../utils/safeImageFetch', () => ({ safeFetchImage: jest.fn() }));
@@ -106,6 +107,26 @@ describe('creation through the shared dedup chokepoint', () => {
     expect(error.message).toContain('existing_wine_id');
     expect(error.message).toContain(String(WINE._id));
     expect(attachOfficialWineImage).not.toHaveBeenCalled();
+  });
+});
+
+// Like the REST mint: a created registry wine announces its public page.
+describe('IndexNow for a created wine', () => {
+  const { submitUrls } = require('../services/indexNow');
+
+  test('a created wine is announced; a resolved existing one is not', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: WINE, created: true });
+    await tool('admin_add_registry_wine').handler(
+      { name: 'Barolo', producer: 'Bartolo Mascarello', country: 'Italy', type: 'red' }, ADMIN_CTX
+    );
+    expect(submitUrls).toHaveBeenCalledWith(`/wines/${oid('e')}`);
+
+    submitUrls.mockClear();
+    findOrCreateWine.mockResolvedValue({ wine: WINE, created: false });
+    await tool('admin_add_registry_wine').handler(
+      { name: 'Barolo', producer: 'Bartolo Mascarello', country: 'Italy', type: 'red' }, ADMIN_CTX
+    );
+    expect(submitUrls).not.toHaveBeenCalled();
   });
 });
 

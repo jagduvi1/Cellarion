@@ -310,10 +310,7 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
           : {}),
       }
     );
-    // A pending row (or a draft) has no public wine page to announce — it 404s
-    // for everyone but its creator, so pinging IndexNow would advertise a dead
-    // URL. The promotion / publish path submits it instead.
-    if (!pendingIdentity && !draft) submitUrls(`/wines/${wine.slug || wine._id}`);
+    announceMintedWine(wine);
   }
   // Stamp the label scan on EVERY scan-originated mint — and on the creator's
   // OWN pending row that has none yet, which is how a second bottle of the same
@@ -391,7 +388,18 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
   return { wine, created: !!created, pendingIdentity };
 }
 
+/**
+ * Announce a newly minted wine's public page to IndexNow. A pending row (or a
+ * draft) has no public wine page to announce — it 404s for everyone but its
+ * creator, so pinging IndexNow would advertise a dead URL. The promotion /
+ * publish path submits it instead. Shared with the MCP write tools, which mint
+ * through findOrCreateWine directly rather than through resolveOrMintWine.
+ */
+function announceMintedWine(wine) {
+  if (wine && wine.pendingIdentity !== true && wine.draft !== true) submitUrls(`/wines/${wine.slug || wine._id}`);
+}
+
 module.exports = {
-  resolveOrMintWine, validateNewWineFields, attachScanImage, validateScanConflicts,
+  resolveOrMintWine, validateNewWineFields, attachScanImage, validateScanConflicts, announceMintedWine,
   MAX_WINE_FIELD, MAX_GRAPES, MAX_SCAN_CONFLICTS,
 };

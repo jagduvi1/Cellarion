@@ -28,6 +28,7 @@ jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), build
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), removeFromRacks: jest.fn(),
@@ -171,6 +172,24 @@ describe('apply', () => {
     const ledger = McpActionLog.create.mock.calls.at(-1)[0];
     expect(ledger.action).toBe('bulk_add');
     expect(ledger.detail.bottles).toHaveLength(2);
+  });
+
+  // Like add_bottle and the REST mint: a wine the batch creates announces its
+  // public page to IndexNow (pending rows and drafts excluded — wineCommit).
+  test('a wine the batch creates is announced to IndexNow; the known wine is not', async () => {
+    const { submitUrls } = require('../services/indexNow');
+    McpActionLog.findOne.mockReturnValue(chain(freshPreview()));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(freshPreview());
+    ownCellar();
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Known' }));
+    findOrCreateWine.mockResolvedValue({ wine: { _id: oid('e'), name: 'Fresh Wine', producer: 'P', slug: 'fresh-wine' }, created: true });
+    bottleOps.addBottle
+      .mockResolvedValueOnce({ bottle: { _id: new mongoose.Types.ObjectId(oid('1')) } })
+      .mockResolvedValueOnce({ bottle: { _id: new mongoose.Types.ObjectId(oid('2')) } });
+
+    await tool('bulk_add').handler({ mode: 'apply', preview_id: oid('9') }, CTX);
+    expect(submitUrls).toHaveBeenCalledTimes(1);
+    expect(submitUrls).toHaveBeenCalledWith('/wines/fresh-wine');
   });
 
   test('refuses: exhausted budget, non-applyable plan, used/expired/foreign preview', async () => {
