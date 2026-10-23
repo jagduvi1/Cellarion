@@ -249,6 +249,11 @@ services:
         VITE_SITE_URL: ${VITE_SITE_URL:-}
     container_name: cellarion-frontend
     restart: unless-stopped
+    environment:
+      # The one host search engines may index; any other host answers with
+      # X-Robots-Tag: noindex. Set it to your own host name only if you want
+      # your public install in search results.
+      - CELLARION_INDEXABLE_HOST=${CELLARION_INDEXABLE_HOST:-cellarion.app}
     security_opt:
       - no-new-privileges:true
     cap_drop:
