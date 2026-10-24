@@ -82,6 +82,8 @@ export default function CellarRoom() {
   const slotTimerRef = useRef(null);
   // Only the latest request may fill the list: an older search can answer last.
   const slotSeqRef = useRef(0);
+  // Retry gives way to the loading line; focus goes here, not to the page.
+  const slotSearchRef = useRef(null);
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId, bottle }
   const [journalBottle, setJournalBottle] = useState(null); // consumed bottle awaiting journal prompt
   // The bottle just taken out, said with Undo — as on the racks page
@@ -1474,6 +1476,7 @@ export default function CellarRoom() {
                   </p>
                 )}
                 <input
+                  ref={slotSearchRef}
                   type="text"
                   className="room-slot-search"
                   placeholder={t('racks.searchWines', 'Search wines...')}
@@ -1485,9 +1488,9 @@ export default function CellarRoom() {
                   {slotLoading ? (
                     <p className="room-slot-empty">…</p>
                   ) : slotLoadFailed ? (
-                    <p className="room-slot-empty" role="alert">
-                      {t('racks.unplacedLoadFailed', "Couldn't load your bottles.")}{' '}
-                      <button type="button" className="btn btn-secondary btn-small" onClick={() => fetchSlotBottles(slotSearch)}>
+                    <p className="room-slot-empty">
+                      <span role="alert">{t('racks.unplacedLoadFailed', "Couldn't load your bottles.")}</span>{' '}
+                      <button type="button" className="btn btn-secondary btn-small" onClick={() => { slotSearchRef.current?.focus(); fetchSlotBottles(slotSearch); }}>
                         {t('common.retry', 'Retry')}
                       </button>
                     </p>

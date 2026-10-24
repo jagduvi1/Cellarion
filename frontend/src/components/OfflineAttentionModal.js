@@ -14,6 +14,12 @@ const isForceable = (op) => op.code === 'field_changed'
   || (op.code === 'slot_changed' && (op.kind === 'place' || op.kind === 'move'))
   || (op.code === 'state_changed' && op.kind === 'pour');
 
+// A pour refused because the bottle's glasses changed. The check exists for a
+// glass that already reached the server, whose reply was lost and which was
+// sent again — applying that one anyway lists the glass twice. So the line
+// says how to tell, and Discard is the suggested choice.
+const isRefusedPour = (op) => op.code === 'state_changed' && op.kind === 'pour';
+
 function describe(op, t) {
   const l = op.label || {};
   const wine = l.wine || t('offline.op.aBottle', 'a bottle');
@@ -60,7 +66,9 @@ export default function OfflineAttentionModal({ userId, onClose }) {
           <li key={op.id} style={{ borderTop: '1px solid var(--color-border)', padding: '0.75rem 0' }}>
             <strong>{describe(op, t)}</strong>
             <div style={{ fontSize: '0.88rem', opacity: 0.85 }}>
-              {new Date(op.createdAt).toLocaleString()} — {op.error}
+              {new Date(op.createdAt).toLocaleString()} — {isRefusedPour(op)
+                ? t('offline.pourChangedMeanwhile', 'Glasses were poured from this bottle meanwhile. If this glass is already listed on the bottle, choose Discard.')
+                : op.error}
             </div>
             {op.code === 'field_changed' && op.current && (
               <div style={{ fontSize: '0.88rem', marginTop: '0.35rem' }}>
@@ -73,7 +81,7 @@ export default function OfflineAttentionModal({ userId, onClose }) {
             )}
             <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: '0.5rem' }}>
               {isForceable(op) ? (
-                <button type="button" className="btn btn-primary btn-small" disabled={!!busy} onClick={() => act(op, 'force')}>
+                <button type="button" className={`btn ${isRefusedPour(op) ? 'btn-secondary' : 'btn-primary'} btn-small`} disabled={!!busy} onClick={() => act(op, 'force')}>
                   {op.code === 'field_changed' ? t('offline.keepMine', 'Keep mine') : t('offline.applyAnyway', 'Apply anyway')}
                 </button>
               ) : op.code !== 'state_changed' && (
@@ -81,7 +89,7 @@ export default function OfflineAttentionModal({ userId, onClose }) {
                   {t('offline.retry', 'Try again')}
                 </button>
               )}
-              <button type="button" className="btn btn-secondary btn-small" disabled={!!busy} onClick={() => act(op, 'discard')}>
+              <button type="button" className={`btn ${isRefusedPour(op) ? 'btn-primary' : 'btn-secondary'} btn-small`} disabled={!!busy} onClick={() => act(op, 'discard')}>
                 {op.code === 'field_changed' ? t('offline.keepTheirs', 'Keep theirs') : t('offline.discard', 'Discard')}
               </button>
             </div>

@@ -2078,6 +2078,8 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
   const timerRef = useRef(null);
   // Only the latest request may fill the list: an older search can answer last.
   const seqRef = useRef(0);
+  // Retry gives way to the loading line; focus goes here, not to the page.
+  const searchRef = useRef(null);
 
   // Fetch bottles from backend, excluding already-placed bottles server-side
   const fetchBottles = useCallback(async (term) => {
@@ -2130,6 +2132,7 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
         <button className="slot-popup-close" onClick={onClose} aria-label="Close">&times;</button>
       </div>
       <input
+        ref={searchRef}
         type="text"
         className="slot-search"
         placeholder={t('racks.searchWines')}
@@ -2195,9 +2198,9 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
         {loading ? (
           <p className="slot-empty-msg">…</p>
         ) : loadFailed ? (
-          <p className="slot-empty-msg" role="alert">
-            {t('racks.unplacedLoadFailed', "Couldn't load your bottles.")}{' '}
-            <button type="button" className="btn btn-secondary btn-small" onClick={() => fetchBottles(search)}>
+          <p className="slot-empty-msg">
+            <span role="alert">{t('racks.unplacedLoadFailed', "Couldn't load your bottles.")}</span>{' '}
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => { searchRef.current?.focus(); fetchBottles(search); }}>
               {t('common.retry', 'Retry')}
             </button>
           </p>

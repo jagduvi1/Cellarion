@@ -186,3 +186,32 @@ test('an older search answering after the latest one does not replace its list',
   expect(within(popup).queryByText('Chardonnay')).not.toBeInTheDocument();
   expect(within(popup).getByText('Chablis Premier Cru')).toBeInTheDocument();
 });
+
+// Retry gives way to the loading line, so keyboard focus must not go down with
+// it (the next Tab would leave the dialog): it moves to the search field. The
+// alert is the failure sentence alone, not the button beside it.
+test('Retry keeps focus inside the picker, and the alert is the message without the button', async () => {
+  setup();
+  picker[''] = () => Promise.reject(new TypeError('Failed to fetch'));
+  renderPage();
+  const popup = await openPicker();
+  await within(popup).findByText('racks.unplacedLoadFailed');
+
+  const alert = within(popup).getByRole('alert');
+  expect(alert).toHaveTextContent('racks.unplacedLoadFailed');
+  const retry = within(popup).getByRole('button', { name: 'common.retry' });
+  expect(alert).not.toContainElement(retry);
+
+  const again = deferred();
+  picker[''] = () => again.promise;
+  retry.focus();
+  expect(retry).toHaveFocus();
+  fireEvent.click(retry);
+
+  expect(await within(popup).findByText('…')).toBeInTheDocument();
+  expect(within(popup).getByRole('textbox')).toHaveFocus();
+
+  again.resolve(listed(bottle('b1', 'Château Margaux')));
+  expect(await within(popup).findByText('Château Margaux')).toBeInTheDocument();
+  expect(within(popup).getByRole('textbox')).toHaveFocus();
+});

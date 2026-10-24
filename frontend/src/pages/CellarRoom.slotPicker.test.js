@@ -156,3 +156,32 @@ test('only the latest search fills the list: an older answer arriving late is dr
   expect(within(panel).queryByText('…')).not.toBeInTheDocument();
   expect(within(panel).queryByText('Chardonnay')).not.toBeInTheDocument();
 });
+
+// Retry gives way to the loading line, so keyboard focus must not go down with
+// it: it moves to the search field. The alert is the failure sentence alone,
+// not the button beside it.
+test('Retry keeps focus inside the picker, and the alert is the message without the button', async () => {
+  setup();
+  picker[''] = () => Promise.reject(new TypeError('Failed to fetch'));
+  renderRoom();
+  const panel = await openPicker();
+  await within(panel).findByText('racks.unplacedLoadFailed');
+
+  const alert = within(panel).getByRole('alert');
+  expect(alert).toHaveTextContent('racks.unplacedLoadFailed');
+  const retry = within(panel).getByRole('button', { name: 'common.retry' });
+  expect(alert).not.toContainElement(retry);
+
+  const again = deferred();
+  picker[''] = () => again.promise;
+  retry.focus();
+  expect(retry).toHaveFocus();
+  fireEvent.click(retry);
+
+  expect(await within(panel).findByText('…')).toBeInTheDocument();
+  expect(within(panel).getByPlaceholderText('racks.searchWines')).toHaveFocus();
+
+  again.resolve(listed(bottle('b1', 'Château Margaux')));
+  expect(await within(panel).findByText('Château Margaux')).toBeInTheDocument();
+  expect(within(panel).getByPlaceholderText('racks.searchWines')).toHaveFocus();
+});

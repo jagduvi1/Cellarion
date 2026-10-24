@@ -5788,6 +5788,7 @@
     "applyAnyway": "Apply anyway",
     "retry": "Try again",
     "discard": "Discard",
+    "pourChangedMeanwhile": "Glasses were poured from this bottle meanwhile. If this glass is already listed on the bottle, choose Discard.",
     "op": {
       "aBottle": "a bottle",
       "consume": "Remove {{wine}} from the cellar",
