@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const {
-  cleanup, refPaths, unusedAppellations, WINE_CASCADE_MODELS, WINE_REF_SOURCES, WINE_CASCADE,
+  cleanup, stillUnreferenced, refPaths, unusedAppellations, WINE_CASCADE_MODELS, WINE_REF_SOURCES, WINE_CASCADE,
   REGION_REF_SOURCES, GRAPE_REF_SOURCES,
 } = require('./cleanup-unused-wines');
 const { WINE_REF_HANDLED, WINE_REF_EXEMPT } = require('../utils/wineRefs');
@@ -162,6 +162,29 @@ describe('dry run with the reads mocked', () => {
     const res = await cleanup();
 
     expect(res.unusedIds).toEqual([profiled]);
+  });
+
+  test('a canary is never a candidate: the wine scan leaves canaries out', async () => {
+    distincts = { WineDefinition: { _id: [id(1)] } };
+
+    await cleanup();
+
+    const i = mongoose.Model.distinct.mock.contexts.findIndex((Model, n) => Model.modelName === 'WineDefinition'
+      && mongoose.Model.distinct.mock.calls[n][0] === '_id');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(mongoose.Model.distinct.mock.calls[i][1]).toEqual({ canary: { $ne: true } });
+  });
+
+  test('right before the delete, a candidate that gained a reference since the scan is dropped', async () => {
+    const [late, still] = [id(1), id(2)];
+    distincts = { Bottle: { wineDefinition: [late] } };
+
+    expect(await stillUnreferenced([late, still])).toEqual([still]);
+
+    // Every source that keeps a wine is asked again, about the candidates only.
+    const { calls } = mongoose.Model.distinct.mock;
+    expect(calls).toHaveLength(WINE_REF_SOURCES.length);
+    for (const [p, filter] of calls) expect(filter).toEqual({ [p]: { $in: [late, still] } });
   });
 
   test('without options it deletes nothing', async () => {

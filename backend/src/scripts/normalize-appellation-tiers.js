@@ -39,13 +39,24 @@ const { createBackupLog } = require('./lib/backupLog');
 const APPLY = process.argv.includes('--apply');
 const tag = APPLY ? '✔' : '[dry]';
 
+// Rows whose normalizedKey is a generateWineKey key. A pending-identity row
+// keys as `pending~<creator>` and a draft as `draft~<creator>`: re-keyed here
+// they would enter the public key space while still private. A canary keeps
+// the fields it was seeded with.
+const CANDIDATES = {
+  appellation: { $nin: [null, ''] },
+  pendingIdentity: { $ne: true },
+  draft: { $ne: true },
+  canary: { $ne: true },
+};
+
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log(`Connected. Mode: ${APPLY ? 'APPLY' : 'DRY RUN (pass --apply to execute)'}\n`);
   const searchOk = APPLY ? await initSearch({ label: 'normalize-appellation-tiers' }) : false;
 
   const wines = await WineDefinition
-    .find({ appellation: { $nin: [null, ''] } })
+    .find(CANDIDATES)
     .select('name producer appellation normalizedKey')
     .lean();
 
@@ -87,4 +98,8 @@ async function run() {
   await mongoose.disconnect();
 }
 
-run().catch((err) => { console.error('Appellation cleanup failed:', err); process.exit(1); });
+if (require.main === module) {
+  run().catch((err) => { console.error('Appellation cleanup failed:', err); process.exit(1); });
+}
+
+module.exports = { CANDIDATES };

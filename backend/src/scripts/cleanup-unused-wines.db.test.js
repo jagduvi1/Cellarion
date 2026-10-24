@@ -12,7 +12,10 @@
  * synonym. This seeds each kind of reference next to genuinely unused rows,
  * runs the dry run (the default) and --apply, and checks that the dry run
  * deletes nothing and reports what --apply then deletes, which is exactly the
- * unused rows.
+ * unused rows. A canary wine never has a reference and is never deleted, and
+ * every row --apply deletes is in its backup file first. The last test runs
+ * the cleanup in this process to stage a first bottle arriving between the
+ * scan and the delete.
  *
  * Needs a MongoDB: CLEANUP_MONGO_URI, whose database name must start with
  * "cellarion_cleanup" (it is dropped before and after). CI provides one; a
@@ -25,6 +28,11 @@
  *     node node_modules/jest/bin/jest.js src/scripts/cleanup-unused-wines.db.test.js
  *   docker stop cleanup-mongo && docker network rm cleanup-test
  */
+// Only the in-process run below loads the script here; the Meilisearch client
+// is ESM-only (Jest cannot load it) and that run deletes nothing.
+jest.mock('./lib/scriptSearch', () => ({ initSearch: jest.fn(async () => false) }));
+jest.mock('../services/search', () => ({ removeWine: jest.fn() }));
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -48,6 +56,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WineNotDuplicate = require('../models/WineNotDuplicate');
 const RegistryDataValue = require('../models/RegistryDataValue');
 const WineEmbedding = require('../models/WineEmbedding');
+const { cleanup } = require('./cleanup-unused-wines');
 
 const URI = process.env.CLEANUP_MONGO_URI;
 const SCRIPT = path.join(__dirname, 'cleanup-unused-wines.js');
@@ -64,16 +73,16 @@ const ids = (rows) => rows.map((r) => String(r._id)).sort();
 
 // Every seeded row, by role. "keep" rows are referenced; "gone" rows are not.
 const C = oid();
-const R = { parent: oid(), wine: oid(), app: oid(), grape: oid(), orphan: oid(), doomed: oid(), doomedGrape: oid() };
+const R = { parent: oid(), wine: oid(), app: oid(), grape: oid(), canary: oid(), orphan: oid(), doomed: oid(), doomedGrape: oid() };
 const G = { wine: oid(), typical: oid(), orphan: oid(), doomed: oid() };
 const A = { barolo: oid(), cdp: oid(), brunello: oid(), orphan: oid(), doomed: oid() };
 const W = {
   bottle: oid(), personal: oid(), skip: oid(), reportDup: oid(), proposalTarget: oid(), inquiry: oid(), request: oid(),
-  profileOnly: oid(), orphan: oid(),
+  canary: oid(), profileOnly: oid(), orphan: oid(),
 };
 const KEEP = {
-  wines: [W.bottle, W.personal, W.skip, W.reportDup, W.proposalTarget, W.inquiry, W.request],
-  regions: [R.parent, R.wine, R.app, R.grape],
+  wines: [W.bottle, W.personal, W.skip, W.reportDup, W.proposalTarget, W.inquiry, W.request, W.canary],
+  regions: [R.parent, R.wine, R.app, R.grape, R.canary],
   grapes: [G.wine, G.typical],
   appellations: [A.barolo, A.cdp, A.brunello],
 };
@@ -93,6 +102,7 @@ async function seed() {
     { _id: R.wine, name: 'Wine Region', country: C, parentRegion: R.parent, typicalGrapes: [G.typical] },
     { _id: R.app, name: 'Appellation Region', country: C },
     { _id: R.grape, name: 'Grape Name Region', country: C },
+    { _id: R.canary, name: 'Canary Region', country: C },
     { _id: R.orphan, name: 'Orphan Region', country: C },
     { _id: R.doomed, name: 'Doomed Region', country: C },
     { _id: R.doomedGrape, name: 'Doomed Grape Region', country: C },
@@ -120,6 +130,8 @@ async function seed() {
     wine(W.proposalTarget, 'Merge Target'),
     wine(W.inquiry, 'Inquired'),
     wine(W.request, 'Requested'),
+    // A canary has no bottle by design; its region is used by nothing else.
+    wine(W.canary, 'Canary', { canary: true, region: R.canary }),
     wine(W.profileOnly, 'Profile Only', { region: R.doomed, grapes: [G.doomed], appellation: 'Doomed Hills' }),
     wine(W.orphan, 'Orphan'),
   ]);
@@ -137,6 +149,7 @@ async function seed() {
   await WineVintageProfile.collection.insertMany([
     { _id: oid(), wineDefinition: W.profileOnly, vintage: '2018' },
     { _id: oid(), wineDefinition: W.bottle, vintage: '2018' },
+    { _id: oid(), wineDefinition: W.canary, vintage: '2016', earlyDrinking: 2021, peakDrinking: 2026, lateDrinking: 2034 },
   ]);
   await WineNotDuplicate.collection.insertOne({ _id: oid(), wineA: W.orphan, wineB: W.bottle });
   await RegistryDataValue.collection.insertOne({ _id: oid(), wineDefinition: W.orphan, key: 'abv', status: 'published' });
@@ -207,11 +220,12 @@ describeWithMongo('cleanup-unused-wines against a real MongoDB', () => {
     expect(fs.readdirSync(tmpDir)).toEqual([]);
     expect(out).toMatch(new RegExp(`Unreferenced wines:\\s+${GONE.wines.length}\\n`));
     expect(countLine(out, 'Grapes')).toEqual({ total: 4, unused: GONE.grapes.length });
-    expect(countLine(out, 'Regions')).toEqual({ total: 7, unused: GONE.regions.length });
+    expect(countLine(out, 'Regions')).toEqual({ total: 8, unused: GONE.regions.length });
     expect(countLine(out, 'Appellations')).toEqual({ total: 5, unused: GONE.appellations.length });
   }, 180000);
 
   test('--apply deletes exactly the unused wines and taxonomy, with the rows that only describe those wines', async () => {
+    const doomedProfiles = await WineVintageProfile.collection.find({ wineDefinition: { $in: GONE.wines } }).toArray();
     const out = await runScript(['--apply'], tmpDir);
     const after = await snapshot();
 
@@ -221,8 +235,10 @@ describeWithMongo('cleanup-unused-wines against a real MongoDB', () => {
     expect(after.appellations).toEqual(str(KEEP.appellations));
 
     // The unused wines' profile, not-duplicate pair, registry value and
-    // embedding went with them; the kept wine's profile stayed.
-    const keptProfile = await WineVintageProfile.collection.find({ wineDefinition: W.bottle }).toArray();
+    // embedding went with them; the kept wines' profiles stayed, the canary's
+    // curated window among them.
+    const keptProfile = await WineVintageProfile.collection.find({ wineDefinition: { $in: [W.bottle, W.canary] } }).toArray();
+    expect(keptProfile).toHaveLength(2);
     expect(after.profiles).toEqual(ids(keptProfile));
     expect(after.notDuplicates).toEqual([]);
     expect(after.registryValues).toEqual([]);
@@ -233,16 +249,24 @@ describeWithMongo('cleanup-unused-wines against a real MongoDB', () => {
       expect(await Model.collection.countDocuments()).toBe(1);
     }
 
-    // The deleted taxonomy rows are in the backup, whole.
+    // Every deleted row is in the backup, whole: the wines, the rows deleted
+    // with them, and the taxonomy.
     const files = fs.readdirSync(tmpDir);
     expect(files).toHaveLength(1);
     expect(out).toContain(path.join(tmpDir, files[0]));
     const rows = fs.readFileSync(path.join(tmpDir, files[0]), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-    const backedUp = (collection) => rows.filter((r) => r.collection === collection).map((r) => r.doc._id).sort();
-    expect(backedUp(Region.collection.collectionName)).toEqual(str(GONE.regions));
-    expect(backedUp(Grape.collection.collectionName)).toEqual(str(GONE.grapes));
-    expect(backedUp(Appellation.collection.collectionName)).toEqual(str(GONE.appellations));
+    const backedUp = (Model) => rows.filter((r) => r.collection === Model.collection.collectionName).map((r) => r.doc._id).sort();
+    expect(backedUp(WineDefinition)).toEqual(str(GONE.wines));
+    expect(backedUp(WineVintageProfile)).toEqual(ids(doomedProfiles));
+    expect(backedUp(WineNotDuplicate)).toEqual(before.notDuplicates);
+    expect(backedUp(RegistryDataValue)).toEqual(before.registryValues);
+    expect(backedUp(WineEmbedding)).toEqual(before.embeddings);
+    expect(backedUp(Region)).toEqual(str(GONE.regions));
+    expect(backedUp(Grape)).toEqual(str(GONE.grapes));
+    expect(backedUp(Appellation)).toEqual(str(GONE.appellations));
     expect(rows.find((r) => r.doc._id === String(A.orphan)).doc.name).toBe('Nowhere Valley');
+    expect(rows.find((r) => r.doc._id === String(W.orphan)).doc).toMatchObject({ name: 'Orphan', producer: 'Test Producer' });
+    expect(rows.find((r) => r.collection === RegistryDataValue.collection.collectionName).doc).toMatchObject({ key: 'abv', status: 'published' });
   }, 180000);
 
   test('a second --apply finds nothing left to delete', async () => {
@@ -253,4 +277,29 @@ describeWithMongo('cleanup-unused-wines against a real MongoDB', () => {
     expect(countLine(out, 'Regions').unused).toBe(0);
     expect(countLine(out, 'Appellations').unused).toBe(0);
   }, 180000);
+
+  test('a wine that gains its first bottle between the scan and the delete is kept, with its profile', async () => {
+    const race = oid();
+    await WineDefinition.collection.insertOne({ _id: race, name: 'Late Bottle', producer: 'Test Producer', country: C, type: 'red' });
+    await WineVintageProfile.collection.insertOne({ _id: oid(), wineDefinition: race, vintage: '2019' });
+    // The scan reads the bottles, then the first bottle of the wine is saved.
+    const scan = mongoose.Model.distinct;
+    jest.spyOn(Bottle, 'distinct').mockImplementationOnce(async function scanThenAdd(...args) {
+      const seen = await scan.apply(this, args);
+      await Bottle.collection.insertOne({ _id: oid(), wineDefinition: race, status: 'active' });
+      return seen;
+    });
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    let res;
+    try {
+      res = await cleanup({ apply: true, backupDir: tmpDir });
+    } finally {
+      jest.restoreAllMocks();
+    }
+
+    expect(res.unusedIds.map(String)).not.toContain(String(race));
+    expect(await WineDefinition.collection.countDocuments({ _id: race })).toBe(1);
+    expect(await WineVintageProfile.collection.countDocuments({ wineDefinition: race })).toBe(1);
+  }, 60000);
 });

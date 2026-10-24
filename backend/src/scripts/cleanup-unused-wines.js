@@ -13,6 +13,14 @@
  * not owned as a bottle — checking bottles alone would delete exactly those
  * wines and orphan the wishlist entries.
  *
+ * Canary wines are never candidates: nothing references them by design, and
+ * deleting one would take its curated windows with it and silently remove the
+ * registry-lockdown tripwire it exists to be.
+ *
+ * The scan takes a while, so right before the delete every candidate is
+ * checked again (stillUnreferenced): a wine that gained its first bottle, or
+ * any other reference, since the scan is kept.
+ *
  * For genuinely unused wines, also cascades (WINE_CASCADE_MODELS):
  *   - WineVintageProfile / WineVintagePrice records
  *   - WineEmbedding rows (they hold the vectors for similarity search)
@@ -26,20 +34,22 @@
  * wine's appellation string folds to the doc's name or one of its synonyms,
  * tier suffix ("Barolo DOCG") stripped or not. Wines the first phase deletes,
  * and grapes deleted before the regions, keep nothing in use — in a dry run
- * too, so it reports what --apply deletes. Before deleting taxonomy rows,
- * --apply writes them to an NDJSON backup file.
+ * too, so it reports what --apply deletes.
+ *
+ * Every row --apply deletes (the wines, the rows cascaded with them, the
+ * taxonomy) is appended to an NDJSON backup, one `{ collection, doc }` per
+ * line, right before its delete (scripts/lib/backupLog: --backup-dir=<dir> or
+ * SCRIPT_BACKUP_DIR, default the OS temp dir).
  *
  * DRY-RUN BY DEFAULT — prints what would be deleted. Pass --apply to delete.
  *
  * Usage (containers must be running):
  *   docker exec cellarion-backend node src/scripts/cleanup-unused-wines.js
  *   docker exec cellarion-backend node src/scripts/cleanup-unused-wines.js --apply
+ *   docker exec cellarion-backend node src/scripts/cleanup-unused-wines.js --apply --backup-dir=<dir>
  */
 
 require('dotenv').config();
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const Grape = require('../models/Grape');
@@ -48,6 +58,8 @@ const Appellation = require('../models/Appellation');
 // Register remaining schemas so Mongoose doesn't complain about unknown refs
 require('../models/Country');
 const searchService = require('../services/search');
+const { initSearch } = require('./lib/scriptSearch');
+const { createBackupLog, resolveBackupDir } = require('./lib/backupLog');
 const { WINE_REF_HANDLED, WINE_REF_EXEMPT } = require('../utils/wineRefs');
 const { normalizeAppellation, normalizeAppellationKey } = require('../utils/normalize');
 
@@ -124,6 +136,21 @@ async function referencedIds(sources, exclude = new Map()) {
   return used;
 }
 
+/**
+ * The wine ids in `ids` that nothing references now: every WINE_REF_SOURCES
+ * path is asked again, about these ids only. Run right before the delete.
+ */
+async function stillUnreferenced(ids) {
+  if (!ids.length) return ids;
+  const used = new Set();
+  for (const [Model, p] of WINE_REF_SOURCES) {
+    for (const id of await Model.distinct(p, { [p]: { $in: ids } })) {
+      if (id) used.add(id.toString());
+    }
+  }
+  return ids.filter(id => !used.has(id.toString()));
+}
+
 /** The appellation keys a wine's appellation string matches: as written and with its tier stripped. */
 function appellationKeys(s) {
   return [normalizeAppellationKey(s), normalizeAppellationKey(normalizeAppellation(s) || s)].filter(Boolean);
@@ -137,55 +164,48 @@ function unusedAppellations(appellations, wineAppellations) {
 }
 
 /**
- * Writes each taxonomy row to an NDJSON file (one `{ collection, doc }` per
- * line) right before it is deleted. The file exists from the first row.
+ * Appends each row `filter` matches to the backup ({ collection, doc } per
+ * line), then deletes exactly those rows.
  */
-function createTaxonomyBackup(dir) {
-  let file = null;
-  let count = 0;
-  return {
-    append(collection, docs) {
-      if (!docs.length) return;
-      if (!file) file = path.join(dir, `cleanup-unused-wines-taxonomy-${Date.now()}.ndjson`);
-      fs.appendFileSync(file, docs.map(doc => JSON.stringify({ collection, doc })).join('\n') + '\n');
-      count += docs.length;
-    },
-    get file() { return file; },
-    get count() { return count; },
-  };
+async function backupAndDelete(Model, filter, backup) {
+  const docs = await Model.find(filter).lean();
+  for (const doc of docs) backup.append({ collection: Model.collection.collectionName, doc });
+  return Model.deleteMany({ _id: { $in: docs.map(d => d._id) } });
 }
 
-async function backupAndDelete(Model, ids, backup) {
-  backup.append(Model.collection.collectionName, await Model.find({ _id: { $in: ids } }).lean());
-  return Model.deleteMany({ _id: { $in: ids } });
-}
-
-async function cleanup({ apply = false, backupDir = os.tmpdir() } = {}) {
+async function cleanup({ apply = false, backupDir = resolveBackupDir() } = {}) {
   console.log(`Mode: ${apply ? 'APPLY' : 'DRY-RUN (pass --apply to delete)'}\n`);
+  const backup = createBackupLog('cleanup-unused-wines', { dir: backupDir });
 
   // ── Phase 1: Unused wine definitions ──────────────────────────────────────
 
-  const allWineIds = await WineDefinition.distinct('_id');
-  console.log(`Wine definitions total:  ${allWineIds.length}`);
+  const allWineIds = await WineDefinition.distinct('_id', { canary: { $ne: true } });
+  console.log(`Wine definitions total:  ${allWineIds.length} (canaries not counted)`);
 
   const usedSet = await referencedIds(WINE_REF_SOURCES);
-  const unusedIds = allWineIds.filter(id => !usedSet.has(id.toString()));
+  let unusedIds = allWineIds.filter(id => !usedSet.has(id.toString()));
   console.log(`Referenced anywhere:     ${usedSet.size}`);
   console.log(`Unreferenced wines:      ${unusedIds.length}`);
 
+  // Checked again right before the delete: the scan above takes a while.
+  if (unusedIds.length > 0 && apply) {
+    const scanned = unusedIds.length;
+    unusedIds = await stillUnreferenced(unusedIds);
+    if (unusedIds.length < scanned) {
+      console.log(`Referenced since the scan, kept: ${scanned - unusedIds.length}`);
+    }
+  }
+
   if (unusedIds.length > 0 && apply) {
     for (const [Model, paths, label] of WINE_CASCADE) {
-      const r = await Model.deleteMany({ $or: paths.map(p => ({ [p]: { $in: unusedIds } })) });
+      const r = await backupAndDelete(Model, { $or: paths.map(p => ({ [p]: { $in: unusedIds } })) }, backup);
       console.log(`Deleted ${label}: ${r.deletedCount}`);
     }
 
-    const wineResult = await WineDefinition.deleteMany({ _id: { $in: unusedIds } });
+    const wineResult = await backupAndDelete(WineDefinition, { _id: { $in: unusedIds } }, backup);
     console.log(`Deleted wine definitions: ${wineResult.deletedCount}`);
 
-    await searchService.initialize();
-    if (searchService.getIsAvailable?.() === false) {
-      console.warn('Meilisearch unavailable — deleted wines remain in the index until it is rebuilt.');
-    } else {
+    if (await initSearch({ label: 'cleanup-unused-wines' })) {
       for (const id of unusedIds) {
         await searchService.removeWine(id);
       }
@@ -199,14 +219,13 @@ async function cleanup({ apply = false, backupDir = os.tmpdir() } = {}) {
 
   // ── Phase 2: Orphaned taxonomy ────────────────────────────────────────────
   console.log('');
-  const backup = createTaxonomyBackup(backupDir);
 
   const usedGrapeIds = await referencedIds(GRAPE_REF_SOURCES, new Map([[WineDefinition, unusedIds]]));
   const allGrapes = await Grape.distinct('_id');
   const unusedGrapeIds = allGrapes.filter(id => !usedGrapeIds.has(id.toString()));
   console.log(`Grapes total:            ${allGrapes.length}  unused: ${unusedGrapeIds.length}`);
   if (unusedGrapeIds.length > 0 && apply) {
-    const r = await backupAndDelete(Grape, unusedGrapeIds, backup);
+    const r = await backupAndDelete(Grape, { _id: { $in: unusedGrapeIds } }, backup);
     console.log(`Deleted grapes:          ${r.deletedCount}`);
   }
 
@@ -215,7 +234,7 @@ async function cleanup({ apply = false, backupDir = os.tmpdir() } = {}) {
   const unusedRegionIds = allRegions.filter(id => !usedRegionIds.has(id.toString()));
   console.log(`Regions total:           ${allRegions.length}  unused: ${unusedRegionIds.length}`);
   if (unusedRegionIds.length > 0 && apply) {
-    const r = await backupAndDelete(Region, unusedRegionIds, backup);
+    const r = await backupAndDelete(Region, { _id: { $in: unusedRegionIds } }, backup);
     console.log(`Deleted regions:         ${r.deletedCount}`);
   }
 
@@ -226,13 +245,11 @@ async function cleanup({ apply = false, backupDir = os.tmpdir() } = {}) {
   const unusedAppellationIds = unusedAppellations(allAppellations, wineAppellations).map(a => a._id);
   console.log(`Appellations total:      ${allAppellations.length}  unused: ${unusedAppellationIds.length}`);
   if (unusedAppellationIds.length > 0 && apply) {
-    const r = await backupAndDelete(Appellation, unusedAppellationIds, backup);
+    const r = await backupAndDelete(Appellation, { _id: { $in: unusedAppellationIds } }, backup);
     console.log(`Deleted appellations:    ${r.deletedCount}`);
   }
 
-  if (backup.file) {
-    console.log(`\nBackup of ${backup.count} taxonomy rows → ${backup.file} (container /tmp is ephemeral — copy it off)`);
-  }
+  backup.report();
   console.log(apply ? '\nDone.' : '\nDry-run complete — nothing deleted. Re-run with --apply to delete.');
   return { unusedIds, unusedGrapeIds, unusedRegionIds, unusedAppellationIds, backupFile: backup.file };
 }
@@ -252,6 +269,7 @@ if (require.main === module) {
 
 module.exports = {
   cleanup,
+  stillUnreferenced,
   refPaths,
   appellationKeys,
   unusedAppellations,

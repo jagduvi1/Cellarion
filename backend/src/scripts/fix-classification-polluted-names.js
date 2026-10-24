@@ -38,6 +38,18 @@ const { createBackupLog } = require('./lib/backupLog');
 const APPLY = process.argv.includes('--apply');
 const tag = APPLY ? '✔' : '[dry]';
 
+// Rows whose normalizedKey is a generateWineKey key. A pending-identity row
+// keys as `pending~<creator>` and a draft as `draft~<creator>`: re-keyed here
+// they would enter the public key space while still private. A canary keeps
+// the fields it was seeded with.
+const CANDIDATES = {
+  nonWine: { $ne: true },
+  producer: { $nin: [null, ''] },
+  pendingIdentity: { $ne: true },
+  draft: { $ne: true },
+  canary: { $ne: true },
+};
+
 // updateOne bypasses WineDefinition's pre-validate hook, so this update does
 // what the hook does when a save changes name and appellation:
 // - canonicalKey: findOrCreateWine looks it up first, and a key still built
@@ -68,7 +80,7 @@ async function run() {
   const searchOk = APPLY ? await initSearch({ label: 'fix-classification-polluted-names' }) : false;
 
   const wines = await WineDefinition
-    .find({ nonWine: { $ne: true }, producer: { $nin: [null, ''] } })
+    .find(CANDIDATES)
     .select('name producer appellation classification normalizedKey canonicalKey verifiedChecks verifiedAt crossChecksCleared crossChecksClearedAt')
     .lean();
 
@@ -121,4 +133,4 @@ if (require.main === module) {
   run().catch((err) => { console.error('Fix polluted names failed:', err); process.exit(1); });
 }
 
-module.exports = { buildFixUpdate };
+module.exports = { CANDIDATES, buildFixUpdate };
