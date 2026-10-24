@@ -45,6 +45,7 @@ It runs entirely on **your** machine and proxies to your Cellarion server's `/ap
 - The token is scoped and **revocable instantly** from Cellarion — revoking it cuts this bridge off mid-session.
 - A `read`-scope token can only read your own cellar data. It cannot modify anything, cannot read other accounts, and cannot manage tokens.
 - The token goes only to the host in `CELLARION_URL` — nowhere else. Nothing is logged.
+- If the connection drops mid-request, the bridge reconnects. Tool and resource lists are fetched again; a tool call (which may change your cellar) is sent again only when it carries an `idempotency_key`, because the server then returns the first result instead of acting twice. Otherwise your AI gets the error and can check what happened before trying again.
 
 ## License
 

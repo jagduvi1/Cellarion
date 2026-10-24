@@ -26,8 +26,8 @@ import {
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ReadResourceRequestSchema,
-  McpError,
 } from '@modelcontextprotocol/sdk/types.js';
+import { makeRemote } from './remote.js';
 
 const VERSION = createRequire(import.meta.url)('./package.json').version;
 
@@ -69,29 +69,14 @@ async function connectRemote() {
   return client;
 }
 
-let remoteClient = null;
-// One reconnect attempt per failed call — but ONLY for transport-level
-// failures (dropped connection, network blip). A JSON-RPC error (McpError:
-// unknown tool, invalid params, server-side error result) means the remote
-// EXECUTED the request; retrying it would be wrong today and dangerous once
-// write tools exist, so those propagate unchanged.
-async function remote(fn) {
-  if (!remoteClient) remoteClient = await connectRemote();
-  try {
-    return await fn(remoteClient);
-  } catch (err) {
-    if (err instanceof McpError) throw err;
-    try { await remoteClient.close(); } catch { /* already dead */ }
-    remoteClient = await connectRemote();
-    return fn(remoteClient);
-  }
-}
+const remote = makeRemote(connectRemote);
 
 async function main() {
   // Connect eagerly: fail fast on a bad token/URL (before the client believes
   // the server is up), and fetch the remote instructions for our initialize.
+  let remoteClient;
   try {
-    remoteClient = await connectRemote();
+    remoteClient = await remote.open();
   } catch (err) {
     process.stderr.write(
       `cellarion-mcp: cannot reach ${MCP_URL} — ${err?.message || err}\n` +
@@ -109,18 +94,18 @@ async function main() {
 
   // Full passthrough incl. req.params, so pagination cursors survive the hop
   // if the server ever starts paginating its lists.
-  server.setRequestHandler(ListToolsRequestSchema, (req) => remote((c) => c.listTools(req.params)));
-  server.setRequestHandler(CallToolRequestSchema, (req) => remote((c) => c.callTool(req.params)));
-  server.setRequestHandler(ListResourcesRequestSchema, (req) => remote((c) => c.listResources(req.params)));
-  server.setRequestHandler(ListResourceTemplatesRequestSchema, (req) => remote((c) => c.listResourceTemplates(req.params)));
-  server.setRequestHandler(ReadResourceRequestSchema, (req) => remote((c) => c.readResource(req.params)));
+  server.setRequestHandler(ListToolsRequestSchema, (req) => remote.listTools(req.params));
+  server.setRequestHandler(CallToolRequestSchema, (req) => remote.callTool(req.params));
+  server.setRequestHandler(ListResourcesRequestSchema, (req) => remote.listResources(req.params));
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, (req) => remote.listResourceTemplates(req.params));
+  server.setRequestHandler(ReadResourceRequestSchema, (req) => remote.readResource(req.params));
 
   // When the client closes our stdin (Claude Desktop quitting), take the
   // remote connection down with us instead of lingering on an open stream.
   // server.onclose is the SDK's public hook — the transport's own onclose is
   // owned by the Protocol internals and must not be overwritten.
   server.onclose = () => {
-    Promise.resolve().then(() => remoteClient?.close()).catch(() => {}).finally(() => process.exit(0));
+    Promise.resolve().then(() => remote.close()).catch(() => {}).finally(() => process.exit(0));
   };
   await server.connect(new StdioServerTransport());
   process.stderr.write(`cellarion-mcp v${VERSION} → ${MCP_URL.origin} (server v${remoteVersion || '?'}) ready\n`);

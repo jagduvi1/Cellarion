@@ -9,8 +9,12 @@
   },
   "files": [
     "index.js",
+    "remote.js",
     "README.md"
   ],
+  "scripts": {
+    "test": "node --test"
+  },
   "engines": {
     "node": ">=20"
   },
