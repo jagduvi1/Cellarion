@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { lazy } from '../utils/lazyWithReload';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';

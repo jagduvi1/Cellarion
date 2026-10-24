@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { watchDiscussion, unwatchDiscussion } from '../api/discussions';
@@ -9,13 +9,15 @@ import './WatchThreadButton.css';
  * Follow / Unfollow toggle for an entire discussion thread (vs FollowButton
  * which follows a user). Renders on the discussion-detail header.
  *
- * - Anon users see "Sign in to follow" linking to /login?next=...
+ * - Anon users see "Sign in to follow" linking to /login, with this thread
+ *   in router state so signing in returns here
  * - Authors auto-follow on post (server-side); button starts as "Following"
  * - Toggle is optimistic; rolls back on server failure
  */
 export default function WatchThreadButton({ idOrSlug, isWatching, watcherCount, onChange }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
+  const { pathname, search } = useLocation();
   const [watching, setWatching] = useState(!!isWatching);
   const [count, setCount] = useState(watcherCount || 0);
   const [busy, setBusy] = useState(false);
@@ -23,7 +25,8 @@ export default function WatchThreadButton({ idOrSlug, isWatching, watcherCount, 
   if (!user) {
     return (
       <Link
-        to={`/login?next=${encodeURIComponent(window.location.pathname)}`}
+        to="/login"
+        state={{ from: pathname + search }}
         className="watch-thread-btn watch-thread-btn--anon"
       >
         🔔 {t('discussions.signInToFollow')}

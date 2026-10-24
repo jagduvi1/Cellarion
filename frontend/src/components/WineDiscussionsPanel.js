@@ -61,7 +61,7 @@ export default function WineDiscussionsPanel({ wine }) {
             {t('wineDiscussions.startCta')}
           </Link>
         ) : (
-          <Link to={`/login?next=/wines/${wineId}`} className="btn btn-secondary btn-small">
+          <Link to="/login" state={{ from: `/wines/${wineId}` }} className="btn btn-secondary btn-small">
             {t('wineDiscussions.signInToStart')}
           </Link>
         )}

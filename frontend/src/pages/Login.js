@@ -63,7 +63,8 @@ function Login() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
   // Where ProtectedRoute sent them from, when a deep link bounced them here
-  // (issue #1165). Set by ProtectedRoute itself, never read from the URL.
+  // (issue #1165), or the community page whose sign-in link they followed.
+  // Router state set by the app itself, never read from the URL.
   const location = useLocation();
   const appVersion = useVersion();
 

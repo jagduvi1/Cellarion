@@ -44,7 +44,7 @@ function BlogPost() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await getDiscussions(apiFetch, `?blogPost=${post._id}&limit=10`);
+        const res = await getDiscussions(apiFetch, `blogPost=${post._id}&limit=10`);
         const data = await res.json();
         if (!cancelled && res.ok) setThreads(data.discussions || []);
       } catch { /* no threads shown */ }
