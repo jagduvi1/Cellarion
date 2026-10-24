@@ -20,9 +20,12 @@ const McpActionLog = require('../../models/McpActionLog');
 const { registerTool } = require('../registry');
 const { getMaxPosition } = require('../../utils/rackGeometry');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../../utils/rackArrange');
-// Maturity annotation + the one-save atomic apply live in services/rackOps —
-// shared with a future REST arrange endpoint (one-impl rule).
-const { buildAnnotatedEntries, applyArrangement } = require('../../services/rackOps');
+// The slot load, usable count, maturity annotation and the one-save atomic
+// apply live in services/rackOps — shared with the web Arrange endpoints
+// (one-impl rule).
+const {
+  ARRANGE_SLOT_POPULATE, usablePositionCount, buildAnnotatedEntries, applyArrangement,
+} = require('../../services/rackOps');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, objectId, resolveCellarAccess } = require('../toolUtil');
 const { logAction, trimOutstandingPreviews } = require('../actionLedger');
@@ -42,11 +45,8 @@ async function loadRackForArrange(userId, rackId) {
   if (!stub) return null;
   const access = await resolveCellarAccess(userId, stub.cellar, 'editor');
   if (!access) return null;
-  const rack = await Rack.findOne({ _id: rackId, deletedAt: null }).populate({
-    path: 'slots.bottle',
-    select: 'vintage status drinkFrom drinkTo peakFrom peakUntil wineDefinition',
-    populate: { path: 'wineDefinition', select: 'name producer type' },
-  });
+  // The same load as the web Arrange preview, so both surfaces plan alike.
+  const rack = await Rack.findOne({ _id: rackId, deletedAt: null }).populate(ARRANGE_SLOT_POPULATE);
   if (!rack) return null;
   return { rack, cellar: access.cellar };
 }
@@ -105,7 +105,7 @@ registerTool({
       // positions (slots disabled after placement, double-height rows removed).
       // The plan would then assign bottles to undefined positions — refuse
       // with a recovery hint instead.
-      const usableCount = getMaxPosition(rack) - (rack.disabledPositions || []).length;
+      const usableCount = usablePositionCount(rack);
       if (entries.length > usableCount) {
         return fail('conflict',
           `This rack holds ${entries.length} bottle(s) but only ${usableCount} usable position(s) — free up or re-enable slots in the web app before arranging.`);

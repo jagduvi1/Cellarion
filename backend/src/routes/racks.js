@@ -11,6 +11,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate, cabinetRows, modularTotalSlots } = require('../utils/rackGeometry');
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
+  ARRANGE_SLOT_POPULATE, usablePositionCount,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
   normalizeRackGroup, moveRackBottles,
 } = require('../services/rackOps');
@@ -626,13 +627,8 @@ router.post('/:id/arrange/preview', async (req, res) => {
       return res.status(400).json({ error: `Invalid strategy. Must be one of: ${ARRANGE_STRATEGIES.join(', ')}` });
     }
 
-    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).populate({
-      path: 'slots.bottle',
-      // purchaseDate/createdAt anchor relative (NV) profile windows for the
-      // maturity arrangement strategy.
-      select: 'vintage status drinkFrom drinkTo peakFrom peakUntil wineDefinition purchaseDate createdAt',
-      populate: { path: 'wineDefinition', select: 'name producer type' },
-    });
+    // The same load as MCP auto_arrange, so both surfaces plan alike.
+    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).populate(ARRANGE_SLOT_POPULATE);
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
     const cellarDoc = await Cellar.findById(rack.cellar);
@@ -656,9 +652,7 @@ router.post('/:id/arrange/preview', async (req, res) => {
     if (entries.length === 0) {
       return res.json({ strategy, bottlesTotal: 0, changes: [], target: [], before: [] });
     }
-    const disabled = new Set(rack.disabledPositions || []);
-    const usableCount = (positionOrder || Array.from({ length: maxPos }, (_, i) => i + 1))
-      .filter((p) => !disabled.has(p)).length;
+    const usableCount = usablePositionCount(rack, positionOrder);
     if (entries.length > usableCount) {
       return res.status(409).json({ error: `This rack holds ${entries.length} bottles but only ${usableCount} usable positions — free up or re-enable slots first.` });
     }

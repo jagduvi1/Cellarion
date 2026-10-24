@@ -236,6 +236,31 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
 }
 
 /**
+ * What an arrangement reads of each placed bottle — the ONE load for the web
+ * Arrange preview and MCP auto_arrange, so both plan from the same data.
+ * purchaseDate/createdAt anchor relative (NV) profile windows
+ * (maturityUtils.bottleAnchorYear): without them an NV bottle under a curated
+ * window classifies as having no window and sorts last.
+ */
+const ARRANGE_SLOT_POPULATE = {
+  path: 'slots.bottle',
+  select: 'vintage status drinkFrom drinkTo peakFrom peakUntil wineDefinition purchaseDate createdAt',
+  populate: { path: 'wineDefinition', select: 'name producer type' },
+};
+
+/**
+ * How many positions an arrangement can fill: the positions of the fill
+ * order (default 1..maxPosition) that are not disabled. Counted from the
+ * positions themselves, so a disabled entry listed twice or lying beyond the
+ * rack does not shrink it. Shared by both arrange surfaces' overflow guard.
+ */
+function usablePositionCount(rack, positionOrder) {
+  const disabled = new Set(rack.disabledPositions || []);
+  const order = positionOrder || Array.from({ length: getMaxPosition(rack) }, (_, i) => i + 1);
+  return order.filter((p) => !disabled.has(p)).length;
+}
+
+/**
  * Occupied slots of a (slots.bottle-populated) rack annotated with the same
  * maturityStatus the rack views color by (routes/racks withMaturity) — the
  * input shape utils/rackArrange.buildArrangePlan sorts on. Shared so an MCP
@@ -460,5 +485,6 @@ async function countUnplaced(ids) {
 module.exports = {
   normalizeRackGroup,
   createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
+  ARRANGE_SLOT_POPULATE, usablePositionCount,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement, moveRackBottles,
 };

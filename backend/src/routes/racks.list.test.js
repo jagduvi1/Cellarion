@@ -181,8 +181,10 @@ describe('rack changes answer with the same projection', () => {
 
   test('no rack route populates whole documents any more', () => {
     const src = require('fs').readFileSync(require.resolve('./racks'), 'utf8');
-    // Every slots.bottle populate goes through SLOT_BOTTLES, except the
-    // arrange preview's own even slimmer one (name producer type).
+    // Every slots.bottle populate goes through SLOT_BOTTLES or the arrange
+    // preview's even slimmer rackOps.ARRANGE_SLOT_POPULATE (name producer
+    // type, pinned in rackOps.arrangeShared.test.js); an inline one may take
+    // no more of the wine than that.
     const inline = src.match(/populate\(\{\s*path: 'slots\.bottle'[\s\S]*?\}\)/g) || [];
     for (const block of inline) expect(block).toMatch(/select: 'name producer type'/);
     expect(src).not.toMatch(/populate: \['country', 'region', 'grapes'\]/);
