@@ -199,7 +199,13 @@ function AdminWines() {
     setPage(1);
   }, [filters]);
 
+  // Loads overlap (a filter change also resets the page, and the search box
+  // searches as the admin types): only the latest one may fill the list or
+  // end the loading.
+  const fetchSeq = useRef(0);
+
   const fetchWines = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setListError(null);
     try {
@@ -209,6 +215,7 @@ function AdminWines() {
       params.set('sort', filters.sort);
       const res = await adminGetWines(apiFetch, params);
       const data = await res.json().catch(() => ({}));
+      if (seq !== fetchSeq.current) return;
       if (res.ok) {
         setWines(data.wines || []);
         setTotal(data.total || 0);
@@ -217,10 +224,11 @@ function AdminWines() {
         setListError(data.error || `Failed to load wines (${res.status})`);
       }
     } catch (err) {
+      if (seq !== fetchSeq.current) return;
       console.error('Failed to fetch wines:', err);
       setListError('Failed to load wines — check your connection and retry.');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   }, [apiFetch, page, search, filters, pageSize]);
 

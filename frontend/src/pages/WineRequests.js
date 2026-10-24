@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import PhotoCapture from '../components/PhotoCapture';
@@ -54,7 +54,12 @@ function WineRequests() {
     }
   };
 
+  // The background-removed preview belongs to the photo it was made from: a
+  // retake or a removal while one is running drops its late result.
+  const bgSeq = useRef(0);
+
   const clearImage = () => {
+    bgSeq.current++;
     setImageFile(null);
     setImageBgRemoved(null);
     setProcessingBg(false);
@@ -92,6 +97,7 @@ function WineRequests() {
   };
 
   const removeBgPreview = async (file) => {
+    const seq = ++bgSeq.current;
     setProcessingBg(true);
     setImageBgRemoved(null);
     try {
@@ -103,12 +109,12 @@ function WineRequests() {
       });
       if (res.ok) {
         const data = await res.json();
-        setImageBgRemoved(data.processedImage);
+        if (seq === bgSeq.current) setImageBgRemoved(data.processedImage);
       }
     } catch (err) {
       console.error('BG removal preview failed:', err);
     } finally {
-      setProcessingBg(false);
+      if (seq === bgSeq.current) setProcessingBg(false);
     }
   };
 

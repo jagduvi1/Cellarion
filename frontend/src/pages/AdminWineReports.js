@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { adminGetWineReports, adminResolveWineReport, adminDismissWineReport } from '../api/admin';
 import './AdminWineReports.css';
@@ -29,12 +29,16 @@ function AdminWineReports() {
   const [success, setSuccess] = useState(null);
 
   const LIMIT = 20;
+  // A tab or page change while a list is loading leaves two loads in flight:
+  // only the latest one may fill the list or end the loading.
+  const fetchSeq = useRef(0);
 
   useEffect(() => {
     fetchReports();
   }, [statusFilter, page, apiFetch]);
 
   const fetchReports = async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setError(null);
     try {
@@ -42,13 +46,14 @@ function AdminWineReports() {
       if (statusFilter) params.set('status', statusFilter);
       const res = await adminGetWineReports(apiFetch, params.toString());
       const data = await res.json();
+      if (seq !== fetchSeq.current) return;
       if (!res.ok) return setError(data.error || 'Failed to load reports');
       setReports(data.reports || []);
       setTotal(data.total || 0);
     } catch {
-      setError('Network error.');
+      if (seq === fetchSeq.current) setError('Network error.');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   };
 

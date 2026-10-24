@@ -26,13 +26,18 @@ export default function WineSearchPicker({ selected, onSelect, placeholder, incl
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
+  // Searches overlap on a slow network: only the one for the current query
+  // may fill the dropdown or stop the spinner.
+  const searchSeq = useRef(0);
   const listboxId = useId();
 
   // Debounced search
   useEffect(() => {
+    const seq = ++searchSeq.current;
     if (!query.trim()) {
       setResults([]);
       setNoResults(false);
+      setLoading(false);
       return;
     }
 
@@ -43,16 +48,18 @@ export default function WineSearchPicker({ selected, onSelect, placeholder, incl
         const own = includeOwnHidden ? '&ownHidden=1' : '';
         const res = await searchWines(apiFetch, `search=${encodeURIComponent(query.trim())}&limit=8${own}`);
         const data = await res.json();
+        if (seq !== searchSeq.current) return;
         const wines = data.wines || [];
         setResults(wines);
         setNoResults(wines.length === 0);
         setActiveIndex(-1);
         setOpen(true);
       } catch {
+        if (seq !== searchSeq.current) return;
         setResults([]);
         setNoResults(false);
       } finally {
-        setLoading(false);
+        if (seq === searchSeq.current) setLoading(false);
       }
     }, 300);
 

@@ -34,6 +34,9 @@ export default function WinePicker({ value, onChange, placeholder }) {
   const [aiNote, setAiNote] = useState(null);
   const [selected, setSelected] = useState(!!(value?.bottle || value?.wine));
   const debounceRef = useRef(null);
+  // Searches overlap on a slow network: only the one for the current query
+  // may fill the results, and none may reopen them once a wine is picked.
+  const searchSeq = useRef(0);
   const wrapRef = useRef(null);
 
   // Close results on outside click
@@ -47,10 +50,15 @@ export default function WinePicker({ value, onChange, placeholder }) {
 
   // Search as user types
   useEffect(() => {
-    if (selected) return;
+    const seq = ++searchSeq.current;
+    if (selected) {
+      setSearching(false);
+      return;
+    }
     if (!query.trim() || query.trim().length < 2) {
       setResults({ bottles: [], wines: [] });
       setShowResults(false);
+      setSearching(false);
       return;
     }
 
@@ -61,11 +69,12 @@ export default function WinePicker({ value, onChange, placeholder }) {
         const res = await apiFetch(`/api/journal/wine-search?q=${encodeURIComponent(query.trim())}`);
         if (res.ok) {
           const data = await res.json();
+          if (seq !== searchSeq.current) return;
           setResults(data);
           setShowResults(true);
         }
       } catch { /* ignore */ }
-      setSearching(false);
+      if (seq === searchSeq.current) setSearching(false);
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
