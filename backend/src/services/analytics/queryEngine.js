@@ -668,7 +668,10 @@ function kvJoinStages(field, alias, userId) {
             { $eq: ['$key', keyOid] },
             { $or: [
               { $eq: ['$bottle', '$$bid'] },
+              // targetType too: on a bottle with no registry wine yet $$wid is
+              // missing, and so is every bottle entry's wineDefinition.
               { $and: [
+                { $eq: ['$targetType', 'wine'] },
                 { $eq: ['$wineDefinition', '$$wid'] },
                 { $in: [slot, [null, '$$vint']] },
               ] },

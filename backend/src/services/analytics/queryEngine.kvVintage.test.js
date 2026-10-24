@@ -273,4 +273,16 @@ describe('personal key join reads a missing vintage as every-vintage', () => {
     const r = await sortedVersusShown('personal', bottle, [wineEntry('2018', 13), bottleEntry(OTHER_BOTTLE, 11)]);
     expect(r).toEqual({ sorted: null, shown: null });
   });
+
+  test("a bottle with no registry wine yet never reads another bottle's entry through the wine arm", async () => {
+    const pending = { _id: BOTTLE, vintage: '2019' };
+    const r = await sortedVersusShown('personal', pending, [bottleEntry(OTHER_BOTTLE, 11)]);
+    expect(r).toEqual({ sorted: null, shown: null });
+  });
+
+  test('a bottle with no registry wine yet still reads its own bottle entry', async () => {
+    const pending = { _id: BOTTLE, vintage: '2019' };
+    const r = await sortedVersusShown('personal', pending, [bottleEntry(OTHER_BOTTLE, 11), bottleEntry(BOTTLE, 15)]);
+    expect(r).toEqual({ sorted: 15, shown: 15 });
+  });
 });
