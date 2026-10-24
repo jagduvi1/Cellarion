@@ -1557,6 +1557,7 @@
     "slotTitle": "Slot {{position}}",
     "searchWines": "Search wines...",
     "noUnplacedBottles": "No unplaced bottles found",
+    "unplacedLoadFailed": "Couldn't load your bottles.",
     "caseOpenBtn": "Place several…",
     "toolsMenu": "Rack tools",
     "renameMenuItem": "Rename or group…",

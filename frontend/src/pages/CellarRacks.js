@@ -2069,15 +2069,21 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed load shows a retry, not "no unplaced bottles".
+  const [loadFailed, setLoadFailed] = useState(false);
   // Case placement: the group being quantity-picked, chosen quantity, busy flag
   const [caseGroup, setCaseGroup] = useState(null);
   const [caseQty, setCaseQty] = useState(2);
   const [placing, setPlacing] = useState(false);
   const timerRef = useRef(null);
+  // Only the latest request may fill the list: an older search can answer last.
+  const seqRef = useRef(0);
 
   // Fetch bottles from backend, excluding already-placed bottles server-side
   const fetchBottles = useCallback(async (term) => {
+    const seq = ++seqRef.current;
     setLoading(true);
+    setLoadFailed(false);
     try {
       const params = new URLSearchParams({ limit: '30' });
       if (term) params.set('search', term);
@@ -2086,10 +2092,13 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
       params.set('excludePlaced', '1');
       const res = await getCellar(apiFetch, cellarId, params.toString());
       const data = await res.json();
-      if (res.ok) {
-        setResults(data.bottles?.items || []);
-      }
-    } catch { /* ignore */ }
+      if (seq !== seqRef.current) return;
+      if (res.ok) setResults(data.bottles?.items || []);
+      else setLoadFailed(true);
+    } catch {
+      if (seq !== seqRef.current) return;
+      setLoadFailed(true);
+    }
     setLoading(false);
   }, [apiFetch, cellarId]);
 
@@ -2185,6 +2194,13 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
       <div className="slot-bottle-list">
         {loading ? (
           <p className="slot-empty-msg">…</p>
+        ) : loadFailed ? (
+          <p className="slot-empty-msg" role="alert">
+            {t('racks.unplacedLoadFailed', "Couldn't load your bottles.")}{' '}
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => fetchBottles(search)}>
+              {t('common.retry', 'Retry')}
+            </button>
+          </p>
         ) : results.length === 0 ? (
           <p className="slot-empty-msg">{t('racks.noUnplacedBottles')}</p>
         ) : (

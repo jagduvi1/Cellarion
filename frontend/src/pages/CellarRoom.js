@@ -77,7 +77,11 @@ export default function CellarRoom() {
   const [slotSearch, setSlotSearch] = useState('');
   const [slotResults, setSlotResults] = useState([]);
   const [slotLoading, setSlotLoading] = useState(false);
+  // A failed load shows a retry, not "no unplaced bottles".
+  const [slotLoadFailed, setSlotLoadFailed] = useState(false);
   const slotTimerRef = useRef(null);
+  // Only the latest request may fill the list: an older search can answer last.
+  const slotSeqRef = useRef(0);
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId, bottle }
   const [journalBottle, setJournalBottle] = useState(null); // consumed bottle awaiting journal prompt
   // The bottle just taken out, said with Undo — as on the racks page
@@ -1080,7 +1084,9 @@ export default function CellarRoom() {
 
   // Backend search for slot picker
   const fetchSlotBottles = useCallback(async (term) => {
+    const seq = ++slotSeqRef.current;
     setSlotLoading(true);
+    setSlotLoadFailed(false);
     try {
       const params = new URLSearchParams({ limit: '30' });
       if (term) params.set('search', term);
@@ -1089,10 +1095,13 @@ export default function CellarRoom() {
       params.set('excludePlaced', '1');
       const res = await getCellar(apiFetch, id, params.toString());
       const data = await res.json();
-      if (res.ok) {
-        setSlotResults(data.bottles?.items || []);
-      }
-    } catch { /* ignore */ }
+      if (seq !== slotSeqRef.current) return;
+      if (res.ok) setSlotResults(data.bottles?.items || []);
+      else setSlotLoadFailed(true);
+    } catch {
+      if (seq !== slotSeqRef.current) return;
+      setSlotLoadFailed(true);
+    }
     setSlotLoading(false);
   }, [apiFetch, id]);
 
@@ -1475,6 +1484,13 @@ export default function CellarRoom() {
                 <div className="room-slot-bottle-list">
                   {slotLoading ? (
                     <p className="room-slot-empty">…</p>
+                  ) : slotLoadFailed ? (
+                    <p className="room-slot-empty" role="alert">
+                      {t('racks.unplacedLoadFailed', "Couldn't load your bottles.")}{' '}
+                      <button type="button" className="btn btn-secondary btn-small" onClick={() => fetchSlotBottles(slotSearch)}>
+                        {t('common.retry', 'Retry')}
+                      </button>
+                    </p>
                   ) : slotResults.length === 0 ? (
                     <p className="room-slot-empty">{t('racks.noUnplacedBottles', 'No available bottles')}</p>
                   ) : (
