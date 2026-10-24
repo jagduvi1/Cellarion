@@ -75,7 +75,12 @@ jest.mock('../models/ProfileAuditSample', () => ({ create: jest.fn(), find: jest
 jest.mock('../models/WineReport', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
-jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn().mockResolvedValue(undefined), fullSync: jest.fn().mockResolvedValue([]) }));
+// edit_grape runs regional names through the admin editor's validator and
+// clears the public taxonomy list cache after a grape save; both are pinned
+// in editGrape.regionalNames.test.js, so here they pass through.
+jest.mock('../services/grapeRegionalNames', () => ({ validateGrapeRegionalNames: jest.fn(async (value) => ({ value })) }));
+jest.mock('../routes/taxonomy', () => ({ clearTaxonomyListCache: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));

@@ -864,6 +864,9 @@ registerTool({
       createdBy: ctx.user.id,
     });
     await grape.save();
+    // The public taxonomy lists are cached; the admin taxonomy routes clear
+    // them after every change, and so does this one.
+    require('../../routes/taxonomy').clearTaxonomyListCache();
 
     logAudit(ctx.req, 'somm.taxonomy.create',
       { type: 'grape', id: grape._id }, { name: grape.name, colour: grape.color, synonyms });
@@ -903,7 +906,8 @@ registerTool({
     'rather than Godello, Durif in Australia rather than Petite Sirah — while storage keeps ONE canonical ' +
     'variety. Pass region as well as country where a variety has several (Carignan is Mazuelo in Rioja and ' +
     'Carignano in Sardinia), and add the same string as a synonym so label text and imports resolve INBOUND too, ' +
-    'not only render outbound. Synonyms and regional names are additive; nothing is ever removed.',
+    'not only render outbound. One display name per place — a second name for the same country/region is refused. ' +
+    'Synonyms and regional names are additive; nothing is ever removed.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, openWorldHint: false },
@@ -934,6 +938,7 @@ registerTool({
 
     const before = { color: grape.color, synonyms: [...(grape.synonyms || [])], regionalNames: (grape.regionalNames || []).length };
     const applied = [];
+    let regionalNameAdded = false;
 
     if (args.colour !== undefined) {
       // An established colour is load-bearing: the conflict check and the
@@ -977,12 +982,27 @@ registerTool({
         if (!regionDoc) return fail('not_found', `No region "${args.region}" in ${country.name}.`);
       }
       const rn = sanitizeTaxonomyName(args.regional_name);
-      const dup = (grape.regionalNames || []).some((x) =>
+      const existing = (grape.regionalNames || []).map((x) => ({ country: x.country, region: x.region || null, name: x.name }));
+      const dup = existing.some((x) =>
         String(x.country) === String(country._id) &&
         String(x.region || '') === String(regionDoc ? regionDoc._id : '') &&
         normalizeString(x.name) === normalizeString(rn));
       if (!dup) {
-        grape.regionalNames.push({ country: country._id, region: regionDoc ? regionDoc._id : null, name: rn });
+        // The admin grape editor's validator, over the whole list as it will
+        // be saved: one display name per (country, region) — two would make
+        // the rendered label depend on array order — and at most 20.
+        const { validateGrapeRegionalNames } = require('../../services/grapeRegionalNames');
+        const check = await validateGrapeRegionalNames([
+          ...existing,
+          { country: country._id, region: regionDoc ? regionDoc._id : null, name: rn },
+        ]);
+        if (check.error) {
+          return fail('conflict',
+            `Cannot add regional name "${rn}" to "${grape.name}": ${check.error}. This tool only adds — changing or removing a ` +
+            'regional name is an admin edit.');
+        }
+        grape.regionalNames = check.value;
+        regionalNameAdded = true;
         applied.push(`regional name ${rn} (${country.name}${regionDoc ? ' / ' + regionDoc.name : ''})`);
       }
     }
@@ -992,6 +1012,12 @@ registerTool({
 
     if (applied.length === 0) return ok(`Nothing to change on "${grape.name}" — every value given is already set.`, { grape: grape.name });
     await grape.save();
+
+    // The same follow-through as the admin grape editor: the public taxonomy
+    // lists (colour, synonyms) are cached, and regional names feed the
+    // registry search index (regional display recall), so a new one rebuilds it.
+    require('../../routes/taxonomy').clearTaxonomyListCache();
+    if (regionalNameAdded) require('../../services/search').fullSync().catch(() => {});
 
     logAudit(ctx.req, 'somm.taxonomy.update', { type: 'grape', id: grape._id },
       { name: grape.name, applied, from: before });
