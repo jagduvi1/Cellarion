@@ -128,3 +128,34 @@ describe('parseOenoExport — inch marks in Bottle Notes', () => {
     });
   });
 });
+
+describe('parseOenoExport — a quote that opens a bare cell', () => {
+  // The bare dialect does not escape quotes, so a cell may open with a quoted
+  // word whose closing quote is not at a field boundary. That quote must not
+  // swallow the rest of the file, and its row still reads as before.
+  it('keeps every bottle when a bare note starts with a quoted word', () => {
+    const result = parseOenoExport(bare('"Reserve" bottle for Dad'));
+    expect(result.items.map((i) => i.wineName)).toEqual(['Test Wine A', 'Test Wine B', 'Test Wine C']);
+    expect(result.items[0]).toMatchObject({ notes: 'Reserve bottle for Dad', producer: 'Producer A', country: 'NZ' });
+  });
+
+  it('still finds the bottle section when a cabinet label starts with a quoted word', () => {
+    const text = bare('').replace('Main Cellar,TRANSTHERM,Espace Cellar,4,13', '"Big" Vintec,TRANSTHERM,Espace Cellar,4,13');
+    const result = parseOenoExport(text);
+    expect(result).not.toBeNull();
+    expect(result.items.map((i) => i.wineName)).toEqual(['Test Wine A', 'Test Wine B', 'Test Wine C']);
+  });
+
+  it('reads a later quoted multi-line note after such a quote', () => {
+    const result = parseOenoExport(bare('"Reserve" bottle for Dad', '"Aged on lees.\nDecant an hour."'));
+    expect(result.items.map((i) => i.wineName)).toEqual(['Test Wine A', 'Test Wine B', 'Test Wine C']);
+    expect(result.items[0].notes).toBe('Reserve bottle for Dad');
+    expect(result.items[2].notes).toBe('Aged on lees.\nDecant an hour.');
+  });
+
+  it('parseAndMap reads such a file as an Oeno export', () => {
+    const result = parseAndMap(bare('"Reserve" bottle for Dad'));
+    expect(result.format).toBe('oeno-export');
+    expect(result.items).toHaveLength(3);
+  });
+});

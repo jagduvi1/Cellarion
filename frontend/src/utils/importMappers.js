@@ -311,6 +311,41 @@ export function detectFormat(headers) {
 }
 
 /**
+ * The logical records of an Oeno export. A quoted Bottle Note may span lines,
+ * but the bare dialect does not escape a quote at the start of a cell
+ * ("Reserve" bottle for Dad), and the CSV rule would then keep that quote
+ * open to the end of the file. So a record that spans lines is accepted only
+ * when it splits into exactly as many cells as its section's header row and
+ * none of its continuation lines is a whole row by itself (a quote closing at
+ * a later row's note can make the count match). Any other one is a runaway
+ * quote: its first line stands alone, as a line-by-line split reads it, and
+ * the records are read again from the line after it.
+ */
+function splitOenoRecords(text) {
+  const records = [];
+  let headerCells = 0; // cells in the current section's header row
+  let rest = text;
+  const swallowsRows = (record) => record.split('\n').slice(1)
+    .some((line) => splitCSVLine(line.replace(/\r$/, '')).length === headerCells);
+  for (;;) {
+    const lines = splitLogicalLines(rest, ',');
+    let runaway = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const cells = splitCSVLine(lines[i]);
+      const first = (cells[0] || '').trim();
+      if (first === 'Cabinet ID' || first === 'Bottle ID') headerCells = cells.length;
+      if (lines[i].includes('\n') && (cells.length !== headerCells || swallowsRows(lines[i]))) { runaway = i; break; }
+      records.push(lines[i]);
+    }
+    if (runaway === -1) return records;
+    const record = lines[runaway];
+    const cut = record.indexOf('\n');
+    records.push(record.slice(0, cut).replace(/\r$/, ''));
+    rest = [record.slice(cut + 1), ...lines.slice(runaway + 1)].join('\n');
+  }
+}
+
+/**
  * Detect Oeno-by-Vintec's real two-section export by scanning for the
  * "User Bottles Details" marker separating the cabinet definitions from
  * the bottle records. Returns the row index of the bottle-section header
@@ -1555,7 +1590,7 @@ export function parseJSON(text) {
 export function parseOenoExport(text) {
   const cleaned = text.replace(/^\uFEFF/, '');
   // Logical records, not raw lines: a quoted Bottle Note may span lines.
-  const lines = splitLogicalLines(cleaned, ',');
+  const lines = splitOenoRecords(cleaned);
   const boundary = detectOenoExportBoundary(lines);
   if (boundary === -1) {
     return null;
@@ -1575,8 +1610,9 @@ export function parseOenoExport(text) {
   for (let i = 0; i < boundary; i++) {
     if (firstCell(lines[i]) === 'Cabinet ID') { cabinetHeader = i; break; }
   }
+  const cabinetCells = cabinetHeader === -1 ? 0 : splitCSVLine(lines[cabinetHeader]).length;
   for (let i = cabinetHeader + 1; i < boundary; i++) {
-    const cells = splitCSVLine(lines[i]);
+    const cells = oenoCells(lines[i], cabinetCells);
     if (!cells[0] || !cells[0].trim()) continue;
     const cabinetId = cells[0].trim();
     if (!cabinetId) continue;
@@ -1659,7 +1695,7 @@ export function parseOenoExport(text) {
   const occupiedByRack = new Map();
 
   for (let i = boundary + 1; i < lines.length; i++) {
-    const cells = splitCSVLine(lines[i]);
+    const cells = oenoCells(lines[i], bottleHeaders.length);
     if (!cells[idx.bottleId] || !cells[idx.bottleId].trim()) continue;
 
     const cabinetIdRaw = (cells[idx.cabinetId] || '').trim();
@@ -1861,6 +1897,35 @@ function geometryForColumn(col, rows) {
 function splitCSVLine(line, delimiter = ',') {
   if (!line) return [];
   return splitCsvFields(line, delimiter, { trim: false });
+}
+
+/**
+ * The cells of one Oeno row. The boundary-aware split keeps a stray inch mark
+ * literal, but in the bare dialect it also keeps a quote at the start of a
+ * cell open when its closing quote is not at a boundary ("Reserve" bottle),
+ * and the row then comes out short. When the row does not split into the
+ * header's number of cells, a split that toggles on every quote is tried, the
+ * way the bare dialect was always read, and kept when it does.
+ */
+function oenoCells(line, expected) {
+  const cells = splitCSVLine(line);
+  if (!expected || cells.length === expected) return cells;
+  const fields = [];
+  let field = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') { field += '"'; i++; } else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      fields.push(decodeCharRefs(field));
+      field = '';
+    } else {
+      field += c;
+    }
+  }
+  fields.push(decodeCharRefs(field));
+  return fields.length === expected ? fields : cells;
 }
 
 // ── CellarTracker Location/Bin → rack auto-map ─────────────────────────────
