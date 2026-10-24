@@ -218,6 +218,7 @@ function withoutPreconditions(op) {
     delete body.ifUnchanged;
     delete body.expectOccupant; // place: my bottle goes there, whatever is in the slot now
     delete body.expectTo;       // move: into the target even if it is taken now (a swap)
+    delete body.expectPours;    // pour: add my glass to whatever is poured now
     // expectFrom stays: a move must still move MY bottle — never whatever
     // someone else has put in that slot since.
   }

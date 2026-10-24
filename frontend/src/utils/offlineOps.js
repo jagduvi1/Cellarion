@@ -7,7 +7,7 @@
  * Queueable, owner/editor only:
  *   consume   POST   /api/bottles/:id/consume          (+ ifActive, consumedAt)
  *   open      POST   /api/bottles/:id/open             (+ openedAt)
- *   pour      POST   /api/bottles/:id/pour             (a glass from an open bottle)
+ *   pour      POST   /api/bottles/:id/pour             a glass from an open bottle (+ expectPours)
  *   edit      PUT    /api/bottles/:id                  notes / rating / ratingScale only (+ ifUnchanged)
  *   place     PUT    /api/racks/:id/slots/:pos         (+ expectOccupant)
  *   clear     DELETE /api/racks/:id/slots/:pos         (+ ?expect=)
@@ -91,7 +91,11 @@ export function buildOp({ url, method, body, idx, id, userId, now = new Date() }
         body: { ...payload, consumedAt: payload.consumedAt || at, ifActive: true } };
     }
     if (kind === 'pour') {
-      return { ...base, bottleId, cellarId: String(bottle.cellar), label, method: 'POST', url: path, body: { ...payload } };
+      // The glasses the user saw (the device copy, with their earlier queued
+      // pours): a pour that lands after the server forgot its key
+      // (models/IdempotencyRecord, 8 days) must not add the glass twice.
+      return { ...base, bottleId, cellarId: String(bottle.cellar), label, method: 'POST', url: path,
+        body: { ...payload, expectPours: (bottle.pours || []).length } };
     }
     if (kind === 'open') {
       const at = new Date(now.getTime() - 5000).toISOString();

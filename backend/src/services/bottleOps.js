@@ -237,15 +237,24 @@ async function openBottle(bottle, { preservationMethod, openedAt } = {}, req) {
  * full batch up front, so there is never a partially-committed batch (the
  * MCP pour_glass ledger row can then always say recorded = requested).
  * Mirrors POST /api/bottles/:id/pour exactly (REST always passes count 1).
+ * `expectPours` (sent by the offline queue only): the number of pours the
+ * user saw on the bottle; the pour is recorded only while the bottle still
+ * has exactly that many. Absent → recorded whatever is poured.
  * Returns { error } | { bottle }.
  */
-async function pourFromBottle(bottle, { ml, count } = {}, req) {
+async function pourFromBottle(bottle, { ml, count, expectPours } = {}, req) {
   if (bottle.status === ORDERED_STATUS) return { error: { ...NOT_ARRIVED_ERROR } };
   if (CONSUMED_STATUSES.includes(bottle.status)) {
     return { error: { status: 400, message: 'Bottle is already consumed' } };
   }
   if (!bottle.openedAt) {
     return { error: { status: 400, message: 'Open the bottle first', code: 'not_open' } };
+  }
+  // A queued pour can reach the server after its Idempotency-Key record has
+  // expired (models/IdempotencyRecord): a retry whose first attempt already
+  // landed must be refused, not add the glass a second time.
+  if (expectPours !== undefined && expectPours !== null && Number(expectPours) !== bottle.pours.length) {
+    return { error: { status: 409, message: 'Glasses were poured from this bottle meanwhile', code: 'state_changed' } };
   }
   const amount = ml === undefined || ml === null ? DEFAULT_POUR_ML : Number(ml);
   if (!Number.isFinite(amount) || amount < 1 || amount > 6000) {

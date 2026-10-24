@@ -13,9 +13,12 @@ const mongoose = require('mongoose');
  *
  * Scoped per user: a key is only ever looked up together with its owner, so one
  * account can never read or collide with another's outcome. `status: null`
- * marks a write still in progress. Rows expire 8 days after creation (TTL) —
- * longer than the offline queue keeps a change (utils/offlineQueue, 7 days), so
- * a change is never retried after the server has forgotten it arrived.
+ * marks a write still in progress. Rows expire 8 days after creation (TTL). The
+ * offline queue keeps a change for up to 90 days (frontend utils/offlineQueue),
+ * so a change sent after its record has expired is guarded by its own
+ * precondition (ifActive, ifUnchanged, expectOccupant / expectFrom / expectTo /
+ * ?expect=, expectPours; an open refuses a bottle already open), which refuses
+ * a second apply instead of replaying it.
  *
  * GDPR: registered in services/userDataRegistry.js — purged on account
  * deletion; not exported (a transient technical record of a request already

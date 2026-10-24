@@ -4,12 +4,15 @@ import Modal from './Modal';
 import { listAttention, resolveAttention } from '../utils/offlineQueue';
 
 // Refusals where "apply mine anyway" is a meaningful choice: a notes/rating
-// conflict (keep mine), and a place or move into a slot that changed (the move
-// still only moves MY bottle — offlineQueue keeps that check). Not a take-out
-// of a slot that now holds another bottle (it would take out the wrong one),
-// nor a bottle that already left the cellar (it would overwrite that record).
+// conflict (keep mine), a place or move into a slot that changed (the move
+// still only moves MY bottle — offlineQueue keeps that check), and a pour from
+// a bottle poured from meanwhile (my glass on top of what is poured now). Not
+// a take-out of a slot that now holds another bottle (it would take out the
+// wrong one), nor a bottle that already left the cellar (it would overwrite
+// that record).
 const isForceable = (op) => op.code === 'field_changed'
-  || (op.code === 'slot_changed' && (op.kind === 'place' || op.kind === 'move'));
+  || (op.code === 'slot_changed' && (op.kind === 'place' || op.kind === 'move'))
+  || (op.code === 'state_changed' && op.kind === 'pour');
 
 function describe(op, t) {
   const l = op.label || {};

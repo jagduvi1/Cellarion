@@ -1179,8 +1179,13 @@ router.delete('/:id/open', requireBottleAccess('editor'), async (req, res) => {
 // POST /api/bottles/:id/pour — record a pour (default: one 125 ml glass)
 router.post('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const result = await pourFromBottle(req.bottle, { ml: req.body?.ml }, req);
-    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+    // expectPours: the pours the user saw, sent by the offline queue — 409
+    // state_changed when the bottle has more or fewer by now (services/bottleOps).
+    const result = await pourFromBottle(req.bottle, { ml: req.body?.ml, expectPours: req.body?.expectPours }, req);
+    if (result.error) {
+      const { status, message, code } = result.error;
+      return res.status(status).json({ error: message, ...(code ? { code } : {}) });
+    }
     res.json({ bottle: result.bottle });
   } catch (error) {
     console.error('Pour error:', error);
