@@ -77,7 +77,9 @@ router.get('/', requireSommOrAdmin, async (req, res) => {
 /**
  * GET /api/somm/maturity/lookup?wine=:wineId&vintage=:vintage
  * Look up the profile for a specific wine+vintage. Any authenticated user.
- * Used by BottleDetail to display maturity status.
+ * Used by BottleDetail and CellarVintage to display maturity status. Who set
+ * the window (setBy) goes to sommeliers and admins only: the registry never
+ * shows members who contributed its data.
  */
 router.get('/lookup', async (req, res) => {
   try {
@@ -89,10 +91,12 @@ router.get('/lookup', async (req, res) => {
       return res.status(400).json({ error: 'Invalid wine ID' });
     }
 
-    const profile = await WineVintageProfile.findOne({
+    const curator = req.user.roles.includes('somm') || req.user.roles.includes('admin');
+    const query = WineVintageProfile.findOne({
       wineDefinition: String(wine),
       vintage: String(vintage)
-    }).populate({ path: 'setBy', select: 'username' });
+    });
+    const profile = await (curator ? query.populate({ path: 'setBy', select: 'username' }) : query.select('-setBy'));
 
     if (!profile) {
       return res.json({ profile: null });
