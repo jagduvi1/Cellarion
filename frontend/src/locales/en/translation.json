@@ -1823,7 +1823,10 @@
       "bottleArrive": "Bottle arrived",
       "bottleArriveUndo": "Arrival undone (back on order)",
       "bottleBulkArrive": "Bottles arrived in bulk",
-      "bottleChangeWine": "Changed a bottle's wine"
+      "bottleChangeWine": "Changed a bottle's wine",
+      "imageAttach": "Photo added",
+      "imageLink": "Photos linked",
+      "imageDefault": "Default photo changed"
     },
     "anonymous": "anonymous",
     "sharedAs": "{{user}} as {{role}}",
