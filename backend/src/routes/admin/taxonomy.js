@@ -10,6 +10,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
+const { stripHtml } = require('../../utils/sanitize');
 const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
 const { mergeGrapes, mergeRegions, mergeCountries } = require('../../services/taxonomyMerge');
 const { findDuplicateClusters } = require('../../utils/taxonomyDuplicates');
@@ -538,7 +539,7 @@ router.post('/grapes', async (req, res) => {
       characteristics: characteristics || [],
       agingPotential: agingPotential || null,
       prestige: prestige || null,
-      description: description || '',
+      description: stripHtml(typeof description === 'string' ? description : ''),
       regionalNames: regionalNamesValue,
       createdBy: req.user.id
     });
@@ -595,7 +596,7 @@ router.put('/grapes/:id', async (req, res) => {
     if (characteristics !== undefined) grape.characteristics = characteristics;
     if (agingPotential !== undefined) grape.agingPotential = agingPotential;
     if (prestige !== undefined) grape.prestige = prestige;
-    if (description !== undefined) grape.description = description;
+    if (description !== undefined) grape.description = stripHtml(typeof description === 'string' ? description : '');
     if (regionalNamesValue !== undefined) grape.regionalNames = regionalNamesValue;
 
     await grape.save();

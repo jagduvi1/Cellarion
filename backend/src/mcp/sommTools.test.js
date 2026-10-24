@@ -1501,9 +1501,9 @@ describe('add_grape (somm-owned taxonomy, 2026-08-22)', () => {
 
   test('a synonym that repeats the canonical name is dropped, not double-claimed', async () => {
     probeReturns(null);
-    const body = parse(await tool('add_grape').handler({ name: 'Vidal', colour: 'White', synonyms: ['VIDAL', 'Vidal Blanc'] }, SOMM_CTX));
+    const body = parse(await tool('add_grape').handler({ name: 'Norton', colour: 'Red', synonyms: ['NORTON', 'Cynthiana'] }, SOMM_CTX));
     expect(body.error).toBeUndefined();
-    expect(Grape.mock.calls[0][0].synonyms).toEqual(['Vidal Blanc']);
+    expect(Grape.mock.calls[0][0].synonyms).toEqual(['Cynthiana']);
   });
 
   test('write scope + somm role are both required', async () => {

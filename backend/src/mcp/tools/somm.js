@@ -27,7 +27,8 @@ const { bumpWineOwners } = require('../../services/dataVersion');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId, parseAndValidateVintage } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
-const { normalizeString, sanitizeTaxonomyName, resolveCountryName } = require('../../utils/normalize');
+const { normalizeString, sanitizeTaxonomyName, resolveCountryName, resolveGrapeName } = require('../../utils/normalize');
+const { claimKey, findGrapeClaim } = require('../../services/grapeClaims');
 const { otherProducerSpellings, displaySpelling } = require('../../services/producerSpelling');
 const { classifyProposal } = require('../../services/proposalDirectApply');
 const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
@@ -819,7 +820,9 @@ registerTool({
     'nothing is created and the tool tells you what it resolves to — so calling it "just in case" is safe. Include ' +
     'the synonyms owners actually write (accents, hyphens, Cynthiana-for-Norton) — they are what the resolver ' +
     'matches label text against. colour follows the registry rule: the colour of the BERRY (Red/White), null only ' +
-    'for genuine edge cases. Adds are audited and attributed to you.',
+    'for genuine edge cases. Adds are audited and attributed to you. ' +
+    'A known alias such as Shiraz counts as its canonical variety (Syrah): it matches that variety, or the new ' +
+    'row is stored under the canonical name and the reply says so.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, openWorldHint: false },
@@ -836,18 +839,21 @@ registerTool({
     if (denied) return denied;
     const Grape = require('../../models/Grape');
 
-    const name = sanitizeTaxonomyName(args.name);
+    const typed = sanitizeTaxonomyName(args.name);
+    // A static alias ("Shiraz") is stored under its canonical variety (Syrah):
+    // resolveGrapeIdsStrict folds every name through the alias map before it
+    // looks a variety up, so a row named after the alias could never be reached.
+    const name = sanitizeTaxonomyName(resolveGrapeName(typed));
     if (!name) return fail('invalid_input', 'name is empty after sanitising');
+    const substitution = normalizeString(typed) !== normalizeString(name) ? `${typed} → ${name}` : null;
     const synonyms = [...new Set((args.synonyms || []).map((s) => sanitizeTaxonomyName(s)).filter(Boolean))]
       .filter((s) => normalizeString(s) !== normalizeString(name));
 
     // Every string this row would claim — canonical name and all synonyms —
-    // must be unclaimed. Two varieties answering to one string would make
-    // resolveGrapeIdsStrict ambiguous for every later profile write.
-    const claims = [name, ...synonyms].map((s) => normalizeString(s));
-    const taken = await Grape.findOne({
-      $or: [{ normalizedName: { $in: claims } }, { normalizedSynonyms: { $in: claims } }],
-    }).select('name synonyms').lean();
+    // must be unclaimed, under the same fold resolveGrapeIdsStrict uses. Two
+    // varieties answering to one string would make it ambiguous for every
+    // later profile write.
+    const taken = await findGrapeClaim([name, ...synonyms]);
     if (taken) {
       return fail('conflict',
         `Already in the taxonomy: "${taken.name}"${taken.synonyms?.length ? ` (synonyms: ${taken.synonyms.join(', ')})` : ''} ` +
@@ -872,12 +878,14 @@ registerTool({
       { type: 'grape', id: grape._id }, { name: grape.name, colour: grape.color, synonyms });
 
     const envelope = {
-      summary: `Added "${grape.name}" (${grape.color || 'no colour'}) to the grape taxonomy${synonyms.length ? ` with ${synonyms.length} synonym(s)` : ''}`,
+      summary: `Added "${grape.name}" (${grape.color || 'no colour'}) to the grape taxonomy${synonyms.length ? ` with ${synonyms.length} synonym(s)` : ''}` +
+        (substitution ? ` — "${typed}" is a known alias, stored under its canonical name ${grape.name}` : ''),
       data: {
         grape_id: String(grape._id),
         name: grape.name,
         colour: grape.color,
         synonyms,
+        ...(substitution ? { substitution } : {}),
         note: 'Resolves immediately — re-run the set_wine_profile or correction that failed on it.',
       },
     };
@@ -932,7 +940,9 @@ registerTool({
     const Country = require('../../models/Country');
     const Region = require('../../models/Region');
 
-    const key = normalizeString(args.grape);
+    // Looked up under the fold the wine write path uses, so an alias finds the
+    // variety set_wine_profile would store it under ("Shiraz" → Syrah).
+    const key = claimKey(args.grape);
     const grape = await Grape.findOne({ $or: [{ normalizedName: key }, { normalizedSynonyms: key }] });
     if (!grape) return fail('not_found', `No variety resolves from "${args.grape}" — add_grape creates a new one.`);
 
@@ -957,12 +967,9 @@ registerTool({
       const claims = args.add_synonyms.map((s) => sanitizeTaxonomyName(s)).filter(Boolean);
       for (const s of claims) {
         const n = normalizeString(s);
-        // A synonym another variety already answers to would make the
-        // resolver ambiguous for every later write.
-        const taken = await Grape.findOne({
-          _id: { $ne: grape._id },
-          $or: [{ normalizedName: n }, { normalizedSynonyms: n }],
-        }).select('name').lean();
+        // A synonym another variety already answers to — directly or through
+        // the alias map — would make the resolver ambiguous for every later write.
+        const taken = await findGrapeClaim([s], { excludeId: grape._id });
         if (taken) return fail('conflict', `"${s}" already resolves to "${taken.name}" — one string cannot mean two varieties.`);
         if (n === normalizeString(grape.name)) continue;
         if (!(grape.synonyms || []).some((x) => normalizeString(x) === n)) {
