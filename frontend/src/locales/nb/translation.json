@@ -153,6 +153,8 @@
     "sendResetLink": "Send lenke for nytt passord",
     "footerOpenSource": "Cellarion har <1>åpen kildekode</1>. Har du en idé eller har du funnet en feil? <3>Meld fra på GitHub</3>.",
     "footerHelp": "Trenger du hjelp med kontoen din? <1>Kontakt brukerstøtte</1>.",
-    "passwordsNoMatch": "Passordene er ikke like."
+    "passwordsNoMatch": "Passordene er ikke like.",
+    "resetFailed": "Kunne ikke tilbakestille passordet. Lenken kan ha utløpt.",
+    "resetPasswordTitle": "Tilbakestill passord"
   }
 }
