@@ -37,14 +37,27 @@ router.post('/reindex', async (req, res) => {
     // async task, so without waitForTasks the response would mean "enqueued",
     // not "searchable", and async indexing failures would be invisible
     // (audit 2026-07-29). The wait makes the durations honest too.
+    // throwOnError: a sync that throws lands in the catch below instead of
+    // being logged and reported as done.
     const t0 = Date.now();
-    const wineTasks = await searchService.fullSync();
-    await searchService.waitForTasks(wineTasks);
+    const wineTasks = await searchService.waitForTasks(
+      await searchService.fullSync({ throwOnError: true })
+    );
     const winesMs = Date.now() - t0;
     const t1 = Date.now();
-    const discussionTasks = await searchService.fullSyncDiscussions();
-    await searchService.waitForTasks(discussionTasks);
+    const discussionTasks = await searchService.waitForTasks(
+      await searchService.fullSyncDiscussions({ throwOnError: true })
+    );
     const discussionsMs = Date.now() - t1;
+
+    // A failed task settles like a successful one; only 'succeeded' is done.
+    const failed = [...wineTasks, ...discussionTasks].filter((t) => t.status !== 'succeeded');
+    if (failed.length > 0) {
+      console.error('Search reindex: tasks did not succeed', failed.map((t) => ({
+        uid: t.uid, status: t.status, error: t.error?.code,
+      })));
+      return res.status(500).json({ error: 'Reindex failed', failedTasks: failed.length });
+    }
 
     logAudit(req, 'admin.search.reindex', {}, { winesMs, discussionsMs });
     res.json({ ok: true, winesMs, discussionsMs });

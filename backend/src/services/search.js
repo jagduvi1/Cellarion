@@ -223,8 +223,11 @@ async function syncViaCursor(query, buildDoc, idx, label) {
   return taskUids;
 }
 
-async function fullSync() {
-  if (!isAvailable) return;
+// Returns the enqueued task uids. A failure is logged and swallowed for the
+// fire-and-forget callers (boot sync, taxonomy renames, import, scripts);
+// `throwOnError` rethrows it for a caller that answers with the verdict.
+async function fullSync({ throwOnError = false } = {}) {
+  if (!isAvailable) return [];
 
   try {
     return await syncViaCursor(
@@ -249,6 +252,7 @@ async function fullSync() {
     );
   } catch (err) {
     console.error(`Meilisearch full sync failed: ${err.message}`);
+    if (throwOnError) throw err;
   }
 }
 
@@ -393,13 +397,16 @@ async function fetchReplyTextsForIndex(discussionId) {
   return replies.map(r => stripHtml(r.body || '')).filter(Boolean);
 }
 
-async function fullSyncDiscussions() {
-  if (!isAvailable) return;
+// Same contract as fullSync: the enqueued task uids, and `throwOnError` for a
+// caller that answers with the verdict.
+async function fullSyncDiscussions({ throwOnError = false } = {}) {
+  if (!isAvailable) return [];
 
   try {
     const DiscussionReply = require('../models/DiscussionReply');
     let batch = [];
     let total = 0;
+    const taskUids = [];
 
     // Per chunk: fetch reply texts for just this chunk's discussions (one
     // $in query per chunk — batched, not N+1, and never the whole replies
@@ -420,7 +427,8 @@ async function fullSyncDiscussions() {
       const documents = batch.map(d =>
         buildDiscussionDocument(d, repliesByDiscussion.get(d._id.toString()) || [])
       );
-      await discussionsIndex.addDocuments(documents, { primaryKey: 'id' });
+      const task = await discussionsIndex.addDocuments(documents, { primaryKey: 'id' });
+      if (task?.taskUid != null) taskUids.push(task.taskUid);
       total += documents.length;
       batch = [];
     };
@@ -437,8 +445,10 @@ async function fullSyncDiscussions() {
     await flush();
 
     console.log(`Meilisearch: synced ${total} discussions (with reply content)`);
+    return taskUids;
   } catch (err) {
     console.error(`Meilisearch discussion full sync failed: ${err.message}`);
+    if (throwOnError) throw err;
   }
 }
 
@@ -568,13 +578,16 @@ async function deleteIndexDocuments(label, ids) {
  * Wait for enqueued Meili tasks to actually complete — done-means-done for
  * callers like the admin force-reindex, where responding before indexing
  * finishes recreates the stale-index window the button exists to close.
+ *
+ * Returns the settled tasks. A task that FAILED settles too (only a timeout
+ * throws), so a caller that needs the verdict reads each task's `status`.
  */
 async function waitForTasks(taskUids, { timeOutMs = 120000 } = {}) {
-  if (!isAvailable || !Array.isArray(taskUids) || taskUids.length === 0) return;
+  if (!isAvailable || !Array.isArray(taskUids) || taskUids.length === 0) return [];
   // meilisearch-js ≥0.38 moved task waiting to client.tasks and renamed the
   // options (timeout/interval, ms) — client.waitForTasks does not exist on
   // 0.58 and 500'd the admin reindex (prod 2026-08-11).
-  await client.tasks.waitForTasks(taskUids, { timeout: timeOutMs, interval: 250 });
+  return await client.tasks.waitForTasks(taskUids, { timeout: timeOutMs, interval: 250 });
 }
 
 module.exports = {
