@@ -1,6 +1,44 @@
 {
   "nav": {
-    "myCellars": "Mine kjellere"
+    "myCellars": "Mine kjellere",
+    "wineRegistry": "Vinregister",
+    "myRequests": "Mine forespørsler",
+    "myDrafts": "Mine utkast",
+    "maturityQueue": "Modenhetskø",
+    "priceQueue": "Priskø",
+    "wineLibrary": "Vinbibliotek",
+    "adminRequests": "Adminforespørsler",
+    "taxonomy": "Taksonomi",
+    "imageReview": "Bildegjennomgang",
+    "auditLog": "Endringslogg",
+    "users": "Brukere",
+    "adminSettings": "Innstillinger",
+    "deletedCellars": "Slettede kjellere",
+    "settings": "Innstillinger",
+    "logout": "Logg ut",
+    "toggleNav": "Vis eller skjul navigasjon",
+    "plans": "Abonnement",
+    "supporter": "Støtt oss",
+    "blog": "Blogg",
+    "blogUnread_one": "{{count}} ulest innlegg",
+    "blogUnread_other": "{{count}} uleste innlegg",
+    "blogAdmin": "Blogg",
+    "adminStats": "Global statistikk",
+    "adminMcp": "KI-kobling",
+    "adminBridge": "Registerbro",
+    "moderators": "Moderatorer",
+    "moderationReports": "Moderering",
+    "badge": {
+      "admin": "Admin",
+      "somm": "Somm",
+      "mod": "Mod"
+    },
+    "analytics": "Statistikk",
+    "restock": "Påfyll",
+    "wishlist": "Ønskeliste",
+    "recommendations": "Anbefalinger",
+    "journal": "Vindagbok",
+    "community": "Fellesskap"
   },
   "registryTerms": {
     "contributionNote": "Når du sender inn, gir du Cellarion lov til å bruke dette i det felles vinregisteret etter vilkårene for registerdata.",
@@ -54,6 +92,9 @@
     "rating": "Vurdering",
     "reason": "Årsak",
     "error": "Noe gikk galt",
-    "optional": "valgfritt"
+    "optional": "valgfritt",
+    "or": "eller",
+    "loadFailed": "Kunne ikke laste inn ({{status}})",
+    "actionFailed": "Noe gikk galt ({{status}})"
   }
 }
