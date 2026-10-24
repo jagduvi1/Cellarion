@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,7 +25,12 @@ function ReviewFeed() {
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
 
-  const fetchReviews = useCallback(async (p, replace = false, activeTab = tab) => {
+  // Latest-wins guard: every tab switch starts a new load, and a slower
+  // answer for the previous tab (or a "Load more" started under it) must not
+  // land in the list for the tab now on screen.
+  const fetchSeq = useRef(0);
+
+  const fetchReviews = useCallback(async (p, replace = false, activeTab = tab, seq = fetchSeq.current) => {
     try {
       if (replace) setLoading(true);
       else setLoadingMore(true);
@@ -33,6 +38,7 @@ function ReviewFeed() {
       const fetcher = activeTab === 'following' ? getReviewFeed : getDiscoverFeed;
       const res = await fetcher(apiFetch, `page=${p}&limit=20`);
       const data = await res.json();
+      if (seq !== fetchSeq.current) return;
 
       if (res.ok) {
         setReviews(prev => replace ? data.reviews : [...prev, ...data.reviews]);
@@ -43,16 +49,19 @@ function ReviewFeed() {
         setError(data.error || t('reviewFeed.failedLoad'));
       }
     } catch {
-      setError(t('reviewFeed.failedLoad'));
+      if (seq === fetchSeq.current) setError(t('reviewFeed.failedLoad'));
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (seq === fetchSeq.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [apiFetch, tab, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const seq = ++fetchSeq.current;
     setReviews([]);
-    fetchReviews(1, true, tab);
+    fetchReviews(1, true, tab, seq);
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = async (e) => {

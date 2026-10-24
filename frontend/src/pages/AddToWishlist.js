@@ -35,6 +35,8 @@ function AddToWishlist() {
   const [registryWines, setRegistryWines] = useState([]);
   const [adoptingId, setAdoptingId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const searchSeq = useRef(0);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
   // identify-text is read-only — see api/wines.js. `aiIdentified` is UNSAVED
@@ -396,16 +398,29 @@ function AddToWishlist() {
     const query = search.trim();
     setLoading(true);
     setAiSearchError(null);
+    setSearchFailed(false);
     clearAi();
 
+    // Only the latest search may set the list: an earlier one that answers
+    // last is not the answer to what is in the box.
+    const seq = ++searchSeq.current;
     searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.wines) setWines(data.wines);
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`search ${res.status}`);
+        const data = await res.json();
+        if (seq !== searchSeq.current) return;
+        setWines(Array.isArray(data.wines) ? data.wines : []);
         setRegistryWines(Array.isArray(data.registryWines) ? data.registryWines : []);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      // Said, not just swallowed: a failed search that keeps the previous
+      // list reads as the answer to this one.
+      .catch(() => {
+        if (seq !== searchSeq.current) return;
+        setWines([]);
+        setRegistryWines([]);
+        setSearchFailed(true);
+      })
+      .finally(() => { if (seq === searchSeq.current) setLoading(false); });
   }, [search, apiFetch, clearAi]);
 
   const handleSearchKeyDown = (e) => {
@@ -872,7 +887,7 @@ function AddToWishlist() {
             <>
               <div className="wine-select-manual-header">
                 <h2>{t('addToWishlist.searchForWine')}</h2>
-                <button type="button" className="btn-link-muted" onClick={() => { setShowTextSearch(false); setSearch(''); setWines([]); setAiSearchError(null); }}>
+                <button type="button" className="btn-link-muted" onClick={() => { searchSeq.current += 1; setLoading(false); setShowTextSearch(false); setSearch(''); setWines([]); setSearchFailed(false); setAiSearchError(null); }}>
                   {t('addToWishlist.useCameraInstead')}
                 </button>
               </div>
@@ -885,7 +900,7 @@ function AddToWishlist() {
                     type="text"
                     placeholder={t('addToWishlist.searchPlaceholder')}
                     value={search}
-                    onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); setError(null); clearAi(); }}
+                    onChange={(e) => { searchSeq.current += 1; setLoading(false); setSearch(e.target.value); setWines([]); setSearchFailed(false); setAiSearchError(null); setError(null); clearAi(); }}
                     onKeyDown={handleSearchKeyDown}
                     className="search-input-large"
                     autoFocus
@@ -897,6 +912,12 @@ function AddToWishlist() {
               </div>
 
               {loading && <p>{t('addToWishlist.searching')}</p>}
+
+              {searchFailed && !loading && (
+                <p className="error-text" role="alert">
+                  {t('addToWishlist.searchFailed', 'The search didn’t go through. Check your connection and try again.')}
+                </p>
+              )}
 
               {/* AI result card — shape-aware: `card` is either a saved
                   registry wine (populated refs) or the AI's unsaved suggestion

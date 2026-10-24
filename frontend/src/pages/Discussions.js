@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +56,12 @@ function Discussions() {
     'most-replies': t('discussions.sortMostReplies')
   };
 
-  const fetchDiscussions = useCallback(async (p, replace = false) => {
+  // Latest-wins guard: every filter change starts a new load, and a slower
+  // answer for the previous filter (or a "Load more" started under it) must
+  // not land in the list for the filter now on screen.
+  const fetchSeq = useRef(0);
+
+  const fetchDiscussions = useCallback(async (p, replace = false, seq = fetchSeq.current) => {
     try {
       if (replace) setLoading(true);
       else setLoadingMore(true);
@@ -68,6 +73,7 @@ function Discussions() {
 
       const res = await getDiscussions(apiFetch, params.toString());
       const data = await res.json();
+      if (seq !== fetchSeq.current) return;
 
       if (res.ok) {
         setDiscussions(prev => replace ? data.discussions : [...prev, ...data.discussions]);
@@ -78,16 +84,19 @@ function Discussions() {
         setError(data.error || t('discussions.failedLoad'));
       }
     } catch {
-      setError(t('discussions.failedLoad'));
+      if (seq === fetchSeq.current) setError(t('discussions.failedLoad'));
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (seq === fetchSeq.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [apiFetch, category, sort, searchQuery, language, t]);
 
   useEffect(() => {
+    const seq = ++fetchSeq.current;
     setDiscussions([]);
-    fetchDiscussions(1, true);
+    fetchDiscussions(1, true, seq);
   }, [category, sort, searchQuery, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The open sections. Only fetched once; a failure leaves `languages` empty,

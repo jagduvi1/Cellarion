@@ -1149,6 +1149,7 @@
     "searchHint": "Be as specific as possible — include the wine name and producer. We search Cellarion's shared wine registry, the wines members have added; if nothing matches, you can ask AI to identify it.",
     "identifyFailed": "Identification failed",
     "identifyNetworkError": "Network error during identification.",
+    "demoAiBlocked": "AI wine lookup isn't available in the demo. Create a free account to use it.",
     "addFailed": "Failed to add bottle",
     "placePrompt": {
       "title_one": "Place your bottle in a rack now?",
@@ -4656,6 +4657,7 @@
     "searchPlaceholder": "e.g. Chateau Margaux 2015",
     "searchBtn": "Search",
     "searching": "Searching...",
+    "searchFailed": "The search didn’t go through. Check your connection and try again.",
     "aiFound": "Already in the registry",
     "useThisWine": "Use this wine",
     "select": "Select",

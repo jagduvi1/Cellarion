@@ -741,7 +741,14 @@ function AddBottle() {
     try {
       const res = await identifyWineByText(apiFetch, search.trim());
       const data = await res.json();
-      if (!res.ok) { setAiSearchError(data.error || t('addBottle.identifyFailed')); return; }
+      if (!res.ok) {
+        // The demo's AI 403 is a fixed English server string; show the
+        // translated sign-up line for the one case we can recognise.
+        setAiSearchError(data.code === 'demo_ai_disabled'
+          ? t('addBottle.demoAiBlocked')
+          : (data.error || t('addBottle.identifyFailed')));
+        return;
+      }
       // Branch on `identified`, never on a wine: "the model recognised it but
       // the registry doesn't have it" is a SUCCESS, and is the common case.
       if (!data.identified) { setAiSearchError(t('addBottle.aiCouldNotIdentify')); return; }
