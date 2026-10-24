@@ -14,6 +14,11 @@ name: Publish cellarion-mcp
 # its package-lock.json in a PR, merge it, then push the tag
 # `cellarion-mcp-v<version>` on that commit of main. mcp-registry/README.md
 # has the registry step that follows.
+#
+# Two jobs, so that only the publish step can ask for the OIDC token: `test`
+# installs the dependencies and runs the tests without it, and `publish`
+# runs no dependency code at all (the package has no build step, and npm
+# packs only the files package.json lists).
 
 on:
   push:
@@ -21,7 +26,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm trusted publishing (OIDC)
 
 concurrency:
   group: cellarion-mcp-publish
@@ -31,9 +35,11 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  publish:
-    name: Publish cellarion-mcp to npm
+  test:
+    name: Check and test cellarion-mcp
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: cellarion-mcp
@@ -45,12 +51,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false # no cache in a release build
-
-      # Trusted publishing needs npm 11.5.1 or later.
-      - name: npm with trusted publishing
-        run: npm install -g npm@^11.5.1 && npm --version
 
       - name: The tag names this package's version, on main
         run: |
@@ -65,11 +66,36 @@ jobs:
             exit 1
           fi
 
+      # No dependency of the bridge needs an install script.
       - name: Install
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Test
         run: npm test
+
+  publish:
+    name: Publish cellarion-mcp to npm
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC)
+    defaults:
+      run:
+        working-directory: cellarion-mcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false # no cache in a release build
+
+      # Trusted publishing needs npm 11.5.1 or later. Pinned to an exact
+      # version, so a release never runs whichever npm 11 came out last.
+      - name: npm with trusted publishing
+        run: npm install -g npm@11.21.1 && npm --version
 
       - name: Publish
         run: npm publish --access public
