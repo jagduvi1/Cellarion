@@ -9,6 +9,9 @@
  * handled model, so a new model with a wine reference fails a test until
  * someone decides what a merge does with it.
  *
+ * scripts/cleanup-unused-wines reads the same list: there a listed model
+ * keeps a wine in use unless the script deletes its rows with the wine.
+ *
  * Names only, no model requires: safe to load from anywhere.
  */
 

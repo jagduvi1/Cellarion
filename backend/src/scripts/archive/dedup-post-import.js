@@ -1,6 +1,15 @@
 /**
  * dedup-post-import.js
  *
+ * WARNING — do not run --apply as it is. Before deleting a wine it checks
+ * only that no bottle references it, and only the wine's vintage profiles go
+ * with it: every other reference (wishlists, wine lists, journal pairings,
+ * reviews, discussions, members' personal entries, reports, proposals, …)
+ * would be left pointing at a deleted wine. Before using it after another
+ * LWIN import, make it skip every wine scripts/cleanup-unused-wines.js counts
+ * as in use (WINE_REF_SOURCES) and delete the same rows with the wine
+ * (WINE_CASCADE).
+ *
  * After a LWIN CSV import, backup wines (no lwin.lwin7) may be duplicated by
  * newly-created LWIN wines (has lwin.lwin7). Backup wines have composite names
  * like "Barolo Albe G.D. Vajra" while LWIN wines use short names like "Albe".
@@ -10,17 +19,17 @@
  * Also require same country. Keep the backup wine; delete the LWIN duplicate.
  *
  * Usage:
- *   node src/scripts/dedup-post-import.js           # dry run (shows matches)
- *   node src/scripts/dedup-post-import.js --apply   # deletes LWIN duplicates
+ *   node src/scripts/archive/dedup-post-import.js           # dry run (shows matches)
+ *   node src/scripts/archive/dedup-post-import.js --apply   # deletes LWIN duplicates
  */
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const WineDefinition = require('../models/WineDefinition');
-const WineVintageProfile = require('../models/WineVintageProfile');
-const Bottle = require('../models/Bottle');
-const searchService = require('../services/search');
-const { normalizeString } = require('../utils/normalize');
+const WineDefinition = require('../../models/WineDefinition');
+const WineVintageProfile = require('../../models/WineVintageProfile');
+const Bottle = require('../../models/Bottle');
+const searchService = require('../../services/search');
+const { normalizeString } = require('../../utils/normalize');
 
 const APPLY = process.argv.includes('--apply');
 
