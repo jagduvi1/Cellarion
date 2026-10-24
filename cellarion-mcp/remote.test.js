@@ -79,6 +79,76 @@ test('a lost response to a tool call with idempotency_key: reconnects and sends 
   assert.deepEqual(sent.map((s) => [s.client, s.params]), [[1, params], [2, params]]);
 });
 
+// A tools/list answer as the server publishes it: every tool carries MCP
+// annotations, readOnlyHint true for reads and false for writes.
+const toolList = (tools) => ({
+  tools: Object.entries(tools).map(([name, annotations]) => ({ name, inputSchema: { type: 'object' }, annotations })),
+});
+const CATALOGUE = toolList({
+  search_bottles: { readOnlyHint: true },
+  add_bottle: { readOnlyHint: false },
+  get_source_info: {},
+});
+
+test('a lost response to a listed read-only tool: reconnects and sends it once more', async () => {
+  const { remote, clients, sent } = fakeRemote([CATALOGUE, lostResponse(), { content: [] }]);
+  await remote.listTools({});
+  const params = { name: 'search_bottles', arguments: { query: 'barolo' } };
+  assert.deepEqual(await remote.callTool(params), { content: [] });
+  assert.equal(clients[0].closed, true);
+  assert.deepEqual(sent.slice(1).map((s) => [s.client, s.params]), [[1, params], [2, params]]);
+});
+
+test('a listed write tool, or one without readOnlyHint true, is not sent again', async () => {
+  for (const name of ['add_bottle', 'get_source_info']) {
+    const { remote, sent } = fakeRemote([CATALOGUE, lostResponse(), { content: [] }]);
+    await remote.listTools({});
+    await assert.rejects(remote.callTool({ name, arguments: {} }), /HTTP 502/);
+    assert.equal(sent.length, 2, name);
+  }
+});
+
+test('a tool the bridge has not seen in a list is not sent again', async () => {
+  const { remote, sent } = fakeRemote([lostResponse(), CATALOGUE, lostResponse(), { content: [] }]);
+  await assert.rejects(remote.callTool({ name: 'search_bottles', arguments: {} }), /HTTP 502/, 'before any list');
+  await remote.listTools({});
+  await assert.rejects(remote.callTool({ name: 'list_cellars', arguments: {} }), /HTTP 502/, 'not in the list');
+  assert.deepEqual(sent.map((s) => s.method), ['callTool', 'listTools', 'callTool']);
+});
+
+test('the read-only tools survive a reconnect', async () => {
+  const { remote, clients, sent } = fakeRemote([CATALOGUE, lostResponse(), lostResponse(), { content: [] }]);
+  await remote.listTools({});
+  await assert.rejects(remote.callTool({ name: 'add_bottle', arguments: {} }), /HTTP 502/);
+  // The second connection has not listed anything itself.
+  assert.deepEqual(await remote.callTool({ name: 'search_bottles', arguments: {} }), { content: [] });
+  assert.equal(clients.length, 3);
+  assert.deepEqual(sent.map((s) => s.client), [1, 1, 2, 3]);
+});
+
+test('a list fetched again after a lost response is remembered', async () => {
+  const { remote, sent } = fakeRemote([lostResponse(), CATALOGUE, lostResponse(), { content: [] }]);
+  await remote.listTools({});
+  assert.deepEqual(await remote.callTool({ name: 'search_bottles', arguments: {} }), { content: [] });
+  assert.equal(sent.length, 4);
+});
+
+test('each full tool list replaces the read-only tools; a later page adds to them', async () => {
+  const { remote, sent } = fakeRemote([
+    CATALOGUE,
+    toolList({ add_bottle: { readOnlyHint: false } }),
+    toolList({ get_cellar: { readOnlyHint: true } }),
+    lostResponse(),
+    lostResponse(), { content: [] },
+  ]);
+  await remote.listTools({});
+  await remote.listTools({});
+  await remote.listTools({ cursor: 'page-2' });
+  await assert.rejects(remote.callTool({ name: 'search_bottles', arguments: {} }), /HTTP 502/, 'gone from the new list');
+  assert.deepEqual(await remote.callTool({ name: 'get_cellar', arguments: {} }), { content: [] });
+  assert.equal(sent.length, 6);
+});
+
 test('a second failure after the re-send is not retried again', async () => {
   const { remote, sent } = fakeRemote([lostResponse(), lostResponse()]);
   await assert.rejects(remote.listTools({}), /HTTP 502/);

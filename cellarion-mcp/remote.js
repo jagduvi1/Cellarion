@@ -11,6 +11,20 @@ const hasIdempotencyKey = (params) =>
 
 export function makeRemote(connect) {
   let client = null;
+  // Tools the server marks readOnlyHint: true in the tool lists proxied so
+  // far. A call to one of them only reads, so it is safe to send twice. A tool
+  // the bridge has not seen listed as read-only counts as a write. Kept across
+  // reconnects: the list belongs to the server, not to one connection.
+  let readOnlyTools = new Set();
+
+  function rememberReadOnly(params, result) {
+    const names = (result?.tools || [])
+      .filter((t) => t?.annotations?.readOnlyHint === true && typeof t.name === 'string')
+      .map((t) => t.name);
+    // A list without a cursor starts a full list; a later page adds to it.
+    if (params?.cursor) names.forEach((name) => readOnlyTools.add(name));
+    else readOnlyTools = new Set(names);
+  }
 
   // A failure without an answer from the server (a plain Error: dropped
   // connection, a proxy's 502/504 on the POST) or a closed connection leaves
@@ -46,8 +60,14 @@ export function makeRemote(connect) {
       client = null;
       await open?.close();
     },
-    listTools: (params) => call((c) => c.listTools(params), { resend: true }),
-    callTool: (params) => call((c) => c.callTool(params), { resend: hasIdempotencyKey(params) }),
+    async listTools(params) {
+      const result = await call((c) => c.listTools(params), { resend: true });
+      rememberReadOnly(params, result);
+      return result;
+    },
+    callTool: (params) => call((c) => c.callTool(params), {
+      resend: hasIdempotencyKey(params) || readOnlyTools.has(params?.name),
+    }),
     listResources: (params) => call((c) => c.listResources(params), { resend: true }),
     listResourceTemplates: (params) => call((c) => c.listResourceTemplates(params), { resend: true }),
     readResource: (params) => call((c) => c.readResource(params), { resend: true }),
