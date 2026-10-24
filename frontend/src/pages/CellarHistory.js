@@ -50,7 +50,7 @@ const cursorOf = (bottle) => `${bottle.consumedAt || ''}|${bottle._id}`;
 const HISTORY_VIEW_PREFIX = 'cellarion.historyView.';
 const DEFAULT_HISTORY_FILTERS = {
   search: '',
-  type: [], country: [], region: [], grapes: [], vintage: [],
+  type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
   minRating: '', maxRating: '', maturity: []
 };
 const readSavedHistoryView = (cellarId) => {
@@ -156,7 +156,7 @@ function CellarHistory() {
   const filterKey = [
     debouncedSearch,
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
-    filters.grapes.join(','), filters.vintage.join(',')
+    (filters.appellation || []).join(','), filters.grapes.join(','), filters.vintage.join(',')
   ].join('|');
 
   // `id` is included so navigating to another cellar whose scope key matches the
@@ -318,6 +318,7 @@ function CellarHistory() {
   (filters.type || []).forEach(v => activeChips.push({ key: 'type', value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }));
   (filters.country || []).forEach(v => activeChips.push({ key: 'country', value: v, label: countryNames[v] || v }));
   (filters.region || []).forEach(v => activeChips.push({ key: 'region', value: v, label: regionNames[v] || v }));
+  (filters.appellation || []).forEach(v => activeChips.push({ key: 'appellation', value: v, label: v }));
   (filters.grapes || []).forEach(v => activeChips.push({ key: 'grapes', value: v, label: grapeNames[v] || v }));
   (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
 
@@ -335,7 +336,7 @@ function CellarHistory() {
   };
 
   const clearAll = () => setFilters(prev => ({
-    ...prev, type: [], country: [], region: [], grapes: [], vintage: [],
+    ...prev, type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
     minRating: '', maxRating: '', maturity: []
   }));
 
