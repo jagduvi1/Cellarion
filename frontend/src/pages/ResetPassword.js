@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import CellarionLogo from '../components/CellarionLogo';
+import AuthLogo from '../components/AuthLogo';
 import './Login.css';
 
 function ResetPassword() {
@@ -60,7 +60,7 @@ function ResetPassword() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <CellarionLogo size={90} color="var(--color-primary)" showText />
+            <AuthLogo />
             <p>{t('auth.resetPasswordTitle')}</p>
           </div>
           <div className="alert alert-error">{t('auth.noResetToken')}</div>
@@ -80,7 +80,7 @@ function ResetPassword() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <CellarionLogo size={90} color="var(--color-primary)" showText />
+          <AuthLogo />
           <p>{t('auth.setNewPassword')}</p>
         </div>
 

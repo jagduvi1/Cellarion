@@ -5,7 +5,6 @@ vi.mock('react-i18next', () => {
   const t = (key, opts) => (opts && typeof opts === 'object' && 'count' in opts ? `${key}:${opts.count}` : key);
   return { useTranslation: () => ({ t }), Trans: ({ i18nKey }) => i18nKey };
 });
-vi.mock('../components/CellarionLogo', () => ({ default: () => null }));
 
 const DeleteAccountLink = (await import('./DeleteAccountLink')).default;
 

@@ -10,9 +10,8 @@ import { stashSignupSourceForSso } from '../utils/signupSource';
 // language, not from an English server refusal afterwards.
 import { USERNAME_RULE, PASSWORD_POLICY } from '../utils/accountRules';
 import './Login.css';
+import AuthLogo from '../components/AuthLogo';
 
-const LOGO_WEBP = '/cellarion-logo-light.webp';
-const LOGO_PNG  = '/cellarion-logo-light.png';
 
 // Google's "G" mark, per their branding guidelines, as an inline SVG so it
 // needs no extra asset/request.
@@ -217,10 +216,7 @@ function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <picture>
-              <source srcSet={LOGO_WEBP} type="image/webp" />
-              <img src={LOGO_PNG} alt="Cellarion" className="login-logo" width="159" height="128" />
-            </picture>
+            <AuthLogo />
             <p>{t('auth.resetYourPassword')}</p>
           </div>
 
@@ -285,10 +281,7 @@ function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <picture>
-              <source srcSet={LOGO_WEBP} type="image/webp" />
-              <img src={LOGO_PNG} alt="Cellarion" className="login-logo" width="159" height="128" />
-            </picture>
+            <AuthLogo />
           </div>
           <div className="alert alert-success">
             <strong>{t('auth.checkYourEmail')}</strong>
@@ -319,10 +312,7 @@ function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <picture>
-            <source srcSet={LOGO_WEBP} type="image/webp" />
-            <img src={LOGO_PNG} alt="Cellarion" className="login-logo" />
-          </picture>
+          <AuthLogo />
           <p>{t('auth.tagline')}</p>
         </div>
 

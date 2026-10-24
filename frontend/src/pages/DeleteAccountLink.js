@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
-import CellarionLogo from '../components/CellarionLogo';
+import AuthLogo from '../components/AuthLogo';
 import { previewAccountDeletion, confirmAccountDeletion } from '../api/accountDeletion';
 import './Login.css';
 
@@ -72,7 +72,7 @@ function DeleteAccountLink() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <CellarionLogo size={90} color="var(--color-primary)" showText />
+          <AuthLogo />
           <p>{t('deleteAccountLink.title', 'Delete your Cellarion account')}</p>
         </div>
 

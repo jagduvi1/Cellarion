@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import CellarionLogo from '../components/CellarionLogo';
+import AuthLogo from '../components/AuthLogo';
 import './Login.css';
 
 function VerifyEmail() {
@@ -69,7 +69,7 @@ function VerifyEmail() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <CellarionLogo size={90} color="var(--color-primary)" showText />
+          <AuthLogo />
           <p>{t('auth.emailVerification')}</p>
         </div>
 
