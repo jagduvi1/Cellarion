@@ -54,7 +54,8 @@
     "switchToLight": "Bytt til lys modus",
     "dashboard": "Oversikt",
     "pickLists": "Plukklister",
-    "help": "Hjelp"
+    "help": "Hjelp",
+    "wineReports": "Feilrapporter"
   },
   "registryTerms": {
     "contributionNote": "Når du sender inn, gir du Cellarion lov til å bruke dette i det felles vinregisteret etter vilkårene for registerdata.",
@@ -115,6 +116,40 @@
   },
   "errors": {
     "network": "Kunne ikke nå Cellarion. Sjekk tilkoblingen og prøv igjen.",
-    "serverUnavailable": "Cellarion kunne ikke svare akkurat nå. Prøv igjen om litt."
+    "serverUnavailable": "Cellarion kunne ikke svare akkurat nå. Prøv igjen om litt.",
+    "rateLimited": "For mange forespørsler på kort tid. Vent noen minutter og prøv igjen.",
+    "rateLimitedFor": "For mange forespørsler på kort tid. Prøv igjen om {{minutes}} min.",
+    "rateLimitedSoon": "For mange forespørsler på kort tid. Prøv igjen om noen sekunder.",
+    "generic": "Noe gikk galt. Prøv igjen."
+  },
+  "auth": {
+    "continueWithGoogle": "Fortsett med Google",
+    "continueWithProvider": "Fortsett med {{provider}}",
+    "login": "Logg inn",
+    "register": "Registrer deg",
+    "tagline": "Din personlige vinkjeller",
+    "sessionEnded": "Økten din er avsluttet. Logg inn igjen for å fortsette der du slapp.",
+    "usernameOrEmail": "Brukernavn eller e-post",
+    "usernameLabel": "Brukernavn",
+    "emailLabel": "E-post",
+    "passwordLabel": "Passord",
+    "loading": "Laster inn …",
+    "createAccount": "Opprett konto",
+    "rememberMe": "Husk meg",
+    "forgotPassword": "Glemt passordet?",
+    "consent": "Jeg godtar <1>personvernerklæringen</1> og samtykker til at personopplysningene mine behandles slik det er beskrevet der.",
+    "verificationResent": "Vi har sendt e-posten med bekreftelse på nytt. Sjekk innboksen din.",
+    "resendFailed": "Kunne ikke sende på nytt. Prøv igjen.",
+    "resendVerification": "Send bekreftelsen på nytt",
+    "sending": "Sender …",
+    "checkYourEmail": "Sjekk e-posten din",
+    "verificationSentTo": "Vi har sendt en bekreftelseslenke til <1>{{email}}</1>. Åpne lenken i e-posten for å aktivere kontoen din.",
+    "didntReceive": "Fikk du den ikke?",
+    "resetYourPassword": "Tilbakestill passordet",
+    "forgotSent": "Hvis e-postadressen finnes hos oss, har vi sendt en lenke for å tilbakestille passordet. Sjekk innboksen din.",
+    "backToLogin": "Tilbake til innlogging",
+    "forgotIntro": "Skriv inn e-postadressen din, så sender vi deg en lenke for å tilbakestille passordet.",
+    "genericError": "Noe gikk galt. Prøv igjen.",
+    "sendResetLink": "Send lenke for nytt passord"
   }
 }
