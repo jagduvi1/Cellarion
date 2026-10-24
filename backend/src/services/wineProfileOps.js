@@ -258,6 +258,9 @@ function snapshotProfile(wine) {
   snap.verifiedBy = ap.verifiedBy ? String(ap.verifiedBy) : null;
   snap.verifiedAt = ap.verifiedAt || null;
   snap.profileReviewedAt = wine.profileReviewedAt || null;
+  // applyProfilePatch ends a hold, so the undo must be able to put it back.
+  snap.heldAt = ap.heldAt || null;
+  snap.heldReason = ap.heldReason || null;
   // Record fields (may hold populated docs — keep bare ids for the undo).
   snap.type = wine.type || null;
   snap.colour = wine.colour || null;
@@ -319,9 +322,10 @@ function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
   return wine;
 }
 
-/** Restore a snapshot verbatim (undo). Mirrors applyProfilePatch's surface.
- *  Record fields restore only when the snapshot carries them — ledger rows
- *  written before type/grapes existed must not null a wine's type. */
+/** Restore a snapshot verbatim (undo). Mirrors applyProfilePatch's surface,
+ *  the hold it ends included. Record fields and the hold restore only when
+ *  the snapshot carries them — ledger rows written before those were captured
+ *  must not null a wine's type or re-hold / un-hold a wine. */
 function restoreProfile(wine, snap) {
   if (!wine.aiProfile) wine.aiProfile = {};
   for (const f of EDITABLE_FIELDS) {
@@ -331,6 +335,10 @@ function restoreProfile(wine, snap) {
   wine.aiProfile.verifiedBy = snap.verifiedBy || null;
   wine.aiProfile.verifiedAt = snap.verifiedAt || null;
   wine.profileReviewedAt = snap.profileReviewedAt || null;
+  if (Object.prototype.hasOwnProperty.call(snap, 'heldAt')) {
+    wine.aiProfile.heldAt = snap.heldAt ? new Date(snap.heldAt) : null;
+    wine.aiProfile.heldReason = snap.heldReason || null;
+  }
   if (typeof snap.type === 'string' && snap.type) wine.type = snap.type;
   // Only when the snapshot carries the key: ledger rows written before colour
   // existed must not clear one set since.
