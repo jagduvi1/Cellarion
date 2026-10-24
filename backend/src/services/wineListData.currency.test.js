@@ -3,11 +3,14 @@
  * printed on the PDF and the web menu when the owner set no list price, and
  * the cost side of the margin stats. Each bottle's price is in that bottle's
  * own currency, so the average is currency-aware:
- *  - priced bottles of one entry in ONE currency: their plain average;
- *  - in SEVERAL currencies: the count-weighted average in the list's currency,
- *    converted with today's rates;
- *  - a currency that cannot be converted, or no list currency to convert into
- *    (the editor's picker): no average rather than a sum of mixed units.
+ *  - priced bottles of one entry all in the list's currency: their plain
+ *    average;
+ *  - in any other currency, one or several: the count-weighted average in the
+ *    list's currency, converted with today's rates;
+ *  - a currency that cannot be converted: no average rather than a price in
+ *    the wrong unit or a sum of mixed units;
+ *  - no list currency to convert into (the editor's picker): one currency
+ *    keeps its plain average, several have none.
  */
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ aggregate: jest.fn(), distinct: jest.fn() }));
@@ -105,25 +108,54 @@ describe('loadWineMap — average purchase price', () => {
     expect(info.avgPrice).toBeNull();
   });
 
-  test('a single-currency entry keeps its plain average, without fetching rates', async () => {
+  test("an entry in the list's own currency keeps its plain average, without fetching rates", async () => {
     Bottle.aggregate.mockResolvedValue([group('SEK', { stock: 3, priceSum: 900 })]);
 
-    const info = (await loadWineMap(list('USD'))).get(KEY);
+    const info = (await loadWineMap(list('SEK'))).get(KEY);
 
     expect(info.avgPrice).toBe(300);
     expect(getOrCreateDailySnapshot).not.toHaveBeenCalled();
   });
 
-  test('unpriced bottles (default currency) neither count in the average nor make an entry mixed', async () => {
+  test("an entry in ONE other currency is converted into the list's currency", async () => {
+    Bottle.aggregate.mockResolvedValue([group('SEK', { stock: 3, priceSum: 900 })]);
+
+    const info = (await loadWineMap(list('USD'))).get(KEY);
+
+    expect(info.avgPrice).toBeCloseTo(30, 10); // 900 SEK = 90 USD, over 3
+    expect(getOrCreateDailySnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  test("an entry in one other currency has no average when today's rates are missing", async () => {
+    getOrCreateDailySnapshot.mockResolvedValue(null);
+    Bottle.aggregate.mockResolvedValue([group('EUR', { stock: 2, priceSum: 90 })]);
+
+    const info = (await loadWineMap(list('SEK'))).get(KEY);
+
+    expect(info.stock).toBe(2);
+    expect(info.avgPrice).toBeNull();
+  });
+
+  test('an entry in one other currency the rates lack has no average', async () => {
+    getOrCreateDailySnapshot.mockResolvedValue({ date: '2026-10-24', rates: { USD: 1, SEK: 10 } });
+    Bottle.aggregate.mockResolvedValue([group('EUR', { stock: 2, priceSum: 90 })]);
+
+    const info = (await loadWineMap(list('SEK'))).get(KEY);
+
+    expect(info.avgPrice).toBeNull();
+  });
+
+  test('unpriced bottles (default currency) neither count in the average nor call for a conversion', async () => {
     Bottle.aggregate.mockResolvedValue([
       group('SEK', { stock: 2, priceSum: 600 }),
       group('USD', { stock: 3, priced: 0, priceSum: 0 }),
     ]);
 
-    const info = (await loadWineMap(list('USD'))).get(KEY);
+    const info = (await loadWineMap(list('SEK'))).get(KEY);
 
     expect(info.stock).toBe(5);
     expect(info.avgPrice).toBe(300);
+    expect(getOrCreateDailySnapshot).not.toHaveBeenCalled();
   });
 
   test('an alias and its code are one currency', async () => {
@@ -132,9 +164,10 @@ describe('loadWineMap — average purchase price', () => {
       group('EUR', { stock: 1, priceSum: 30 }),
     ]);
 
-    const info = (await loadWineMap(list('SEK'))).get(KEY);
+    const info = (await loadWineMap(list('EUR'))).get(KEY);
 
     expect(info.avgPrice).toBe(20);
+    expect(getOrCreateDailySnapshot).not.toHaveBeenCalled();
   });
 
   test('an entry without any priced bottle has no average', async () => {

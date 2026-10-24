@@ -33,8 +33,8 @@ function allEntries(wineList) {
 function averagePrice(prices, currency, rates) {
   if (prices.size === 0) return null;
   if (prices.size === 1) {
-    const [{ sum, n }] = prices.values();
-    return sum / n;
+    const [[from, { sum, n }]] = prices;
+    if (!currency || from === normalizeCurrency(currency)) return sum / n;
   }
   if (!currency) return null;
   let total = 0;
@@ -56,10 +56,12 @@ function averagePrice(prices, currency, rates) {
  * purchase prices must never leak from other cellars.
  *
  * Each price is in its bottle's own currency. An entry whose priced bottles
- * share one currency gets their plain average. An entry mixing currencies gets
- * the count-weighted average converted into `currency` (the list's) with
- * today's rates — or null when there is no currency to convert into or a rate
- * is missing: no price beats EUR and SEK added up as one number.
+ * are all in `currency` (the list's) gets their plain average. Any other entry
+ * — one foreign currency or several — gets the count-weighted average
+ * converted into `currency` with today's rates, or null when a rate is
+ * missing: no price beats a SEK figure printed as euros, or EUR and SEK added
+ * up as one number. Without a `currency` (the editor's picker) an entry in
+ * one currency keeps its plain average and a mixed one has none.
  *
  * @param {any} cellarId
  * @param {{ currency?: string }} [options]
@@ -106,11 +108,14 @@ async function loadStockMap(cellarId, { currency } = {}) {
     rows.set(key, row);
   }
 
+  // Rates are needed as soon as one priced bottle is in another currency than
+  // the list's.
+  const target = currency && normalizeCurrency(currency);
   let rates = null;
-  if (currency && [...rows.values()].some(r => r.prices.size > 1)) {
+  if (target && [...rows.values()].some(r => [...r.prices.keys()].some(c => c !== target))) {
     try {
       rates = (await getOrCreateDailySnapshot())?.rates || null;
-    } catch (_) { /* mixed-currency entries get no average */ }
+    } catch (_) { /* entries needing a conversion get no average */ }
   }
 
   const map = new Map();
