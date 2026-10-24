@@ -302,7 +302,7 @@ describe('undo_last reversals', () => {
     imageOps.setBottleDefaultImage.mockResolvedValue({ bottle: {}, prev: oid('4') });
     const res = await revertLedgerRow({ _id: 'row', action: 'default_image', bottle: oid('d'), detail: { imageId: oid('4') }, prev: { defaultImage: oid('3') } }, CTX, HELPERS);
     expect(res.ok).toBe(true);
-    expect(imageOps.setBottleDefaultImage).toHaveBeenCalledWith(expect.anything(), oid('3'));
+    expect(imageOps.setBottleDefaultImage).toHaveBeenCalledWith(expect.anything(), oid('3'), REQ);
   });
 
   test('default_image: a photo chosen since wins over the undo', async () => {

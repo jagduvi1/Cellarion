@@ -156,6 +156,8 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
       wineDefinitionId: wineDefinitionId ? String(wineDefinitionId) : null,
       credit,
       keepBackground,
+      // Named in the 'image.attach' audit row the pipeline writes for a bottle.
+      via: 'web',
     }, req);
     if (result.error) {
       return res.status(result.error.status).json({ error: result.error.message });
@@ -544,6 +546,8 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
       { _id: { $in: imageIds }, uploadedBy: req.user.id },
       { bottle: bottleId, vintage: photoVintage(bottle.vintage) }
     );
+    logAudit(req, 'image.link', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+      { imageIds: imageIds.map(String), via: 'web' });
 
     res.json({ message: 'Images linked to bottle' });
   } catch (error) {
@@ -580,6 +584,8 @@ router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
     processImage(image._id).catch(err =>
       console.error('Retry processing error:', err.message)
     );
+    logAudit(req, 'image.retry', { type: 'image', id: image._id },
+      { bottleId: image.bottle ? String(image.bottle) : null });
 
     res.json({ message: 'Processing restarted' });
   } catch (error) {

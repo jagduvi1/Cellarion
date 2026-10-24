@@ -13,7 +13,6 @@ const sharp = require('sharp');
 const { registerTool } = require('../registry');
 const { ingestBottleImage } = require('../../services/imageOps');
 const { safeFetchImage } = require('../../utils/safeImageFetch');
-const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 const { logAction, replay, releaseClaim } = require('../actionLedger');
 const Bottle = require('../../models/Bottle');
@@ -170,9 +169,10 @@ registerTool({
     if (args.keep_background === true && args.label_only !== true) {
       notes.push('keep_background is ignored: a photo with the bottle in it is always cut out. For a photo of the label alone, filling the frame, pass label_only: true.');
     }
+    // The pipeline writes the 'image.attach' audit row, naming this surface.
     const result = await ingestBottleImage({
       buffer, userId: ctx.user.id, userRoles: ctx.user.roles, bottle, wineDefinitionId, credit: args.credit || null,
-      keepBackground,
+      keepBackground, via: 'mcp',
     }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient
@@ -180,7 +180,6 @@ registerTool({
       return fail(result.error.status >= 500 ? 'unavailable' : 'invalid_input', result.error.message);
     }
     const image = result.image;
-    logAudit(ctx.req, 'image.attach', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { via: 'mcp', imageId: String(image._id) });
 
     const showsOn = wineDefinitionId
       ? await count(Bottle.countDocuments({ user: ctx.user.id, wineDefinition: wineDefinitionId, status: 'active' }))
@@ -367,7 +366,7 @@ registerTool({
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
     const { setBottleDefaultImage } = require('../../services/imageOps');
-    const result = await setBottleDefaultImage(bottle, args.image_id || null);
+    const result = await setBottleDefaultImage(bottle, args.image_id || null, ctx.req);
     if (result.error) {
       return fail(result.error.status === 404 ? 'not_found' : 'invalid_input',
         result.error.status === 404 ? 'That photo is not one of this bottle\'s — use an image_id from get_bottle → photos.' : result.error.message);

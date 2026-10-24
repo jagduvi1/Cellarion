@@ -71,10 +71,11 @@ function sanitizeCredit(credit, userRoles) {
  *   kicked off. The worker keeps an already-approved row approved; a row
  *   approved after the hand-off raced it and usually ended 'processed' —
  *   invisible in every gallery (release audit 2026-10-09, H1).
+ * @param {'web'|'mcp'} [opts.via='web']   the surface, named in the audit row
  * @param {object}  req                    for downstream audit attribution
  * @returns {{ image }} | {{ error: { status, message } }}
  */
-async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null, wineDefinitionId = null, credit = null, keepBackground = false, publish = null }, req) {
+async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null, wineDefinitionId = null, credit = null, keepBackground = false, publish = null, via = 'web' }, req) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     return { error: { status: 400, message: 'No image data provided' } };
   }
@@ -162,6 +163,15 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
     } : {}),
   });
   await image.save();
+
+  // One attach row for both surfaces, and only for a photo put on a bottle:
+  // the admin flows that publish a registry picture write their own row, and
+  // a photo uploaded before its bottle exists is audited when it is linked.
+  if (bottle) {
+    const { logAudit } = require('./audit');
+    logAudit(req, 'image.attach', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+      { via, imageId: String(image._id) });
+  }
 
   // Fire-and-forget background removal (rembg) — same hand-off as the route.
   if (!keep) {
@@ -274,14 +284,23 @@ async function persistLabelScan({ buffer, userId, side = 'front' }) {
  * tool. `imageId` null/'' clears the choice. A photo qualifies when it belongs
  * to this bottle, or is a published picture of the bottle's wine (the same
  * candidates the web picker offers). `bottle` is an access-checked document.
+ * A change is audited here ('image.default'), once for both surfaces; `req`
+ * names the actor. Choosing the photo that already is the default writes no row.
  * Returns { error } | { bottle, prev } (prev = the previous default image id).
  */
-async function setBottleDefaultImage(bottle, imageId) {
+async function setBottleDefaultImage(bottle, imageId, req) {
   const mongoose = require('mongoose');
+  const { logAudit } = require('./audit');
   const prev = bottle.defaultImage ? String(bottle.defaultImage) : null;
+  const audit = (now) => {
+    if (now === prev) return;
+    logAudit(req, 'image.default', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+      { imageId: now, prev });
+  };
   if (!imageId) {
     bottle.defaultImage = null;
     await bottle.save();
+    audit(null);
     return { bottle, prev };
   }
   // Cast the caller's id before it touches the query (a junk string would
@@ -304,6 +323,7 @@ async function setBottleDefaultImage(bottle, imageId) {
   }
   bottle.defaultImage = image._id;
   await bottle.save();
+  audit(String(image._id));
   return { bottle, prev };
 }
 

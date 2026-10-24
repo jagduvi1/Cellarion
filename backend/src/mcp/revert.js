@@ -209,11 +209,11 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const prevImage = row.prev?.defaultImage || null;
     let r;
     try {
-      r = await setBottleDefaultImage(access.bottle, prevImage);
+      r = await setBottleDefaultImage(access.bottle, prevImage, ctx.req);
       if (r.error) {
         // The old picture may be gone since; falling back to "no default" is
         // still a faithful undo of choosing the new one.
-        const cleared = await setBottleDefaultImage(access.bottle, null);
+        const cleared = await setBottleDefaultImage(access.bottle, null, ctx.req);
         if (cleared.error) { await unclaim(row._id); return fail('conflict', `Cannot undo that: ${cleared.error.message}`); }
       }
     } catch (err) {

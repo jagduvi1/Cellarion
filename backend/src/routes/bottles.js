@@ -1051,10 +1051,11 @@ router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res)
     const { imageId } = req.body;
 
     // Shared with the MCP set_bottle_default_image tool (services/imageOps):
-    // the candidate rule, the id cast and the clear-on-empty live there once.
+    // the candidate rule, the id cast, the clear-on-empty and the audit row
+    // live there once.
     // Lazy: imageOps pulls in the image pipeline, which this route needs only here.
     const { setBottleDefaultImage } = require('../services/imageOps');
-    const result = await setBottleDefaultImage(bottle, imageId);
+    const result = await setBottleDefaultImage(bottle, imageId, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     if (!imageId) return res.json({ bottle });
 
