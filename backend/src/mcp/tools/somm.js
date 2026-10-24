@@ -2215,7 +2215,7 @@ registerTool({
       const src = args.proposed_fields || {};
       for (const f of PROPOSAL_FIELDS) {
         if (src[f] === undefined || src[f] === null) continue;
-        const v = String(src[f]).trim();
+        const v = stripHtml(String(src[f])).trim();
         if (!v) continue;
         if (v.length > PROPOSAL_FIELD_MAX) {
           return fail('invalid_input', `proposed_fields.${f} must be at most ${PROPOSAL_FIELD_MAX} characters.`);
