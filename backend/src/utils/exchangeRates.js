@@ -68,6 +68,16 @@ function getSnapshotForDate(date) {
 }
 
 /**
+ * The newest stored snapshot no more than `maxAgeDays` days old (today
+ * included), or null. For a job that must not lose its run to one failed
+ * fetch: a recent day's rates stand in for today's.
+ */
+function getRecentSnapshot(maxAgeDays) {
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return ExchangeRateSnapshot.findOne({ date: { $gte: cutoff } }).sort({ date: -1 }).lean();
+}
+
+/**
  * Batch-fetches snapshots for an array of date strings.
  * Returns a Map<date, rates> for quick lookups.
  */
@@ -103,4 +113,4 @@ function convertCurrency(amount, from, to, rates) {
   return (amount / fromRate) * toRate;
 }
 
-module.exports = { fetchExchangeRates, getOrCreateDailySnapshot, getSnapshotForDate, getSnapshotsForDates, convertCurrency };
+module.exports = { fetchExchangeRates, getOrCreateDailySnapshot, getSnapshotForDate, getRecentSnapshot, getSnapshotsForDates, convertCurrency };
