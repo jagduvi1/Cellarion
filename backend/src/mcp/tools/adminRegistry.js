@@ -322,7 +322,7 @@ registerTool({
     'that fold to the same string go quiet with it. Use for strings that are NOT appellations (quality tiers like ' +
     '"Qualitätswein", fantasy names, label slogans); for a real appellation use promote_appellation instead. The ' +
     'wines keep their free-text value either way — this only silences the review queue. Same terminal-state ' +
-    'pattern as reject_price_request (ticket 6a842d5e).',
+    'pattern as reject_price_request.',
   scope: 'write',
   requireRole: ['admin'],
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },

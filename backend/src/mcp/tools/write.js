@@ -102,7 +102,7 @@ registerTool({
     'Adds one bottle to a cellar the user owns or edits. Reference the wine by wine_id (from resolve_wine / ' +
     'search_registry / an existing bottle) — or, only after resolve_wine returned no_match and the user confirmed the ' +
     'details, pass new_wine to mint a registry entry. ALWAYS confirm with the user before adding (name, vintage, ' +
-    'cellar). The bottle arrives UNPLACED (rack placement is a separate step in the web app for now). Reversible via ' +
+    'cellar). The bottle arrives UNPLACED — place it in a rack with place_bottle. Reversible via ' +
     'undo_last. Pass an idempotency_key when retrying. With new_wine, draft:true keeps the new wine as the user\'s ' +
     'PRIVATE DRAFT — visible only to them, editable with update_wine_draft without any review, published to the ' +
     'shared registry with publish_wine when the record is complete (an untouched draft holding bottles publishes ' +

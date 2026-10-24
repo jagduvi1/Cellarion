@@ -384,7 +384,9 @@ registerTool({
     'match AND you can\'t confirm enough detail (producer, country, type) to add it yourself with add_bottle/new_wine. ' +
     'Requires a source_url (a Systembolaget / Vivino / winery page an admin can verify) and the wine_name as printed. ' +
     'This is a request to a human queue, not an instant add — tell the user it may take a while and that add_bottle ' +
-    'with new_wine is the immediate route when the details are known. ' + RETRY_NOTE('list_history'),
+    'with new_wine is the immediate route when the details are known. Cannot be unsent, and no tool lists your ' +
+    'requests, so ALWAYS pass an idempotency_key (any unique string): a retry with the same key replays the ' +
+    'original result instead of filing twice.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {

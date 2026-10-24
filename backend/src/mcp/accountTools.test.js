@@ -387,11 +387,15 @@ describe('idempotency on the human-queue writes (support ticket 2026-09-12)', ()
     expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({ tool: 'request_wine_addition', action: 'wine_request' }));
   });
 
-  test('every irreversible write declares idempotency_key and says to read back on a transport error', () => {
+  test('every irreversible write declares idempotency_key; the ticket writes say to read back on a transport error', () => {
     for (const n of ['create_support_ticket', 'reply_to_ticket', 'request_wine_addition']) {
       expect(tool(n).inputSchema.idempotency_key).toBeDefined();
+    }
+    for (const n of ['create_support_ticket', 'reply_to_ticket']) {
       expect(tool(n).description).toMatch(/read back/);
     }
+    // No tool lists wine requests, so the key is the only safe retry path.
+    expect(tool('request_wine_addition').description).toMatch(/ALWAYS pass an idempotency_key/);
   });
 });
 

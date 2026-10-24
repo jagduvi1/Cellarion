@@ -521,9 +521,8 @@ registerTool({
   description:
     'Resets a REVIEWED wine+vintage back to pending: clears every phase and the note, drops the reviewer stamp, and ' +
     'puts the pair back in the queue as if never curated. For a window written in error — the wrong vintage, a ' +
-    'non-vintage cuvée given a year, an en primeur vintage with no bottle to assess. This was the missing verb: ' +
-    'remove_from_maturity_queue refuses reviewed rows and told the caller to reset first, and until now nothing ' +
-    'could (somm ticket 6a944e46). To remove the pair entirely, reset here and then call remove_from_maturity_queue. ' +
+    'non-vintage cuvée given a year, an en primeur vintage with no bottle to assess. remove_from_maturity_queue ' +
+    'refuses reviewed rows, so to remove the pair entirely, reset here and then call remove_from_maturity_queue. ' +
     'Reversible via undo_last, which restores the exact window and note that were withdrawn.',
   scope: 'write',
   requireRole: SOMM_ROLES,
@@ -814,8 +813,7 @@ registerTool({
   title: 'Sommelier: add a variety to the grape taxonomy',
   description:
     'Adds a NEW grape variety to the shared taxonomy — the unblock for set_wine_profile/propose_wine_correction ' +
-    'failing with "not in the grape taxonomy". Until 2026-08-22 this needed an admin and a support ticket (Norton, ' +
-    'St. Pepin, Souzão, Vidal and three more were all filed that way in one week); wine data is somm-owned now, and ' +
+    'failing with "not in the grape taxonomy". No admin or support ticket is needed: wine data is somm-owned, and ' +
     'taxonomy is wine data. Match-first: if the name or any synonym already resolves to an existing variety, ' +
     'nothing is created and the tool tells you what it resolves to — so calling it "just in case" is safe. Include ' +
     'the synonyms owners actually write (accents, hyphens, Cynthiana-for-Norton) — they are what the resolver ' +
@@ -908,8 +906,8 @@ registerTool({
     'arrived incomplete — a curator could see the hole and not fill it. ' +
     'COLOUR IS THE ONE THAT MATTERS MOST. A grape with no colour cannot take part in the colour-conflict check ' +
     'at all: wines built on it are not failing that check, they are never evaluated, so the queue reports zero ' +
-    'and reads as clean. Filling seven null colours on 2026-08-23 immediately surfaced a wine typed red whose ' +
-    'only grape was white. If you see a variety with no colour, that is a silent hole in a live validation rule. ' +
+    'and reads as clean. Filling a null colour can immediately surface a wine typed red whose only grape is ' +
+    'white. If you see a variety with no colour, that is a silent hole in a live validation rule. ' +
     'REGIONAL NAMES render the label a drinker in that country would actually see — Gouveio on a Douro wine ' +
     'rather than Godello, Durif in Australia rather than Petite Sirah — while storage keeps ONE canonical ' +
     'variety. Pass region as well as country where a variety has several (Carignan is Mazuelo in Rioja and ' +
@@ -1628,12 +1626,13 @@ registerTool({
     'grape list is wrong, and the note does not presume which). A held row stores NO profile content by design — ' +
     'publication withheld means never written, which is why release REGENERATES rather than publishing something ' +
     'stored. include_published_suspects:true ALSO lists the published rows whose producer the model flagged as ' +
-    'suspect (the 08-17 batch) — same judgement work, different state. Owner-count rides on every row and the list ' +
+    'suspect — same judgement work, different state. Owner-count rides on every row and the list ' +
     'is impact-first (owners desc, then confidence asc). Judge each with review_held_profile; rows you have decided ' +
     'disappear from this list. ' +
-    'SINCE 2026-08-22 this is also the INTAKE queue: automatic AI enrichment is off (wine data is somm-owned), so ' +
-    'every new registry wine appears here as state "unprofiled" — no flags, no confidence, just a wine awaiting its ' +
-    'first profile. Write it with set_wine_profile (type/grape fixes ride the same call); identity gaps go through ' +
+    'This is also the INTAKE queue: a registry wine with no profile at all appears here as state "unprofiled" — no ' +
+    'flags, no confidence, just a wine awaiting its first profile. When this server has automatic AI profiles ' +
+    'switched off (wine data is somm-owned), every new registry wine lands here and nothing else writes its ' +
+    'profile. Write it with set_wine_profile (type/grape fixes ride the same call); identity gaps go through ' +
     'propose_wine_correction as usual. state:"unprofiled" lists only these.',
   scope: 'read',
   requireRole: SOMM_ROLES,
@@ -1641,7 +1640,7 @@ registerTool({
   inputSchema: {
     held_reason: z.string().max(40).optional().describe('Filter the HELD set to one reason (e.g. "taxonomy_conflict"); "legacy" = rows with no recorded reason'),
     state: z.enum(['held', 'published_suspect', 'unprofiled']).optional()
-      .describe('One state only. "unprofiled" = wines with NO profile at all — since automatic AI enrichment was turned off (2026-08-22, somm-owned data) every new wine lands here and set_wine_profile is how it leaves. Omit for all states.'),
+      .describe('One state only. "unprofiled" = wines with NO profile at all — with automatic AI profiles switched off every new wine lands here, and set_wine_profile is how it leaves. Omit for all states.'),
     include_published_suspects: z.boolean().optional().describe('Also list PUBLISHED producer-suspect rows awaiting judgement (state "published_suspect")'),
     producer: z.string().max(200).optional().describe('Only rows whose producer contains this text (case-insensitive) — the queue clusters hard by producer, and one producer judgement often decides many rows'),
     group_by: z.enum(['producer']).optional().describe('Return producer CLUSTERS instead of rows: {producer, row_count, reasons, max_owner_count, wine_ids} — the unit of judgement is usually the producer'),
@@ -2205,7 +2204,7 @@ registerTool({
       type: z.enum(WINE_TYPES).optional(),
       colour: z.enum(WINE_COLOURS).optional(),
       grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).min(1).max(GRAPES_MAX).optional(),
-    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `colour` is the colour of a sparkling, dessert or fortified wine (a sparkling rosé is type "sparkling", colour "rosé"); `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety. A BRAND THAT CHANGED HANDS (somm ticket 6a8698d5): registry wines are vintage-neutral, so a producer that was acquired has no single true value. The convention is CURRENT OWNER WINS — put today\'s owner in `producer` and record the predecessor in the reason, e.g. "ZAREA acquired the brand from Domeniile Tohani in 2019". Do not uphold a suspect flag on a wine whose producer is knowable just because ownership moved: that leaves a permanent cannot-identify caveat on an identifiable wine and inflates the residue count the scaling review reads.'),
+    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `colour` is the colour of a sparkling, dessert or fortified wine (a sparkling rosé is type "sparkling", colour "rosé"); `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety. A BRAND THAT CHANGED HANDS: registry wines are vintage-neutral, so a producer that was acquired has no single true value. The convention is CURRENT OWNER WINS — put today\'s owner in `producer` and record the predecessor in the reason, e.g. "ZAREA acquired the brand from Domeniile Tohani in 2019". Do not uphold a suspect flag on a wine whose producer is knowable just because ownership moved: that leaves a permanent cannot-identify caveat on an identifiable wine and inflates the residue count the scaling review reads.'),
     merge_target_id: objectId.optional().describe('kind "merge" only: the duplicate\'s SURVIVING wine — must differ from wine_id'),
     evidence_url: z.string().max(PROPOSAL_URL_MAX).optional()
       .describe('http(s) URL backing the claim — cite one whenever the somm has it; it is what makes approval fast'),
@@ -3519,7 +3518,7 @@ registerTool({
     'when the note reports only that the model could not place the name ("not a producer I can verify") and makes ' +
     'no claim about what the field is instead — producer_suspect asserts a positive suspicion, and an epistemic ' +
     'note contains no such assertion. Both leave the row as producerUnknown: a real winery we cannot place, ' +
-    'published without an owner-visible caveat. `note_doubts_cuvee_not_producer` (somm 6a872291) fires when the ' +
+    'published without an owner-visible caveat. `note_doubts_cuvee_not_producer` fires when the ' +
     'doubt is scoped to the WINE NAME or a quoted other entity while the producer is named affirmatively — "La ' +
     'Libertad appears to be a label or line from Bodega Benegas" doubts the cuvée, not the estate; it declines ' +
     'whenever any clause doubts the producer itself, and lands clean, or on producerUnknown when the note also ' +
@@ -3528,7 +3527,7 @@ registerTool({
     'propose_wine_correction or set_wine_profile still work on it normally; and when the row is RIGHT — a ' +
     'documented estate the rule happened to move — review_held_profile with decision confirm records the placement ' +
     'and takes it off this list. A row a HUMAN judged carries ' +
-    'suspectDecision instead and never appears here. One documented semantic (audit 6a86dad6): the tag records ' +
+    'suspectDecision instead and never appears here. One documented semantic: the tag records ' +
     'which rule FIRED under strongest-claim-first precedence, not which shape the note best fits — a note that ' +
     'textually asserts a producer can carry the epistemic tag when the assertion regex did not match it; the ' +
     'outcome is identical either way. A fourth tag, `appellation_has_geography`, is record-based rather than ' +
@@ -3604,8 +3603,8 @@ registerTool({
   description:
     'Registry wines whose PUBLISHED AI description names a place or variety on a record that has NO region and NO ' +
     'appellation — so every such claim in the prose is ungrounded by construction. Each ungrounded claim is ' +
-    'labelled kind: place | variety (varieties were in the original 6a82bfb7 test; the label keeps the two ' +
-    'readable at a glance). The producer\'s own name and the record\'s country are subtracted from claim spans ' +
+    'labelled kind: place | variety, so the two read apart at a glance. ' +
+    'The producer\'s own name and the record\'s country are subtracted from claim spans ' +
     'rather than grounding them wholesale — "Chile\'s Maipo Valley" on a Chile record reports Maipo Valley, and a ' +
     'mention of the producer is never a claim. Graded, never just ' +
     'counted: `assertion` = an ungrounded place stated as fact for the wine ("a red blend from the Hunter Valley" ' +
@@ -3616,7 +3615,7 @@ registerTool({
     'correctly knows — several rows are exactly this) or rewriting the prose (set_wine_profile, or a re-enrich ' +
     'via review). Never fix one by just deleting the geography sentence — silence about region always passes, and ' +
     'training enrichment toward blank confidence is the failure mode this grading exists to avoid. Curator-written ' +
-    'descriptions are out of scope by construction (the 6a86dad6 exclusion, one layer up). Records that HAVE a ' +
+    'descriptions are out of scope by construction. Records that HAVE a ' +
     'region or appellation are also out of scope: prose legitimately goes finer than the record (a La Morra ' +
     'mention on a Barolo row), and judging that needs a gazetteer, not a substring.',
   scope: 'read',
