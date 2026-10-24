@@ -36,6 +36,8 @@ const WineDefinition = require('../models/WineDefinition');
 const Grape = require('../models/Grape');
 const { buildSurfaceForms, inferGrapeIds } = require('../services/grapeInference');
 const { stripProducerName } = require('../utils/producerPrefix');
+const searchService = require('../services/search');
+const { initSearch } = require('./lib/scriptSearch');
 
 const APPLY = process.argv.includes('--apply');
 const limitArg = process.argv.find((a) => a.startsWith('--limit='));
@@ -53,6 +55,7 @@ function producerFreeName(name, producer) {
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log(`Connected. Mode: ${APPLY ? 'APPLY' : 'DRY RUN (pass --apply to execute)'}\n`);
+  const searchOk = APPLY ? await initSearch({ label: 'backfill-wine-grapes-from-name' }) : false;
 
   const grapeDocs = await Grape.find({}).select('name normalizedName normalizedSynonyms').lean();
   const forms = buildSurfaceForms(grapeDocs);
@@ -86,8 +89,8 @@ async function run() {
 
     if (APPLY) {
       await WineDefinition.updateOne({ _id: w._id }, { $set: { grapes: ids } });
-      // Re-index so the Meili grapes= filter + denormalized bottle rows update.
-      try { await require('../services/search').indexWine(w._id); } catch { /* best-effort */ }
+      // Re-index so the Meili grapes= filter updates.
+      if (searchOk) await searchService.indexWine(w._id);
     }
   }
 

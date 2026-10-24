@@ -31,6 +31,8 @@ const WineDefinition = require('../models/WineDefinition');
 const { unpolluteEstateName } = require('../services/findOrCreateWine');
 const { generateWineKey } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
+const searchService = require('../services/search');
+const { initSearch } = require('./lib/scriptSearch');
 
 const APPLY = process.argv.includes('--apply');
 const tag = APPLY ? '✔' : '[dry]';
@@ -62,6 +64,7 @@ function buildFixUpdate(w, out, newKey) {
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log(`Connected. Mode: ${APPLY ? 'APPLY' : 'DRY RUN (pass --apply to execute)'}\n`);
+  const searchOk = APPLY ? await initSearch({ label: 'fix-classification-polluted-names' }) : false;
 
   const wines = await WineDefinition
     .find({ nonWine: { $ne: true }, producer: { $nin: [null, ''] } })
@@ -100,7 +103,7 @@ async function run() {
 
     if (APPLY) {
       await WineDefinition.updateOne({ _id: w._id }, buildFixUpdate(w, out, newKey));
-      try { await require('../services/search').indexWine(w._id); } catch { /* best-effort */ }
+      if (searchOk) await searchService.indexWine(w._id);
     }
   }
 
@@ -113,7 +116,7 @@ async function run() {
   console.log(`\nSummary: ${stats.scanned} scanned, ${stats.changed} ${APPLY ? 'fixed' : 'would change'} ` +
     `(${Object.entries(stats.byShape).map(([s, n]) => `${s}: ${n}`).join(', ') || 'none'}), ` +
     `${stats.collisions} collisions left for manual merge.`);
-  if (APPLY) console.log('Next: the changed rows re-key + reindexed inline; run an incremental embed if descriptions exist for them.');
+  if (APPLY) console.log(`Next: the changed rows re-key${searchOk ? ' + reindexed inline' : ' (not reindexed: Meilisearch unavailable)'}; run an incremental embed if descriptions exist for them.`);
   await mongoose.disconnect();
 }
 

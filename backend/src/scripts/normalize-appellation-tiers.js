@@ -32,6 +32,8 @@ const os = require('os');
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const { normalizeAppellation, generateWineKey } = require('../utils/normalize');
+const searchService = require('../services/search');
+const { initSearch } = require('./lib/scriptSearch');
 
 const APPLY = process.argv.includes('--apply');
 const tag = APPLY ? '✔' : '[dry]';
@@ -39,6 +41,7 @@ const tag = APPLY ? '✔' : '[dry]';
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log(`Connected. Mode: ${APPLY ? 'APPLY' : 'DRY RUN (pass --apply to execute)'}\n`);
+  const searchOk = APPLY ? await initSearch({ label: 'normalize-appellation-tiers' }) : false;
 
   const wines = await WineDefinition
     .find({ appellation: { $nin: [null, ''] } })
@@ -72,7 +75,7 @@ async function run() {
 
     if (APPLY) {
       await WineDefinition.updateOne({ _id: w._id }, { $set: { appellation: canonical || null, normalizedKey: newKey } });
-      try { await require('../services/search').indexWine(w._id); } catch { /* best-effort */ }
+      if (searchOk) await searchService.indexWine(w._id);
     }
   }
 

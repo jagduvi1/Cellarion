@@ -1,6 +1,12 @@
 /**
  * flag-non-wine-rows.js
  *
+ * Finished: every row in the list below is flagged. A wine found to be
+ * non-wine later is flagged with the admin non-wine endpoint
+ * (routes/admin/wines.js) or through the proposal queue; both also delete the
+ * wine's pending vintage profiles and write an audit row, which this script
+ * does not.
+ *
  * Registry audit 2026-07-26 (B8): 44 rows in the wine registry are not wine —
  * one 2026-07-07 session imported an entire spirits bar (Jack Daniel's,
  * Johnnie Walker, tequilas, grappas…), plus an April cider/alcohol-free
@@ -22,15 +28,16 @@
  * Dry-run by default.
  *
  * Usage:
- *   node src/scripts/flag-non-wine-rows.js            # dry run
- *   node src/scripts/flag-non-wine-rows.js --apply    # execute
+ *   node src/scripts/archive/flag-non-wine-rows.js            # dry run
+ *   node src/scripts/archive/flag-non-wine-rows.js --apply    # execute
  */
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const WineDefinition = require('../models/WineDefinition');
-const WineEmbedding = require('../models/WineEmbedding');
-const searchService = require('../services/search');
+const WineDefinition = require('../../models/WineDefinition');
+const WineEmbedding = require('../../models/WineEmbedding');
+const searchService = require('../../services/search');
+const { initSearch } = require('../lib/scriptSearch');
 
 const APPLY = process.argv.includes('--apply');
 const tag = APPLY ? '✔' : '[dry]';
@@ -57,6 +64,7 @@ const NON_WINE_IDS = [
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log(`Connected. Mode: ${APPLY ? 'APPLY' : 'DRY RUN (pass --apply to execute)'}\n`);
+  const searchOk = APPLY ? await initSearch({ label: 'flag-non-wine-rows' }) : false;
 
   const stats = { flagged: 0, already: 0, missing: 0 };
   for (const id of NON_WINE_IDS) {
@@ -66,7 +74,8 @@ async function run() {
     console.log(`  ${tag} "${w.name}" — ${w.producer} [${id}]`);
     if (APPLY) {
       await WineDefinition.updateOne({ _id: id }, { $set: { nonWine: true, updatedAt: new Date() } });
-      searchService.removeWine(id);
+      // indexWine reads the flag just written and drops the row's document.
+      if (searchOk) await searchService.indexWine(id);
       // Vectors too: semantic search and the similar-wines graph read the
       // WineEmbedding rows, not the flag (audit 2026-10-14).
       await WineEmbedding.deleteMany({ wineDefinition: id });
@@ -76,7 +85,7 @@ async function run() {
 
   console.log(`\nFlagged: ${stats.flagged}  already flagged: ${stats.already}  missing: ${stats.missing}  of ${NON_WINE_IDS.length}`);
   if (APPLY) {
-    console.log('Rows removed from Meilisearch and their vectors deleted; owners keep their bottles and wine pages.');
+    console.log(`${searchOk ? 'Rows removed from Meilisearch and their' : 'Their'} vectors deleted; owners keep their bottles and wine pages.`);
   }
   await mongoose.disconnect();
 }

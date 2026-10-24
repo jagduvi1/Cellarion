@@ -42,6 +42,7 @@ require('../models/Country');
 require('../models/Grape');
 const { regionForAppellation } = require('../services/findOrCreateWine');
 const searchService = require('../services/search');
+const { initSearch } = require('./lib/scriptSearch');
 const { logAudit } = require('../services/audit');
 
 (async () => {
@@ -119,6 +120,7 @@ const { logAudit } = require('../services/audit');
     return;
   }
 
+  const searchOk = await initSearch({ label: 'normalize-region-to-appellation' });
   let written = 0;
   for (const c of changes) {
     await WineDefinition.updateOne(
@@ -127,11 +129,11 @@ const { logAudit } = require('../services/audit');
     );
     logAudit(null, 'admin.wine.region_normalize', { type: 'wine', id: c.id },
       { appellation: c.appellation, from: c.from, to: c.to });
-    await searchService.indexWine(c.id);
+    if (searchOk) await searchService.indexWine(c.id);
     written++;
   }
 
-  if (written) console.log(`\nReindexed ${written} wines.`);
+  if (written && searchOk) console.log(`\nReindexed ${written} wines.`);
   console.log(`Applied ${written} region rewrites.`);
   console.log('Region is part of the embedding text — start an incremental embed job to refresh the stored vectors.');
 

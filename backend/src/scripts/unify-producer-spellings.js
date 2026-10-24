@@ -31,6 +31,8 @@ const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const { normalizeString } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
+const searchService = require('../services/search');
+const { initSearch } = require('./lib/scriptSearch');
 
 (async () => {
   const apply = process.argv.includes('--apply');
@@ -108,13 +110,20 @@ const { computeCanonicalKey } = require('../utils/wineIdentity');
   console.log(`[unify-producer-spellings] ${apply ? 'APPLY' : 'DRY-RUN'} wines=${wines.length} splitGroups=${groupsToUnify} rowsToRewrite=${ops.length} skippedKeyDrift=${skippedKeyDrift}`);
 
   if (apply && ops.length > 0) {
+    const searchOk = await initSearch({ label: 'unify-producer-spellings' });
     const res = await WineDefinition.bulkWrite(ops, { ordered: false });
     console.log(`[unify-producer-spellings] modified=${res.modifiedCount}`);
-    try {
-      await require('../services/search').fullSync();
-      console.log('[unify-producer-spellings] Meilisearch fullSync done');
-    } catch (e) {
-      console.warn('[unify-producer-spellings] Meili sync failed — run fullSync manually:', e.message);
+    if (searchOk) {
+      // fullSync only enqueues Meilisearch tasks; done means the tasks
+      // succeeded (a failed task settles like a successful one).
+      try {
+        const tasks = await searchService.waitForTasks(await searchService.fullSync({ throwOnError: true }));
+        const failed = tasks.filter((t) => t.status !== 'succeeded').length;
+        if (failed) throw new Error(`${failed}/${tasks.length} index tasks did not succeed`);
+        console.log('[unify-producer-spellings] Meilisearch fullSync done');
+      } catch (e) {
+        console.warn('[unify-producer-spellings] Meili sync failed — run POST /api/admin/search/reindex:', e.message);
+      }
     }
     console.log('[unify-producer-spellings] NOTE: run the embedding job (incremental) — producer is in the embedding text.');
   }

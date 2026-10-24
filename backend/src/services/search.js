@@ -18,7 +18,12 @@ let index = null;
 let discussionsIndex = null;
 let isAvailable = false;
 
-async function initialize() {
+// `sync: false` connects and configures the indexes but skips the background
+// work below (retired-index cleanup, initial sync of an empty index). That
+// work belongs to the server: a standalone script (scripts/lib/scriptSearch)
+// that disconnects from MongoDB halfway through an initial sync would leave a
+// partial index, which the next boot finds non-empty and never completes.
+async function initialize({ sync = true } = {}) {
   const url = process.env.MEILI_URL || 'http://localhost:7700';
   const apiKey = process.env.MEILI_MASTER_KEY || '';
 
@@ -69,6 +74,8 @@ async function initialize() {
 
     isAvailable = true;
     console.log(`Meilisearch connected: ${url}`);
+
+    if (!sync) return;
 
     // Only do a full sync when an index is actually empty (first boot, or after
     // the meili-data volume is wiped). Meilisearch persists documents on its
