@@ -3,6 +3,8 @@ const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
 const { DRAFT_EXCLUDED } = require('./wineVisibility');
+const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
+const { normalizeCurrency } = require('../config/currencies');
 
 const WINE_SELECT = 'name producer type appellation country region grapes classification';
 const WINE_POPULATE = [
@@ -25,12 +27,44 @@ function allEntries(wineList) {
 }
 
 /**
+ * Average purchase price of one entry from its per-currency price totals
+ * (Map<currency, { sum, n }>, priced bottles only) — see loadStockMap.
+ */
+function averagePrice(prices, currency, rates) {
+  if (prices.size === 0) return null;
+  if (prices.size === 1) {
+    const [{ sum, n }] = prices.values();
+    return sum / n;
+  }
+  if (!currency) return null;
+  let total = 0;
+  let count = 0;
+  for (const [from, { sum, n }] of prices) {
+    // convertCurrency reads 0 as nothing to convert; 0 is 0 in any currency.
+    const converted = sum === 0 ? 0 : convertCurrency(sum, from, currency, rates);
+    if (converted == null) return null;
+    total += converted;
+    count += n;
+  }
+  return total / count;
+}
+
+/**
  * Aggregate the cellar's active bottles per wine + vintage + bottle size.
  * Returns Map<entryKey, { stock, avgPrice }>. Stock is scoped to the list's
  * cellar — entry wine IDs reference the shared registry, but counts and
  * purchase prices must never leak from other cellars.
+ *
+ * Each price is in its bottle's own currency. An entry whose priced bottles
+ * share one currency gets their plain average. An entry mixing currencies gets
+ * the count-weighted average converted into `currency` (the list's) with
+ * today's rates — or null when there is no currency to convert into or a rate
+ * is missing: no price beats EUR and SEK added up as one number.
+ *
+ * @param {any} cellarId
+ * @param {{ currency?: string }} [options]
  */
-async function loadStockMap(cellarId) {
+async function loadStockMap(cellarId, { currency } = {}) {
   const groups = await Bottle.aggregate([
     {
       $match: {
@@ -45,17 +79,43 @@ async function loadStockMap(cellarId) {
           wine: '$wineDefinition',
           vintage: { $ifNull: ['$vintage', 'NV'] },
           bottleSize: { $ifNull: ['$bottleSize', '750ml'] },
+          currency: { $ifNull: ['$currency', 'USD'] },
         },
         stock: { $sum: 1 },
-        avgPrice: { $avg: '$price' },
+        priced: { $sum: { $cond: [{ $isNumber: '$price' }, 1, 0] } },
+        priceSum: { $sum: '$price' },
       },
     },
   ]);
 
-  const map = new Map();
+  // Fold the per-currency groups into one row per entry. A bottle without a
+  // price still carries the default currency, so only priced groups count
+  // towards an entry's currencies.
+  const rows = new Map();
   for (const g of groups) {
     const key = entryKey({ wine: g._id.wine, vintage: g._id.vintage, bottleSize: g._id.bottleSize });
-    map.set(key, { stock: g.stock, avgPrice: g.avgPrice != null ? g.avgPrice : null });
+    const row = rows.get(key) || { stock: 0, prices: new Map() };
+    row.stock += g.stock;
+    if (g.priced > 0) {
+      const cur = normalizeCurrency(g._id.currency);
+      const p = row.prices.get(cur) || { sum: 0, n: 0 };
+      p.sum += g.priceSum;
+      p.n += g.priced;
+      row.prices.set(cur, p);
+    }
+    rows.set(key, row);
+  }
+
+  let rates = null;
+  if (currency && [...rows.values()].some(r => r.prices.size > 1)) {
+    try {
+      rates = (await getOrCreateDailySnapshot())?.rates || null;
+    } catch (_) { /* mixed-currency entries get no average */ }
+  }
+
+  const map = new Map();
+  for (const [key, row] of rows) {
+    map.set(key, { stock: row.stock, avgPrice: averagePrice(row.prices, currency, rates) });
   }
   return map;
 }
@@ -125,7 +185,7 @@ async function loadWineMap(wineList) {
         .populate(WINE_POPULATE)
         .lean()
     ),
-    loadStockMap(wineList.cellar),
+    loadStockMap(wineList.cellar, { currency: wineList.layout?.currency || 'USD' }),
   ]);
 
   const wineById = new Map(wines.map(w => [w._id.toString(), w]));
@@ -145,6 +205,8 @@ async function loadWineMap(wineList) {
 /**
  * All distinct wines in a cellar (active bottles grouped by wine + vintage +
  * size) with stock and average purchase price — the editor's picker data.
+ * The picker belongs to no list, so it has no currency to convert into: a
+ * wine whose bottles were bought in several currencies has no average here.
  */
 async function loadCellarWines(cellarId) {
   const stockMap = await loadStockMap(cellarId);
