@@ -318,8 +318,9 @@ const IMPORT_ARCHIVE_DAYS = 30;
 /**
  * Project one import row down to its identity columns plus its outcome.
  * `outcome` is what the row's SELECTION resolved to — matched an existing
- * wine, minted a new one, filed a request, or was skipped — because "what
- * the file said" and "what we did with it" are only diagnostic together.
+ * wine, minted a new one, or filed a request ('other' when it had none); a
+ * row that errored keeps its selection's outcome. "What the file said" and
+ * "what we did with it" are only diagnostic together.
  */
 function archiveRow(item, outcome) {
   const row = { outcome };
@@ -2122,7 +2123,10 @@ router.post('/confirm', async (req, res) => {
       const rows = items.slice(0, ARCHIVE_ROW_CAP).map((item) => archiveRow(
         item,
         item.requestWine ? 'request'
-          : (item.newWine ? 'created'
+          // The import client sends a confirmed AI proposal as `aiWine`
+          // (utils/importPayload). Test it before wineDefinition: the loop
+          // above fills wineDefinition in on every row whose wine it minted.
+          : (item.aiWine ? 'created'
             : (item.wineDefinition ? 'matched' : 'other'))
       ));
       ImportArchive.create({
