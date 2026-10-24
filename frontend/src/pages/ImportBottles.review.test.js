@@ -8,6 +8,8 @@
  *   review and they never reach the import.
  * - A year typed into a vintage-missing row must reach the saved draft like
  *   any other review edit.
+ * - "Import more" must not carry the last import's comment and occasion onto
+ *   the next file's bottles.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -140,3 +142,25 @@ it('a year typed into a vintage-missing row is saved to the draft', async () => 
   expect(sessionId).toBe('s1');
   expect(payload.results[0].item.vintage).toBe('2019');
 }, 15000);
+
+it('Import more starts the next file with an empty comment and occasion', async () => {
+  scanReceipt.mockResolvedValue(jsonRes(receiptOf([
+    { wineName: 'Chablis', producer: 'William Fèvre', vintage: '2022', quantity: 1 },
+  ])));
+  validateImport.mockImplementation((_af, { items }) => Promise.resolve(validated(items)));
+  confirmImport.mockResolvedValue(jsonRes({ created: 1, total: 1, skipped: [], errors: [] }));
+
+  const { container } = render(<ImportBottles />);
+  chooseReceipt(container);
+  fireEvent.change(await screen.findByPlaceholderText('importBottles.wholeImport.commentPlaceholder'), { target: { value: 'Birthday case' } });
+  fireEvent.change(screen.getByPlaceholderText('importBottles.wholeImport.occasionPlaceholder'), { target: { value: 'Birthday' } });
+  fireEvent.click(screen.getByText('importBottles.validate.matchButton:1'));
+  fireEvent.click(await screen.findByText('importBottles.review.importButton:1'));
+
+  fireEvent.click(await screen.findByText('importBottles.done.importMore'));
+  expect(confirmImport.mock.calls[0][1]).toMatchObject({ importNotes: 'Birthday case', importOccasion: 'Birthday' });
+
+  chooseReceipt(container);
+  expect((await screen.findByPlaceholderText('importBottles.wholeImport.commentPlaceholder')).value).toBe('');
+  expect(screen.getByPlaceholderText('importBottles.wholeImport.occasionPlaceholder').value).toBe('');
+});

@@ -2718,6 +2718,8 @@ function ImportBottles() {
             setStep('upload');
             setParsedItems([]);
             setReceiptInfo(null);
+            setImportNotes('');
+            setImportOccasion('');
             setImportOnOrder(false);
             setImportExpectedArrival('');
             setResults([]);
