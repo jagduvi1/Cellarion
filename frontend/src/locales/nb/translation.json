@@ -9,6 +9,7 @@
   "common": {
     "save": "Lagre",
     "saving": "Lagrer …",
-    "saved": "Lagret"
+    "saved": "Lagret",
+    "done": "Ferdig"
   }
 }
