@@ -210,13 +210,46 @@ function maturitySortKey(status, window) {
   return { rank, due: Number.isFinite(due) ? due : null, end: Number.isFinite(w.drinkTo) ? w.drinkTo : null };
 }
 
+/**
+ * The sort key of a bottle whose status comes from a curated profile. The
+ * profile has boundaries the effective window folds away, and classifyMaturity
+ * uses them: a late stage with no end (lateFrom alone), a peak that runs on
+ * until lateFrom, an early stage that ends at earlyUntil. `w` is the profile
+ * resolved for the bottle (resolveWindowForBottle).
+ */
+function curatedSortKey(status, w) {
+  const n = (v) => (Number.isFinite(v) ? v : null);
+  const earlyFrom = n(w.earlyFrom), earlyUntil = n(w.earlyUntil), peakFrom = n(w.peakFrom);
+  const peakUntil = n(w.peakUntil), lateFrom = n(w.lateFrom), lateUntil = n(w.lateUntil);
+  let peakEnd = peakUntil;
+  if (lateFrom !== null && (peakEnd === null || lateFrom - 1 > peakEnd)) peakEnd = lateFrom - 1;
+  const due = {
+    'not-ready': earlyFrom ?? peakFrom,
+    early: peakFrom ?? earlyUntil,
+    peak: peakEnd ?? lateUntil,
+    late: lateUntil,
+    declining: lateUntil ?? peakUntil,
+  }[status] ?? null;
+  return {
+    rank: MATURITY_SORT_RANK[status] ?? NO_MATURITY_SORT_RANK,
+    due,
+    end: lateUntil ?? (lateFrom !== null ? null : peakUntil),
+  };
+}
+
 /** Bottle id → sort key; `statusMap` (id → classifyMaturity) saves classifying twice. */
 function buildMaturitySortKeys(bottles, profileMap, statusMap = null) {
   const keys = new Map();
   for (const b of bottles) {
     const id = b._id.toString();
     const status = statusMap ? statusMap.get(id) : classifyMaturity(b, profileMap);
-    keys.set(id, maturitySortKey(status, status ? resolveEffectiveWindow(b, profileMap) : null));
+    const window = status ? resolveEffectiveWindow(b, profileMap) : null;
+    if (window?.source === 'profile') {
+      const wdId = b.wineDefinition?._id?.toString() || b.wineDefinition?.toString();
+      keys.set(id, curatedSortKey(status, resolveWindowForBottle(profileMap.get(`${wdId}:${b.vintage}`), b)));
+    } else {
+      keys.set(id, maturitySortKey(status, window));
+    }
   }
   return keys;
 }

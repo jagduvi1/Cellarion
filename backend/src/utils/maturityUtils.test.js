@@ -818,4 +818,37 @@ describe('maturity sort keys — "Drink Soon→Later"', () => {
     const keys = buildMaturitySortKeys([bottle('A')], map, new Map([['A', 'late']]));
     expect(keys.get('A')).toEqual({ rank: 1, due: 2040, end: 2040 });
   });
+
+  describe('curated boundaries the effective window folds away', () => {
+    const SHAPES = {
+      openLate: { peakFrom: 2015, peakUntil: 2020, lateFrom: 2021 },          // late since 2021, no end
+      lateNow: { peakFrom: 2015, peakUntil: 2022, lateFrom: 2023, lateUntil: 2026 }, // late, closes this year
+      gapPeak: { peakFrom: 2018, peakUntil: 2024, lateFrom: 2030, lateUntil: 2034 }, // peak runs on to 2029
+      peakNext: { peakFrom: 2020, peakUntil: 2027, lateFrom: 2028, lateUntil: 2031 }, // peak ends 2027
+      earlyOnly: { earlyFrom: 2024, earlyUntil: 2027 },                           // early until 2027
+      earlyLater: { earlyFrom: 2025, earlyUntil: 2026, peakFrom: 2029, peakUntil: 2035 }, // early, peak from 2029
+    };
+    const shapeMap = new Map(Object.entries(SHAPES).map(([name, p], i) => [`${W}:${2100 + i}`, { status: 'reviewed', ...p }]));
+    const shape = (name) => ({ _id: name, wineDefinition: { _id: W }, vintage: String(2100 + Object.keys(SHAPES).indexOf(name)) });
+    const keysOf = (names) => buildMaturitySortKeys(names.map(shape), shapeMap);
+
+    test('a late stage with no end has no due year and no window end, so it sorts after one closing this year', () => {
+      const keys = keysOf(['openLate', 'lateNow']);
+      expect(keys.get('openLate')).toEqual({ rank: 1, due: null, end: null });
+      expect(keys.get('lateNow')).toEqual({ rank: 1, due: 2026, end: 2026 });
+      expect(compareMaturitySortKeys(keys.get('lateNow'), keys.get('openLate'))).toBeLessThan(0);
+    });
+
+    test('a peak that runs on until lateFrom ends the year before it', () => {
+      const keys = keysOf(['gapPeak', 'peakNext']);
+      expect(keys.get('gapPeak')).toEqual({ rank: 2, due: 2029, end: 2034 });
+      expect(compareMaturitySortKeys(keys.get('peakNext'), keys.get('gapPeak'))).toBeLessThan(0);
+    });
+
+    test('an early stage with no peak ends at earlyUntil', () => {
+      const keys = keysOf(['earlyOnly', 'earlyLater']);
+      expect(keys.get('earlyOnly')).toEqual({ rank: 3, due: 2027, end: null });
+      expect(compareMaturitySortKeys(keys.get('earlyOnly'), keys.get('earlyLater'))).toBeLessThan(0);
+    });
+  });
 });
