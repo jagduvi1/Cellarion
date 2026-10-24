@@ -672,11 +672,16 @@ wineDefinitionSchema.pre('save', function(next) {
 // admin PUT rename, strip-producer); scripted updateOne callers must set
 // canonicalKey themselves (backfill-canonical-key.js does).
 //
-// verifiedChecks/verifiedAt watch ONLY name + producer, and unlike canonicalKey
-// they have NO scripted-caller blind spot: enumerated 2026-07-26, no updateOne/
-// updateMany/bulkWrite/findByIdAndUpdate caller in the codebase mutates either
-// field on an existing row (admin LWIN import wraps both in $ifNull, so it can
-// only fill them on upsert-insert).
+// verifiedChecks/verifiedAt watch ONLY name + producer. Atomic writes skip this
+// hook, so a caller that changes either string on an existing row with one owns
+// the resets itself. fix-classification-polluted-names.js does: with the new name
+// and appellation it sets canonicalKey and clears verifiedChecks and
+// crossChecksCleared with their timestamps. Two scripts change one of the two
+// strings and leave both clearance records as they are: strip-name-vintages.js
+// (drops a trailing year from name; sets canonicalKey) and
+// unify-producer-spellings.js (rewrites producer to a spelling variant with the
+// same canonicalKey). Admin LWIN import wraps both in $ifNull, so it can only
+// fill them on upsert-insert.
 wineDefinitionSchema.pre('validate', function(next) {
   // AUTO-PROMOTE. A pending row exists only because its identity was
   // incomplete; the moment producer AND name are both real (present, not a
