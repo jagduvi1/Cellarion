@@ -38,7 +38,23 @@
     "wishlist": "Ønskeliste",
     "recommendations": "Anbefalinger",
     "journal": "Vindagbok",
-    "community": "Fellesskap"
+    "community": "Fellesskap",
+    "cellarChat": "Kjellerchat",
+    "support": "Brukerstøtte",
+    "supportTickets": "Henvendelser",
+    "registryData": "Datafelt",
+    "aiBudgetRequests": "KI-budsjett",
+    "sommelier": "Sommelier",
+    "admin": "Admin",
+    "cellars": "Kjellere",
+    "more": "Mer",
+    "systemMonitor": "Systemovervåking",
+    "mainNavigation": "Hovednavigasjon",
+    "switchToDark": "Bytt til mørk modus",
+    "switchToLight": "Bytt til lys modus",
+    "dashboard": "Oversikt",
+    "pickLists": "Plukklister",
+    "help": "Hjelp"
   },
   "registryTerms": {
     "contributionNote": "Når du sender inn, gir du Cellarion lov til å bruke dette i det felles vinregisteret etter vilkårene for registerdata.",
@@ -96,5 +112,9 @@
     "or": "eller",
     "loadFailed": "Kunne ikke laste inn ({{status}})",
     "actionFailed": "Noe gikk galt ({{status}})"
+  },
+  "errors": {
+    "network": "Kunne ikke nå Cellarion. Sjekk tilkoblingen og prøv igjen.",
+    "serverUnavailable": "Cellarion kunne ikke svare akkurat nå. Prøv igjen om litt."
   }
 }
