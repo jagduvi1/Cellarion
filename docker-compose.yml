@@ -6,7 +6,8 @@
 services:
   mongo:
     # Digest-pinned (security audit L-11): mongo:7 is a moving minor tag.
-    # Dependabot's docker ecosystem bumps this; the tag is kept for readability.
+    # Dependabot's docker-compose ecosystem bumps this; the tag is kept for
+    # readability.
     image: mongo:7@sha256:340c1c56fb10e95cf79ff547f8664b96bc6ead9909bc355238cbf865a9695a6f
     container_name: cellarion-mongo
     restart: unless-stopped
@@ -44,7 +45,10 @@ services:
       retries: 5
 
   meilisearch:
-    image: getmeili/meilisearch:v1.45.1
+    # Digest-pinned (security audit L-11) to the multi-arch index digest, so
+    # amd64 and arm64 hosts both pull. Dependabot's docker-compose ecosystem
+    # bumps the tag and digest together.
+    image: getmeili/meilisearch:v1.45.1@sha256:ac40212f9e5a7526d8007586e3e46fb0441d29dd36c7b02fa2341d2c9a1f6493
     container_name: cellarion-meilisearch
     restart: unless-stopped
     security_opt:
@@ -65,8 +69,9 @@ services:
       # version incompatible") and stays down until someone migrates it. With
       # this it upgrades the data in place on the first start of the new
       # version; it does nothing while the version is unchanged (tested
-      # 2026-10-20: 1.45.1 → 1.55.0, indexes kept). Dependabot bumps the tag
-      # above. The index can always be rebuilt from MongoDB (MEILI_FORCE_REINDEX).
+      # 2026-10-20: 1.45.1 → 1.55.0, indexes kept). Dependabot proposes new
+      # minors of the image above; majors are ignored there. The index can
+      # always be rebuilt from MongoDB (MEILI_FORCE_REINDEX).
       - MEILI_UPGRADE_DB=true
     volumes:
       - meili-data:/meili_data
@@ -284,7 +289,8 @@ services:
   # service is optional and inert without those vars.
   umami:
     # Digest-pinned (security audit L-11): `:postgresql-latest` is a fully
-    # moving tag — the worst supply-chain case. Dependabot bumps it.
+    # moving tag — the worst supply-chain case. Dependabot's docker-compose
+    # ecosystem bumps it.
     image: ghcr.io/umami-software/umami:postgresql-latest@sha256:8edfe4beaef13f9d1300619fa264ef250a3688df9cc54d24ca830ca31cb475ec
     container_name: cellarion-umami
     restart: unless-stopped
@@ -323,7 +329,8 @@ services:
         condition: service_healthy
 
   umami-db:
-    # Digest-pinned (security audit L-11). Dependabot bumps it.
+    # Digest-pinned (security audit L-11). Dependabot's docker-compose ecosystem
+    # bumps it.
     image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
     container_name: cellarion-umami-db
     restart: unless-stopped

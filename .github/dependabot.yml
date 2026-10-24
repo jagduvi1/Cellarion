@@ -16,14 +16,14 @@ updates:
       github-actions:
         patterns: ["*"]
 
-  # Container base images: one entry per Dockerfile directory + the root for
-  # docker-compose.yml. All are digest-pinned, so these bump the @sha256.
+  # Container base images: one directory per Dockerfile. All are digest-pinned,
+  # so these bump the @sha256. The docker ecosystem reads Dockerfiles only; the
+  # images docker-compose.yml pulls have their own entry below.
   - package-ecosystem: docker
     directories:
       - /backend
       - /frontend
       - /rembg
-      - /
     schedule:
       interval: weekly
     groups:
@@ -37,4 +37,29 @@ updates:
       # suppresses the major hop, which we take deliberately when a line goes
       # Active LTS. Bump/remove this when moving to the next LTS.
       - dependency-name: node
+        update-types: ["version-update:semver-major"]
+
+  # Images docker-compose.yml pulls (mongo, meilisearch, umami, postgres). All
+  # are tag + digest pinned, so these bump the @sha256, and the tag too when a
+  # new Meilisearch minor is out. Its own group, deliberately NOT in the list
+  # that dependabot-automerge.yml merges: docker-compose.yml is the stack
+  # self-hosters run, a merged bump reaches their data on their next pull, and
+  # a Meilisearch minor migrates its data directory in place (MEILI_UPGRADE_DB)
+  # with a reindex as the only way back. CI does not start these images, so
+  # green checks say nothing about them; a person reads each one.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      compose-images:
+        patterns: ["*"]
+    ignore:
+      # A datastore major is a data migration for every self-hoster, taken
+      # deliberately, not a pin refresh.
+      - dependency-name: mongo
+        update-types: ["version-update:semver-major"]
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+      - dependency-name: getmeili/meilisearch
         update-types: ["version-update:semver-major"]
