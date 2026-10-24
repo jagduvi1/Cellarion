@@ -26,7 +26,17 @@ describe('decodeCharRefs', () => {
 
   it('decodes the named references a CSV carries', () => {
     expect(decodeCharRefs('Hart &amp; Hunter')).toBe('Hart & Hunter');
-    expect(decodeCharRefs('&quot;Gassies&quot; &lt;2&gt; l&apos;Est&nbsp;')).toBe('"Gassies" <2> l\'Est ');
+    expect(decodeCharRefs('&quot;Gassies&quot; l&apos;Est&nbsp;')).toBe('"Gassies" l\'Est ');
+  });
+
+  it('keeps < and > encoded, so the server tag stripper never cuts a note short', () => {
+    expect(decodeCharRefs('Hold until score &lt; 95, then drink')).toBe('Hold until score &lt; 95, then drink');
+    expect(decodeCharRefs('&#60;3 this wine &#x3E;93 pts &gt;')).toBe('&#60;3 this wine &#x3E;93 pts &gt;');
+  });
+
+  it('decodes tab and line breaks but keeps other control characters encoded', () => {
+    expect(decodeCharRefs('a&#9;b&#10;c&#13;d')).toBe('a\tb\nc\rd');
+    expect(decodeCharRefs('a&#1;b&#27;c&#127;')).toBe('a&#1;b&#27;c&#127;');
   });
 
   it('decodes in a single pass', () => {
@@ -905,6 +915,12 @@ describe('parseOenoExport', () => {
     '5003,null,null,null,null,null,0.75,2014,Red Wine,,Test Wine C,NZ,Test Region,Producer C,null,NZD,2024-10-30,,2024-11-26',
     '5004,10001,500,5502,1004,3,0.75,2019,White Wine,Aged on lees,Test Wine D,NZ,Test Region,Producer D,42,NZD,2024-10-30,,'
   ].join('\n');
+
+  it('decodes character references in the bottle rows', () => {
+    const encoded = fixture.replace('Test Wine D,NZ,Test Region,Producer D', 'Feteasc&#259; Neagr&#259;,RO,Mehedin&#539;i,Crama Opri&#537;or');
+    const wine = parseOenoExport(encoded).items.find((i) => i.wineName === 'Fetească Neagră');
+    expect(wine).toMatchObject({ region: 'Mehedinți', producer: 'Crama Oprișor' });
+  });
 
   it('detects the two-section boundary at the "Bottle ID" header row', () => {
     const lines = fixture.split('\n');
