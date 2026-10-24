@@ -729,8 +729,13 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     if (!cellar || cellar.deletedAt) {
       return res.status(404).json({ error: 'Cellar not found' });
     }
+    // No role answers like a missing cellar (no existence oracle), as
+    // middleware/cellarAccess does; a viewer sees the cellar but cannot import.
     const role = getCellarRole(cellar, req.user.id);
-    if (!role || role === 'viewer') {
+    if (!role) {
+      return res.status(404).json({ error: 'Cellar not found' });
+    }
+    if (role === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to import bottles to this cellar' });
     }
 
@@ -1501,8 +1506,13 @@ router.post('/confirm', async (req, res) => {
     if (!cellar || cellar.deletedAt) {
       return res.status(404).json({ error: 'Cellar not found' });
     }
+    // No role answers like a missing cellar (no existence oracle), as
+    // middleware/cellarAccess does; a viewer sees the cellar but cannot import.
     const role = getCellarRole(cellar, req.user.id);
-    if (!role || role === 'viewer') {
+    if (!role) {
+      return res.status(404).json({ error: 'Cellar not found' });
+    }
+    if (role === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to import bottles to this cellar' });
     }
 
@@ -2193,9 +2203,14 @@ router.post('/sessions', async (req, res) => {
     if (!cellar || cellar.deletedAt) {
       return res.status(404).json({ error: 'Cellar not found' });
     }
+    // No role answers like a missing cellar (no existence oracle), as
+    // middleware/cellarAccess does; a viewer sees the cellar but cannot import.
     const role = getCellarRole(cellar, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized' });
+    if (!role) {
+      return res.status(404).json({ error: 'Cellar not found' });
+    }
+    if (role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to import bottles to this cellar' });
     }
 
     // Replace any existing draft for this user+cellar
@@ -2242,8 +2257,10 @@ router.get('/sessions', async (req, res) => {
     if (!cellar || cellar.deletedAt) {
       return res.status(404).json({ error: 'Cellar not found' });
     }
+    // No role answers like a missing cellar (no existence oracle), as
+    // middleware/cellarAccess does. A viewer may list their own drafts.
     if (!getCellarRole(cellar, req.user.id)) {
-      return res.status(403).json({ error: 'Not authorized' });
+      return res.status(404).json({ error: 'Cellar not found' });
     }
 
     const sessions = await ImportSession.find({
