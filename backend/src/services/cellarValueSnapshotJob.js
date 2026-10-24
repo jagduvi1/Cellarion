@@ -21,10 +21,19 @@ async function runCellarValueSnapshots() {
     todayRates = snap?.rates || null;
   } catch (_) {}
 
+  // Snapshots are stored in USD. Without today's rates a non-USD amount has no
+  // USD value, and a point that adds SEK as if it were dollars is worse than a
+  // missing week on the chart.
+  if (!todayRates) {
+    console.warn('[cellarValueSnapshot] No exchange rates available today — run skipped');
+    return;
+  }
+
   // All users who have at least one cellar
   const userIds = await Cellar.distinct('user', { deletedAt: null });
 
   let snapshotCount = 0;
+  let skippedAmounts = 0;
 
   for (const userId of userIds) {
     try {
@@ -42,13 +51,13 @@ async function runCellarValueSnapshots() {
       // Replacement estimate per bottle (secondary ?? currentRelease ?? paid).
       const replMap = await resolveReplacementForBottles(bottles);
 
-      // Convert any amount to USD using today's rates (falls back to the raw
-      // amount if rates are unavailable).
-      const toUsd = (amount, currency) => {
-        const from = currency || 'USD';
-        if (from === 'USD' || !todayRates) return amount;
-        const converted = convertCurrency(amount, from, 'USD', todayRates);
-        return converted != null ? converted : amount;
+      // Add an amount in USD with today's rates. An amount whose currency is
+      // not in the rates map has no USD value: it is left out and counted,
+      // never added as if it were USD.
+      const addUsd = (entry, field, amount, currency) => {
+        const usd = convertCurrency(amount, currency || 'USD', 'USD', todayRates);
+        if (usd == null) skippedAmounts++;
+        else entry[field] += usd;
       };
 
       // Group by cellar
@@ -63,10 +72,10 @@ async function runCellarValueSnapshots() {
 
         byCellar[cid].bottleCount++;
 
-        if (b.price > 0) byCellar[cid].totalValue += toUsd(b.price, b.currency);
+        if (b.price > 0) addUsd(byCellar[cid], 'totalValue', b.price, b.currency);
 
         const repl = replMap.get(b._id.toString());
-        if (repl) byCellar[cid].replacementValue += toUsd(repl.amount, repl.currency);
+        if (repl) addUsd(byCellar[cid], 'replacementValue', repl.amount, repl.currency);
       }
 
       // Upsert snapshots
@@ -99,7 +108,8 @@ async function runCellarValueSnapshots() {
     }
   }
 
-  console.log(`[cellarValueSnapshot] Created ${snapshotCount} snapshot(s) for ${userIds.length} user(s)`);
+  console.log(`[cellarValueSnapshot] Created ${snapshotCount} snapshot(s) for ${userIds.length} user(s)`
+    + (skippedAmounts ? ` — ${skippedAmounts} amount(s) skipped: currency not in today's rates` : ''));
 }
 
 module.exports = { runCellarValueSnapshots };
