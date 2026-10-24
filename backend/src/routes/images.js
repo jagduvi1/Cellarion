@@ -125,9 +125,16 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
         safeUnlink(req.file.path);
         return res.status(404).json({ error: 'Bottle not found' });
       }
+      // Same rule as middleware/bottleAccess: a soft-deleted cellar and a
+      // caller with no role both read as a missing bottle; only a viewer,
+      // who can see the bottle, is told they may not add to it.
       const cellar = await Cellar.findById(bottle.cellar);
-      const cellarRole = cellar ? getCellarRole(cellar, req.user.id) : null;
-      if (!cellarRole || cellarRole === 'viewer') {
+      const cellarRole = cellar && !cellar.deletedAt ? getCellarRole(cellar, req.user.id) : null;
+      if (!cellarRole) {
+        safeUnlink(req.file.path);
+        return res.status(404).json({ error: 'Bottle not found' });
+      }
+      if (cellarRole === 'viewer') {
         safeUnlink(req.file.path);
         return res.status(403).json({ error: 'Not authorized to upload images for this bottle' });
       }
@@ -176,13 +183,14 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.bottleId)) return res.status(400).json({ error: 'Invalid ID' });
 
-    // Verify bottle access (owner or shared cellar viewer+)
+    // Verify bottle access (owner or shared cellar viewer+); a soft-deleted
+    // cellar's bottles are not found, as in middleware/bottleAccess.
     const bottle = await Bottle.findById(req.params.bottleId);
     if (!bottle) {
       return res.status(404).json({ error: 'Bottle not found' });
     }
     const cellar = await Cellar.findById(bottle.cellar);
-    const cellarRole = cellar ? getCellarRole(cellar, req.user.id) : null;
+    const cellarRole = cellar && !cellar.deletedAt ? getCellarRole(cellar, req.user.id) : null;
     if (!cellarRole) {
       return res.status(404).json({ error: 'Bottle not found' });
     }
@@ -413,7 +421,8 @@ router.get('/:id', requireAuth, async (req, res) => {
       }
       if (!authorized && bottle && bottle.cellar) {
         const cellar = await Cellar.findById(bottle.cellar);
-        if (cellar && getCellarRole(cellar, req.user.id)) {
+        // Membership of a soft-deleted cellar grants nothing until it is restored.
+        if (cellar && !cellar.deletedAt && getCellarRole(cellar, req.user.id)) {
           authorized = true;
         }
       }
@@ -519,17 +528,18 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
     }
 
     // Verify cellar access — bottles are owned by the cellar owner, so shared-cellar
-    // editors must be allowed to link the images they uploaded (mirrors /upload).
+    // editors must be allowed to link the images they uploaded (mirrors /upload,
+    // including its 404 for a soft-deleted cellar or a caller with no role).
     const bottle = await Bottle.findById(bottleId);
     if (!bottle) {
       return res.status(404).json({ error: 'Bottle not found' });
     }
     const cellar = await Cellar.findById(bottle.cellar);
-    if (!cellar) {
+    const cellarRole = cellar && !cellar.deletedAt ? getCellarRole(cellar, req.user.id) : null;
+    if (!cellarRole) {
       return res.status(404).json({ error: 'Bottle not found' });
     }
-    const cellarRole = getCellarRole(cellar, req.user.id);
-    if (!cellarRole || cellarRole === 'viewer') {
+    if (cellarRole === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to link images to this bottle' });
     }
 
