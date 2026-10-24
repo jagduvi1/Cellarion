@@ -12,6 +12,25 @@
     "saved": "Lagret",
     "done": "Ferdig",
     "cancel": "Avbryt",
-    "edit": "Rediger"
+    "edit": "Rediger",
+    "delete": "Slett",
+    "create": "Opprett",
+    "creating": "Oppretter …",
+    "loading": "Laster inn …",
+    "confirm": "Bekreft",
+    "typeToConfirm": "Skriv «{{name}}» for å bekrefte",
+    "back": "Tilbake",
+    "close": "Lukk",
+    "yes": "Ja",
+    "no": "Nei",
+    "name": "Navn",
+    "description": "Beskrivelse",
+    "color": "Farge",
+    "search": "Søk",
+    "filter": "Filtrer",
+    "clear": "Tøm",
+    "clearSearch": "Tøm søket",
+    "submit": "Send inn",
+    "networkError": "Nettverksfeil"
   }
 }
