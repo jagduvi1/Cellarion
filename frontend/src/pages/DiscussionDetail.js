@@ -25,6 +25,7 @@ import ParticipantStack from '../components/ParticipantStack';
 import JumpToReplyButton from '../components/JumpToReplyButton';
 import { sanitizeForumRender, extractForumPlainText } from '../utils/sanitizeForumRender';
 import { isDeletedUser, authorDisplayName } from '../utils/deletedUser';
+import { httpError, friendlyError, messageForResponse, responseError } from '../utils/friendlyError';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
@@ -78,6 +79,11 @@ function DiscussionDetail() {
   // Language section of the thread, and the sections it can be moved to.
   const [moveLanguage, setMoveLanguage] = useState('en');
   const [moveLanguages, setMoveLanguages] = useState([]);
+
+  // Why the last edit, report or move did not go through. Only one of those
+  // dialogs is open at a time, and opening or closing one starts it empty.
+  const [actionError, setActionError] = useState(null);
+  useEffect(() => { setActionError(null); }, [editingReply, reportTarget, showMove]);
 
   const isOwner = user && discussion?.author?._id === user.id;
   const isMod = user && (user.roles?.includes('moderator') || user.roles?.includes('admin'));
@@ -178,6 +184,7 @@ function DiscussionDetail() {
   const handleEditReply = async (e) => {
     e.preventDefault();
     if (editTextLength < 1 || !editingReply) return;
+    setActionError(null);
 
     try {
       const res = await updateReply(apiFetch, id, editingReply._id, { body: editBody });
@@ -186,38 +193,30 @@ function DiscussionDetail() {
         setReplies(prev => prev.map(r => r._id === editingReply._id ? { ...r, ...data.reply, liked: r.liked } : r));
         setEditingReply(null);
         setEditBody('');
+      } else {
+        setActionError(messageForResponse(res, data, undefined, t));
       }
-    } catch {
-      // silent
+    } catch (err) {
+      setActionError(friendlyError(err, t));
     }
   };
 
+  // The two deletes throw on failure: ConfirmModal then shows the reason and
+  // stays open, so the dialog closes only once the delete went through.
   const handleDeleteReply = async (reply) => {
-    try {
-      const res = await deleteReply(apiFetch, id, reply._id);
-      if (res.ok) {
-        const data = await res.json();
-        // Update reply in-place to show soft-deleted state
-        setReplies(prev => prev.map(r => r._id === reply._id ? { ...r, ...data.reply, isDeleted: true, body: t('discussions.replyRemoved') } : r));
-      }
-    } catch {
-      // silent
-    } finally {
-      setConfirmDeleteReply(null);
-    }
+    const res = await deleteReply(apiFetch, id, reply._id);
+    if (!res.ok) throw httpError(res, await res.json().catch(() => null));
+    const data = await res.json();
+    // Update reply in-place to show soft-deleted state
+    setReplies(prev => prev.map(r => r._id === reply._id ? { ...r, ...data.reply, isDeleted: true, body: t('discussions.replyRemoved') } : r));
+    setConfirmDeleteReply(null);
   };
 
   const handleDeleteDiscussion = async () => {
-    try {
-      const res = await deleteDiscussion(apiFetch, id);
-      if (res.ok) {
-        navigate('/community/discussions');
-      }
-    } catch {
-      // silent
-    } finally {
-      setConfirmDeleteDiscussion(false);
-    }
+    const res = await deleteDiscussion(apiFetch, id);
+    if (!res.ok) throw httpError(res, await res.json().catch(() => null));
+    navigate('/community/discussions');
+    setConfirmDeleteDiscussion(false);
   };
 
   const handlePin = async () => {
@@ -255,28 +254,32 @@ function DiscussionDetail() {
 
   // Category and language are independent axes, so a move applies whichever
   // of them actually changed — a moderator fixing only the language must not
-  // re-file the subject as a side effect, and vice versa.
+  // re-file the subject as a side effect, and vice versa. A step that went
+  // through is shown even when the next one is refused: the server has
+  // already filed the thread there, and a retry then repeats only the rest.
   const handleMove = async () => {
     if (!moveCategory) return;
+    setActionError(null);
+    let updated = null;
     try {
-      let updated = null;
       if (moveCategory !== discussion.category) {
         const res = await moveDiscussion(apiFetch, id, moveCategory);
         const data = await res.json();
-        if (!res.ok) return;
+        if (!res.ok) { setActionError(messageForResponse(res, data, undefined, t)); return; }
         updated = data.discussion;
       }
       const currentLanguage = discussion.language || 'en';
       if (moveLanguage && moveLanguage !== currentLanguage) {
         const res = await moveDiscussionLanguage(apiFetch, id, moveLanguage);
         const data = await res.json();
-        if (!res.ok) return;
+        if (!res.ok) { setActionError(messageForResponse(res, data, undefined, t)); return; }
         updated = data.discussion;
       }
-      if (updated) setDiscussion(updated);
       setShowMove(false);
-    } catch {
-      // silent
+    } catch (err) {
+      setActionError(friendlyError(err, t));
+    } finally {
+      if (updated) setDiscussion(updated);
     }
   };
 
@@ -284,6 +287,7 @@ function DiscussionDetail() {
     e.preventDefault();
     if (!reportReason) return;
     setReporting(true);
+    setActionError(null);
 
     try {
       const data = { reason: reportReason, details: reportDetails || undefined };
@@ -297,9 +301,11 @@ function DiscussionDetail() {
         setReportTarget(null);
         setReportReason('');
         setReportDetails('');
+      } else {
+        setActionError(await responseError(res, t));
       }
-    } catch {
-      // silent
+    } catch (err) {
+      setActionError(friendlyError(err, t));
     } finally {
       setReporting(false);
     }
@@ -545,6 +551,7 @@ function DiscussionDetail() {
       {editingReply && (
         <Modal title={t('discussions.editReply')} onClose={() => setEditingReply(null)}>
           <form onSubmit={handleEditReply}>
+            {actionError && <div className="alert alert-error" role="alert">{actionError}</div>}
             <Suspense fallback={<div className="loading">{t('common.loading')}</div>}>
               <DiscussionComposer
                 value={editBody}
@@ -566,6 +573,7 @@ function DiscussionDetail() {
       {reportTarget && (
         <Modal title={reportTarget.type === 'discussion' ? t('discussions.reportDiscussion') : t('discussions.reportReply')} onClose={() => setReportTarget(null)}>
           <form onSubmit={handleReport} className="discussions__create-form">
+            {actionError && <div className="alert alert-error" role="alert">{actionError}</div>}
             <div className="form-group">
               <label className="form-label">{t('discussions.reason')}</label>
               <select className="input" value={reportReason} onChange={e => setReportReason(e.target.value)} required>
@@ -603,6 +611,7 @@ function DiscussionDetail() {
           independent, and moving between languages leaves the subject alone. */}
       {showMove && (
         <Modal title={t('discussions.moveDiscussion')} onClose={() => setShowMove(false)}>
+          {actionError && <div className="alert alert-error" role="alert">{actionError}</div>}
           <div className="form-group">
             <label className="form-label">{t('discussions.newCategory')}</label>
             <select className="input" value={moveCategory} onChange={e => setMoveCategory(e.target.value)}>
