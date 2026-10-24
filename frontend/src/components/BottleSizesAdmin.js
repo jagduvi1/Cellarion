@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { bottleSizeLabel } from '../config/bottleSizes';
+import { friendlyError, messageForResponse } from '../utils/friendlyError';
 
 /**
  * Admin panel (rendered as a tab inside AdminTaxonomy) for auditing and fixing
@@ -15,6 +16,8 @@ export default function BottleSizesAdmin({ apiFetch }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [targets, setTargets] = useState({}); // stored value -> chosen target code
 
   const load = useCallback(async () => {
@@ -25,32 +28,45 @@ export default function BottleSizesAdmin({ apiFetch }) {
       if (res.ok) {
         setSizes(data.sizes || []);
         setCanonical(data.canonical || []);
+        setLoadFailed(false);
+      } else {
+        setLoadFailed(true);
+        setError(messageForResponse(res, data, undefined, t));
       }
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      setLoadFailed(true);
+      setError(friendlyError(err, t));
+    } finally {
       setLoading(false);
     }
-  }, [apiFetch]);
+  }, [apiFetch, t]);
 
   useEffect(() => { load(); }, [load]);
 
   const normalizeAll = async () => {
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setError(null);
     try {
       const res = await apiFetch('/api/admin/taxonomy/bottle-sizes/normalize-all', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         setMsg(t('admin.bottleSizes.normalized', { defaultValue: '{{count}} bottle(s) normalized.', count: data.changed }));
         await load();
+      } else {
+        setError(messageForResponse(res, data, undefined, t));
       }
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      setError(friendlyError(err, t));
+    } finally {
       setBusy(false);
     }
   };
 
-  const remap = async (from) => {
-    const to = targets[from];
+  // `suggested` is what the row's select shows until the admin picks another
+  // target, so Apply sends it when nothing was picked.
+  const remap = async (from, suggested) => {
+    const to = targets[from] || suggested;
     if (!to) return;
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setError(null);
     try {
       const res = await apiFetch('/api/admin/taxonomy/bottle-sizes/remap', {
         method: 'POST',
@@ -62,14 +78,27 @@ export default function BottleSizesAdmin({ apiFetch }) {
         setMsg(t('admin.bottleSizes.remapped', { defaultValue: '{{count}} bottle(s) remapped.', count: data.modified }));
         await load();
       } else {
-        setMsg(data.error || 'Remap failed');
+        setError(messageForResponse(res, data, undefined, t));
       }
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      setError(friendlyError(err, t));
+    } finally {
       setBusy(false);
     }
   };
 
   if (loading) return <div className="loading">{t('common.loading')}</div>;
+
+  // Without the list there is nothing to count or remap: an empty table would
+  // read as "no non-standard values".
+  if (loadFailed) {
+    return (
+      <div className="bottle-sizes-admin">
+        {msg && <div className="alert alert-success">{msg}</div>}
+        <div className="alert alert-error">{error}</div>
+      </div>
+    );
+  }
 
   const nonCanonical = sizes.filter((s) => !s.canonical).length;
 
@@ -85,6 +114,7 @@ export default function BottleSizesAdmin({ apiFetch }) {
       </div>
 
       {msg && <div className="alert alert-success">{msg}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
 
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
@@ -121,7 +151,7 @@ export default function BottleSizesAdmin({ apiFetch }) {
                         <option key={c.code} value={c.code}>{bottleSizeLabel(c.code, t)}</option>
                       ))}
                     </select>
-                    <button className="btn btn-secondary btn-small" disabled={busy} onClick={() => remap(s.value)}>
+                    <button className="btn btn-secondary btn-small" disabled={busy} onClick={() => remap(s.value, s.suggested)}>
                       {t('admin.bottleSizes.apply', 'Apply')}
                     </button>
                   </span>

@@ -161,9 +161,18 @@ function AdminTaxonomy() {
         // can't populate the list with another tab's documents.
         setItems(data[activeTab] || []);
         setNeedsReviewCount(data.needsReviewCount ?? 0);
+      } else {
+        // Clear the list too: rows left from the previous tab would render
+        // under this tab's label, and their actions would send those ids to
+        // this tab's endpoint.
+        setItems([]);
+        setNeedsReviewCount(0);
+        setError(data.error || 'Failed to load data');
       }
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
+      setItems([]);
+      setNeedsReviewCount(0);
       setError('Failed to load data');
     } finally {
       if (seq === fetchSeqRef.current) setLoading(false);
