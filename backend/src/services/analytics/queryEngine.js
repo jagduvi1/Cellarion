@@ -819,7 +819,10 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
   // KV hydration: two indexed queries for the whole page.
   const personalFields = fields.filter((f) => f.source === 'personal');
   const registryFields = fields.filter((f) => f.source === 'registry');
-  const wineIds = [...new Set(ordered.map((b) => String(b.wineDefinition?._id || b.wineDefinition)).filter(Boolean))];
+  // A bottle with no registry wine yet has no id to add: dropped before the
+  // String(), which would turn it into "undefined"/"null" — an id no model can
+  // cast, failing the whole page.
+  const wineIds = [...new Set(ordered.map((b) => b.wineDefinition?._id || b.wineDefinition).filter(Boolean).map(String))];
 
   let personalEntries = [];
   if (personalFields.length) {
