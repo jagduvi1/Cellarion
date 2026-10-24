@@ -736,65 +736,88 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
         //     WineVintageProfile is optional, so partial profiles are real)
         //   - Fall-through default is 'early' (matches the JS function's
         //     final `return 'early'`)
-        $cond: {
-          if: {
-            $or: [
-              { $eq: [{ $ifNull: ['$profile', null] }, null] },
-              { $and: [
-                { $eq: [{ $ifNull: ['$profile.earlyFrom', null] }, null] },
-                { $eq: [{ $ifNull: ['$profile.peakFrom',  null] }, null] },
-                { $eq: [{ $ifNull: ['$profile.peakUntil', null] }, null] },
-              ]},
-            ],
+        //   - Every boundary is read through $ifNull. The sommelier writers
+        //     $unset a cleared phase, so an unset boundary is a MISSING field,
+        //     and aggregation sorts missing below null: `$ne: [<missing>, null]`
+        //     is true and `$gt: [year, <missing>]` is true. Read raw, an absent
+        //     boundary passes every "is set" guard.
+        $let: {
+          vars: {
+            earlyFrom:  { $ifNull: ['$profile.earlyFrom',  null] },
+            earlyUntil: { $ifNull: ['$profile.earlyUntil', null] },
+            peakFrom:   { $ifNull: ['$profile.peakFrom',   null] },
+            peakUntil:  { $ifNull: ['$profile.peakUntil',  null] },
+            lateFrom:   { $ifNull: ['$profile.lateFrom',   null] },
+            lateUntil:  { $ifNull: ['$profile.lateUntil',  null] },
           },
-          then: 'noProfile',
-          else: {
-            $switch: {
-              branches: [
-                { case: { $and: [
-                  { $ne: ['$profile.earlyFrom', null] },
-                  { $lt: [currentYear, '$profile.earlyFrom'] },
-                ]}, then: 'notReady' },
-                { case: { $and: [
-                  { $eq: ['$profile.earlyFrom', null] },
-                  { $ne: ['$profile.peakFrom', null] },
-                  { $lt: [currentYear, '$profile.peakFrom'] },
-                ]}, then: 'notReady' },
-                { case: { $and: [
-                  { $ne: ['$profile.earlyUntil', null] },
-                  { $lte: [currentYear, '$profile.earlyUntil'] },
-                ]}, then: 'early' },
-                { case: { $and: [
-                  { $ne: ['$profile.peakFrom', null] },
-                  { $lt: [currentYear, '$profile.peakFrom'] },
-                ]}, then: 'early' },
-                { case: { $and: [
-                  { $ne: ['$profile.peakUntil', null] },
-                  { $lte: [currentYear, '$profile.peakUntil'] },
-                ]}, then: 'peak' },
-                { case: { $and: [
-                  { $ne: ['$profile.lateFrom', null] },
-                  { $lt: [currentYear, '$profile.lateFrom'] },
-                ]}, then: 'peak' },
-                { case: { $and: [
-                  { $ne: ['$profile.lateUntil', null] },
-                  { $lte: [currentYear, '$profile.lateUntil'] },
-                ]}, then: 'late' },
-                { case: { $and: [
-                  { $ne: ['$profile.lateUntil', null] },
-                  { $gt: [currentYear, '$profile.lateUntil'] },
-                ]}, then: 'declining' },
-                { case: { $and: [
-                  { $ne: ['$profile.peakUntil', null] },
-                  { $gt: [currentYear, '$profile.peakUntil'] },
-                  { $eq: ['$profile.lateFrom', null] },
-                ]}, then: 'declining' },
-                { case: { $and: [
-                  { $ne: ['$profile.peakFrom', null] },
-                  { $gte: [currentYear, '$profile.peakFrom'] },
-                ]}, then: 'peak' },
-              ],
-              default: 'early',
+          in: {
+            $cond: {
+              if: {
+                $or: [
+                  { $eq: [{ $ifNull: ['$profile', null] }, null] },
+                  { $and: [
+                    { $eq: ['$$earlyFrom', null] },
+                    { $eq: ['$$peakFrom',  null] },
+                    { $eq: ['$$peakUntil', null] },
+                  ]},
+                ],
+              },
+              then: 'noProfile',
+              else: {
+                $switch: {
+                  branches: [
+                    { case: { $and: [
+                      { $ne: ['$$earlyFrom', null] },
+                      { $lt: [currentYear, '$$earlyFrom'] },
+                    ]}, then: 'notReady' },
+                    { case: { $and: [
+                      { $eq: ['$$earlyFrom', null] },
+                      { $ne: ['$$peakFrom', null] },
+                      { $lt: [currentYear, '$$peakFrom'] },
+                    ]}, then: 'notReady' },
+                    { case: { $and: [
+                      { $ne: ['$$earlyUntil', null] },
+                      { $lte: [currentYear, '$$earlyUntil'] },
+                    ]}, then: 'early' },
+                    { case: { $and: [
+                      { $ne: ['$$peakFrom', null] },
+                      { $lt: [currentYear, '$$peakFrom'] },
+                    ]}, then: 'early' },
+                    { case: { $and: [
+                      { $ne: ['$$peakUntil', null] },
+                      { $lte: [currentYear, '$$peakUntil'] },
+                    ]}, then: 'peak' },
+                    { case: { $and: [
+                      { $ne: ['$$lateFrom', null] },
+                      { $lt: [currentYear, '$$lateFrom'] },
+                    ]}, then: 'peak' },
+                    { case: { $and: [
+                      { $ne: ['$$lateUntil', null] },
+                      { $lte: [currentYear, '$$lateUntil'] },
+                    ]}, then: 'late' },
+                    // A late phase with no end stays late once it has begun.
+                    { case: { $and: [
+                      { $ne: ['$$lateFrom', null] },
+                      { $eq: ['$$lateUntil', null] },
+                      { $gte: [currentYear, '$$lateFrom'] },
+                    ]}, then: 'late' },
+                    { case: { $and: [
+                      { $ne: ['$$lateUntil', null] },
+                      { $gt: [currentYear, '$$lateUntil'] },
+                    ]}, then: 'declining' },
+                    { case: { $and: [
+                      { $ne: ['$$peakUntil', null] },
+                      { $gt: [currentYear, '$$peakUntil'] },
+                      { $eq: ['$$lateFrom', null] },
+                    ]}, then: 'declining' },
+                    { case: { $and: [
+                      { $ne: ['$$peakFrom', null] },
+                      { $gte: [currentYear, '$$peakFrom'] },
+                    ]}, then: 'peak' },
+                  ],
+                  default: 'early',
+                },
+              },
             },
           },
         },
