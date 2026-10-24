@@ -9,6 +9,15 @@ import './JournalEntryForm.css';
 
 const OCCASIONS = ['dinner', 'tasting', 'celebration', 'casual', 'gift', 'travel', 'other'];
 
+const EMPTY_PAIRING = { dish: '', bottle: null, wine: null, wineName: '', notes: '' };
+
+// Every pairing row carries a client-only `_key` (the saved row's `_id`, or a
+// counter for a new row) and is keyed by it. WinePicker copies its value into
+// local state at mount, so a row keyed by its position would hand a removed
+// row's picker — and the wine it shows — to the row below it.
+let pairingSeq = 0;
+const withKey = (p) => ({ ...p, _key: p._key || p._id || `p${++pairingSeq}` });
+
 export default function JournalEntryForm({ existing, onClose, onSaved, prefilledBottle }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
@@ -23,13 +32,13 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
   const [notes, setNotes] = useState(existing?.notes || '');
   const [visibility, setVisibility] = useState(existing?.visibility || 'private');
   const [people, setPeople] = useState(existing?.people || []);
-  const [pairings, setPairings] = useState(
+  const [pairings, setPairings] = useState(() => (
     existing?.pairings?.length > 0
       ? existing.pairings
       : prefilledBottle
-        ? [{ dish: '', bottle: prefilledBottle._id, wine: prefilledBottle.wineDefinition?._id, wineName: [prefilledBottle.wineDefinition?.producer, prefilledBottle.wineDefinition?.name].filter(Boolean).join(' '), vintage: prefilledBottle.vintage || '', notes: '' }]
-        : [{ dish: '', bottle: null, wine: null, wineName: '', notes: '' }]
-  );
+        ? [{ ...EMPTY_PAIRING, bottle: prefilledBottle._id, wine: prefilledBottle.wineDefinition?._id, wineName: [prefilledBottle.wineDefinition?.producer, prefilledBottle.wineDefinition?.name].filter(Boolean).join(' '), vintage: prefilledBottle.vintage || '' }]
+        : [EMPTY_PAIRING]
+  ).map(withKey));
 
   const [personName, setPersonName] = useState('');
   const [friendSuggestions, setFriendSuggestions] = useState([]);
@@ -69,7 +78,7 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
   };
 
   const addPairing = () => {
-    setPairings(prev => [...prev, { dish: '', bottle: null, wine: null, wineName: '', notes: '' }]);
+    setPairings(prev => [...prev, withKey(EMPTY_PAIRING)]);
   };
 
   const removePairing = (idx) => {
@@ -92,6 +101,7 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
         notes: notes.trim(),
         visibility,
         people: people.map(p => ({ name: p.name, user: p.user?._id || p.user || null })),
+        // Named fields only: the client-only `_key` stays out of the request.
         pairings: pairings.filter(p => p.dish || p.wineName || p.bottle || p.notes).map(p => ({
           dish: p.dish,
           bottle: p.bottle,
@@ -191,7 +201,7 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
         <div className="form-group">
           <label>{t('journal.pairings', 'Pairings')}</label>
           {pairings.map((p, i) => (
-            <div key={i} className="journal-form__pairing">
+            <div key={p._key} className="journal-form__pairing">
               <div className="journal-form__pairing-header">
                 <span className="journal-form__pairing-num">#{i + 1}</span>
                 {pairings.length > 1 && (
