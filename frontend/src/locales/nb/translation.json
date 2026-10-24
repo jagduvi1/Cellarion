@@ -150,6 +150,9 @@
     "backToLogin": "Tilbake til innlogging",
     "forgotIntro": "Skriv inn e-postadressen din, så sender vi deg en lenke for å tilbakestille passordet.",
     "genericError": "Noe gikk galt. Prøv igjen.",
-    "sendResetLink": "Send lenke for nytt passord"
+    "sendResetLink": "Send lenke for nytt passord",
+    "footerOpenSource": "Cellarion har <1>åpen kildekode</1>. Har du en idé eller har du funnet en feil? <3>Meld fra på GitHub</3>.",
+    "footerHelp": "Trenger du hjelp med kontoen din? <1>Kontakt brukerstøtte</1>.",
+    "passwordsNoMatch": "Passordene er ikke like."
   }
 }
