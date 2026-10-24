@@ -10,6 +10,8 @@
     "save": "Lagre",
     "saving": "Lagrer …",
     "saved": "Lagret",
-    "done": "Ferdig"
+    "done": "Ferdig",
+    "cancel": "Avbryt",
+    "edit": "Rediger"
   }
 }
