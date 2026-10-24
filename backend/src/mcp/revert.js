@@ -587,6 +587,15 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     // The undo changes the embedding text back — the vectors must follow, same as
     // on the original correction.
     require('../services/embeddingJob').reembedActiveVintages(wine._id).catch(() => {});
+    // The somm undos audit like the writes they reverse, as registry rows
+    // (no cellarId: a member's cellar history never shows them). `via: 'undo'`
+    // because this engine serves undo_last and the in-app revert alike.
+    logAudit(ctx.req, 'somm.wineProfile.update.undo', { type: 'wine', id: wine._id }, {
+      wine: `${wine.producer} — ${wine.name}`,
+      source: wine.aiProfile?.source || 'ai',
+      via: 'undo',
+      ledgerRow: String(row._id),
+    });
 
     const envelope = {
       summary: `Undid tasting-profile edit — ${wine.producer} — ${wine.name} back to ${wine.aiProfile?.source || 'ai'}-sourced`,
@@ -626,6 +635,8 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       await unclaim(row._id); // nothing restored yet → let the undo be retried
       throw err;
     }
+    logAudit(ctx.req, 'somm.maturity.remove.undo', { type: 'wine', id: prev.wineDefinition },
+      { vintage: prev.vintage, via: 'undo', ledgerRow: String(row._id) });
 
     const envelope = {
       summary: `Undid queue removal — vintage ${prev.vintage} is pending again`,
@@ -679,6 +690,8 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       await unclaim(row._id); // nothing restored yet → let the undo be retried
       throw err;
     }
+    logAudit(ctx.req, 'somm.price.decline.undo', { type: 'wine', id: prev.wineDefinition },
+      { vintage: prev.vintage, skipLifted: !!prev.skipCreated, via: 'undo', ledgerRow: String(row._id) });
 
     const envelope = {
       summary: `Undid price-request decline — vintage ${prev.vintage} is back in the price queue and can be requested again`,
@@ -698,7 +711,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
     }
     const WineCorrectionProposal = require('../models/WineCorrectionProposal');
-    const proposal = await WineCorrectionProposal.findById(row.detail?.proposalId).select('status kind');
+    const proposal = await WineCorrectionProposal.findById(row.detail?.proposalId).select('status kind wineDefinition');
     if (!proposal) return fail('conflict', 'That proposal no longer exists; nothing was changed.');
     if (proposal.status !== 'pending') {
       // 'closed' is not a decision: the wine was merged or deleted under the
@@ -730,6 +743,8 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       await unclaim(row._id);
       return fail('conflict', 'That proposal was just decided by an admin — the decision stands; nothing was undone.');
     }
+    logAudit(ctx.req, 'somm.wineProposal.create.undo', { type: 'wine', id: proposal.wineDefinition },
+      { proposalId: proposal._id, kind: proposal.kind, via: 'undo', ledgerRow: String(row._id) });
 
     const envelope = {
       summary: `Withdrew the pending ${proposal.kind} proposal — it no longer awaits admin review`,
@@ -758,6 +773,8 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     if (row.action === 'somm_price') {
       const WineVintagePrice = require('../models/WineVintagePrice');
       const del = await WineVintagePrice.deleteOne({ _id: row.detail?.entryId, setBy: ctx.user.id });
+      logAudit(ctx.req, 'somm.price.add.undo', { type: 'wine', id: row.detail?.wineId },
+        { vintage: row.detail?.vintage, entryId: row.detail?.entryId, removed: !!del.deletedCount, via: 'undo', ledgerRow: String(row._id) });
       envelope = { summary: del.deletedCount ? `Undid price entry — snapshot for vintage ${row.detail?.vintage} removed` : 'Price snapshot was already gone; ledger marked undone.', data: { undone: 'set_vintage_price', removed: !!del.deletedCount } };
     } else {
       const prev = row.prev || {};
@@ -779,6 +796,10 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       // The restored window changes the owners' maturity statistics like the
       // write it undoes did: move their data version. Never throws.
       require('../services/dataVersion').bumpWineOwners([profile.wineDefinition]);
+      // reset_maturity_row ledgers as somm_maturity too, marked detail.reset.
+      logAudit(ctx.req, row.detail?.reset ? 'somm.maturity.reset.undo' : 'somm.maturity.review.undo',
+        { type: 'wine', id: profile.wineDefinition },
+        { vintage: row.detail?.vintage, status: profile.status, via: 'undo', ledgerRow: String(row._id) });
       envelope = { summary: `Undid maturity review — vintage ${row.detail?.vintage} back to ${profile.status}`, data: { undone: 'set_vintage_maturity', profile_id: String(profile._id), status: profile.status } };
     }
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
