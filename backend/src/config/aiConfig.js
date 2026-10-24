@@ -513,7 +513,10 @@ async function load() {
         embeddingBatchDelayMs: doc.value.embeddingBatchDelayMs ?? defaults.embeddingBatchDelayMs,
         chatDailyLimit:        doc.value.chatDailyLimit       ?? defaults.chatDailyLimit,
         chatModel:             VALID_CHAT_MODELS.includes(doc.value.chatModel) ? doc.value.chatModel : defaults.chatModel,
-        chatModelFallback:     VALID_CHAT_MODELS.includes(doc.value.chatModelFallback) ? doc.value.chatModelFallback : defaults.chatModelFallback,
+        // null is the admin's explicit "no fallback", not a missing value.
+        chatModelFallback:     doc.value.chatModelFallback === null
+          ? null
+          : (VALID_CHAT_MODELS.includes(doc.value.chatModelFallback) ? doc.value.chatModelFallback : defaults.chatModelFallback),
         chatSystemPrompt:      doc.value.chatSystemPrompt     ?? defaults.chatSystemPrompt,
         labelScanPrompt:       doc.value.labelScanPrompt      ?? defaults.labelScanPrompt,
         labelScanBackPrompt:   doc.value.labelScanBackPrompt  ?? defaults.labelScanBackPrompt,
