@@ -29,7 +29,7 @@ const { parsePagination } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/sanitize');
 const { redactUrlCredentials } = require('../utils/redactUrl');
 const { coerceStringQuery } = require('../utils/validation');
-const { SYSTEM_PROMPT_MAX_LENGTH, SCAN_PROMPT_MAX_LENGTH, CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
+const { PROMPT_MAX_LENGTHS, CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 
 const router = express.Router();
 
@@ -392,6 +392,8 @@ router.get('/ai', async (req, res) => {
         embedding: embeddingProviderName(),
       },
       config: cfg,
+      // Each editable prompt's cap, for the page's character counters.
+      promptLimits: PROMPT_MAX_LENGTHS,
       job: jobStatus,
       enrichmentJob: enrichStatus,
       enrichment: { totalWines, enrichedWines },
@@ -583,13 +585,15 @@ router.get('/ai/costs', async (req, res) => {
 // PATCH /api/superadmin/ai/<*>-prompt and /api/superadmin/ai/<*>-model
 //
 // These settings routes all share the same shape, so they are registered from
-// the route table below. Prompt routes validate a non-empty string within a
-// max length and save the trimmed value into a single aiConfig key; model
-// routes validate against the VALID_CHAT_MODELS allowlist and save a single
-// aiConfig key. The console.error label is the path minus the '/ai/' prefix.
+// the route table below. Prompt routes validate a non-empty string within the
+// key's cap (PROMPT_MAX_LENGTHS) and save the trimmed value into a single
+// aiConfig key; model routes validate against the VALID_CHAT_MODELS allowlist
+// and save a single aiConfig key. The console.error label is the path minus
+// the '/ai/' prefix.
 // ---------------------------------------------------------------------------
-function registerPromptRoute(path, configKey, maxLen, saveErrorMsg) {
+function registerPromptRoute(path, configKey, saveErrorMsg) {
   const label = path.slice('/ai/'.length);
+  const maxLen = PROMPT_MAX_LENGTHS[configKey];
   router.patch(path, async (req, res) => {
     const { prompt } = req.body;
     if (typeof prompt !== 'string' || !prompt.trim()) {
@@ -635,25 +639,25 @@ function registerModelRoute(path, configKey, saveErrorMsg) {
 }
 
 // Route table (registration order preserved from the original handlers).
-registerPromptRoute('/ai/system-prompt',        'chatSystemPrompt',   SYSTEM_PROMPT_MAX_LENGTH, 'Failed to save system prompt');
-registerPromptRoute('/ai/label-scan-prompt',    'labelScanPrompt',    SCAN_PROMPT_MAX_LENGTH,   'Failed to save label scan prompt');
+registerPromptRoute('/ai/system-prompt',        'chatSystemPrompt',   'Failed to save system prompt');
+registerPromptRoute('/ai/label-scan-prompt',    'labelScanPrompt',    'Failed to save label scan prompt');
 // The back-label rescue prompt (POST /api/wines/scan-label-back). No model
 // route beside it: the back scan runs on labelScanModel, above.
-registerPromptRoute('/ai/label-scan-back-prompt', 'labelScanBackPrompt', SCAN_PROMPT_MAX_LENGTH, 'Failed to save back label scan prompt');
+registerPromptRoute('/ai/label-scan-back-prompt', 'labelScanBackPrompt', 'Failed to save back label scan prompt');
 // The receipt scan prompt (POST /api/bottles/import/receipt). Like the back
 // scan, it runs on labelScanModel — no model route of its own.
-registerPromptRoute('/ai/receipt-scan-prompt',  'receiptScanPrompt',  SCAN_PROMPT_MAX_LENGTH,   'Failed to save receipt scan prompt');
-registerPromptRoute('/ai/import-lookup-prompt', 'importLookupPrompt', SCAN_PROMPT_MAX_LENGTH,   'Failed to save import lookup prompt');
+registerPromptRoute('/ai/receipt-scan-prompt',  'receiptScanPrompt',  'Failed to save receipt scan prompt');
+registerPromptRoute('/ai/import-lookup-prompt', 'importLookupPrompt', 'Failed to save import lookup prompt');
 registerModelRoute('/ai/import-lookup-model',   'importLookupModel',  'Failed to save import lookup model');
 registerModelRoute('/ai/label-scan-model',      'labelScanModel',     'Failed to save label scan model');
-registerPromptRoute('/ai/maturity-suggest-prompt', 'maturitySuggestPrompt', SCAN_PROMPT_MAX_LENGTH, 'Failed to save maturity suggest prompt');
+registerPromptRoute('/ai/maturity-suggest-prompt', 'maturitySuggestPrompt', 'Failed to save maturity suggest prompt');
 // The -nv route edits the non-vintage variant of the maturity suggest prompt
 // (asks for year-offsets after purchase instead of calendar years).
-registerPromptRoute('/ai/maturity-suggest-prompt-nv', 'maturitySuggestPromptNv', SCAN_PROMPT_MAX_LENGTH, 'Failed to save NV maturity suggest prompt');
+registerPromptRoute('/ai/maturity-suggest-prompt-nv', 'maturitySuggestPromptNv', 'Failed to save NV maturity suggest prompt');
 registerModelRoute('/ai/maturity-suggest-model', 'maturitySuggestModel', 'Failed to save maturity suggest model');
-registerPromptRoute('/ai/price-suggest-prompt', 'priceSuggestPrompt', SCAN_PROMPT_MAX_LENGTH,   'Failed to save price suggest prompt');
+registerPromptRoute('/ai/price-suggest-prompt', 'priceSuggestPrompt', 'Failed to save price suggest prompt');
 registerModelRoute('/ai/price-suggest-model',   'priceSuggestModel',  'Failed to save price suggest model');
-registerPromptRoute('/ai/enrichment-prompt',    'enrichmentPrompt',   SCAN_PROMPT_MAX_LENGTH,   'Failed to save enrichment prompt');
+registerPromptRoute('/ai/enrichment-prompt',    'enrichmentPrompt',   'Failed to save enrichment prompt');
 registerModelRoute('/ai/enrichment-model',      'enrichmentModel',    'Failed to save enrichment model');
 
 // ---------------------------------------------------------------------------

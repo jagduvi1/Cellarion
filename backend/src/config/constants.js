@@ -112,11 +112,22 @@ const AI_CONCURRENCY = 5;
 
 // ─── Prompt length limits ────────────────────────────────────────────────────
 
-// Maximum character length for the AI chat system prompt
-const SYSTEM_PROMPT_MAX_LENGTH = 4000;
-
-// Maximum character length for the label-scan and import-lookup prompts
-const SCAN_PROMPT_MAX_LENGTH = 6000;
+// Maximum character length of each AI prompt a super admin can edit
+// (SuperAdmin → AI), keyed by its aiConfig key. Each cap sits well above the
+// shipped default so the default saves as it is and leaves room to add to it;
+// config/constants.promptLimits.test.js keeps every default 500 under its cap.
+// GET /api/superadmin/ai sends these to the page for its character counters.
+const PROMPT_MAX_LENGTHS = {
+  chatSystemPrompt: 4000,
+  labelScanPrompt: 8000,
+  labelScanBackPrompt: 8000,
+  receiptScanPrompt: 8000,
+  importLookupPrompt: 8000,
+  maturitySuggestPrompt: 8000,
+  maturitySuggestPromptNv: 8000,
+  priceSuggestPrompt: 8000,
+  enrichmentPrompt: 12000,
+};
 
 // ─── Community / Reviews ────────────────────────────────────────────────────
 
@@ -190,8 +201,7 @@ module.exports = {
   IMPORT_FUZZY_THRESHOLD,
   MAX_IMPORT_SIZE,
   AI_CONCURRENCY,
-  SYSTEM_PROMPT_MAX_LENGTH,
-  SCAN_PROMPT_MAX_LENGTH,
+  PROMPT_MAX_LENGTHS,
   REVIEWS_PER_PAGE,
   REVIEWS_MAX_PER_PAGE,
   REVIEW_MAX_LENGTHS,

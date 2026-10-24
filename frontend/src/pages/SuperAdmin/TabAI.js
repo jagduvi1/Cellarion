@@ -296,7 +296,7 @@ function ChatModelPanel({ currentModel, currentFallback, apiFetch }) {
   );
 }
 
-function SystemPromptPanel({ prompt, apiFetch }) {
+function SystemPromptPanel({ prompt, maxChars = 4000, apiFetch }) {
   return (
     <PromptPanel
       title="Cellar Chat — System Prompt"
@@ -304,31 +304,33 @@ function SystemPromptPanel({ prompt, apiFetch }) {
       intro="This prompt is sent to Claude before every chat message. Takes effect immediately on save."
       prompt={prompt}
       rows={10}
-      maxChars={4000}
+      maxChars={maxChars}
       apiFetch={apiFetch}
     />
   );
 }
 
-function LabelScanPromptPanel({ prompt, apiFetch }) {
+function LabelScanPromptPanel({ prompt, maxChars, apiFetch }) {
   return (
     <PromptPanel
       title="Label Scan — AI Prompt"
       endpoint="/api/superadmin/ai/label-scan-prompt"
       intro="This prompt is sent to Claude when a user scans a wine label. It controls how wine data is extracted and inferred. Takes effect immediately on save."
       prompt={prompt}
+      maxChars={maxChars}
       apiFetch={apiFetch}
     />
   );
 }
 
-function ReceiptScanPromptPanel({ prompt, apiFetch }) {
+function ReceiptScanPromptPanel({ prompt, maxChars, apiFetch }) {
   return (
     <PromptPanel
       title="Receipt Scan — AI Prompt"
       endpoint="/api/superadmin/ai/receipt-scan-prompt"
       intro="Sent with the photos or PDF when a user scans a receipt on the import page. It reads the wine lines (text, quantity, price, shop, date) — identification happens afterwards in the import review. Uses the label scan model. Takes effect immediately on save."
       prompt={prompt}
+      maxChars={maxChars}
       apiFetch={apiFetch}
     />
   );
@@ -360,13 +362,14 @@ function ImportLookupModelPanel({ currentModel, apiFetch }) {
   );
 }
 
-function ImportLookupPromptPanel({ prompt, apiFetch }) {
+function ImportLookupPromptPanel({ prompt, maxChars, apiFetch }) {
   return (
     <PromptPanel
       title="Import Lookup — AI Prompt"
       endpoint="/api/superadmin/ai/import-lookup-prompt"
       intro={<>Prompt sent to Claude when a wine can't be found in the library during import. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{vintage}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code> placeholders.</>}
       prompt={prompt}
+      maxChars={maxChars}
       apiFetch={apiFetch}
     />
   );
@@ -385,25 +388,27 @@ function MaturitySuggestModelPanel({ currentModel, apiFetch }) {
   );
 }
 
-function MaturitySuggestPromptPanel({ prompt, apiFetch }) {
+function MaturitySuggestPromptPanel({ prompt, maxChars, apiFetch }) {
   return (
     <PromptPanel
       title="Maturity Suggest — AI Prompt"
       endpoint="/api/superadmin/ai/maturity-suggest-prompt"
       intro={<>Prompt sent to Claude when a sommelier asks AI to suggest drink window phases. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{vintage}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{appellation}}'}</code>, <code style={codeStyle}>{'{{type}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> placeholders.</>}
       prompt={prompt}
+      maxChars={maxChars}
       apiFetch={apiFetch}
     />
   );
 }
 
-function MaturitySuggestPromptNvPanel({ prompt, apiFetch }) {
+function MaturitySuggestPromptNvPanel({ prompt, maxChars, apiFetch }) {
   return (
     <PromptPanel
       title="Maturity Suggest (Non-Vintage) — AI Prompt"
       endpoint="/api/superadmin/ai/maturity-suggest-prompt-nv"
       intro={<>Used instead of the prompt above when the wine is <strong>non-vintage (NV)</strong>. It must ask for the window as <strong>whole years after purchase</strong> (offsets like 0, 2, 5), not calendar years — that's how NV drink windows are stored. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{appellation}}'}</code>, <code style={codeStyle}>{'{{type}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> placeholders ({'{{vintage}}'} is not used for NV).</>}
       prompt={prompt}
+      maxChars={maxChars}
       apiFetch={apiFetch}
     />
   );
@@ -422,13 +427,14 @@ function PriceSuggestModelPanel({ currentModel, apiFetch }) {
   );
 }
 
-function PriceSuggestPromptPanel({ prompt, apiFetch }) {
+function PriceSuggestPromptPanel({ prompt, maxChars, apiFetch }) {
   return (
     <PromptPanel
       title="Price Suggest — AI Prompt"
       endpoint="/api/superadmin/ai/price-suggest-prompt"
       intro={<>Prompt sent to Claude when a sommelier asks AI to suggest a market price. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{vintage}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{appellation}}'}</code>, <code style={codeStyle}>{'{{type}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> placeholders. If a wine has no cellar value, AI should return null for price.</>}
       prompt={prompt}
+      maxChars={maxChars}
       apiFetch={apiFetch}
     />
   );
@@ -449,13 +455,14 @@ function EnrichmentModelPanel({ currentModel, apiFetch }) {
   );
 }
 
-function EnrichmentPromptPanel({ prompt, apiFetch }) {
+function EnrichmentPromptPanel({ prompt, maxChars, apiFetch }) {
   return (
     <PromptPanel
       title="Wine Enrichment — AI Prompt"
       endpoint="/api/superadmin/ai/enrichment-prompt"
       intro={<>Prompt sent to Claude to generate each wine's tasting/style profile. Must request a JSON object with body, tannin, acidity, sweetness, flavors[], foodPairings[], description, confidence. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> (and country/appellation/classification/type/vintage) placeholders.</>}
       prompt={prompt}
+      maxChars={maxChars}
       rows={16}
       successMsg="Saved — takes effect on next enrichment run"
       apiFetch={apiFetch}
@@ -1096,6 +1103,7 @@ export default function TabAI() {
 
   const { configured, config, job, vectors, embeddings } = data;
   const providers = data.providers || {};
+  const promptLimits = data.promptLimits || {};
   const openAiMode = providers.llm === 'openai' || providers.embedding === 'openai';
   const enrichJob = data.enrichmentJob || {};
   const enrichCoverage = data.enrichment || { totalWines: 0, enrichedWines: 0 };
@@ -1496,19 +1504,19 @@ export default function TabAI() {
         </div>
       )}
       <ChatModelPanel currentModel={config.chatModel} currentFallback={config.chatModelFallback || null} apiFetch={apiFetch} />
-      <SystemPromptPanel prompt={config.chatSystemPrompt || ''} apiFetch={apiFetch} />
+      <SystemPromptPanel prompt={config.chatSystemPrompt || ''} maxChars={promptLimits.chatSystemPrompt} apiFetch={apiFetch} />
       <LabelScanModelPanel currentModel={config.labelScanModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
-      <LabelScanPromptPanel prompt={config.labelScanPrompt || ''} apiFetch={apiFetch} />
-      <ReceiptScanPromptPanel prompt={config.receiptScanPrompt || ''} apiFetch={apiFetch} />
+      <LabelScanPromptPanel prompt={config.labelScanPrompt || ''} maxChars={promptLimits.labelScanPrompt} apiFetch={apiFetch} />
+      <ReceiptScanPromptPanel prompt={config.receiptScanPrompt || ''} maxChars={promptLimits.receiptScanPrompt} apiFetch={apiFetch} />
       <ImportLookupModelPanel currentModel={config.importLookupModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
-      <ImportLookupPromptPanel prompt={config.importLookupPrompt || ''} apiFetch={apiFetch} />
+      <ImportLookupPromptPanel prompt={config.importLookupPrompt || ''} maxChars={promptLimits.importLookupPrompt} apiFetch={apiFetch} />
       <MaturitySuggestModelPanel currentModel={config.maturitySuggestModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
-      <MaturitySuggestPromptPanel prompt={config.maturitySuggestPrompt || ''} apiFetch={apiFetch} />
-      <MaturitySuggestPromptNvPanel prompt={config.maturitySuggestPromptNv || ''} apiFetch={apiFetch} />
+      <MaturitySuggestPromptPanel prompt={config.maturitySuggestPrompt || ''} maxChars={promptLimits.maturitySuggestPrompt} apiFetch={apiFetch} />
+      <MaturitySuggestPromptNvPanel prompt={config.maturitySuggestPromptNv || ''} maxChars={promptLimits.maturitySuggestPromptNv} apiFetch={apiFetch} />
       <PriceSuggestModelPanel currentModel={config.priceSuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
-      <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} apiFetch={apiFetch} />
+      <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} maxChars={promptLimits.priceSuggestPrompt} apiFetch={apiFetch} />
       <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
-      <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} apiFetch={apiFetch} />
+      <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} maxChars={promptLimits.enrichmentPrompt} apiFetch={apiFetch} />
       <ChatLimitPanel limit={config.chatDailyLimit ?? 50} apiFetch={apiFetch} />
       <EnrichmentGatePanel floor={config.enrichmentHoldConfidenceFloor ?? 0.4} unknownBar={config.enrichmentHoldUnknownConfidenceBar ?? 0.55} apiFetch={apiFetch} />
       <EnrichmentSearchPanel enabled={config.enrichmentSearchEnabled ?? true} dailyCap={config.enrichmentSearchDailyCap ?? 5} apiFetch={apiFetch} />
