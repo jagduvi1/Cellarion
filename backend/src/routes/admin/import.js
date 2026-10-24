@@ -582,7 +582,11 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     res.json({ ok: true, stats });
   } catch (err) {
     console.error('Wine import error:', err);
-    res.status(500).json({ error: 'Import failed', details: err.message });
+    // Same rule as app.js's central handler: the error text stays in the log
+    // in production and reaches the response only outside it.
+    res.status(500).json(process.env.NODE_ENV === 'production'
+      ? { error: 'Import failed' }
+      : { error: 'Import failed', details: err.message });
   }
 });
 

@@ -65,7 +65,7 @@ router.post('/enrich/start', async (req, res) => {
       return res.status(409).json({ error: err.message });
     }
     console.error('[admin/ai] POST enrich/start error:', err);
-    res.status(500).json({ error: err.message || 'Failed to start enrichment job' });
+    res.status(500).json({ error: 'Failed to start enrichment job' });
   }
 });
 

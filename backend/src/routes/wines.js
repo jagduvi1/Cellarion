@@ -925,7 +925,7 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (r
   } catch (err) {
     await debit.refund();
     console.error('Identify text error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to identify wine' });
+    return res.status(500).json({ error: 'Failed to identify wine' });
   }
 
   if (!result.data) {
@@ -994,7 +994,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
   } catch (err) {
     await debit.refund();
     console.error('AI info error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to get AI wine info' });
+    return res.status(500).json({ error: 'Failed to get AI wine info' });
   }
 }));
 
