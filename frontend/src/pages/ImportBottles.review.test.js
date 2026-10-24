@@ -6,6 +6,8 @@
  * - "Back to upload" must forget a partial validation run along with its
  *   results, or the next Match resumes past batches that are no longer in the
  *   review and they never reach the import.
+ * - A year typed into a vintage-missing row must reach the saved draft like
+ *   any other review edit.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -113,3 +115,28 @@ it('Back to upload forgets a partial validation, so the next Match starts again 
   expect(validateImport.mock.calls[2][1].items).toHaveLength(25);
   expect(validateImport.mock.calls[3][1].items).toHaveLength(5);
 });
+
+it('a year typed into a vintage-missing row is saved to the draft', async () => {
+  scanReceipt.mockResolvedValue(jsonRes(receiptOf([
+    { wineName: 'Barolo', producer: 'Giacomo Conterno', quantity: 1 },
+  ])));
+  validateImport.mockImplementation((_af, { items }) => Promise.resolve(validated(items, 'no_match')));
+  createImportSession.mockResolvedValue(jsonRes({ sessionId: 's1' }));
+  updateImportSession.mockResolvedValue(jsonRes({}));
+
+  const { container } = render(<ImportBottles />);
+  chooseReceipt(container);
+  fireEvent.click(await screen.findByText('importBottles.validate.matchButton:1'));
+
+  // The review is saved once on arrival, before anything is typed.
+  await waitFor(() => expect(screen.getByText('importBottles.review.saved')).toBeTruthy(), { timeout: 4000 });
+  expect(createImportSession.mock.calls[0][1].results[0].item.vintage).toBe('NV');
+  expect(updateImportSession).not.toHaveBeenCalled();
+
+  fireEvent.change(screen.getByLabelText('importBottles.preview.vintageInputAria'), { target: { value: '2019' } });
+
+  await waitFor(() => expect(updateImportSession).toHaveBeenCalled(), { timeout: 4000 });
+  const [, sessionId, payload] = updateImportSession.mock.calls.at(-1);
+  expect(sessionId).toBe('s1');
+  expect(payload.results[0].item.vintage).toBe('2019');
+}, 15000);

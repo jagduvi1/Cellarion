@@ -297,7 +297,10 @@ function ImportBottles() {
     importWarnings, detectedEncoding, ctTable, ctTextFallback
   };
 
-  // Auto-save whenever selections or manualWines change while in review step
+  // Auto-save whenever a review edit (a selection, a manual wine, a typed
+  // vintage, the rack/currency options) changes while in the review step.
+  // Validation commits results while the step is still 'upload', which the
+  // early return keeps from saving.
   useEffect(() => {
     if (step !== 'review' || results.length === 0) return;
 
@@ -348,7 +351,7 @@ function ImportBottles() {
     }, 1500);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [step, selections, manualWines, positionAnchor, rackConfigs, importCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, results, selections, manualWines, positionAnchor, rackConfigs, importCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute summary from a results array (used after resume + refresh)
   const computeSummary = (rs) => ({
