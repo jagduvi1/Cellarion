@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { idempotency } = require('../middleware/idempotency');
 const { requireCellarAccess } = require('../middleware/cellarAccess');
+const { ROLE_LEVELS } = require('../middleware/bottleAccess');
 const Rack = require('../models/Rack');
 const { RACK_TYPES } = require('../models/Rack');
 const Cellar = require('../models/Cellar');
@@ -87,6 +88,27 @@ async function withMaturity(rackOrRacks) {
 // typeConfig.doubleHeightRows request validation lives in utils/rackGeometry
 // (validateDoubleHeightRows) — shared with services/rackOps.createGridRack so
 // the create path and the update route below can't drift.
+
+// The routes under /:id reach the cellar through the rack, so they answer the
+// way requireCellarAccess does: a missing or soft-deleted cellar, and a caller
+// with no role on it, read exactly like a rack that does not exist (no
+// existence oracle for rack ids; a deleted cellar's racks stay frozen until
+// restore or purge). Only a member below minRole gets the 403, with the
+// route's own message. Sends the refusal itself and returns null; otherwise
+// returns the caller's role.
+async function rackAccess(req, res, rack, minRole, deniedMessage) {
+  const cellarDoc = await Cellar.findById(rack.cellar);
+  const role = cellarDoc && !cellarDoc.deletedAt ? getCellarRole(cellarDoc, req.user.id) : null;
+  if (!role) {
+    res.status(404).json({ error: 'Rack not found' });
+    return null;
+  }
+  if ((ROLE_LEVELS[role] || 0) < (ROLE_LEVELS[minRole] || 0)) {
+    res.status(403).json({ error: deniedMessage });
+    return null;
+  }
+  return role;
+}
 
 // GET /api/racks/nfc/:id  — resolve a rack ID to its cellar (for NFC tag redirect)
 // Requires auth so only logged-in users can follow NFC links.
@@ -206,11 +228,7 @@ router.put('/:id', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify this rack' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify this rack'))) return;
 
     const { name, type, rows, cols, typeConfig, isModular, modules, rfidTag, zones, group } = req.body;
 
@@ -435,11 +453,7 @@ router.delete('/:id', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (role !== 'owner') {
-      return res.status(403).json({ error: 'Only the cellar owner can delete racks' });
-    }
+    if (!(await rackAccess(req, res, rack, 'owner', 'Only the cellar owner can delete racks'))) return;
 
     // Clear all bottle slot assignments before soft-deleting
     if (rack.slots.length > 0) {
@@ -495,11 +509,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
     if (slotChanged(rack, position, req.body.expectOccupant)) return res.status(409).json(SLOT_CHANGED);
 
     // Placement invariants + slot write are shared with the MCP place tool.
@@ -529,11 +539,7 @@ router.post('/:id/slots/:position/move', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
 
     const maxPos = getMaxPosition(rack);
     if (from < 1 || from > maxPos || to < 1 || to > maxPos) {
@@ -586,12 +592,7 @@ router.post('/:id/move-bottles', async (req, res) => {
     const target = source ? await Rack.findOne({ _id: toRackId, cellar: source.cellar, deletedAt: null }) : null;
     if (!source || !target) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(source.cellar);
-    if (!cellarDoc || cellarDoc.deletedAt) return res.status(404).json({ error: 'Rack not found' });
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, source, 'editor', 'Not authorized to modify rack slots'))) return;
 
     const result = await moveRackBottles(source, target, req);
     if (result.error) {
@@ -631,11 +632,7 @@ router.post('/:id/arrange/preview', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).populate(ARRANGE_SLOT_POPULATE);
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
 
     const maxPos = getMaxPosition(rack);
     let positionOrder;
@@ -694,11 +691,7 @@ router.post('/:id/arrange/apply', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
 
     // Staleness guard: the rack must hold EXACTLY the occupancy the plan was
     // computed from — any placement, removal or move since = recompute.
@@ -739,11 +732,7 @@ router.delete('/:id/slots/:position', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
 
     // ?expect=<bottleId> — the bottle the user saw in the slot (offline queue).
     if (req.query.expect !== undefined && slotChanged(rack, position, String(req.query.expect))) {
@@ -770,11 +759,7 @@ router.post('/:id/slots/:position/disable', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
 
     const maxPos = getMaxPosition(rack);
     if (position < 1 || position > maxPos) {
@@ -814,11 +799,7 @@ router.delete('/:id/slots/:position/disable', async (req, res) => {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
-    }
+    if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
 
     if (rack.disabledPositions.includes(position)) {
       rack.disabledPositions = rack.disabledPositions.filter(p => p !== position);

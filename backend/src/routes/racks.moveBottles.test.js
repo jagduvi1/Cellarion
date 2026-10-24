@@ -182,7 +182,7 @@ describe('POST /api/racks/:id/move-bottles', () => {
 
   test.each([
     ['a viewer', () => token(VIEWER), 403],
-    ['someone with no access', () => token(STRANGER), 403],
+    ['someone with no access', () => token(STRANGER), 404],
   ])('refuses %s', async (_label, auth, code) => {
     const { status } = await post(`/api/racks/${SRC}/move-bottles`, { toRackId: DST }, auth());
     expect(status).toBe(code);
