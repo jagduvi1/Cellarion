@@ -558,6 +558,9 @@ registerTool({
     profile.setBy = null;
     profile.setAt = null;
     await profile.save();
+    // Same as the REST route: withdrawing the window changes the owners'
+    // maturity statistics — move their data version.
+    bumpWineOwners([profile.wineDefinition?._id || profile.wineDefinition]);
 
     logAudit(ctx.req, 'somm.maturity.reset',
       { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },

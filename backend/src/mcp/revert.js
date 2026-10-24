@@ -776,6 +776,9 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         if (err?.name === 'VersionError') return fail('conflict', 'The profile changed mid-undo — retry.');
         throw err;
       }
+      // The restored window changes the owners' maturity statistics like the
+      // write it undoes did: move their data version. Never throws.
+      require('../services/dataVersion').bumpWineOwners([profile.wineDefinition]);
       envelope = { summary: `Undid maturity review — vintage ${row.detail?.vintage} back to ${profile.status}`, data: { undone: 'set_vintage_maturity', profile_id: String(profile._id), status: profile.status } };
     }
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
