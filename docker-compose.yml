@@ -8,7 +8,7 @@ services:
     # Digest-pinned (security audit L-11): mongo:7 is a moving minor tag.
     # Dependabot's docker-compose ecosystem bumps this; the tag is kept for
     # readability.
-    image: mongo:7@sha256:340c1c56fb10e95cf79ff547f8664b96bc6ead9909bc355238cbf865a9695a6f
+    image: mongo:7@sha256:c53852c00c23ca9f23fc39690350ffa9a80e3642fe8f96879726d8da0abe80a7
     container_name: cellarion-mongo
     restart: unless-stopped
     security_opt:
@@ -48,7 +48,7 @@ services:
     # Digest-pinned (security audit L-11) to the multi-arch index digest, so
     # amd64 and arm64 hosts both pull. Dependabot's docker-compose ecosystem
     # bumps the tag and digest together.
-    image: getmeili/meilisearch:v1.45.1@sha256:ac40212f9e5a7526d8007586e3e46fb0441d29dd36c7b02fa2341d2c9a1f6493
+    image: getmeili/meilisearch:v1.55.0@sha256:ff546679970126f8822e15d1b6a06bfbff1f2ce2e43f810cfb5258012f92de5c
     container_name: cellarion-meilisearch
     restart: unless-stopped
     security_opt:
@@ -291,7 +291,7 @@ services:
     # Digest-pinned (security audit L-11): `:postgresql-latest` is a fully
     # moving tag — the worst supply-chain case. Dependabot's docker-compose
     # ecosystem bumps it.
-    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:8edfe4beaef13f9d1300619fa264ef250a3688df9cc54d24ca830ca31cb475ec
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
     container_name: cellarion-umami
     restart: unless-stopped
     # Opt-in: only starts with `docker compose --profile analytics up`. It is
