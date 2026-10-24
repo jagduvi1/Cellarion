@@ -4,7 +4,8 @@
  *
  * Pins: an upload onto a bottle writes 'image.attach' (via 'web') through the
  * real shared pipeline; linking photos uploaded before the bottle existed
- * writes 'image.link'; restarting background removal writes 'image.retry';
+ * writes 'image.link', naming only the caller's own photos the link touched;
+ * restarting background removal writes 'image.retry';
  * a refused request writes nothing.
  */
 
@@ -16,6 +17,7 @@ jest.mock('../models/BottleImage', () => {
   });
   M.countDocuments = jest.fn();
   M.updateMany = jest.fn();
+  M.distinct = jest.fn();
   M.findById = jest.fn();
   return M;
 });
@@ -85,6 +87,8 @@ beforeEach(() => {
   getCellarRole.mockReturnValue('owner');
   BottleImage.countDocuments.mockResolvedValue(0);
   BottleImage.updateMany.mockResolvedValue({});
+  // Every id sent is the caller's own upload unless a test says otherwise.
+  BottleImage.distinct.mockImplementation(async (field, filter) => filter._id.$in);
   Bottle.findById.mockResolvedValue({ _id: BOTTLE, cellar: CELLAR, vintage: '2016' });
   Cellar.findById.mockResolvedValue({ _id: CELLAR });
 });
@@ -133,6 +137,22 @@ describe('POST /api/images/link-to-bottle', () => {
     expect(action).toBe('image.link');
     expect(resource).toEqual({ type: 'bottle', id: BOTTLE, cellarId: CELLAR });
     expect(detail).toEqual({ imageIds: [oid('e'), oid('d')], via: 'web' });
+  });
+
+  test('the row names only the photos that are the caller\'s own uploads — the ones the link touches', async () => {
+    BottleImage.distinct.mockResolvedValue([oid('e')]);
+    const { status } = await send('POST', '/api/images/link-to-bottle', { bottleId: BOTTLE, imageIds: [oid('e'), oid('d')] });
+    expect(status).toBe(200);
+    expect(BottleImage.distinct).toHaveBeenCalledWith('_id', { _id: { $in: [oid('e'), oid('d')] }, uploadedBy: USER });
+    expect(logAudit).toHaveBeenCalledTimes(1);
+    expect(logAudit.mock.calls[0][3]).toEqual({ imageIds: [oid('e')], via: 'web' });
+  });
+
+  test('ids that match none of the caller\'s uploads write no row', async () => {
+    BottleImage.distinct.mockResolvedValue([]);
+    const { status } = await send('POST', '/api/images/link-to-bottle', { bottleId: BOTTLE, imageIds: [oid('d')] });
+    expect(status).toBe(200);
+    expect(logAudit).not.toHaveBeenCalled();
   });
 
   test('a viewer is refused and nothing is written', async () => {

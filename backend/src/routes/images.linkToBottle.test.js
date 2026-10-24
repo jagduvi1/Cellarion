@@ -7,7 +7,7 @@
 
 process.env.JWT_SECRET = 'test-secret';
 
-jest.mock('../models/BottleImage', () => ({ countDocuments: jest.fn(), updateMany: jest.fn() }));
+jest.mock('../models/BottleImage', () => ({ countDocuments: jest.fn(), updateMany: jest.fn(), distinct: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({}));
@@ -55,6 +55,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   BottleImage.countDocuments.mockResolvedValue(0);
   BottleImage.updateMany.mockResolvedValue({});
+  BottleImage.distinct.mockImplementation(async (field, filter) => filter._id.$in);
   Cellar.findById.mockResolvedValue({ _id: oid('c') });
 });
 

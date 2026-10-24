@@ -540,14 +540,19 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
       return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` });
     }
 
+    // Only the caller's own uploads are linked; the audit row names exactly
+    // those, and a request that matches none of them writes no row.
+    const own = { _id: { $in: imageIds }, uploadedBy: req.user.id };
+    const ownIds = new Set((await BottleImage.distinct('_id', own)).map(String));
+    const linkedIds = [...new Set(imageIds.map(String))].filter(id => ownIds.has(id));
+
     // The AddBottle flow uploads before the bottle exists, so the photo learns
     // its vintage here, with its bottle (support ticket 2026-10-09).
-    await BottleImage.updateMany(
-      { _id: { $in: imageIds }, uploadedBy: req.user.id },
-      { bottle: bottleId, vintage: photoVintage(bottle.vintage) }
-    );
-    logAudit(req, 'image.link', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-      { imageIds: imageIds.map(String), via: 'web' });
+    await BottleImage.updateMany(own, { bottle: bottleId, vintage: photoVintage(bottle.vintage) });
+    if (linkedIds.length) {
+      logAudit(req, 'image.link', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+        { imageIds: linkedIds, via: 'web' });
+    }
 
     res.json({ message: 'Images linked to bottle' });
   } catch (error) {
