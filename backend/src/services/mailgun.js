@@ -297,8 +297,12 @@ async function sendCellarInviteEmail(toEmail, senderName, senderEmail, cellarNam
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const registerLink = `${frontendUrl}/register`;
-  const googlePlayLink = 'https://play.google.com/store/apps/details?id=app.cellarion.twa';
-  const websiteLink = 'https://cellarion.app';
+  // The shared cellar exists only on this instance, and the Google Play app is
+  // bound to cellarion.app: only the hosted service offers the app.
+  const hosted = isHostedCellarion();
+  const googlePlayLink = hosted ? 'https://play.google.com/store/apps/details?id=app.cellarion.twa' : null;
+  const websiteLink = frontendUrl;
+  const websiteLabel = hosted ? 'Visit cellarion.app' : 'Open Cellarion';
   const roleLabel = role === 'editor' ? 'view and edit' : 'view';
 
   await mg.messages.create(DOMAIN, {
@@ -315,9 +319,7 @@ async function sendCellarInviteEmail(toEmail, senderName, senderEmail, cellarNam
       '',
       'Once you sign up, the shared cellar will automatically appear in your account.',
       '',
-      'You can also get Cellarion on Google Play:',
-      googlePlayLink,
-      '',
+      ...(googlePlayLink ? ['You can also get Cellarion on Google Play:', googlePlayLink, ''] : []),
       `Or visit our website: ${websiteLink}`,
       '',
       'Cheers!',
@@ -339,9 +341,9 @@ async function sendCellarInviteEmail(toEmail, senderName, senderEmail, cellarNam
         </p>
         <p>Once you sign up, the shared cellar will automatically appear in your account.</p>
         <p style="margin-top:1.5rem;">
-          <a href="${googlePlayLink}" style="color:#7B9E88;font-weight:600;">Get it on Google Play</a>
+          ${googlePlayLink ? `<a href="${googlePlayLink}" style="color:#7B9E88;font-weight:600;">Get it on Google Play</a>
           &nbsp;&middot;&nbsp;
-          <a href="${websiteLink}" style="color:#7B9E88;font-weight:600;">Visit cellarion.app</a>
+          ` : ''}<a href="${websiteLink}" style="color:#7B9E88;font-weight:600;">${websiteLabel}</a>
         </p>
         <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
         <p style="color:#9A9484;font-size:0.85em;">
