@@ -8,6 +8,7 @@ const { logAudit } = require('../services/audit');
 const { issueTokens, clientHint } = require('../services/authTokens');
 const { resolvePendingShares } = require('../services/pendingShares');
 const { CookieStateStore } = require('../services/oauthStateStore');
+const { isReservedUsername } = require('../utils/deletedUser');
 
 const router = express.Router();
 
@@ -95,11 +96,13 @@ const failureRedirect = (reason) => `${frontendBase}/login/callback?error=${enco
 /**
  * Derive a unique, schema-valid username (3–30 chars, [a-z0-9_.-], lowercase)
  * from the email local-part or display name, appending a short random suffix on
- * collision so first-time SSO users always get a usable handle.
+ * collision so first-time SSO users always get a usable handle. A reserved
+ * system name (utils/deletedUser.js) loses its leading underscores.
  */
 async function generateUniqueUsername(email, displayName) {
   const seed = email.split('@')[0] || displayName || 'user';
   let base = seed.toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+  if (isReservedUsername(base)) base = base.replace(/^_+/, '');
   if (base.length < 3) base = `${base}user`;
   base = base.slice(0, 24); // leave headroom for a suffix within the 30-char cap
 

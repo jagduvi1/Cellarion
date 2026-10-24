@@ -7,10 +7,21 @@ const User = require('../models/User');
 // at this sentinel so the conversation stays intact for other users.
 //
 // The sentinel can never be authenticated as: the bcrypt hash is intentionally
-// invalid, profileVisibility is private (excludes from search), and the
-// double-underscore prefix sits outside the conventional username allowlist.
+// invalid and profileVisibility is private (excludes from search).
+//
+// The sentinel is found BY USERNAME, so a person holding its name would become
+// it and inherit every erased member's content. Every double-underscore name is
+// reserved for system accounts: registration refuses one and SSO never derives
+// one (isReservedUsername). The rule lives here, not in the User model, because
+// the sentinel itself is created through that model.
 const SENTINEL_USERNAME = '__deleted__';
 const SENTINEL_EMAIL    = 'deleted@cellarion.invalid';
+
+// Compared the way the User schema stores a username: trimmed, lowercase.
+function isReservedUsername(name) {
+  const n = typeof name === 'string' ? name.trim().toLowerCase() : '';
+  return n === SENTINEL_USERNAME || n.startsWith('__');
+}
 
 // Module-level cache so we don't hit the DB every time userDeletionJob runs.
 let cachedId = null;
@@ -43,6 +54,7 @@ async function getOrCreateDeletedUser() {
 
 module.exports = {
   getOrCreateDeletedUser,
+  isReservedUsername,
   SENTINEL_USERNAME,
   SENTINEL_EMAIL
 };

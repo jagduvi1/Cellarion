@@ -15,6 +15,7 @@ const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, 
 const { isAccountLocked, isAccountLockedNow, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
 const { rateLimitKey } = require('../utils/clientIp');
 const { sanitizeSignupSource } = require('../utils/signupSource');
+const { isReservedUsername } = require('../utils/deletedUser');
 // Token issuance + refresh-cookie handling and pending-share resolution are
 // extracted to services so the password flow (here) and the SSO flow
 // (routes/oauth.js) share one implementation.
@@ -124,9 +125,10 @@ router.post('/register', authLimiter, async (req, res) => {
     // blocks an email-shaped username (login resolves username OR email, so a
     // username like "victim@example.com" could shadow that email's login) and
     // caps length. Enforced at registration only, so existing accounts that
-    // predate the rule aren't broken on unrelated saves.
+    // predate the rule aren't broken on unrelated saves. A reserved system name
+    // (utils/deletedUser.js) gets the same answer, so nothing says it is special.
     const uname = typeof username === 'string' ? username.trim() : '';
-    if (uname.length < 3 || uname.length > 30 || !/^[a-z0-9_.-]+$/i.test(uname)) {
+    if (uname.length < 3 || uname.length > 30 || !/^[a-z0-9_.-]+$/i.test(uname) || isReservedUsername(uname)) {
       return res.status(400).json({ error: 'Username must be 3–30 characters and use only letters, numbers, dots, underscores, or hyphens.' });
     }
 
