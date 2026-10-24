@@ -1,6 +1,8 @@
 // The guard itself is not under test here (it needs the Appellation
 // taxonomy); its output is passed in.
 jest.mock('../services/findOrCreateWine', () => ({ unpolluteEstateName: jest.fn() }));
+jest.mock('../services/search', () => ({ indexWine: jest.fn() }));
+jest.mock('./lib/scriptSearch', () => ({ initSearch: jest.fn() }));
 
 const { buildFixUpdate } = require('./fix-classification-polluted-names');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
