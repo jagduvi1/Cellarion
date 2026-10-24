@@ -6,18 +6,24 @@
 export const VIEW_MODES = ['list', 'card'];
 export const VIEW_MODE_KEY = 'cellarion_bottle_view';
 
-export function readBottleViewMode(storage = globalThis.localStorage) {
+// Without `storage` (the app) this browser's localStorage is used. It is looked
+// up inside the try: with site data blocked, the getter itself throws.
+const storageOrDefault = (storage) => (storage === undefined ? globalThis.localStorage : storage);
+
+export function readBottleViewMode(storage) {
   try {
-    const v = storage ? storage.getItem(VIEW_MODE_KEY) : null;
+    const store = storageOrDefault(storage);
+    const v = store ? store.getItem(VIEW_MODE_KEY) : null;
     return VIEW_MODES.includes(v) ? v : 'list';
   } catch {
     return 'list';
   }
 }
 
-export function storeBottleViewMode(mode, storage = globalThis.localStorage) {
+export function storeBottleViewMode(mode, storage) {
   try {
-    if (storage) storage.setItem(VIEW_MODE_KEY, mode);
+    const store = storageOrDefault(storage);
+    if (store) store.setItem(VIEW_MODE_KEY, mode);
   } catch {
     // Private mode / quota — the preference just does not persist.
   }

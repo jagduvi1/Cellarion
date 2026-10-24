@@ -19,6 +19,7 @@ const notifyApiMutation = (url) => {
 import i18n, { hasLanguagePreview } from '../i18n';
 import { getSignupSource } from '../utils/signupSource';
 import { markSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
+import { removeStored } from '../utils/safeStorage';
 import { track } from '../utils/track';
 import { guessCurrency } from '../utils/localeDefaults';
 import { saveLocaleDefaults } from '../api/auth';
@@ -136,9 +137,9 @@ export const AuthProvider = ({ children }) => {
 
   const clearToken = () => {
     // Clean up any legacy stored tokens from previous versions
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('sessionOnly');
+    removeStored('token');
+    removeStored('token', 'session');
+    removeStored('sessionOnly', 'session');
     setToken(null);
     tokenRef.current = null;
   };
@@ -326,9 +327,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Migrate: clear any legacy stored tokens from previous versions
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('sessionOnly');
+    removeStored('token');
+    removeStored('token', 'session');
+    removeStored('sessionOnly', 'session');
 
     // On mount, attempt to restore session via httpOnly refresh cookie
     const restoreSession = async () => {

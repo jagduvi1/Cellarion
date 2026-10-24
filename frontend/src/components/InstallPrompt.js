@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { track } from '../utils/track';
+import { readStored, writeStored } from '../utils/safeStorage';
 
 function InstallPrompt() {
   const { t } = useTranslation();
@@ -9,7 +10,7 @@ function InstallPrompt() {
 
   useEffect(() => {
     // Don't show if user previously dismissed
-    if (sessionStorage.getItem('pwa-install-dismissed')) {
+    if (readStored('pwa-install-dismissed', 'session')) {
       setDismissed(true);
       return;
     }
@@ -38,7 +39,7 @@ function InstallPrompt() {
   const handleDismiss = () => {
     setDismissed(true);
     setDeferredPrompt(null);
-    sessionStorage.setItem('pwa-install-dismissed', '1');
+    writeStored('pwa-install-dismissed', '1', 'session');
   };
 
   if (!deferredPrompt || dismissed) return null;

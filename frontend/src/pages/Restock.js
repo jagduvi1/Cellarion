@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getStatsOverview } from '../api/stats';
 import { getRestockAlerts, dismissRestockAlert } from '../api/restockAlerts';
+import { writeStored } from '../utils/safeStorage';
 import './Restock.css';
 
 // Shared restock math for one category dimension: one entry per consumed
@@ -138,7 +139,7 @@ export default function Restock() {
   // localStorage mirrors the dismissed state via the effect below — state
   // updates stay pure (safe under StrictMode's double-invoked updaters).
   useEffect(() => {
-    localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(dismissed));
+    writeStored('cellarion_restock_dismissed', JSON.stringify(dismissed));
   }, [dismissed]);
 
   const handleDismissCategory = (category, name) => {

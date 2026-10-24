@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { readStored, writeStored } from '../utils/safeStorage';
 import './AnnouncementBanner.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -50,7 +51,7 @@ function AnnouncementBanner() {
   const { t, i18n } = useTranslation();
   const [announcement, setAnnouncement] = useState(null);
   const [dismissedVersion, setDismissedVersion] = useState(
-    () => localStorage.getItem(DISMISS_KEY)
+    () => readStored(DISMISS_KEY)
   );
 
   useEffect(() => {
@@ -86,7 +87,7 @@ function AnnouncementBanner() {
 
   const dismiss = () => {
     const version = announcement.updatedAt || 'unknown';
-    localStorage.setItem(DISMISS_KEY, version);
+    writeStored(DISMISS_KEY, version);
     setDismissedVersion(version);
   };
 

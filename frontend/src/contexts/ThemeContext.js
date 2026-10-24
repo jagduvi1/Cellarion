@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { readStored, writeStored } from '../utils/safeStorage';
 
 const ThemeContext = createContext();
 
@@ -14,13 +15,13 @@ export const ThemeProvider = ({ children }) => {
     // wine-label imagery are designed for the warm cream palette — first-time
     // visitors see that even when their OS is in dark mode. Returning users
     // get whatever they last chose via the toggle.
-    const saved = localStorage.getItem('cellarion-theme');
+    const saved = readStored('cellarion-theme');
     return saved || 'light';
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('cellarion-theme', theme);
+    writeStored('cellarion-theme', theme);
 
     // Update theme-color meta tag
     const metaLight = document.querySelector('meta[name="theme-color"][media*="light"]');
