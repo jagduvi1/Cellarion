@@ -14,7 +14,7 @@ jest.mock('../models/WineDefinition', () => ({ exists: jest.fn() }));
 
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WineDefinition = require('../models/WineDefinition');
-const { ensurePendingVintageProfile } = require('./vintageProfile');
+const { ensurePendingVintageProfile, MATURITY_QUEUE_EXCLUDED } = require('./vintageProfile');
 
 const WINE = 'a'.repeat(24);
 
@@ -55,13 +55,16 @@ test('Unknown vintage and missing args are no-ops', async () => {
 test('a nonWine-quarantined wine never seeds — the quarantine covers the somm queue too', async () => {
   WineDefinition.exists.mockResolvedValue({ _id: WINE });
   await ensurePendingVintageProfile(WINE, '2018');
-  // The quarantine query now also covers pendingIdentity rows — same reason
-  // (nothing to curate a drink window against) and same no-op outcome.
-  expect(WineDefinition.exists).toHaveBeenCalledWith({
-    _id: WINE,
-    $or: [{ nonWine: true }, { pendingIdentity: true }],
-  });
+  // The quarantine query is the shared exclusion the backfill script uses too.
+  expect(WineDefinition.exists).toHaveBeenCalledWith({ _id: WINE, ...MATURITY_QUEUE_EXCLUDED });
   expect(WineVintageProfile.findOneAndUpdate).not.toHaveBeenCalled();
+});
+
+test('the queue exclusion covers non-wines, pending-identity rows and drafts', () => {
+  // Same reason for all three: nothing to curate a drink window against.
+  expect(MATURITY_QUEUE_EXCLUDED).toEqual({
+    $or: [{ nonWine: true }, { pendingIdentity: true }, { draft: true }],
+  });
 });
 
 test('a write failure is swallowed — seeding is best-effort next to the bottle save', async () => {

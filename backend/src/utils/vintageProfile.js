@@ -2,6 +2,15 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WineDefinition = require('../models/WineDefinition');
 
 /**
+ * Wines that never get a pending maturity row: quarantined non-wines,
+ * pending-identity rows and drafts (a draft is always pendingIdentity too;
+ * the clause states the intent). Shared by the per-bottle seed below and the
+ * bulk re-seed script (scripts/backfill-maturity-profiles.js), so both keep
+ * the same wines out of the somm queue.
+ */
+const MATURITY_QUEUE_EXCLUDED = { $or: [{ nonWine: true }, { pendingIdentity: true }, { draft: true }] };
+
+/**
  * Ensure a *pending* WineVintageProfile exists for a (wine, vintage) pair so the
  * wine surfaces in the sommelier maturity queue.
  *
@@ -44,10 +53,7 @@ async function ensurePendingVintageProfile(wineDefinitionId, vintage) {
     // until the wine has an identity — and it would double-surface the row in
     // two queues. The pending-wines queue is where it belongs; promotion
     // re-seeds the maturity rows from the wine's own bottles.
-    if (await WineDefinition.exists({
-      _id: wineDefinitionId,
-      $or: [{ nonWine: true }, { pendingIdentity: true }],
-    })) return;
+    if (await WineDefinition.exists({ _id: wineDefinitionId, ...MATURITY_QUEUE_EXCLUDED })) return;
     await WineVintageProfile.findOneAndUpdate(
       { wineDefinition: wineDefinitionId, vintage },
       { $setOnInsert: { wineDefinition: wineDefinitionId, vintage, status: 'pending', relative: vintage === 'NV' } },
@@ -59,4 +65,4 @@ async function ensurePendingVintageProfile(wineDefinitionId, vintage) {
   }
 }
 
-module.exports = { ensurePendingVintageProfile };
+module.exports = { ensurePendingVintageProfile, MATURITY_QUEUE_EXCLUDED };

@@ -5,8 +5,7 @@
  * one bottle but no corresponding WineVintageProfile, create a pending profile
  * so the wine+vintage appears in the somm maturity queue.
  *
- * This is the general superset of backfill-nv-profiles.js: it covers EVERY
- * non-"Unknown" vintage (year vintages AND NV), not just NV. Run it once after
+ * It covers EVERY non-"Unknown" vintage (year vintages AND NV). Run it once after
  * deploying the fix that seeds the queue from imports — wines imported BEFORE
  * that fix (especially ones added via a "request" later approved by an admin)
  * have bottles with a wineDefinition but no pending profile, so they never
@@ -16,6 +15,11 @@
  * Behaviour:
  *   - DRY-RUN by default: prints what would be created, changes nothing.
  *   - Pass --apply to actually write the profiles.
+ *   - Skips the wines ensurePendingVintageProfile keeps out of the queue
+ *     (MATURITY_QUEUE_EXCLUDED: quarantined non-wines, pending-identity rows,
+ *     drafts). The quarantine and the draft/undo cleanups delete their pending
+ *     rows; a re-seed must not put them back.
+ *   - Idempotent: a pair that already has a profile (any status) is skipped.
  *
  * Usage (containers must be running):
  *   docker exec cellarion-backend node src/scripts/backfill-maturity-profiles.js          # dry run
@@ -34,6 +38,7 @@ require('../models/Country');
 require('../models/Region');
 require('../models/Grape');
 require('../models/User');
+const { MATURITY_QUEUE_EXCLUDED } = require('../utils/vintageProfile');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar';
 
@@ -42,11 +47,17 @@ const APPLY = args.has('--apply');
 
 const key = (wineDefinition, vintage) => `${wineDefinition}:${vintage}`;
 
-async function run() {
+/** The missing pairs whose wine is not in `excludedIds` (ids of any type). */
+function filterEligible(missing, excludedIds) {
+  const excluded = new Set([...excludedIds].map(String));
+  return missing.filter(m => !excluded.has(String(m.wineDefinition)));
+}
+
+async function run({ apply = APPLY } = {}) {
   console.log('Connecting to MongoDB…');
   await mongoose.connect(MONGO_URI);
   console.log('Connected.\n');
-  console.log(APPLY ? 'Mode: APPLY (profiles will be written)' : 'Mode: DRY RUN (no changes)');
+  console.log(apply ? 'Mode: APPLY (profiles will be written)' : 'Mode: DRY RUN (no changes)');
   console.log('');
 
   // Distinct (wineDefinition, vintage) pairs across all bottles linked to a real
@@ -65,29 +76,37 @@ async function run() {
   const missing = pairs
     .map(p => ({ wineDefinition: p._id.wineDefinition, vintage: p._id.vintage }))
     .filter(p => !have.has(key(p.wineDefinition, p.vintage)));
-  console.log(`  missing a profile (to backfill):         ${missing.length}`);
+  console.log(`  missing a profile:                       ${missing.length}`);
 
-  if (missing.length === 0) {
+  const missingWineIds = [...new Set(missing.map(m => String(m.wineDefinition)))];
+  const excludedIds = missingWineIds.length
+    ? await WineDefinition.distinct('_id', { _id: { $in: missingWineIds }, ...MATURITY_QUEUE_EXCLUDED })
+    : [];
+  const eligible = filterEligible(missing, excludedIds);
+  console.log(`  excluded (non-wine / pending identity / draft): ${missing.length - eligible.length}`);
+  console.log(`  to backfill:                             ${eligible.length}`);
+
+  if (eligible.length === 0) {
     console.log('\nNothing to do.');
     await mongoose.disconnect();
     return;
   }
 
   // Sample up to 10 for context.
-  const sampleIds = [...new Set(missing.slice(0, 10).map(m => m.wineDefinition))];
+  const sampleIds = [...new Set(eligible.slice(0, 10).map(m => m.wineDefinition))];
   const sampleWines = await WineDefinition.find({ _id: { $in: sampleIds } }, 'name producer').lean();
   const nameById = new Map(sampleWines.map(w => [w._id.toString(), w]));
   console.log('  sample pairs that will get a profile:');
-  for (const m of missing.slice(0, 10)) {
+  for (const m of eligible.slice(0, 10)) {
     const w = nameById.get(m.wineDefinition.toString());
     console.log(`    ${w?.producer || '?'} — ${w?.name || '?'} (${m.vintage})`);
   }
-  if (missing.length > 10) {
-    console.log(`    … and ${missing.length - 10} more`);
+  if (eligible.length > 10) {
+    console.log(`    … and ${eligible.length - 10} more`);
   }
 
-  if (APPLY) {
-    const docs = missing.map(m => ({
+  if (apply) {
+    const docs = eligible.map(m => ({
       wineDefinition: m.wineDefinition,
       vintage: m.vintage,
       status: 'pending',
@@ -111,7 +130,11 @@ async function run() {
   await mongoose.disconnect();
 }
 
-run().catch(err => {
-  console.error('Backfill failed:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch(err => {
+    console.error('Backfill failed:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { run, filterEligible };

@@ -10,5 +10,5 @@ docker exec cellarion-backend node src/scripts/archive/<script>.js
 ```
 
 Scripts that may still need a production run (e.g. `migrate-wine-list-entries.js`,
-`strip-exif-images.js`, `backfill-nv-profiles.js`) and operational utilities
+`strip-exif-images.js`) and operational utilities
 (cleanups, seeders, admin tools) stay in the parent `scripts/` directory.
