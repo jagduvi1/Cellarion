@@ -1,5 +1,14 @@
 {
   "nav": {
     "myCellars": "Mine kjellere"
+  },
+  "registryTerms": {
+    "contributionNote": "Når du sender inn, gir du Cellarion lov til å bruke dette i det felles vinregisteret etter vilkårene for registerdata.",
+    "link": "Vilkår for registerdata"
+  },
+  "common": {
+    "save": "Lagre",
+    "saving": "Lagrer …",
+    "saved": "Lagret"
   }
 }
