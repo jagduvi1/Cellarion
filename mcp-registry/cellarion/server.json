@@ -3,7 +3,7 @@
   "name": "app.cellarion/cellarion",
   "title": "Cellarion",
   "description": "Wine cellar manager: bottles, racks, drink windows, pairings and a shared wine registry.",
-  "version": "1.82.4",
+  "version": "1.279.2",
   "websiteUrl": "https://cellarion.app",
   "repository": {
     "url": "https://github.com/jagduvi1/Cellarion",
@@ -34,7 +34,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "cellarion-mcp",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },

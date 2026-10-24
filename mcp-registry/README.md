@@ -89,11 +89,20 @@ curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=app.cellarion
 proof of npm ownership is that `package.json` carries an `mcpName` field
 matching `server.json`'s `name`. So:
 
-1. Publish `cellarion-mcp@0.1.1` to npm **first** (it now has
-   `"mcpName": "app.cellarion/cellarion"`). This must be run in an
-   **interactive terminal** — the npm account's 2FA is a passkey, so a non-TTY
-   `npm publish` fails with `EOTP`.
-2. Then publish `cellarion/server.json`.
+1. Publish the `cellarion-mcp` version that `server.json` names to npm
+   **first** (its `package.json` carries `"mcpName": "app.cellarion/cellarion"`).
+   GitHub Actions does this: bump the version in `cellarion-mcp/package.json`
+   and the root of its `package-lock.json`, merge, then push the tag
+   `cellarion-mcp-v<version>` on that commit of main.
+   `.github/workflows/cellarion-mcp-publish.yml` checks the tag against the
+   version, runs the bridge's tests and publishes with npm Trusted Publishing
+   (OIDC, no token or 2FA prompt, provenance attached). This needs a one-time
+   setting on npmjs.com: package `cellarion-mcp` → Settings → Trusted Publisher
+   → GitHub Actions, user `jagduvi1`, repository `Cellarion`, workflow
+   `cellarion-mcp-publish.yml`. A new trusted-publisher setting must see its
+   first successful publish within two days.
+2. Then publish `cellarion/server.json`, with its `packages[0].version` set to
+   that npm version.
 
 Publishing it before the npm release fails with
 `NPM package 'cellarion-mcp' is missing required 'mcpName' field`.
