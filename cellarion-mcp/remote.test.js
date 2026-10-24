@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { makeRemote } from './remote.js';
 
 // A fake remote: every connect() makes a new client; each request takes the
@@ -147,6 +148,36 @@ test('each full tool list replaces the read-only tools; a later page adds to the
   await assert.rejects(remote.callTool({ name: 'search_bottles', arguments: {} }), /HTTP 502/, 'gone from the new list');
   assert.deepEqual(await remote.callTool({ name: 'get_cellar', arguments: {} }), { content: [] });
   assert.equal(sent.length, 6);
+});
+
+// What the SDK throws when the server answers the POST with an HTTP error
+// status: a StreamableHTTPError whose `code` is the status.
+const httpError = (status, body) => new StreamableHTTPError(status, `Error POSTing to endpoint: ${body}`);
+// The server's answer to a request on a session that has expired or that it
+// does not know: 404, before it runs anything.
+const sessionGone = () => httpError(404,
+  '{"jsonrpc":"2.0","error":{"code":-32001,"message":"Session not found or expired — re-initialize (POST without Mcp-Session-Id)."},"id":null}');
+
+test('an expired session (404) on a tool call without idempotency_key: reconnects and sends it once more', async () => {
+  const { remote, clients, sent } = fakeRemote([sessionGone(), { content: [] }]);
+  const params = { name: 'add_bottle', arguments: { wine_id: 'w1' } };
+  assert.deepEqual(await remote.callTool(params), { content: [] });
+  assert.equal(clients[0].closed, true);
+  assert.deepEqual(sent.map((s) => [s.client, s.params]), [[1, params], [2, params]]);
+});
+
+test('a second 404, on the fresh session, comes back: no third send', async () => {
+  const { remote, sent } = fakeRemote([sessionGone(), sessionGone(), { content: [] }]);
+  await assert.rejects(remote.callTool({ name: 'add_bottle', arguments: {} }), (err) => err.code === 404);
+  assert.equal(sent.length, 2);
+});
+
+test('a 502, 401 or 429 on a tool call without idempotency_key: the error comes back, nothing is sent twice', async () => {
+  for (const status of [502, 401, 429]) {
+    const { remote, sent } = fakeRemote([httpError(status, 'refused'), { content: [] }]);
+    await assert.rejects(remote.callTool({ name: 'add_bottle', arguments: { wine_id: 'w1' } }), (err) => err.code === status);
+    assert.equal(sent.length, 1, `HTTP ${status}`);
+  }
 });
 
 test('a second failure after the re-send is not retried again', async () => {
