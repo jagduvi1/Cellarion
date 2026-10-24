@@ -11,6 +11,12 @@
  * matched an existing wine is left to a curator — the file's category can be
  * wrong.
  *
+ * The row is BORN flagged: /confirm passes findOrCreateWine's opt-in
+ * `nonWine` option, so the one fire-and-forget index call the mint makes
+ * already sees a flagged row. The mock below does what the real service does
+ * (services/findOrCreateWine.nonWine.test.js pins that), and every index call
+ * records the row's state at that moment: none may see a visible row.
+ *
  * Real router + real requireAuth (HS256 test tokens); models, search and the
  * AI layer are mocked (the harness of import.validateReadonly.test.js).
  */
@@ -147,28 +153,42 @@ const mintedWine = () => ({
   _id: WINE_ID, name: AI_SPIRIT.name, producer: AI_SPIRIT.producer, type: 'red', nonWine: false,
   save: jest.fn().mockResolvedValue(undefined),
 });
+// The row's state at every index call, in order.
+let indexed;
 
 const nonWineAudits = () => logAudit.mock.calls.filter((c) => c[1] === 'wine.nonWine');
+const optionsOfMint = () => findOrCreateWine.mock.calls[0][2];
 
 beforeEach(() => {
   jest.clearAllMocks();
   Bottle.__instances.length = 0;
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, name: 'Main', user: USER_ID, members: [], deletedAt: null });
   wine = mintedWine();
-  findOrCreateWine.mockImplementation(async () => ({ wine, created: true }));
+  indexed = [];
+  searchService.indexWine.mockImplementation((id) => { indexed.push({ id, nonWine: wine.nonWine }); });
+  // As the real service does on a mint: the row is created with the caller's
+  // nonWine option and indexed once, fire-and-forget.
+  findOrCreateWine.mockImplementation(async (_data, _userId, opts = {}) => {
+    if (opts.nonWine === true) wine.nonWine = true;
+    searchService.indexWine(wine._id);
+    return { wine, created: true };
+  });
 });
 
 describe('POST /confirm — a minted wine from a row the file marked as a spirit', () => {
-  test('is flagged non-wine, saved, re-indexed and audited; the bottle still lands', async () => {
+  test('is born flagged non-wine and audited, never indexed as a visible row; the bottle still lands', async () => {
     const res = await confirm([aiItem({ nonWineHint: true })]);
 
     expect(res.status).toBe(200);
     expect(res.body.created).toBe(1);
     expect(res.body.errors).toEqual([]);
 
+    expect(optionsOfMint()).toEqual(expect.objectContaining({ createdVia: 'import', allowPending: true, nonWine: true }));
     expect(wine.nonWine).toBe(true);
-    expect(wine.save).toHaveBeenCalledTimes(1);
-    expect(searchService.indexWine).toHaveBeenCalledWith(WINE_ID);
+    // Flagged at birth: no second save, and the mint's own index call is the
+    // only one. It saw a flagged row, so it removed rather than added.
+    expect(wine.save).not.toHaveBeenCalled();
+    expect(indexed).toEqual([{ id: WINE_ID, nonWine: true }]);
     expect(nonWineAudits()).toHaveLength(1);
     expect(logAudit).toHaveBeenCalledWith(
       expect.anything(), 'wine.nonWine',
@@ -191,11 +211,12 @@ describe('POST /confirm — a minted wine from a row the file marked as a spirit
 
     expect(res.body.created).toBe(2);
     expect(findOrCreateWine).toHaveBeenCalledTimes(1);
-    expect(wine.save).toHaveBeenCalledTimes(1);
+    expect(indexed).toEqual([{ id: WINE_ID, nonWine: true }]);
     expect(nonWineAudits()).toHaveLength(1);
   });
 
   test('a hinted row that matched an existing wine leaves that wine alone', async () => {
+    // The service applies the option only to a row it mints.
     findOrCreateWine.mockImplementation(async () => ({ wine, created: false }));
 
     const res = await confirm([aiItem({ nonWineHint: true })]);
@@ -216,9 +237,12 @@ describe('POST /confirm — a minted wine from a row the file marked as a spirit
     const res = await confirm([aiItem(extra)]);
 
     expect(res.body.created).toBe(1);
+    // The service is called exactly as for any other import row.
+    expect(Object.prototype.hasOwnProperty.call(optionsOfMint(), 'nonWine')).toBe(false);
+    expect(optionsOfMint()).toEqual(expect.objectContaining({ createdVia: 'import', allowPending: true }));
     expect(wine.nonWine).toBe(false);
     expect(wine.save).not.toHaveBeenCalled();
-    expect(searchService.indexWine).not.toHaveBeenCalled();
+    expect(indexed).toEqual([{ id: WINE_ID, nonWine: false }]);
     expect(nonWineAudits()).toHaveLength(0);
   });
 });

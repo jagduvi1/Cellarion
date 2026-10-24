@@ -313,6 +313,11 @@ async function findOrCreateGrapes(rawNames, userId) {
  *   services/cellarImport. NEVER passed by the deliberate shared-registry curation
  *   surfaces (routes/admin/wines.js, routes/admin/wineRequests.js, MCP
  *   admin_add_registry_wine): a curator typing "Bordeaux" as producer SHOULD be told.
+ * @param {boolean} [opts.nonWine=false] - A row this call MINTS is born with the
+ *   non-wine flag (WineDefinition.nonWine), so the one index call below removes it
+ *   instead of adding it. A match is returned untouched. Passed by routes/import.js
+ *   /confirm for a row the file marked as a spirit; flagging after the mint would race
+ *   that fire-and-forget index call and could leave the row publicly searchable.
  */
 // ── Estate-name pollution guard (ticket 6a83f014) ───────────────────────────
 //
@@ -387,7 +392,7 @@ async function unpolluteEstateName({ name, producer, appellation, classification
 // re-runs them at publish), and the row keys into the per-creator 'draft~'
 // namespace. `excludeId`: the publish-time re-check passes the draft's own id
 // so no stage can match the draft against itself.
-async function findOrCreateWine({ name, producer, country, region, appellation, type, colour, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, colour, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null, nonWine = false } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever
@@ -1046,6 +1051,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     // carries its 7-day untouched clock (services/wineDraftExpiryJob).
     draft,
     draftExpiresAt: draft ? new Date(Date.now() + DRAFT_TTL_MS) : null,
+    // Only when the caller asked: every other create stays exactly as it was.
+    ...(nonWine === true ? { nonWine: true } : {}),
   });
 
   try {

@@ -318,9 +318,12 @@ const IMPORT_ARCHIVE_DAYS = 30;
 /**
  * Project one import row down to its identity columns plus its outcome.
  * `outcome` is what the row's SELECTION resolved to — matched an existing
- * wine, minted a new one, or filed a request ('other' when it had none); a
- * row that errored keeps its selection's outcome. "What the file said" and
- * "what we did with it" are only diagnostic together.
+ * wine, minted a new one, or filed a request ('other' when it had none). A
+ * confirmed AI proposal records what /confirm resolved it to: 'created' only
+ * when this row minted the wine, 'matched' when it found one, 'unresolved'
+ * when it found none. Any other row that errored keeps its selection's
+ * outcome. "What the file said" and "what we did with it" are only diagnostic
+ * together.
  */
 function archiveRow(item, outcome) {
   const row = { outcome };
@@ -1609,6 +1612,11 @@ router.post('/confirm', async (req, res) => {
     // routinely repeats the same wine, and each unique one must resolve to ONE
     // registry row per batch. normalizedKey-style key, same as /validate.
     const aiWineCache = new Map();
+    // What each confirmed AI proposal resolved to, by row index, for the
+    // import archive below: 'created' when findOrCreateWine minted the wine
+    // for this row, 'matched' when it found an existing one or the row repeats
+    // a wine this batch already resolved.
+    const aiOutcomes = new Map();
     // Wines this batch minted with an incomplete identity (no usable producer,
     // or a geography in the producer column — the classic one-column-off
     // mapping). Their BOTTLES imported normally; only the registry entry waits
@@ -1664,6 +1672,7 @@ router.post('/confirm', async (req, res) => {
           }
           const aiKey = `${normalizeWineName(ai.name)}:${normalizeString(ai.producer || '')}`;
           let wine = aiWineCache.get(aiKey);
+          let outcome = 'matched';
           if (!wine) {
             const { wine: resolved, created, producerRejected } = await findOrCreateWine({
               name: ai.name,
@@ -1677,6 +1686,9 @@ router.post('/confirm', async (req, res) => {
             }, req.user.id, {
               createdVia: 'import', allowPending: true,
               provenance: computeIdentityProvenance(item, ai),
+              // The file's Type/Category named a spirit: a wine this row
+              // mints is born non-wine flagged (see below).
+              ...(item.nonWineHint === true ? { nonWine: true } : {}),
             });
             // findOrCreateWine can return { wine: null, candidates } — the soft
             // zone. Unguarded, `wine._id` two lines down threw and took the
@@ -1689,6 +1701,7 @@ router.post('/confirm', async (req, res) => {
             wine = resolved;
             aiWineCache.set(aiKey, wine);
             if (created) {
+              outcome = 'created';
               if (wine.pendingIdentity) pendingIdentityCount++;
               // Same action name as the MCP/admin/find-or-create surfaces so
               // registry writes read as one audit stream (2026-08-03 M-1).
@@ -1702,22 +1715,22 @@ router.post('/confirm', async (req, res) => {
                     : {}) });
               // The file's Type/Category named a spirit, whisky, gin, …
               // (frontend utils/importMappers looksNonWine). The row this
-              // import just minted gets the flag POST /admin/wines/:id/non-wine
-              // sets: the bottle lands and its owner keeps the wine
-              // (services/ownHiddenWines), but it stays out of public search,
-              // the maturity queue and embeddings. Set before the bottle is
-              // created, so nothing is seeded that would need removing. A
-              // hinted row that MATCHED an existing wine is left to a curator:
-              // the file's category can be wrong.
+              // import just minted carries the flag that
+              // POST /admin/wines/:id/non-wine sets: the bottle lands and its
+              // owner keeps the wine (services/ownHiddenWines), but it stays
+              // out of public search, the maturity queue and embeddings.
+              // findOrCreateWine created it flagged, so the one index call the
+              // mint makes removes it and nothing is seeded that would need
+              // removing; flagging it here instead would race that
+              // fire-and-forget call. A hinted row that MATCHED an existing
+              // wine is left to a curator: the file's category can be wrong.
               if (item.nonWineHint === true) {
-                wine.nonWine = true;
-                await wine.save();
-                searchService.indexWine(wine._id); // removes a flagged row
                 logAudit(req, 'wine.nonWine', { type: 'wine', id: wine._id },
                   { via: 'import', value: true, name: wine.name, producer: wine.producer || null });
               }
             }
           }
+          aiOutcomes.set(i, outcome);
           // Hand the resolved doc straight to the bottle-creation flow below —
           // item.wineDefinition keeps the wishlist branch working, wineDoc
           // skips the redundant findById re-fetch.
@@ -2139,14 +2152,16 @@ router.post('/confirm', async (req, res) => {
     // the same stall a real connection hiccup would cause in production.)
     // The rows are projected, not stored raw — see IDENTITY_FIELDS.
     try {
-      const rows = items.slice(0, ARCHIVE_ROW_CAP).map((item) => archiveRow(
+      const rows = items.slice(0, ARCHIVE_ROW_CAP).map((item, i) => archiveRow(
         item,
         item.requestWine ? 'request'
           // The import client sends a confirmed AI proposal as `aiWine`
-          // (utils/importPayload). Test it before wineDefinition: the loop
-          // above fills wineDefinition in on every row whose wine it minted.
-          : (item.aiWine ? 'created'
-            : (item.wineDefinition ? 'matched' : 'other'))
+          // (utils/importPayload); the loop above recorded what it resolved
+          // to. One it never resolved (the near-match zone, a missing name, a
+          // bad vintage) has no wineDefinition: the loop fills that in only
+          // on a row it resolved.
+          : (aiOutcomes.get(i)
+            || (item.wineDefinition ? 'matched' : (item.aiWine ? 'unresolved' : 'other')))
       ));
       ImportArchive.create({
         user: req.user.id,

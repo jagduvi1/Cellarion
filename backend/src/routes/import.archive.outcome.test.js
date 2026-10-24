@@ -2,16 +2,19 @@
  * POST /api/bottles/import/confirm — the outcome each archived row records.
  *
  * The archive keeps what the row's SELECTION resolved to. The import client
- * sends a confirmed AI proposal as `aiWine` (utils/importPayload), and /confirm
- * fills in item.wineDefinition when it mints that wine, before the archive is
- * written. The outcome therefore has to be read from `aiWine`, or every
- * minted row reads as an ordinary registry match.
+ * sends a confirmed AI proposal as `aiWine` (utils/importPayload). Whether
+ * that proposal minted a wine is only known inside the /confirm loop, from
+ * findOrCreateWine's `created` flag, so the loop records it per row.
  *
  * Locked here:
- *   - a matched row, a confirmed AI proposal and a request read
+ *   - a matched row, a confirmed AI proposal that minted, and a request read
  *     'matched', 'created' and 'request'
- *   - a repeat of the same AI proposal in one batch is 'created' too, even
- *     though the wine is only minted once
+ *   - a repeat of the same AI proposal in one batch is 'matched': the wine is
+ *     minted once, and the repeat attaches to it
+ *   - a confirmed proposal that findOrCreateWine matched to an existing wine
+ *     is 'matched'
+ *   - a confirmed proposal that resolved to no wine (the near-match zone, a
+ *     missing name) is 'unresolved'
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -136,7 +139,7 @@ describe('import archive outcome', () => {
     expect(rows[1]).not.toHaveProperty('aiWine');
   });
 
-  it('a repeat of the same AI proposal in one batch is archived as created too', async () => {
+  it('a repeat of the same AI proposal in one batch is archived as matched', async () => {
     const { status, body } = await post({
       cellarId: CELLAR_ID,
       items: [AI_ROW, { ...AI_ROW, vintage: '2020' }],
@@ -147,6 +150,38 @@ describe('import archive outcome', () => {
     await flush();
 
     const { rows } = ImportArchive.create.mock.calls[0][0];
-    expect(rows.map((r) => r.outcome)).toEqual(['created', 'created']);
+    expect(rows.map((r) => r.outcome)).toEqual(['created', 'matched']);
+  });
+
+  it('a confirmed AI proposal that matched an existing wine is archived as matched', async () => {
+    findOrCreateWine.mockResolvedValue({
+      wine: { _id: WINE_ID, name: AI_WINE.name, producer: AI_WINE.producer, type: 'red' },
+      created: false,
+    });
+
+    const { status, body } = await post({ cellarId: CELLAR_ID, items: [AI_ROW] });
+    expect(status).toBe(200);
+    expect(body.created).toBe(1);
+    await flush();
+
+    const { rows } = ImportArchive.create.mock.calls[0][0];
+    expect(rows.map((r) => r.outcome)).toEqual(['matched']);
+  });
+
+  it('a confirmed AI proposal that resolved to no wine is archived as unresolved', async () => {
+    // The near-match zone: findOrCreateWine hands back candidates, no wine.
+    findOrCreateWine.mockResolvedValue({ wine: null, candidates: [{ _id: WINE_ID }] });
+
+    const { status, body } = await post({
+      cellarId: CELLAR_ID,
+      items: [AI_ROW, { ...AI_ROW, aiWine: { producer: 'Domaine Fictif' } }, MATCHED_ROW],
+    });
+    expect(status).toBe(200);
+    expect(body.created).toBe(1);
+    expect(body.errors).toHaveLength(2);
+    await flush();
+
+    const { rows } = ImportArchive.create.mock.calls[0][0];
+    expect(rows.map((r) => r.outcome)).toEqual(['unresolved', 'unresolved', 'matched']);
   });
 });
