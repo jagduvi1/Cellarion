@@ -1,5 +1,6 @@
 import {
   parseCSV,
+  decodeCharRefs,
   detectFormat,
   detectDelimiter,
   parseJSON,
@@ -13,6 +14,38 @@ import {
   splitClassificationFromName,
   stripAppellationPrefixFromName,
 } from './importMappers';
+
+// ---------------------------------------------------------------------------
+// decodeCharRefs
+// ---------------------------------------------------------------------------
+describe('decodeCharRefs', () => {
+  it('decodes decimal and hex references', () => {
+    expect(decodeCharRefs('Feteasc&#259; Neagr&#x103;')).toBe('Fetească Neagră');
+    expect(decodeCharRefs('Karao&#287;lan &#X1F377;')).toBe('Karaoğlan 🍷');
+  });
+
+  it('decodes the named references a CSV carries', () => {
+    expect(decodeCharRefs('Hart &amp; Hunter')).toBe('Hart & Hunter');
+    expect(decodeCharRefs('&quot;Gassies&quot; &lt;2&gt; l&apos;Est&nbsp;')).toBe('"Gassies" <2> l\'Est ');
+  });
+
+  it('decodes in a single pass', () => {
+    expect(decodeCharRefs('&amp;#259;')).toBe('&#259;');
+  });
+
+  it('reads references in 128–159 as Windows-1252, as browsers do', () => {
+    expect(decodeCharRefs('l&#146;Ermite &#128;12')).toBe('l’Ermite €12');
+    expect(decodeCharRefs('&#x9F;&#140;')).toBe('ŸŒ');
+    expect(decodeCharRefs('&#129;')).toBe('&#129;'); // undefined in Windows-1252
+  });
+
+  it('leaves anything that is not a valid reference as written', () => {
+    for (const s of ['R&D', 'Tom & Jerry', '&#0;', '&#55296;', '&#1114112;', '&eacute;', '&#259', '']) {
+      expect(decodeCharRefs(s)).toBe(s);
+    }
+    expect(decodeCharRefs(undefined)).toBeUndefined();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // parseCSV
@@ -38,6 +71,14 @@ describe('parseCSV', () => {
     expect(rows[0].Notes).toBe('Line1\nLine2');
     expect(rows[1].Name).toBe('Wine B');
     expect(rows[1].Notes).toBe('Simple');
+  });
+
+  it('decodes character references per field, after the split', () => {
+    const csv = 'Name,Region\nA&#44;B,Mini&#351;\n"Hart &amp; Hunter",Dealu Mare';
+    const rows = parseCSV(csv);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ Name: 'A,B', Region: 'Miniş' }); // an encoded comma never splits a field
+    expect(rows[1].Name).toBe('Hart & Hunter');
   });
 
   it('returns empty array for single line (header only, no data rows)', () => {

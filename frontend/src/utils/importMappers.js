@@ -132,9 +132,36 @@ export function parseLocaleNumber(input) {
   return isNaN(n) ? NaN : n;
 }
 
+const NAMED_CHAR_REFS = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ' };
+// Windows-1252 for 0x80–0x9F; \0 marks the five bytes it leaves undefined.
+const CP1252_C1 = '€\0‚ƒ„…†‡ˆ‰Š‹Œ\0Ž\0'
+  + '\0‘’“”•–—˜™š›œ\0žŸ';
+
+/**
+ * Turn HTML character references in one field back into the characters they
+ * stand for. CellarTracker writes every letter outside Latin-1 that way
+ * ("Fetească" arrives as "Feteasc&#259;"), and saved web pages do the same.
+ * Decimal and hex references plus the few named ones a CSV carries are
+ * decoded in a single pass, so "&amp;#259;" becomes the literal "&#259;".
+ * References in 128–159 mean Windows-1252 characters, as browsers read them;
+ * an invalid code point is left as written.
+ */
+export function decodeCharRefs(text) {
+  if (!text || !text.includes('&')) return text;
+  return text.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|(amp|quot|apos|lt|gt|nbsp));/g, (ref, dec, hex, named) => {
+    if (named) return NAMED_CHAR_REFS[named];
+    const cp = dec ? parseInt(dec, 10) : parseInt(hex, 16);
+    if (cp >= 0x80 && cp <= 0x9F) return CP1252_C1[cp - 0x80] === '\0' ? ref : CP1252_C1[cp - 0x80];
+    if (cp <= 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return ref;
+    return String.fromCodePoint(cp);
+  });
+}
+
 /**
  * Parse CSV text into an array of row objects.
  * Handles quoted fields, embedded commas, and newlines within quotes.
+ * Character references are decoded per field (decodeCharRefs), after the
+ * split, so an encoded comma or quote can never change the row's shape.
  * Production callers should pre-detect the delimiter via detectDelimiter()
  * before calling this (see parseAndMap below).
  */
@@ -211,13 +238,13 @@ export function parseCSV(text, delimiter = ',') {
           field += '"'; // stray quote mid-field — literal
         }
       } else if (c === delimiter && !inQ) {
-        fields.push(field.trim());
+        fields.push(decodeCharRefs(field).trim());
         field = '';
       } else {
         field += c;
       }
     }
-    fields.push(field.trim());
+    fields.push(decodeCharRefs(field).trim());
     return fields;
   };
 
@@ -1825,13 +1852,13 @@ function splitCSVLine(line, delimiter = ',') {
         inQ = !inQ;
       }
     } else if (c === delimiter && !inQ) {
-      fields.push(field);
+      fields.push(decodeCharRefs(field));
       field = '';
     } else {
       field += c;
     }
   }
-  fields.push(field);
+  fields.push(decodeCharRefs(field));
   return fields;
 }
 

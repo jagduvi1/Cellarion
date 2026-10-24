@@ -373,6 +373,38 @@ describe('CT List: TSV / UTF-8 CSV / Windows-1252 CSV equivalence', () => {
   });
 });
 
+describe('CT character references (letters outside Latin-1)', () => {
+  // CellarTracker writes every letter outside Latin-1 as a numeric character
+  // reference: "Fetească" arrives as "Feteasc&#259;". é and ü stay as they are.
+  const asCellarTracker = (s) => s.replace(/[^\u0000-ÿ]/gu, (c) => `&#${c.codePointAt(0)};`);
+  const listWith = (cells) => {
+    const [header, row] = decode('bundle', 'CellarTracker_List.tsv').text.split(/\r?\n/);
+    const names = header.split('\t');
+    const values = row.split('\t');
+    for (const [col, value] of Object.entries(cells)) values[names.indexOf(col)] = value;
+    return `${header}\n${values.join('\t')}\n`;
+  };
+  const romanian = {
+    Wine: 'Crama Oprișor Fetească Neagră', Producer: 'Crama Oprișor', SortProducer: 'Oprișor, Crama',
+    Locale: 'Romania, Oltenia, Mehedinți', Country: 'Romania', Region: 'Oltenia', SubRegion: 'Mehedinți',
+    Appellation: 'Mehedinți', Varietal: 'Fetească Neagră', MasterVarietal: 'Fetească Neagră',
+  };
+
+  it('the fixture row really carries references once encoded', () => {
+    const encoded = listWith(Object.fromEntries(Object.entries(romanian).map(([k, v]) => [k, asCellarTracker(v)])));
+    expect(encoded).toContain('Crama Opri&#537;or Feteasc&#259; Neagr&#259;');
+    expect(encoded).toContain('Mehedin&#539;i');
+  });
+
+  it('maps to exactly the items of the same file written with the letters', () => {
+    const plain = parseAndMap(listWith(romanian));
+    const encoded = parseAndMap(listWith(Object.fromEntries(Object.entries(romanian).map(([k, v]) => [k, asCellarTracker(v)]))));
+    expect(encoded.items).toEqual(plain.items);
+    expect(encoded.items[0]).toMatchObject({ producer: 'Crama Oprișor', country: 'Romania', region: 'Oltenia' });
+    expect(JSON.stringify(encoded.items)).not.toMatch(/&#\d+;/);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Inventory table — one row per bottle; (pending) rows on order; native currency
 // ---------------------------------------------------------------------------
