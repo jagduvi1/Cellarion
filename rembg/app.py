@@ -1,7 +1,11 @@
 import io
+import os
+import threading
 import numpy as np
+import onnxruntime as ort
 from flask import Flask, request, send_file, jsonify
 from rembg import remove
+from rembg.sessions.u2net import U2netSession
 from PIL import Image
 
 # Defense-in-depth against decompression-bomb images: cap decoded pixels so a
@@ -12,6 +16,39 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = 64_000_000
 
 app = Flask(__name__)
+
+# One u2net session for the life of the worker. Given no session, rembg's
+# remove() builds a new one on every call: an MD5 of the ~176 MB model file
+# plus a fresh ONNX Runtime session per photo. It is built on the first photo,
+# never at import, so /health still answers while the model cannot be read,
+# and a failed build is not kept, so the next photo tries again. The lock only
+# guards the build, for a gunicorn started with --threads; ONNX Runtime allows
+# concurrent run() calls on one session.
+_session = None
+_session_lock = threading.Lock()
+
+
+def _build_session():
+    # The options rembg's new_session('u2net') uses, minus ONNX Runtime's CPU
+    # memory arena: a kept session would hold the arena's peak (~500 MB) for
+    # good, leaving the worker at ~1.37 GiB of its 1536M cap. Without it each
+    # run frees its working memory, and the output is the same.
+    opts = ort.SessionOptions()
+    opts.enable_cpu_mem_arena = False
+    if 'OMP_NUM_THREADS' in os.environ:
+        threads = int(os.environ['OMP_NUM_THREADS'])
+        opts.inter_op_num_threads = threads
+        opts.intra_op_num_threads = threads
+    return U2netSession('u2net', opts)
+
+
+def get_session():
+    global _session
+    if _session is None:
+        with _session_lock:
+            if _session is None:
+                _session = _build_session()
+    return _session
 
 
 @app.route('/health', methods=['GET'])
@@ -37,7 +74,7 @@ def remove_bg():
         if already_transparent:
             output_bytes = input_bytes
         else:
-            output_bytes = remove(input_bytes)
+            output_bytes = remove(input_bytes, session=get_session())
 
         # Auto-crop transparent borders so the bottle fills the image.
         # Use a numpy alpha-threshold (>10) to ignore the near-invisible fringe
