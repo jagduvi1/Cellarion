@@ -191,6 +191,28 @@
     "loginFailed": "Kunne ikke logge inn.",
     "anAiAssistant": "En KI-assistent",
     "wants": "vil koble seg til kjelleren din i Cellarion og vil kunne:",
-    "scopeRead": "Se kjellere, flasker, statistikk, ønskeliste og vindagbok"
+    "scopeRead": "Se kjellere, flasker, statistikk, ønskeliste og vindagbok",
+    "scopeConsume": "Merke flasker som åpnet, skjenket eller drukket (kan angres)",
+    "scopeWrite": "Legge til og redigere flasker, reoler og kjellere",
+    "revokeNote": "Du kan trekke tilbake tilgangen når som helst i Innstillinger. Du har kontrollen, og assistenten ber deg bekrefte hver endring før den gjøres.",
+    "returnedTo": "Når du har godkjent, sendes du tilbake til",
+    "approve": "Godkjenn",
+    "deny": "Avbryt",
+    "working": "Behandler …",
+    "failed": "Kunne ikke fullføre godkjenningen. Prøv igjen.",
+    "invalidRequest": "Lenken for godkjenning er ugyldig eller ufullstendig. Start tilkoblingen på nytt fra KI-assistenten din.",
+    "demoBlocked": "Du kan ikke koble til en KI-assistent i demoen. Opprett en gratis konto for å bruke denne funksjonen.",
+    "beta": "Beta",
+    "betaNotice": "KI-tilkoblingen er en betafunksjon, og du bruker den på eget ansvar. Den er ny og testes fortsatt. Alt den endrer, kan angres, og du kan trekke tilbake tilgangen når som helst i Innstillinger.",
+    "reversibleNotice": "Alt den endrer, kan angres, og du kan trekke tilbake tilgangen når som helst i Innstillinger.",
+    "wantsChoose": "vil koble seg til kjelleren din i Cellarion. Velg hvor mye den får gjøre:",
+    "accessLevel": "Tilgangsnivå",
+    "levelRead": "Bare lese: den kan se, men aldri endre noe",
+    "levelConsume": "Lese og registrere drikking: den kan også merke flasker som åpnet eller drukket (kan angres)",
+    "levelFull": "Full tilgang: den kan også legge til og redigere flasker, reoler og kjellere"
+  },
+  "connectAi": {
+    "title": "Koble KI-assistenten til vinkjelleren din",
+    "subtitle": "Cellarion støtter Model Context Protocol (MCP), så du kan styre kjelleren din fra Claude, ChatGPT eller en annen MCP-klient."
   }
 }
