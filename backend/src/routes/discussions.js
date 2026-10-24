@@ -550,24 +550,34 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     // Index in Meilisearch for in-forum search (fire-and-forget)
     searchService.indexDiscussion(discussion._id);
 
-    await discussion.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
+    // The thread is stored. Nothing after this line may answer 500: a retry
+    // of a stored thread creates a second one.
+    try {
+      await discussion.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
+    } catch (err) {
+      console.error('[discussions] author populate failed after the thread was saved:', err.message);
+    }
 
     // Notify @mentioned users — dispatched after the response would normally be
     // optimal, but since createNotification is fire-and-forget internally, calling
     // it before res.json() doesn't add latency.
-    const authorName = discussion.author?.displayName || discussion.author?.username || 'Someone';
-    const link = `/community/discussions/${discussion.slug || discussion._id}`;
-    const mentionedIds = await extractMentions(cleanBody, req.user.id);
-    for (const uid of mentionedIds) {
-      createNotification(
-        uid,
-        'discussion_mention',
-        `${authorName} mentioned you`,
-        `In a new discussion: "${cleanTitle}"`,
-        link,
-        'communityMention',
-        req.user.id // actor — lets GDPR erasure remove this on the author's deletion
-      );
+    try {
+      const authorName = discussion.author?.displayName || discussion.author?.username || 'Someone';
+      const link = `/community/discussions/${discussion.slug || discussion._id}`;
+      const mentionedIds = await extractMentions(cleanBody, req.user.id);
+      for (const uid of mentionedIds) {
+        createNotification(
+          uid,
+          'discussion_mention',
+          `${authorName} mentioned you`,
+          `In a new discussion: "${cleanTitle}"`,
+          link,
+          'communityMention',
+          req.user.id // actor — lets GDPR erasure remove this on the author's deletion
+        );
+      }
+    } catch (err) {
+      console.error('[discussions] mention resolution failed after the thread was saved:', err.message);
     }
 
     res.status(201).json({ discussion });
@@ -845,7 +855,16 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
     // category has its own granular email/push preferences (drinkWindow,
     // communityReply, communityMention, communityFollow); email/push fire
     // only when the recipient opted in for that category.
-    const replier = await User.findById(req.user.id).select('username displayName');
+    //
+    // The reply is stored. Nothing after this point may answer 500: a retry
+    // of a stored reply posts it twice. A failed name lookup falls back to
+    // 'Someone' rather than failing the request.
+    let replier = null;
+    try {
+      replier = await User.findById(req.user.id).select('username displayName');
+    } catch (err) {
+      console.error('[discussions] replier lookup failed after the reply was saved:', err.message);
+    }
     const replierName = replier?.displayName || replier?.username || 'Someone';
     const link = `/community/discussions/${discussion.slug || discussion._id}`;
     const fullUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}${link}`;
@@ -966,8 +985,12 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });
 
-    await reply.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
-    await reply.populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } });
+    try {
+      await reply.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
+      await reply.populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } });
+    } catch (err) {
+      console.error('[discussions] reply populate failed after the reply was saved:', err.message);
+    }
 
     res.status(201).json({ reply });
   } catch (err) {

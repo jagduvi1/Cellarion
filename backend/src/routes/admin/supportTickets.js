@@ -122,15 +122,20 @@ router.put('/:id/respond', async (req, res) => {
     ticket.status = newStatus;
     await ticket.save();
 
-    // Notify the user
-    await Notification.create({
-      user: ticket.user,
-      type: 'support_ticket_response',
-      title: 'Support ticket update',
-      message: `Your support ticket "${ticket.subject}" has received a response.`,
-      link: '/support'
-    });
-    bumpNotificationsVersion(ticket.user);
+    // The reply is stored. Nothing after this line may answer 500: a retry of
+    // a stored reply appends the same answer to replies[] a second time.
+    try {
+      await Notification.create({
+        user: ticket.user,
+        type: 'support_ticket_response',
+        title: 'Support ticket update',
+        message: `Your support ticket "${ticket.subject}" has received a response.`,
+        link: '/support'
+      });
+      bumpNotificationsVersion(ticket.user);
+    } catch (err) {
+      console.error('[support] bell notification failed after the reply was saved:', err.message);
+    }
     const emailed = await emailSupportReply(ticket, cleaned);
 
     logAudit(req, 'support.ticket.responded', { type: 'SupportTicket', id: ticket._id }, {
@@ -138,8 +143,12 @@ router.put('/:id/respond', async (req, res) => {
       emailed
     });
 
-    await ticket.populate('user', 'username email');
-    await ticket.populate('respondedBy', 'username');
+    try {
+      await ticket.populate('user', 'username email');
+      await ticket.populate('respondedBy', 'username');
+    } catch (err) {
+      console.error('[support] populate failed after the reply was saved:', err.message);
+    }
     res.json({ ticket, emailed });
   } catch (err) {
     console.error('Admin respond to support ticket error:', err);
