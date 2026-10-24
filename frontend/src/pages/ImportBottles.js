@@ -2118,6 +2118,9 @@ function ImportBottles() {
               setSessionId(null);
               setSaveStatus('idle');
               setRefreshedItems({});
+              // The results are gone, so a resume would skip batches that are
+              // no longer in the review: the next Match starts from the top.
+              setValidationResume(null);
             }}
           >
             {t('importBottles.review.backToUpload')}
