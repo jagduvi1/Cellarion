@@ -4,6 +4,7 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
+const liveWindowLimiter = require('../middleware/liveWindowLimiter');
 const { upload, ORIGINALS_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
@@ -52,11 +53,9 @@ const bgRemovalLimiter = rateLimit({
 // Per-user upload cap on /upload. The per-bottle MAX_IMAGES_PER_BOTTLE limits
 // per-resource growth, but doesn't stop a user creating bottles + uploading
 // in a loop to fill the disk. Keyed on req.user.id (not IP) so an attacker
-// rotating IPs can't bypass.
-const imageUploadLimiter = rateLimit({
-  // windowMs is read once at limiter creation (express-rate-limit doesn't
-  // support a functional windowMs in v7). Matches the chatBurst pattern.
-  windowMs: 60 * 60 * 1000,
+// rotating IPs can't bypass. Window and max are admin-tunable and read live.
+const imageUploadLimiter = liveWindowLimiter({
+  windowMs: () => rateLimitsConfig.get().imageUploadBurst.windowMs,
   max:      () => rateLimitsConfig.get().imageUploadBurst.max,
   keyGenerator: (req) => String(req.user?.id || ''),
   standardHeaders: true,

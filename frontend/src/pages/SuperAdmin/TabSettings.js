@@ -434,11 +434,10 @@ function ChatLimitsPanel({ apiFetch, config, defaults, error }) {
   const [msg,    setMsg]    = useState(null);
 
   useEffect(() => {
-    if (config?.chatBurst && config?.chatConcurrentStreams) {
+    if (config?.chatBurst) {
       setForm({
         burstMax:      String(config.chatBurst.max),
         burstWindowMs: String(config.chatBurst.windowMs),
-        concurrent:    String(config.chatConcurrentStreams.max),
       });
     }
   }, [config]);
@@ -447,8 +446,7 @@ function ChatLimitsPanel({ apiFetch, config, defaults, error }) {
     setSaving(true); setMsg(null);
     try {
       const res = await adminSaveRateLimits(apiFetch, {
-        chatBurst:             { max: Number(form.burstMax), windowMs: Number(form.burstWindowMs) },
-        chatConcurrentStreams: { max: Number(form.concurrent) },
+        chatBurst: { max: Number(form.burstMax), windowMs: Number(form.burstWindowMs) },
       });
       if (!res.ok) { const d = await res.json(); setMsg({ ok: false, text: d.error || 'Save failed' }); }
       else setMsg({ ok: true, text: 'Saved — takes effect immediately' });
@@ -462,7 +460,7 @@ function ChatLimitsPanel({ apiFetch, config, defaults, error }) {
   return (
     <PanelShell
       title="Cellar Chat abuse controls"
-      intro="Per-user throttles on /api/chat — guards Anthropic spend against scripted bursts inside a single user's daily quota. The SSE per-stream timeout is hardcoded at 90s (not editable) as a system safety bound."
+      intro="Per-user throttles on /api/chat — guards Anthropic spend against scripted bursts inside a single user's daily quota."
       saving={saving} onSave={save} msg={msg}
     >
       <NumberField
@@ -481,14 +479,6 @@ function ChatLimitsPanel({ apiFetch, config, defaults, error }) {
         defaultValue={defaults?.chatBurst?.windowMs}
         onChange={v => setForm(f => ({ ...f, burstWindowMs: v }))}
         min={10000} max={3600000}
-      />
-      <NumberField
-        label="Max concurrent SSE streams per user"
-        unit="streams"
-        value={form.concurrent}
-        defaultValue={defaults?.chatConcurrentStreams?.max}
-        onChange={v => setForm(f => ({ ...f, concurrent: v }))}
-        min={1} max={50}
       />
     </PanelShell>
   );

@@ -11,8 +11,8 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
-const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
+const liveWindowLimiter = require('../middleware/liveWindowLimiter');
 const asyncHandler = require('../utils/asyncHandler');
 const aiChat = require('../services/aiChat');
 const { tryDebitGlobalAi } = require('../services/aiBudget');
@@ -30,10 +30,11 @@ const router = express.Router();
 // scripted abuse (5 chats in 5 seconds) that the daily quota can't react to
 // fast enough to bound Anthropic spend.
 
-// Burst limit: at most N chats per user per minute. Keyed on req.user.id so
-// it survives IP rotation. Per-IP apiLimiter still runs alongside.
-const chatBurstLimiter = rateLimit({
-  windowMs: 60 * 1000,
+// Burst limit: at most N chats per user per window (default 5 per minute);
+// both numbers are admin-tunable and read live. Keyed on req.user.id so it
+// survives IP rotation. Per-IP apiLimiter still runs alongside.
+const chatBurstLimiter = liveWindowLimiter({
+  windowMs: () => rateLimitsConfig.get().chatBurst.windowMs,
   max: () => rateLimitsConfig.get().chatBurst.max,
   keyGenerator: (req) => String(req.user?.id || ''),
   standardHeaders: true,

@@ -23,9 +23,6 @@ const defaults = {
   // limit. Default 5 chats/min/user is generous for human use and catches
   // scripted bursts.
   chatBurst: { max: 5, windowMs: 60 * 1000 },
-  // Cap concurrent SSE streams per user. Same protection lens as chatBurst:
-  // no human reads two AI streams at once; cap is for script abuse.
-  chatConcurrentStreams: { max: 2 },
   // Per-user burst limit on Anthropic-backed wine endpoints (/wines/scan-label,
   // /identify-text, /ai-info). Protects Anthropic budget from a scripted loop
   // by any logged-in user. These share one bucket because they share one
@@ -159,7 +156,6 @@ let cache = {
   auth:  { max: defaults.auth.max },
   accountLockout: { ...defaults.accountLockout },
   chatBurst: { ...defaults.chatBurst },
-  chatConcurrentStreams: { ...defaults.chatConcurrentStreams },
   aiBurst: { ...defaults.aiBurst },
   aiDailyBudget: { ...defaults.aiDailyBudget },
   aiImportPerRequestCap: { ...defaults.aiImportPerRequestCap },
@@ -191,9 +187,6 @@ async function load() {
         chatBurst: {
           max:      doc.value.chatBurst?.max      ?? defaults.chatBurst.max,
           windowMs: doc.value.chatBurst?.windowMs ?? defaults.chatBurst.windowMs,
-        },
-        chatConcurrentStreams: {
-          max: doc.value.chatConcurrentStreams?.max ?? defaults.chatConcurrentStreams.max,
         },
         aiBurst: {
           max:      doc.value.aiBurst?.max      ?? defaults.aiBurst.max,

@@ -34,7 +34,7 @@ router.get('/rate-limits', async (req, res) => {
 // accountLockout.threshold to 9999 effectively turns lockout off).
 router.patch('/rate-limits', async (req, res) => {
   try {
-    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, imageUploadBurst, demo, mcp, registryRead, bridge } = req.body;
+    const { api, write, auth, accountLockout, chatBurst, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, imageUploadBurst, demo, mcp, registryRead, bridge } = req.body;
 
     const previous = { ...rateLimitsConfig.get() };
 
@@ -68,11 +68,6 @@ router.patch('/rate-limits', async (req, res) => {
     if (chatBurst !== undefined) {
       requireIntInRange('chatBurst.max',      chatBurst.max,      1,      1000);
       requireIntInRange('chatBurst.windowMs', chatBurst.windowMs, 10_000, 60 * 60 * 1000);
-    }
-
-    // Concurrent SSE streams cap per user
-    if (chatConcurrentStreams !== undefined) {
-      requireIntInRange('chatConcurrentStreams.max', chatConcurrentStreams.max, 1, 50);
     }
 
     // Shared per-user daily Anthropic-call budget (0 = unlimited)
@@ -186,9 +181,6 @@ router.patch('/rate-limits', async (req, res) => {
       chatBurst: {
         max:      chatBurst?.max      ?? previous.chatBurst.max,
         windowMs: chatBurst?.windowMs ?? previous.chatBurst.windowMs,
-      },
-      chatConcurrentStreams: {
-        max: chatConcurrentStreams?.max ?? previous.chatConcurrentStreams.max,
       },
       aiDailyBudget: {
         max: aiDailyBudget?.max ?? previous.aiDailyBudget?.max ?? rateLimitsConfig.defaults.aiDailyBudget.max,

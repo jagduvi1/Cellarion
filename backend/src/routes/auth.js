@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
+const liveWindowLimiter = require('../middleware/liveWindowLimiter');
 const { checkIsSuperAdmin } = require('../middleware/superAdmin');
 const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
@@ -92,13 +93,13 @@ const resendLimiter = rateLimit({
   }
 });
 
-// Ephemeral public-demo creation limiter — default 3/hour per IP (admin-tunable
-// max). Cloning a snapshot cellar per visitor is write-heavy, so this per-IP cap
-// is tighter than authLimiter. windowMs is fixed at limiter-build time (like
-// authLimiter); the durable global ceiling in the handler is the real backstop,
-// since this in-memory limiter resets on every backend restart.
-const demoLimiter = rateLimit({
-  windowMs: rateLimitsConfig.defaults.demo.createWindowMs,
+// Ephemeral public-demo creation limiter — default 3/hour per IP (window and
+// max admin-tunable, read live). Cloning a snapshot cellar per visitor is
+// write-heavy, so this per-IP cap is tighter than authLimiter. The durable
+// global ceiling in the handler is the real backstop, since this in-memory
+// limiter resets on every backend restart (and when its window is changed).
+const demoLimiter = liveWindowLimiter({
+  windowMs: () => rateLimitsConfig.get().demo.createWindowMs,
   max: () => rateLimitsConfig.get().demo.createMax,
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,

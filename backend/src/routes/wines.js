@@ -1035,7 +1035,7 @@ const publicWineLimiter = rateLimit({
   // aiBurstLimiter. express-rate-limit resolves max() per request but wants a
   // real number for the window at construction, which is before the stored
   // settings are loaded — so the window is the code default (no admin
-  // setting changes it), like demoLimiter's in routes/auth.js.
+  // setting changes it).
   windowMs: rateLimitsConfig.defaults.publicWineRead.windowMs,
   max: () => rateLimitsConfig.get().publicWineRead.max,
   keyGenerator: (req) => rateLimitKey(req),
