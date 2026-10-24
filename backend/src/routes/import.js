@@ -1366,6 +1366,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
  *                     instead of a Bottle (requires a matched registry wine;
  *                     request-wine rows are reported as per-row errors).
  *                     Duplicates — in-batch or already-wanted — are skipped.
+ *   nonWineHint     — true when the file's Type/Category named a spirit; a
+ *                     wine this row mints (aiWine) is created non-wine
+ *                     flagged. A matched registry wine is never touched.
  * Response: { created, skipped, errors[], wishlistCreated, ... }
  */
 router.post('/confirm', async (req, res) => {
@@ -1697,6 +1700,22 @@ router.post('/confirm', async (req, res) => {
                   ...(producerRejected
                     ? { rejectedProducer: producerRejected.producer, rejectedByCheck: producerRejected.check }
                     : {}) });
+              // The file's Type/Category named a spirit, whisky, gin, …
+              // (frontend utils/importMappers looksNonWine). The row this
+              // import just minted gets the flag POST /admin/wines/:id/non-wine
+              // sets: the bottle lands and its owner keeps the wine
+              // (services/ownHiddenWines), but it stays out of public search,
+              // the maturity queue and embeddings. Set before the bottle is
+              // created, so nothing is seeded that would need removing. A
+              // hinted row that MATCHED an existing wine is left to a curator:
+              // the file's category can be wrong.
+              if (item.nonWineHint === true) {
+                wine.nonWine = true;
+                await wine.save();
+                searchService.indexWine(wine._id); // removes a flagged row
+                logAudit(req, 'wine.nonWine', { type: 'wine', id: wine._id },
+                  { via: 'import', value: true, name: wine.name, producer: wine.producer || null });
+              }
             }
           }
           // Hand the resolved doc straight to the bottle-creation flow below —
