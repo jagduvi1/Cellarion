@@ -63,6 +63,7 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
+const { loadRuntimeConfig } = require('./src/config/runtime');
 const searchService = require('./src/services/search');
 const eventBus = require('./src/services/eventBus');
 const mcpSessions = require('./src/mcp/sessions');
@@ -79,6 +80,12 @@ const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB, initialize search, then start server
 connectDB().then(async () => {
+  // The settings admins change at run time (rate limits, AI settings, the
+  // announcement, feature flags) are read from the database now that it is
+  // connected, before the migrations, the scheduler or a request use them.
+  // A config that cannot be read keeps its code defaults; the boot goes on.
+  await loadRuntimeConfig();
+
   // Migration: drop old non-partial cellar name index so Mongoose can create the
   // updated partial one (user_1_name_1 with partialFilterExpression: {deletedAt: null}).
   // Only drop when the existing index actually lacks the partial filter — the new

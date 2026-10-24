@@ -94,9 +94,6 @@ const mcpRoute = require('./routes/mcp');
 const mcpOAuthRoute = require('./routes/mcpOAuth');
 const wellKnownOAuthRoute = require('./routes/wellKnownOAuth');
 const rateLimitsConfig = require('./config/rateLimits');
-const aiConfig = require('./config/aiConfig');
-const announcementConfig = require('./config/announcement');
-const featureFlags = require('./config/featureFlags');
 const { logAudit, logger } = require('./services/audit');
 const { drainingConnectionClose } = require('./services/shutdown');
 
@@ -457,25 +454,5 @@ app.use((err, req, res, next) => {
     : (err.message || 'Internal server error');
   res.status(status).json({ error: message });
 });
-
-// Load rate limit configuration from DB on startup (non-blocking; falls back to defaults)
-rateLimitsConfig.load().catch(err =>
-  console.warn('[rateLimits] Startup load failed, using defaults:', err.message)
-);
-
-// Load AI feature-flag configuration from DB on startup
-aiConfig.load().catch(err =>
-  console.warn('[aiConfig] Startup load failed, using defaults:', err.message)
-);
-
-// Load the site announcement banner from DB on startup
-announcementConfig.load().catch(err =>
-  console.warn('[announcement] Startup load failed, using defaults:', err.message)
-);
-
-// Load the feature flags (off / beta / everyone per flagged feature)
-featureFlags.load().catch(err =>
-  console.warn('[featureFlags] Startup load failed, using defaults:', err.message)
-);
 
 module.exports = app;

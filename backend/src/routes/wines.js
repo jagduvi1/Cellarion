@@ -1033,8 +1033,10 @@ const PUBLIC_TAXONOMY_POPULATE = [
 const publicWineLimiter = rateLimit({
   // Static window, dynamic max — the same shape as apiLimiter and
   // aiBurstLimiter. express-rate-limit resolves max() per request but wants a
-  // real number for the window at construction.
-  windowMs: rateLimitsConfig.get().publicWineRead.windowMs,
+  // real number for the window at construction, which is before the stored
+  // settings are loaded — so the window is the code default (no admin
+  // setting changes it), like demoLimiter's in routes/auth.js.
+  windowMs: rateLimitsConfig.defaults.publicWineRead.windowMs,
   max: () => rateLimitsConfig.get().publicWineRead.max,
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
