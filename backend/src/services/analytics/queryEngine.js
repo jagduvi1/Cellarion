@@ -620,24 +620,33 @@ const WINE_LOOKUP = [
  * `$<alias>`, so KV fields can be sorted, grouped and aggregated server-side.
  * Personal entries apply the same precedence as the bottle page — bottle
  * entry beats a vintage-scoped wine entry beats a vintage-null wine entry —
- * enforced by the _prio sort inside the sub-pipeline. Registry reads the one
- * published row per (wine, key). Both sub-pipelines are $limit 1 and run on
- * indexed keys, bounded by the outer maxTimeMS like everything else.
+ * enforced by the _prio sort inside the sub-pipeline. Registry applies the
+ * hydrated column's rule (registryDataOps.resolveForVintage): the published
+ * override for the bottle's vintage beats the wine-wide default, and another
+ * vintage's override never applies. Rows of either collection written before
+ * the vintage field existed carry no `vintage` at all (and in $expr a missing
+ * field is not null) — $ifNull reads them as the every-vintage slot, as the
+ * column does. Both sub-pipelines are $limit 1 and run on indexed keys,
+ * bounded by the outer maxTimeMS like everything else.
  */
 function kvJoinStages(field, alias, userId) {
   const keyOid = new mongoose.Types.ObjectId(field.keyId);
+  const slot = { $ifNull: ['$vintage', null] };
   if (field.source === 'registry') {
     return [
       {
         $lookup: {
           from: 'registrydatavalues',
-          let: { wid: '$wineDefinition' },
+          let: { wid: '$wineDefinition', vint: '$vintage' },
           pipeline: [
             { $match: { $expr: { $and: [
               { $eq: ['$wineDefinition', '$$wid'] },
               { $eq: ['$key', keyOid] },
               { $eq: ['$status', 'published'] },
+              { $in: [slot, [null, '$$vint']] },
             ] } } },
+            { $addFields: { _prio: { $cond: [{ $eq: [slot, null] }, 1, 0] } } },
+            { $sort: { _prio: 1 } },
             { $limit: 1 },
             { $project: { _id: 0, value: 1 } },
           ],
@@ -661,14 +670,14 @@ function kvJoinStages(field, alias, userId) {
               { $eq: ['$bottle', '$$bid'] },
               { $and: [
                 { $eq: ['$wineDefinition', '$$wid'] },
-                { $in: ['$vintage', [null, '$$vint']] },
+                { $in: [slot, [null, '$$vint']] },
               ] },
             ] },
           ] } } },
           { $addFields: { _prio: { $switch: {
             branches: [
               { case: { $eq: ['$targetType', 'bottle'] }, then: 0 },
-              { case: { $ne: ['$vintage', null] }, then: 1 },
+              { case: { $ne: [slot, null] }, then: 1 },
             ],
             default: 2,
           } } } },
