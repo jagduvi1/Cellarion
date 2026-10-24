@@ -15,17 +15,17 @@
  * A collision on the new key (a correctly-named twin already in the registry)
  * is SKIPPED and reported for manual merge — this script never merges wines.
  *
- * Dry-run by default; --apply writes a JSON backup of affected rows first.
+ * Dry-run by default; --apply appends each row's old values to an NDJSON
+ * backup before writing it (scripts/lib/backupLog: --backup-dir=<dir> or
+ * SCRIPT_BACKUP_DIR, default the OS temp dir).
  *
  * Usage:
  *   node src/scripts/fix-classification-polluted-names.js            # dry run
  *   node src/scripts/fix-classification-polluted-names.js --apply
+ *   node src/scripts/fix-classification-polluted-names.js --apply --backup-dir=<dir>
  */
 
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const { unpolluteEstateName } = require('../services/findOrCreateWine');
@@ -33,6 +33,7 @@ const { generateWineKey } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 const searchService = require('../services/search');
 const { initSearch } = require('./lib/scriptSearch');
+const { createBackupLog } = require('./lib/backupLog');
 
 const APPLY = process.argv.includes('--apply');
 const tag = APPLY ? '✔' : '[dry]';
@@ -72,7 +73,7 @@ async function run() {
     .lean();
 
   const stats = { scanned: 0, changed: 0, collisions: 0, byShape: {} };
-  const backup = [];
+  const backup = createBackupLog('polluted-names');
 
   for (const w of wines) {
     stats.scanned += 1;
@@ -94,24 +95,20 @@ async function run() {
     stats.byShape[out.changed] = (stats.byShape[out.changed] || 0) + 1;
     console.log(`${tag} [${out.changed}] "${w.name}" — ${w.producer}`);
     console.log(`      → name "${out.name}" · appellation "${out.appellation || '∅'}" · classification "${out.classification || '∅'}"`);
-    backup.push({
-      _id: String(w._id), name: w.name, appellation: w.appellation || null, classification: w.classification || null,
-      normalizedKey: w.normalizedKey, canonicalKey: w.canonicalKey ?? null,
-      verifiedChecks: w.verifiedChecks ?? null, verifiedAt: w.verifiedAt ?? null,
-      crossChecksCleared: w.crossChecksCleared ?? null, crossChecksClearedAt: w.crossChecksClearedAt ?? null,
-    });
 
     if (APPLY) {
+      backup.append({
+        _id: String(w._id), name: w.name, appellation: w.appellation || null, classification: w.classification || null,
+        normalizedKey: w.normalizedKey, canonicalKey: w.canonicalKey ?? null,
+        verifiedChecks: w.verifiedChecks ?? null, verifiedAt: w.verifiedAt ?? null,
+        crossChecksCleared: w.crossChecksCleared ?? null, crossChecksClearedAt: w.crossChecksClearedAt ?? null,
+      });
       await WineDefinition.updateOne({ _id: w._id }, buildFixUpdate(w, out, newKey));
       if (searchOk) await searchService.indexWine(w._id);
     }
   }
 
-  if (APPLY && backup.length) {
-    const file = path.join(os.tmpdir(), `polluted-names-backup-${Date.now()}.json`);
-    fs.writeFileSync(file, JSON.stringify(backup, null, 2));
-    console.log(`\nBackup of ${backup.length} rows → ${file} (container /tmp is ephemeral — copy it off)`);
-  }
+  if (APPLY) backup.report();
 
   console.log(`\nSummary: ${stats.scanned} scanned, ${stats.changed} ${APPLY ? 'fixed' : 'would change'} ` +
     `(${Object.entries(stats.byShape).map(([s, n]) => `${s}: ${n}`).join(', ') || 'none'}), ` +

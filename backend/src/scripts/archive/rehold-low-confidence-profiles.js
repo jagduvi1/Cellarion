@@ -1,6 +1,15 @@
 /**
  * rehold-low-confidence-profiles.js
  *
+ * Finished: the bounded run recorded below (2026-08-18) is done, and the
+ * publication gate (enrichmentJob.shouldHoldProfile) runs whenever a profile
+ * is generated. Do not run this again as it stands. It calls the gate without
+ * the data-sufficiency input the generation-time call passes, so it would
+ * re-hold rows the gate publishes. Its backup is written once after the loop,
+ * so a run that dies halfway leaves the rows it already changed with no
+ * pre-image; a rerun first moves its writes to scripts/lib/backupLog (one row
+ * appended before each write).
+ *
  * Ticket 6a83e765, rollout step: the publication gate (enrichmentJob.
  * shouldHoldProfile — confidence floor + unknown-producer bar, calibrated
  * 2026-08-18) only fires at generation time. Profiles PUBLISHED before the
@@ -41,10 +50,10 @@
  * reported, never touched.
  *
  * Usage:
- *   node src/scripts/rehold-low-confidence-profiles.js                 # dry run
- *   node src/scripts/rehold-low-confidence-profiles.js --apply
- *   node src/scripts/rehold-low-confidence-profiles.js --cutoff=2026-08-01
- *   node src/scripts/rehold-low-confidence-profiles.js --reasons=low_confidence,unknown_low_confidence --apply
+ *   node src/scripts/archive/rehold-low-confidence-profiles.js                 # dry run
+ *   node src/scripts/archive/rehold-low-confidence-profiles.js --apply
+ *   node src/scripts/archive/rehold-low-confidence-profiles.js --cutoff=2026-08-01
+ *   node src/scripts/archive/rehold-low-confidence-profiles.js --reasons=low_confidence,unknown_low_confidence --apply
  */
 
 require('dotenv').config();
@@ -52,11 +61,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const mongoose = require('mongoose');
-const WineDefinition = require('../models/WineDefinition');
-const Bottle = require('../models/Bottle');
-const aiConfig = require('../config/aiConfig');
-const { shouldHoldProfile } = require('./../services/enrichmentJob');
-const { embedSinglePair } = require('../services/embeddingJob');
+const WineDefinition = require('../../models/WineDefinition');
+const Bottle = require('../../models/Bottle');
+const aiConfig = require('../../config/aiConfig');
+const { shouldHoldProfile } = require('../../services/enrichmentJob');
+const { embedSinglePair } = require('../../services/embeddingJob');
 
 const APPLY = process.argv.includes('--apply');
 const cutoffArg = (process.argv.find((a) => a.startsWith('--cutoff=')) || '').slice('--cutoff='.length);

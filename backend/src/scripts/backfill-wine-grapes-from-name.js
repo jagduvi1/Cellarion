@@ -14,23 +14,28 @@
  * fallback (Barolo→Nebbiolo, Chablis→Chardonnay — NOT Rioja/Sancerre/Chianti).
  * Wines where nothing matches are left untouched.
  *
- * Dry-run by default. On --apply it writes a JSON backup of every affected row
- * (old grapes) first, then updates + re-indexes Meilisearch per wine (so the
- * grapes= filter reflects the change). NOTE: embeddings are NOT refreshed here
- * — grapes feed the embed text, so run the admin embedding job afterwards to
- * update semantic search (the DB-backed Statistics + Mongo grapes= filter are
- * correct immediately).
+ * Wines ADOPTED over the Registry Bridge (registryId set, self-hosted installs
+ * only) are left alone: the registry sends them their grapes, and moving their
+ * updatedAt past registrySyncedAt reads as a local edit and would stop every
+ * later registry refresh of that wine. On the rows it tags, updatedAt moves so
+ * the Bridge change check passes the grapes on to installs that adopted them.
+ *
+ * Dry-run by default. On --apply, per wine: the row's old grapes are appended
+ * to an NDJSON backup (scripts/lib/backupLog: --backup-dir=<dir> or
+ * SCRIPT_BACKUP_DIR, default the OS temp dir), then the row is updated and
+ * re-indexed in Meilisearch (so the grapes= filter reflects the change).
+ * NOTE: embeddings are NOT refreshed here — grapes feed the embed text, so run
+ * the admin embedding job afterwards to update semantic search (the DB-backed
+ * Statistics + Mongo grapes= filter are correct immediately).
  *
  * Usage:
  *   node src/scripts/backfill-wine-grapes-from-name.js            # dry run
  *   node src/scripts/backfill-wine-grapes-from-name.js --apply    # execute
+ *   node src/scripts/backfill-wine-grapes-from-name.js --apply --backup-dir=<dir>
  *   node src/scripts/backfill-wine-grapes-from-name.js --limit=50 # cap (testing)
  */
 
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const Grape = require('../models/Grape');
@@ -38,6 +43,7 @@ const { buildSurfaceForms, inferGrapeIds } = require('../services/grapeInference
 const { stripProducerName } = require('../utils/producerPrefix');
 const searchService = require('../services/search');
 const { initSearch } = require('./lib/scriptSearch');
+const { createBackupLog } = require('./lib/backupLog');
 
 const APPLY = process.argv.includes('--apply');
 const limitArg = process.argv.find((a) => a.startsWith('--limit='));
@@ -52,6 +58,26 @@ function producerFreeName(name, producer) {
   return n;
 }
 
+const EMPTY_GRAPES = { $or: [{ grapes: { $exists: false } }, { grapes: { $size: 0 } }] };
+// Matches null and missing: this install's own wines, not Bridge copies.
+const NOT_ADOPTED = { registryId: null };
+const CANDIDATES = { ...EMPTY_GRAPES, ...NOT_ADOPTED };
+
+// The filter re-checks the candidate conditions, so grapes set since the read
+// are never overwritten. updateOne bypasses WineDefinition's pre-validate hook,
+// so this also does what the hook does when a save changes grapes:
+// crossChecksCleared watches them, and a clearance an admin recorded against
+// the empty list no longer vouches for the new one.
+function buildGrapeWrite(w, ids) {
+  return {
+    filter: { _id: w._id, ...CANDIDATES },
+    update: {
+      $set: { grapes: ids, crossChecksClearedAt: null, updatedAt: new Date() },
+      $unset: { crossChecksCleared: '' },
+    },
+  };
+}
+
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log(`Connected. Mode: ${APPLY ? 'APPLY' : 'DRY RUN (pass --apply to execute)'}\n`);
@@ -63,14 +89,14 @@ async function run() {
   console.log(`Loaded ${grapeDocs.length} grapes → ${forms.length} surface forms.\n`);
 
   const q = WineDefinition
-    .find({ $or: [{ grapes: { $exists: false } }, { grapes: { $size: 0 } }] })
-    .select('name producer appellation grapes')
+    .find(CANDIDATES)
+    .select('name producer appellation grapes crossChecksCleared crossChecksClearedAt')
     .lean();
   if (LIMIT) q.limit(LIMIT);
   const wines = await q;
 
   const stats = { scanned: 0, inferred: 0, noMatch: 0 };
-  const backup = [];
+  const backup = createBackupLog('grape-backfill');
   let shown = 0;
 
   for (const w of wines) {
@@ -85,24 +111,28 @@ async function run() {
       console.log(`${tag} ${w.name}${w.producer ? ' — ' + w.producer : ''}  →  ${names.join(', ')}`);
       shown += 1;
     }
-    backup.push({ _id: String(w._id), name: w.name, oldGrapes: (w.grapes || []).map(String) });
 
     if (APPLY) {
-      await WineDefinition.updateOne({ _id: w._id }, { $set: { grapes: ids } });
+      backup.append({
+        _id: String(w._id), name: w.name, oldGrapes: (w.grapes || []).map(String),
+        crossChecksCleared: w.crossChecksCleared ?? null, crossChecksClearedAt: w.crossChecksClearedAt ?? null,
+      });
+      const { filter, update } = buildGrapeWrite(w, ids);
+      await WineDefinition.updateOne(filter, update);
       // Re-index so the Meili grapes= filter updates.
       if (searchOk) await searchService.indexWine(w._id);
     }
   }
 
-  if (APPLY && backup.length) {
-    const file = path.join(os.tmpdir(), `grape-backfill-backup-${Date.now()}.json`);
-    fs.writeFileSync(file, JSON.stringify(backup, null, 2));
-    console.log(`\nBackup of ${backup.length} rows (old grapes) → ${file}`);
-  }
+  if (APPLY) backup.report();
 
   console.log(`\nSummary: ${stats.scanned} empty-grape wines scanned, ${stats.inferred} ${APPLY ? 'tagged' : 'would tag'}, ${stats.noMatch} left untouched (no varietal in name).`);
   if (APPLY) console.log('Next: run the admin embedding job to refresh semantic search (grapes feed the embed text). Statistics + /api/wines grapes= reflect the change now.');
   await mongoose.disconnect();
 }
 
-run().catch((err) => { console.error('Backfill failed:', err); process.exit(1); });
+if (require.main === module) {
+  run().catch((err) => { console.error('Backfill failed:', err); process.exit(1); });
+}
+
+module.exports = { CANDIDATES, buildGrapeWrite };

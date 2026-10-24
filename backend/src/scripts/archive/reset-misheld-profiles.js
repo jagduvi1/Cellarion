@@ -1,6 +1,14 @@
 /**
  * reset-misheld-profiles.js
  *
+ * Finished: a one-shot migration (run 2026-08-19) of rows held under the
+ * earlier prompt and gate semantics. Profiles generated since are held or
+ * published by the refined gate (enrichmentJob.shouldHoldProfile with
+ * identityDataSufficient). Do not run this again as it stands: its backup is
+ * written once after the loop, so a run that dies halfway leaves the rows it
+ * already changed with no pre-image; a rerun first moves its writes to
+ * scripts/lib/backupLog (one row appended before each write).
+ *
  * Somm ticket 6a855285 (2026-08-19): the hold queue's bulk is data-rich wines
  * held only because the generator didn't recognise the BOTTLING, plus rows
  * whose flags misfired on known houses (pre-R7/R8 prompt semantics). Their
@@ -32,8 +40,8 @@
  * Dry-run by default; --apply writes a JSON backup first.
  *
  * Usage:
- *   node src/scripts/reset-misheld-profiles.js            # dry run
- *   node src/scripts/reset-misheld-profiles.js --apply
+ *   node src/scripts/archive/reset-misheld-profiles.js            # dry run
+ *   node src/scripts/archive/reset-misheld-profiles.js --apply
  */
 
 require('dotenv').config();
@@ -41,8 +49,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const mongoose = require('mongoose');
-const WineDefinition = require('../models/WineDefinition');
-const { identityDataSufficient } = require('../services/enrichmentJob');
+const WineDefinition = require('../../models/WineDefinition');
+const { identityDataSufficient } = require('../../services/enrichmentJob');
 
 const APPLY = process.argv.includes('--apply');
 const tag = APPLY ? '✔' : '[dry]';
