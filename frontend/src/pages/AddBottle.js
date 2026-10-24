@@ -314,6 +314,9 @@ function AddBottle() {
    */
   const handleBackScanSuccess = useCallback((data) => {
     const merged = data.merged || {};
+    // Read now: the form updater below runs at render time, after this
+    // handler has already replaced the ref with the merge's verdict.
+    const suspectValue = suspectProducerValueRef.current;
     setBackScanImageId(data.backScanImageId || null);
     setScanConflicts(Array.isArray(data.conflicts) ? data.conflicts : []);
     setBackOffer(false);
@@ -348,8 +351,8 @@ function AddBottle() {
       // REPLACE (audit M-1: fill-blanks-only left the flagged string in the
       // box and made the rescue inert) — but only while the box still holds
       // the exact prefilled string; any edit by the user outranks both labels.
-      if (suspectProducerValueRef.current
-          && next.producer === suspectProducerValueRef.current
+      if (suspectValue
+          && next.producer === suspectValue
           && fromMerged.producer
           && fromMerged.producer !== next.producer) {
         next.producer = fromMerged.producer;

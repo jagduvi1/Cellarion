@@ -220,6 +220,9 @@ function AddToWishlist() {
    */
   const handleBackScanSuccess = useCallback((data) => {
     const merged = data.merged || {};
+    // Read now: the form updater runs at render time, after this handler has
+    // already replaced the ref with the merge's verdict.
+    const suspectValue = suspectProducerValueRef.current;
     setBackScanImageId(data.backScanImageId || null);
     setScanConflicts(Array.isArray(data.conflicts) ? data.conflicts : []);
     setBackOffer(false);
@@ -248,8 +251,8 @@ function AddToWishlist() {
       }
       // A SUSPECT front producer may be REPLACED by the back label's — only
       // while the box still holds the exact prefilled string (audit M-1).
-      if (suspectProducerValueRef.current
-          && next.producer === suspectProducerValueRef.current
+      if (suspectValue
+          && next.producer === suspectValue
           && fromMerged.producer
           && fromMerged.producer !== next.producer) {
         next.producer = fromMerged.producer;
