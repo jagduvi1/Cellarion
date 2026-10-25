@@ -216,8 +216,11 @@ function PrivacyPolicy() {
 
         <h2>9. Cookies</h2>
         <p>
-          Cellarion uses a single httpOnly authentication cookie to keep you logged in.
-          This cookie is strictly necessary for the service to function and does not require
+          Cellarion uses a single httpOnly authentication cookie to keep you logged in. Between
+          signing up and confirming your email address there is one more: a short-lived httpOnly
+          cookie that lets the confirmation link sign you in on the browser you signed up with. It
+          holds no personal data and is removed once your address is confirmed (or after 7 days).
+          These cookies are strictly necessary for the service to function and do not require
           separate consent. On the hosted cellarion.app, Cloudflare may also set a strictly-necessary
           security cookie to distinguish humans from bots. No tracking, analytics, or advertising
           cookies are used (our Umami analytics is cookieless). Besides page views, Umami counts a few
