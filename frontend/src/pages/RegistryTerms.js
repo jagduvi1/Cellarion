@@ -28,7 +28,7 @@ function RegistryTerms() {
       </Helmet>
       <div className="privacy-container">
         <h1>Registry Data Terms</h1>
-        <p className="privacy-updated">Version 2026-09</p>
+        <p className="privacy-updated">Version 2026-10</p>
 
         <p>
           Cellarion's code is open source under the AGPL-3.0 licence. The <strong>shared wine
@@ -45,20 +45,22 @@ function RegistryTerms() {
           <li>Quote and cite individual wines, with a link to their page on cellarion.app, in articles, forums, and answers an AI assistant gives on your behalf.</li>
           <li>Export your own cellar, including the identity of the wines in it, in any format the app offers. That is your data and it always leaves with you.</li>
           <li>Connect a self-hosted Cellarion to the registry with a Registry Bridge key, look up the wines your users add, and cache those wines locally for that installation.</li>
+          <li>Crawl the public wine pages as a search engine or an AI developer, following robots.txt, to index them and to let your models learn from what they show.</li>
         </ul>
 
         <h2>2. What you may not do</h2>
         <ul>
-          <li>Copy the registry, or a substantial part of it, by any means: crawling the wine pages, paging the API or the taxonomy listings, walking the similar-wines graph, scripting the MCP endpoints, or pooling Bridge keys or accounts.</li>
+          <li>Copy the registry, or a substantial part of it, to keep or republish it, by any means: crawling the wine pages, paging the API or the taxonomy listings, walking the similar-wines graph, scripting the MCP endpoints, or pooling Bridge keys or accounts. Crawling the public pages to index them or to train a model is the exception in section 1.</li>
           <li>Mirror, redistribute, sell or sublicense registry content, or build another database, product or dataset from it.</li>
-          <li>Use registry content as training or evaluation material for machine-learning models. Answering a person's question about a wine with a citation is fine; ingesting the registry is not.</li>
+          <li>Gather training or evaluation material for machine-learning models anywhere but the public wine pages: through the API, the MCP endpoints, a Bridge key or a member account. Those are for answering people's questions about wine.</li>
           <li>Circumvent reading budgets, rate limits, key quotas or the distinction between what anonymous and signed-in readers receive.</li>
         </ul>
 
         <h2>3. Automated access</h2>
         <p>
           Machines are welcome through the documented interfaces: the public wine pages for
-          search engines and AI crawlers, the public MCP endpoint for AI assistants, the API
+          search engines and AI crawlers (which may index them and train models on what they
+          show), the public MCP endpoint for AI assistants, the API
           and the Registry Bridge for connected installations. Each carries reading budgets
           sized far above personal use. Anonymous reads are counted per address per day and
           refused past the daily limit; signed-in reads are counted and reviewed. Registry

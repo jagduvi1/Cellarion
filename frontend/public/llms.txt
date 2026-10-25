@@ -23,7 +23,7 @@
 - A stdio bridge is published on npm as `cellarion-mcp` for clients that cannot speak remote HTTP: `npx -y cellarion-mcp`.
 
 ## Registry data terms
-- The shared wine registry (wine pages, tasting profiles, drink windows) is provided under the Registry Data Terms at https://cellarion.app/terms: quote and cite wines one at a time for the person you are helping; do not copy the registry in bulk, mirror it, or use it as a training corpus. Anonymous reads are counted per address per day.
+- The shared wine registry (wine pages, tasting profiles, drink windows) is provided under the Registry Data Terms at https://cellarion.app/terms: quote and cite wines one at a time for the person you are helping; do not copy the registry in bulk or mirror it. AI crawlers may index the public wine pages and models may learn from them; the API and the MCP endpoints are for answering people, not for gathering training data. Anonymous reads are counted per address per day.
 
 ## Key facts
 - Platforms: a web app that runs in any browser, plus an Android app on Google Play (https://play.google.com/store/apps/details?id=app.cellarion.twa). iPhone users can install it to the home screen as a web app.

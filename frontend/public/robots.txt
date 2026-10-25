@@ -1,7 +1,7 @@
 # https://www.robotstxt.org/robotstxt.html
-# Registry content (wine pages, tasting profiles, drink windows) is provided under
-# the Registry Data Terms: https://cellarion.app/terms — read and cite one wine at a
-# time; bulk extraction, mirroring and training corpora are not permitted.
+# Registry content is provided under the Registry Data Terms: https://cellarion.app/terms
+# Search engines and AI crawlers may index the public wine pages, and AI models may
+# learn from them. Mirroring or republishing the registry is not permitted.
 
 # Default policy — applies to all crawlers not matched below
 User-agent: *
@@ -36,11 +36,12 @@ Allow: /api/sitemap.xml
 Allow: /api/blog
 Allow: /api/taxonomy/
 
-# AI crawlers — explicit allow for content discovery and citation.
-# These index for AI assistants (ChatGPT, Claude, Perplexity, Copilot, Gemini, etc.).
+# AI crawlers — explicit allow for content discovery, citation and model training.
+# These index for AI assistants (ChatGPT, Claude, Perplexity, Copilot, Gemini, etc.) and
+# collect what their models learn from.
 # Same disallow list as the default group: only public marketing/reference surfaces are crawlable.
 # Note: Google-Extended and Applebot-Extended only opt-out of generative-AI training, not search
-# indexing — allowing them is the explicit "we want to be cited" choice.
+# indexing — allowing them is the explicit choice to let models learn from these pages.
 User-agent: GPTBot
 User-agent: ChatGPT-User
 User-agent: OAI-SearchBot

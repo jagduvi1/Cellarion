@@ -19,6 +19,6 @@ const CURRENT_PRIVACY_POLICY_VERSION = '2026-10-23.2';
 // them. Bump together with the version line on that page. A bump does not
 // revoke existing keys; it means new keys are issued under the new version
 // and the Settings page asks for re-acceptance before the next one.
-const CURRENT_REGISTRY_TERMS_VERSION = '2026-09';
+const CURRENT_REGISTRY_TERMS_VERSION = '2026-10';
 
 module.exports = { CURRENT_PRIVACY_POLICY_VERSION, CURRENT_REGISTRY_TERMS_VERSION };
