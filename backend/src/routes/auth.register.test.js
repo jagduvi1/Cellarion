@@ -80,6 +80,15 @@ const register = (body) => fetch(`${baseUrl}/api/auth/register`, {
   }),
 });
 
+test('with email verification off there is no signup binding cookie (the account is signed in at once)', async () => {
+  User.findOne.mockResolvedValue(null);
+
+  const res = await register();
+
+  expect(res.status).toBe(201);
+  expect(res.headers.get('set-cookie') || '').not.toMatch(/signupBinding/);
+});
+
 test('a new account is marked for first-sign-in language + currency defaults', async () => {
   User.findOne.mockResolvedValue(null);
 

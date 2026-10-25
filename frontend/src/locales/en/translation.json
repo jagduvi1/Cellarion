@@ -170,6 +170,7 @@
     "verificationFailed": "Verification failed. The link may have expired.",
     "verifying": "Verifying your email address...",
     "verified": "Email verified! Taking you to the login page...",
+    "verifiedSignedIn": "Email verified! You're signed in — taking you to your cellar...",
     "verifiedNowLogin": "Your email is verified. Log in to start your cellar.",
     "usernameHint": "3–30 characters: letters, numbers, dots, underscores or hyphens.",
     "usernameRuleError": "Usernames are 3–30 characters and may use letters, numbers, dots, underscores and hyphens — no spaces.",

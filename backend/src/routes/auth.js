@@ -25,6 +25,7 @@ const {
   removeSession, revokeAllSessions, sessionForCookie, hashRefreshToken,
 } = require('../services/authTokens');
 const { resolvePendingShares } = require('../services/pendingShares');
+const { setSignupBinding, hasSignupBinding, clearSignupBinding } = require('../services/signupBinding');
 const { createDemoAccountWithinCeiling } = require('../services/demoAccount');
 
 const router = express.Router();
@@ -183,6 +184,10 @@ router.post('/register', authLimiter, async (req, res) => {
         { type: 'user', id: user._id },
         { username: user.username, email: user.email }
       );
+
+      // This browser registered the account: its verification link may sign
+      // the member in here, and only here (services/signupBinding).
+      setSignupBinding(res, user._id);
 
       return res.status(202).json({
         message: 'Registration successful. Please check your email to verify your account.',
@@ -364,6 +369,8 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const accessToken = await issueTokens(user, res, { rememberMe: rememberMe !== false, client: clientHint(req) });
+    // A signup binding has done its job once someone signs in on this browser.
+    if (req.cookies?.signupBinding) clearSignupBinding(res);
 
     logAudit(req, 'auth.login.success',
       { type: 'user', id: user._id },
@@ -384,19 +391,19 @@ router.post('/login', authLimiter, async (req, res) => {
   }
 });
 
-// GET /api/auth/verify-email?token=:token - Verify email address
-// POST (not GET) and issues NO session (security audit M-1). The email link
-// points at the SPA page /verify-email?token=…, which now POSTs the token here
-// from same-origin JS. This closes two holes in the old session-issuing GET:
-//   - login-CSRF / session-fixation: a cross-site GET to the old endpoint (or
-//     to the SPA page) let an attacker's verification token Set-Cookie the
-//     attacker's refresh cookie into a victim's browser (SameSite=Lax does not
-//     block storing it), silently logging the victim into the attacker's
-//     account. A POST is not triggerable by a plain cross-site navigation, and
-//     issuing no session removes the fixation entirely — the user logs in
-//     normally afterward.
+// POST /api/auth/verify-email - Verify email address
+// POST (not GET), security audit M-1. The email link points at the SPA page
+// /verify-email?token=…, which POSTs the token here from same-origin JS:
 //   - one-time-token burn by mail-security prefetchers: link scanners issue
-//     GETs, not the SPA's POST, so they no longer consume the token.
+//     GETs, not the SPA's POST, so they do not consume the token.
+//   - login-CSRF / session-fixation: anyone can get a browser to open the SPA
+//     page with THEIR token, so a session issued here for whoever opens the
+//     link would silently sign a victim in to the attacker's account. A
+//     session is therefore issued ONLY when the request carries the signup
+//     binding of this very account — the httpOnly cookie its registration set
+//     in that browser (services/signupBinding). An attacker cannot put that
+//     cookie in someone else's browser. Everywhere else the link only
+//     verifies, and the member signs in normally afterward.
 router.post('/verify-email', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const { token } = req.body || {};
@@ -432,8 +439,36 @@ router.post('/verify-email', async (req, res) => {
     // Resolve any pending cellar shares for this email
     resolvePendingShares(user).catch(() => {});
 
-    // No session is issued here — the client sends the user to log in.
-    res.json({ verified: true, message: 'Email verified successfully. Please log in.' });
+    // The browser that registered this account signs straight in (see the
+    // route comment). Not a demo or a locked account, nor one being deleted.
+    // A binding for another account (this browser registered one of its own)
+    // is left in place for that account's link.
+    const bound = hasSignupBinding(req, user._id);
+    if (bound) clearSignupBinding(res);
+    const signIn = bound && !user.isDemo && !user.deletionScheduledFor && !isAccountLocked(user);
+    if (!signIn) {
+      return res.json({ verified: true, message: 'Email verified successfully. Please log in.' });
+    }
+
+    // The email IS verified at this point: a failed sign-in falls back to the
+    // plain answer (log in normally) instead of reporting a failed verification.
+    let accessToken;
+    try {
+      if (resetLoginAttempts(user)) {
+        try { await user.save(); } catch (err) { console.warn('Failed to reset login-attempt counter:', err.message); }
+      }
+      accessToken = await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
+    } catch (err) {
+      console.error('Sign-in after email verification failed:', err.message);
+      return res.json({ verified: true, message: 'Email verified successfully. Please log in.' });
+    }
+    logAudit(req, 'auth.login.success',
+      { type: 'user', id: user._id },
+      { username: user.username, via: 'email_verification' }
+    );
+    const userJson = user.toJSON();
+    userJson.isSuperAdmin = checkIsSuperAdmin(req, user.email);
+    res.json({ verified: true, token: accessToken, persistent: true, user: userJson });
   } catch (error) {
     console.error('Email verification error:', error);
     res.status(500).json({ error: 'Email verification failed' });
@@ -703,6 +738,8 @@ router.post('/logout', async (req, res) => {
     // refresh (and, read as a rejection, wiping their offline copy). With no
     // cookie there is nothing to clear (audit 2026-09-27 M5).
     if (hash) clearRefreshCookie(res);
+    // Signing out of a shared browser leaves no signup binding behind either.
+    if (req.cookies?.signupBinding) clearSignupBinding(res);
     res.json({ message: 'Logged out' });
   } catch (error) {
     console.error('Logout error:', error);

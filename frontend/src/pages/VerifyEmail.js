@@ -11,7 +11,7 @@ function VerifyEmail() {
   const { verifyEmail } = useAuth();
   const navigate = useNavigate();
 
-  const [status, setStatus] = useState('verifying'); // 'verifying' | 'success' | 'error'
+  const [status, setStatus] = useState('verifying'); // 'verifying' | 'success' | 'signedIn' | 'error'
   const [errorMessage, setErrorMessage] = useState('');
   const [resendEmail, setResendEmail] = useState('');
   const [resendStatus, setResendStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
@@ -35,12 +35,16 @@ function VerifyEmail() {
     setSearchParams(new URLSearchParams(), { replace: true });
 
     verifyEmail(token).then(result => {
-      if (result.success) {
+      if (result.success && result.signedIn) {
+        // The browser that registered the account is signed straight in.
+        setStatus('signedIn');
+        setTimeout(() => navigate('/cellars', { replace: true }), 1500);
+      } else if (result.success) {
         setStatus('success');
-        // Verification no longer logs the user in (security audit M-1) — send
-        // them to log in rather than into an authenticated view. The flag lets
-        // the login page say why they are there: on a phone this usually opens
-        // in the mail app's own browser, where no session exists yet.
+        // Anywhere else verification does not sign in (security audit M-1):
+        // send them to log in. The flag lets the login page say why they are
+        // there: on a phone this usually opens in the mail app's own browser,
+        // where no session exists yet.
         setTimeout(() => navigate('/login', { replace: true, state: { verified: true } }), 1500);
       } else {
         setStatus('error');
@@ -80,6 +84,12 @@ function VerifyEmail() {
         {status === 'success' && (
           <div className="alert alert-success">
             {t('auth.verified')}
+          </div>
+        )}
+
+        {status === 'signedIn' && (
+          <div className="alert alert-success">
+            {t('auth.verifiedSignedIn', "Email verified! You're signed in — taking you to your cellar...")}
           </div>
         )}
 
