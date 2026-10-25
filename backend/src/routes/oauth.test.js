@@ -75,7 +75,10 @@ jest.mock('../models/User', () => {
   return User;
 });
 
+jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+
 const User = require('../models/User');
+const { logAudit } = require('../services/audit');
 const { upsertSsoUser, upsertGoogleUser, generateUniqueUsername } = require('./oauth');
 
 const googleProfile = (overrides = {}) => ({
@@ -88,6 +91,7 @@ const googleProfile = (overrides = {}) => ({
 
 beforeEach(() => {
   User.__store.users.length = 0;
+  logAudit.mockClear();
 });
 
 describe('upsertGoogleUser', () => {
@@ -114,12 +118,13 @@ describe('upsertGoogleUser', () => {
     expect(User.__store.users).toHaveLength(1);
   });
 
-  test('links Google to an existing account with the same verified email', async () => {
+  test('links Google to an existing VERIFIED account with the same email, keeping its password', async () => {
     const existing = User.__seed({
       username: 'bob',
       email: 'bob@example.com',
       password: 'hashed',
-      emailVerified: false,
+      emailVerified: true,
+      sessions: [{ hash: 'h1' }],
       authProviders: [],
     });
 
@@ -130,10 +135,47 @@ describe('upsertGoogleUser', () => {
     expect(user).toBe(existing); // linked, not duplicated
     expect(User.__store.users).toHaveLength(1);
     expect(user.authProviders).toContainEqual({ provider: 'google', providerId: 'google-99' });
-    expect(user.emailVerified).toBe(true); // upgraded — Google verified it
-    expect(user.password).toBe('hashed'); // password untouched
+    expect(user.password).toBe('hashed'); // the owner proved the mailbox before: untouched
+    expect(user.sessions).toEqual([{ hash: 'h1' }]);
     // An existing account keeps its own settings — no first-sign-in defaults.
     expect(user.localeDefaultsPending).toBeUndefined();
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('an UNVERIFIED account registered with the address carries nothing over when the owner signs in with Google', async () => {
+    // Someone registered the owner's address with a password of their own and
+    // never verified it. Without the reset they could keep signing in with
+    // that password next to the owner, who now uses the account via Google.
+    const existing = User.__seed({
+      username: 'squatter',
+      email: 'bob@example.com',
+      password: 'hashed-by-someone-else',
+      emailVerified: false,
+      sessions: [{ hash: 'h1' }],
+      refreshTokenHash: 'legacy',
+      emailVerificationTokenHash: 'v', emailVerificationExpiresAt: new Date(),
+      passwordResetTokenHash: 'r', passwordResetExpiresAt: new Date(),
+      failedLoginAttempts: { count: 3, firstFailedAt: new Date(), lockedUntil: null },
+      gdprConsent: { privacyPolicy: { accepted: true, acceptedAt: new Date(), version: 'x' }, dataProcessing: { accepted: true, acceptedAt: new Date() } },
+      authProviders: [],
+    });
+
+    const user = await upsertGoogleUser(
+      googleProfile({ id: 'google-99', emails: [{ value: 'bob@example.com', verified: true }] })
+    );
+
+    expect(user).toBe(existing);
+    expect(user.authProviders).toContainEqual({ provider: 'google', providerId: 'google-99' });
+    expect(user.emailVerified).toBe(true); // Google verified it
+    expect(user.password).toBeUndefined(); // the earlier password no longer signs in
+    expect(user.sessions).toEqual([]);
+    expect(user.refreshTokenHash).toBeNull();
+    expect(user.emailVerificationTokenHash).toBeNull();
+    expect(user.passwordResetTokenHash).toBeNull();
+    expect(user.failedLoginAttempts.count).toBe(0);
+    expect(user.gdprConsent.privacyPolicy.accepted).toBe(false); // the owner consents themselves
+    expect(user.gdprConsent.dataProcessing.accepted).toBe(false);
+    expect(logAudit).toHaveBeenCalledWith(null, 'auth.sso.claimed_unverified', { type: 'user', id: existing._id }, { provider: 'google' });
   });
 
   test('matches email case-insensitively when linking', async () => {

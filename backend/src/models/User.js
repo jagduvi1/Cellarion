@@ -561,8 +561,9 @@ userSchema.pre('save', function(next) {
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
-  // Only hash if password is modified or new
-  if (!this.isModified('password')) {
+  // Only hash if password is modified or new. A password cleared to nothing
+  // (an account becoming sign-in-provider only) has nothing to hash.
+  if (!this.isModified('password') || this.password == null) {
     return next();
   }
 
