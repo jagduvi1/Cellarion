@@ -170,8 +170,36 @@ async function upsertSsoUser(provider, claims, { trustEmailVerified = false, iss
   const existing = await User.findOne({ email });
   if (existing) {
     existing.authProviders.push({ ...identity });
-    if (!existing.emailVerified) existing.emailVerified = true; // provider-verified
+    const claimed = !existing.emailVerified;
+    if (claimed) {
+      // Nobody had proven owning this mailbox before this sign-in: the account
+      // was registered with the address and never verified. What was set on it
+      // (a password, sessions, a pending verification or reset link, the
+      // consent given at registration) came from someone who may not be the
+      // owner, so none of it carries over. Kept, it would let whoever
+      // registered the address first go on signing in with their password
+      // beside the owner. The account becomes this provider's sign-in, and the
+      // owner gives consent themselves, as a new SSO account does.
+      existing.emailVerified = true; // provider-verified
+      existing.password = undefined;
+      existing.sessions = [];
+      existing.refreshTokenHash = null;
+      existing.refreshTokenExpiresAt = null;
+      existing.refreshTokenPersistent = null;
+      existing.emailVerificationTokenHash = null;
+      existing.emailVerificationExpiresAt = null;
+      existing.passwordResetTokenHash = null;
+      existing.passwordResetExpiresAt = null;
+      existing.failedLoginAttempts = { count: 0, firstFailedAt: null, lockedUntil: null };
+      existing.gdprConsent = {
+        privacyPolicy: { accepted: false, acceptedAt: null, version: null },
+        dataProcessing: { accepted: false, acceptedAt: null },
+      };
+    }
     await existing.save();
+    if (claimed) {
+      logAudit(null, 'auth.sso.claimed_unverified', { type: 'user', id: existing._id }, { provider });
+    }
     return existing;
   }
 
