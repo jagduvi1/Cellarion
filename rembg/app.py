@@ -18,12 +18,12 @@ Image.MAX_IMAGE_PIXELS = 64_000_000
 app = Flask(__name__)
 
 # One u2net session for the life of the worker. Given no session, rembg's
-# remove() builds a new one on every call: an MD5 of the ~176 MB model file
-# plus a fresh ONNX Runtime session per photo. It is built on the first photo,
-# never at import, so /health still answers while the model cannot be read,
-# and a failed build is not kept, so the next photo tries again. The lock only
-# guards the build, for a gunicorn started with --threads; ONNX Runtime allows
-# concurrent run() calls on one session.
+# remove() builds a fresh ONNX Runtime session on every call, and of its own
+# default model (bria-rmbg), which the image does not carry. It is built on the
+# first photo, never at import, so /health still answers while the model
+# cannot be read, and a failed build is not kept, so the next photo tries
+# again. The lock only guards the build, for a gunicorn started with --threads;
+# ONNX Runtime allows concurrent run() calls on one session.
 _session = None
 _session_lock = threading.Lock()
 
