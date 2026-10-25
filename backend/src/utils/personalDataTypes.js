@@ -28,8 +28,12 @@ function validateValue(key, raw) {
 
   switch (key.type) {
     case 'text': {
-      if (typeof raw !== 'string') return { ok: false, error: 'Expected text' };
-      const value = raw.trim();
+      // A number-only value (an article number, an EAN, a lot code) often
+      // arrives from an API or MCP client as a JSON number; a text key keeps
+      // it as text. Leading zeros survive only when it is sent as a string.
+      const str = typeof raw === 'number' && Number.isFinite(raw) ? String(raw) : raw;
+      if (typeof str !== 'string') return { ok: false, error: 'Expected text' };
+      const value = str.trim();
       if (!value) return { ok: false, error: 'A value is required' };
       if (value.length > TEXT_MAX) {
         return { ok: false, error: `Text too long (max ${TEXT_MAX} characters)` };

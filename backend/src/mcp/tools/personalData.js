@@ -30,7 +30,8 @@ const svcFail = (result) => fail(FAIL_CODE[result.code] || 'invalid_input', resu
 
 // Values arrive as string, number or boolean; the service casts them against
 // the key's declared type and rejects mismatches.
-const VALUE_SCHEMA = z.union([z.string().max(500), z.number(), z.boolean()]);
+const VALUE_SCHEMA = z.union([z.string().max(500), z.number(), z.boolean()])
+  .describe('For a text key, send the value as a string (e.g. "00123"), so leading zeros are kept');
 
 const entryOut = (e) => ({
   entry_id: e._id,
