@@ -26,6 +26,7 @@ import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/Jou
 import OfflineSettings from '../components/OfflineSettings';
 import EarlyAccessSettings from '../components/EarlyAccessSettings';
 import SettingsGroup from '../components/SettingsGroup';
+import { confirmWordFrom, matchesConfirmWord } from '../utils/confirmWord';
 import './Settings.css';
 
 function Settings() {
@@ -210,6 +211,10 @@ function Settings() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  // The word to type is the one the instruction shows in the user's language;
+  // DELETE is accepted as well.
+  const deleteWord = confirmWordFrom(t('settings.danger.typeToConfirm', 'Type <strong>DELETE</strong> to confirm:'), 'DELETE');
+  const deleteConfirmed = matchesConfirmWord(deleteConfirmText, [deleteWord, 'DELETE']);
 
   // Data export state (full GDPR data dump)
   const [exporting, setExporting] = useState(false);
@@ -304,7 +309,7 @@ function Settings() {
   };
 
   const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== 'DELETE') return;
+    if (!deleteConfirmed) return;
     setDeleting(true);
     setDeleteError(null);
     try {
@@ -956,7 +961,7 @@ function Settings() {
                   className="input"
                   value={deleteConfirmText}
                   onChange={e => setDeleteConfirmText(e.target.value)}
-                  placeholder="DELETE"
+                  placeholder={deleteWord}
                   autoFocus
                 />
                 {deleteError && <div className="alert alert-error">{deleteError}</div>}
@@ -964,7 +969,7 @@ function Settings() {
                   <button
                     className="btn btn-danger"
                     onClick={handleDeleteAccount}
-                    disabled={deleteConfirmText !== 'DELETE' || deleting}
+                    disabled={!deleteConfirmed || deleting}
                   >
                     {deleting ? t('settings.danger.scheduling', 'Scheduling...') : t('settings.danger.scheduleBtn', 'Schedule account deletion')}
                   </button>
