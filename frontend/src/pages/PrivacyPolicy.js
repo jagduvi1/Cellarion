@@ -219,7 +219,8 @@ function PrivacyPolicy() {
           Cellarion uses a single httpOnly authentication cookie to keep you logged in. Between
           signing up and confirming your email address there is one more: a short-lived httpOnly
           cookie that lets the confirmation link sign you in on the browser you signed up with. It
-          holds no personal data and is removed once your address is confirmed (or after 7 days).
+          holds only a random code tied to your new account, and is removed when you confirm your
+          address or sign in or out on that browser, and after 7 days at the latest.
           These cookies are strictly necessary for the service to function and do not require
           separate consent. On the hosted cellarion.app, Cloudflare may also set a strictly-necessary
           security cookie to distinguish humans from bots. No tracking, analytics, or advertising

@@ -61,7 +61,7 @@ const cookieParser = require('cookie-parser');
 const User = require('../models/User');
 const { issueTokens } = require('../services/authTokens');
 const { logAudit } = require('../services/audit');
-const { setSignupBinding } = require('../services/signupBinding');
+const { setSignupBinding, hasSignupBinding } = require('../services/signupBinding');
 const authRouter = require('./auth');
 
 let server;
@@ -109,7 +109,9 @@ test('registration marks the registering browser with an httpOnly, strict, auth-
   });
   expect(res.status).toBe(202);
   const set = res.headers.get('set-cookie') || '';
-  expect(set).toContain(`signupBinding=${bindingFor('u-new')}`);
+  const value = (/signupBinding=([^;]+)/.exec(set) || [])[1];
+  expect(hasSignupBinding({ cookies: { signupBinding: value } }, 'u-new')).toBe(true);
+  expect(hasSignupBinding({ cookies: { signupBinding: value } }, 'someone-else')).toBe(false);
   expect(set).toMatch(/HttpOnly/i);
   expect(set).toMatch(/SameSite=Strict/i);
   expect(set).toMatch(/Path=\/api\/auth/i);
@@ -175,6 +177,36 @@ test('a locked account, an account being deleted and a demo account only verify'
     expect((await res.json()).token).toBeUndefined();
   }
   expect(issueTokens).not.toHaveBeenCalled();
+});
+
+test('a binding older than 7 days is refused by the server, whatever the browser kept', async () => {
+  unverifiedAccount('u4', 'tok-4');
+  let old;
+  setSignupBinding({ cookie: (_n, val) => { old = val; } }, 'u4', Date.now() - 8 * 864e5);
+
+  const res = await verify('tok-4', `signupBinding=${old}`);
+
+  expect((await res.json()).token).toBeUndefined();
+  expect(issueTokens).not.toHaveBeenCalled();
+});
+
+test('a sign-in that fails after verifying still reports the email as verified', async () => {
+  const user = unverifiedAccount('u5', 'tok-5');
+  issueTokens.mockRejectedValueOnce(new Error('session save failed'));
+
+  const res = await verify('tok-5', `signupBinding=${bindingFor('u5')}`);
+
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body).toMatchObject({ verified: true });
+  expect(body.token).toBeUndefined();
+  expect(user.emailVerified).toBe(true);
+});
+
+test('signing out clears a signup binding left in the browser', async () => {
+  const res = await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST', headers: { Cookie: `signupBinding=${bindingFor('u6')}` } });
+  expect(res.status).toBe(200);
+  expect(res.headers.get('set-cookie') || '').toMatch(/signupBinding=;/);
 });
 
 test('an invalid token is still refused, binding or not', async () => {

@@ -16,7 +16,8 @@
  * The cookie is SameSite=Strict and scoped to /api/auth: it rides only on the
  * same-origin POST the verify page makes, never on a cross-site request. It
  * lives as long as a verification link can still be sent again (resend), and
- * is cleared once the email is verified.
+ * is cleared once the email is verified in that browser, or on a sign-in or
+ * sign-out there.
  */
 const crypto = require('crypto');
 const { COOKIE_SECURE } = require('./authTokens');
@@ -25,24 +26,28 @@ const COOKIE_NAME = 'signupBinding';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const cookieBase = { httpOnly: true, secure: COOKIE_SECURE, sameSite: 'strict', path: '/api/auth' };
 
-function bindingFor(userId) {
+// "<issued-at ms>.<HMAC of id and issued-at>": the server, not only the
+// browser, decides that a binding is older than MAX_AGE_MS.
+function sign(userId, issuedAt) {
   return crypto.createHmac('sha256', process.env.JWT_SECRET)
-    .update(`signup-binding:${String(userId)}`)
+    .update(`signup-binding:${String(userId)}:${issuedAt}`)
     .digest('hex');
 }
 
 /** Mark this browser as the one that registered `userId`. */
-function setSignupBinding(res, userId) {
-  res.cookie(COOKIE_NAME, bindingFor(userId), { ...cookieBase, maxAge: MAX_AGE_MS });
+function setSignupBinding(res, userId, now = Date.now()) {
+  res.cookie(COOKIE_NAME, `${now}.${sign(userId, now)}`, { ...cookieBase, maxAge: MAX_AGE_MS });
 }
 
-/** Whether the request comes from the browser that registered `userId`. */
-function hasSignupBinding(req, userId) {
+/** Whether the request comes from the browser that registered `userId`, within MAX_AGE_MS. */
+function hasSignupBinding(req, userId, now = Date.now()) {
   const got = req.cookies?.[COOKIE_NAME];
-  if (typeof got !== 'string' || !got) return false;
-  const want = bindingFor(userId);
-  if (got.length !== want.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
+  if (typeof got !== 'string') return false;
+  const m = /^(\d{13})\.([0-9a-f]{64})$/.exec(got);
+  if (!m) return false;
+  const issuedAt = Number(m[1]);
+  if (!(issuedAt <= now && now - issuedAt <= MAX_AGE_MS)) return false;
+  return crypto.timingSafeEqual(Buffer.from(m[2]), Buffer.from(sign(userId, m[1])));
 }
 
 function clearSignupBinding(res) {

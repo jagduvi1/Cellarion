@@ -369,6 +369,8 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const accessToken = await issueTokens(user, res, { rememberMe: rememberMe !== false, client: clientHint(req) });
+    // A signup binding has done its job once someone signs in on this browser.
+    if (req.cookies?.signupBinding) clearSignupBinding(res);
 
     logAudit(req, 'auth.login.success',
       { type: 'user', id: user._id },
@@ -448,10 +450,18 @@ router.post('/verify-email', async (req, res) => {
       return res.json({ verified: true, message: 'Email verified successfully. Please log in.' });
     }
 
-    if (resetLoginAttempts(user)) {
-      try { await user.save(); } catch (err) { console.warn('Failed to reset login-attempt counter:', err.message); }
+    // The email IS verified at this point: a failed sign-in falls back to the
+    // plain answer (log in normally) instead of reporting a failed verification.
+    let accessToken;
+    try {
+      if (resetLoginAttempts(user)) {
+        try { await user.save(); } catch (err) { console.warn('Failed to reset login-attempt counter:', err.message); }
+      }
+      accessToken = await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
+    } catch (err) {
+      console.error('Sign-in after email verification failed:', err.message);
+      return res.json({ verified: true, message: 'Email verified successfully. Please log in.' });
     }
-    const accessToken = await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
     logAudit(req, 'auth.login.success',
       { type: 'user', id: user._id },
       { username: user.username, via: 'email_verification' }
@@ -728,6 +738,8 @@ router.post('/logout', async (req, res) => {
     // refresh (and, read as a rejection, wiping their offline copy). With no
     // cookie there is nothing to clear (audit 2026-09-27 M5).
     if (hash) clearRefreshCookie(res);
+    // Signing out of a shared browser leaves no signup binding behind either.
+    if (req.cookies?.signupBinding) clearSignupBinding(res);
     res.json({ message: 'Logged out' });
   } catch (error) {
     console.error('Logout error:', error);
