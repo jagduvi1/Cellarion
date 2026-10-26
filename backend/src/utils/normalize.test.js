@@ -8,6 +8,7 @@ const {
   normalizeProducerKey,
   generateWineKey,
   normalizeAppellation,
+  normalizeClassification,
   levenshteinDistance,
   calculateSimilarity,
   generateTrigrams,
@@ -123,6 +124,62 @@ describe('tokenize', () => {
 });
 
 // ─── generateWineKey ─────────────────────────────────────────────────────────
+
+// ─── normalizeClassification (GitHub discussion #1696) ───────────────────────
+
+describe('normalizeClassification', () => {
+  test('a quality tier is kept as typed, whitespace folded', () => {
+    expect(normalizeClassification('Grand Cru Classé en 1855')).toBe('Grand Cru Classé en 1855');
+    expect(normalizeClassification('  Riserva ')).toBe('Riserva');
+    expect(normalizeClassification('Grand  Cru')).toBe('Grand Cru');
+    expect(normalizeClassification('Spätlese')).toBe('Spätlese');
+    expect(normalizeClassification('Premier Cru')).toBe('Premier Cru');
+    // A category in its own system, not the appellation's mark: kept.
+    expect(normalizeClassification('Vin de France')).toBe('Vin de France');
+    expect(normalizeClassification('Qualitätswein')).toBe('Qualitätswein');
+  });
+
+  test('the regulatory mark alone is no classification at all', () => {
+    for (const mark of ['DOCG', 'DOC', 'DOCa', 'D.O.C.G.', 'D.O.C.', 'AOC', 'AOP', 'IGT', 'IGP', 'DO', 'AVA', 'DOQ', 'PDO', 'PGI']) {
+      expect(normalizeClassification(mark)).toBeNull();
+    }
+  });
+
+  test('a spelled-out mark is no classification either', () => {
+    expect(normalizeClassification('Denominazione di Origine Controllata e Garantita')).toBeNull();
+    expect(normalizeClassification('Denominazione di Origine Controllata')).toBeNull();
+    expect(normalizeClassification('Denominazione di Origine Protetta')).toBeNull();
+    expect(normalizeClassification('Indicazione Geografica Tipica')).toBeNull();
+    expect(normalizeClassification("Appellation d'Origine Protégée")).toBeNull();
+    expect(normalizeClassification("Appellation d'Origine Contrôlée")).toBeNull();
+    expect(normalizeClassification('Indication Géographique Protégée')).toBeNull();
+    expect(normalizeClassification('Denominación de Origen')).toBeNull();
+  });
+
+  test('a mark attached to a real tier is dropped and the tier stays', () => {
+    expect(normalizeClassification('Riserva DOCG')).toBe('Riserva');
+    expect(normalizeClassification('DOCG Riserva')).toBe('Riserva');
+    expect(normalizeClassification('Gran Reserva DOCa')).toBe('Gran Reserva');
+    expect(normalizeClassification('Superiore DOC')).toBe('Superiore');
+    expect(normalizeClassification('Classico Superiore D.O.C.G.')).toBe('Classico Superiore');
+    expect(normalizeClassification('Riserva, Denominazione di Origine Controllata e Garantita')).toBe('Riserva');
+  });
+
+  test('empty, blank and non-string inputs are null', () => {
+    expect(normalizeClassification(null)).toBeNull();
+    expect(normalizeClassification(undefined)).toBeNull();
+    expect(normalizeClassification('')).toBeNull();
+    expect(normalizeClassification('   ')).toBeNull();
+  });
+
+  test('the appellation rule is unchanged by sharing its loops', () => {
+    expect(normalizeAppellation('DOCG')).toBe('DOCG');
+    expect(normalizeAppellation('Denominazione di Origine Controllata')).toBe('Denominazione di Origine Controllata');
+    expect(normalizeAppellation('Chianti Denominazione di Origine Controllata')).toBe('Chianti');
+    expect(normalizeAppellation('D.O. Valle Central')).toBe('Valle Central');
+    expect(normalizeAppellation('Vin du Québec - Indication géographique protégée')).toBe('Vin du Québec');
+  });
+});
 
 describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
   test('strips the trailing classification tier', () => {

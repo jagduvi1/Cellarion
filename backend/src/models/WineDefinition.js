@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
+const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 const { isStyleType, inferColourFromName } = require('../utils/wineColour');
 
@@ -755,6 +755,18 @@ wineDefinitionSchema.pre('validate', function(next) {
   )) {
     this.crossChecksCleared = undefined;
     this.crossChecksClearedAt = null;
+  }
+  // CLASSIFICATION is a quality tier on top of the appellation (Riserva, Grand
+  // Cru Classé, a Prädikat). The appellation's regulatory mark (DOCG, DOC, AOC,
+  // IGT, AVA, spelled out or not) is not one — it follows from the appellation
+  // — and is dropped here on EVERY save-based write, so no prompt, form or
+  // tool can store "DOCG" as the tier (GitHub discussion #1696; about 310
+  // registry rows had). Atomic writes skip this hook:
+  // scripts/normalize-classification-tiers.js is the backfill and applies the
+  // same helper.
+  if (this.isModified('classification')) {
+    const tier = normalizeClassification(this.classification);
+    if (tier !== this.classification) this.classification = tier;
   }
   // COLOUR belongs to the style types only. Anything else holds none — a
   // colour left behind by a retype to red/white/rosé (or to no type) would

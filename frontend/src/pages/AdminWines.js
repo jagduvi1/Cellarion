@@ -36,6 +36,7 @@ const emptyForm = {
   type: 'red',
   colour: '',
   appellation: '',
+  classification: '',
   grapes: [],
 };
 
@@ -309,6 +310,7 @@ function AdminWines() {
           type: w.type || 'red',
           colour: recordedColour(w) || '',
           appellation: w.appellation || '',
+          classification: w.classification || '',
           grapes: (w.grapes || []).map(g => g._id || g),
         });
         setEditWine(w);
@@ -343,6 +345,9 @@ function AdminWines() {
         // Only a sparkling/dessert/fortified wine keeps one ('' clears it).
         colour: isStyleType(formData.type) ? (formData.colour || null) : null,
         appellation: formData.appellation.trim() || null,
+        // A quality tier on top of the appellation; the server drops a
+        // regulatory mark (DOCG, AOC) typed here.
+        classification: formData.classification.trim() || null,
         grapes: formData.grapes,
         // Only meaningful on create: skips the server-side duplicate probe
         // after the admin explicitly chose "create anyway".
@@ -697,6 +702,17 @@ function AdminWines() {
                     <option key={a._id} value={a.name}>{a.name}</option>
                   ))}
                 </select>
+              </div>
+              <div className="form-group">
+                <label>{t('admin.wines.classificationLabel', 'Classification')}</label>
+                <input
+                  type="text"
+                  value={formData.classification}
+                  onChange={(e) => setFormData({ ...formData, classification: e.target.value })}
+                  placeholder={t('admin.wines.classificationPlaceholder', 'Riserva, Grand Cru Classé, Cru Bourgeois, Spätlese…')}
+                  maxLength={200}
+                />
+                <p className="wine-image-hint">{t('admin.wines.classificationHint', 'A quality tier on top of the appellation. Not DOCG, DOC or AOC: that follows from the appellation.')}</p>
               </div>
               {grapes.length > 0 && (
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>

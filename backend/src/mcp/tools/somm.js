@@ -32,7 +32,7 @@ const { claimKey, findGrapeClaim } = require('../../services/grapeClaims');
 const { otherProducerSpellings, displaySpelling } = require('../../services/producerSpelling');
 const { classifyProposal } = require('../../services/proposalDirectApply');
 const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
-const { ok, fail, objectId, pageParams } = require('../toolUtil');
+const { ok, fail, objectId, pageParams, FIELD_DESCRIPTIONS } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
   PROFILE_ENUMS,
@@ -2197,10 +2197,10 @@ registerTool({
     proposed_fields: z.object({
       producer: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
       name: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      appellation: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      region: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      appellation: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.appellation),
+      region: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.region),
       country: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.classification),
       type: z.enum(WINE_TYPES).optional(),
       colour: z.enum(WINE_COLOURS).optional(),
       grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).min(1).max(GRAPES_MAX).optional(),
@@ -3218,8 +3218,8 @@ registerTool({
     wine_id: objectId.describe('From list_pending_wines'),
     producer: z.string().min(1).max(FIELD_MAX).optional().describe('The winery exactly as printed on the label'),
     name: z.string().min(1).max(FIELD_MAX).optional().describe('The cuvée/wine name WITHOUT the producer in it'),
-    appellation: z.string().max(FIELD_MAX).optional().describe('Empty string clears it'),
-    region: z.string().max(FIELD_MAX).optional().describe('Region NAME; empty string clears it'),
+    appellation: z.string().max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.appellation + ' Empty string clears it.'),
+    region: z.string().max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.region + ' Empty string clears it.'),
     country: z.string().max(FIELD_MAX).optional().describe('Country NAME — must already exist in the taxonomy'),
     grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).optional()
       .describe('Variety NAMES, taxonomy-resolved (synonyms ok). Replaces the whole list.'),

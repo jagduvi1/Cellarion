@@ -6,7 +6,7 @@
 const { z } = require('zod');
 const { registerTool } = require('../registry');
 const ops = require('../../services/wineProposalOps');
-const { ok, fail, objectId } = require('../toolUtil');
+const { ok, fail, objectId, FIELD_DESCRIPTIONS } = require('../toolUtil');
 // A suggestion cannot be withdrawn, so a retry after an ambiguous transport
 // failure must be safe: idempotency_key claims/replays through the ledger
 // (support ticket 2026-09-12).
@@ -52,10 +52,10 @@ registerTool({
     fields: z.object({
       producer: z.string().max(200).optional(),
       name: z.string().max(200).optional(),
-      appellation: z.string().max(200).optional(),
-      region: z.string().max(200).optional(),
+      appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation),
+      region: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.region),
       country: z.string().max(200).optional(),
-      classification: z.string().max(200).optional(),
+      classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification),
       type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional()
         .describe('The wine\'s colour/style, when the record has it wrong'),
       colour: z.enum(['red', 'white', 'rosé']).optional()

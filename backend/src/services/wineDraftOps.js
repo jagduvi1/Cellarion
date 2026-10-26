@@ -31,7 +31,7 @@ const Appellation = require('../models/Appellation');
 const { logAudit } = require('./audit');
 const {
   generateWineKey, pendingWineKey, draftWineKey, normalizeAppellation, normalizeAppellationKey,
-  normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity, stripTrailingVintage,
+  normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity, stripTrailingVintage, normalizeClassification,
 } = require('../utils/normalize');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { resolveCanonicalAppellation } = require('./appellationResolve');
@@ -122,7 +122,8 @@ function validateDraftPatch(patch) {
     }
     const c = (classification || '').trim().replace(/\s+/g, ' ');
     if (c.length > FIELD_MAX) return { ok: false, error: `classification must be at most ${FIELD_MAX} characters` };
-    clean.classification = c;
+    // A regulatory mark (DOCG, AOC …) is no tier: it clears the field instead.
+    clean.classification = normalizeClassification(c) || '';
   }
   if (Object.keys(clean).length === 0) {
     return { ok: false, error: `Nothing to change — send at least one of: ${DRAFT_FIELDS.join(', ')}` };

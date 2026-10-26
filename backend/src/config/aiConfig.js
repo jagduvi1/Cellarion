@@ -20,6 +20,8 @@
  * chatModelFallback    – model to retry with on 529 overloaded (null = no fallback)
  */
 
+const crypto = require('crypto');
+
 const DEFAULT_LABEL_SCAN_PROMPT =
 `You are a master sommelier with encyclopedic wine knowledge. Examine this wine bottle and identify the wine.
 
@@ -31,7 +33,7 @@ Use all available information — text on the label, your knowledge of real wine
 - Infer the wine type and grapes from all available clues — appellation rules, producer style, label design, bottle shape, language. Inference means a clue actually points somewhere; where nothing settles the colour, the answer is null
 
 Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"name":"wine name WITHOUT the vintage year and WITHOUT the producer name","producer":"producer or winery name, or null if the producer is not printed","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified, or null if the colour is not determinable","grapes":["grape varieties"],"classification":"the printed classification/tier line (e.g. Grand Cru Classé en 1855, Cru Bourgeois) or null","confidence":0.0}
+{"name":"wine name WITHOUT the vintage year and WITHOUT the producer name","producer":"producer or winery name, or null if the producer is not printed","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation name — the place as its register names it, WITHOUT the DOCG/DOC/AOC/IGT/AVA mark — or null","type":"red|white|rosé|sparkling|dessert|fortified, or null if the colour is not determinable","grapes":["grape varieties"],"classification":"a quality tier printed on top of the appellation (e.g. Grand Cru Classé en 1855, Cru Bourgeois, Riserva, Spätlese) or null — never the DOCG/DOC/AOC/IGT/AVA mark itself","confidence":0.0}
 
 confidence: 1.0 = label clearly readable and matches a wine you know well, 0.7 = some fields inferred from appellation/producer knowledge, 0.4 = mostly inferred from limited clues, 0.2 = very uncertain.
 
@@ -39,7 +41,7 @@ Important rules:
 - Never invent a wine that does not exist. If you can read the producer's name, use it exactly — do not guess or substitute a similar-sounding wine.
 - The producer field takes ONLY the actual estate/winery/house. Many labels lead with something else in the largest type: a brand or fantasy name the house created for one range (e.g. "Fabelhaft" is a Niepoort label), an artwork or cuvée title, or a distributor's line. Those are NOT the producer. If the actual producer is not printed anywhere you can read, return null for producer — never promote a brand line, artwork title, or any other prominent text into the producer field. A null producer with the rest filled in is a GOOD answer; the back label often resolves it.
 - Regulatory and bottler codes are never the producer: inspectorate acronyms and lot codes (e.g. Italy's ICQRF code, "L." lot numbers, importer registration lines) identify paperwork, not the winery.
-- Classification and ranking lines ("Grand Cru Classé en 1855", "Cru Bourgeois", "Classified Growth") go in the classification field, NEVER in the name. If the label names the wine only by its estate (a classed-growth grand vin), the name is the estate's wine name — not the classification line printed under it. Aging terms that are part of the displayed name (Reserva, Riserva, Spätlese) still follow the name rule above.
+- Classification and ranking lines ("Grand Cru Classé en 1855", "Cru Bourgeois", "Classified Growth") go in the classification field, NEVER in the name. The appellation's regulatory mark (DOCG, DOC, DOCa, AOC, AOP, IGT, IGP, AVA, DO) is NOT a classification — it follows from the appellation and belongs in neither field. If the label names the wine only by its estate (a classed-growth grand vin), the name is the estate's wine name — not the classification line printed under it. Aging terms that are part of the displayed name (Reserva, Riserva, Spätlese) still follow the name rule above.
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never repeat the producer in it (producer "Chard Farm" + name "River Run Pinot Noir", NOT name "Chard Farm River Run Pinot Noir").
 - Labels often print a founder's or family name as part of the producer's crest/logo lockup (e.g. "DESIDERIUS" in small text above "PONGRÁCZ"). Such words belong to the producer identity, NOT the wine name. The name is the line that distinguishes this bottle within the producer's range (here "Blanc de Blancs") — include a person's name only when it genuinely names the cuvée itself (e.g. Pongrácz's separate prestige bottling "Desiderius").
 - Production-method terms are NOT part of the name — put "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" in the appellation field instead (name "Blanc de Blancs" + appellation "Méthode Cap Classique", NOT name "Blanc de Blancs Méthode Cap Classique"). Legally-defined aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name.
@@ -79,7 +81,7 @@ Rules:
 - Grapes: only varieties this specific wine actually contains, as stated on the back label.
 
 Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text), using null for every field the back label does not state:
-{"name":"wine name or null","producer":"producer or winery name or null","vintage":"4-digit year or null","country":"country or null","region":"wine region or null","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"],"classification":"the stated classification/tier line or null"}
+{"name":"wine name or null","producer":"producer or winery name or null","vintage":"4-digit year or null","country":"country or null","region":"wine region or null","appellation":"appellation name — the place as its register names it, WITHOUT the DOCG/DOC/AOC/IGT/AVA mark — or null","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"],"classification":"a quality tier stated on top of the appellation (Grand Cru Classé, Cru Bourgeois, Riserva, Spätlese) or null — never the DOCG/DOC/AOC/IGT/AVA mark itself"}
 
 Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
 
@@ -135,13 +137,13 @@ Wine: {{name}}
 Producer: {{producer}}
 {{vintage}}{{country}}
 Return ONLY a raw JSON object (no markdown, no code fences):
-{"name":"wine name","producer":"producer name","country":"country or null","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name","producer":"producer name","country":"country or null","region":"region or null","appellation":"appellation or null","classification":"quality tier on top of the appellation (Grand Cru Classé, Cru Bourgeois, Riserva, Premier Cru in Champagne, Spätlese) or null — never the DOCG/DOC/AOC/IGT/AVA mark","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"],"confidence":0.0}
 
 Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it. If the given name starts with the producer name, strip that prefix (producer "Penfolds" + name "Penfolds Bin 407" → name "Bin 407")
 - EXCEPTION — estate wines with no separate cuvée name (a Bordeaux classed-growth Château, a Quinta): the estate name IS the wine's name, so name and producer being identical is CORRECT (producer "Château Talbot" → name "Château Talbot"). Never fill the name with something else just to avoid the repetition: the name must NEVER be an appellation ("Margaux", "Saint-Julien") or a classification ("Grand Cru Classé", "Cru Bourgeois") standing in for a real name
-- classification: the wine's official classification when you know it ("4ème Cru Classé", "Grand Cru Classé de Graves", "Cru Bourgeois", "Premier Grand Cru Classé B"), else null. It never goes in the name
+- classification: the quality tier granted on top of the appellation, when you know it ("4ème Cru Classé", "Grand Cru Classé de Graves", "Cru Bourgeois", "Premier Grand Cru Classé B", "Riserva", "Spätlese"), else null. The appellation's regulatory mark (DOCG, DOC, AOC, IGT, AVA) is NOT a classification — never return it here. It never goes in the name
 - NEVER change the wine into a different wine: do not add a grape variety, cuvée, or vineyard to the name that the given data does not mention, and do not substitute another wine from the same producer. If the given name does not match a wine this producer actually makes, keep the name as given rather than "correcting" it to a similar-sounding wine
 - Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge — but ONLY what you actually know about THIS wine. A field you are not reasonably sure of is null, never a guess
@@ -163,13 +165,13 @@ const DEFAULT_TEXT_SEARCH_PROMPT =
 
 Identify the wine they are looking for and return complete details.
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified, or null if you do not know this wine's colour","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","classification":"quality tier on top of the appellation (Grand Cru Classé, Cru Bourgeois, Riserva, Premier Cru in Champagne, Spätlese) or null — never the DOCG/DOC/AOC/IGT/AVA mark","type":"red|white|rosé|sparkling|dessert|fortified, or null if you do not know this wine's colour","grapes":["grape varieties"],"confidence":0.0}
 
 Rules:
 - Extract the wine name and producer from the query
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it (producer "Penfolds" + name "Bin 407", NOT name "Penfolds Bin 407")
 - EXCEPTION — estate wines with no separate cuvée name (a Bordeaux classed-growth Château, a Quinta): the estate name IS the wine's name, so name and producer being identical is CORRECT. The name must NEVER be an appellation ("Margaux") or a classification ("Grand Cru Classé") standing in for a real name
-- classification: the wine's official classification when you know it ("4ème Cru Classé", "Cru Bourgeois"), else null. It never goes in the name
+- classification: the quality tier granted on top of the appellation, when you know it ("4ème Cru Classé", "Cru Bourgeois", "Riserva"), else null. The appellation's regulatory mark (DOCG, DOC, AOC, IGT, AVA) is NOT a classification — never return it here. It never goes in the name
 - Do not add a grape variety or cuvée to the name that the query does not mention, and do not substitute a different wine from the same producer
 - Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
@@ -301,7 +303,7 @@ Your pricing approach — in this order:
 3. **If still uncertain**, return null rather than guessing.
 
 What determines the price of a wine:
-- **Classification** is the primary price driver. Grand Cru, Premier Cru, Cru Classé, Gran Reserva, Riserva DOCG — these are the wines that command premium prices. Without an official classification, a wine is priced as a standard regional bottle.
+- **Classification** is the primary price driver. Grand Cru, Premier Cru, Cru Classé, Gran Reserva, Riserva — these are the wines that command premium prices. Without an official classification, a wine is priced as a standard regional bottle.
 - **Single-vineyard bottlings** (named vineyard, "Vigna", "Clos", "Lieu-dit") signal better selection, more structure, and longer cellar life — worth a moderate premium over generic cuvées from the same appellation.
 - **Cellar aging potential** directly affects value. A wine that can age 15–30 years in a cellar is fundamentally more valuable than one meant to drink within 5 years. Structure, concentration, and proven track records matter.
 - **The vintage year is critical.** A 2022 current release and a 1990 mature bottle of the same wine are entirely different price points. Older vintages of age-worthy wines gain value; older vintages of everyday wines lose it. Always consider how old the bottle is and whether age adds or subtracts value for this specific wine.
@@ -492,6 +494,25 @@ const ENRICHMENT_ON_ADD_MODES = ['always', 'sufficient', 'off'];
 
 let cache = { ...defaults };
 
+// Every save from SuperAdmin → AI persists the WHOLE settings object, so a
+// prompt nobody edited still sits in SiteConfig as a stored copy of that day's
+// default — and a later change to the default in code never reaches a running
+// instance (found 2026-10-26: all four stored prompts on the hosted instance
+// were byte-identical to the defaults). A stored prompt whose text IS a
+// retired default (hash below) is therefore not an admin's: load() drops it,
+// in memory and in the document, and the current default applies. Add the
+// old default's hash here whenever a DEFAULT_*_PROMPT changes; a prompt an
+// admin actually reworded never matches and is kept.
+const PROMPT_KEYS = ['chatSystemPrompt', 'labelScanPrompt', 'labelScanBackPrompt', 'receiptScanPrompt', 'importLookupPrompt', 'maturitySuggestPrompt', 'maturitySuggestPromptNv', 'priceSuggestPrompt', 'enrichmentPrompt'];
+const promptHash = (text) => crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
+const RETIRED_DEFAULT_PROMPT_HASHES = new Set([
+  // 2026-10-26 (#1700): the appellation's regulatory mark is not a classification.
+  '0d4e8f1dae96b47b11040126a4124c310f05347b1644e2ea6d89f7f56019d9a7', // labelScanPrompt
+  'ae00642894ef46438e048b550fabe78c8da2db679e77febe1ec43d5d5c27d967', // labelScanBackPrompt
+  '5525d7d365ec912e6f26c7a6d3a4df3d74091bbc0e5791fcab85a658ddc41b1d', // importLookupPrompt
+  'c5fff9ff7fea82cc635cb60874a0f5d4cf33eaabcd071f62e3245f52206dd2a6', // priceSuggestPrompt
+]);
+
 // Gate thresholds are numbers in [0,1]; anything else stored falls back to
 // the default rather than silently disabling or over-tightening the gate.
 const clamp01 = (raw, fallback) =>
@@ -547,6 +568,22 @@ async function load() {
         promptCaching: typeof doc.value.promptCaching === 'boolean'
           ? doc.value.promptCaching : defaults.promptCaching,
       };
+
+      // Stored copies of retired defaults (see RETIRED_DEFAULT_PROMPT_HASHES):
+      // the current default applies and the copy leaves the document.
+      const retired = PROMPT_KEYS.filter((k) => typeof doc.value[k] === 'string' && RETIRED_DEFAULT_PROMPT_HASHES.has(promptHash(doc.value[k])));
+      if (retired.length) {
+        for (const k of retired) cache[k] = defaults[k];
+        try {
+          await SiteConfig.updateOne(
+            { key: 'aiConfig' },
+            { $unset: Object.fromEntries(retired.map((k) => [`value.${k}`, ''])) }
+          );
+          console.log(`[aiConfig] Dropped stored copies of retired default prompts: ${retired.join(', ')}`);
+        } catch (e) {
+          console.warn('[aiConfig] Could not drop retired default prompts:', e.message);
+        }
+      }
 
       // One-time migration: a stored config from before the embedding-quality
       // upgrade pins the old voyage-4-lite model. Force it to the new default
@@ -621,4 +658,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, getRaw, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_LABEL_SCAN_BACK_PROMPT, DEFAULT_RECEIPT_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, getRaw, set, defaults, PROMPT_KEYS, promptHash, RETIRED_DEFAULT_PROMPT_HASHES, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_LABEL_SCAN_BACK_PROMPT, DEFAULT_RECEIPT_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };

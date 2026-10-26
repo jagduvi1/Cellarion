@@ -141,6 +141,39 @@ test('a type change alone counts — the profile describes the wrong colour othe
   expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, true);
 });
 
+// classification joined the edit form (GitHub discussion #1696): absent leaves
+// it alone, a value is normalised like the mint does it, and a change counts
+// as a profile input.
+describe('PUT classification', () => {
+  test('a new tier is stored and re-enriches', async () => {
+    const wine = mkWine();
+    WineDefinition.findById.mockResolvedValue(wine);
+    const res = await put({ name: 'Douro Tinto', producer: 'Fabelhaft', type: 'red', classification: 'Reserva' });
+    expect(res.status).toBe(200);
+    expect(wine.classification).toBe('Reserva');
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, true);
+  });
+
+  test('a regulatory mark stores as no classification', async () => {
+    const wine = mkWine({ classification: 'Reserva' });
+    WineDefinition.findById.mockResolvedValue(wine);
+    const res = await put({ name: 'Douro Tinto', producer: 'Fabelhaft', type: 'red', classification: 'DOC' });
+    expect(res.status).toBe(200);
+    expect(wine.classification).toBeNull();
+  });
+
+  test('absent leaves the stored tier alone; a non-string is a 400', async () => {
+    const wine = mkWine({ classification: 'Reserva' });
+    WineDefinition.findById.mockResolvedValue(wine);
+    let res = await put({ name: 'Douro Tinto', producer: 'Fabelhaft', type: 'red' });
+    expect(res.status).toBe(200);
+    expect(wine.classification).toBe('Reserva');
+    res = await put({ name: 'Douro Tinto', producer: 'Fabelhaft', type: 'red', classification: 7 });
+    expect(res.status).toBe(400);
+    expect(wine.save).toHaveBeenCalledTimes(1);
+  });
+});
+
 // The edit runs the create route's checks (they were added to POST in
 // July/August and never to the PUT, so an edit could store what a create
 // refuses, and a malformed id or a non-string field ended in a 500).
