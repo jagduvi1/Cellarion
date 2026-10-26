@@ -1,5 +1,6 @@
 import { BOTTLE_SIZES, bottleSizeLabel, formatVolume, mlFromCode, normalizeBottleSize } from './bottleSizes';
 import en from '../locales/en/translation.json';
+import i18n from '../i18n';
 
 // Stand-in for i18n's t(): resolves the dotted key against the en bundle so a
 // missing bottleSizeNames entry shows up as a failing label, not as the raw key
@@ -59,4 +60,29 @@ describe('normalizeBottleSize — litre inputs', () => {
 
 test('formatVolume renders a litre without trailing zeros', () => {
   expect(formatVolume(1000)).toBe('1 L');
+});
+
+describe('formatVolume in the chosen language', () => {
+  test.each([
+    ['en', 1500, '1.5 L'],
+    ['nb', 1500, '1,5 L'],
+    ['sv', 1500, '1,5 L'],
+    ['de', 187, '187 ml'],
+    ['fr', 3000, '3 L'],
+  ])('%s: %p ml → %p', (locale, ml, expected) => {
+    expect(formatVolume(ml, locale)).toBe(expected);
+  });
+
+  test('keeps the "ml" unit rather than Intl\'s "mL"', () => {
+    expect(formatVolume(750, 'en')).toBe('750 ml');
+  });
+
+  test('labels follow the language the app is set to', async () => {
+    await i18n.changeLanguage('nb');
+    try {
+      expect(bottleSizeLabel('1500ml', t)).toBe('1,5 L (Magnum)');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
 });
