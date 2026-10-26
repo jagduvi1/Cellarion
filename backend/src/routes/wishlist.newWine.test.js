@@ -143,7 +143,7 @@ describe('POST /api/wishlist — newWine mints at commit', () => {
     expect(findOrCreateWine.mock.calls[0][2]).toEqual({
       // allowPending: a wishlist add is a commit path too — an incomplete
       // identity is filed for curation instead of refusing the add.
-      confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true, draft: false,
+      confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true, draft: false, nonWine: false,
     });
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'wine.create',
       { type: 'wine', id: WINE_ID }, { via: 'ui', name: 'Kaefferkopf', producer: 'Cave de Kaysersberg' });

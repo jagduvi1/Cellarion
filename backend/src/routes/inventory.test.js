@@ -351,7 +351,7 @@ describe('a read token gets the inventory', () => {
       personal: [{ key: 'Closure', type: 'enum', unit: null, value: 'cork', level: 'bottle', by: 'maria' }],
     });
     expect(body.wines[W1]).toEqual({
-      name: 'Barolo', producer: 'Mascarello', type: 'red', colour: null, country: 'Italy', region: 'Piedmont',
+      name: 'Barolo', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
       appellation: 'Barolo', classification: 'DOCG', grapes: ['Nebbiolo'],
       image: '/api/uploads/thumbs/processed/w1img.webp.webp',
       profile: { body: 'full', acidity: 'high', sweetness: 'dry', tannin: 'high', flavors: ['tar', 'rose'], foodPairings: ['truffle'] },
