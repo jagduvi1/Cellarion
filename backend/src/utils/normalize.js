@@ -269,8 +269,13 @@ const CLASSIFICATION_MARK_TOKENS = new Set([...APPELLATION_TIER_TOKENS, ...APPEL
 // The French label line that wraps the place in the mark ("Appellation
 // Pauillac Contrôlée", "Appellation Saint-Émilion Grand Cru Contrôlée"). The
 // old scan prompt asked for "the printed classification/tier line", and on a
-// French label that IS this line. Never a tier, whatever place it wraps.
-const CLASSIFICATION_WRAPPED_MARK_RX = /^appellation\s+.+\s+(contr[ôo]l[ée]e|prot[ée]g[ée]e)$/i;
+// French label that IS this line. Never a tier, whatever place it wraps. A
+// token test, not a regex: `^appellation\s+.+\s+…$` is the polynomial-ReDoS
+// shape CodeQL flags on this file (js/polynomial-redos), and the value is
+// already split on single spaces.
+const WRAPPED_MARK_TAILS = new Set(['controlee', 'protegee']);
+const isWrappedMarkLine = (parts) =>
+  parts.length >= 3 && foldTierWord(parts[0]) === 'appellation' && WRAPPED_MARK_TAILS.has(foldTierWord(parts[parts.length - 1]));
 
 /**
  * The classification to STORE: a quality tier granted on top of the
@@ -290,8 +295,9 @@ const normalizeClassification = (classification) => {
   if (classification == null) return null;
   const folded = String(classification).trim().replace(/\s+/g, ' ');
   if (!folded) return null;
-  if (CLASSIFICATION_WRAPPED_MARK_RX.test(folded)) return null;
-  const parts = stripTierEdges(folded.split(' '), {
+  const tokens = folded.split(' ');
+  if (isWrappedMarkLine(tokens)) return null;
+  const parts = stripTierEdges(tokens, {
     min: 0, phrases: CLASSIFICATION_TIER_PHRASES,
     leading: CLASSIFICATION_MARK_TOKENS, trailing: CLASSIFICATION_MARK_TOKENS,
   });
