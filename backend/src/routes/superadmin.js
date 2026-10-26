@@ -430,7 +430,7 @@ router.patch('/ai/chat-limit', async (req, res) => {
   try {
     const current = aiConfig.getRaw();
     const updated = { ...current, chatDailyLimit: limit };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
+    await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
     aiConfig.set(updated);
     res.json({ chatDailyLimit: limit });
   } catch (error) {
@@ -458,7 +458,7 @@ router.patch('/ai/enrichment-gate', async (req, res) => {
   try {
     const current = aiConfig.getRaw();
     const updated = { ...current, enrichmentHoldConfidenceFloor: floor, enrichmentHoldUnknownConfidenceBar: unknownBar };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
+    await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
     aiConfig.set(updated);
     res.json({ enrichmentHoldConfidenceFloor: floor, enrichmentHoldUnknownConfidenceBar: unknownBar });
   } catch (error) {
@@ -498,7 +498,7 @@ router.patch('/ai/enrichment-on-add', async (req, res) => {
       ...(sommMaturitySuggestEnabled !== undefined ? { sommMaturitySuggestEnabled } : {}),
       ...(sommPriceSuggestEnabled !== undefined ? { sommPriceSuggestEnabled } : {}),
     };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
+    await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
     aiConfig.set(updated);
     // Attribution rides on updateSiteConfig(req.user.id), same as the gate
     // and search knobs above — no separate audit row.
@@ -531,7 +531,7 @@ router.patch('/ai/enrichment-search', async (req, res) => {
   try {
     const current = aiConfig.getRaw();
     const updated = { ...current, enrichmentSearchEnabled: enabled, enrichmentSearchDailyCap: dailyCap };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
+    await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
     aiConfig.set(updated);
     res.json({ enrichmentSearchEnabled: enabled, enrichmentSearchDailyCap: dailyCap });
   } catch (error) {
@@ -555,7 +555,7 @@ router.patch('/ai/prompt-caching', async (req, res) => {
   try {
     const current = aiConfig.getRaw();
     const updated = { ...current, promptCaching: enabled };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
+    await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
     aiConfig.set(updated);
     res.json({ promptCaching: enabled });
   } catch (error) {
@@ -605,7 +605,7 @@ function registerPromptRoute(path, configKey, saveErrorMsg) {
     try {
       const current = aiConfig.getRaw();
       const updated = { ...current, [configKey]: prompt.trim() };
-      await updateSiteConfig('aiConfig', updated, req.user.id);
+      await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
       aiConfig.set(updated);
       res.json({ [configKey]: updated[configKey] });
     } catch (error) {
@@ -628,7 +628,7 @@ function registerModelRoute(path, configKey, saveErrorMsg) {
     try {
       const current = aiConfig.getRaw();
       const updated = { ...current, [configKey]: model };
-      await updateSiteConfig('aiConfig', updated, req.user.id);
+      await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
       aiConfig.set(updated);
       res.json({ [configKey]: model });
     } catch (error) {
@@ -687,7 +687,7 @@ router.patch('/ai/chat-model', async (req, res) => {
       chatModel: model,
       chatModelFallback: effectiveFallback,
     };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
+    await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
     aiConfig.set(updated);
     res.json({ chatModel: model, chatModelFallback: updated.chatModelFallback });
   } catch (error) {

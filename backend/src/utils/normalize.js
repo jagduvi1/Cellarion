@@ -166,7 +166,7 @@ const APPELLATION_TIER_PHRASES = [
 // punctuation out ("d'Origen" → "dOrigen"), lowercased, accents stripped
 // ("Denominación" → "denominacion", "Denominação" → "denominacao").
 const foldTierWord = (token) => token
-  .replace(/[.,'’]/g, '')
+  .replace(/[.,'’()[\]]/g, '')
   .toLowerCase()
   .normalize('NFD')
   .replace(/[̀-ͯ]/g, '');
@@ -175,9 +175,9 @@ const foldTierWord = (token) => token
 // phrases first, repeating until stable ("PDO Denominación de Origen X" is
 // unrealistic but costs nothing to handle), then single tokens (the leading
 // set, then the trailing set), then separator debris a strip leaves dangling
-// ("Vin du Québec -", found on prod 2026-08-18). Dots and commas fold OUT of a
-// token before it probes a set, so the abbreviated forms labels print —
-// "Lison Classico D.O.C.G.", "Rioja D.O.Ca." — match (prod 2026-08-13); the
+// ("Vin du Québec -", found on prod 2026-08-18). Dots, commas and brackets fold
+// OUT of a token before it probes a set, so the forms labels print — "Lison
+// Classico D.O.C.G.", "Rioja D.O.Ca.", "Barolo (DOCG)" — match (prod 2026-08-13); the
 // split is on whitespace, so folding cannot merge two tokens. `min` is the
 // smallest list the loops may leave behind: 1 for an appellation (an input
 // that IS only tier text survives untouched and the caller falls back to the
@@ -199,7 +199,7 @@ const stripTierEdges = (parts, { min, phrases, leading, trailing }) => {
       }
     }
   }
-  const fold = (token) => token.replace(/[.,]/g, '').toLowerCase();
+  const fold = (token) => token.replace(/[.,()[\]]/g, '').toLowerCase();
   while (parts.length > min && leading.has(fold(parts[0]))) parts.shift();
   while (parts.length > min && trailing.has(fold(parts[parts.length - 1]))) parts.pop();
   while (parts.length > min && /^[-–—·|/]+$/.test(parts[0])) parts.shift();
@@ -257,16 +257,31 @@ const CLASSIFICATION_TIER_PHRASES = [
   ...APPELLATION_TIER_PHRASES,
   ['appellation', 'dorigine', 'protegee'],
   ['appellation', 'dorigine', 'controlee'],
+  ['districtus', 'austriae', 'controllatus'],
 ];
+
+// The classification field owns its token set: every mark, as a leading OR a
+// trailing token. The appellation sets keep 'do' trailing-only and 'dac' out
+// because "Rueda, DO" and "Kamptal DAC" are place names there; in the
+// classification field neither reading exists, so both are marks.
+const CLASSIFICATION_MARK_TOKENS = new Set([...APPELLATION_TIER_TOKENS, ...APPELLATION_LEADING_TIER_TOKENS, 'dac']);
+
+// The French label line that wraps the place in the mark ("Appellation
+// Pauillac Contrôlée", "Appellation Saint-Émilion Grand Cru Contrôlée"). The
+// old scan prompt asked for "the printed classification/tier line", and on a
+// French label that IS this line. Never a tier, whatever place it wraps.
+const CLASSIFICATION_WRAPPED_MARK_RX = /^appellation\s+.+\s+(contr[ôo]l[ée]e|prot[ée]g[ée]e)$/i;
 
 /**
  * The classification to STORE: a quality tier granted on top of the
  * appellation (Riserva, Grand Cru Classé en 1855, Cru Bourgeois, a Prädikat),
  * whitespace folded, with the appellation's regulatory mark — DOCG, DOC, AOC,
- * IGT, AVA, their dotted forms and the spelled-out phrases — stripped off
- * either end. The mark follows from the appellation and is no tier, so a
- * value that is only the mark ("DOCG", "Denominazione di Origine Controllata")
- * comes back null and "Riserva DOCG" comes back "Riserva". Null or blank in,
+ * IGT, AVA, DAC, their dotted and bracketed forms, the spelled-out phrases and
+ * the French "Appellation … Contrôlée" line — stripped off either end. The
+ * mark follows from the appellation and is no tier, so a value that is only
+ * the mark ("DOCG", "(DOC)", "Denominazione di Origine Controllata",
+ * "Appellation Pauillac Contrôlée") comes back null and "Riserva DOCG" comes
+ * back "Riserva". Null or blank in,
  * null out. One rule for every write path (model hook, mint, admin edit,
  * proposals, drafts) and for the backfill (scripts/normalize-classification-
  * tiers.js) — GitHub discussion #1696.
@@ -275,9 +290,10 @@ const normalizeClassification = (classification) => {
   if (classification == null) return null;
   const folded = String(classification).trim().replace(/\s+/g, ' ');
   if (!folded) return null;
+  if (CLASSIFICATION_WRAPPED_MARK_RX.test(folded)) return null;
   const parts = stripTierEdges(folded.split(' '), {
     min: 0, phrases: CLASSIFICATION_TIER_PHRASES,
-    leading: APPELLATION_LEADING_TIER_TOKENS, trailing: APPELLATION_TIER_TOKENS,
+    leading: CLASSIFICATION_MARK_TOKENS, trailing: CLASSIFICATION_MARK_TOKENS,
   });
   const result = trimTrailingChars(parts.join(' '), ' ,').trim();
   return result || null;

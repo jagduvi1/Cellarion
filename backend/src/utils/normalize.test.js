@@ -172,6 +172,22 @@ describe('normalizeClassification', () => {
     expect(normalizeClassification('   ')).toBeNull();
   });
 
+  test('audit 2026-10-26: bracketed, wrapped and Austrian marks are marks too', () => {
+    expect(normalizeClassification('Riserva (DOCG)')).toBe('Riserva');
+    expect(normalizeClassification('(DOCG)')).toBeNull();
+    expect(normalizeClassification('Denominazione di Origine Controllata (DOC)')).toBeNull();
+    expect(normalizeClassification('Appellation Pauillac Contrôlée')).toBeNull();
+    expect(normalizeClassification('Appellation Saint-Émilion Grand Cru Contrôlée')).toBeNull();
+    expect(normalizeClassification('Appellation Côtes du Rhône Protégée')).toBeNull();
+    expect(normalizeClassification('DAC')).toBeNull();
+    expect(normalizeClassification('Districtus Austriae Controllatus')).toBeNull();
+    expect(normalizeClassification('Reserve DO')).toBe('Reserve');
+    expect(normalizeClassification('DO Pago')).toBe('Pago');
+    // The appellation keeps its own exceptions.
+    expect(normalizeAppellation('Kamptal DAC')).toBe('Kamptal DAC');
+    expect(normalizeAppellation('Barolo (DOCG)')).toBe('Barolo');
+  });
+
   test('the appellation rule is unchanged by sharing its loops', () => {
     expect(normalizeAppellation('DOCG')).toBe('DOCG');
     expect(normalizeAppellation('Denominazione di Origine Controllata')).toBe('Denominazione di Origine Controllata');

@@ -66,9 +66,9 @@ registerTool({
     name: z.string().min(1).max(200),
     producer: z.string().min(1).max(200),
     appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation),
-    // Same fields as the mint, so the lookup and add_bottle's new_wine carry
-    // one shape. Classification plays no part in matching.
-    classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification),
+    // Accepted so a client can hand the lookup the same object it will pass
+    // as add_bottle's new_wine; it plays no part in matching.
+    classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification + ' Accepted here only so the lookup takes the same object as add_bottle new_wine; it plays no part in matching.'),
   },
   handler: async (args, ctx) => {
     const { findOrCreateWine } = require('../../services/findOrCreateWine');

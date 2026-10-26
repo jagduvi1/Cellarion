@@ -78,11 +78,26 @@ beforeEach(() => {
 });
 
 describe('PATCH /api/superadmin/ai/<*>-prompt', () => {
-  test.each(PROMPT_ROUTES)('%s saves the shipped default unchanged', async (path, key) => {
+  test.each(PROMPT_ROUTES)('%s accepts the shipped default and stores no copy of it', async (path, key) => {
     const res = await call('PATCH', path, { prompt: aiConfig.defaults[key] });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ [key]: aiConfig.defaults[key].trim() });
-    expect(updateSiteConfig).toHaveBeenCalledWith('aiConfig', expect.objectContaining({ [key]: aiConfig.defaults[key].trim() }), 'admin-1');
+    // The running config holds the default; the document does not carry a
+    // copy, so a later default reaches this instance on its next boot.
+    expect(aiConfig.getRaw()[key]).toBe(aiConfig.defaults[key].trim());
+    expect(updateSiteConfig).toHaveBeenCalledTimes(1);
+    expect(updateSiteConfig.mock.calls[0][0]).toBe('aiConfig');
+    expect(updateSiteConfig.mock.calls[0][1]).not.toHaveProperty(key);
+    expect(updateSiteConfig.mock.calls[0][2]).toBe('admin-1');
+  });
+
+  test('a reworded prompt is stored; the untouched defaults beside it are not', async () => {
+    const res = await call('PATCH', '/api/superadmin/ai/label-scan-prompt', { prompt: 'Read the label.' });
+    expect(res.status).toBe(200);
+    const stored = updateSiteConfig.mock.calls[0][1];
+    expect(stored.labelScanPrompt).toBe('Read the label.');
+    expect(stored).not.toHaveProperty('importLookupPrompt');
+    expect(aiConfig.getRaw().importLookupPrompt).toBe(aiConfig.defaults.importLookupPrompt);
   });
 
   test.each(PROMPT_ROUTES)('%s refuses a prompt one character over its cap, without saving', async (path, key) => {

@@ -513,6 +513,21 @@ const RETIRED_DEFAULT_PROMPT_HASHES = new Set([
   'c5fff9ff7fea82cc635cb60874a0f5d4cf33eaabcd071f62e3245f52206dd2a6', // priceSuggestPrompt
 ]);
 
+/**
+ * The settings object to PERSIST: a prompt equal to the shipped default is
+ * left out, so the document holds only what an admin actually changed and a
+ * later default reaches every instance on its next boot (load() reads an
+ * absent key as the default). The hash list above covers documents written
+ * before this rule.
+ */
+function stripDefaultPrompts(settings) {
+  const out = { ...settings };
+  for (const k of PROMPT_KEYS) {
+    if (typeof out[k] === 'string' && out[k].trim() === String(defaults[k]).trim()) delete out[k];
+  }
+  return out;
+}
+
 // Gate thresholds are numbers in [0,1]; anything else stored falls back to
 // the default rather than silently disabling or over-tightening the gate.
 const clamp01 = (raw, fallback) =>
@@ -658,4 +673,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, getRaw, set, defaults, PROMPT_KEYS, promptHash, RETIRED_DEFAULT_PROMPT_HASHES, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_LABEL_SCAN_BACK_PROMPT, DEFAULT_RECEIPT_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, getRaw, set, defaults, PROMPT_KEYS, promptHash, RETIRED_DEFAULT_PROMPT_HASHES, stripDefaultPrompts, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_LABEL_SCAN_BACK_PROMPT, DEFAULT_RECEIPT_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };

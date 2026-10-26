@@ -135,3 +135,13 @@ describe('mapRow — colour of a sparkling, dessert or fortified row', () => {
     expect(mapRow({ ...row, WineType: 'rose' }, 'simple').colour).toBeNull();
   });
 });
+
+describe('mapRow — classification (audit 2026-10-26)', () => {
+  test('a regulatory mark is no classification on either format', () => {
+    expect(mapRow(lwinRow({ PRODUCER_NAME: 'Azelia', WINE: 'Barolo', CLASSIFICATION: 'DOCG' }), 'lwin').classification).toBeNull();
+    expect(mapRow(lwinRow({ PRODUCER_NAME: 'Azelia', WINE: 'Barolo', CLASSIFICATION: 'Riserva DOCG' }), 'lwin').classification).toBe('Riserva');
+    const simple = mapRow({ Producer: 'Azelia', Wine: 'Barolo', Country: 'Italy', Region: 'Piedmont', Appellation: 'Barolo DOCG', WineType: 'Red', Classification: 'DOCG' }, 'simple');
+    expect(simple.classification).toBeNull();
+    expect(simple.appellation).toBe('Barolo');
+  });
+});

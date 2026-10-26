@@ -49,6 +49,23 @@ test('the current defaults are not themselves retired', () => {
   }
 });
 
-test('the four prompts retired on 2026-10-26 are registered', () => {
-  expect(RETIRED_DEFAULT_PROMPT_HASHES.size).toBeGreaterThanOrEqual(5); // four + this test's
+test('the four prompts retired on 2026-10-26 are registered by hash', () => {
+  // The sha256 of each default as shipped before #1701 — verified against the
+  // hosted instance's stored copies on 2026-10-26. A mistyped hash here would
+  // leave an instance on the old prompt with no log line, so they are pinned.
+  for (const hash of [
+    '0d4e8f1dae96b47b11040126a4124c310f05347b1644e2ea6d89f7f56019d9a7', // labelScanPrompt
+    'ae00642894ef46438e048b550fabe78c8da2db679e77febe1ec43d5d5c27d967', // labelScanBackPrompt
+    '5525d7d365ec912e6f26c7a6d3a4df3d74091bbc0e5791fcab85a658ddc41b1d', // importLookupPrompt
+    'c5fff9ff7fea82cc635cb60874a0f5d4cf33eaabcd071f62e3245f52206dd2a6', // priceSuggestPrompt
+  ]) expect(RETIRED_DEFAULT_PROMPT_HASHES.has(hash)).toBe(true);
+});
+
+test('a prompt equal to the shipped default is left out of what is persisted', () => {
+  const stored = aiConfig.stripDefaultPrompts({ ...aiConfig.defaults, labelScanPrompt: 'Read the label.', chatDailyLimit: 7 });
+  expect(stored.labelScanPrompt).toBe('Read the label.');
+  expect(stored.chatDailyLimit).toBe(7);
+  for (const k of ['labelScanBackPrompt', 'importLookupPrompt', 'priceSuggestPrompt', 'chatSystemPrompt', 'enrichmentPrompt']) {
+    expect(stored).not.toHaveProperty(k);
+  }
 });

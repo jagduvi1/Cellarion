@@ -108,6 +108,13 @@ describe('createFieldCorrection validation', () => {
     expect((await ops.createFieldCorrection(ME, { ...GOOD, fields: { producer: '   ' } })).code).toBe('invalid');
   });
 
+  test('a regulatory mark is no classification: alone it is nothing changed, beside a tier it is dropped', async () => {
+    expect((await ops.createFieldCorrection(ME, { ...GOOD, fields: { classification: 'DOCG' } })).code).toBe('invalid');
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { classification: 'Riserva DOCG' } });
+    expect(res.ok).toBe(true);
+    expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ classification: 'Riserva' });
+  });
+
   test('discussion ban blocks the write before any query', async () => {
     mockUser('newcomer', true);
     const res = await ops.createFieldCorrection(ME, GOOD);
