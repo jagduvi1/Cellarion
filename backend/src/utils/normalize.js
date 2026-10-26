@@ -155,6 +155,16 @@ const APPELLATION_TIER_PHRASES = [
   ['denominazione', 'di', 'origine', 'controllata', 'e', 'garantita'],
   ['denominazione', 'di', 'origine', 'controllata'],
   ['denominazione', 'di', 'origine', 'protetta'],
+  // The apostrophe spelling labels also print ("Denominazione d'Origine
+  // Controllata"): "d'Origine" folds to one token (prod 2026-10-26).
+  ['denominazione', 'dorigine', 'controllata', 'e', 'garantita'],
+  ['denominazione', 'dorigine', 'controllata'],
+  ['denominazione', 'dorigine', 'protetta'],
+  // The bare French mark with no place in it ("Appellation Contrôlée" on an
+  // old Burgundy label). The place-wrapping form stays membership-gated in
+  // services/appellationResolve; see also isWrappedMarkLine.
+  ['appellation', 'controlee'],
+  ['appellation', 'protegee'],
   ['indicazione', 'geografica', 'tipica'],
   ['indicacion', 'geografica', 'protegida'],
   ['indication', 'geographique', 'protegee'],
