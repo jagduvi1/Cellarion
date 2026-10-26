@@ -28,6 +28,9 @@ import './WineRecordSection.css';
 // Every field a suggestion may carry (must match wineProposalOps FIELDS +
 // EXTRA_FIELDS), in reading order: who and what, then where.
 const RECORD_FIELDS = ['producer', 'name', 'type', 'grapes', 'appellation', 'region', 'country', 'classification'];
+// A drink that is not wine (the Other category) has no grapes, appellation or
+// classification to record: those rows are not shown for it.
+const NOT_WINE_HIDDEN = new Set(['grapes', 'appellation', 'classification']);
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const GRAPES_MAX = 12;
 const REASON_MIN = 10;
@@ -469,7 +472,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
       )}
 
       <div className={`wr-grid${suggestMode ? ' wr-grid--suggest' : ''}`}>
-        {RECORD_FIELDS.map((f) => (
+        {(wine?.nonWine === true ? RECORD_FIELDS.filter((f) => !NOT_WINE_HIDDEN.has(f)) : RECORD_FIELDS).map((f) => (
           <div key={f} className="wr-row">
             <span className="wr-key">{fieldLabel(f)}</span>
             {renderValue(f)}

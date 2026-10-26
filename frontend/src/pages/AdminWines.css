@@ -147,6 +147,7 @@
 .type-sparkling { background: rgba(140,180,220,0.2); color: #9abedd; }
 .type-dessert { background: rgba(200,168,126,0.2); color: var(--color-accent); }
 .type-fortified { background: rgba(140,100,60,0.2); color: #b88a5a; }
+.type-other { background: rgba(140,140,140,0.2); color: #8a8a8a; }
 
 /* Pagination */
 .pagination {

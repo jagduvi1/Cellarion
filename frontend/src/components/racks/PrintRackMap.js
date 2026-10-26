@@ -12,6 +12,7 @@ const TYPE_FILLS = {
   sparkling: '#88A848',
   dessert:   '#A06020',
   fortified: '#7A3010',
+  other:     '#9A9A9A',
 };
 const DARK_TEXT_TYPES = new Set(['white', 'sparkling']);
 

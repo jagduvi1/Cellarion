@@ -379,7 +379,8 @@ async function runJob(cfg) {
     // A wine copied from the shared registry (Registry Bridge, registryId set)
     // carries the registry's profile and is refreshed from there — the local
     // model must never write over it.
-    const keepCurated = { 'aiProfile.source': { $ne: 'curator' }, pendingIdentity: { $ne: true }, canary: { $ne: true }, registryId: { $exists: false } };
+    // A drink that is not wine (the Other category) gets no wine profile either.
+    const keepCurated = { 'aiProfile.source': { $ne: 'curator' }, pendingIdentity: { $ne: true }, nonWine: { $ne: true }, canary: { $ne: true }, registryId: { $exists: false } };
     const filter = job.mode === 'full'
       ? keepCurated
       : {
@@ -971,6 +972,7 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
     // so without it the very add that mints a pending row would immediately
     // spend the adding user's daily AI budget describing a producerless wine.
     if (wine.pendingIdentity === true) return;
+    if (wine.nonWine === true) return; // the Other category: a cider gets no wine profile
     if (wine.canary === true) return; // registry lockdown L4 — a canary's profile is the evidence; never touch it
     if (wine.registryId) return; // a Registry Bridge copy keeps the shared registry's profile
     if (wine.aiProfile && wine.aiProfile.source === 'curator') return; // hand-corrected — never regenerate (force included)

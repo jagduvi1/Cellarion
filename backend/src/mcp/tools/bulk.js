@@ -91,6 +91,9 @@ async function planItem(item, userId, roles) {
     return { status: 'ready', wine_id: String(wine._id), wine: wineSummary(wine) };
   }
 
+  if (!item.new_wine.type && item.new_wine.category !== 'other') {
+    return { status: 'invalid', error: 'new_wine.type is required unless category is "other" (a drink that is not wine)' };
+  }
   const { findOrCreateWine } = require('../../services/findOrCreateWine');
   // producer is optional on NEW_WINE_SHAPE now; findOrCreateWine's .trim() runs
   // before any option is consulted, so a preview must hand it '' not undefined.
@@ -242,6 +245,10 @@ registerTool({
           // that appeared since — most often a near-duplicate spelling minted
           // by an EARLIER item of this same batch — block the create instead
           // of silently bypassing the registry guard.
+          if (!item.new_wine.type && item.new_wine.category !== 'other') {
+            failures.push({ index: i, error: 'new_wine.type is required unless category is "other" (a drink that is not wine)' });
+            continue;
+          }
           const res = await findOrCreateWine(item.new_wine, ctx.user.id, {
             confirmCreate: !!p.despite_candidates, skipSiblingMatch: false, createdVia: 'mcp',
             // Same commit-path rule as add_bottle: an incomplete identity files
@@ -250,6 +257,8 @@ registerTool({
             allowPending: true,
             // Private drafts, as fixed at preview (support ticket 2026-09-12).
             draft: draft === true,
+            // The Other category: born outside the shared wine registry.
+            nonWine: item.new_wine.category === 'other',
           });
           if (!res.wine) { failures.push({ index: i, error: 'similar wines appeared since the preview — resolve this item individually with resolve_wine' }); continue; }
           wineDoc = res.wine;
@@ -270,7 +279,14 @@ registerTool({
           drinkTo: item.drink_to,
         }, ctx.req);
         if (result.error) failures.push({ index: i, error: result.error.message });
-        else added.push(String(result.bottle._id));
+        else {
+          added.push(String(result.bottle._id));
+          // category "other" on a record the registry already had as wine.
+          if (item.new_wine) {
+            const { applyOtherCategoryAfterAdd } = require('../../services/nonWineOps');
+            await applyOtherCategoryAfterAdd({ wine: wineDoc, newWine: item.new_wine, userId: ctx.user.id, req: ctx.req, via: 'mcp' });
+          }
+        }
       } catch (err) {
         failures.push({ index: i, error: err.message });
       }

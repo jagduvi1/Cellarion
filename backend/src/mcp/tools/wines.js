@@ -7,7 +7,7 @@ const { z } = require('zod');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
-const { ok, fail, wineSummary, hasContent } = require('../toolUtil');
+const { ok, fail, wineSummary, hasContent, objectId } = require('../toolUtil');
 const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { publicProfileSummary } = require('../../services/registryTiering');
@@ -199,5 +199,38 @@ registerTool({
         draft_note: 'This is the user\'s PRIVATE DRAFT — not in the shared registry yet. Edit it with update_wine_draft; publish it with publish_wine (list_wine_drafts shows every draft with its deadline).',
       } : {}),
     });
+  },
+});
+
+// ── The Other category on the user's word ────────────────────────────────────
+registerTool({
+  name: 'mark_not_wine',
+  title: 'Move a drink that is not wine to the Other category',
+  description:
+    'For a cider, beer, spirit or soft drink the user keeps under a wine record: moves the record out of the shared ' +
+    'wine registry into the user\'s Other category. Their bottles, racks and notes stay as they are; the drink keeps ' +
+    'no wine type and gets no drink window or tasting profile. Applies at once when at most three members hold ' +
+    'bottles of it; otherwise it files a curator proposal and the answer says so. Only a member holding a bottle of ' +
+    'it may call this. NOT undoable via undo_last — an admin restores a row that was wine after all. For a drink the ' +
+    'user is adding now, pass category "other" on add_bottle new_wine instead.',
+  scope: 'write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('The record\'s wine_id, from get_bottle or search_bottles'),
+  },
+  handler: async (args, ctx) => {
+    const { markNotWineByMember } = require('../../services/nonWineOps');
+    const r = await markNotWineByMember({ wineId: args.wine_id, userId: ctx.user.id, req: ctx.req, via: 'mcp' });
+    if (!r.ok) {
+      const code = r.code === 'not_found' ? 'not_found' : r.code === 'forbidden' ? 'forbidden' : 'invalid_input';
+      return fail(code, r.message);
+    }
+    const note = {
+      applied: 'Moved to Other: it has left the shared wine registry and stays in the user\'s cellar.',
+      already: 'This record is already in the Other category.',
+      filed: `${r.holders} members hold bottles of it, so a curator will decide; nothing changed yet.`,
+      pending: 'A curator proposal to mark it as not wine is already waiting; nothing changed yet.',
+    }[r.status];
+    return ok({ wine_id: String(args.wine_id), status: r.status, category: r.category, note });
   },
 });

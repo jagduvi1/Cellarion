@@ -826,6 +826,12 @@ describe('findOrCreateWine — creation', () => {
     expect(WineDefinition.mock.calls[0][0].type).toBe('sparkling');
   });
 
+  test('the Other category (opts.nonWine) mints with no wine type and the non-wine flag', async () => {
+    await findOrCreateWine({ ...INPUT, type: 'sparkling' }, USER_ID, { nonWine: true });
+    expect(WineDefinition.mock.calls[0][0].type).toBeNull();
+    expect(WineDefinition.mock.calls[0][0].nonWine).toBe(true);
+  });
+
   test('field lengths are capped at 200 characters (registry pollution / fuzzy-cost bound)', async () => {
     await findOrCreateWine({ ...INPUT, name: 'x'.repeat(300) }, USER_ID);
 

@@ -163,6 +163,7 @@
 .cb-type-dot.type-sparkling { background: #88A848; }
 .cb-type-dot.type-dessert   { background: #A06020; }
 .cb-type-dot.type-fortified { background: #7A3010; }
+.cb-type-dot.type-other { background: #9A9A9A; }
 
 .cb-footer {
   margin-top: 3rem;

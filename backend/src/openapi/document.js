@@ -181,6 +181,7 @@ const schemas = {
       name: { type: ['string', 'null'] },
       producer: { type: ['string', 'null'] },
       type: WINE_TYPE,
+      category: { type: 'string', enum: ['wine', 'other'], description: '"other" for a drink that is not wine (cider, beer, spirits), kept in the cellar outside the shared wine registry; its type is then null.' },
       colour: { ...WINE_TYPE, description: 'The colour of a sparkling, dessert or fortified wine (e.g. a sparkling rosé), or null.' },
       country: { type: ['string', 'null'] },
       region: { type: ['string', 'null'] },
@@ -305,6 +306,7 @@ const schemas = {
       classification: { type: ['string', 'null'] },
       grapes: { type: 'array', items: ref('Grape') },
       image: { type: ['string', 'null'], description: 'The registry image URL, or null.' },
+      nonWine: { type: 'boolean', description: 'True for a drink that is not wine (cider, beer, spirits): the Other category, kept in the holder\'s cellar outside the shared wine registry; its type is then null.' },
     },
   },
   NamedRef: {

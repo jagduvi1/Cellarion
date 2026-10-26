@@ -350,6 +350,7 @@
 .wine-row-placeholder.sparkling { background: var(--wine-sparkling); }
 .wine-row-placeholder.dessert { background: var(--wine-dessert); }
 .wine-row-placeholder.fortified { background: var(--wine-fortified); }
+.wine-row-placeholder.other { background: var(--color-border); }
 /* Colour unknown (ticket 6a85ad44): a neutral swatch, never one of the six —
    the placeholder used to fall back to red, which read as a determination. */
 .wine-row-placeholder.unknown { background: var(--color-border); }
@@ -401,6 +402,8 @@
 /* Same reason as the placeholder: an undetermined colour gets its own neutral
    pill rather than borrowing red's. */
 .wine-type-pill.unknown  { background: var(--color-surface-hover); color: var(--color-text-secondary); }
+/* The Other category (not wine): neutral, like an undetermined colour. */
+.wine-type-pill.other    { background: var(--color-surface-hover); color: var(--color-text-secondary); }
 
 /* ── "Can't find your wine?" AI search row ───────────────────────────────── */
 

@@ -306,6 +306,20 @@ describe('pendingIdentity rows are never enriched', () => {
     expect(WineDefinition.updateOne).not.toHaveBeenCalled();
   });
 
+  test('a drink that is not wine (the Other category) is never enriched either', async () => {
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Vintage Cider', producer: 'Example Orchard', nonWine: true,
+      country: { name: 'England' }, region: null, grapes: [],
+    }));
+    tryDebitAi.mockResolvedValue({ ok: true, refund: jest.fn() });
+
+    await enrichWineById(WINE_ID, { budgetUserId: 'b'.repeat(24) });
+
+    expect(suggestProfile).not.toHaveBeenCalled();
+    expect(tryDebitAi).not.toHaveBeenCalled();
+    expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+  });
+
   test('the gate is narrow: an ordinary unenriched wine is still processed', async () => {
     tryDebitAi.mockResolvedValue({ ok: true, refund: jest.fn() });
     suggestProfile.mockResolvedValue(profile('Bright and fresh.'));

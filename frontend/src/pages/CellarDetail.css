@@ -736,6 +736,7 @@
 .bottle-wine-placeholder.sparkling { background: var(--wine-sparkling); }
 .bottle-wine-placeholder.dessert   { background: var(--wine-dessert); }
 .bottle-wine-placeholder.fortified { background: var(--wine-fortified); }
+.bottle-wine-placeholder.other { background: var(--color-border); }
 
 .bottle-info {
   flex: 1;
@@ -937,6 +938,7 @@
 .bottle-grid-placeholder.sparkling { background: var(--wine-sparkling); }
 .bottle-grid-placeholder.dessert   { background: var(--wine-dessert); }
 .bottle-grid-placeholder.fortified { background: var(--wine-fortified); }
+.bottle-grid-placeholder.other { background: var(--color-border); }
 
 .bottle-grid-info {
   padding: 0.625rem 0.75rem 0.75rem;

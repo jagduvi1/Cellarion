@@ -8,6 +8,7 @@ export const TYPE_COLORS = {
   sparkling: '#6EC6C6',
   dessert:   '#D4A070',
   fortified: '#8B6A9A',
+  other:     '#9A9A9A', // the non-wine category (cider, beer, spirits)
   // Bottles without a wine definition (pending review). Mid-gray on purpose:
   // distinct from the themed track colour in both light and dark mode, so it
   // never reads as a gap in the ring.

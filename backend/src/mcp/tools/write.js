@@ -48,7 +48,8 @@ const NEW_WINE_SHAPE = {
   region: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.region),
   appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation),
   classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification),
-  type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).describe('Required: creating without the real type would mint a default-red registry entry'),
+  type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional().describe('Required unless category is "other": creating a wine without its real type would mint a default-red registry entry'),
+  category: z.enum(['wine', 'other']).optional().describe('"other" for a drink that is NOT wine (cider, beer, spirits, a soft drink): it stays in the user\'s cellar with no type, outside the shared wine registry, and gets no drink window or tasting profile. Default "wine".'),
   grapes: z.array(z.string().max(200)).max(10).optional(),
 };
 
@@ -181,6 +182,9 @@ registerTool({
       if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
     } else {
       const { findOrCreateWine } = require('../../services/findOrCreateWine');
+      if (!args.new_wine.type && args.new_wine.category !== 'other') {
+        return fail('invalid_input', 'new_wine.type is required unless category is "other" (a drink that is not wine).');
+      }
       let result;
       try {
         // Sibling matching stays ON even when confirmed — stricter than REST,
@@ -197,6 +201,8 @@ registerTool({
           // PRIVATE DRAFT (support ticket 2026-09-12): the row stays the
           // user's until publish_wine. Strictly boolean true.
           draft: args.draft === true,
+          // The Other category: born outside the shared wine registry.
+          nonWine: args.new_wine.category === 'other',
         });
       } catch (err) {
         if (err?.status === 400) return fail('invalid_input', err.message);
@@ -253,6 +259,14 @@ registerTool({
     }, ctx.req);
     if (result.error) return fail('invalid_input', result.error.message);
     const { bottle } = result;
+    // category "other" on a record the registry already had as wine: the
+    // user now holds a bottle, so their word applies or files, as on the page.
+    let notWine = null;
+    if (args.new_wine) {
+      const { applyOtherCategoryAfterAdd } = require('../../services/nonWineOps');
+      notWine = await applyOtherCategoryAfterAdd({ wine: wineDoc, newWine: args.new_wine, userId: ctx.user.id, req: ctx.req, via: 'mcp' });
+      if (notWine && notWine.status === 'applied') wineDoc.nonWine = true;
+    }
 
     const wineDraft = wineDoc.draft === true;
     // A draft is pending by invariant; "pending identity" here keeps its own
@@ -264,6 +278,7 @@ registerTool({
         bottle_id: bottle._id,
         wine: { ...wineSummary(wineDoc) },
         wine_created: wineCreated,
+        ...(notWine ? { not_wine: notWine, note: notWine.status === 'applied' ? 'The record was already in the registry as wine; on your word it is now in the Other category.' : notWine.status === 'filed' ? `The record was already in the registry as wine and ${notWine.holders} members hold it, so a curator will decide on the Other category; the bottle is saved.` : 'A curator proposal to move this record to Other is already waiting; the bottle is saved.' } : {}),
         // Say it plainly: the bottle is saved and usable, but the wine is not
         // shared registry content until a curator completes the identity.
         ...(pendingIdentity ? {

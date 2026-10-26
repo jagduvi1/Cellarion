@@ -16,6 +16,7 @@ const { scanLabelFull, scanLabelBack, mergeBackScan, identifyWineFromQuery } = r
 const { sanitizeImageBuffer, detectImageFormat } = require('../services/imageSanitizer');
 const { persistLabelScan } = require('../services/imageOps');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
+const { markNotWineByMember } = require('../services/nonWineOps');
 const { generateWineKey } = require('../utils/normalize');
 const { findBestMatch } = require('../services/wineMatching');
 const { conflictingStyleTerms } = require('../utils/styleTerms');
@@ -830,6 +831,21 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
 // asyncHandler: `?.trim()` only short-circuits on null/undefined — a numeric
 // `name` threw a rejection Express 4 never catches, so the request hung open
 // forever. The shared validator 400s non-strings before the service runs.
+// POST /api/wines/:id/not-wine — a member moves a drink that is not wine
+// (cider, beer, spirits, a soft drink) to the Other category: out of the
+// shared wine registry, still in their cellar. Applies at once while few
+// members hold the row, otherwise files the curator proposal the sommelier
+// would (services/nonWineOps). Answer: { status: applied | already | filed |
+// pending, category, holders }.
+router.post('/:id/not-wine', requireAuth, requireNonDemo, asyncHandler(async (req, res) => {
+  const r = await markNotWineByMember({ wineId: req.params.id, userId: req.user.id, req, via: 'member' });
+  if (!r.ok) {
+    const status = r.code === 'not_found' ? 404 : r.code === 'forbidden' ? 403 : 400;
+    return res.status(status).json({ error: r.message });
+  }
+  res.json({ status: r.status, category: r.category, ...(r.holders !== undefined ? { holders: r.holders } : {}) });
+}));
+
 router.post('/find-or-create', requireAuth, requireNonDemo, asyncHandler(async (req, res) => {
   const { name, producer, country, region, appellation, type, grapes } = req.body;
 

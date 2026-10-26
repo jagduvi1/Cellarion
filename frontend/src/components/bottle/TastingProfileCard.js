@@ -12,6 +12,8 @@ import rehypeSanitize from 'rehype-sanitize';
 export default function TastingProfileCard({ wine, onReport }) {
   const { t } = useTranslation();
   if (!wine) return null;
+  // A drink that is not wine (the Other category) is never assessed: no card.
+  if (wine.nonWine === true) return null;
 
   // No published profile — an honest "not yet assessed" instead of a
   // silent blank (somm ticket 6a83e765 rollout note). Held-by-the-gate and

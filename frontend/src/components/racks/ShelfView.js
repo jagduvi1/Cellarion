@@ -14,6 +14,7 @@ const WINE_COLORS = {
   sparkling: { fill: '#B8C868', stroke: '#688830', text: '#2a3300' },
   dessert:   { fill: '#A06020', stroke: '#805018', text: '#fff' },
   fortified: { fill: '#7A3010', stroke: '#5A2008', text: '#fff' },
+  other:     { fill: '#9A9A9A', stroke: '#707070', text: '#fff' },
 };
 
 const BOTTLE_RX = 16; // horizontal radius (oval — top-down silhouette)

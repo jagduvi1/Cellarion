@@ -61,7 +61,7 @@ registerTool({
     // keeps a stray punctuation mark from reading as "no vintage matches".
     vintage: z.string().regex(/^[A-Za-z0-9]{1,10}$/, 'alphanumeric, e.g. "2015" or "NV"').optional()
       .describe('e.g. "2015" or "NV"'),
-    type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional(),
+    type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified', 'other']).optional().describe('"other" = drinks that are not wine (the Other category)'),
     reserved: z.enum(['only', 'exclude']).optional()
       .describe('only = just reserved ("spoken for") bottles; exclude = hide them'),
     limit: z.number().int().min(1).max(50).default(20),

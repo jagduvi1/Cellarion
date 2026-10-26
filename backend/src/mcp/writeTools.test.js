@@ -109,14 +109,14 @@ describe('add_bottle', () => {
   test('requires exactly one of wine_id / new_wine', async () => {
     expect(parse(await tool('add_bottle').handler({ cellar_id: oid('c') }, CTX)).error.code).toBe('invalid_input');
     expect(parse(await tool('add_bottle').handler(
-      { cellar_id: oid('c'), wine_id: oid('f'), new_wine: { name: 'x', producer: 'y', country: 'z' } }, CTX
+      { cellar_id: oid('c'), wine_id: oid('f'), new_wine: { name: 'x', producer: 'y', country: 'z', type: 'red' } }, CTX
     )).error.code).toBe('invalid_input');
   });
 
   // Release audit 2026-10-13: the new wine was created before addBottle refused the currency.
   test('an unsupported currency → invalid_input before any wine work', async () => {
     const res = await tool('add_bottle').handler(
-      { cellar_id: oid('c'), new_wine: { name: 'x', producer: 'y', country: 'z' }, currency: 'PLN' }, CTX);
+      { cellar_id: oid('c'), new_wine: { name: 'x', producer: 'y', country: 'z', type: 'red' }, currency: 'PLN' }, CTX);
     expect(parse(res).error.code).toBe('invalid_input');
     expect(findOrCreateWine).not.toHaveBeenCalled();
     expect(bottleOps.addBottle).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('add_bottle', () => {
       candidates: [{ wine: { _id: oid('f'), name: 'Close Wine', producer: 'P' }, score: 0.9 }],
     });
     const res = await tool('add_bottle').handler(
-      { cellar_id: oid('c'), new_wine: { name: 'Close Wine', producer: 'P', country: 'France' } }, CTX);
+      { cellar_id: oid('c'), new_wine: { name: 'Close Wine', producer: 'P', country: 'France', type: 'red' } }, CTX);
     const body = parse(res);
     expect(body.error.code).toBe('conflict');
     expect(body.error.message).toContain(oid('f'));
@@ -152,7 +152,7 @@ describe('add_bottle', () => {
     bottleOps.addBottle.mockResolvedValue({ bottle: { _id: new mongoose.Types.ObjectId(oid('d')), vintage: '2019', cellar: oid('c') } });
     const res = await tool('add_bottle').handler({
       cellar_id: oid('c'),
-      new_wine: { name: 'New Wine', producer: 'P', country: 'France' },
+      new_wine: { name: 'New Wine', producer: 'P', country: 'France', type: 'red' },
       confirm_new_wine: true,
       vintage: '2019',
       idempotency_key: 'k-add',
@@ -275,7 +275,7 @@ describe('add_bottle — private drafts (2026-09-12)', () => {
     });
     bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: '2019', cellar: oid('c') } });
     const body = parse(await tool('add_bottle').handler({
-      cellar_id: oid('c'), new_wine: { name: 'Draft Wine', producer: 'P', country: 'France' }, draft: true, vintage: '2019',
+      cellar_id: oid('c'), new_wine: { name: 'Draft Wine', producer: 'P', country: 'France', type: 'red' }, draft: true, vintage: '2019',
     }, CTX));
     expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ draft: true, allowPending: true, createdVia: 'mcp' });
     expect(body.data.wine_draft).toBe(true);
@@ -293,7 +293,7 @@ describe('add_bottle — private drafts (2026-09-12)', () => {
 
     findOrCreateWine.mockResolvedValue({ wine: { _id: oid('f'), name: 'New Wine', producer: 'P', grapes: [] }, created: true });
     bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: '2019', cellar: oid('c') } });
-    const plain = parse(await tool('add_bottle').handler({ cellar_id: oid('c'), new_wine: { name: 'New Wine', producer: 'P', country: 'France' } }, CTX));
+    const plain = parse(await tool('add_bottle').handler({ cellar_id: oid('c'), new_wine: { name: 'New Wine', producer: 'P', country: 'France', type: 'red' } }, CTX));
     expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ draft: false });
     expect(plain.data.wine_draft).toBeUndefined();
   });
@@ -309,7 +309,7 @@ describe('add_bottle — IndexNow for a minted wine', () => {
     findOrCreateWine.mockResolvedValue({ wine: { grapes: [], ...wine }, created });
     bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: '2019', cellar: oid('c') } });
     return parse(await tool('add_bottle').handler({
-      cellar_id: oid('c'), new_wine: { name: wine.name, producer: 'P', country: 'France' }, confirm_new_wine: true, vintage: '2019',
+      cellar_id: oid('c'), new_wine: { name: wine.name, producer: 'P', country: 'France', type: 'red' }, confirm_new_wine: true, vintage: '2019',
     }, CTX));
   };
 

@@ -298,6 +298,7 @@
 .slot-bottle-type-dot.type-sparkling { background: #74b9ff; }
 .slot-bottle-type-dot.type-dessert   { background: #a29bfe; }
 .slot-bottle-type-dot.type-fortified { background: #55efc4; }
+.slot-bottle-type-dot.type-other { background: #b2bec3; }
 
 .slot-bottle-info {
   display: flex;

@@ -35,6 +35,7 @@
 .wine-ref-card__dot.sparkling { background: #f39c12; }
 .wine-ref-card__dot.dessert   { background: #8e44ad; }
 .wine-ref-card__dot.fortified { background: #27ae60; }
+.wine-ref-card__dot.other { background: #9a9a9a; }
 
 .wine-ref-card__info {
   display: flex;
@@ -125,6 +126,7 @@
 .wine-modal__type-badge.sparkling { background: #d4860f; }
 .wine-modal__type-badge.dessert   { background: #8e44ad; }
 .wine-modal__type-badge.fortified { background: #27ae60; }
+.wine-modal__type-badge.other { background: #9a9a9a; }
 
 .wine-modal__rating {
   font-size: 0.9rem;

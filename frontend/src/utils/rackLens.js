@@ -79,6 +79,7 @@ const TYPE_LEGEND = [
   { key: 'sparkling', fill: '#88A848' },
   { key: 'dessert',   fill: '#A06020' },
   { key: 'fortified', fill: '#7A3010' },
+  { key: 'other',     fill: '#9A9A9A' },
 ];
 
 /**
