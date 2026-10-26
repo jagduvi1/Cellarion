@@ -242,6 +242,10 @@ registerTool({
           // that appeared since — most often a near-duplicate spelling minted
           // by an EARLIER item of this same batch — block the create instead
           // of silently bypassing the registry guard.
+          if (!item.new_wine.type && item.new_wine.category !== 'other') {
+            failures.push({ index: i, error: 'new_wine.type is required unless category is "other" (a drink that is not wine)' });
+            continue;
+          }
           const res = await findOrCreateWine(item.new_wine, ctx.user.id, {
             confirmCreate: !!p.despite_candidates, skipSiblingMatch: false, createdVia: 'mcp',
             // Same commit-path rule as add_bottle: an incomplete identity files
@@ -250,6 +254,8 @@ registerTool({
             allowPending: true,
             // Private drafts, as fixed at preview (support ticket 2026-09-12).
             draft: draft === true,
+            // The Other category: born outside the shared wine registry.
+            nonWine: item.new_wine.category === 'other',
           });
           if (!res.wine) { failures.push({ index: i, error: 'similar wines appeared since the preview — resolve this item individually with resolve_wine' }); continue; }
           wineDoc = res.wine;

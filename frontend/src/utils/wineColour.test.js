@@ -41,6 +41,20 @@ describe('swatchType', () => {
   });
 });
 
+describe('the Other category (a drink that is not wine)', () => {
+  test('draws its own neutral swatch, whatever type it was typed with', () => {
+    expect(swatchType({ type: 'sparkling', nonWine: true })).toBe('other');
+    expect(swatchType({ type: null, nonWine: true }, 'red')).toBe('other');
+    expect(swatchType({ type: 'sparkling', nonWine: false })).toBe('sparkling');
+  });
+
+  test('reads "Other", never the old wine type', () => {
+    expect(wineTypeLabel({ type: 'sparkling', nonWine: true }, t)).toBe('Other');
+    expect(wineTypeLabel({ type: null, nonWine: true }, t)).toBe('Other');
+    expect(en.statistics.typeLabels.other).toBe('Other');
+  });
+});
+
 describe('wineTypeLabel', () => {
   test('one phrase per style and colour', () => {
     expect(wineTypeLabel({ type: 'sparkling', colour: 'rosé' }, t)).toBe('Sparkling rosé');

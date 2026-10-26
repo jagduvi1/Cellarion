@@ -219,6 +219,15 @@ describe('ranking', () => {
     expect(idsOf(await search('merlo ', { sort: 'createdAt' }))).toEqual([402, 401]);
   });
 
+  test('a drink that is not wine is filtered and counted as Other, whatever type it was typed with', () => {
+    const w = wine(502, { name: 'Vintage Cider', producer: 'Example Orchard', type: 'sparkling', nonWine: true });
+    const doc = _internal.buildSearchDoc({ _id: w._id, vintage: '' }, w);
+    expect(doc.values.type).toBe('other');
+    expect(doc.facets.type).toBe('other');
+    const plain = _internal.buildSearchDoc({ _id: 503, vintage: '' }, wine(503, { name: 'Brut', producer: 'B', type: 'sparkling' }));
+    expect(plain.facets.type).toBe('sparkling');
+  });
+
   test('the typo rule decides first: an exact country beats a one-typo word in the name', () => {
     const w = wine(501, { name: 'Côtes de Francs', country: FRANCE });
     const doc = _internal.buildSearchDoc({ _id: w._id, vintage: '' }, w);

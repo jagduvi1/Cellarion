@@ -2,6 +2,10 @@ const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchange
 const { toNormalized, bottleRating, RATING_BANDS, emptyBands, ratingBand } = require('../utils/ratingUtils');
 const { classifyMaturity, classifyPersonalWindow, buildProfileMap, resolveWindowForBottle } = require('../utils/maturityUtils');
 
+// The type a bottle is counted under: 'other' for a drink that is not wine
+// (the non-wine category), 'unknown' while the colour is not recorded.
+const statType = (wd) => (wd?.nonWine === true ? 'other' : (wd?.type || 'unknown'));
+
 const avgOf = (sum, count) => (count > 0 ? Math.round((sum / count) * 10) / 10 : null);
 
 /**
@@ -95,7 +99,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       byRating[ratingBand(ownRating)]++;
     }
 
-    const type = wd?.type || 'unknown';
+    const type = statType(wd);
     byType[type] = (byType[type] || 0) + 1;
 
     const country = wd?.country?.name || 'Unknown';
@@ -200,7 +204,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
         name:          wd?.name      || 'Unknown',
         producer:      wd?.producer  || '',
         vintage:       b.vintage     || 'NV',
-        type:          wd?.type      || 'unknown',
+        type:          statType(wd),
         price:         b.price ? Math.round((toTarget(b.price, b.currency || 'USD') ?? 0) * 100) / 100 : null,
         status:        maturityStatus,
       });
@@ -229,7 +233,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       // owner sees its rack slot and label photo (forum request,
       // turbulent3964 2026-08-29). Optional-chained so a missing id omits the
       // field rather than crashing; the UI then renders plain text.
-      if (v != null) topValueArr.push({ id: b._id?.toString(), cellarId: b.cellar?.toString(), name: wd.name || 'Unknown', producer: wd.producer || '', vintage: b.vintage || 'NV', type: wd.type || 'unknown', price: Math.round(v * 100) / 100 });
+      if (v != null) topValueArr.push({ id: b._id?.toString(), cellarId: b.cellar?.toString(), name: wd.name || 'Unknown', producer: wd.producer || '', vintage: b.vintage || 'NV', type: statType(wd), price: Math.round(v * 100) / 100 });
     }
   }
 
@@ -315,7 +319,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       regretItems.push({
         name:           wd?.name  || 'Unknown',
         vintage:        b.vintage || 'NV',
-        type:           wd?.type  || 'unknown',
+        type:           statType(wd),
         rating:         toNormalized(b.rating,         b.ratingScale         || '5'),
         consumedRating: toNormalized(b.consumedRating, b.consumedRatingScale || '5'),
         delta:          toNormalized(b.consumedRating, b.consumedRatingScale || '5') - toNormalized(b.rating, b.ratingScale || '5'),

@@ -512,7 +512,7 @@ function AddBottle() {
     setCreateAsDraft(false);
     setPendingNewWine(wineData);
     // colour rides along: step 2 draws the wine the user just described.
-    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type, colour: wineData.colour || null });
+    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type, colour: wineData.colour || null, nonWine: wineData.category === 'other' });
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
     setScanResult(null);
     setLabelImage(null);
@@ -1478,10 +1478,13 @@ function AddBottle() {
                 </div>
                 <div className="form-group">
                   <label>{t('addBottle.scanType')}</label>
-                  <select value={pendingWineData.type}
+                  <select value={pendingWineData.category === 'other' ? 'other' : pendingWineData.type}
                     onChange={e => setPendingWineData(p => ({
                       ...p,
-                      type: e.target.value,
+                      // "Other" is a category, not a wine type: the drink is
+                      // not wine, so it carries no type and never a colour.
+                      type: e.target.value === 'other' ? '' : e.target.value,
+                      category: e.target.value === 'other' ? 'other' : undefined,
                       // A colour belongs to sparkling/dessert/fortified only.
                       ...(isStyleType(e.target.value) ? {} : { colour: '' }),
                     }))}>
@@ -1491,7 +1494,11 @@ function AddBottle() {
                         making the user pick a colour to get past it. */}
                     <option value="">{t('common.unknown')}</option>
                     {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
+                    <option value="other">{t('addBottle.typeOther', 'Other (not wine)')}</option>
                   </select>
+                  {pendingWineData.category === 'other' && (
+                    <small className="form-hint">{t('addBottle.typeOtherHint', 'Cider, beer, spirits or anything else that is not wine. It stays in your cellar and never enters the shared wine registry.')}</small>
+                  )}
                 </div>
                 {/* Only where the type does not already say the colour. Left
                     "not stated", a rosé name ("Brut Rosé") still fills it in. */}
@@ -1779,7 +1786,7 @@ function AddBottle() {
               else, and published when they are done (support ticket
               2026-09-12). Only shown on that path — an existing wine is
               already shared. */}
-          {pendingNewWine && (
+          {pendingNewWine && pendingNewWine.category !== 'other' && (
             <label className="draft-wine-toggle">
               <input
                 type="checkbox"

@@ -664,7 +664,7 @@ function BottleDetail() {
               {displayProducer || <em className="bd-producer-pending">{t('bottleDetail.producerPending')}</em>}
               {wine?.country?.name && <span className="bd-country">{displayProducer ? ' · ' : ' — '}{wine.country.name}</span>}
             </p>
-            {wine?.type && (
+            {(wine?.type || wine?.nonWine) && (
               <span className={`wine-type-pill ${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>
             )}
           </div>
@@ -733,6 +733,7 @@ function BottleDetail() {
           onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(typeof reason === 'string' ? reason : null); }}
           wineDraft={bottle.wineDraft || null}
           onDraftChanged={(notice) => { setDraftNotice(typeof notice === 'string' ? notice : null); fetchBottle(); }}
+          onWineChanged={fetchBottle}
           draftNotice={draftNotice}
         />
       )}

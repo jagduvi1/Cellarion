@@ -40,7 +40,9 @@ const { grapeSearchNames } = require('../utils/grapeDisplay');
 // Searchable fields, most important first — the order is the field ranking.
 const FIELDS = ['wineName', 'producer', 'appellation', 'countryName', 'regionName', 'grapeNames', 'type', 'notes', 'location', 'vintage'];
 const FACETS = ['type', 'countryName', 'regionName', 'appellation', 'vintage', 'countryId', 'regionId', 'grapeIds'];
-const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+// 'other' = the non-wine category (WineDefinition.nonWine): a cider in the
+// cellar is filtered and counted as Other, never as the type it was typed with.
+const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified', 'other'];
 const SORT_FIELDS = { name: 'wineName', createdAt: 'createdAt', vintage: 'vintage', price: 'price', rating: 'rating' };
 
 const MAX_QUERY_WORDS = 10;      // Meilisearch read at most ten query words too
@@ -370,7 +372,7 @@ function buildSearchDoc(bottle, wine) {
     countryName: populatedName(w.country),
     regionName: populatedName(w.region),
     grapeNames: grapeSearchNames(w).join(', '),
-    type: w.type || '',
+    type: w.nonWine === true ? 'other' : (w.type || ''),
     notes: bottle.notes || '',
     location: bottle.location || '',
     vintage,

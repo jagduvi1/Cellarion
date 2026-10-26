@@ -17,8 +17,9 @@ import DraftWineBanner from './DraftWineBanner';
 import MaturityPhaseTable from './MaturityPhaseTable';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
+import { markNotWine } from '../../api/wines';
 
-function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, draftNotice = null, recordFold = null }) {
+function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, onWineChanged, draftNotice = null, recordFold = null }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
@@ -33,6 +34,28 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const maturityReviewed = vintageProfile?.status === 'reviewed' && (!isNv || vintageProfile.relative);
   const [showSommNotes, setShowSommNotes] = useState(false);
   const wine = bottle.wineDefinition;
+  // "Not a wine? Move it to Other": the member's own word moves a cider or a
+  // beer out of the shared wine registry (few holders) or asks a curator.
+  const [notWine, setNotWine] = useState({ busy: false, status: null, holders: 0 });
+  const moveToOther = async () => {
+    setNotWine({ busy: true, status: null, holders: 0 });
+    try {
+      const res = await markNotWine(apiFetch, wine._id);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setNotWine({ busy: false, status: 'error', holders: 0 }); return; }
+      setNotWine({ busy: false, status: data.status, holders: data.holders || 0 });
+      if ((data.status === 'applied' || data.status === 'already') && onWineChanged) onWineChanged();
+    } catch {
+      setNotWine({ busy: false, status: 'error', holders: 0 });
+    }
+  };
+  const notWineMessage = {
+    applied: t('bottleDetail.notWineApplied', 'Moved to Other. It stays in your cellar and is no longer in the shared wine registry.'),
+    already: t('bottleDetail.notWineApplied', 'Moved to Other. It stays in your cellar and is no longer in the shared wine registry.'),
+    filed: t('bottleDetail.notWineFiled', 'Several members hold this one, so a curator will look at it.'),
+    pending: t('bottleDetail.notWinePending', 'A curator is already looking at this one.'),
+    error: t('bottleDetail.notWineError', 'That did not work. Please try again later.'),
+  };
   const record = (
     <WineRecordSection
       wine={wine}
@@ -41,7 +64,8 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
       apiFetch={apiFetch}
       // The "no grapes yet" invitation stays for whoever looks after the
       // bottle, as it always was — it now opens the record's own grape form.
-      promptMissingGrapes={canEdit}
+      // Not for a drink that is not wine: it has no grapes to record.
+      promptMissingGrapes={canEdit && wine?.nonWine !== true}
       suggestSignal={suggestFixSignal}
     />
   );
@@ -174,6 +198,19 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
           <div className="card bd-record-fold">{record}</div>
         </CollapsibleBlock>
       ) : record}
+      {/* The Other category: a drink that is not wine leaves the shared wine
+          registry on its holder's word, or a curator's when many hold it. */}
+      {canEdit && wine && wine.nonWine !== true && wine.draft !== true && !user?.isDemo && (
+        <div className="bd-not-wine">
+          {notWine.status ? (
+            <span className="bd-maturity-note">{notWineMessage[notWine.status] || notWineMessage.error}</span>
+          ) : (
+            <button type="button" className="bd-somm-notes-btn" disabled={notWine.busy} onClick={moveToOther}>
+              {t('bottleDetail.notWineAction', 'Not a wine? Move it to Other')}
+            </button>
+          )}
+        </div>
+      )}
       {/* Personal drink window — the user's own drinkFrom/drinkTo. Takes
           precedence over the sommelier profile status below, so the profile
           badge is suppressed while this is set. */}
@@ -208,7 +245,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
 
       {/* Sommelier maturity section — shown for NV too (somms can set a drink
           window for non-vintage sparkling); only hidden for unknown vintages */}
-      {bottle.vintage && bottle.vintage !== 'Unknown' && (
+      {bottle.vintage && bottle.vintage !== 'Unknown' && wine?.nonWine !== true && (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.sommMaturity')}</span>
           {!vintageProfile ? (

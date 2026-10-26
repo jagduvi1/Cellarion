@@ -401,6 +401,8 @@
 /* Same reason as the placeholder: an undetermined colour gets its own neutral
    pill rather than borrowing red's. */
 .wine-type-pill.unknown  { background: var(--color-surface-hover); color: var(--color-text-secondary); }
+/* The Other category (not wine): neutral, like an undetermined colour. */
+.wine-type-pill.other    { background: var(--color-surface-hover); color: var(--color-text-secondary); }
 
 /* ── "Can't find your wine?" AI search row ───────────────────────────────── */
 

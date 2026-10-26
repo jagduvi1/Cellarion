@@ -462,6 +462,8 @@
 .wine-type-pill.sparkling{ background: var(--wine-sparkling); color: var(--color-info); }
 .wine-type-pill.dessert  { background: var(--wine-dessert); color: #b07ad0; }
 .wine-type-pill.fortified{ background: var(--wine-fortified); color: var(--color-success); }
+.wine-type-pill.other    { background: var(--color-surface-hover); color: var(--color-text-secondary); }
+.bd-not-wine { margin-top: 0.75rem; }
 
 /* ── Details card ── */
 .bd-details {

@@ -13,6 +13,7 @@ const WINE_COLORS = {
   sparkling: { fill: '#88A848', stroke: '#688830' },
   dessert:   { fill: '#A06020', stroke: '#805018' },
   fortified: { fill: '#7A3010', stroke: '#5A2008' },
+  other:     { fill: '#9A9A9A', stroke: '#707070' }, // not wine (cider, beer, spirits)
 };
 
 const EMPTY_FILL   = '#C4A478';

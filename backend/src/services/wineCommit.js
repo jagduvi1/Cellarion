@@ -78,6 +78,11 @@ function validateNewWineFields(payload, { allowPending = false } = {}) {
   if (typeof country !== 'string' || !country.trim()) {
     return 'country is required';
   }
+  // The Other category (a drink that is not wine) is the only value besides
+  // the default; anything else is a client fault, not a silent "wine".
+  if (payload.category !== undefined && payload.category !== 'wine' && payload.category !== 'other') {
+    return 'category must be "wine" or "other"';
+  }
   // region is capped too: findOrCreateRegion mints whatever arrives, and this
   // path receives machine-generated payloads (accepted AI suggestions).
   // classification joins the cap for the same reason — the scan path fills it.
@@ -260,6 +265,9 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
         // wine to stay theirs until they publish it. Strictly boolean true —
         // a body value can't turn a string into a draft by accident.
         draft: newWine.draft === true,
+        // The Other category: born outside the shared wine registry with no
+        // type — the member said it is not wine, so no curator round trip.
+        nonWine: newWine.category === 'other',
       }
     );
   } catch (err) {

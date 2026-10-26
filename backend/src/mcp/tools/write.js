@@ -48,7 +48,8 @@ const NEW_WINE_SHAPE = {
   region: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.region),
   appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation),
   classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification),
-  type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).describe('Required: creating without the real type would mint a default-red registry entry'),
+  type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional().describe('Required unless category is "other": creating a wine without its real type would mint a default-red registry entry'),
+  category: z.enum(['wine', 'other']).optional().describe('"other" for a drink that is NOT wine (cider, beer, spirits, a soft drink): it stays in the user\'s cellar with no type, outside the shared wine registry, and gets no drink window or tasting profile. Default "wine".'),
   grapes: z.array(z.string().max(200)).max(10).optional(),
 };
 
@@ -181,6 +182,9 @@ registerTool({
       if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
     } else {
       const { findOrCreateWine } = require('../../services/findOrCreateWine');
+      if (!args.new_wine.type && args.new_wine.category !== 'other') {
+        return fail('invalid_input', 'new_wine.type is required unless category is "other" (a drink that is not wine).');
+      }
       let result;
       try {
         // Sibling matching stays ON even when confirmed — stricter than REST,
@@ -197,6 +201,8 @@ registerTool({
           // PRIVATE DRAFT (support ticket 2026-09-12): the row stays the
           // user's until publish_wine. Strictly boolean true.
           draft: args.draft === true,
+          // The Other category: born outside the shared wine registry.
+          nonWine: args.new_wine.category === 'other',
         });
       } catch (err) {
         if (err?.status === 400) return fail('invalid_input', err.message);

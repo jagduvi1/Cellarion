@@ -53,7 +53,7 @@ export const LAST_BOTTLE_LABEL = {
 // Auto-mode grouping: the fields a heading level may group on, and the cap
 export const LEVEL_FIELDS = ['type', 'country', 'region', 'appellation'];
 export const MAX_LEVELS = 3;
-const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified'];
+const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified', 'other'];
 
 /**
  * The grouping levels in force: explicit `levels` (unknown fields and

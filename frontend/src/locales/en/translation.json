@@ -1115,6 +1115,8 @@
     "scanRegion": "Region",
     "scanAppellation": "Appellation",
     "scanType": "Type",
+    "typeOther": "Other (not wine)",
+    "typeOtherHint": "Cider, beer, spirits or anything else that is not wine. It stays in your cellar and never enters the shared wine registry.",
     "scanGrapes": "Grapes (comma-separated)",
     "scanGrapesPlaceholder": "e.g. Cabernet Sauvignon, Merlot",
     "scanConfirmWine": "Confirm Wine",
@@ -1214,6 +1216,11 @@
     "buyerOther": "buyers",
     "indicativePrice": "indicative",
     "sommMaturity": "Aging & Maturity",
+    "notWineAction": "Not a wine? Move it to Other",
+    "notWineApplied": "Moved to Other. It stays in your cellar and is no longer in the shared wine registry.",
+    "notWineFiled": "Several members hold this one, so a curator will look at it.",
+    "notWinePending": "A curator is already looking at this one.",
+    "notWineError": "That did not work. Please try again later.",
     "loadingMaturity": "Loading…",
     "awaitingSommelier": "Awaiting staff review",
     "sommelierWillSet": "Our staff will set the aging window for this vintage soon.",
@@ -2882,6 +2889,7 @@
       "sparkling": "Sparkling",
       "dessert": "Dessert",
       "fortified": "Fortified",
+      "other": "Other",
       "unknown": "Pending review"
     },
     "ratingBands": {

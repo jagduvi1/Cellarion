@@ -305,6 +305,7 @@ const schemas = {
       classification: { type: ['string', 'null'] },
       grapes: { type: 'array', items: ref('Grape') },
       image: { type: ['string', 'null'], description: 'The registry image URL, or null.' },
+      nonWine: { type: 'boolean', description: 'True for a drink that is not wine (cider, beer, spirits): the Other category, kept in the holder\'s cellar outside the shared wine registry; its type is then null.' },
     },
   },
   NamedRef: {

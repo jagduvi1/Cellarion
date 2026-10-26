@@ -130,3 +130,8 @@ export const getAiWineInfo = (apiFetch, query) =>
  */
 export const getWineDiscussions = (apiFetch, idOrSlug, params = '') =>
   apiFetch(`/api/wines/${idOrSlug}/discussions${params ? `?${params}` : ''}`);
+
+// The Other category: move a drink that is not wine out of the shared wine
+// registry (applies at once with few holders, otherwise files a curator proposal).
+export const markNotWine = (apiFetch, wineId) =>
+  apiFetch(`/api/wines/${wineId}/not-wine`, { method: 'POST' });

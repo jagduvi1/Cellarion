@@ -33,6 +33,9 @@ export function recordedColour(wine) {
  */
 export function swatchType(wine, fallback = null) {
   if (!wine) return fallback;
+  // A drink that is not wine (the Other category) draws its own neutral swatch,
+  // whatever type it was typed with before it was moved.
+  if (wine.nonWine === true) return 'other';
   const colour = recordedColour(wine);
   if (wine.type === 'sparkling' && (colour === 'rosé' || colour === 'red')) return colour;
   return wine.type || fallback;
@@ -54,6 +57,7 @@ const COMBINED_FALLBACK = {
  * recorded, otherwise the plain translated type. Null for an untyped wine.
  */
 export function wineTypeLabel(wine, t) {
+  if (wine?.nonWine === true) return t('statistics.typeLabels.other', 'Other');
   const type = wine?.type;
   if (!type) return null;
   const colour = recordedColour(wine);
