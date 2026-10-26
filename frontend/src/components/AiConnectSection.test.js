@@ -5,7 +5,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     // Components pass English fallbacks inline — return those so assertions
     // read like the real UI.
-    t: (key, fallback) => (typeof fallback === 'string' ? fallback : key),
+    t: (key, fallback, opts) => (typeof fallback === 'string' ? fallback : key)
+      .replace(/\{\{(\w+)\}\}/g, (m, name) => opts?.[name] ?? m),
   }),
 }));
 
@@ -33,6 +34,11 @@ describe('AiConnectSection', () => {
     // Read-only tokens, reversible changes, instant revoke.
     expect(screen.getByText(/read-only token/i)).toBeInTheDocument();
     expect(screen.getByText(/revoking the token cuts it off instantly/i)).toBeInTheDocument();
+  });
+
+  test('points to the AI activity section by its actual heading', () => {
+    render(<AiConnectSection />);
+    expect(screen.getByText(/can be undone under "Recent AI activity"/)).toBeInTheDocument();
   });
 
   test('renders all three configs with a placeholder token and, off-cellarion.app, a CELLARION_URL override', () => {
