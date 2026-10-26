@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Cellarion</title>
+  <!-- bottle -->
+  <path fill="#702820" d="M231 72h50a6 6 0 0 1 6 6v100c0 10 6 18 16 26 18 14 24 30 24 50v170a18 18 0 0 1-18 18H203a18 18 0 0 1-18-18V254c0-20 6-36 24-50 10-8 16-16 16-26V78a6 6 0 0 1 6-6z"/>
+  <!-- capsule -->
+  <rect x="227" y="64" width="58" height="22" rx="5" fill="#8a3a30"/>
+  <!-- cellar arch -->
+  <path fill="none" stroke="#d8b058" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+        d="M212 404V330a44 44 0 0 1 88 0v74"/>
+  <path fill="none" stroke="#d8b058" stroke-width="12" stroke-linecap="round" d="M196 410h120"/>
+  <!-- stones -->
+  <g stroke="#702820" stroke-width="4" stroke-linecap="round">
+    <path d="M212 352h12M300 352h-12M212 376h12M300 376h-12M220 310l9 8M292 310l-9 8M240 296l5 11M272 296l-5 11M256 290v12"/>
+  </g>
+  <!-- floor shading -->
+  <path fill="#d8b058" opacity="0.35" d="M212 404h88v6h-88z"/>
+</svg>
