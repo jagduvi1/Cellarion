@@ -123,6 +123,15 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     if (v.length > FIELD_MAX) {
       return fail('invalid', `${f} must be at most ${FIELD_MAX} characters.`);
     }
+    if (f === 'classification') {
+      // A regulatory mark (DOCG, AOC …) is no tier: it would apply as nothing
+      // at approval, so it does not count as a changed field at filing.
+      const { normalizeClassification } = require('../utils/normalize');
+      const tier = normalizeClassification(v);
+      if (!tier) continue;
+      proposedFields[f] = tier;
+      continue;
+    }
     proposedFields[f] = v;
   }
   if (src.type !== undefined && src.type !== null) {

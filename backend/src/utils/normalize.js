@@ -166,31 +166,44 @@ const APPELLATION_TIER_PHRASES = [
 // punctuation out ("d'Origen" → "dOrigen"), lowercased, accents stripped
 // ("Denominación" → "denominacion", "Denominação" → "denominacao").
 const foldTierWord = (token) => token
-  .replace(/[.,'’]/g, '')
+  .replace(/[.,'’()[\]]/g, '')
   .toLowerCase()
   .normalize('NFD')
   .replace(/[̀-ͯ]/g, '');
 
-// Strip tier phrases off either END of the token list, repeating until stable
-// ("PDO Denominación de Origen X" is unrealistic but costs nothing to
-// handle). Mutates `parts`. The > guard means an input that IS only the
-// phrase survives untouched — same never-empty rule as the token loops.
-const stripTierPhrases = (parts) => {
+// Strip regulatory tier text off both ENDS of a token list: spelled-out
+// phrases first, repeating until stable ("PDO Denominación de Origen X" is
+// unrealistic but costs nothing to handle), then single tokens (the leading
+// set, then the trailing set), then separator debris a strip leaves dangling
+// ("Vin du Québec -", found on prod 2026-08-18). Dots, commas and brackets fold
+// OUT of a token before it probes a set, so the forms labels print — "Lison
+// Classico D.O.C.G.", "Rioja D.O.Ca.", "Barolo (DOCG)" — match (prod 2026-08-13); the
+// split is on whitespace, so folding cannot merge two tokens. `min` is the
+// smallest list the loops may leave behind: 1 for an appellation (an input
+// that IS only tier text survives untouched and the caller falls back to the
+// original), 0 for a classification (a value that is only tier text is no
+// classification at all). Mutates and returns `parts`.
+const stripTierEdges = (parts, { min, phrases, leading, trailing }) => {
   let changed = true;
   while (changed) {
     changed = false;
-    for (const phrase of APPELLATION_TIER_PHRASES) {
-      if (parts.length > phrase.length && phrase.every((w, i) => foldTierWord(parts[i]) === w)) {
+    for (const phrase of phrases) {
+      if (parts.length >= phrase.length + min && phrase.every((w, i) => foldTierWord(parts[i]) === w)) {
         parts.splice(0, phrase.length);
         changed = true;
       }
-      if (parts.length > phrase.length &&
+      if (parts.length >= phrase.length + min &&
           phrase.every((w, i) => foldTierWord(parts[parts.length - phrase.length + i]) === w)) {
         parts.splice(parts.length - phrase.length, phrase.length);
         changed = true;
       }
     }
   }
+  const fold = (token) => token.replace(/[.,()[\]]/g, '').toLowerCase();
+  while (parts.length > min && leading.has(fold(parts[0]))) parts.shift();
+  while (parts.length > min && trailing.has(fold(parts[parts.length - 1]))) parts.pop();
+  while (parts.length > min && /^[-–—·|/]+$/.test(parts[0])) parts.shift();
+  while (parts.length > min && /^[-–—·|/]+$/.test(parts[parts.length - 1])) parts.pop();
   return parts;
 };
 
@@ -227,37 +240,69 @@ const normalizeAppellationKey = (appellation) =>
 const normalizeAppellation = (appellation) => {
   if (appellation == null) return appellation;
   const original = String(appellation).trim();
-  const parts = original.split(/\s+/);
-  // Spelled-out wrappers first — the single-token loops below can't see them.
-  stripTierPhrases(parts);
-  // Drop leading tier token(s) — dots tolerated so "D.O." matches 'do'.
-  while (parts.length > 1) {
-    const first = parts[0].replace(/[.,]/g, '').toLowerCase();
-    if (!APPELLATION_LEADING_TIER_TOKENS.has(first)) break;
-    parts.shift();
-  }
-  // Drop trailing tier token(s), folding dots/commas OUT of the candidate the
-  // same way the leading loop does. Trimming only the TRAILING punctuation left
-  // the internal dots in place, so the abbreviated forms labels actually print
-  // — "Lison Classico D.O.C.G.", "Rioja D.O.Ca." — probed the set as 'd.o.c.g'
-  // and 'd.o.ca', which are in it nowhere, and the tier survived into the
-  // registry as a second spelling of the same appellation (prod 2026-08-13).
-  // The dots are punctuation inside one token, not token separators: the split
-  // above is on whitespace, so folding them cannot merge two tokens.
-  while (parts.length > 1) {
-    const last = parts[parts.length - 1].replace(/[.,]/g, '').toLowerCase();
-    if (!APPELLATION_TIER_TOKENS.has(last)) break;
-    parts.pop();
-  }
-  // Separator debris (found on prod 2026-08-18): stripping a phrase or tier
-  // written after a separator leaves the separator dangling — "Vin du Québec
-  // - Indication géographique protégée" → "Vin du Québec -". A token that is
-  // ONLY punctuation at either end is never part of a name; same never-empty
-  // rule as every loop above.
-  while (parts.length > 1 && /^[-–—·|/]+$/.test(parts[0])) parts.shift();
-  while (parts.length > 1 && /^[-–—·|/]+$/.test(parts[parts.length - 1])) parts.pop();
+  const parts = stripTierEdges(original.split(/\s+/), {
+    min: 1, phrases: APPELLATION_TIER_PHRASES,
+    leading: APPELLATION_LEADING_TIER_TOKENS, trailing: APPELLATION_TIER_TOKENS,
+  });
   const result = trimTrailingChars(parts.join(' '), ' ,').trim();
   return result || original;
+};
+
+// Spelled-out marks that reach the CLASSIFICATION field as a value in their
+// own right ("Appellation d'Origine Protégée" filed as the tier of a Rhône
+// wine). Kept off the appellation list on purpose: there "Appellation …
+// Contrôlée" wraps a real place name and stays membership-gated in
+// services/appellationResolve.
+const CLASSIFICATION_TIER_PHRASES = [
+  ...APPELLATION_TIER_PHRASES,
+  ['appellation', 'dorigine', 'protegee'],
+  ['appellation', 'dorigine', 'controlee'],
+  ['districtus', 'austriae', 'controllatus'],
+];
+
+// The classification field owns its token set: every mark, as a leading OR a
+// trailing token. The appellation sets keep 'do' trailing-only and 'dac' out
+// because "Rueda, DO" and "Kamptal DAC" are place names there; in the
+// classification field neither reading exists, so both are marks.
+const CLASSIFICATION_MARK_TOKENS = new Set([...APPELLATION_TIER_TOKENS, ...APPELLATION_LEADING_TIER_TOKENS, 'dac']);
+
+// The French label line that wraps the place in the mark ("Appellation
+// Pauillac Contrôlée", "Appellation Saint-Émilion Grand Cru Contrôlée"). The
+// old scan prompt asked for "the printed classification/tier line", and on a
+// French label that IS this line. Never a tier, whatever place it wraps. A
+// token test, not a regex: `^appellation\s+.+\s+…$` is the polynomial-ReDoS
+// shape CodeQL flags on this file (js/polynomial-redos), and the value is
+// already split on single spaces.
+const WRAPPED_MARK_TAILS = new Set(['controlee', 'protegee']);
+const isWrappedMarkLine = (parts) =>
+  parts.length >= 3 && foldTierWord(parts[0]) === 'appellation' && WRAPPED_MARK_TAILS.has(foldTierWord(parts[parts.length - 1]));
+
+/**
+ * The classification to STORE: a quality tier granted on top of the
+ * appellation (Riserva, Grand Cru Classé en 1855, Cru Bourgeois, a Prädikat),
+ * whitespace folded, with the appellation's regulatory mark — DOCG, DOC, AOC,
+ * IGT, AVA, DAC, their dotted and bracketed forms, the spelled-out phrases and
+ * the French "Appellation … Contrôlée" line — stripped off either end. The
+ * mark follows from the appellation and is no tier, so a value that is only
+ * the mark ("DOCG", "(DOC)", "Denominazione di Origine Controllata",
+ * "Appellation Pauillac Contrôlée") comes back null and "Riserva DOCG" comes
+ * back "Riserva". Null or blank in,
+ * null out. One rule for every write path (model hook, mint, admin edit,
+ * proposals, drafts) and for the backfill (scripts/normalize-classification-
+ * tiers.js) — GitHub discussion #1696.
+ */
+const normalizeClassification = (classification) => {
+  if (classification == null) return null;
+  const folded = String(classification).trim().replace(/\s+/g, ' ');
+  if (!folded) return null;
+  const tokens = folded.split(' ');
+  if (isWrappedMarkLine(tokens)) return null;
+  const parts = stripTierEdges(tokens, {
+    min: 0, phrases: CLASSIFICATION_TIER_PHRASES,
+    leading: CLASSIFICATION_MARK_TOKENS, trailing: CLASSIFICATION_MARK_TOKENS,
+  });
+  const result = trimTrailingChars(parts.join(' '), ' ,').trim();
+  return result || null;
 };
 
 // A vintage year TRAILING a wine name — imports and label scans routinely
@@ -1185,6 +1230,7 @@ module.exports = {
   foldProducerToken,
   normalizeAppellation,
   normalizeAppellationKey,
+  normalizeClassification,
   stripTrailingVintage,
   resolveGrapeName,
   resolveCountryName,

@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, normalizeAppellationKey, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName } = require('../../utils/normalize');
+const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, normalizeAppellationKey, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName, normalizeClassification } = require('../../utils/normalize');
 const { STYLE_TYPES, isStyleType, inferColourFromName } = require('../../utils/wineColour');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
@@ -136,7 +136,9 @@ function mapRow(row, format) {
       appellation: normalizeAppellation(lwinVal(row.SUB_REGION)),
       type: mapType(row.COLOUR, row.SUB_TYPE, null),
       colour: mapColour(row.COLOUR, mapType(row.COLOUR, row.SUB_TYPE, null), name, producer),
-      classification: lwinVal(row.CLASSIFICATION),
+      // A regulatory mark is no tier (same rule as the mint); this path writes
+      // through a bulkWrite pipeline, which the model hook never sees.
+      classification: normalizeClassification(lwinVal(row.CLASSIFICATION)),
       status: (row.STATUS || '').trim() || 'Live',
       rowType: (row.TYPE || '').trim() || 'Wine',
     };
@@ -152,7 +154,7 @@ function mapRow(row, format) {
     appellation: normalizeAppellation((row.Appellation || '').trim()) || null,
     type: mapType(null, null, row.WineType),
     colour: mapColour(null, mapType(null, null, row.WineType), (row.Wine || '').trim(), (row.Producer || '').trim()),
-    classification: (row.Classification || '').trim() || null,
+    classification: normalizeClassification((row.Classification || '').trim()),
     status: 'Live',
     rowType: 'Wine',
   };

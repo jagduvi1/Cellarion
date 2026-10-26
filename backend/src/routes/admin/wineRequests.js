@@ -3,7 +3,7 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
 const WineDefinition = require('../../models/WineDefinition');
-const { generateWineKey, normalizeAppellation, normalizeString } = require('../../utils/normalize');
+const { generateWineKey, normalizeAppellation, normalizeString, normalizeClassification } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
@@ -247,7 +247,7 @@ router.put('/:id/resolve', async (req, res) => {
         country,
         region: region || null,
         appellation: cleanAppellation,
-        classification: pradikatSplit.classification || undefined,
+        classification: normalizeClassification(pradikatSplit.classification) || undefined,
         grapes: grapes || [],
         type: type || null, // no guessed red (ticket 6a85ad44)
         // Sparkling/dessert/fortified only; the model hook drops anything else

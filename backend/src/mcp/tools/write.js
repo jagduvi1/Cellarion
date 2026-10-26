@@ -32,7 +32,7 @@ const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { parseCurrency } = require('../../config/currencies');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
-  resolveCellarAccess, resolveBottleAccess, wineSummary,
+  resolveCellarAccess, resolveBottleAccess, wineSummary, FIELD_DESCRIPTIONS,
 } = require('../toolUtil');
 const { logAction, replay, releaseClaim } = require('../actionLedger');
 
@@ -45,8 +45,9 @@ const NEW_WINE_SHAPE = {
   producer: z.string().trim().max(200).optional()
     .describe('Omit ONLY when the user genuinely cannot tell you (unreadable label). The wine is then filed for sommelier completion and stays invisible to other users until then — never guess a producer to fill this in.'),
   country: z.string().trim().min(1).max(200).describe('Country name (required to create)'),
-  region: z.string().max(200).optional(),
-  appellation: z.string().max(200).optional(),
+  region: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.region),
+  appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation),
+  classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification),
   type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).describe('Required: creating without the real type would mint a default-red registry entry'),
   grapes: z.array(z.string().max(200)).max(10).optional(),
 };
@@ -64,12 +65,15 @@ registerTool({
   inputSchema: {
     name: z.string().min(1).max(200),
     producer: z.string().min(1).max(200),
-    appellation: z.string().max(200).optional(),
+    appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation),
+    // Accepted so a client can hand the lookup the same object it will pass
+    // as add_bottle's new_wine; it plays no part in matching.
+    classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification + ' Accepted here only so the lookup takes the same object as add_bottle new_wine; it plays no part in matching.'),
   },
   handler: async (args, ctx) => {
     const { findOrCreateWine } = require('../../services/findOrCreateWine');
     const result = await findOrCreateWine(
-      { name: args.name, producer: args.producer, appellation: args.appellation },
+      { name: args.name, producer: args.producer, appellation: args.appellation, classification: args.classification },
       ctx.user.id,
       { matchOnly: true }
     );

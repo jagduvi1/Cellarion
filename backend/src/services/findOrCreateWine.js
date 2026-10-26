@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, normalizeString, normalizeWineName, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, normalizeString, normalizeWineName, normalizeAppellation, normalizeAppellationKey, normalizeClassification, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 
 // A private draft's untouched clock (models/WineDefinition.draftExpiresAt):
 // reset by every edit and bottle add, swept hourly by services/wineDraftExpiryJob.
@@ -1013,8 +1013,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Classification is display/curation data, not identity: stored on creates
   // only, never matched or keyed on. Same whitespace fold + cap as the
   // identity fields, so a scanned "Grand  Cru Classé" can't store raggedly.
+  // The appellation's regulatory mark (DOCG, AOC, …) is no tier: dropped here
+  // (and again by the model hook), so a scan that read "DOCG" off the label
+  // stores no classification at all — GitHub discussion #1696.
   const trimmedClassification = (typeof classification === 'string' && classification.trim())
-    ? classification.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD)
+    ? normalizeClassification(classification.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD))
     : null;
 
   const newWine = new WineDefinition({

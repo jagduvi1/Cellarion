@@ -19,7 +19,7 @@ const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { announceMintedWine } = require('../../services/wineCommit');
 const { isValidId } = require('../../utils/validation');
-const { ok, fail, wineSummary } = require('../toolUtil');
+const { ok, fail, wineSummary, FIELD_DESCRIPTIONS } = require('../toolUtil');
 const { safeFetchImage } = require('../../utils/safeImageFetch');
 
 const MAX_BASE64_CHARS = 1_500_000; // same budget as attach_bottle_image
@@ -41,8 +41,9 @@ registerTool({
     name: z.string().trim().min(1).max(200).describe('Wine name WITHOUT the producer in it'),
     producer: z.string().trim().min(1).max(200),
     country: z.string().trim().min(1).max(200).describe('Country name (required)'),
-    region: z.string().max(200).optional(),
-    appellation: z.string().max(200).optional(),
+    region: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.region),
+    appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation),
+    classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification),
     type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).describe('Required: defaulting silently would mint wrong-type registry entries'),
     grapes: z.array(z.string().max(200)).max(10).optional(),
     confirm_create: z.boolean().optional().describe('Set true ONLY after reviewing returned candidates and confirming this is a different wine'),
@@ -80,6 +81,7 @@ registerTool({
           country: args.country,
           region: args.region,
           appellation: args.appellation,
+          classification: args.classification,
           type: args.type,
           grapes: args.grapes,
         }, ctx.user.id, { confirmCreate: !!args.confirm_create, skipSiblingMatch: false, createdVia: 'mcp' });

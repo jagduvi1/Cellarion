@@ -10,7 +10,8 @@ const {
   tokenSimilarity,
   normalizeString,
   normalizeProducerKey,
-  normalizeAppellation
+  normalizeAppellation,
+  normalizeClassification,
 } = require('../../utils/normalize');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { validateImageRef } = require('../../services/accountOps');
@@ -276,7 +277,7 @@ router.post('/', async (req, res) => {
       country,
       region: region || null,
       appellation: cleanAppellation,
-      classification: pradikatSplit.classification || undefined,
+      classification: normalizeClassification(pradikatSplit.classification) || undefined,
       grapes: grapes || [],
       type: type || null, // no guessed red (ticket 6a85ad44)
       // Kept only on a sparkling/dessert/fortified wine — the model hook drops
@@ -1497,7 +1498,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, producer, country, region, appellation, grapes, type, colour, image } = req.body;
+    const { name, producer, country, region, appellation, classification, grapes, type, colour, image } = req.body;
 
     const wine = await WineDefinition.findById(req.params.id);
     // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
@@ -1519,6 +1520,9 @@ router.put('/:id', async (req, res) => {
     }
     if (appellation != null && typeof appellation !== 'string') {
       return res.status(400).json({ error: 'Appellation must be a string' });
+    }
+    if (classification != null && typeof classification !== 'string') {
+      return res.status(400).json({ error: 'Classification must be a string' });
     }
     if (country && !isValidId(String(country))) {
       return res.status(400).json({ error: 'Invalid country' });
@@ -1576,6 +1580,10 @@ router.put('/:id', async (req, res) => {
     if (country) wine.country = country;
     if (region !== undefined) wine.region = region || null;
     if (appellation !== undefined) wine.appellation = nextAppellation;
+    // Absent = leave alone; '' or null = clear. Normalised the way the mint
+    // does it (a regulatory mark stores as no classification), and a change
+    // feeds the re-enrich decision below like any other profile input.
+    if (classification !== undefined) wine.classification = normalizeClassification(classification);
     if (grapes !== undefined) wine.grapes = grapes;
     if (type) wine.type = type;
     // Absent = leave alone; '' or null = clear. The model hook drops it again

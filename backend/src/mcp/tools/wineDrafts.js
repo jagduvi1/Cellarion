@@ -9,7 +9,7 @@
  */
 const { z } = require('zod');
 const { registerTool } = require('../registry');
-const { ok, fail, objectId } = require('../toolUtil');
+const { ok, fail, objectId, FIELD_DESCRIPTIONS } = require('../toolUtil');
 const ops = require('../../services/wineDraftOps');
 
 const DRAFT_NOTE = 'A private draft is visible only to its creator (and to members of shared cellars holding a bottle of it). ' +
@@ -62,13 +62,13 @@ registerTool({
     wine_id: objectId,
     name: z.string().max(200).optional(),
     producer: z.string().max(200).optional().describe('"" clears it'),
-    appellation: z.string().max(200).optional(),
-    classification: z.string().max(200).optional(),
+    appellation: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.appellation + ' "" clears it.'),
+    classification: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.classification + ' "" clears it.'),
     type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional(),
     colour: z.enum(['red', 'white', 'rosé']).nullable().optional()
       .describe('Colour of a sparkling, dessert or fortified wine (e.g. a sparkling rosé); null clears it'),
     country: z.string().max(200).optional(),
-    region: z.string().max(200).optional(),
+    region: z.string().max(200).optional().describe(FIELD_DESCRIPTIONS.region + ' "" clears it.'),
     grapes: z.array(z.string().min(1).max(60)).max(12).optional().describe('The COMPLETE variety list'),
   },
   handler: async (args, ctx) => {

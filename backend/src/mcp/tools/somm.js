@@ -27,12 +27,12 @@ const { bumpWineOwners } = require('../../services/dataVersion');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId, parseAndValidateVintage } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
-const { normalizeString, sanitizeTaxonomyName, resolveCountryName, resolveGrapeName } = require('../../utils/normalize');
+const { normalizeString, sanitizeTaxonomyName, resolveCountryName, resolveGrapeName, normalizeClassification } = require('../../utils/normalize');
 const { claimKey, findGrapeClaim } = require('../../services/grapeClaims');
 const { otherProducerSpellings, displaySpelling } = require('../../services/producerSpelling');
 const { classifyProposal } = require('../../services/proposalDirectApply');
 const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
-const { ok, fail, objectId, pageParams } = require('../toolUtil');
+const { ok, fail, objectId, pageParams, FIELD_DESCRIPTIONS } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
   PROFILE_ENUMS,
@@ -2197,10 +2197,10 @@ registerTool({
     proposed_fields: z.object({
       producer: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
       name: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      appellation: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      region: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      appellation: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.appellation),
+      region: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.region),
       country: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.classification),
       type: z.enum(WINE_TYPES).optional(),
       colour: z.enum(WINE_COLOURS).optional(),
       grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).min(1).max(GRAPES_MAX).optional(),
@@ -2254,6 +2254,14 @@ registerTool({
         if (!v) continue;
         if (v.length > PROPOSAL_FIELD_MAX) {
           return fail('invalid_input', `proposed_fields.${f} must be at most ${PROPOSAL_FIELD_MAX} characters.`);
+        }
+        if (f === 'classification') {
+          // Same filing rule as the user path (wineProposalOps): a regulatory
+          // mark is no tier and would apply as nothing at approval.
+          const tier = normalizeClassification(v);
+          if (!tier) continue;
+          proposedFields[f] = tier;
+          continue;
         }
         proposedFields[f] = v;
       }
@@ -3218,8 +3226,9 @@ registerTool({
     wine_id: objectId.describe('From list_pending_wines'),
     producer: z.string().min(1).max(FIELD_MAX).optional().describe('The winery exactly as printed on the label'),
     name: z.string().min(1).max(FIELD_MAX).optional().describe('The cuvée/wine name WITHOUT the producer in it'),
-    appellation: z.string().max(FIELD_MAX).optional().describe('Empty string clears it'),
-    region: z.string().max(FIELD_MAX).optional().describe('Region NAME; empty string clears it'),
+    appellation: z.string().max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.appellation + ' Empty string clears it.'),
+    classification: z.string().max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.classification + ' Empty string clears it.'),
+    region: z.string().max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.region + ' Empty string clears it.'),
     country: z.string().max(FIELD_MAX).optional().describe('Country NAME — must already exist in the taxonomy'),
     grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).optional()
       .describe('Variety NAMES, taxonomy-resolved (synonyms ok). Replaces the whole list.'),
@@ -3255,6 +3264,7 @@ registerTool({
     if (args.producer !== undefined) patch.producer = args.producer;
     if (args.name !== undefined) patch.name = args.name;
     if (args.appellation !== undefined) patch.appellation = args.appellation;
+    if (args.classification !== undefined) patch.classification = args.classification;
     if (args.region !== undefined) patch.regionName = args.region;
     if (args.country !== undefined) patch.countryName = args.country;
     if (args.grapes !== undefined) patch.grapeNames = args.grapes;

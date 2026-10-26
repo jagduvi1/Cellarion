@@ -30,7 +30,7 @@ const Country = require('../models/Country');
 // pendingWineKey comes from utils/normalize (beside generateWineKey), NOT from
 // services/findOrCreateWine: one definition of the key shape, and no dependency
 // from the curation queue onto the resolver's module tree to build a string.
-const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
+const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity, normalizeClassification } = require('../utils/normalize');
 const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = require('../utils/crossFieldChecks');
 // Top-level: labelScanAccess requires nothing at load (its own model require is
 // lazy), so it adds no module tree to the curation queue.
@@ -46,7 +46,7 @@ const { WINE_COLOURS, stateColour, colourTypeConflict } = require('../utils/wine
 // row; the rest ride along so one pass can fix everything the misread label
 // got wrong. Deliberately NOT here: type-only/profile fields (set_wine_profile
 // owns those), nonWine (a quarantine proposal), and anything about the bottle.
-const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type', 'colour', 'identityUnavailable'];
+const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'classification', 'regionName', 'countryName', 'grapeNames', 'type', 'colour', 'identityUnavailable'];
 /**
  * Not a field — an explicit, audited OVERRIDE of the cross-field refusal below.
  *
@@ -326,6 +326,7 @@ async function applyPendingFix(wine, clean, userId) {
     producer: wine.producer || null,
     name: wine.name,
     appellation: wine.appellation || null,
+    classification: wine.classification || null,
     type: wine.type || null,
     identityUnavailable: wine.identityUnavailable === true,
   };
@@ -359,6 +360,10 @@ async function applyPendingFix(wine, clean, userId) {
     wine.appellation = clean.appellation
       ? await resolveCanonicalAppellation(normalizeAppellation(clean.appellation))
       : null;
+  }
+  // '' clears; a regulatory mark stores as none (utils/normalize).
+  if (clean.classification !== undefined) {
+    wine.classification = clean.classification ? normalizeClassification(clean.classification) : null;
   }
   // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
   const colourErr = colourTypeConflict(clean.type || wine.type, clean.colour);
@@ -530,6 +535,7 @@ async function applyPendingFix(wine, clean, userId) {
     producer: wine.producer || null,
     name: wine.name,
     appellation: wine.appellation || null,
+    classification: wine.classification || null,
     type: wine.type || null,
     identityUnavailable: wine.identityUnavailable === true,
   };

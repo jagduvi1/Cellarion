@@ -50,7 +50,7 @@ const { WINE_COLOURS, isStyleType } = require('../../utils/wineColour');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { otherProducerSpellings, planProducerRename, displaySpelling } = require('../../services/producerSpelling');
 const { performWineMerge } = require('./wines');
-const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName, resolveGrapeName } = require('../../utils/normalize');
+const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName, resolveGrapeName, normalizeClassification } = require('../../utils/normalize');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
@@ -393,7 +393,12 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         // region through the gated findOrCreateRegion helper.
         if (pf.name) { wine.name = pf.name.trim(); applied.push('name'); }
         if (pf.producer) { wine.producer = pf.producer.trim(); applied.push('producer'); }
-        if (pf.classification) { wine.classification = pf.classification.trim(); applied.push('classification'); }
+        if (pf.classification) {
+          // A regulatory mark proposed as the tier applies as nothing (same
+          // rule as the mint); the proposal still closes as reviewed.
+          const tier = normalizeClassification(pf.classification);
+          if (tier) { wine.classification = tier; applied.push('classification'); }
+        }
         if (pf.appellation) {
           // Tier-strip AND curated-registry resolve. Approving a proposal is a
           // registry WRITE, so it owes the same canonicalization as the mint

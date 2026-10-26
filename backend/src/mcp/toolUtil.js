@@ -185,7 +185,16 @@ function pageParams(args, defLimit, maxLimit) {
   return { limit, offset };
 }
 
+// What belongs in the three registry fields every add/correct tool takes —
+// one text, so no tool schema drifts from the rule (GitHub discussion #1696).
+const FIELD_DESCRIPTIONS = {
+  region: 'The wine region NAME where THIS wine is grown (e.g. "Piedmont", "Barossa Valley") — never assumed from where the producer is based.',
+  appellation: 'The appellation as its register names it, WITHOUT the regulatory mark: "Barolo" not "Barolo DOCG", "Pauillac" not "Pauillac AOC". Premier/Grand Cru stays only where it is part of the legal name ("Chablis Premier Cru", "Saint-Émilion Grand Cru"). Never a quality tier.',
+  classification: 'A quality tier granted ON TOP of the appellation: Riserva, Gran Reserva, Grand Cru Classé en 1855, Cru Bourgeois, Premier Cru in Champagne, a German Prädikat (Kabinett, Spätlese). NEVER the regulatory mark (DOCG, DOC, AOC, IGT, AVA) — that follows from the appellation and is dropped on write.',
+};
+
 module.exports = {
+  FIELD_DESCRIPTIONS,
   ok,
   fail,
   objectId,
