@@ -259,7 +259,7 @@ function Wishlist() {
                     <div className="wine-meta">
                       {wd?.country?.name && <span>{wd.country.name}</span>}
                       {wd?.region?.name && <span>• {wd.region.name}</span>}
-                      {wd?.type && <span className={`wine-type-pill ${swatchType(wd)}`}>{wineTypeLabel(wd, t)}</span>}
+                      {(wd?.type || wd?.nonWine) && <span className={`wine-type-pill ${swatchType(wd)}`}>{wineTypeLabel(wd, t)}</span>}
                     </div>
                     {item.vintage && <span className="wishlist-item-vintage">{t('wishlist.vintageLine', { vintage: item.vintage })}</span>}
                     {item.notes && <p className="wishlist-item-notes">{item.notes}</p>}

@@ -518,7 +518,7 @@ function CellarVintage() {
                     <div className="cvb-wine-line">
                       {[wine.producer, wine.region?.name, wine.country?.name].filter(Boolean).join(' · ')}
                     </div>
-                    {wine.type && <span className={`wine-type-pill ${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>}
+                    {(wine.type || wine.nonWine) && <span className={`wine-type-pill ${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>}
                   </div>
                 </div>
               )}

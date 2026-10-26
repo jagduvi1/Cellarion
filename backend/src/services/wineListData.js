@@ -6,7 +6,7 @@ const { DRAFT_EXCLUDED } = require('./wineVisibility');
 const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { normalizeCurrency } = require('../config/currencies');
 
-const WINE_SELECT = 'name producer type appellation country region grapes classification';
+const WINE_SELECT = 'name producer type nonWine appellation country region grapes classification';
 const WINE_POPULATE = [
   { path: 'country', select: 'name translations' },
   { path: 'region', select: 'name translations' },

@@ -210,7 +210,8 @@ describe('POST /api/bottles — newWine mints at commit', () => {
     expect(userId).toBe(USER_ID);
     // allowPending: the commit path files an incomplete identity instead of
     // 400-ing the user's bottle away (pending-identity wines).
-    expect(opts).toEqual({ confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true, draft: false });
+    // nonWine: the Other category rides the same options; false for a wine.
+    expect(opts).toEqual({ confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true, draft: false, nonWine: false });
 
     // audit parity with every other registry-write surface: same action name,
     // same detail shape — plus IndexNow on a real creation
@@ -239,7 +240,7 @@ describe('POST /api/bottles — newWine mints at commit', () => {
     await post({ cellar: CELLAR_ID, vintage: '2019', newWine: { ...NEW_WINE, confirmCreate: true } });
 
     expect(findOrCreateWine.mock.calls[0][2]).toEqual({
-      confirmCreate: true, skipSiblingMatch: true, createdVia: 'ui', allowPending: true, draft: false,
+      confirmCreate: true, skipSiblingMatch: true, createdVia: 'ui', allowPending: true, draft: false, nonWine: false,
     });
   });
 

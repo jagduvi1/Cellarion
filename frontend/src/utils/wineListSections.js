@@ -12,26 +12,32 @@ export const TYPE_TITLES = {
   en: {
     red: 'Red Wines', white: 'White Wines', 'rosé': 'Rosé Wines',
     sparkling: 'Sparkling Wines', dessert: 'Dessert Wines', fortified: 'Fortified Wines',
+    other: 'Other', unknown: 'Unknown',
   },
   sv: {
     red: 'Röda Viner', white: 'Vita Viner', 'rosé': 'Rosévin',
     sparkling: 'Mousserande Viner', dessert: 'Dessertviner', fortified: 'Starkvin',
+    other: 'Övrigt', unknown: 'Okänd',
   },
   fr: {
     red: 'Vins Rouges', white: 'Vins Blancs', 'rosé': 'Vins Rosés',
     sparkling: 'Vins Effervescents', dessert: 'Vins de Dessert', fortified: 'Vins Fortifiés',
+    other: 'Autres', unknown: 'Inconnu',
   },
   de: {
     red: 'Rotweine', white: 'Weißweine', 'rosé': 'Roséweine',
     sparkling: 'Schaumweine', dessert: 'Dessertweine', fortified: 'Likörweine',
+    other: 'Sonstiges', unknown: 'Unbekannt',
   },
   es: {
     red: 'Vinos Tintos', white: 'Vinos Blancos', 'rosé': 'Vinos Rosados',
     sparkling: 'Vinos Espumosos', dessert: 'Vinos de Postre', fortified: 'Vinos Fortificados',
+    other: 'Otros', unknown: 'Desconocido',
   },
   it: {
     red: 'Vini Rossi', white: 'Vini Bianchi', 'rosé': 'Vini Rosati',
     sparkling: 'Spumanti', dessert: 'Vini da Dessert', fortified: 'Vini Liquorosi',
+    other: 'Altro', unknown: 'Sconosciuto',
   },
 };
 
@@ -53,7 +59,7 @@ export const LAST_BOTTLE_LABEL = {
 // Auto-mode grouping: the fields a heading level may group on, and the cap
 export const LEVEL_FIELDS = ['type', 'country', 'region', 'appellation'];
 export const MAX_LEVELS = 3;
-const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified', 'other'];
+const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified', 'other', 'unknown'];
 
 /**
  * The grouping levels in force: explicit `levels` (unknown fields and
@@ -102,6 +108,7 @@ function resolveEntry(entry, winesByKey, layout = {}, lang = 'en') {
     appellation: wine.appellation || '',
     grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
     type: wine.type || '',
+    nonWine: wine.nonWine === true,
     price: entry.listPrice != null ? entry.listPrice : item.avgPrice,
     glassPrice: entry.byGlass && entry.glassPrice != null ? entry.glassPrice : null,
     byGlass: !!entry.byGlass,
@@ -142,7 +149,8 @@ function formatTypeTitle(type, lang = 'en') {
 // A wine missing the field of a nested level falls back up the geography —
 // but never to the heading it already sits under: that goes to "Other", last.
 function groupKeyOf(wine, level, parentKey) {
-  if (level === 'type') return wine.type || 'other';
+  // Other = a drink that is not wine; a wine of unknown colour is its own group.
+  if (level === 'type') return wine.nonWine ? 'other' : (wine.type || 'unknown');
   if (level === 'country') return wine.country || 'Other';
   const key = level === 'region'
     ? (wine.region || wine.country)

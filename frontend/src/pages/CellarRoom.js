@@ -1422,7 +1422,7 @@ export default function CellarRoom() {
                 <div className="room-bottle-panel-info">
                   {wine?.producer && <p className="room-bottle-producer">{wine.producer}</p>}
                   <div className="room-bottle-meta">
-                    {wine?.type && <span className={`room-bottle-type type-${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>}
+                    {(wine?.type || wine?.nonWine) && <span className={`room-bottle-type type-${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>}
                     {bottle?.vintage && <span>{bottle.vintage}</span>}
                   </div>
                   {wine?.country?.name && (

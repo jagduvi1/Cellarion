@@ -425,6 +425,7 @@
 .bd-wine-placeholder.sparkling{ background: var(--wine-sparkling); }
 .bd-wine-placeholder.dessert  { background: var(--wine-dessert); }
 .bd-wine-placeholder.fortified{ background: var(--wine-fortified); }
+.bd-wine-placeholder.other{ background: var(--color-border); }
 
 .bd-wine-meta {
   padding: 1rem 0.25rem 0;
@@ -464,6 +465,7 @@
 .wine-type-pill.fortified{ background: var(--wine-fortified); color: var(--color-success); }
 .wine-type-pill.other    { background: var(--color-surface-hover); color: var(--color-text-secondary); }
 .bd-not-wine { margin-top: 0.75rem; }
+.bd-not-wine-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 
 /* ── Details card ── */
 .bd-details {

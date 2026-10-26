@@ -542,7 +542,7 @@ async function loadWines(ids) {
   const unique = [...new Set(ids.filter(Boolean).map(String))];
   if (unique.length === 0) return new Map();
   const wines = await WineDefinition.find({ _id: { $in: unique } })
-    .select('name producer appellation type country region grapes')
+    .select('name producer appellation type nonWine country region grapes')
     .populate('country', 'name')
     .populate('region', 'name')
     // regionalNames feed grapeSearchNames (regional display names match too).

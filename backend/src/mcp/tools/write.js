@@ -259,6 +259,14 @@ registerTool({
     }, ctx.req);
     if (result.error) return fail('invalid_input', result.error.message);
     const { bottle } = result;
+    // category "other" on a record the registry already had as wine: the
+    // user now holds a bottle, so their word applies or files, as on the page.
+    let notWine = null;
+    if (args.new_wine) {
+      const { applyOtherCategoryAfterAdd } = require('../../services/nonWineOps');
+      notWine = await applyOtherCategoryAfterAdd({ wine: wineDoc, newWine: args.new_wine, userId: ctx.user.id, req: ctx.req, via: 'mcp' });
+      if (notWine && notWine.status === 'applied') wineDoc.nonWine = true;
+    }
 
     const wineDraft = wineDoc.draft === true;
     // A draft is pending by invariant; "pending identity" here keeps its own
@@ -270,6 +278,7 @@ registerTool({
         bottle_id: bottle._id,
         wine: { ...wineSummary(wineDoc) },
         wine_created: wineCreated,
+        ...(notWine ? { not_wine: notWine, note: notWine.status === 'applied' ? 'The record was already in the registry as wine; on your word it is now in the Other category.' : notWine.status === 'filed' ? `The record was already in the registry as wine and ${notWine.holders} members hold it, so a curator will decide on the Other category; the bottle is saved.` : 'A curator proposal to move this record to Other is already waiting; the bottle is saved.' } : {}),
         // Say it plainly: the bottle is saved and usable, but the wine is not
         // shared registry content until a curator completes the identity.
         ...(pendingIdentity ? {

@@ -404,7 +404,8 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
  * through findOrCreateWine directly rather than through resolveOrMintWine.
  */
 function announceMintedWine(wine) {
-  if (wine && wine.pendingIdentity !== true && wine.draft !== true) submitUrls(`/wines/${wine.slug || wine._id}`);
+  // Nor for a drink that is not wine (the Other category): no public page.
+  if (wine && wine.pendingIdentity !== true && wine.draft !== true && wine.nonWine !== true) submitUrls(`/wines/${wine.slug || wine._id}`);
 }
 
 module.exports = {

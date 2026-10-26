@@ -1221,6 +1221,8 @@
     "notWineFiled": "Several members hold this one, so a curator will look at it.",
     "notWinePending": "A curator is already looking at this one.",
     "notWineError": "That did not work. Please try again later.",
+    "notWineConfirm": "Move it to Other? It leaves the shared wine registry for everyone who holds it, and an admin would have to bring it back.",
+    "notWineConfirmAction": "Yes, it is not wine",
     "loadingMaturity": "Loading…",
     "awaitingSommelier": "Awaiting staff review",
     "sommelierWillSet": "Our staff will set the aging window for this vintage soon.",

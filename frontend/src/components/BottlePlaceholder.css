@@ -17,6 +17,7 @@
 .bottle-placeholder--sparkling { --bp-glass: #3f5b34; }  /* champagne green */
 .bottle-placeholder--dessert   { --bp-glass: #b8742a; }  /* amber */
 .bottle-placeholder--fortified { --bp-glass: #5a2a16; }  /* tawny */
+.bottle-placeholder--other     { --bp-glass: #8a8a8a; }  /* not wine: neutral */
 
 /* On a dark page a dark bottle needs a light edge to keep its shape. */
 [data-theme="dark"] .bottle-placeholder {

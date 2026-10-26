@@ -55,7 +55,7 @@ const BOTTLE_SELECT = [
 const INVENTORY_WINE_POPULATE = [
   {
     path: 'wineDefinition',
-    select: 'name producer type colour country region appellation classification grapes image',
+    select: 'name producer type colour nonWine country region appellation classification grapes image',
     populate: [
       { path: 'country', select: 'name' },
       { path: 'region', select: 'name' },
@@ -109,6 +109,9 @@ function wineOf(wine, profile) {
     name: text(w.name),
     producer: text(w.producer),
     type: text(w.type),
+    // 'other' = a drink that is not wine (cider, beer, spirits), outside the
+    // shared wine registry; its type is then null.
+    category: w.nonWine === true ? 'other' : 'wine',
     colour: text(w.colour),
     country: text(w.country && w.country.name),
     region: text(w.region && w.region.name),

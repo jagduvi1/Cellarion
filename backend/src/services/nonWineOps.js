@@ -10,58 +10,36 @@
  * by curators only, hours after a member had added a cider as "sparkling";
  * now the member says so up front (add form, import, MCP: category "other")
  * or moves a drink to Other from the bottle page, which is what this module
- * does. One quarantine procedure for every path that flags a row.
+ * does.
+ *
+ * ONE quarantine procedure: a member's move is the same non_wine proposal the
+ * sommelier files, decided by the same rule (services/proposalDirectApply:
+ * direct while at most a few members hold the row) and applied by the same
+ * code (routes/admin/wineProposals.approveProposal), so Admin → Proposals
+ * shows every move under Decided with its Restore button, and a flag an
+ * admin wants to re-seed or revisit has one place to look.
  */
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
-const WineEmbedding = require('../models/WineEmbedding');
-const WineVintageProfile = require('../models/WineVintageProfile');
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
 const { logAudit } = require('./audit');
 const { isValidId } = require('../utils/validation');
-const { countHoldingMembers, NON_WINE_DIRECT_MAX_OWNERS } = require('./proposalDirectApply');
+const { classifyProposal, countHoldingMembers } = require('./proposalDirectApply');
 
-// The curator reads this on the proposal a member's action files when too
-// many members hold the row for the flag to apply on their word alone.
+// The curator reads this on the proposal when too many members hold the row
+// for the flag to apply on one member's word.
 const NOT_WINE_REASON = 'A bottle owner marked this record as a drink that is not wine (cider, beer, spirits or a soft drink), from their bottle page.';
 
 /**
- * Flag a row as not wine and complete the quarantine: it leaves the search
- * index (indexWine owns membership and drops a flagged row), its vectors go
- * (semantic search and the similar-wines graph would keep showing it), and
- * its PENDING maturity rows go (auto-seeded stubs; a REVIEWED window is
- * curated data and stays with the record). Owners keep their bottles.
- *
- * @param {object} wine  a WineDefinition document (saved here)
- * @param {{req?: object, via: string}} opts  via = 'member' | 'mcp' | 'admin' | …
+ * Does this member hold a bottle of the wine in a cellar they can EDIT — their
+ * own, or one shared with them as an editor? A viewer of a shared cellar may
+ * not change a bottle note; they do not get to move the owner's wine either.
  */
-async function quarantineAsNonWine(wine, { req = null, via }) {
-  const alreadyFlagged = wine.nonWine === true;
-  if (!alreadyFlagged) {
-    wine.nonWine = true;
-    await wine.save();
-  }
-  // services/search top-requires the ESM-only meilisearch package: lazy, like
-  // every other caller outside the route layer.
-  const searchService = require('./search');
-  searchService.indexWine(wine._id);
-  await WineEmbedding.deleteMany({ wineDefinition: wine._id });
-  let pendingRemoved = 0;
-  if (!alreadyFlagged) {
-    const del = await WineVintageProfile.deleteMany({ wineDefinition: wine._id, status: 'pending' });
-    pendingRemoved = del.deletedCount || 0;
-  }
-  logAudit(req, 'wine.nonWine', { type: 'wine', id: wine._id },
-    { value: true, via, name: wine.name, producer: wine.producer || null, pendingRemoved });
-  return { alreadyFlagged, pendingRemoved };
-}
-
-/** Does this member hold a bottle of the wine, in a cellar of theirs or one shared with them? */
 async function holdsBottleOf(userId, wineId) {
   const cellarIds = await Cellar.distinct('_id', {
     deletedAt: null,
-    $or: [{ user: userId }, { 'members.user': userId }],
+    $or: [{ user: userId }, { members: { $elemMatch: { user: userId, role: 'editor' } } }],
   });
   if (!cellarIds.length) return false;
   return Boolean(await Bottle.exists({ wineDefinition: wineId, cellar: { $in: cellarIds } }));
@@ -70,14 +48,13 @@ async function holdsBottleOf(userId, wineId) {
 /**
  * A member moves a drink that is not wine to the Other category.
  *
- * Applies at once while at most NON_WINE_DIRECT_MAX_OWNERS members hold
- * bottles of the row (the sommelier's own direct-apply rule): hiding a row
- * from a handful of people on one of their word is reversible and cheap.
- * With more holders it files the same non_wine proposal the sommelier would,
- * and a curator decides. Only a member who holds a bottle of it (or created
- * it) may ask.
+ * Files the non_wine proposal and, when the direct-apply rule allows it (at
+ * most NON_WINE_DIRECT_MAX_OWNERS members hold bottles of the row), applies
+ * it at once as the sommelier's own filings do. Otherwise the proposal waits
+ * for a curator. Only a member who holds a bottle of it in a cellar they can
+ * edit (or who created the row) may ask.
  *
- * @returns {Promise<{ok: true, status: 'applied'|'already'|'filed'|'pending', category: 'other'|'wine', holders?: number, pendingRemoved?: number}
+ * @returns {Promise<{ok: true, status: 'applied'|'already'|'filed'|'pending', category: 'other'|'wine', holders?: number}
  *                 | {ok: false, code: 'invalid'|'not_found'|'forbidden', message: string}>}
  */
 async function markNotWineByMember({ wineId, userId, req = null, via = 'member' }) {
@@ -89,17 +66,12 @@ async function markNotWineByMember({ wineId, userId, req = null, via = 'member' 
 
   const holds = String(wine.createdBy || '') === String(userId) || await holdsBottleOf(userId, wine._id);
   if (!holds) {
-    return { ok: false, code: 'forbidden', message: 'Only a member who holds a bottle of it can move a drink to Other.' };
+    return { ok: false, code: 'forbidden', message: 'Only a member who holds a bottle of it in a cellar they can edit can move a drink to Other.' };
   }
 
-  const holders = await countHoldingMembers(wine._id);
-  if (holders <= NON_WINE_DIRECT_MAX_OWNERS) {
-    const { pendingRemoved } = await quarantineAsNonWine(wine, { req, via });
-    return { ok: true, status: 'applied', category: 'other', holders, pendingRemoved };
-  }
-
+  let proposal;
   try {
-    await WineCorrectionProposal.create({
+    proposal = await WineCorrectionProposal.create({
       proposer: userId,
       wineDefinition: wine._id,
       kind: 'non_wine',
@@ -116,12 +88,43 @@ async function markNotWineByMember({ wineId, userId, req = null, via = 'member' 
   } catch (err) {
     // One pending proposal per (wine, kind): somebody — a member or the
     // sommelier — already asked, and a curator has not decided yet.
-    if (err && err.code === 11000) return { ok: true, status: 'pending', category: 'wine', holders };
+    if (err && err.code === 11000) return { ok: true, status: 'pending', category: 'wine' };
     throw err;
   }
   logAudit(req, 'wine.nonWineProposed', { type: 'wine', id: wine._id },
-    { via, holders, name: wine.name, producer: wine.producer || null });
-  return { ok: true, status: 'filed', category: 'wine', holders };
+    { via, name: wine.name, producer: wine.producer || null });
+
+  const verdict = await classifyProposal(wine, 'non_wine', null);
+  if (!verdict.direct) {
+    return { ok: true, status: 'filed', category: 'wine', holders: await countHoldingMembers(wine._id) };
+  }
+
+  // Required lazily: the admin route tree requires the MCP registry, which
+  // requires the tools, which require this module (the sommelier tool does
+  // the same for the same reason). approveProposal reads req.user.id for
+  // decidedBy; a request-less caller (MCP contexts, scripts) gets a stand-in.
+  const { approveProposal } = require('../routes/admin/wineProposals');
+  const asReq = req && req.user ? req : { user: { id: userId } };
+  const outcome = await approveProposal(proposal._id, asReq);
+  if (outcome.status !== 200) {
+    // The proposal stays pending and a curator picks it up: a failed
+    // self-apply must never read as a success.
+    console.warn(`[nonWine] self-apply declined for proposal ${proposal._id}: ${outcome.status} ${outcome.body?.error || ''}`);
+    return { ok: true, status: 'filed', category: 'wine' };
+  }
+  return { ok: true, status: 'applied', category: 'other' };
 }
 
-module.exports = { quarantineAsNonWine, markNotWineByMember, holdsBottleOf, NOT_WINE_REASON };
+/**
+ * An add with category "other" that resolved to a record the registry already
+ * had as WINE: the member's choice is not dropped — they now hold a bottle of
+ * it, so the move runs as from the bottle page (applied, or filed for a
+ * curator). Null when nothing is to do.
+ */
+async function applyOtherCategoryAfterAdd({ wine, newWine, userId, req = null, via = 'add' }) {
+  if (!wine || !newWine || newWine.category !== 'other' || wine.nonWine === true) return null;
+  const r = await markNotWineByMember({ wineId: wine._id, userId, req, via });
+  return r.ok ? { status: r.status, category: r.category, ...(r.holders !== undefined ? { holders: r.holders } : {}) } : null;
+}
+
+module.exports = { markNotWineByMember, applyOtherCategoryAfterAdd, holdsBottleOf, NOT_WINE_REASON };

@@ -36,9 +36,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const wine = bottle.wineDefinition;
   // "Not a wine? Move it to Other": the member's own word moves a cider or a
   // beer out of the shared wine registry (few holders) or asks a curator.
-  const [notWine, setNotWine] = useState({ busy: false, status: null, holders: 0 });
+  const [notWine, setNotWine] = useState({ busy: false, status: null, holders: 0, confirming: false });
   const moveToOther = async () => {
-    setNotWine({ busy: true, status: null, holders: 0 });
+    setNotWine({ busy: true, status: null, holders: 0, confirming: false });
     try {
       const res = await markNotWine(apiFetch, wine._id);
       const data = await res.json().catch(() => ({}));
@@ -200,12 +200,26 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
       ) : record}
       {/* The Other category: a drink that is not wine leaves the shared wine
           registry on its holder's word, or a curator's when many hold it. */}
-      {canEdit && wine && wine.nonWine !== true && wine.draft !== true && !user?.isDemo && (
+      {canEdit && wine && wine.draft !== true && !user?.isDemo && (notWine.status || wine.nonWine !== true) && (
         <div className="bd-not-wine">
           {notWine.status ? (
+            // Outlives the reload that follows an applied move: the block stays
+            // for the message even though the row is now in Other.
             <span className="bd-maturity-note">{notWineMessage[notWine.status] || notWineMessage.error}</span>
+          ) : notWine.confirming ? (
+            // A shared registry row leaves search, its vectors and its queued
+            // drink windows for everyone who holds it: ask once before doing it.
+            <span className="bd-not-wine-confirm">
+              <span className="bd-maturity-note">{t('bottleDetail.notWineConfirm', 'Move it to Other? It leaves the shared wine registry for everyone who holds it, and an admin would have to bring it back.')}</span>
+              <button type="button" className="bd-somm-notes-btn" disabled={notWine.busy} onClick={moveToOther}>
+                {t('bottleDetail.notWineConfirmAction', 'Yes, it is not wine')}
+              </button>
+              <button type="button" className="bd-somm-notes-btn" onClick={() => setNotWine((s) => ({ ...s, confirming: false }))}>
+                {t('common.cancel', 'Cancel')}
+              </button>
+            </span>
           ) : (
-            <button type="button" className="bd-somm-notes-btn" disabled={notWine.busy} onClick={moveToOther}>
+            <button type="button" className="bd-somm-notes-btn" onClick={() => setNotWine((s) => ({ ...s, confirming: true }))}>
               {t('bottleDetail.notWineAction', 'Not a wine? Move it to Other')}
             </button>
           )}

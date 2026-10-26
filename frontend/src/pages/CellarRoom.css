@@ -396,6 +396,7 @@
 .room-bottle-type.type-sparkling { background: #e8f8f0; color: #508040; }
 .room-bottle-type.type-dessert { background: #f8f0e0; color: #8a5020; }
 .room-bottle-type.type-fortified { background: #f0e8e0; color: #7a4020; }
+.room-bottle-type.type-other { background: #ececec; color: #666; }
 
 .room-bottle-region {
   margin: 0.15rem 0;
@@ -494,6 +495,7 @@
 .room-slot-type-dot.type-sparkling { background: #88A848; }
 .room-slot-type-dot.type-dessert { background: #A06020; }
 .room-slot-type-dot.type-fortified { background: #7A3810; }
+.room-slot-type-dot.type-other { background: #9A9A9A; }
 
 .room-slot-empty {
   font-size: 0.8rem;

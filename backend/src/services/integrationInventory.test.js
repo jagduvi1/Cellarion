@@ -119,6 +119,7 @@ describe('assembleInventory — the contract', () => {
       name: 'Château X',
       producer: 'Château X',
       type: 'red',
+      category: 'wine',
       colour: null,
       country: 'France',
       region: 'Pauillac',

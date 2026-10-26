@@ -54,6 +54,7 @@ const {
 // (or resolved) INSIDE the bottle create, never before it. Shared with the
 // wishlist route; findOrCreateWine itself is lazy-required inside the service.
 const { resolveOrMintWine } = require('../services/wineCommit');
+const { applyOtherCategoryAfterAdd } = require('../services/nonWineOps');
 const { parseExpectedArrival } = require('../utils/onOrder');
 const { moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
@@ -562,6 +563,13 @@ router.post('/', requireNonDemo, async (req, res) => {
     const result = await addBottle(cellarDoc, wineDoc, req.body, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     const { bottle } = result;
+    // The Other category on a record the registry already had as wine: the
+    // member now holds a bottle of it, so their word applies (few holders)
+    // or files for a curator, exactly as from the bottle page. Before the
+    // populate, so the answer shows the row as it now is.
+    const notWine = newWine
+      ? await applyOtherCategoryAfterAdd({ wine: wineDoc, newWine, userId: req.user.id, req, via: 'add' })
+      : null;
     await bottle.populate(WINE_POPULATE);
 
     // Custom fields typed in the add form (user ticket 6ab05cca — "adding ABV
@@ -639,6 +647,7 @@ router.post('/', requireNonDemo, async (req, res) => {
     res.status(201).json({
       bottle,
       priceWarnings,
+      ...(notWine ? { notWine } : {}),
       ...(customFieldErrors.length > 0 ? { customFieldErrors } : {}),
     });
   } catch (error) {

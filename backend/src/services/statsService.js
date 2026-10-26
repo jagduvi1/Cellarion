@@ -261,7 +261,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     consumptionByReason[reason] = (consumptionByReason[reason] || 0) + 1;
 
     const cwd = b.wineDefinition;
-    if (cwd?.type) consumedByType[cwd.type] = (consumedByType[cwd.type] || 0) + 1;
+    if (cwd?.type || cwd?.nonWine === true) consumedByType[statType(cwd)] = (consumedByType[statType(cwd)] || 0) + 1;
     if (cwd?.region?.name) consumedByRegion[cwd.region.name] = (consumedByRegion[cwd.region.name] || 0) + 1;
     if (cwd?.country?.name) consumedByCountry[cwd.country.name] = (consumedByCountry[cwd.country.name] || 0) + 1;
     if (cwd?.producer) consumedByProducer[cwd.producer] = (consumedByProducer[cwd.producer] || 0) + 1;
@@ -302,7 +302,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     }
 
     if (reason === 'drank' && b.consumedRating && b.price) {
-      const type     = b.wineDefinition?.type || 'unknown';
+      const type     = statType(b.wineDefinition);
       const priceCvt = toTarget(b.price, b.currency || 'USD');
       if (priceCvt && priceCvt > 0) {
         const normCR = toNormalized(b.consumedRating, b.consumedRatingScale || '5');
