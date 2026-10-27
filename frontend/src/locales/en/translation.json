@@ -67,7 +67,12 @@
       "pour_careful": "open and pour; sediment is likely, so pour carefully"
     },
     "byStyle": "Style guideline",
-    "bySommelier": "Set by the sommelier"
+    "bySommelier": "Set by the sommelier",
+    "needsAir": {
+      "long": "needs one to two hours of air when young",
+      "short": "a little air helps when young",
+      "none": "no decanting"
+    }
   },
   "nav": {
     "myCellars": "My Cellars",

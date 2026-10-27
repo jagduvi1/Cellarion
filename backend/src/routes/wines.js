@@ -1109,6 +1109,18 @@ router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res
     const member = !!req.user && !req.user.isDemo;
     const payload = tierWinePayload(decorateGrapes(wine), { full: member });
     delete payload.canary;
+    // Wine-level serving advice for everyone: the temperature (the
+    // sommelier's or the style's) and the air trait. Not tiered — it is not
+    // the drink-window data members pay attention for — and composed from the
+    // untiered record, so a visitor gets the sommelier's temperature too. The
+    // decanting advice for a bottle's age stays on the bottle page.
+    {
+      const { servingAdvice } = require('../utils/servingUtils');
+      const advice = servingAdvice(wine, null);
+      payload.serving = advice
+        ? { temperature: advice.temperature, unit: 'C', needsAir: (wine.aiProfile && wine.aiProfile.needsAir) || null }
+        : null;
+    }
     // The page around the wine (links, region and grape notes, related
     // wines, drink windows for members only), behind the same counted read.
     // Optional: when it fails the wine itself still answers.

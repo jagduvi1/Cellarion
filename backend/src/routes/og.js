@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const { recordRead, readerFor } = require('../services/registryReadTracker');
 const { publicProfileSummary } = require('../services/registryTiering');
+const { servingAdvice, servingSentence } = require('../utils/servingUtils');
 const { buildWinePageContext } = require('../services/winePageContext');
 const BlogPost = require('../models/BlogPost');
 const Country = require('../models/Country');
@@ -623,6 +624,10 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     // (registryTiering: the description and a style sentence, never the
     // structured arrays), so search engines read the page people read.
     const tasting = publicProfileSummary(wine.aiProfile);
+    // Wine-level serving line (temperature by the sommelier or the style; no
+    // decanting advice, which needs a bottle's age) — the same line the page
+    // shows, so readers and crawlers see it too.
+    const servingLine = servingSentence(servingAdvice(wine, null));
     // Meta description under 160 chars, cut on a word. With tasting prose it
     // is this wine's own text instead of the line every wine page shares.
     const fullDesc = tasting
@@ -811,6 +816,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     ${hasRating && ratingOn5 != null ? `<p><strong>Community rating:</strong> ${ratingOn5.toFixed(1)}/5 from ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}</p>` : ''}
     ${wine.image ? `<img src="${esc(imageUrl)}" alt="${esc(wine.name)}" width="300" />` : ''}
     ${tasting ? `<section><h2>Tasting profile${tasting.source === 'ai' ? ' (AI-generated)' : ''}</h2>${tasting.style ? `<p><strong>Structure:</strong> ${esc(tasting.style)}</p>` : ''}<p>${esc(tasting.description)}</p></section>` : ''}
+    ${servingLine ? `<p><strong>Serving:</strong> ${esc(servingLine)}</p>` : ''}
     ${reviewedVintages > 0 ? `<section><h2>When to drink</h2><p>Cellarion's sommeliers have reviewed the drink window of ${reviewedVintages} ${vintagesWord} of ${esc(wine.name)}. <a href="${esc(SITE_URL)}/login?mode=register">Sign up free</a> to see ${whenReady}.</p></section>` : ''}
     ${whereFromHtml}
     ${moreWinesHtml}
