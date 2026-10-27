@@ -66,8 +66,6 @@
       "pour": "open and pour",
       "pour_careful": "open and pour; sediment is likely, so pour carefully"
     },
-    "byStyle": "Style guideline",
-    "bySommelier": "Set by the sommelier",
     "needsAir": {
       "long": "needs one to two hours of air when young",
       "short": "a little air helps when young",

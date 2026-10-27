@@ -44,10 +44,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const serving = servingAdvice(wine, servingPhase);
   const servingLine = serving ? (
     <p className="bd-maturity-note bd-serving">
-      {servingText(serving, t, temperatureUnitOf(user))}{' '}
-      <span className="bd-serving-source">
-        ({serving.temperature.source === 'sommelier' || serving.air?.source === 'sommelier' ? t('serving.bySommelier') : t('serving.byStyle')})
-      </span>
+      {servingText(serving, t, temperatureUnitOf(user))}
     </p>
   ) : null;
   // "Not a wine? Move it to Other": the member's own word moves a cider or a

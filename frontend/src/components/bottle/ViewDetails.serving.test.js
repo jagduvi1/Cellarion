@@ -15,8 +15,6 @@ vi.mock('react-i18next', () => ({
         'serving.temperature': `Serve at ${opts.range}`,
         'serving.air.decant_long': 'decant one to two hours before serving',
         'serving.air.pour': 'open and pour',
-        'serving.bySommelier': 'Set by the sommelier',
-        'serving.byStyle': 'Style guideline',
       }[key];
       return text || (typeof a === 'string' ? a : key);
     },
@@ -61,19 +59,19 @@ test('a young wine that needs air: the sommelier\'s temperature and "decant", fr
   renderDetails({ vintageProfile });
   const line = document.querySelector('.bd-serving');
   expect(line).not.toBeNull();
-  expect(line.textContent).toBe('Serve at 16–18 °C; decant one to two hours before serving. (Set by the sommelier)');
+  expect(line.textContent).toBe('Serve at 16–18 °C; decant one to two hours before serving.');
 });
 
 test('with no window yet, the line shows the style\'s temperature and no guess about the wine\'s age', () => {
   renderDetails({ bottle: bottle({ wineDefinition: { _id: 'w2', name: 'Cru', type: 'red', grapes: [], aiProfile: { body: 'light' } } }) });
-  expect(document.querySelector('.bd-serving').textContent).toBe('Serve at 13–15 °C. (Style guideline)');
+  expect(document.querySelector('.bd-serving').textContent).toBe('Serve at 13–15 °C.');
 });
 
 test('a member who reads Fahrenheit sees the same advice in °F', () => {
   unit = 'F';
   try {
     renderDetails({ bottle: bottle({ wineDefinition: { _id: 'w4', name: 'Cru', type: 'red', grapes: [], aiProfile: { body: 'full' } } }) });
-    expect(document.querySelector('.bd-serving').textContent).toBe('Serve at 61–64 °F. (Style guideline)');
+    expect(document.querySelector('.bd-serving').textContent).toBe('Serve at 61–64 °F.');
   } finally {
     unit = 'C';
   }
