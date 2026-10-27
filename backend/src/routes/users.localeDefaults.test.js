@@ -66,7 +66,19 @@ test('saves language + currency only while the first-sign-in flag is set, cleari
   // One query when it applies, and the automatic change is on record.
   expect(User.findById).not.toHaveBeenCalled();
   expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'user.locale_defaults',
-    { type: 'user', id: USER }, { language: 'sv', currency: 'SEK' });
+    { type: 'user', id: USER }, { language: 'sv', currency: 'SEK', temperatureUnit: null });
+});
+
+test('the temperature unit the device guessed is saved and recorded with the rest', async () => {
+  User.findOneAndUpdate.mockResolvedValue(SAVED);
+
+  const res = await post({ language: 'en', currency: 'USD', temperatureUnit: 'f' });
+
+  expect(res.status).toBe(200);
+  const [, update] = User.findOneAndUpdate.mock.calls[0];
+  expect(update.$set).toEqual({ 'preferences.language': 'en', 'preferences.currency': 'USD', 'preferences.temperatureUnit': 'F' });
+  expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'user.locale_defaults',
+    { type: 'user', id: USER }, { language: 'en', currency: 'USD', temperatureUnit: 'F' });
 });
 
 test('answers applied:false when the flag is gone (older account, or already saved) and records nothing', async () => {
