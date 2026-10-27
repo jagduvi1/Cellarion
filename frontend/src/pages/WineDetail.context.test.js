@@ -67,6 +67,27 @@ test('a visitor sees how many vintages are reviewed and a sign-up link, never th
   expect(document.body.textContent).not.toMatch(/2027|2029/);
 });
 
+// The serving line everyone sees on the wine page: the temperature in the
+// reader's unit and the air trait in words; the per-bottle decanting advice
+// stays on the bottle page.
+test('a visitor sees the serving temperature and the air trait, a member in the unit they chose', async () => {
+  const serving = { temperature: { min: 8, max: 10, source: 'style' }, unit: 'C', needsAir: 'none' };
+  auth = { apiFetch: fetchWine, user: null };
+  body = { wine: { ...WINE, serving }, context: CONTEXT };
+  const { unmount } = renderPage();
+  await screen.findByText('wineDetail.whenToDrink');
+  expect(document.querySelector('.bd-ai-serving').textContent)
+    .toBe('serving.label:serving.temperature|{"range":"8–10 °C"} · serving.needsAir.none (serving.bySommelier)');
+  unmount();
+
+  auth = { apiFetch: fetchWine, user: { id: 'u1', preferences: { temperatureUnit: 'F' } } };
+  body = { wine: { ...WINE, serving: { ...serving, needsAir: null } }, context: CONTEXT };
+  renderPage();
+  await screen.findByText('wineDetail.whenToDrink');
+  expect(document.querySelector('.bd-ai-serving').textContent)
+    .toBe('serving.label:serving.temperature|{"range":"46–50 °F"} (serving.byStyle)');
+});
+
 test('a member sees the drink windows', async () => {
   auth = { apiFetch: fetchWine, user: { id: 'u1', preferences: {} } };
   body = { wine: WINE, context: { ...CONTEXT, drinkWindows: [WINDOW] } };

@@ -155,4 +155,12 @@ describe('GET /api/wines/:idOrSlug/public', () => {
     expect(status).toBe(200);
     expect(body.wine.grapes[0].displayName).toBe('Tinta Roriz');
   });
+
+  // The serving line everyone sees: the style's temperature until the
+  // sommelier sets one (utils/servingUtils), never tiered away.
+  test('the public wine page carries wine-level serving advice', async () => {
+    WineDefinition.findOne.mockReturnValue(chain(wineDoc()));
+    const { body } = await get(`/api/wines/${WINE_ID}/public`);
+    expect(body.wine.serving).toEqual({ temperature: { min: 12, max: 16, source: 'style' }, unit: 'C', needsAir: null });
+  });
 });

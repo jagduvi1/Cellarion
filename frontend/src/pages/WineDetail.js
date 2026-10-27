@@ -5,6 +5,25 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
+import { formatTemperatureRange, temperatureUnitOf } from '../utils/temperature';
+
+// Wine-level serving advice from the API: the temperature (the sommelier's or
+// the style's) in the reader's unit, and the air trait in words. The decanting
+// advice for a bottle's age lives on the bottle page, where the age is known.
+function ServingLine({ serving, user, t }) {
+  if (!serving?.temperature) return null;
+  const range = formatTemperatureRange(serving.temperature.min, serving.temperature.max, temperatureUnitOf(user));
+  const bySommelier = serving.temperature.source === 'sommelier' || !!serving.needsAir;
+  return (
+    <div className="bd-ai-pairings bd-ai-serving">
+      <span className="bd-ai-pairings__label">{t('serving.label', { defaultValue: 'Serving' })}:</span>
+      {t('serving.temperature', { range, defaultValue: 'Serve at {{range}}' })}
+      {serving.needsAir ? ` · ${t(`serving.needsAir.${serving.needsAir}`)}` : ''}
+      {' '}
+      <span className="bd-serving-source">({bySommelier ? t('serving.bySommelier', { defaultValue: 'Set by the sommelier' }) : t('serving.byStyle', { defaultValue: 'Style guideline' })})</span>
+    </div>
+  );
+}
 import { fromNormalized } from '../utils/ratingUtils';
 import Layout from '../components/Layout';
 import SEOHead from '../components/SEOHead';
@@ -301,6 +320,7 @@ export default function WineDetail() {
               {wine.aiProfile.foodPairings.join(' · ')}
             </div>
           )}
+          <ServingLine serving={wine.serving} user={user} t={t} />
         </div>
       )}
 
@@ -317,6 +337,7 @@ export default function WineDetail() {
           <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.9rem' }}>
             {t('wineDetail.profilePendingBody', 'This wine hasn’t been assessed yet. A tasting profile appears here once it has been.')}
           </p>
+          <ServingLine serving={wine.serving} user={user} t={t} />
         </div>
       )}
 
