@@ -1,9 +1,26 @@
 /**
- * Strips all HTML tags from a user-supplied string to prevent XSS in rendered output.
+ * Strips HTML markup from a user-supplied plain-text string.
+ *
+ * Markup is what an HTML parser reads as markup: a '<' followed by an ASCII
+ * letter, '/', '!' or '?' opens a tag, end tag, comment, doctype or processing
+ * instruction, and everything up to its closing '>' is removed (an unclosed
+ * one drops the rest of the input). Any other '<' or '>' is text and is kept,
+ * so "drink < 2030", "<3", "> 4" and "a -> b" are stored as typed. A '<' glued
+ * to a letter ("a<b") opens a tag in a browser, so it is stripped like one;
+ * a written comparison has a space or a digit after the sign.
+ *
+ * The result never contains a '<' that opens markup, so it reads as text in
+ * any HTML parser. It is still not escaped: a page or email that puts it into
+ * HTML escapes it there ('&', quotes and the kept '<' and '>').
+ *
  * Uses a linear character-by-character scan instead of regex to avoid ReDoS.
  * Returns the original value unchanged if it is null/undefined/empty.
  */
 const STRIP_HTML_MAX_LEN = 10_000;
+
+function opensMarkup(ch) {
+  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '/' || ch === '!' || ch === '?';
+}
 
 function stripHtml(str) {
   if (!str) return str;
@@ -15,22 +32,29 @@ function stripHtml(str) {
   // routes call this on raw body fields BEFORE their length validation, so a
   // throw here would turn an oversized paste into a generic 500 instead of
   // the per-field 400 the downstream length checks produce.
-  let result = '';
+  const out = [];
   let depth = 0;
   // Loop bound is the literal constant (not str.length) so the scan is
   // provably bounded regardless of the input's length.
   for (let i = 0; i < STRIP_HTML_MAX_LEN; i++) {
     if (i >= str.length) break;
     const ch = str[i];
-    if (ch === '<') {
+    if (ch === '<' && opensMarkup(str[i + 1])) {
+      // Nested openers count, so "<scr<script>ipt>" needs both '>' before
+      // text resumes.
       depth++;
-    } else if (ch === '>') {
-      if (depth > 0) depth--;
-    } else if (depth === 0) {
-      result += ch;
+    } else if (depth > 0) {
+      if (ch === '>') depth--;
+    } else {
+      // Removing a tag can join a kept '<' to the text after it ("<<b>x"
+      // would leave "<x"); such a '<' opens markup after all, so drop it.
+      if (opensMarkup(ch)) {
+        while (out.length > 0 && out[out.length - 1] === '<') out.pop();
+      }
+      out.push(ch);
     }
   }
-  return result.trim();
+  return out.join('').trim();
 }
 
 /**
