@@ -9,6 +9,7 @@ import { CURRENCIES, normalizeCurrency } from '../../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel, normalizeBottleSize } from '../../config/bottleSizes';
 import RatingInput from '../RatingInput';
 import { isOnOrder, toMonthInput } from '../../utils/onOrder';
+import { parseVintageInput, vintageInputProps } from '../../utils/vintage';
 
 const ImageUpload = lazy(() => import('../ImageUpload'));
 const ImageGallery = lazy(() => import('../ImageGallery'));
@@ -101,6 +102,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
       const { expectedArrival, ...formFields } = form;
       const payload = {
         ...formFields,
+        vintage: parseVintageInput(form.vintage, t),
         ...(isOnOrder(bottle) ? { expectedArrival: expectedArrival || null } : {}),
         price:  form.price  ? parseFloat(form.price)  : null,
         rating: form.rating ? parseFloat(form.rating) : null,
@@ -157,9 +159,8 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
             value={form.vintage}
             onChange={set('vintage')}
             placeholder={t('bottleDetail.vintagePlaceholder')}
-            pattern="^(?:[Nn][Vv]|[Uu]nknown|(?:19|20)\d{2})$"
+            {...vintageInputProps(t)}
             title={t('bottleDetail.vintagePattern')}
-            maxLength={7}
           />
         </div>
 

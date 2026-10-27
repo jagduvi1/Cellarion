@@ -9,7 +9,7 @@ import './AddBottle.css';
 import WineImage from '../components/WineImage';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './Wishlist.css';
-import { formatVintage } from '../utils/vintage';
+import { formatVintage, parseVintageInput } from '../utils/vintage';
 
 const PRIORITY_KEYS = { high: 'wishlist.priorityHigh', medium: 'wishlist.priorityMedium', low: 'wishlist.priorityLow' };
 
@@ -153,7 +153,7 @@ function Wishlist() {
       const res = await updateWishlistItem(apiFetch, editItem._id, {
         notes: editNotes,
         priority: editPriority,
-        vintage: editVintage
+        vintage: parseVintageInput(editVintage, t)
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || t('wishlist.failedUpdate')); return; }

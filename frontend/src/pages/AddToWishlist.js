@@ -16,7 +16,7 @@ import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddToWishlist.css';
 import { backLabel } from '../utils/backLabel';
-import { formatVintage } from '../utils/vintage';
+import { formatVintage, parseVintageInput } from '../utils/vintage';
 
 function AddToWishlist() {
   const { t } = useTranslation();
@@ -569,7 +569,7 @@ function AddToWishlist() {
     setSaving(true);
     try {
       const body = {
-        vintage: vintage || undefined,
+        vintage: parseVintageInput(vintage, t) || undefined,
         notes: notes || undefined,
         priority
       };
