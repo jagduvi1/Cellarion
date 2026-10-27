@@ -104,6 +104,12 @@ function Layout({ children }) {
                   {t('nav.myCellars')}
                 </Link>
                 <Link
+                  to="/bottles?status=all"
+                  className={`nav-link ${isActive('/bottles') ? 'active' : ''}`}
+                >
+                  {t('nav.search')}
+                </Link>
+                <Link
                   to="/dashboard"
                   className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}
                 >
@@ -309,6 +315,7 @@ function Layout({ children }) {
         {user && mobileMenuOpen && (
           <div className="mobile-menu">
             <div className="mobile-menu-section">
+              <Link to="/bottles?status=all" className={`mobile-menu-link ${isActive('/bottles') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.search')}</Link>
               <Link to="/community/discussions" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.community')}</Link>
               <Link to="/wishlist" className={`mobile-menu-link ${isActive('/wishlist') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.wishlist')}</Link>
               {pickListsOn && <Link to="/pick-lists" className={`mobile-menu-link ${isActive('/pick-lists') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.pickLists', 'Pick lists')}</Link>}

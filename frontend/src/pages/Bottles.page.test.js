@@ -59,3 +59,59 @@ test('a page that no longer exists (bottles drunk since) goes to the last one th
   await waitFor(() => expect(where.search).toBe('?type=red&page=4'));
   await waitFor(() => expect(offsets()).toContain('90'));
 });
+
+// A search box on the page: the entry point to searching every cellar at once.
+test('searching puts the query in the address, drops the page, and reloads the list', async () => {
+  renderAt('/bottles?type=red&page=2');
+  await waitFor(() => expect(offsets().length).toBeGreaterThan(0));
+  api.mockClear();
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: '  Two Wolves ' } });
+  fireEvent.submit(screen.getByRole('search'));
+  await waitFor(() => expect(where.search).toBe('?type=red&search=Two+Wolves'));
+  await waitFor(() => expect(offsets()).toEqual(['0']));
+  const url = api.mock.calls.map(([u]) => u).find((u) => u.startsWith('/api/bottles'));
+  expect(new URLSearchParams(url.split('?')[1]).get('search')).toBe('Two Wolves');
+});
+
+test('submitting an empty search removes the search filter', async () => {
+  renderAt('/bottles?search=Barolo');
+  expect(screen.getByRole('searchbox')).toHaveValue('Barolo');
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } });
+  fireEvent.submit(screen.getByRole('search'));
+  await waitFor(() => expect(where.search).toBe(''));
+});
+
+test('clearing the search chip also clears the box', async () => {
+  renderAt('/bottles?search=Barolo');
+  expect(screen.getByRole('searchbox')).toHaveValue('Barolo');
+  fireEvent.click(await screen.findByLabelText('bottles.removeFilter'));
+  await waitFor(() => expect(screen.getByRole('searchbox')).toHaveValue(''));
+});
+
+// Search defaults to bottles still in the cellar; the scope picker reaches
+// bottles already drunk, so a wine you just finished can still be found.
+test('the scope picker defaults to in-cellar', () => {
+  renderAt('/bottles');
+  expect(screen.getByRole('combobox')).toHaveValue('active');
+});
+
+test('the scope picker shows the status from the address', () => {
+  renderAt('/bottles?status=all');
+  expect(screen.getByRole('combobox')).toHaveValue('all');
+});
+
+test('choosing a wider scope puts the status in the address and reloads the list', async () => {
+  renderAt('/bottles?search=Predappio&page=2');
+  await waitFor(() => expect(offsets().length).toBeGreaterThan(0));
+  api.mockClear();
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'all' } });
+  await waitFor(() => expect(where.search).toBe('?search=Predappio&status=all'));
+  const url = api.mock.calls.map(([u]) => u).find((u) => u.startsWith('/api/bottles'));
+  expect(new URLSearchParams(url.split('?')[1]).get('status')).toBe('all');
+});
+
+test('going back to in-cellar drops the status from the address', async () => {
+  renderAt('/bottles?status=all');
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'active' } });
+  await waitFor(() => expect(where.search).toBe(''));
+});
