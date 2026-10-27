@@ -139,3 +139,24 @@ export function guessCurrency({ timeZone = deviceTimeZone(), languages = deviceL
   }
   return null;
 }
+
+// Where temperatures are read in Fahrenheit. The United States, and a few
+// places that follow it; everyone else, Canada and the UK included, reads °C.
+const FAHRENHEIT_REGIONS = new Set(['US', 'LR', 'MM', 'BS', 'BZ', 'KY', 'PW', 'FM', 'MH']);
+
+/**
+ * The temperature unit for a device: 'F' when its time zone's country reads
+ * Fahrenheit, or, with no known zone, when the first language tag names such
+ * a region ("en-US"); 'C' otherwise. Same inputs and defaults as guessCurrency.
+ */
+export function guessTemperatureUnit({ timeZone = deviceTimeZone(), languages = deviceLanguages() } = {}) {
+  const zoneRegion = timeZone ? (ZONE_REGION[timeZone] || null) : null;
+  if (zoneRegion) return FAHRENHEIT_REGIONS.has(zoneRegion) ? 'F' : 'C';
+  if (timeZone) return 'C'; // a known-Celsius zone that is not in the table (Europe/…, Australia/…)
+  const tags = Array.isArray(languages) ? languages : [];
+  for (const tag of tags) {
+    const region = explicitRegion(tag);
+    if (region) return FAHRENHEIT_REGIONS.has(region) ? 'F' : 'C';
+  }
+  return 'C';
+}

@@ -184,7 +184,7 @@ registerTool({
         const { servingAdvice, servingSentence } = require('../../utils/servingUtils');
         const advice = servingAdvice(w, null);
         return advice
-          ? { ...advice, needs_air: (w.aiProfile && w.aiProfile.needsAir) || null, advice: servingSentence(advice) }
+          ? { ...advice, unit: 'C', needs_air: (w.aiProfile && w.aiProfile.needsAir) || null, advice: servingSentence(advice) }
           : null;
       })(),
       // The same picture the public wine page shows; a caller's own pending

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMaturityStatus, getPersonalWindowStatus, maturityBadgeText } from '../../utils/drinkStatus';
 import { servingAdvice, servingText } from '../../utils/serving';
+import { temperatureUnitOf } from '../../utils/temperature';
 import { isReserved, reservationSummary } from '../../utils/reservation';
 import { bottleAnchorYear } from '../../utils/maturityUtils';
 import { convertAmountHistorical } from '../../utils/currency';
@@ -43,7 +44,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const serving = servingAdvice(wine, servingPhase);
   const servingLine = serving ? (
     <p className="bd-maturity-note bd-serving">
-      {servingText(serving, t)}{' '}
+      {servingText(serving, t, temperatureUnitOf(user))}{' '}
       <span className="bd-serving-source">
         ({serving.temperature.source === 'sommelier' || serving.air?.source === 'sommelier' ? t('serving.bySommelier') : t('serving.byStyle')})
       </span>

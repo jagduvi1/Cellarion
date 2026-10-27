@@ -157,6 +157,14 @@ const userSchema = new mongoose.Schema({
       enum: ['auto', 'room', 'rack'],
       default: 'auto'
     },
+    // How temperatures are SHOWN (serving line, climate cards). Stored values
+    // are always °C; this converts at display. Guessed once at first sign-in
+    // from the device's region (utils/localeDefaults), changed in Settings.
+    temperatureUnit: {
+      type: String,
+      enum: ['C', 'F'],
+      default: 'C'
+    },
     notifications: {
       // In-app notifications (the bell) are always on for every category —
       // they're a pull surface, not interruptive. The toggles below gate

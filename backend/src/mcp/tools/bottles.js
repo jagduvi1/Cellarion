@@ -319,7 +319,7 @@ async function buildBottleDetail(userId, bottleId) {
         // changes as the vintage ages, the record does not.
         serving: (() => {
           const advice = servingAdvice(wd, phase);
-          return advice ? { ...advice, phase, advice: servingSentence(advice) } : null;
+          return advice ? { ...advice, unit: 'C', phase, advice: servingSentence(advice) } : null;
         })(),
         // A PRIVATE DRAFT wine (support ticket 2026-09-12): the user's own
         // record, not shared registry content yet.

@@ -59,6 +59,7 @@ Content-Type: application/json
 | `readings[].channel` | yes | `[a-z0-9][a-z0-9_-]{0,63}` (case-insensitive) |
 | `readings[].type` | yes | `temperature` or `humidity` |
 | `readings[].value` | yes | number; accepted range −30…60 °C / 0…100 %RH (after calibration offset) |
+| `readings[].unit` | no | `C` (default) or `F` for a temperature reading. A `F` value is converted to °C on arrival; readings are stored and shown in °C (each member picks °C or °F in Settings). A Home Assistant install in imperial mode must send `F`. |
 | `readings[].ts` | no | ISO 8601. Omit to use server time. Accepted window: 48 h past … 5 min future (backfill after an outage is welcome) |
 | `firmware` | no | free-form string, shown on the device page |
 | `rssi` | no | Wi-Fi signal at the device, shown on the device page |
@@ -72,7 +73,7 @@ remainder is stored:
 
 `intervalS` is the *suggested* posting cadence (default 5 min); clients may
 honor it. When entries were rejected, an `errors` array lists the first few
-`{ index, reason }` pairs (`invalid_channel`, `invalid_type`, `invalid_value`,
+`{ index, reason }` pairs (`invalid_channel`, `invalid_type`, `invalid_value`, `invalid_unit`,
 `out_of_bounds`, `invalid_ts`, `ts_too_old`, `ts_in_future`, `channel_limit`,
 `daily_quota`).
 

@@ -1,4 +1,4 @@
-import { guessCurrency } from './localeDefaults';
+import { guessCurrency, guessTemperatureUnit } from './localeDefaults';
 
 describe('guessCurrency', () => {
   test('the time zone decides first: an English (US) browser in Stockholm is SEK', () => {
@@ -54,4 +54,22 @@ test('an English region tag outside Europe says nothing about money', () => {
   expect(guessCurrency({ timeZone: 'Asia/Dubai', languages: ['en-GB', 'en'] })).toBeNull();
   expect(guessCurrency({ timeZone: 'Asia/Bangkok', languages: ['sv-SE'] })).toBe('SEK');
   expect(guessCurrency({ timeZone: 'America/Puerto_Rico', languages: ['en-US'] })).toBe('USD');
+});
+
+describe('guessTemperatureUnit', () => {
+  test('a US time zone reads Fahrenheit; Canada, the UK and Europe read Celsius', () => {
+    expect(guessTemperatureUnit({ timeZone: 'America/New_York', languages: ['en-US'] })).toBe('F');
+    expect(guessTemperatureUnit({ timeZone: 'America/Los_Angeles', languages: ['sv-SE'] })).toBe('F');
+    expect(guessTemperatureUnit({ timeZone: 'America/Toronto', languages: ['en-US'] })).toBe('C');
+    expect(guessTemperatureUnit({ timeZone: 'Europe/London', languages: ['en-US'] })).toBe('C');
+    expect(guessTemperatureUnit({ timeZone: 'Europe/Stockholm', languages: ['en-US'] })).toBe('C');
+  });
+
+  test('a zone outside the table is Celsius; only an unknown zone lets the language tag decide', () => {
+    expect(guessTemperatureUnit({ timeZone: 'Australia/Sydney', languages: ['en-US'] })).toBe('C');
+    expect(guessTemperatureUnit({ timeZone: null, languages: ['en-US'] })).toBe('F');
+    expect(guessTemperatureUnit({ timeZone: null, languages: ['en-GB', 'en-US'] })).toBe('C');
+    expect(guessTemperatureUnit({ timeZone: null, languages: ['en'] })).toBe('C');
+    expect(guessTemperatureUnit({ timeZone: null, languages: [] })).toBe('C');
+  });
 });

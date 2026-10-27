@@ -12,7 +12,7 @@ vi.mock('react-i18next', () => ({
     t: (key, a, b) => {
       const opts = (a && typeof a === 'object') ? a : (b || {});
       const text = {
-        'serving.temperature': `Serve at ${opts.min}–${opts.max} °C`,
+        'serving.temperature': `Serve at ${opts.range}`,
         'serving.air.decant_long': 'decant one to two hours before serving',
         'serving.air.pour': 'open and pour',
         'serving.bySommelier': 'Set by the sommelier',
@@ -22,7 +22,8 @@ vi.mock('react-i18next', () => ({
     },
   }),
 }));
-vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1', roles: [] }, apiFetch: vi.fn() }) }));
+let unit = 'C';
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1', roles: [], preferences: { temperatureUnit: unit } }, apiFetch: vi.fn() }) }));
 vi.mock('../../api/wines', () => ({ markNotWine: vi.fn() }));
 vi.mock('./WineRecordSection', () => ({ default: () => null }));
 vi.mock('./ContributePrompt', () => ({ default: () => null }));
@@ -66,6 +67,16 @@ test('a young wine that needs air: the sommelier\'s temperature and "decant", fr
 test('with no window yet, the line shows the style\'s temperature and no guess about the wine\'s age', () => {
   renderDetails({ bottle: bottle({ wineDefinition: { _id: 'w2', name: 'Cru', type: 'red', grapes: [], aiProfile: { body: 'light' } } }) });
   expect(document.querySelector('.bd-serving').textContent).toBe('Serve at 13–15 °C. (Style guideline)');
+});
+
+test('a member who reads Fahrenheit sees the same advice in °F', () => {
+  unit = 'F';
+  try {
+    renderDetails({ bottle: bottle({ wineDefinition: { _id: 'w4', name: 'Cru', type: 'red', grapes: [], aiProfile: { body: 'full' } } }) });
+    expect(document.querySelector('.bd-serving').textContent).toBe('Serve at 61–64 °F. (Style guideline)');
+  } finally {
+    unit = 'C';
+  }
 });
 
 test('a drink that is not wine has no serving line', () => {

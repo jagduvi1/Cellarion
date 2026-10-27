@@ -36,6 +36,7 @@ const LANGUAGE_TAG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 // BCP-47 maximum.
 const LANGUAGE_TAG_MAX = 35;
 const ALLOWED_RATING_SCALES = ['5', '20', '100'];
+const ALLOWED_TEMPERATURE_UNITS = ['C', 'F'];
 const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
 const ALLOWED_RESTOCK_SCOPE = ['all', 'cellar'];
 const ALLOWED_VISIBILITY = ['public', 'private'];
@@ -52,8 +53,15 @@ const err = (status, message) => ({ status, message });
  * the user. Returns { update } or { error }.
  */
 async function buildPreferencesUpdate(userId, body = {}) {
-  const { currency, language, ratingScale, rackNavigation, restockScope, cellarSort, defaultCellarId, notifications, earlyAccess, collapsedBlocks } = body;
+  const { currency, language, ratingScale, rackNavigation, restockScope, cellarSort, defaultCellarId, notifications, earlyAccess, collapsedBlocks, temperatureUnit } = body;
   const update = {};
+
+  if (temperatureUnit !== undefined) {
+    if (typeof temperatureUnit !== 'string' || !ALLOWED_TEMPERATURE_UNITS.includes(temperatureUnit.toUpperCase())) {
+      return { error: err(400, `Invalid temperature unit. Allowed: ${ALLOWED_TEMPERATURE_UNITS.join(', ')}`) };
+    }
+    update['preferences.temperatureUnit'] = temperatureUnit.toUpperCase();
+  }
 
   // Notifications: per-category × per-channel booleans, explicitly allow-listed
   // so a caller can't inject arbitrary keys into preferences.notifications.
@@ -515,6 +523,7 @@ module.exports = {
   LANGUAGE_TAG,
   LANGUAGE_TAG_MAX,
   ALLOWED_RATING_SCALES,
+  ALLOWED_TEMPERATURE_UNITS,
   ALLOWED_RACK_NAV,
   ALLOWED_RESTOCK_SCOPE,
   ALLOWED_CELLAR_SORTS,

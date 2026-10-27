@@ -194,7 +194,7 @@ router.post('/me/signup-source', requireAuth, async (req, res) => {
 router.post('/me/locale-defaults', requireAuth, async (req, res) => {
   try {
     const $set = {};
-    for (const key of ['language', 'currency']) {
+    for (const key of ['language', 'currency', 'temperatureUnit']) {
       const value = req.body?.[key];
       if (value === undefined) continue;
       const { update, error } = await buildPreferencesUpdate(req.user.id, { [key]: value });
@@ -211,6 +211,7 @@ router.post('/me/locale-defaults', requireAuth, async (req, res) => {
       logAudit(req, 'user.locale_defaults', { type: 'user', id: applied._id }, {
         language: $set['preferences.language'] || null,
         currency: $set['preferences.currency'] || null,
+        temperatureUnit: $set['preferences.temperatureUnit'] || null,
       });
     }
     const user = applied || await User.findById(req.user.id);

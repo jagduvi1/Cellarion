@@ -58,7 +58,7 @@
   },
   "serving": {
     "label": "Serving",
-    "temperature": "Serve at {{min}}–{{max}} °C",
+    "temperature": "Serve at {{range}}",
     "air": {
       "decant_long": "decant one to two hours before serving",
       "decant_short": "open thirty minutes ahead, or decant briefly",
@@ -373,6 +373,10 @@
     "displayPreferences": "Display Preferences",
     "defaultCurrency": "Default Currency",
     "currencyHint": "Used as the default in bottle forms and price fields.",
+    "temperatureUnit": "Temperature",
+    "temperatureUnitHint": "How temperatures are shown: the serving advice on a bottle and your cellar's climate readings.",
+    "temperatureUnitC": "Celsius (°C)",
+    "temperatureUnitF": "Fahrenheit (°F)",
     "language": "Language",
     "languageHint": "Select your preferred display language.",
     "languageBetaOption": "{{language}} (beta · {{percent, number}}%)",

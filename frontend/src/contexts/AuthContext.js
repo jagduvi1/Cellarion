@@ -21,7 +21,7 @@ import { getSignupSource } from '../utils/signupSource';
 import { markSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
 import { removeStored } from '../utils/safeStorage';
 import { track } from '../utils/track';
-import { guessCurrency } from '../utils/localeDefaults';
+import { guessCurrency, guessTemperatureUnit } from '../utils/localeDefaults';
 import { saveLocaleDefaults } from '../api/auth';
 
 const AuthContext = createContext();
@@ -672,7 +672,8 @@ export const AuthProvider = ({ children }) => {
     const generation = sessionGenRef.current;
     const language = i18n.resolvedLanguage || i18n.language;
     const currency = guessCurrency();
-    saveLocaleDefaults(apiFetch, { language, ...(currency ? { currency } : {}) })
+    const temperatureUnit = guessTemperatureUnit();
+    saveLocaleDefaults(apiFetch, { language, ...(currency ? { currency } : {}), temperatureUnit })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         // Signed out (or into another account) while this was in flight: the

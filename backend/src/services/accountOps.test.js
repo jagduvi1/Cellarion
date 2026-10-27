@@ -36,6 +36,13 @@ describe('buildPreferencesUpdate', () => {
     expect((await buildPreferencesUpdate(UID, { currency: 'ZZZ' })).error.status).toBe(400);
   });
 
+  test('temperatureUnit is C or F (case-insensitive), nothing else', async () => {
+    expect((await buildPreferencesUpdate('u1', { temperatureUnit: 'f' })).update).toEqual({ 'preferences.temperatureUnit': 'F' });
+    expect((await buildPreferencesUpdate('u1', { temperatureUnit: 'C' })).update).toEqual({ 'preferences.temperatureUnit': 'C' });
+    expect((await buildPreferencesUpdate('u1', { temperatureUnit: 'K' })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate('u1', { temperatureUnit: 1 })).error.status).toBe(400);
+  });
+
   test('validates language, rating scale, rack nav and restock scope against their allow-lists', async () => {
     expect((await buildPreferencesUpdate(UID, { language: 'sv' })).update).toEqual({ 'preferences.language': 'sv' });
     // A community translation must be storable the day its locale folder lands,

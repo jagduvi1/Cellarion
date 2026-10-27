@@ -325,6 +325,30 @@ describe('POST /api/climate/ingest', () => {
     expect(persist[1].$inc).toEqual({ dailyReadingCount: 1 });
   });
 
+  // Readings are stored in °C. A device or a Home Assistant install in
+  // imperial mode says `unit: 'F'`; without it, 55 °F used to be stored as
+  // 55 °C and pass the bounds.
+  test('a reading sent in °F is converted to °C on arrival; an unknown unit is rejected', async () => {
+    const device = fakeDevice();
+    ClimateDevice.findOne.mockResolvedValue(device);
+    const res = await deviceRequest({
+      readings: [
+        { channel: 'ambient', type: 'temperature', value: 55, unit: 'F' },
+        { channel: 'ambient', type: 'humidity', value: 60, unit: 'F' },
+        { channel: 'ambient', type: 'temperature', value: 12, unit: 'K' },
+      ],
+    });
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body.accepted).toBe(2);
+    expect(body.rejected).toBe(1);
+    expect(body.errors).toEqual([{ index: 2, reason: 'invalid_unit' }]);
+    const docs = ClimateReading.insertMany.mock.calls[0][0];
+    expect(docs[0].value).toBe(12.8);           // (55 − 32) × 5⁄9, to a tenth
+    expect(docs[1].value).toBe(60);             // humidity ignores the unit
+    expect(device.findChannel('ambient', 'temperature').lastValue).toBe(12.8);
+  });
+
   test('an out-of-bounds reading on a new channel does NOT register a phantom channel', async () => {
     const device = fakeDevice();
     ClimateDevice.findOne.mockResolvedValue(device);

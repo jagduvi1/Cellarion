@@ -43,6 +43,9 @@ function prefsView(user) {
     currency: p.currency || 'USD',
     language: p.language || 'en',
     rating_scale: p.ratingScale || '5',
+    // How the user reads temperatures; every temperature this server answers
+    // is in °C, so convert the sentence when this says F.
+    temperature_unit: p.temperatureUnit === 'F' ? 'F' : 'C',
     rack_navigation: p.rackNavigation || 'auto',
     restock_scope: p.restockScope || 'all',
     cellar_sort: ALLOWED_CELLAR_SORTS.includes(p.cellarSort) ? p.cellarSort : '-createdAt',
@@ -124,6 +127,8 @@ registerTool({
     currency: z.string().length(3).optional(),
     language: z.string().max(LANGUAGE_TAG_MAX).regex(LANGUAGE_TAG).optional(),
     rating_scale: z.enum(['5', '20', '100']).optional(),
+    temperature_unit: z.enum(['C', 'F']).optional()
+      .describe('How temperatures are shown to the user (serving line, climate cards); stored values stay °C.'),
     rack_navigation: z.enum(['auto', 'room', 'rack']).optional(),
     restock_scope: z.enum(['all', 'cellar']).optional(),
     cellar_sort: z.enum(ALLOWED_CELLAR_SORTS).optional(),
@@ -137,6 +142,7 @@ registerTool({
     if (args.currency !== undefined) body.currency = args.currency;
     if (args.language !== undefined) body.language = args.language;
     if (args.rating_scale !== undefined) body.ratingScale = args.rating_scale;
+    if (args.temperature_unit !== undefined) body.temperatureUnit = args.temperature_unit;
     if (args.rack_navigation !== undefined) body.rackNavigation = args.rack_navigation;
     if (args.restock_scope !== undefined) body.restockScope = args.restock_scope;
     if (args.cellar_sort !== undefined) body.cellarSort = args.cellar_sort;

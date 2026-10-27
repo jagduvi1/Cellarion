@@ -8,6 +8,8 @@
  * the vintage is in its life, which moves every year.
  */
 
+import { formatTemperatureRange } from './temperature';
+
 export const NEEDS_AIR = ['long', 'short', 'none'];
 
 export const DEFAULT_TEMPS = {
@@ -59,10 +61,11 @@ export function servingAdvice(wine, phase) {
   return { temperature, air };
 }
 
-/** The line the bottle page shows, translated. */
-export function servingText(advice, t) {
+/** The line the bottle page shows, translated, in the user's unit ('C' | 'F'). */
+export function servingText(advice, t, unit = 'C') {
   if (!advice) return '';
-  const temp = t('serving.temperature', 'Serve at {{min}}–{{max}} °C', { min: advice.temperature.min, max: advice.temperature.max });
+  const range = formatTemperatureRange(advice.temperature.min, advice.temperature.max, unit);
+  const temp = t('serving.temperature', 'Serve at {{range}}', { range });
   if (!advice.air) return `${temp}.`;
   return `${temp}; ${t(`serving.air.${advice.air.code}`)}.`;
 }
