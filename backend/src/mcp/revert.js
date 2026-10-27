@@ -509,8 +509,22 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
           return fail('conflict', `"${key.name}" now holds ${entries} entr${entries === 1 ? 'y' : 'ies'} — its unit is part of what each value means and cannot be changed back. Nothing was changed.`);
         }
       }
+      // The old allowed values of a list key come back under the forward
+      // rule too: a value an entry holds TODAY must stay on the list.
+      const restoresOptions = Object.prototype.hasOwnProperty.call(prev, 'enumOptions') && key.type === 'enum';
+      if (restoresOptions) {
+        const PersonalDataEntry = require('../models/PersonalDataEntry');
+        const back = Array.isArray(prev.enumOptions) ? prev.enumOptions : [];
+        const dropped = (key.enumOptions || []).filter((o) => !back.includes(o));
+        const inUse = dropped.length ? await PersonalDataEntry.distinct('value', { key: key._id, value: { $in: dropped } }) : [];
+        if (inUse.length > 0) {
+          await unclaim(row._id);
+          return fail('conflict', `${inUse.map((v) => `"${v}"`).join(', ')} ${inUse.length === 1 ? 'is' : 'are'} now used by an entry — the old list cannot come back. Nothing was changed.`);
+        }
+      }
       if (prev.name) { key.name = prev.name; key.nameKey = prev.name.toLowerCase(); }
       if (restoresUnit) key.unit = prev.unit || undefined;
+      if (restoresOptions) key.enumOptions = Array.isArray(prev.enumOptions) ? prev.enumOptions : undefined;
       try {
         await key.save();
       } catch (err) {
@@ -520,8 +534,12 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       }
       await bumpPersonalData(ctx.user.id, null, key._id);
       const envelope = {
-        summary: `Undid key change — "${key.name}"${restoresUnit ? ` (unit ${JSON.stringify(key.unit || null)})` : ''} restored`,
-        data: { undone: 'update_personal_key', key_id: key._id, restored: { name: key.name, unit: key.unit || null } },
+        summary: `Undid key change — "${key.name}"${restoresUnit ? ` (unit ${JSON.stringify(key.unit || null)})` : ''}${restoresOptions ? ` (allowed values: ${(key.enumOptions || []).join(', ')})` : ''} restored`,
+        data: {
+          undone: 'update_personal_key',
+          key_id: key._id,
+          restored: { name: key.name, unit: key.unit || null, ...(restoresOptions ? { options: key.enumOptions || null } : {}) },
+        },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
       return ok(envelope.summary, envelope.data);

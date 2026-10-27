@@ -533,14 +533,17 @@ async function ownKey(userId, keyId) {
  *   - type: never (every stored value would need revalidation; not offered).
  * Returns the previous name/unit so a caller (MCP undo) can restore them.
  */
-async function updateKey(userId, keyId, { name, unit } = {}) {
+async function updateKey(userId, keyId, { name, unit, enumOptions } = {}) {
   const found = await ownKey(userId, keyId);
   if (!found.ok) return found;
   const { key } = found;
 
   const wantsName = name !== undefined;
   const wantsUnit = unit !== undefined;
-  if (!wantsName && !wantsUnit) return fail('invalid', 'Nothing to change — pass name and/or unit');
+  const wantsOptions = enumOptions !== undefined;
+  if (!wantsName && !wantsUnit && !wantsOptions) {
+    return fail('invalid', 'Nothing to change — pass name, unit and/or enumOptions');
+  }
 
   let cleanName = key.name;
   if (wantsName) {
@@ -569,10 +572,37 @@ async function updateKey(userId, keyId, { name, unit } = {}) {
     cleanUnit = cleanUnit || null;
   }
 
-  const prev = { name: key.name, unit: key.unit || null };
+  // The allowed values of a list key (user ticket 2026-10-27: a list could
+  // never grow after its creation). The new list replaces the old one under
+  // the creation rules; a value some entry still holds must stay on it, so
+  // no stored value ever falls outside its key's definition.
+  let cleanOptions = key.enumOptions ? [...key.enumOptions] : null;
+  if (wantsOptions) {
+    if (key.type !== 'enum') {
+      return fail('invalid', `Only "one of a list" keys carry allowed values — "${key.name}" is a ${key.type} key`);
+    }
+    const checked = validateKeyDefinition({ name: key.name, type: 'enum', enumOptions });
+    if (!checked.ok) return fail('invalid', checked.error);
+    cleanOptions = checked.def.enumOptions;
+    const dropped = (key.enumOptions || []).filter((o) => !cleanOptions.includes(o));
+    if (dropped.length > 0) {
+      const inUse = await PersonalDataEntry.distinct('value', { key: key._id, value: { $in: dropped } });
+      if (inUse.length > 0) {
+        const list = inUse.map((v) => `"${v}"`).join(', ');
+        return fail('in_use', `${list} ${inUse.length === 1 ? 'is' : 'are'} still used by an entry — keep ${inUse.length === 1 ? 'it' : 'them'} on the list, or change those entries first`);
+      }
+    }
+  }
+
+  const prev = {
+    name: key.name,
+    unit: key.unit || null,
+    ...(key.type === 'enum' ? { enumOptions: key.enumOptions ? [...key.enumOptions] : null } : {}),
+  };
   key.name = cleanName;
   key.nameKey = cleanName.toLowerCase();
   key.unit = cleanUnit || undefined;
+  if (wantsOptions) key.enumOptions = cleanOptions;
   try {
     await key.save();
   } catch (err) {
@@ -581,7 +611,7 @@ async function updateKey(userId, keyId, { name, unit } = {}) {
     }
     throw err;
   }
-  // The name (and unit) shows on every entry under the key.
+  // The name (unit, allowed values) shows on every entry under the key.
   await bumpKeyViewers(userId, key._id);
   return { ok: true, key: serializeKey(key), prev };
 }

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import {
   getPersonalData, addPersonalData, updatePersonalDataEntry,
-  deletePersonalDataEntry, getPersonalDataKeys,
+  deletePersonalDataEntry, getPersonalDataKeys, updatePersonalDataKey,
 } from '../../api/personalData';
 import { suggestWineValue, proposeRegistryKey } from '../../api/registryData';
 import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
@@ -27,6 +27,7 @@ const emptyForm = {
   unit: '',
   enumOptions: '',
   value: '',
+  newOption: '',
 };
 
 // `scope="vintage"`: the card on the vintage page, which reaches the data
@@ -46,6 +47,9 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Typing a value that is not on a list key's list yet (the list is
+  // extended first, then the entry saved — user ticket 2026-10-27).
+  const [addingOption, setAddingOption] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(null);
   // Promotion path (#985): "suggest this to the registry" on an own entry.
   const [promote, setPromote] = useState(null); // entry
@@ -75,10 +79,18 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
     (k) => k.name.toLowerCase() === form.keyName.trim().toLowerCase()
   );
   const effectiveType = matchedKey ? matchedKey.type : form.keyType;
+  // The saved list key behind the value input, if any: the matched key, or
+  // the key of the entry being edited. Only such a key can take a new value
+  // — a key still being created gets its list typed in directly.
+  const listKey = effectiveType === 'enum'
+    ? (matchedKey || (modal?.mode === 'edit' ? modal.entry.key : null))
+    : null;
+  const listOptions = listKey?.enumOptions || [];
 
   const openAdd = async () => {
     setForm(onVintagePage ? { ...emptyForm, level: offerVintage ? 'wine-vintage' : 'wine' } : emptyForm);
     setError(null);
+    setAddingOption(false);
     setModal({ mode: 'add' });
     try {
       const res = await getPersonalDataKeys(apiFetch);
@@ -98,6 +110,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
       value: entry.key.type === 'boolean' ? String(entry.value) : String(entry.value),
     });
     setError(null);
+    setAddingOption(false);
     setModal({ mode: 'edit', entry });
   };
 
@@ -118,16 +131,37 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
     setBusy(true);
     setError(null);
     try {
+      let value = formValue();
+      // A new value for a list key: extend the key first (the server keeps
+      // every value an entry holds), then save the entry with it. A value
+      // already on the list, in any case, is reused as spelled there.
+      if (listKey && addingOption) {
+        const typed = form.newOption.trim();
+        const listed = listOptions.find((o) => o.toLowerCase() === typed.toLowerCase());
+        if (listed) {
+          value = listed;
+        } else {
+          const keyRes = await updatePersonalDataKey(apiFetch, listKey._id, { enumOptions: [...listOptions, typed] });
+          const keyBody = await keyRes.json().catch(() => ({}));
+          if (!keyRes.ok) {
+            setError(keyBody.error || t('common.networkError', 'Network error. Please try again.'));
+            return;
+          }
+          const options = keyBody.key?.enumOptions || [...listOptions, typed];
+          setKeys((prev) => prev.map((k) => (k._id === listKey._id ? { ...k, enumOptions: options } : k)));
+          value = typed;
+        }
+      }
       let res;
       if (modal.mode === 'edit') {
-        res = await updatePersonalDataEntry(apiFetch, modal.entry._id, formValue());
+        res = await updatePersonalDataEntry(apiFetch, modal.entry._id, value);
       } else {
         // 'wine-vintage' is UI sugar (user ticket 6a853211): a wine-level
         // entry the server scopes to THIS bottle's vintage.
         const payload = {
           level: form.level === 'wine-vintage' ? 'wine' : form.level,
           ...(form.level === 'wine-vintage' ? { vintageScoped: true } : {}),
-          value: formValue(),
+          value,
         };
         if (matchedKey) {
           payload.keyId = matchedKey._id;
@@ -146,6 +180,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setModal(null);
+        setAddingOption(false);
         await load();
       } else {
         setError(body.error || t('common.networkError', 'Network error. Please try again.'));
@@ -506,20 +541,46 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
               <label htmlFor="pd-value-input">
                 {t('personalData.value', 'Value')}
               </label>
-              <TypedValueInput
-                id="pd-value-input"
-                keyDef={{
-                  type: effectiveType,
-                  unit: matchedKey?.unit || (modal.mode === 'edit' ? modal.entry.key.unit : form.unit.trim() || null),
-                  enumOptions: matchedKey?.enumOptions
-                    || (modal.mode === 'edit' ? modal.entry.key.enumOptions : null)
-                    || (effectiveType === 'enum'
-                      ? form.enumOptions.split(',').map((o) => o.trim()).filter(Boolean)
-                      : null),
-                }}
-                value={form.value}
-                onChange={(v) => setForm({ ...form, value: v })}
-              />
+              {listKey && addingOption ? (
+                <input
+                  id="pd-value-input"
+                  type="text"
+                  value={form.newOption}
+                  onChange={(e) => setForm({ ...form, newOption: e.target.value })}
+                  placeholder={t('personalData.newOptionPlaceholder', 'A value not on the list yet')}
+                  maxLength={40}
+                  required
+                />
+              ) : (
+                <TypedValueInput
+                  id="pd-value-input"
+                  keyDef={{
+                    type: effectiveType,
+                    unit: matchedKey?.unit || (modal.mode === 'edit' ? modal.entry.key.unit : form.unit.trim() || null),
+                    enumOptions: matchedKey?.enumOptions
+                      || (modal.mode === 'edit' ? modal.entry.key.enumOptions : null)
+                      || (effectiveType === 'enum'
+                        ? form.enumOptions.split(',').map((o) => o.trim()).filter(Boolean)
+                        : null),
+                  }}
+                  value={form.value}
+                  onChange={(v) => setForm({ ...form, value: v })}
+                />
+              )}
+              {listKey && !addingOption && listOptions.length < 20 && (
+                <button
+                  type="button"
+                  className="pd-add-option"
+                  onClick={() => { setAddingOption(true); setForm({ ...form, value: '', newOption: '' }); }}
+                >
+                  {t('personalData.addOption', '+ Add a new value to the list')}
+                </button>
+              )}
+              {listKey && addingOption && (
+                <button type="button" className="pd-add-option" onClick={() => setAddingOption(false)}>
+                  {t('personalData.backToList', 'Back to the list')}
+                </button>
+              )}
             </div>
 
             <div className="modal-actions">

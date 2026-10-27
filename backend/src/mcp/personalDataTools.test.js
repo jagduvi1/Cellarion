@@ -18,7 +18,7 @@ jest.mock('../services/personalData', () => ({
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), aggregate: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn(), find: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn().mockResolvedValue({}) }));
-jest.mock('../models/PersonalDataEntry', () => ({ findOne: jest.fn(), findOneAndDelete: jest.fn(), create: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/PersonalDataEntry', () => ({ findOne: jest.fn(), findOneAndDelete: jest.fn(), create: jest.fn(), countDocuments: jest.fn(), distinct: jest.fn(async () => []) }));
 jest.mock('../models/PersonalDataKey', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // revert.js and tools/write.js top-require bottleOps (which pulls the search/
@@ -185,6 +185,50 @@ describe('update_personal_key / delete_personal_key (ticket 6aa6c95e)', () => {
     // An undo moves the data version like the forward write (the inventory ETag).
     expect(svc.bumpKeyViewers).toHaveBeenCalledWith(ME, KEY_ID);
     expect(svc.bumpPersonalDataViewers).toHaveBeenCalledWith(ME, undefined);
+  });
+
+  test('enum_options replaces the allowed values; the ledger row carries only the old list', async () => {
+    const enumRow = { _id: KEY_ID, name: 'Closure', type: 'enum', unit: null, enumOptions: ['cork', 'screwcap', 'crown'] };
+    svc.updateKey.mockResolvedValue({ ok: true, key: enumRow, prev: { name: 'Closure', unit: null, enumOptions: ['cork', 'screwcap'] } });
+
+    const res = await tool('update_personal_key').handler({ key_id: KEY_ID, enum_options: ['cork', 'screwcap', 'crown'] }, CTX);
+
+    expect(svc.updateKey).toHaveBeenCalledWith(ME, KEY_ID, { name: undefined, unit: undefined, enumOptions: ['cork', 'screwcap', 'crown'] });
+    const body = parse(res);
+    expect(body.summary).toMatch(/allowed values now: cork, screwcap, crown/);
+    expect(body.data.key.options).toEqual(['cork', 'screwcap', 'crown']);
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      tool: 'update_personal_key',
+      detail: expect.objectContaining({ op: 'key_update', keyId: KEY_ID }),
+      prev: { enumOptions: ['cork', 'screwcap'] },
+    }));
+  });
+
+  test('undo of an allowed-values change restores the old list, unless an entry now holds a dropped value', async () => {
+    McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'row' });
+    const saved = jest.fn().mockResolvedValue(undefined);
+    const key = { _id: KEY_ID, name: 'Closure', nameKey: 'closure', type: 'enum', enumOptions: ['cork', 'screwcap', 'crown'], save: saved };
+    PersonalDataKey.findOne.mockResolvedValue(key);
+
+    PersonalDataEntry.distinct.mockResolvedValueOnce(['crown']);
+    const refused = await revertLedgerRow({
+      _id: 'row', action: 'personal_data', tool: 'update_personal_key',
+      detail: { op: 'key_update', keyId: KEY_ID, key: 'Closure' }, prev: { enumOptions: ['cork', 'screwcap'] },
+    }, CTX, okHelpers);
+    expect(refused.isError).toBe(true);
+    expect(parse(refused).error.code).toBe('conflict');
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'row' }, { $set: { reversed: false } });
+    expect(saved).not.toHaveBeenCalled();
+    expect(key.enumOptions).toEqual(['cork', 'screwcap', 'crown']);
+
+    PersonalDataEntry.distinct.mockResolvedValueOnce([]);
+    const ok = await revertLedgerRow({
+      _id: 'row2', action: 'personal_data', tool: 'update_personal_key',
+      detail: { op: 'key_update', keyId: KEY_ID, key: 'Closure' }, prev: { enumOptions: ['cork', 'screwcap'] },
+    }, CTX, okHelpers);
+    expect(parse(ok)).toMatchObject({ undone: 'update_personal_key', restored: { name: 'Closure', options: ['cork', 'screwcap'] } });
+    expect(key.enumOptions).toEqual(['cork', 'screwcap']);
+    expect(saved).toHaveBeenCalled();
   });
 });
 

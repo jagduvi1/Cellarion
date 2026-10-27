@@ -463,6 +463,52 @@ describe('updateKey / deleteKey (ticket 6aa6c95e)', () => {
     expect(await svc.updateKey(ME, KEY_ID, {})).toMatchObject({ ok: false, code: 'invalid' });
   });
 
+  // A list key's allowed values (user ticket 2026-10-27: a list could never
+  // grow after its creation).
+  test('the allowed values of a list key can grow; the old list rides in prev', async () => {
+    const key = keyDoc({ type: 'enum', unit: undefined, enumOptions: ['cork', 'screwcap'] });
+    PersonalDataKey.findOne.mockResolvedValue(key);
+
+    const res = await svc.updateKey(ME, KEY_ID, { enumOptions: ['cork', 'screwcap', ' crown '] });
+
+    expect(res.ok).toBe(true);
+    expect(key.enumOptions).toEqual(['cork', 'screwcap', 'crown']);
+    expect(key.save).toHaveBeenCalled();
+    expect(res.prev).toEqual({ name: 'Falstaff', unit: null, enumOptions: ['cork', 'screwcap'] });
+    expect(res.key.enumOptions).toEqual(['cork', 'screwcap', 'crown']);
+    // Nothing left the list, so no entry's value had to be checked (the one
+    // distinct call is the viewer bump's bottle lookup).
+    expect(PersonalDataEntry.distinct).not.toHaveBeenCalledWith('value', expect.anything());
+  });
+
+  test('a value an entry still holds cannot leave the list; an unused one can', async () => {
+    const key = keyDoc({ type: 'enum', unit: undefined, enumOptions: ['cork', 'screwcap', 'crown'] });
+    PersonalDataKey.findOne.mockResolvedValue(key);
+
+    PersonalDataEntry.distinct.mockResolvedValueOnce(['crown']);
+    const refused = await svc.updateKey(ME, KEY_ID, { enumOptions: ['cork', 'screwcap'] });
+    expect(refused).toMatchObject({ ok: false, code: 'in_use' });
+    expect(refused.message).toMatch(/"crown" is still used by an entry/);
+    expect(PersonalDataEntry.distinct).toHaveBeenCalledWith('value', { key: KEY_ID, value: { $in: ['crown'] } });
+    expect(key.enumOptions).toEqual(['cork', 'screwcap', 'crown']);
+    expect(key.save).not.toHaveBeenCalled();
+
+    PersonalDataEntry.distinct.mockResolvedValueOnce([]);
+    const ok = await svc.updateKey(ME, KEY_ID, { enumOptions: ['cork', 'screwcap'] });
+    expect(ok.ok).toBe(true);
+    expect(key.enumOptions).toEqual(['cork', 'screwcap']);
+  });
+
+  test('allowed values on a non-list key, or a list outside the creation rules, are refused', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc());
+    expect(await svc.updateKey(ME, KEY_ID, { enumOptions: ['a', 'b'] })).toMatchObject({ ok: false, code: 'invalid' });
+
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc({ type: 'enum', unit: undefined, enumOptions: ['a', 'b'] }));
+    expect(await svc.updateKey(ME, KEY_ID, { enumOptions: ['a'] })).toMatchObject({ ok: false, code: 'invalid' });
+    expect(await svc.updateKey(ME, KEY_ID, { enumOptions: ['a', 'x'.repeat(41)] })).toMatchObject({ ok: false, code: 'invalid' });
+    expect(await svc.updateKey(ME, KEY_ID, { enumOptions: Array.from({ length: 21 }, (_, i) => `v${i}`) })).toMatchObject({ ok: false, code: 'invalid' });
+  });
+
   test('someone else\'s key is not_found, never an existence oracle', async () => {
     PersonalDataKey.findOne.mockResolvedValue(null);
     expect(await svc.updateKey(OTHER, KEY_ID, { name: 'x' })).toMatchObject({ ok: false, code: 'not_found' });

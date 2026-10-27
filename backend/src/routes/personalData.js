@@ -103,20 +103,22 @@ router.delete('/entries/:entryId', requireNonDemo, async (req, res, next) => {
 });
 
 /**
- * PATCH /api/personal-data/keys/:keyId — rename a key and/or change its unit
- * (unit: numeric keys only, and only while the key holds no entries). The id
- * never changes. Body: { name?, unit? }.
+ * PATCH /api/personal-data/keys/:keyId — rename a key, change its unit
+ * (numeric keys only, and only while the key holds no entries) and/or replace
+ * the allowed values of a list key (a value an entry still holds must stay).
+ * The id never changes. Body: { name?, unit?, enumOptions? }.
  */
 router.patch('/keys/:keyId', requireNonDemo, async (req, res, next) => {
   try {
     const result = await personalData.updateKey(req.user.id, req.params.keyId, {
       name: req.body?.name,
       unit: req.body?.unit,
+      enumOptions: req.body?.enumOptions,
     });
     if (!result.ok) return sendFail(res, result);
     logAudit(req, 'personal_data.key_update',
       { type: 'personalDataKey', id: result.key._id },
-      { from: result.prev, to: { name: result.key.name, unit: result.key.unit } });
+      { from: result.prev, to: { name: result.key.name, unit: result.key.unit, enumOptions: result.key.enumOptions } });
     res.json({ key: result.key });
   } catch (err) {
     next(err);
