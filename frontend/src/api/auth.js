@@ -42,9 +42,9 @@ export const recordSignupSource = (apiFetch, signupSource) =>
 // keeps the language it signed up in and gets its region's currency. The
 // server applies it only while that flag is set and clears it in the same
 // update; answers { applied, user }.
-export const saveLocaleDefaults = (apiFetch, { language, currency }) =>
+export const saveLocaleDefaults = (apiFetch, { language, currency, temperatureUnit }) =>
   apiFetch('/api/users/me/locale-defaults', {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ language, currency })
+    body: JSON.stringify({ language, currency, temperatureUnit })
   });

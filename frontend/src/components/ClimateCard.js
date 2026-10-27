@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
 import { getCellarClimate, updateCellarClimateConfig } from '../api/climate';
+import { formatTemperature, temperatureUnitOf } from '../utils/temperature';
 import './ClimateCard.css';
 
 // Chart modal pulls in recharts — load it only when opened.
@@ -17,7 +18,7 @@ const REFRESH_MS = 60 * 1000;
 // refreshes once a minute while mounted.
 function ClimateCard({ cellarId }) {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
 
   const [data, setData] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -72,7 +73,7 @@ function ClimateCard({ cellarId }) {
       : ch.lastValue >= config.rhMin && ch.lastValue <= config.rhMax;
   };
   const fmtValue = (ch) =>
-    ch.type === 'temperature' ? `${ch.lastValue.toFixed(1)} °C` : `${Math.round(ch.lastValue)} %`;
+    ch.type === 'temperature' ? formatTemperature(ch.lastValue, temperatureUnitOf(user), { decimals: 1 }) : `${Math.round(ch.lastValue)} %`;
   const agoLabel = (d) => {
     const min = Math.round((Date.now() - new Date(d).getTime()) / 60000);
     if (min < 60) return t('climate.agoMin', { n: min });

@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { DEFAULT_TEMPS, DEFAULT_AIR, AIR_BY_PHASE, NEEDS_AIR, servingAdvice, servingText } from './serving';
 
 const t = (key, fallback, opts) => {
-  if (key === 'serving.temperature') return `Serve at ${opts.min}–${opts.max} °C`;
+  if (key === 'serving.temperature') return `Serve at ${opts.range}`;
   return key;
 };
 
@@ -37,9 +37,10 @@ describe('serving advice on the bottle page', () => {
     expect(servingAdvice({ type: null, nonWine: true, aiProfile: {} }, 'peak')).toBeNull();
   });
 
-  test('the line reads as one sentence', () => {
+  test('the line reads as one sentence, in the user\'s unit', () => {
     expect(servingText(servingAdvice({ type: 'red', aiProfile: { needsAir: 'long' } }, 'early'), t)).toBe('Serve at 15–18 °C; serving.air.decant_long.');
     expect(servingText(servingAdvice({ type: 'sparkling', aiProfile: {} }, null), t)).toBe('Serve at 6–8 °C.');
+    expect(servingText(servingAdvice({ type: 'sparkling', aiProfile: {} }, null), t, 'F')).toBe('Serve at 43–46 °F.');
     expect(servingText(null, t)).toBe('');
   });
 });

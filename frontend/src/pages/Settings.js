@@ -45,6 +45,7 @@ function Settings() {
     return findLanguage(stored)?.code || 'en';
   });
   const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
+  const [temperatureUnit, setTemperatureUnit] = useState(user?.preferences?.temperatureUnit === 'F' ? 'F' : 'C');
   const [rackNavigation, setRackNavigation] = useState(user?.preferences?.rackNavigation || 'auto');
   const [restockScope, setRestockScope] = useState(user?.preferences?.restockScope || 'all');
   // Device-local (localStorage) — applies immediately, no save button needed.
@@ -297,7 +298,7 @@ function Settings() {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const result = await updatePreferences({ currency, language, ratingScale, rackNavigation, restockScope });
+    const result = await updatePreferences({ currency, language, ratingScale, rackNavigation, restockScope, temperatureUnit });
     setSaving(false);
     if (result.success) {
       i18n.changeLanguage(language);
@@ -736,6 +737,22 @@ function Settings() {
               {CURRENCIES.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="temperature-unit-select">{t('settings.temperatureUnit', 'Temperature')}</label>
+            <p className="settings-hint">
+              {t('settings.temperatureUnitHint', 'How temperatures are shown: the serving advice on a bottle and your cellar\'s climate readings.')}
+            </p>
+            <select
+              id="temperature-unit-select"
+              className="input settings-select"
+              value={temperatureUnit}
+              onChange={e => setTemperatureUnit(e.target.value)}
+            >
+              <option value="C">{t('settings.temperatureUnitC', 'Celsius (°C)')}</option>
+              <option value="F">{t('settings.temperatureUnitF', 'Fahrenheit (°F)')}</option>
             </select>
           </div>
 

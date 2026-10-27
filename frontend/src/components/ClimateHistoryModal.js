@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
 import { getCellarClimateReadings } from '../api/climate';
+import { toFahrenheit, temperatureUnitOf } from '../utils/temperature';
 import { SERIES_COLORS } from '../utils/chartColors';
 
 // Threshold guides are recessive ink, not a series or status color.
@@ -122,7 +123,11 @@ function ClimateChart({ title, seriesList, range, unit, thresholds }) {
 // alert thresholds drawn as recessive guides.
 function ClimateHistoryModal({ cellarId, config, channelLabels = {}, onClose }) {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  // Readings and thresholds arrive in °C; a member who reads °F sees the
+  // chart converted, nothing stored changes.
+  const unit = temperatureUnitOf(user);
+  const toUnit = (c) => (unit === 'F' ? Math.round(toFahrenheit(c) * 10) / 10 : c);
 
   const [range, setRange] = useState('24h');
   const [series, setSeries] = useState(null); // null = loading
@@ -160,7 +165,9 @@ function ClimateHistoryModal({ cellarId, config, channelLabels = {}, onClose }) 
   for (const s of prepared) {
     if (nameCounts[s.name] > 1 && s.deviceName) s.name = `${s.name} (${s.deviceName})`;
   }
-  const tempSeries = prepared.filter(s => s.type === 'temperature');
+  const tempSeries = prepared
+    .filter(s => s.type === 'temperature')
+    .map(s => (unit === 'F' ? { ...s, points: (s.points || []).map(p => ({ ...p, avg: p.avg == null ? p.avg : toUnit(p.avg) })) } : s));
   const rhSeries = prepared.filter(s => s.type === 'humidity');
 
   return (
@@ -188,10 +195,10 @@ function ClimateHistoryModal({ cellarId, config, channelLabels = {}, onClose }) 
             title={t('climate.tempChart')}
             seriesList={tempSeries}
             range={range}
-            unit="°C"
+            unit={unit === 'F' ? '°F' : '°C'}
             thresholds={[
-              { value: config.tempMin, label: 'min' },
-              { value: config.tempMax, label: 'max' },
+              { value: toUnit(config.tempMin), label: 'min' },
+              { value: toUnit(config.tempMax), label: 'max' },
             ]}
           />
           <ClimateChart
