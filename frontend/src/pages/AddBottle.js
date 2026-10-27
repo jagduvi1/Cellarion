@@ -29,6 +29,7 @@ import { useBackToClose } from '../utils/useBackToClose';
 import { bottleNoticeName } from '../components/BottleUndoNotice';
 import { handOverBack } from '../hooks/useHandedOverState';
 import { afterPopupEntryGone, isOnPopupEntry } from '../utils/useBackToClose';
+import { formatVintage } from '../utils/vintage';
 
 // How this device last started adding a bottle: 'camera' (the label photo, the
 // default) or 'search' (typing the name). Per device on purpose — the same
@@ -1415,7 +1416,7 @@ function AddBottle() {
                 )}
                 {scanResult.extracted.vintage && (
                   <p className="scan-vintage-note">
-                    {t('addBottle.scanVintageDetected', { year: scanResult.extracted.vintage })}
+                    {t('addBottle.scanVintageDetected', { year: formatVintage(scanResult.extracted.vintage, t) })}
                   </p>
                 )}
                 <div className="scan-wine-actions">

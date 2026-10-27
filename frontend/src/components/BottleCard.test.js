@@ -258,3 +258,16 @@ describe('BottleCard same-vintage photo', () => {
     expect(screen.queryByText('registry credit')).toBeNull();
   });
 });
+
+describe('BottleCard vintage', () => {
+  test('shows a non-vintage bottle through the translated label, not the stored code', () => {
+    renderCard({ bottle: { ...BOTTLE, vintage: 'NV' } });
+    expect(screen.getByText('common.nonVintage')).toBeInTheDocument();
+    expect(screen.queryByText('NV')).toBeNull();
+  });
+
+  test('shows a year as it is', () => {
+    renderCard();
+    expect(screen.getByText('2013')).toBeInTheDocument();
+  });
+});

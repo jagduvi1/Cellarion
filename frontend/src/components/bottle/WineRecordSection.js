@@ -11,6 +11,7 @@ import useGrapeNames from '../../hooks/useGrapeNames';
 import { taxonomyName } from '../../utils/taxonomyName';
 import { WINE_COLOURS, isStyleType, recordedColour, wineTypeLabel, colourLabel } from '../../utils/wineColour';
 import './WineRecordSection.css';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * The full public record of a wine, blanks included (#985 Slice A).
@@ -519,8 +520,8 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                         play, so the reader knows a year-specific figure could
                         still be added). */}
                     {shown && field.resolvedFrom === 'vintage' && (
-                      <span className="wr-scope" title={t('wineRecord.scopeVintageTitle', 'Recorded for the {{year}} vintage specifically', { year: field.resolvedVintage })}>
-                        {field.resolvedVintage}
+                      <span className="wr-scope" title={t('wineRecord.scopeVintageTitle', 'Recorded for the {{year}} vintage specifically', { year: formatVintage(field.resolvedVintage, t) })}>
+                        {formatVintage(field.resolvedVintage, t)}
                       </span>
                     )}
                     {shown && field.resolvedFrom === 'wine' && bottleVintage && (

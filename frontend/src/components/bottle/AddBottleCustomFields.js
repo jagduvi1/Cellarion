@@ -8,6 +8,7 @@ import TypedValueInput, { TYPES } from '../TypedValueInput';
 // feature. This file adds only the add-form's own layout.
 import './PersonalDataCard.css';
 import './AddBottleCustomFields.css';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * Custom fields on the add-bottle form (user ticket 6ab05cca — "Have the
@@ -364,7 +365,7 @@ function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKe
                 <option value="bottle">{t('personalData.levelBottle', 'This bottle only')}</option>
                 {vintage && (
                   <option value="wine-vintage">
-                    {t('personalData.levelWineVintage', 'Every bottle of this vintage ({{vintage}})', { vintage })}
+                    {t('personalData.levelWineVintage', 'Every bottle of this vintage ({{vintage}})', { vintage: formatVintage(vintage, t) })}
                   </option>
                 )}
                 <option value="wine">{t('personalData.levelWine', 'Every bottle of this wine (all vintages)')}</option>

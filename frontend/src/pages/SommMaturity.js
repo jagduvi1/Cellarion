@@ -8,6 +8,7 @@ import { removeMaturityProfile } from '../api/somm';
 import { swatchType } from '../utils/wineColour';
 import { getMaturityStatus, maturityBadgeText } from '../utils/drinkStatus';
 import './SommMaturity.css';
+import { formatVintage } from '../utils/vintage';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -294,7 +295,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
         </div>
 
         <div className="somm-card-right">
-          <span className="somm-vintage-pill">{profile.vintage}</span>
+          <span className="somm-vintage-pill">{formatVintage(profile.vintage, t)}</span>
           {phase ? (
             <span className={`maturity-badge maturity-badge--${phase.status}`}>{maturityBadgeText(phase, t)}</span>
           ) : (
@@ -487,7 +488,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
       {showRemoveConfirm && (
         <ConfirmModal
           title={t('somm.maturity.removeTitle')}
-          message={t('somm.maturity.removeConfirm', { vintage: profile.vintage })}
+          message={t('somm.maturity.removeConfirm', { vintage: formatVintage(profile.vintage, t) })}
           confirmLabel={t('somm.maturity.removeAction')}
           confirmClass="btn btn-danger btn-small"
           onConfirm={handleRemove}

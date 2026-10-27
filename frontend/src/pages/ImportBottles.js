@@ -46,6 +46,7 @@ import {
 import Modal from '../components/Modal';
 import './ImportBottles.css';
 import { backLabel } from '../utils/backLabel';
+import { formatVintage } from '../utils/vintage';
 
 const STEPS = ['upload', 'review', 'importing', 'done'];
 
@@ -1908,7 +1909,7 @@ function ImportBottles() {
                     <td>{item.producer || '—'}</td>
                     <td>{item.wineName || '—'}</td>
                     <td>
-                      {item.vintage || t('importBottles.preview.nv')}
+                      {formatVintage(item.vintage, t) || t('importBottles.preview.nv')}
                       {item.vintageMissing && <span className="import-flag" title={t('importBottles.preview.vintageMissing')}> ?</span>}
                     </td>
                     <td>{item.country || '—'}</td>
@@ -2233,7 +2234,7 @@ function ImportBottles() {
                                   : x));
                               }}
                             />
-                          ) : (r.item.vintage || t('importBottles.preview.nv'))}
+                          ) : (formatVintage(r.item.vintage, t) || t('importBottles.preview.nv'))}
                           {r.item.country && ` · ${r.item.country}`}
                         </span>
                         {/* Receipt rows: the line as printed, to check an

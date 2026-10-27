@@ -6,6 +6,7 @@ import { swatchType } from '../../utils/wineColour';
 import { ReservedRibbon } from './RackRenderer';
 import { cabinetBays, cabinetBayUnits, cabinetRowWidth, cabinetBayOpts, cabinetRowOffset, cabinetHeadToTail, cabinetNeckForward, cabinetSlotSideways, cabinetNeckIndex } from '../../utils/rackLayouts';
 import './ShelfView.css';
+import { formatVintage } from '../../utils/vintage';
 
 const WINE_COLORS = {
   red:       { fill: '#8A1028', stroke: '#6A0820', text: '#fff' },
@@ -372,7 +373,7 @@ function BottleOval({ cx, cy, neck = false, sideways = false, slot, position, di
       tabIndex={0}
       className={`shelf-view-bottle ${filled ? 'filled' : 'empty'} ${isActive ? 'active' : ''} ${isHighlight ? 'highlight' : ''}`}
       aria-label={filled
-        ? `${wine?.name || 'Wine'} ${bottle?.vintage || ''}${neck ? `, ${t('rackView.neckForwardAria', 'neck forward')}` : ''}${sideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}${isReserved(bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
+        ? `${wine?.name || 'Wine'} ${formatVintage(bottle?.vintage, t)}${neck ? `, ${t('rackView.neckForwardAria', 'neck forward')}` : ''}${sideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}${isReserved(bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
         : `Empty slot ${position}${sideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}`}
       style={{ ...(draggable ? { cursor: 'grab' } : null), ...dimStyle }}
     >
@@ -435,7 +436,7 @@ function BottleOval({ cx, cy, neck = false, sideways = false, slot, position, di
           className="shelf-view-vintage"
           fill={textColor}
         >
-          {bottle.vintage}
+          {formatVintage(bottle.vintage, t)}
         </text>
       )}
       {!filled && (

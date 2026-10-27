@@ -6,6 +6,7 @@ import { getWineList, updateWineList, publishWineList, unpublishWineList, upload
 import { buildSections, groupingLevels, LEVEL_FIELDS } from '../utils/wineListSections';
 import WineListMenu from '../components/WineListMenu';
 import './WineListEditor.css';
+import { formatVintage } from '../utils/vintage';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -526,7 +527,7 @@ function WineListEditor() {
   }[saveState];
 
   const renderVintageSize = (vintage, bottleSize) => {
-    const v = vintage || 'NV';
+    const v = formatVintage(vintage || 'NV', t);
     return bottleSize && bottleSize !== '750ml' ? `${v} (${bottleSize})` : v;
   };
 

@@ -9,6 +9,7 @@ import { buildRackUrl } from '../utils/rackNavigation';
 import { bottleSizeLabel } from '../config/bottleSizes';
 import BetaBadge from '../components/BetaBadge';
 import './PickList.css';
+import { formatVintage } from '../utils/vintage';
 
 const BulkConsumeModal = lazy(() => import('../components/BulkConsumeModal'));
 
@@ -197,7 +198,7 @@ export default function PickList() {
 
   const wineText = (it) => [
     [it.wine.producer, it.wine.name].filter(Boolean).join(' — ') || t('common.unknownWine', 'Unknown wine'),
-    it.vintage && it.vintage !== 'Unknown' ? it.vintage : null,
+    it.vintage && it.vintage !== 'Unknown' ? formatVintage(it.vintage, t) : null,
     it.bottleSize && it.bottleSize !== '750ml' ? bottleSizeLabel(it.bottleSize, t) : null,
   ].filter(Boolean).join(' · ');
 

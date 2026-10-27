@@ -16,6 +16,7 @@ import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddToWishlist.css';
 import { backLabel } from '../utils/backLabel';
+import { formatVintage } from '../utils/vintage';
 
 function AddToWishlist() {
   const { t } = useTranslation();
@@ -765,7 +766,7 @@ function AddToWishlist() {
                   <p className="wine-grapes">{scanResult.extracted.grapes.join(', ')}</p>
                 )}
                 {scanResult.extracted.vintage && (
-                  <p className="scan-vintage-note">{t('addToWishlist.vintageDetected', { vintage: scanResult.extracted.vintage })}</p>
+                  <p className="scan-vintage-note">{t('addToWishlist.vintageDetected', { vintage: formatVintage(scanResult.extracted.vintage, t) })}</p>
                 )}
                 <div className="scan-wine-actions">
                   <button type="button" className="btn btn-success" onClick={handleConfirmScan} disabled={findingWine}>

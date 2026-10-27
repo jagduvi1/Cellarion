@@ -28,6 +28,7 @@ import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../ut
 import { summarizeSelection } from '../utils/bulkSelection';
 import LoadError from '../components/LoadError';
 import './CellarDetail.css';
+import { formatVintage } from '../utils/vintage';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
 // so it doesn't apply when several cellars are combined).
@@ -1426,7 +1427,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             return (
               <Fragment key={item.key}>
                 <div className="bottle-group-bar">
-                  <span><strong>{wineName}</strong> · {rep.vintage || 'NV'} · {t('cellarDetail.groupBottleCount', { count: item.count })}</span>
+                  <span><strong>{wineName}</strong> · {formatVintage(rep.vintage || 'NV', t)} · {t('cellarDetail.groupBottleCount', { count: item.count })}</span>
                   <button type="button" className="bottle-group-collapse" onClick={() => toggleGroup(item.key)}>
                     {t('cellarDetail.collapseGroup')}
                   </button>

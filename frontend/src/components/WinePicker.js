@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { identifyWineByText } from '../api/wines';
 import './WinePicker.css';
+import { formatVintage } from '../utils/vintage';
 
 /**
  * Wine search picker for journal pairings.
@@ -190,7 +191,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
                   <span className="wine-picker__option-icon">🍾</span>
                   <span className="wine-picker__option-text">
                     <strong>{b.wine.name}</strong>
-                    {b.vintage && <span className="wine-picker__vintage"> {b.vintage}</span>}
+                    {b.vintage && <span className="wine-picker__vintage"> {formatVintage(b.vintage, t)}</span>}
                     {b.wine.producer && <span className="wine-picker__producer"> · {b.wine.producer}</span>}
                   </span>
                 </button>
@@ -207,7 +208,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
                   <span className="wine-picker__option-icon">🥂</span>
                   <span className="wine-picker__option-text">
                     <strong>{b.wine.name}</strong>
-                    {b.vintage && <span className="wine-picker__vintage"> {b.vintage}</span>}
+                    {b.vintage && <span className="wine-picker__vintage"> {formatVintage(b.vintage, t)}</span>}
                     {b.wine.producer && <span className="wine-picker__producer"> · {b.wine.producer}</span>}
                     {b.consumedAt && <span className="wine-picker__producer"> · {new Date(b.consumedAt).toLocaleDateString()}</span>}
                   </span>

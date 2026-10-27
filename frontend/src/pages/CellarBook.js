@@ -11,6 +11,7 @@ import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './CellarBook.css';
+import { formatVintage } from '../utils/vintage';
 
 // The cellar bottles endpoint caps page size at 200 — loop until we have
 // every active bottle. Hard ceiling well above any real cellar as a
@@ -203,7 +204,7 @@ function BottleTable({ entries, t }) {
                 <span className="cb-wine-name">{wine?.name || t('common.unknown', 'Unknown')}</span>
                 {wine?.producer && <span className="cb-wine-producer"> — {wine.producer}</span>}
               </td>
-              <td className="cb-col-vintage">{bottle?.vintage || 'NV'}</td>
+              <td className="cb-col-vintage">{formatVintage(bottle?.vintage || 'NV', t)}</td>
               <td className="cb-col-type">
                 {type && <span className={`cb-type-dot type-${swatchType(wine)}`} aria-hidden="true" />}
                 {type ? wineTypeLabel(wine, t) : '—'}

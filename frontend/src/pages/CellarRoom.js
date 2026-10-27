@@ -26,6 +26,7 @@ import ActionNotice from '../components/ActionNotice';
 import { backLabel } from '../utils/backLabel';
 import { suspendBackToClose, pageEntryState } from '../utils/useBackToClose';
 import './CellarRoom.css';
+import { formatVintage } from '../utils/vintage';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
 
@@ -1423,7 +1424,7 @@ export default function CellarRoom() {
                   {wine?.producer && <p className="room-bottle-producer">{wine.producer}</p>}
                   <div className="room-bottle-meta">
                     {(wine?.type || wine?.nonWine) && <span className={`room-bottle-type type-${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>}
-                    {bottle?.vintage && <span>{bottle.vintage}</span>}
+                    {bottle?.vintage && <span>{formatVintage(bottle.vintage, t)}</span>}
                   </div>
                   {wine?.country?.name && (
                     <p className="room-bottle-region">
@@ -1507,7 +1508,7 @@ export default function CellarRoom() {
                         <div className="room-slot-bottle-info">
                           <strong>{b.wineDefinition?.name || 'Unknown'}</strong>
                           <span>
-                            {b.wineDefinition?.producer}{b.vintage ? ` \u00B7 ${b.vintage}` : ''}
+                            {b.wineDefinition?.producer}{b.vintage ? ` \u00B7 ${formatVintage(b.vintage, t)}` : ''}
                             {b.wineDefinition?.country?.name ? ` \u00B7 ${b.wineDefinition.country.name}` : ''}
                           </span>
                         </div>

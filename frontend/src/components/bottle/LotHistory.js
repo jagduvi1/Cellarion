@@ -6,6 +6,7 @@ import { fetchLotHistory } from '../../api/bottles';
 import RatingDisplay from '../RatingDisplay';
 import { CONSUMED_LABEL_KEYS } from '../BottleJourney';
 import './LotHistory.css';
+import { formatVintage } from '../../utils/vintage';
 
 const REASON_ICONS = { drank: '\u{1F377}', gifted: '\u{1F381}', sold: '\u{1F4B0}', other: '\u{1F4E6}' };
 
@@ -160,7 +161,7 @@ function VintagePageHistory({ thisLot, otherLots, cellarId, fromPath = null, con
             {otherLots.map((lot) => (
               <li key={String(lot.vintage)}>
                 <Link to={hrefOf(lot)} className="lot-history__vintage-row">
-                  <span className="lot-history__vintage-year">{lot.vintage}</span>
+                  <span className="lot-history__vintage-year">{formatVintage(lot.vintage, t)}</span>
                   <span className="lot-history__vintage-counts"><LotCounts lot={lot} /></span>
                   <span className="lot-history__vintage-go" aria-hidden="true">›</span>
                 </Link>
@@ -270,7 +271,7 @@ export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true
                   key={String(lot.vintage)}
                   lot={lot}
                   currentBottleId={bottleId}
-                  heading={lot.vintage}
+                  heading={formatVintage(lot.vintage, t)}
                 />
               ))}
             </>

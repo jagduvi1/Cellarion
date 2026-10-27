@@ -8,6 +8,7 @@ import BottleCard from '../components/BottleCard';
 import { ratingRangeLabel, ratingBandName, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import { friendlyError, httpError } from '../utils/friendlyError';
 import './Bottles.css';
+import { formatVintage } from '../utils/vintage';
 
 const FILTER_KEYS = [
   'search', 'type', 'country', 'region', 'appellation', 'grapes',
@@ -157,7 +158,7 @@ function Bottles() {
       });
       labels.grapes = t('bottles.chipGrape', 'Grape: {{value}}', { value: names.join(', ') });
     }
-    if (filters.vintage) labels.vintage = t('bottles.chipVintage', 'Vintage: {{value}}', { value: filters.vintage });
+    if (filters.vintage) labels.vintage = t('bottles.chipVintage', 'Vintage: {{value}}', { value: formatVintage(filters.vintage, t) });
     if (filters.producer) labels.producer = t('bottles.chipProducer', 'Producer: {{value}}', { value: filters.producer });
     if (filters.bottleSize) labels.bottleSize = t('bottles.chipSize', 'Size: {{value}}', { value: filters.bottleSize });
     // Rating bounds arrive normalised (0–100) and read back in the user's scale.

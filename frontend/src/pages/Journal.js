@@ -8,6 +8,7 @@ import { getJournalEntries, deleteJournalEntry } from '../api/journal';
 import ConfirmModal from '../components/ConfirmModal';
 import LoadError from '../components/LoadError';
 import './Journal.css';
+import { formatVintage } from '../utils/vintage';
 
 const JournalEntryForm = lazy(() => import('../components/JournalEntryForm'));
 
@@ -233,7 +234,7 @@ export default function Journal() {
                                 <div className="journal-card__pairing-wine">
                                   <span className="journal-card__pairing-icon">{t('journal.wine', 'Wine')}</span>
                                   <span className="journal-card__pairing-text">
-                                    {wineName || '—'}{vintage ? ` ${vintage}` : ''}
+                                    {wineName || '—'}{vintage ? ` ${formatVintage(vintage, t)}` : ''}
                                   </span>
                                 </div>
                               </div>

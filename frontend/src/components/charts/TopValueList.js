@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useBackHere } from '../../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { TYPE_COLORS, fmtCurrency } from './chartHelpers';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * "Most Valuable Bottles". Rows link to their bottle when the payload carries
@@ -28,14 +29,14 @@ function TopValueList({ bottles, currency }) {
             <Link to={`/cellars/${b.cellarId}/bottles/${b.id}`} state={backHere} className="top-bottle-info top-bottle-info--link" title={t('statistics.openBottle')}>
               <div className="top-bottle-name" title={b.name}>{b.name}</div>
               <div className="top-bottle-meta">
-                {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{b.vintage}
+                {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{formatVintage(b.vintage, t)}
               </div>
             </Link>
           ) : (
             <div className="top-bottle-info">
               <div className="top-bottle-name" title={b.name}>{b.name}</div>
               <div className="top-bottle-meta">
-                {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{b.vintage}
+                {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{formatVintage(b.vintage, t)}
               </div>
             </div>
           )}
