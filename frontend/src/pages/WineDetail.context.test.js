@@ -69,7 +69,7 @@ test('a visitor sees how many vintages are reviewed and a sign-up link, never th
 
 // The serving line everyone sees on the wine page: the temperature in the
 // reader's unit and the air trait in words; the per-bottle decanting advice
-// stays on the bottle page.
+// stays on the bottle page. No byline: the registry never says who set a value.
 test('a visitor sees the serving temperature and the air trait, a member in the unit they chose', async () => {
   const serving = { temperature: { min: 8, max: 10, source: 'style' }, unit: 'C', needsAir: 'none' };
   auth = { apiFetch: fetchWine, user: null };
@@ -77,7 +77,7 @@ test('a visitor sees the serving temperature and the air trait, a member in the 
   const { unmount } = renderPage();
   await screen.findByText('wineDetail.whenToDrink');
   expect(document.querySelector('.bd-ai-serving').textContent)
-    .toBe('serving.label:serving.temperature|{"range":"8–10 °C"} · serving.needsAir.none (serving.bySommelier)');
+    .toBe('serving.label:serving.temperature|{"range":"8–10 °C"} · serving.needsAir.none');
   unmount();
 
   auth = { apiFetch: fetchWine, user: { id: 'u1', preferences: { temperatureUnit: 'F' } } };
@@ -85,7 +85,7 @@ test('a visitor sees the serving temperature and the air trait, a member in the 
   renderPage();
   await screen.findByText('wineDetail.whenToDrink');
   expect(document.querySelector('.bd-ai-serving').textContent)
-    .toBe('serving.label:serving.temperature|{"range":"46–50 °F"} (serving.byStyle)');
+    .toBe('serving.label:serving.temperature|{"range":"46–50 °F"}');
 });
 
 test('a member sees the drink windows', async () => {

@@ -13,14 +13,11 @@ import { formatTemperatureRange, temperatureUnitOf } from '../utils/temperature'
 function ServingLine({ serving, user, t }) {
   if (!serving?.temperature) return null;
   const range = formatTemperatureRange(serving.temperature.min, serving.temperature.max, temperatureUnitOf(user));
-  const bySommelier = serving.temperature.source === 'sommelier' || !!serving.needsAir;
   return (
     <div className="bd-ai-pairings bd-ai-serving">
       <span className="bd-ai-pairings__label">{t('serving.label', { defaultValue: 'Serving' })}:</span>
       {t('serving.temperature', { range, defaultValue: 'Serve at {{range}}' })}
       {serving.needsAir ? ` · ${t(`serving.needsAir.${serving.needsAir}`)}` : ''}
-      {' '}
-      <span className="bd-serving-source">({bySommelier ? t('serving.bySommelier', { defaultValue: 'Set by the sommelier' }) : t('serving.byStyle', { defaultValue: 'Style guideline' })})</span>
     </div>
   );
 }
