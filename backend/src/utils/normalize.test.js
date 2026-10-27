@@ -188,6 +188,17 @@ describe('normalizeClassification', () => {
     expect(normalizeAppellation('Barolo (DOCG)')).toBe('Barolo');
   });
 
+  test('prod 2026-10-26: the apostrophe Italian spelling and the bare French mark', () => {
+    expect(normalizeClassification("Denominazione d'Origine Controllata")).toBeNull();
+    expect(normalizeClassification("Denominazione d’Origine Controllata e Garantita")).toBeNull();
+    expect(normalizeClassification('Appellation Contrôlée')).toBeNull();
+    expect(normalizeClassification('Appellation Protégée')).toBeNull();
+    expect(normalizeClassification("Riserva Denominazione d'Origine Controllata")).toBe('Riserva');
+    expect(normalizeAppellation("Langhe Denominazione d'Origine Controllata")).toBe('Langhe');
+    expect(normalizeAppellation('Pommard Appellation Contrôlée')).toBe('Pommard');
+    expect(normalizeAppellation('Appellation Contrôlée')).toBe('Appellation Contrôlée'); // all-mark input survives, as every appellation rule
+  });
+
   test('the appellation rule is unchanged by sharing its loops', () => {
     expect(normalizeAppellation('DOCG')).toBe('DOCG');
     expect(normalizeAppellation('Denominazione di Origine Controllata')).toBe('Denominazione di Origine Controllata');
