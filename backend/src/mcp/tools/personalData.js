@@ -236,33 +236,42 @@ const keyOut = (k) => ({
 
 registerTool({
   name: 'update_personal_key',
-  title: 'Rename one of the user\'s personal data keys or change its unit',
+  title: 'Rename one of the user\'s personal data keys, change its unit or its allowed values',
   description:
     'Renames a key in the user\'s own personal-data vocabulary (key_id from list_analytics_fields — the part after ' +
-    '"personal." — or from an entry\'s key) and/or changes its unit. The id never changes, so every stored entry ' +
-    'and analytics field keeps working. The unit can change only on integer/decimal keys that hold NO entries yet ' +
-    '(a unit is part of what each stored value means); pass an empty string to clear it. The key\'s TYPE never ' +
-    'changes — create a new key instead. Reversible via undo_last.',
+    '"personal." — or from an entry\'s key), changes its unit and/or replaces the allowed values of an enum key. ' +
+    'The id never changes, so every stored entry and analytics field keeps working. The unit can change only on ' +
+    'integer/decimal keys that hold NO entries yet (a unit is part of what each stored value means); pass an empty ' +
+    'string to clear it. enum_options is the COMPLETE new list for an enum key: add values at any time; a value an ' +
+    'entry still holds must stay on the list (change those entries first). The key\'s TYPE never changes — create ' +
+    'a new key instead. Reversible via undo_last.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     key_id: objectId,
     name: z.string().min(1).max(60).optional().describe('New display name (case-insensitively unique among the user\'s keys)'),
     unit: z.string().max(20).optional().describe('New unit for a numeric key with no entries; "" clears it'),
+    enum_options: z.array(z.string().max(40)).min(2).max(20).optional()
+      .describe('For an enum key: the complete new list of allowed values (2–20); a value an entry still holds must stay'),
   },
   handler: async (args, ctx) => {
-    const result = await personalData.updateKey(ctx.user.id, args.key_id, { name: args.name, unit: args.unit });
+    const result = await personalData.updateKey(ctx.user.id, args.key_id, {
+      name: args.name, unit: args.unit, enumOptions: args.enum_options,
+    });
     if (!result.ok) return svcFail(result);
 
     logAudit(ctx.req, 'personal_data.key_update',
       { type: 'personalDataKey', id: result.key._id },
-      { from: result.prev, to: { name: result.key.name, unit: result.key.unit }, via: 'mcp' });
+      { from: result.prev, to: { name: result.key.name, unit: result.key.unit, enumOptions: result.key.enumOptions }, via: 'mcp' });
 
     const changes = [];
     const nameChanged = result.prev.name !== result.key.name;
     const unitChanged = (result.prev.unit || null) !== (result.key.unit || null);
+    const optionsChanged = Object.prototype.hasOwnProperty.call(result.prev, 'enumOptions')
+      && JSON.stringify(result.prev.enumOptions || null) !== JSON.stringify(result.key.enumOptions || null);
     if (nameChanged) changes.push(`renamed "${result.prev.name}" → "${result.key.name}"`);
     if (unitChanged) changes.push(`unit ${JSON.stringify(result.prev.unit || null)} → ${JSON.stringify(result.key.unit || null)}`);
+    if (optionsChanged) changes.push(`allowed values now: ${(result.key.enumOptions || []).join(', ')}`);
     const envelope = {
       summary: changes.length ? `Key ${changes.join(', ')}` : `Key "${result.key.name}" unchanged`,
       data: { key: keyOut(result.key), undo: 'undo_last restores what this call changed' },
@@ -273,7 +282,11 @@ registerTool({
       detail: { op: 'key_update', keyId: String(result.key._id), key: result.key.name },
       // Only the fields THIS call changed — undoing a rename must not touch a
       // unit set elsewhere (audit 2026-09-14 M2).
-      prev: { ...(nameChanged ? { name: result.prev.name } : {}), ...(unitChanged ? { unit: result.prev.unit } : {}) },
+      prev: {
+        ...(nameChanged ? { name: result.prev.name } : {}),
+        ...(unitChanged ? { unit: result.prev.unit } : {}),
+        ...(optionsChanged ? { enumOptions: result.prev.enumOptions } : {}),
+      },
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

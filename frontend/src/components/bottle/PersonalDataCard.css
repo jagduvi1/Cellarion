@@ -78,6 +78,21 @@
   margin: 0.35rem 0 0;
 }
 
+/* "Add a new value to the list" under a list key's select: a quiet text
+   button, the one way to extend a list after its creation. */
+.pd-add-option {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary, #7c2d3a);
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* ── Entry rows: a clean key → value ledger ── */
 .pd-entries {
   margin-top: 0.15rem;

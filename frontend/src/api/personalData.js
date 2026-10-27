@@ -25,3 +25,11 @@ export const deletePersonalDataEntry = (apiFetch, entryId) =>
 
 export const getPersonalDataKeys = (apiFetch) =>
   apiFetch('/api/personal-data/keys');
+
+// Rename a key, change its unit, or replace the allowed values of a list key.
+export const updatePersonalDataKey = (apiFetch, keyId, data) =>
+  apiFetch(`/api/personal-data/keys/${keyId}`, {
+    method: 'PATCH',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });

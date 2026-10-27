@@ -6,6 +6,7 @@ vi.mock('../../api/personalData', () => ({
   updatePersonalDataEntry: vi.fn(),
   deletePersonalDataEntry: vi.fn(),
   getPersonalDataKeys: vi.fn(),
+  updatePersonalDataKey: vi.fn(),
 }));
 
 // The card passes English fallbacks inline — return those so assertions read
@@ -21,7 +22,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 const {
-  getPersonalData, addPersonalData, deletePersonalDataEntry, getPersonalDataKeys,
+  getPersonalData, addPersonalData, deletePersonalDataEntry, getPersonalDataKeys, updatePersonalDataKey,
 } = await import('../../api/personalData');
 const PersonalDataCard = (await import('./PersonalDataCard')).default;
 
@@ -247,4 +248,64 @@ test('delete removes own entry and reloads', async () => {
   fireEvent.click(screen.getByText('Delete'));
   await waitFor(() => expect(deletePersonalDataEntry).toHaveBeenCalledWith(expect.any(Function), 'e1'));
   await waitFor(() => expect(getPersonalData).toHaveBeenCalledTimes(2));
+});
+
+// A list key could never grow after its creation (user ticket 2026-10-27):
+// under the select, "Add a new value to the list" extends the key first, then
+// saves the entry with the new value.
+const LIST_KEY = { _id: 'k9', name: 'Closure', type: 'enum', unit: null, enumOptions: ['cork', 'screwcap'] };
+
+const openListKey = async () => {
+  renderCard();
+  await screen.findByText('Nothing recorded yet.');
+  fireEvent.click(screen.getByText('+ Add'));
+  await screen.findByText('Add wine data');
+  fireEvent.click(await screen.findByRole('button', { name: 'Closure' }));
+  await screen.findByText(/Existing key — type: enum/);
+};
+
+test('an existing list key takes a new value: the list is extended first, then the entry saved with it', async () => {
+  getPersonalDataKeys.mockResolvedValue(ok({ keys: [LIST_KEY] }));
+  updatePersonalDataKey.mockResolvedValue(ok({ key: { ...LIST_KEY, enumOptions: ['cork', 'screwcap', 'crown'] } }));
+  addPersonalData.mockResolvedValue(ok({ entry: entry() }));
+  await openListKey();
+
+  fireEvent.click(screen.getByText('+ Add a new value to the list'));
+  fireEvent.change(screen.getByLabelText(/^Value$/), { target: { value: ' crown ' } });
+  fireEvent.click(screen.getByText('Save'));
+
+  await waitFor(() => expect(updatePersonalDataKey).toHaveBeenCalledWith(
+    expect.any(Function), 'k9', { enumOptions: ['cork', 'screwcap', 'crown'] }
+  ));
+  await waitFor(() => expect(addPersonalData).toHaveBeenCalledWith(
+    expect.any(Function), BOTTLE_ID, { level: 'bottle', value: 'crown', keyId: 'k9' }
+  ));
+});
+
+test('a new value that only differs in case from a listed one reuses it; the key is left alone', async () => {
+  getPersonalDataKeys.mockResolvedValue(ok({ keys: [LIST_KEY] }));
+  addPersonalData.mockResolvedValue(ok({ entry: entry() }));
+  await openListKey();
+
+  fireEvent.click(screen.getByText('+ Add a new value to the list'));
+  fireEvent.change(screen.getByLabelText(/^Value$/), { target: { value: 'Cork' } });
+  fireEvent.click(screen.getByText('Save'));
+
+  await waitFor(() => expect(addPersonalData).toHaveBeenCalledWith(
+    expect.any(Function), BOTTLE_ID, { level: 'bottle', value: 'cork', keyId: 'k9' }
+  ));
+  expect(updatePersonalDataKey).not.toHaveBeenCalled();
+});
+
+test('a refused list change surfaces the server message and saves no entry', async () => {
+  getPersonalDataKeys.mockResolvedValue(ok({ keys: [LIST_KEY] }));
+  updatePersonalDataKey.mockResolvedValue({ ok: false, json: async () => ({ error: 'Too many enum options (max 20)' }) });
+  await openListKey();
+
+  fireEvent.click(screen.getByText('+ Add a new value to the list'));
+  fireEvent.change(screen.getByLabelText(/^Value$/), { target: { value: 'wax' } });
+  fireEvent.click(screen.getByText('Save'));
+
+  expect(await screen.findByText('Too many enum options (max 20)')).toBeInTheDocument();
+  expect(addPersonalData).not.toHaveBeenCalled();
 });
