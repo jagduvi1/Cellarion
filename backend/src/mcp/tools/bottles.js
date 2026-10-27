@@ -20,6 +20,7 @@ const {
   wineSummary, bottleSummary, pageParams, hasContent,
 } = require('../toolUtil');
 const { photosForBottle, photoPresence } = require('../../services/photoState');
+const { servingAdvice, servingSentence } = require('../../utils/servingUtils');
 const { openQuestionForRecipient } = require('../../services/ownerInquiryOps');
 const bottleSearch = require('../../services/bottleSearch');
 
@@ -253,6 +254,20 @@ async function buildBottleDetail(userId, bottleId) {
   }
   const { cellar, role } = access;
   const b = await Bottle.findById(access.bottle._id).populate(WINE_POPULATE).lean();
+  // The vintage's phase today, for the serving line: "decant" while young,
+  // "pour carefully" when old, from the same window drink_window_for shows.
+  // A failed lookup leaves the temperature alone, never the whole answer.
+  let phase = null;
+  if (b.wineDefinition && !CONSUMED_STATUSES.includes(b.status)) {
+    try {
+      const { buildProfileMap, classifyMaturity } = require('../../utils/maturityUtils');
+      const profileMap = await buildProfileMap([b]);
+      phase = classifyMaturity(b, profileMap) || null;
+      if (phase === 'none') phase = null;
+    } catch (err) {
+      console.warn('[mcp] maturity lookup failed for bottle %s: %s', b._id, err.message);
+    }
+  }
   // The rack's geometry too: placement says shelf / row / col, not only the
   // position (utils/rackGeometry.slotLocation — the same words GET
   // /api/inventory uses), so nobody has to count positions by hand.
@@ -299,6 +314,13 @@ async function buildBottleDetail(userId, bottleId) {
         // materialized by Mongoose defaults — return null, not empty shells.
         community_rating: wd.communityRating?.reviewCount ? wd.communityRating : null,
         tasting_profile: hasContent(wd.aiProfile) ? wd.aiProfile : null,
+        // Serving temperature and air, composed for THIS bottle's phase today
+        // from the sommelier's trait (or the style's default): the advice
+        // changes as the vintage ages, the record does not.
+        serving: (() => {
+          const advice = servingAdvice(wd, phase);
+          return advice ? { ...advice, phase, advice: servingSentence(advice) } : null;
+        })(),
         // A PRIVATE DRAFT wine (support ticket 2026-09-12): the user's own
         // record, not shared registry content yet.
         ...(wd.draft === true ? {

@@ -531,6 +531,17 @@
   margin-bottom: 0.6rem;
 }
 
+/* The serving temperature is a range: two short number inputs on one line. */
+.somm-profile-range {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.somm-profile-range input {
+  width: 4.5rem;
+}
+
 .somm-profile-field {
   display: flex;
   flex-direction: column;

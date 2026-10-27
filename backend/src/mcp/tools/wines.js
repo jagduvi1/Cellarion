@@ -177,6 +177,16 @@ registerTool({
       lwin7: w.lwin?.lwin7 || null,
       community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
       tasting_profile: anonymous ? publicProfileSummary(profile) : profile,
+      // Wine-level serving advice: the temperature (sommelier's or the
+      // style's), and the air trait without a phase — a wine has vintages
+      // at different ages; get_bottle composes the decanting advice per bottle.
+      serving: (() => {
+        const { servingAdvice, servingSentence } = require('../../utils/servingUtils');
+        const advice = servingAdvice(w, null);
+        return advice
+          ? { ...advice, needs_air: (w.aiProfile && w.aiProfile.needsAir) || null, advice: servingSentence(advice) }
+          : null;
+      })(),
       // The same picture the public wine page shows; a caller's own pending
       // photos are on get_bottle → photos, never here. The credit stays with
       // signed-in callers, as on the REST public projection; an inline data:

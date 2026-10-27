@@ -549,6 +549,30 @@ describe('set_wine_profile', () => {
     expect(McpActionLog.create.mock.calls[0][0].prev).toMatchObject({ type: 'rosé', colour: null });
   });
 
+  // The serving trait: a temperature range and whether the wine needs air when
+  // young, stored on the profile and composed into advice against the
+  // vintage's phase on the day it is read (utils/servingUtils).
+  test('serving_temperature_c + needs_air land on the profile as a trait, echoed back, and undo keeps the old values', async () => {
+    const w = wine({ aiProfile: { description: 'Big, tannic.', source: 'ai', servingTempMin: null, servingTempMax: null, needsAir: null } });
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), serving_temperature_c: { min: 17, max: 18 }, needs_air: 'long' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(w.aiProfile.servingTempMin).toBe(17);
+    expect(w.aiProfile.servingTempMax).toBe(18);
+    expect(w.aiProfile.needsAir).toBe('long');
+    expect(body.data.profile.serving_temperature_c).toEqual({ min: 17, max: 18 });
+    expect(body.data.profile.needs_air).toBe('long');
+    expect(McpActionLog.create.mock.calls[0][0].prev).toMatchObject({ servingTempMin: null, servingTempMax: null, needsAir: null });
+  });
+
+  test('a serving range with min above max is refused, nothing written', async () => {
+    const w = wine();
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), serving_temperature_c: { min: 18, max: 16 } }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(w.save).not.toHaveBeenCalled();
+  });
+
   // Audit 2026-09-19: the model hook would drop it, so the tool used to report
   // a success that stored nothing.
   test('a colour on a wine that stays red/white/rosé is refused, nothing written', async () => {

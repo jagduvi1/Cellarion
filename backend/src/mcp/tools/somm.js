@@ -678,7 +678,11 @@ registerTool({
     food_pairings: z.array(z.string().max(60)).max(8).nullable().optional()
       .describe('Replaces the whole list.'),
     description: z.string().max(1000).nullable().optional()
-      .describe('Plain-text tasting note shown to owners. null clears it.'),
+      .describe('Plain-text tasting note shown to owners. null clears it. Never serving instructions: those come from serving_temperature_c and needs_air, composed against the vintage\'s phase on the day the page is read.'),
+    serving_temperature_c: z.object({ min: z.number().int().min(0).max(30), max: z.number().int().min(0).max(30) }).nullable().optional()
+      .describe('Serving temperature range in °C, set ONLY when the wine departs from its style\'s default (full reds 16–18, light reds 13–15, crisp whites 8–10, oaked whites 10–12, sparkling 6–8, rosé 8–10, sweet 6–8, fortified 12–16). null returns to the default.'),
+    needs_air: z.enum(['long', 'short', 'none']).nullable().optional()
+      .describe('Whether the wine needs air when young: "long" = decant one to two hours while young (tannic reds, big structured whites), "short" = a little air helps (the default for reds), "none" = never decant (fragile old wines, sparkling, most whites). The page turns this into "decant", "open ahead" or "pour carefully" from the vintage\'s phase TODAY, so the advice stays right as the wine ages. null returns to the type\'s default.'),
     type: z.enum(WINE_TYPES).optional()
       .describe('Correct the wine\'s structural type. Cannot be cleared — every wine has one.'),
     colour: z.enum(WINE_COLOURS).nullable().optional()
@@ -697,6 +701,12 @@ registerTool({
       if (args[f] !== undefined) patch[f] = args[f];
     }
     if (args.food_pairings !== undefined) patch.foodPairings = args.food_pairings;
+    if (args.needs_air !== undefined) patch.needsAir = args.needs_air;
+    if (args.serving_temperature_c !== undefined) {
+      const r = args.serving_temperature_c;
+      patch.servingTempMin = r ? r.min : null;
+      patch.servingTempMax = r ? r.max : null;
+    }
 
     const check = validateProfilePatch(patch);
     if (!check.ok) return fail('invalid_input', check.error);
@@ -778,6 +788,10 @@ registerTool({
           flavors: wine.aiProfile.flavors,
           food_pairings: wine.aiProfile.foodPairings,
           description: wine.aiProfile.description,
+          serving_temperature_c: Number.isInteger(wine.aiProfile.servingTempMin) && Number.isInteger(wine.aiProfile.servingTempMax)
+            ? { min: wine.aiProfile.servingTempMin, max: wine.aiProfile.servingTempMax }
+            : null,
+          needs_air: wine.aiProfile.needsAir || null,
           source: wine.aiProfile.source,
         },
         record: {

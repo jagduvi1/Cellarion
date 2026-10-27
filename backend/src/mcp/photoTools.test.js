@@ -30,6 +30,9 @@ jest.mock('../models/WineCorrectionProposal', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
 }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
+// get_bottle reads the vintage's window for its serving line (utils/servingUtils);
+// unmocked, the query waits on mongoose's buffer and the test times out.
+jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(() => ({ lean: () => Promise.resolve([]) })) }));
 // get_bottle's open-curator-question lookup — "none", so the real model never buffers.
 jest.mock('../models/WineOwnerInquiry', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),

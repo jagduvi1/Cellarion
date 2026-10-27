@@ -113,6 +113,26 @@ describe('validateProfilePatch', () => {
     expect(validateProfilePatch({ grapes: ['x'.repeat(61)] }).ok).toBe(false);
     expect(validateProfilePatch({ grapes: Array.from({ length: 21 }, (_, i) => `g${i}`) }).ok).toBe(false);
   });
+
+  // The serving trait (utils/servingUtils): a temperature RANGE in whole °C
+  // and an air trait — stored, never a sentence; the page composes the advice
+  // against the vintage's phase on the day it is read.
+  test('the serving temperature is a pair of whole °C: both ends or neither, min ≤ max', () => {
+    expect(validateProfilePatch({ servingTempMin: 16, servingTempMax: 18 }).clean).toEqual({ servingTempMin: 16, servingTempMax: 18 });
+    expect(validateProfilePatch({ servingTempMin: null, servingTempMax: null }).clean).toEqual({ servingTempMin: null, servingTempMax: null });
+    expect(validateProfilePatch({ servingTempMin: 16 }).ok).toBe(false);
+    expect(validateProfilePatch({ servingTempMin: 16, servingTempMax: null }).ok).toBe(false);
+    expect(validateProfilePatch({ servingTempMin: 18, servingTempMax: 16 }).ok).toBe(false);
+    expect(validateProfilePatch({ servingTempMin: 16.5, servingTempMax: 18 }).ok).toBe(false);
+    expect(validateProfilePatch({ servingTempMin: -1, servingTempMax: 18 }).ok).toBe(false);
+    expect(validateProfilePatch({ servingTempMin: 16, servingTempMax: 31 }).ok).toBe(false);
+  });
+
+  test('needsAir is a closed vocabulary; null clears it back to the type\'s default', () => {
+    expect(validateProfilePatch({ needsAir: 'long' }).clean).toEqual({ needsAir: 'long' });
+    expect(validateProfilePatch({ needsAir: null }).clean).toEqual({ needsAir: null });
+    expect(validateProfilePatch({ needsAir: 'always' }).ok).toBe(false);
+  });
 });
 
 describe('resolveGrapeIdsStrict (match-only)', () => {

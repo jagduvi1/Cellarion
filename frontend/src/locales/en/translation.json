@@ -56,6 +56,19 @@
     "loadFailed": "Failed to load ({{status}})",
     "actionFailed": "Failed ({{status}})"
   },
+  "serving": {
+    "label": "Serving",
+    "temperature": "Serve at {{min}}–{{max}} °C",
+    "air": {
+      "decant_long": "decant one to two hours before serving",
+      "decant_short": "open thirty minutes ahead, or decant briefly",
+      "open_ahead": "open half an hour ahead",
+      "pour": "open and pour",
+      "pour_careful": "open and pour; sediment is likely, so pour carefully"
+    },
+    "byStyle": "Style guideline",
+    "bySommelier": "Set by the sommelier"
+  },
   "nav": {
     "myCellars": "My Cellars",
     "wineRegistry": "Wine Registry",
@@ -2717,6 +2730,17 @@
       "description": "Tasting note",
       "descriptionPlaceholder": "Two or three plain sentences the owner will read on the bottle page.",
       "commaSeparated": "Comma-separated",
+      "serving": "Serving",
+      "servingTemp": "Serving temperature (°C)",
+      "servingTempHint": "Leave blank for the style's default. Both ends or neither.",
+      "needsAir": "Needs air when young",
+      "needsAirHint": "The bottle page turns this into \"decant\", \"open ahead\" or \"pour carefully\" from the vintage's phase on the day it is read. Never write serving instructions in the tasting note.",
+      "needsAirValue": {
+        "long": "Long — decant one to two hours while young",
+        "short": "Short — a little air helps",
+        "none": "None — never decant"
+      },
+      "needsAirDefault": "— the type's default —",
       "unset": "— not set —",
       "value": {
         "light": "Light",
