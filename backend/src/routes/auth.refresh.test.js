@@ -559,10 +559,15 @@ describe('POST /api/auth/refresh — rate limits', () => {
     expect((await request({ path: '/api/auth/refresh', cookie: madeUpCookie() })).status).toBe(401);
   });
 
-  test('without a cookie the limit falls back to the address', async () => {
+  test('without a cookie there is nothing to limit: the 31st probe from one address is 401 like the first', async () => {
+    // The app's cold-start session probe. Signed-out visitors and crawlers
+    // that execute the app send one per page view; none can guess a token.
+    // Counted, a crawler on the public wine pages was answered 429 for most
+    // of its crawl (2026-10-27).
     mockFixedIp = '198.51.100.2';
-    for (let i = 0; i < 30; i++) expect((await request({ path: '/api/auth/refresh' })).status).toBe(401);
-    expect((await request({ path: '/api/auth/refresh' })).status).toBe(429);
+    for (let i = 0; i < 31; i++) expect((await request({ path: '/api/auth/refresh' })).status).toBe(401);
+    // And the address's own ceiling is untouched: a made-up cookie still gets the normal answer.
+    expect((await request({ path: '/api/auth/refresh', cookie: madeUpCookie() })).status).toBe(401);
   });
 
   test('one address is capped at 300 refreshes per window, however many cookies it makes up', async () => {

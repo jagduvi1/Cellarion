@@ -298,6 +298,16 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
+// A session probe with no refresh cookie is not a write: the app sends one on
+// every cold start to learn whether a session exists, so every signed-out
+// visitor and every crawler that executes the app sends one per page view.
+// It cannot guess a token (there is none to guess) and answers 401 before the
+// route touches anything, so it never counts here. Before this, a crawler
+// rendering ~900 public wine pages in 25 minutes hit the write ceiling, got
+// 663 × 429 on nothing, and left an audit row for each (2026-10-27).
+const isCookielessRefresh = (req) =>
+  req.method === 'POST' && req.originalUrl.split('?')[0] === '/api/auth/refresh' && !req.cookies?.refreshToken;
+
 // Stricter limiter for write operations (POST/PUT/DELETE/PATCH) — default 60 per 15 min
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -310,7 +320,8 @@ const writeLimiter = rateLimit({
   // the shared write budget until real writes 429'd. It stays under
   // apiLimiter like every other read.
   skip: (req) => isStripeWebhook(req) || isMcp(req) || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
-    || (req.method === 'POST' && req.path === '/analytics/query'),
+    || (req.method === 'POST' && req.path === '/analytics/query')
+    || isCookielessRefresh(req),
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'write', limit: rateLimitsConfig.get().write.max });
     res.status(429).json({ error: 'Too many write requests, please try again later' });

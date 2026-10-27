@@ -522,7 +522,8 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
 // bucket made their refreshes compete, with a 429 for whoever came last.
 // Every successful refresh rotates the token, so this bounds a client retrying
 // the SAME token (a retry loop against a failing server), which is what needs
-// bounding. A request without a cookie falls back to its address.
+// bounding. A request without a cookie never reaches the limiters (see
+// noCookieIsNotAnAttempt below); the address fallback stays for safety.
 const refreshKey = (req) => {
   const raw = req.cookies?.refreshToken;
   return raw ? `rt:${hashRefreshToken(raw).slice(0, 32)}` : `ip:${rateLimitKey(req)}`;
@@ -550,8 +551,19 @@ const refreshIpLimiter = rateLimit({
   }
 });
 
+// A probe with no cookie is not an attempt at anything: the app sends one on
+// every cold start to learn whether a session exists, so every signed-out
+// visitor, and every crawler that executes the app, sends one per page view.
+// Answered before the limiters so it is counted nowhere — counted, a crawler
+// rendering public wine pages tripped the 30-per-address bucket within a
+// minute and was answered 429 for the rest of its crawl (2026-10-27).
+const noCookieIsNotAnAttempt = (req, res, next) => {
+  if (!req.cookies?.refreshToken) return res.status(401).json({ error: 'No refresh token' });
+  next();
+};
+
 // POST /api/auth/refresh - Issue new access token using httpOnly refresh token cookie
-router.post('/refresh', refreshIpLimiter, refreshLimiter, async (req, res) => {
+router.post('/refresh', noCookieIsNotAnAttempt, refreshIpLimiter, refreshLimiter, async (req, res) => {
   const incomingToken = req.cookies?.refreshToken;
   if (!incomingToken) {
     return res.status(401).json({ error: 'No refresh token' });
