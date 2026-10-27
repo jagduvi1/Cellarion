@@ -34,6 +34,9 @@ jest.mock('../models/WineCorrectionProposal', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
 }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
+// get_bottle reads the vintage's window for its serving line (utils/servingUtils);
+// no profiles here, so the line carries the style's temperature only.
+jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(() => ({ lean: () => Promise.resolve([]) })) }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 // get_bottle looks up an unanswered curator question for the viewer
 // (open_curator_question, 2026-09-24) — "none" by default so the real model

@@ -118,6 +118,15 @@ const wineDefinitionSchema = new mongoose.Schema({
     flavors:      { type: [String], default: [] },              // e.g. ['dark cherry', 'tar']
     foodPairings: { type: [String], default: [] },              // e.g. ['braised beef']
     description:  { type: String, default: null, trim: true },  // short PLAIN-TEXT prose; markdown stripped at write (enrichmentJob)
+    // Serving trait, curator-set, composed into advice at read time
+    // (utils/servingUtils): the temperature range in °C, and whether the
+    // wine needs air when young ('long' | 'short' | 'none'). Never a
+    // sentence — "decant an hour" is wrong once the vintage is old; the
+    // page derives it from the trait and the vintage's phase today. Null =
+    // the style's default applies.
+    servingTempMin: { type: Number, default: null },
+    servingTempMax: { type: Number, default: null },
+    needsAir:       { type: String, default: null, trim: true },
     confidence:   { type: Number, default: null },             // 0..1 — how sure the AI is
     // The model's doubt about the producer FIELD itself — set true when it
     // recognises the "producer" as a range/brand of another house, a place,

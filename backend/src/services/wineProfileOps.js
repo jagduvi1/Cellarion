@@ -32,7 +32,15 @@ const PROFILE_ENUMS = {
   tannin:    ['low', 'medium', 'high'],
   acidity:   ['low', 'medium', 'high'],
   sweetness: ['dry', 'off-dry', 'sweet'],
+  // Whether the wine needs air when young; the page turns it into decanting
+  // advice against the vintage's phase today (utils/servingUtils).
+  needsAir:  ['long', 'short', 'none'],
 };
+
+// The serving temperature, °C, as a pair: both or neither, min ≤ max. Stored
+// on the profile as a trait; null means the style's default applies.
+const SERVING_FIELDS = ['servingTempMin', 'servingTempMax'];
+const { SERVING_TEMP_MIN_C, SERVING_TEMP_MAX_C } = require('../utils/servingUtils');
 
 const LIST_FIELDS = {
   flavors:      { max: 10, maxLen: 40 },
@@ -49,6 +57,7 @@ const EDITABLE_FIELDS = [
   ...Object.keys(PROFILE_ENUMS),
   ...Object.keys(LIST_FIELDS),
   'description',
+  ...SERVING_FIELDS,
 ];
 
 // Structural RECORD fields a curator may also correct (support ticket
@@ -170,6 +179,14 @@ function validateProfilePatch(patch) {
       continue;
     }
 
+    if (SERVING_FIELDS.includes(field)) {
+      if (!Number.isInteger(value) || value < SERVING_TEMP_MIN_C || value > SERVING_TEMP_MAX_C) {
+        return { ok: false, error: `${field} must be a whole number of °C between ${SERVING_TEMP_MIN_C} and ${SERVING_TEMP_MAX_C} (or null to clear)` };
+      }
+      clean[field] = value;
+      continue;
+    }
+
     // description
     if (typeof value !== 'string') {
       return { ok: false, error: 'description must be a string (or null)' };
@@ -182,6 +199,19 @@ function validateProfilePatch(patch) {
       return { ok: false, error: `description must be ${DESCRIPTION_MAX} characters or fewer` };
     }
     clean[field] = text || null;
+  }
+
+  // The serving temperature is a range: both ends travel together, and a
+  // half-range would read as the style's default anyway (utils/servingUtils).
+  const [lo, hi] = SERVING_FIELDS;
+  if ((lo in clean) !== (hi in clean)) {
+    return { ok: false, error: `${lo} and ${hi} go together — set both, or clear both with null` };
+  }
+  if (lo in clean && (clean[lo] === null) !== (clean[hi] === null)) {
+    return { ok: false, error: `${lo} and ${hi} go together — set both, or clear both with null` };
+  }
+  if (lo in clean && clean[lo] !== null && clean[lo] > clean[hi]) {
+    return { ok: false, error: `${lo} must not be above ${hi}` };
   }
 
   return { ok: true, clean };
@@ -351,6 +381,7 @@ function restoreProfile(wine, snap) {
 module.exports = {
   PROFILE_ENUMS,
   LIST_FIELDS,
+  SERVING_FIELDS,
   EDITABLE_FIELDS,
   RECORD_FIELDS,
   WINE_TYPES,

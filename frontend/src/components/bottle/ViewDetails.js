@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMaturityStatus, getPersonalWindowStatus, maturityBadgeText } from '../../utils/drinkStatus';
+import { servingAdvice, servingText } from '../../utils/serving';
 import { isReserved, reservationSummary } from '../../utils/reservation';
 import { bottleAnchorYear } from '../../utils/maturityUtils';
 import { convertAmountHistorical } from '../../utils/currency';
@@ -34,6 +35,20 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const maturityReviewed = vintageProfile?.status === 'reviewed' && (!isNv || vintageProfile.relative);
   const [showSommNotes, setShowSommNotes] = useState(false);
   const wine = bottle.wineDefinition;
+  // Serving line: the sommelier's trait (or the style's default) read against
+  // the phase this bottle is in today — the owner's own window first, then the
+  // sommelier's — so the decanting advice follows the wine's age, not a date
+  // someone wrote it down.
+  const servingPhase = personalWindow?.status || (maturityReviewed ? maturityStatus?.status : null) || null;
+  const serving = servingAdvice(wine, servingPhase);
+  const servingLine = serving ? (
+    <p className="bd-maturity-note bd-serving">
+      {servingText(serving, t)}{' '}
+      <span className="bd-serving-source">
+        ({serving.temperature.source === 'sommelier' || serving.air?.source === 'sommelier' ? t('serving.bySommelier') : t('serving.byStyle')})
+      </span>
+    </p>
+  ) : null;
   // "Not a wine? Move it to Other": the member's own word moves a cider or a
   // beer out of the shared wine registry (few holders) or asks a curator.
   const [notWine, setNotWine] = useState({ busy: false, status: null, holders: 0, confirming: false });
@@ -298,6 +313,10 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
               )}
             </div>
           )}
+          {/* Serving line in every state: the temperature is the style's
+              until the sommelier sets one, and the air advice follows the
+              phase once a window exists (the owner's own, or the sommelier's). */}
+          {servingLine}
         </div>
       )}
 

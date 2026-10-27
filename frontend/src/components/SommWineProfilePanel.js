@@ -50,6 +50,12 @@ function SommWineProfilePanel({ wine, onSaved }) {
     flavors:      listToText(ap?.flavors),
     foodPairings: listToText(ap?.foodPairings),
     description:  ap?.description || '',
+    // The serving trait: a temperature range (°C) and whether the wine needs
+    // air when young. Blank = the style's default; the page composes the
+    // advice from the trait and the vintage's phase on the day it is read.
+    servingTempMin: ap?.servingTempMin ?? '',
+    servingTempMax: ap?.servingTempMax ?? '',
+    needsAir:       ap?.needsAir || '',
   });
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
@@ -72,6 +78,9 @@ function SommWineProfilePanel({ wine, onSaved }) {
         flavors:      textToList(form.flavors),
         foodPairings: textToList(form.foodPairings),
         description:  form.description.trim() || null,
+        servingTempMin: form.servingTempMin === '' ? null : Number(form.servingTempMin),
+        servingTempMax: form.servingTempMax === '' ? null : Number(form.servingTempMax),
+        needsAir:       form.needsAir || null,
       };
       const res = await updateSommWineProfile(apiFetch, wine._id, payload);
       const data = await res.json().catch(() => ({}));
@@ -126,6 +135,14 @@ function SommWineProfilePanel({ wine, onSaved }) {
         {profile.foodPairings?.length > 0 && (
           <p className="somm-profile-line"><strong>{t('somm.profile.pairings')}:</strong> {profile.foodPairings.join(', ')}</p>
         )}
+        {(profile.servingTempMin != null || profile.needsAir) && (
+          <p className="somm-profile-line"><strong>{t('somm.profile.serving')}:</strong>{' '}
+            {[
+              profile.servingTempMin != null ? `${profile.servingTempMin}–${profile.servingTempMax} °C` : null,
+              profile.needsAir ? t(`somm.profile.needsAirValue.${profile.needsAir}`) : null,
+            ].filter(Boolean).join(' · ')}
+          </p>
+        )}
       </div>
     );
   }
@@ -166,6 +183,30 @@ function SommWineProfilePanel({ wine, onSaved }) {
         <textarea rows={3} value={form.description} onChange={set('description')} disabled={saving}
           maxLength={1000} placeholder={t('somm.profile.descriptionPlaceholder')} />
       </label>
+
+      <div className="somm-profile-grid">
+        <label className="somm-profile-field">
+          <span>{t('somm.profile.servingTemp')}</span>
+          <span className="somm-profile-range">
+            <input type="number" min={0} max={30} step={1} value={form.servingTempMin} onChange={set('servingTempMin')}
+              disabled={saving} aria-label={`${t('somm.profile.servingTemp')} min`} />
+            {' – '}
+            <input type="number" min={0} max={30} step={1} value={form.servingTempMax} onChange={set('servingTempMax')}
+              disabled={saving} aria-label={`${t('somm.profile.servingTemp')} max`} />
+          </span>
+          <small className="somm-profile-hint">{t('somm.profile.servingTempHint')}</small>
+        </label>
+        <label className="somm-profile-field">
+          <span>{t('somm.profile.needsAir')}</span>
+          <select value={form.needsAir} onChange={set('needsAir')} disabled={saving}>
+            <option value="">{t('somm.profile.needsAirDefault')}</option>
+            {['long', 'short', 'none'].map(v => (
+              <option key={v} value={v}>{t(`somm.profile.needsAirValue.${v}`)}</option>
+            ))}
+          </select>
+          <small className="somm-profile-hint">{t('somm.profile.needsAirHint')}</small>
+        </label>
+      </div>
 
       <div className="somm-profile-actions">
         <button type="button" className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
