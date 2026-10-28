@@ -38,6 +38,7 @@ const PROMPT_CATEGORIES = [
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function WineCard({ wine }) {
+  const { t } = useTranslation();
   const hasLink = wine.cellarId && wine.bottleId;
   const Wrapper = hasLink ? Link : 'div';
   const linkProps = hasLink
