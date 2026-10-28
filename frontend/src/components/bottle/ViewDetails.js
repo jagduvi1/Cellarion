@@ -22,7 +22,7 @@ import PriceTrackingToggle from './PriceTrackingToggle';
 import { markNotWine } from '../../api/wines';
 import { formatVintage } from '../../utils/vintage';
 
-function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, onWineChanged, draftNotice = null, recordFold = null }) {
+function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, onWineChanged, draftNotice = null, recordFold = null }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
@@ -328,6 +328,24 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
             className="bd-rack-link"
           >
             <span aria-hidden="true">{'\u{1F4CD}'}</span> {rackInfo.rackName} &middot; {t('bottleDetail.rackSlot')} {rackInfo.position}
+          </Link>
+        </div>
+      )}
+
+      {/* An unplaced bottle, in a cellar that has racks: the way to give it a
+          slot (support ticket 2026-10-26 — placing was reachable only from the
+          rack page). The link opens the rack page in the placing mode the add
+          flow uses, with this one bottle as the queue: tap a free slot, or
+          let it take the first free one. */}
+      {!rackInfo && cellarHasRacks && canEdit && bottle.status === 'active' && (
+        <div className="bd-section">
+          <span className="bd-section-label">{t('bottleDetail.rackLocation')}</span>
+          <Link
+            to={`/cellars/${cellarId}/racks`}
+            state={{ placeQueue: [bottle._id], placeFrom: 'bottle' }}
+            className="bd-rack-link"
+          >
+            <span aria-hidden="true">{'\u{1F4CD}'}</span> {t('bottleDetail.notInRack', 'Not in a rack yet')} &middot; {t('bottleDetail.placeInRack', 'Place in a rack')}
           </Link>
         </div>
       )}

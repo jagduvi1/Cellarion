@@ -176,6 +176,9 @@ function CellarRacks() {
   const backHere = useBackHere('racks');
   const [placeQueue, setPlaceQueue] = useState(() => readPlaceQueue(location.state));
   const [placeTotal] = useState(() => readPlaceQueue(location.state).length);
+  // The bottle page hands over ONE existing bottle (not a fresh add): the
+  // bar says so instead of "your new bottles".
+  const [placeFromBottle] = useState(() => !!(location.state && location.state.placeFrom === 'bottle'));
   const [placeNotice, setPlaceNotice] = useState(null);
   const [placeBusy, setPlaceBusy] = useState(false);
   // Back/reload after the queue drained used to re-enter the mode with the
@@ -1029,8 +1032,12 @@ function CellarRacks() {
         <div className={`alert ${placeNotice?.kind === 'error' ? 'alert-warning' : 'alert-info'} place-queue-bar`} role="status">
           <span>
             {placeQueue.length > 0
-              ? t('racks.placeQueue.progress', { placed: placedCount, total: placeTotal })
-              : t('racks.placeQueue.allPlaced', { count: placeTotal })}
+              ? (placeFromBottle && placeTotal === 1
+                ? t('racks.placeQueue.progressExisting', 'Placing the bottle')
+                : t('racks.placeQueue.progress', { placed: placedCount, total: placeTotal }))
+              : (placeFromBottle && placeTotal === 1
+                ? t('racks.placeQueue.placedExisting', 'The bottle is in its slot.')
+                : t('racks.placeQueue.allPlaced', { count: placeTotal }))}
             {placeQueue.length > 0 && <> · {t('racks.placeQueue.tapHint')}</>}
             {placeNotice?.text && <> · {placeNotice.text}</>}
           </span>

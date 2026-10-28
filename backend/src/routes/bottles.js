@@ -875,6 +875,11 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     // bytes. That per-open cost is what let an ordinary editing session hit
     // the API rate limit.
     let rackInfo = null;
+    // Whether the cellar has any rack at all: the page offers "Place in a
+    // rack" on an unplaced bottle only where that can lead somewhere
+    // (support ticket 2026-10-26). One indexed existence check, and only
+    // when the bottle is not racked (a racked bottle proves it).
+    let cellarHasRacks = false;
     if (bottle.status === 'active') {
       // Own try/catch: placement is auxiliary, and its lookup failing must
       // degrade to "no rack shown", never 500 the bottle page.
@@ -883,7 +888,11 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
         const rack = await Rack.findOne({
           cellar: cellar._id, 'slots.bottle': bottle._id, deletedAt: null,
         }).select('name slots').lean();
+        if (!rack) {
+          cellarHasRacks = !!(await Rack.exists({ cellar: cellar._id, deletedAt: null }));
+        }
         if (rack) {
+          cellarHasRacks = true;
           const slot = rack.slots.find((s) => s.bottle && s.bottle.toString() === bottle._id.toString());
           // inRoom drives the "show me in the 3D room" affordance; one more
           // narrow query, and only when the bottle is actually racked.
@@ -916,7 +925,7 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     }
 
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, vintageImageUrl, vintageImageCredit, otherVintageImageUrl, currentRelease, rackInfo, lotSiblingIds });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, vintageImageUrl, vintageImageCredit, otherVintageImageUrl, currentRelease, rackInfo, cellarHasRacks, lotSiblingIds });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });
