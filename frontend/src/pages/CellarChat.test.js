@@ -119,3 +119,26 @@ describe('CellarChat → Claude guide', () => {
     expect(screen.queryByRole('link', { name: /Connect Cellarion to Claude/ })).toBeNull();
   });
 });
+
+// Release audit 2026-10-28: the wine card called t() without declaring it, so
+// every answer that carried bottles threw during render and the whole app fell
+// to the error boundary. The card renders the real component with wines.
+describe('CellarChat → wine cards', () => {
+  test('an answer that carries wine cards renders them, vintage through the display helper', async () => {
+    usage.current = { used: 0, limit: 10, period: 'daily' };
+    apiFetchMock.mockImplementation(async (url) => {
+      if (url === '/api/chat/usage') return jsonRes(usage.current);
+      if (url === '/api/chat') {
+        return jsonRes({ answer: 'Try the Barolo.', wines: [{ name: 'Barolo Bussia', vintage: 'NV', producer: 'Prunotto', cellarId: 'c1', bottleId: 'b1' }] });
+      }
+      return jsonRes({ cellars: [] });
+    });
+    renderChat();
+    const box = await screen.findByPlaceholderText('cellarChat.placeholder');
+    fireEvent.change(box, { target: { value: 'what should I open tonight?' } });
+    await act(async () => { fireEvent.submit(box.closest('form')); });
+    expect(await screen.findByText('Barolo Bussia')).toBeInTheDocument();
+    expect(screen.getByText(/NV · Prunotto/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Barolo Bussia/ })).toHaveAttribute('href', '/cellars/c1/bottles/b1');
+  });
+});
