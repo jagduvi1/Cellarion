@@ -5,6 +5,10 @@
  * ("Standard", "1.5 L (Magnum)") are derived here via i18n — never stored.
  */
 
+// The instance src/i18n.js configures; importing that module here would pull
+// its react-i18next set-up into every component test that mocks it.
+import i18n from 'i18next';
+
 export const BOTTLE_SIZES = [
   { ml: 187, code: '187ml', nameKey: 'split' },
   { ml: 375, code: '375ml', nameKey: 'half' },
@@ -29,10 +33,23 @@ export function mlFromCode(code) {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** Format ml as a friendly volume: 750 → "750 ml", 1500 → "1.5 L". */
-export function formatVolume(ml) {
+// One number formatter per language. Only the number is localised: the units
+// stay "ml" and "L", since style: 'unit' turns English "750 ml" into "750 mL".
+const volumeFormats = new Map();
+function volumeFormat(locale) {
+  if (!volumeFormats.has(locale)) {
+    let fmt;
+    try { fmt = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }); } catch { fmt = new Intl.NumberFormat('en', { maximumFractionDigits: 3 }); }
+    volumeFormats.set(locale, fmt);
+  }
+  return volumeFormats.get(locale);
+}
+
+/** Format ml as a friendly volume in the chosen language: 750 → "750 ml", 1500 → "1.5 L" ("1,5 L" in nb). */
+export function formatVolume(ml, locale = i18n.language) {
   if (!isFinite(ml) || ml <= 0) return '';
-  return ml >= 1000 ? `${+(ml / 1000).toFixed(3)} L` : `${ml} ml`;
+  const fmt = volumeFormat(locale);
+  return ml >= 1000 ? `${fmt.format(ml / 1000)} L` : `${fmt.format(ml)} ml`;
 }
 
 /** Display label for a code, e.g. "1.5 L (Magnum)" or "900 ml" for unnamed. */

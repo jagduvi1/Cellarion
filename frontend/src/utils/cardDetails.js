@@ -105,7 +105,7 @@ export function cardDetails(bottles, fields, { ratingScale = '5', locale, cardSh
     let text = '';
     if (field === 'rating') text = ratingText(list, ratingScale);
     else if (field === 'price') text = priceText(list, locale);
-    else if (field === 'size') text = formatVolume(mlFromCode(list[0].bottleSize)) || list[0].bottleSize || '';
+    else if (field === 'size') text = formatVolume(mlFromCode(list[0].bottleSize), locale) || list[0].bottleSize || '';
     else if (field === 'region') {
       const names = list.map((b) => {
         const region = b.wineDefinition?.region?.name;
