@@ -75,6 +75,9 @@ function BottleDetail() {
   const [userRole, setUserRole] = useState(null);
   const [cellarColor, setCellarColor] = useState(null);
   const [rackInfo, setRackInfo] = useState(null);
+  // Whether the cellar has any rack: an unplaced bottle offers "Place in a
+  // rack" only then (support ticket 2026-10-26).
+  const [cellarHasRacks, setCellarHasRacks] = useState(false);
   // The other active bottles of this wine and vintage in the viewer's own
   // cellars (from the bottle response) — drives the edit form's "also apply
   // the drink window and price to the other N" checkbox, and the outcome
@@ -156,6 +159,7 @@ function BottleDetail() {
         // same question with one indexed query. That per-open cost is what
         // let an ordinary editing session hit the API rate limit.
         setRackInfo(data.rackInfo || null);
+        setCellarHasRacks(!!data.cellarHasRacks);
         setLotSiblingIds(Array.isArray(data.lotSiblingIds) ? data.lotSiblingIds : []);
         if (data.pendingImageUrl) {
           const url = data.pendingImageUrl.startsWith('http')
@@ -718,6 +722,7 @@ function BottleDetail() {
         <ViewDetails
           bottle={bottle}
           rackInfo={rackInfo}
+          cellarHasRacks={cellarHasRacks}
           cellarId={cellarId}
           vintageProfile={vintageProfile}
           priceHistory={priceHistory}

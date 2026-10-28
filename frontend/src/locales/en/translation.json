@@ -1280,6 +1280,8 @@
     "windowFromYear": "from {{year}}",
     "windowUntilYear": "until {{year}}",
     "rackLocation": "Rack Location",
+    "notInRack": "Not in a rack yet",
+    "placeInRack": "Place in a rack",
     "purchase": "Purchase",
     "priceEvolution": "Price Evolution",
     "premiumFeature": "Premium feature",
@@ -1648,6 +1650,8 @@
     "view3d": "3D",
     "placeQueue": {
       "progress": "Placing your new bottles: {{placed}} of {{total}} placed",
+      "progressExisting": "Placing the bottle",
+      "placedExisting": "The bottle is in its slot.",
       "tapHint": "tap a free slot for the next one",
       "autoPlace_one": "Auto-place the remaining bottle",
       "autoPlace_other": "Auto-place the remaining {{count}}",
@@ -3749,7 +3753,7 @@
         "d1": "Open a cellar and tap Racks in the strip at the top.",
         "d2": "Choose a rack type: grid, X-rack, honeycomb, A-frame, stack, modular cube, open shelf or wine cabinet.",
         "d3": "Customize each rack with a name, size, and layout that matches your real storage.",
-        "d4": "Place bottles into rack slots by clicking an empty slot and selecting a bottle.",
+        "d4": "Place bottles into rack slots by clicking an empty slot and selecting a bottle. An unplaced bottle's own page also offers \"Place in a rack\", which opens the rack page ready to place it.",
         "d5": "Visual grid shows which slots are filled and which are empty."
       },
       "roomView": {
