@@ -40,6 +40,9 @@ const PROFILE_ENUMS = {
 // The serving temperature, °C, as a pair: both or neither, min ≤ max. Stored
 // on the profile as a trait; null means the style's default applies.
 const SERVING_FIELDS = ['servingTempMin', 'servingTempMax'];
+// The serving trait as a whole: the range and the air need. A fact about how
+// the wine is served, not a verdict on the tasting prose (see applyProfilePatch).
+const SERVING_TRAIT_FIELDS = [...SERVING_FIELDS, 'needsAir'];
 const { SERVING_TEMP_MIN_C, SERVING_TEMP_MAX_C } = require('../utils/servingUtils');
 
 const LIST_FIELDS = {
@@ -333,9 +336,14 @@ function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
   if (clean.colour !== undefined) stateColour(wine, clean.colour);
   if (clean.grapes !== undefined) wine.grapes = clean.grapes;
 
+  // The serving trait says how the wine is served, not whether the tasting
+  // prose is right: written on its own it must not stamp the profile
+  // curator-verified, end a hold or freeze regeneration (release audit
+  // 2026-10-28). Only the descriptors below carry that meaning.
+  const descriptorEntries = profileEntries.filter(([f]) => !SERVING_TRAIT_FIELDS.includes(f));
   const isClear = (v) => v === null || (Array.isArray(v) && v.length === 0);
-  const pureClear = profileEntries.length > 0 && profileEntries.every(([, v]) => isClear(v));
-  if (profileEntries.length > 0) {
+  const pureClear = descriptorEntries.length > 0 && descriptorEntries.every(([, v]) => isClear(v));
+  if (descriptorEntries.length > 0) {
     if (!pureClear || wine.aiProfile.source === 'curator') {
       wine.aiProfile.source = 'curator';
       wine.aiProfile.verifiedBy = userId || null;
@@ -347,8 +355,8 @@ function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
     // signal ("this is wrong") and returns the wine to the enrichable pool —
     // where, if the model still doubts the identity, it simply holds again.
     wine.aiProfile.heldAt = null;
-    wine.markModified('aiProfile');
   }
+  if (profileEntries.length > 0) wine.markModified('aiProfile');
   return wine;
 }
 

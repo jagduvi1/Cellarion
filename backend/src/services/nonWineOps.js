@@ -26,6 +26,9 @@ const WineCorrectionProposal = require('../models/WineCorrectionProposal');
 const { logAudit } = require('./audit');
 const { isValidId } = require('../utils/validation');
 const { classifyProposal, countHoldingMembers } = require('./proposalDirectApply');
+const { checkContributionGate } = require('./contributionGate');
+const { createNotification } = require('./notifications');
+const { bumpWineOwners } = require('./dataVersion');
 
 // The curator reads this on the proposal when too many members hold the row
 // for the flag to apply on one member's word.
@@ -68,6 +71,14 @@ async function markNotWineByMember({ wineId, userId, req = null, via = 'member' 
   if (!holds) {
     return { ok: false, code: 'forbidden', message: 'Only a member who holds a bottle of it in a cellar they can edit can move a drink to Other.' };
   }
+
+  // The gate every member contribution to the shared registry pays (release
+  // audit 2026-10-28): a banned account may not move a row, and a move from
+  // the bottle page or MCP counts against the day's suggestion budget — a
+  // drink added as Other up front only says what the member bought, so it
+  // pays the ban check alone.
+  const gate = await checkContributionGate(userId, { budget: via !== 'add' });
+  if (!gate.ok) return gate;
 
   let proposal;
   try {
@@ -112,7 +123,42 @@ async function markNotWineByMember({ wineId, userId, req = null, via = 'member' 
     console.warn(`[nonWine] self-apply declined for proposal ${proposal._id}: ${outcome.status} ${outcome.body?.error || ''}`);
     return { ok: true, status: 'filed', category: 'wine' };
   }
+  // The other holders see "Other" on their bottles from now on: tell them,
+  // and let their cached lists and statistics refresh.
+  await notifyOtherHolders(wine, userId);
+  await bumpWineOwners([wine._id]);
   return { ok: true, status: 'applied', category: 'other' };
+}
+
+/** Every member with a bottle of the wine in a live cellar: owners and members. */
+async function holdingMemberIds(wineId) {
+  const cellarIds = await Bottle.distinct('cellar', { wineDefinition: wineId });
+  if (!cellarIds.length) return [];
+  const cellars = await Cellar.find({ _id: { $in: cellarIds }, deletedAt: null }).select('user members.user').lean();
+  const people = new Set();
+  for (const c of cellars) {
+    if (c.user) people.add(String(c.user));
+    for (const m of c.members || []) if (m.user) people.add(String(m.user));
+  }
+  return [...people];
+}
+
+/**
+ * A row moved to Other on one member's word changes what up to two other
+ * holders see on their own bottles — they are told, in the bell. Never
+ * throws: the move itself is done, a missed notice must not read as failure.
+ */
+async function notifyOtherHolders(wine, actorId) {
+  try {
+    const others = (await holdingMemberIds(wine._id)).filter((id) => id !== String(actorId));
+    const who = `"${wine.name}"${wine.producer ? ` by ${wine.producer}` : ''}`;
+    for (const id of others) {
+      await createNotification(id, 'wine_moved_to_other', 'A drink in your cellar moved to Other',
+        `${who} was marked as not wine by another member who holds it. Your bottles are unchanged; they now show under Other.`);
+    }
+  } catch (err) {
+    console.warn('[nonWine] holder notification failed:', err.message);
+  }
 }
 
 /**

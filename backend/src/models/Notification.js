@@ -44,6 +44,9 @@ const notificationSchema = new mongoose.Schema({
       'wine_recommendation',
       'journal_mention',
       'restock_alert',
+      // A drink a member holds was moved to Other by another holder
+      // (services/nonWineOps, release audit 2026-10-28).
+      'wine_moved_to_other',
       'price_tracked',
       'price_tracking_declined',
       'ai_budget_request',

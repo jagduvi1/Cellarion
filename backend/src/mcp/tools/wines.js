@@ -8,6 +8,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, wineSummary, hasContent, objectId } = require('../toolUtil');
+const { logAction } = require('../actionLedger');
 const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { publicProfileSummary } = require('../../services/registryTiering');
@@ -232,7 +233,9 @@ registerTool({
     const { markNotWineByMember } = require('../../services/nonWineOps');
     const r = await markNotWineByMember({ wineId: args.wine_id, userId: ctx.user.id, req: ctx.req, via: 'mcp' });
     if (!r.ok) {
-      const code = r.code === 'not_found' ? 'not_found' : r.code === 'forbidden' ? 'forbidden' : 'invalid_input';
+      const code = r.code === 'not_found' ? 'not_found'
+        : (r.code === 'forbidden' || r.code === 'banned') ? 'forbidden'
+          : r.code === 'limit' ? 'rate_limited' : 'invalid_input';
       return fail(code, r.message);
     }
     const note = {
@@ -241,6 +244,17 @@ registerTool({
       filed: `${r.holders} members hold bottles of it, so a curator will decide; nothing changed yet.`,
       pending: 'A curator proposal to mark it as not wine is already waiting; nothing changed yet.',
     }[r.status];
-    return ok({ wine_id: String(args.wine_id), status: r.status, category: r.category, note });
+    const data = { wine_id: String(args.wine_id), status: r.status, category: r.category, ...(r.holders !== undefined ? { holders: r.holders } : {}) };
+    // The member's "Recent AI activity" and the admin aggregate read the
+    // ledger: a registry move on the user's word shows there like every
+    // other write (release audit 2026-10-28). Not undo-eligible.
+    if (r.status !== 'already') {
+      await logAction(ctx, {
+        tool: 'mark_not_wine', action: 'not_wine',
+        detail: { wineId: String(args.wine_id), status: r.status },
+        result: { summary: note, data },
+      });
+    }
+    return ok(note, data);
   },
 });

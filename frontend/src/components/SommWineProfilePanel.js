@@ -189,10 +189,10 @@ function SommWineProfilePanel({ wine, onSaved }) {
           <span>{t('somm.profile.servingTemp')}</span>
           <span className="somm-profile-range">
             <input type="number" min={0} max={30} step={1} value={form.servingTempMin} onChange={set('servingTempMin')}
-              disabled={saving} aria-label={`${t('somm.profile.servingTemp')} min`} />
+              disabled={saving} aria-label={t('somm.profile.servingTempMinAria', 'Serving temperature, lower end (°C)')} />
             {' – '}
             <input type="number" min={0} max={30} step={1} value={form.servingTempMax} onChange={set('servingTempMax')}
-              disabled={saving} aria-label={`${t('somm.profile.servingTemp')} max`} />
+              disabled={saving} aria-label={t('somm.profile.servingTempMaxAria', 'Serving temperature, upper end (°C)')} />
           </span>
           <small className="somm-profile-hint">{t('somm.profile.servingTempHint')}</small>
         </label>

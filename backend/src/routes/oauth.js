@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
 const { issueTokens, clientHint } = require('../services/authTokens');
+const { clearSignupBinding } = require('../services/signupBinding');
 const { resolvePendingShares } = require('../services/pendingShares');
 const { CookieStateStore } = require('../services/oauthStateStore');
 const { isReservedUsername } = require('../utils/deletedUser');
@@ -428,6 +429,8 @@ router.get('/google/callback', (req, res, next) => {
     }
     try {
       await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
+      // A sign-in ends the signup binding, as /login does (release audit 2026-10-28).
+      if (req.cookies?.signupBinding) clearSignupBinding(res);
       logAudit(req, 'auth.oauth.success', { type: 'user', id: user._id }, { provider: 'google' });
       resolvePendingShares(user).catch(() => {});
       return res.redirect(successRedirect);
@@ -465,6 +468,8 @@ router.get('/oidc/callback', (req, res, next) => {
     }
     try {
       await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
+      // A sign-in ends the signup binding, as /login does (release audit 2026-10-28).
+      if (req.cookies?.signupBinding) clearSignupBinding(res);
       logAudit(req, 'auth.oauth.success', { type: 'user', id: user._id }, { provider: 'oidc' });
       resolvePendingShares(user).catch(() => {});
       return res.redirect(successRedirect);

@@ -82,3 +82,10 @@ test('a drink that is not wine has no serving line', () => {
   expect(document.querySelector('.bd-serving')).toBeNull();
   expect(screen.queryByText(/Serve at/)).toBeNull();
 });
+
+test('a bottle of unknown vintage still gets the style temperature, in its own section', () => {
+  renderDetails({ bottle: bottle({ vintage: 'Unknown', wineDefinition: { _id: 'w5', name: 'Cru', type: 'white', grapes: [], aiProfile: { body: 'light' } } }) });
+  const line = document.querySelector('.bd-serving');
+  expect(line).not.toBeNull();
+  expect(line.textContent).toBe('Serve at 8–10 °C.');
+});

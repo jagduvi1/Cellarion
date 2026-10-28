@@ -636,3 +636,24 @@ describe('cellar-facing reads + config', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// Release audit 2026-10-28: a template that emits `unit: null` when no unit is
+// configured, or a lower-case letter, is not a rejection.
+describe('climate ingest — the unit field, leniently', () => {
+  test('null means °C and a lower-case f is °F', async () => {
+    const device = fakeDevice();
+    ClimateDevice.findOne.mockResolvedValue(device);
+    const res = await deviceRequest({
+      readings: [
+        { channel: 'ambient', type: 'temperature', value: 12, unit: null },
+        { channel: 'ambient', type: 'temperature', value: 55, unit: 'f' },
+      ],
+    });
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 2, rejected: 0 });
+    const docs = ClimateReading.insertMany.mock.calls[0][0];
+    expect(docs[0].value).toBe(12);
+    expect(docs[1].value).toBe(12.8);
+  });
+});

@@ -378,3 +378,28 @@ describe('colour (record field)', () => {
     expect(wine.colour).toBe('rosé');
   });
 });
+
+// Release audit 2026-10-28: the serving trait is a fact about service, not a
+// review of the prose — a serving-only write must not vouch for the profile.
+describe('applyProfilePatch — the serving trait on its own', () => {
+  test('stores the trait without stamping the profile curator-verified, ending its hold or marking it reviewed', () => {
+    const wine = fakeWine({ body: 'light', description: 'ai text', confidence: 0.6, source: 'ai', heldAt: new Date('2026-07-01') });
+    const now = new Date('2026-07-28T12:00:00Z');
+
+    applyProfilePatch(wine, { servingTempMin: 16, servingTempMax: 18, needsAir: 'long' }, 'user-1', { now });
+
+    expect(wine.aiProfile).toMatchObject({ servingTempMin: 16, servingTempMax: 18, needsAir: 'long', source: 'ai', heldAt: new Date('2026-07-01') });
+    expect(wine.aiProfile.verifiedBy).toBeUndefined();
+    expect(wine.aiProfile.verifiedAt).toBeUndefined();
+    expect(wine.profileReviewedAt).toBeNull();
+    expect(wine.markModified).toHaveBeenCalledWith('aiProfile');
+  });
+
+  test('a descriptor written together with the trait still vouches, as before', () => {
+    const wine = fakeWine({ body: 'light', description: 'wrong', source: 'ai' });
+    const now = new Date('2026-07-28T12:00:00Z');
+    applyProfilePatch(wine, { description: 'right', needsAir: 'none' }, 'user-1', { now });
+    expect(wine.aiProfile).toMatchObject({ description: 'right', needsAir: 'none', source: 'curator', verifiedBy: 'user-1', verifiedAt: now });
+    expect(wine.profileReviewedAt).toBe(now);
+  });
+});

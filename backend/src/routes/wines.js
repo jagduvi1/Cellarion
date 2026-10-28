@@ -840,7 +840,7 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
 router.post('/:id/not-wine', requireAuth, requireNonDemo, asyncHandler(async (req, res) => {
   const r = await markNotWineByMember({ wineId: req.params.id, userId: req.user.id, req, via: 'member' });
   if (!r.ok) {
-    const status = r.code === 'not_found' ? 404 : r.code === 'forbidden' ? 403 : 400;
+    const status = r.code === 'not_found' ? 404 : (r.code === 'forbidden' || r.code === 'banned') ? 403 : r.code === 'limit' ? 429 : 400;
     return res.status(status).json({ error: r.message });
   }
   res.json({ status: r.status, category: r.category, ...(r.holders !== undefined ? { holders: r.holders } : {}) });

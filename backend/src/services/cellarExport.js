@@ -91,6 +91,10 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
       region: wine.region?.name || '',
       appellation: wine.appellation || '',
       type: wine.type || '',
+      // The Other category (a drink that is not wine) travels as its own
+      // field: a bare type of '' would re-import as an untyped WINE and mint
+      // a cider into the shared registry (release audit 2026-10-28).
+      category: wine.nonWine === true ? 'other' : 'wine',
       // The colour of a sparkling/dessert/fortified wine, when recorded — so a
       // sparkling rosé survives an export → import round-trip as one.
       ...(wine.colour ? { colour: wine.colour } : {}),
@@ -311,7 +315,7 @@ async function buildCellarDataExport(userId, scope) {
         // Every wine field mapBottlesForExport emits has to be listed here —
         // `colour` was emitted but not selected, so no export ever carried one
         // (audit 2026-09-19; pinned by cellarExport.select.test.js).
-        select: 'name producer type colour appellation country region grapes',
+        select: 'name producer type colour nonWine appellation country region grapes',
       })
       .limit(EXPORT_MAX)
       .lean(),

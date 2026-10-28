@@ -119,8 +119,10 @@ router.post('/ingest', requireAuth, ingestLimiter, async (req, res) => {
       // imperial mode) may send °F by saying so; without a unit the value is
       // °C, as it always was. 55 °F silently stored as 55 °C passed the bounds
       // and read as a sauna, so the unit is explicit rather than guessed.
-      if (r.unit !== undefined && r.unit !== 'C' && r.unit !== 'F') { reject('invalid_unit'); continue; }
-      const rawValue = (r.type === 'temperature' && r.unit === 'F') ? Math.round((r.value - 32) * 50 / 9) / 10 : r.value;
+      // Absent or null means °C; the letter's case is the sender's choice.
+      const unit = (r.unit === undefined || r.unit === null) ? 'C' : String(r.unit).toUpperCase();
+      if (unit !== 'C' && unit !== 'F') { reject('invalid_unit'); continue; }
+      const rawValue = (r.type === 'temperature' && unit === 'F') ? Math.round((r.value - 32) * 50 / 9) / 10 : r.value;
 
       let ts = now;
       if (r.ts !== undefined && r.ts !== null) {

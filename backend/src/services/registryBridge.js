@@ -34,7 +34,7 @@ const searchService = () => require('./search');
 const POPULATE = ['country', 'region', 'grapes'];
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const { WINE_COLOURS, stateColour } = require('../utils/wineColour');
-const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'source', 'generatedAt', 'verifiedAt'];
+const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'servingTempMin', 'servingTempMax', 'needsAir', 'source', 'generatedAt', 'verifiedAt'];
 const REGISTRY_NOTE = 'From the shared registry (cellarion.app)';
 const isId = (v) => /^[a-f0-9]{24}$/i.test(String(v || ''));
 

@@ -8,13 +8,16 @@
  * and a row already in Other says so. Models, the rule and the apply are
  * mocked: the decisions are under test, not MongoDB.
  */
-jest.mock('../models/Bottle', () => ({ exists: jest.fn() }));
-jest.mock('../models/Cellar', () => ({ distinct: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ exists: jest.fn(), distinct: jest.fn(async () => []) }));
+jest.mock('../models/Cellar', () => ({ distinct: jest.fn(), find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })) }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./proposalDirectApply', () => ({ classifyProposal: jest.fn(), countHoldingMembers: jest.fn() }));
 jest.mock('../routes/admin/wineProposals', () => ({ approveProposal: jest.fn() }));
+jest.mock('./contributionGate', () => ({ checkContributionGate: jest.fn(async () => ({ ok: true, user: {} })) }));
+jest.mock('./notifications', () => ({ createNotification: jest.fn(async () => null) }));
+jest.mock('./dataVersion', () => ({ bumpWineOwners: jest.fn(async () => undefined) }));
 
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -23,6 +26,9 @@ const WineCorrectionProposal = require('../models/WineCorrectionProposal');
 const { logAudit } = require('./audit');
 const { classifyProposal, countHoldingMembers } = require('./proposalDirectApply');
 const { approveProposal } = require('../routes/admin/wineProposals');
+const { checkContributionGate } = require('./contributionGate');
+const { createNotification } = require('./notifications');
+const { bumpWineOwners } = require('./dataVersion');
 const { markNotWineByMember, applyOtherCategoryAfterAdd, holdsBottleOf } = require('./nonWineOps');
 
 const USER = '64b000000000000000000001';
@@ -144,5 +150,53 @@ describe('applyOtherCategoryAfterAdd', () => {
     expect(await applyOtherCategoryAfterAdd({ wine: cider({ nonWine: true }), newWine: { category: 'other' }, userId: USER })).toBeNull();
     expect(await applyOtherCategoryAfterAdd({ wine: cider(), newWine: undefined, userId: USER })).toBeNull();
     expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+});
+
+// Release audit 2026-10-28: the move pays the contribution gate like every
+// other member write to the registry, and the other holders are told.
+describe('markNotWineByMember — gate and co-holders', () => {
+  test('a banned member is refused before anything is filed; a move from the bottle page spends the daily budget', async () => {
+    WineDefinition.findById.mockResolvedValue(cider());
+    checkContributionGate.mockResolvedValueOnce({ ok: false, code: 'banned', message: 'You are banned from posting content visible to other users' });
+
+    const r = await markNotWineByMember({ wineId: WINE_ID, userId: USER, via: 'member' });
+
+    expect(r).toMatchObject({ ok: false, code: 'banned' });
+    expect(checkContributionGate).toHaveBeenCalledWith(USER, { budget: true });
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('a drink added as Other up front pays the ban check only, never the budget', async () => {
+    WineDefinition.findById.mockResolvedValue(cider());
+    await applyOtherCategoryAfterAdd({ wine: cider(), newWine: { category: 'other' }, userId: USER });
+    expect(checkContributionGate).toHaveBeenCalledWith(USER, { budget: false });
+  });
+
+  test('an applied move tells the other holders, never the mover, and bumps the holders\' caches', async () => {
+    WineDefinition.findById.mockResolvedValue(cider());
+    Bottle.distinct.mockResolvedValueOnce(['cellar-1', 'cellar-2']);
+    Cellar.find.mockReturnValueOnce({ select: () => ({ lean: async () => [
+      { user: USER, members: [{ user: OTHER_USER }] },
+      { user: '64b000000000000000000003', members: [] },
+    ] }) });
+
+    const r = await markNotWineByMember({ wineId: WINE_ID, userId: USER, via: 'member' });
+
+    expect(r).toEqual({ ok: true, status: 'applied', category: 'other' });
+    expect(createNotification).toHaveBeenCalledTimes(2);
+    expect(createNotification).toHaveBeenCalledWith(OTHER_USER, 'wine_moved_to_other', expect.any(String), expect.stringContaining('Vintage Cider'));
+    expect(createNotification).toHaveBeenCalledWith('64b000000000000000000003', 'wine_moved_to_other', expect.any(String), expect.any(String));
+    expect(createNotification).not.toHaveBeenCalledWith(USER, expect.anything(), expect.anything(), expect.anything());
+    expect(bumpWineOwners).toHaveBeenCalledWith([WINE_ID]);
+  });
+
+  test('a filed move (many holders) notifies nobody yet', async () => {
+    WineDefinition.findById.mockResolvedValue(cider());
+    classifyProposal.mockResolvedValueOnce({ direct: false, reason: 'many holders' });
+    const r = await markNotWineByMember({ wineId: WINE_ID, userId: USER, via: 'member' });
+    expect(r.status).toBe('filed');
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(bumpWineOwners).not.toHaveBeenCalled();
   });
 });

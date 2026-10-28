@@ -17,14 +17,17 @@ export function formatVintage(vintage, t) {
 // their translations in the user's language (Johan, #1690).
 function vintageWords(t) {
   return {
-    NV: [...new Set(['NV', t('common.nonVintage', 'NV')])],
-    Unknown: [...new Set(['Unknown', t('common.unknownVintage', 'Unknown')])],
+    // An empty translation (a scaffolded sibling, a blank) must never make
+    // the empty field read as a code.
+    NV: [...new Set(['NV', t('common.nonVintage', 'NV')])].filter(Boolean),
+    Unknown: [...new Set(['Unknown', t('common.unknownVintage', 'Unknown')])].filter(Boolean),
   };
 }
 
 /** Stored value for what was typed: "nv", "Uten årgang" → 'NV'; anything else comes back trimmed, for the usual validation. */
 export function parseVintageInput(input, t) {
   const v = String(input ?? '').trim();
+  if (!v) return v;
   const lower = v.toLocaleLowerCase();
   for (const [code, words] of Object.entries(vintageWords(t))) {
     if (words.some((w) => w.toLocaleLowerCase() === lower)) return code;

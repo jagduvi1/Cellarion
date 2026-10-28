@@ -830,6 +830,9 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.set('Cache-Control', 'public, max-age=3600');
+    // The same URL answers the SPA shell to a browser: a shared cache must
+    // key on the user agent, or a visitor gets the crawler page for an hour.
+    res.set('Vary', 'User-Agent');
     // A canary (a wine that does not exist) is served like any other — that is
     // what makes it evidence — but search engines are told to drop it.
     if (wine.canary === true) res.set('X-Robots-Tag', 'noindex, nofollow');

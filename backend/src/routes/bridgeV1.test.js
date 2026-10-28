@@ -109,7 +109,7 @@ const wine = (over = {}) => ({
   _id: ID, name: 'Salmos', producer: 'Torres', slug: 'torres-salmos', type: 'red', appellation: 'Priorat',
   region: { name: 'Catalonia' }, country: { name: 'Spain' }, grapes: [{ name: 'Cariñena' }, { name: 'Syrah' }],
   image: '/api/uploads/processed/x.png', imageCredit: 'Estate', updatedAt: new Date('2026-09-01'),
-  aiProfile: { body: 'full', tannin: 'high', acidity: 'medium', sweetness: 'dry', flavors: ['plum'], foodPairings: ['lamb'], description: 'A dense Priorat.', source: 'curator', generatedAt: new Date(), heldAt: null, producerNote: 'internal', inputsSnapshot: { x: 1 }, model: 'm' },
+  aiProfile: { body: 'full', tannin: 'high', acidity: 'medium', sweetness: 'dry', flavors: ['plum'], foodPairings: ['lamb'], description: 'A dense Priorat.', servingTempMin: 16, servingTempMax: 18, needsAir: 'short', source: 'curator', generatedAt: new Date(), heldAt: null, producerNote: 'internal', inputsSnapshot: { x: 1 }, model: 'm' },
   ...over,
 });
 
@@ -175,7 +175,7 @@ describe('GET /wines/:id', () => {
     expect(res.status).toBe(200);
     const { wine: w } = await res.json();
     expect(findVisibleWine).toHaveBeenCalledWith(ID, expect.objectContaining({ userId: null, roles: [], lean: true }));
-    expect(w).toMatchObject({ id: ID, producer: 'Torres', name: 'Salmos', region: 'Catalonia', profile: { body: 'full', description: 'A dense Priorat.', source: 'curator' } });
+    expect(w).toMatchObject({ id: ID, producer: 'Torres', name: 'Salmos', region: 'Catalonia', profile: { body: 'full', description: 'A dense Priorat.', servingTempMin: 16, servingTempMax: 18, needsAir: 'short', source: 'curator' } });
     expect(w.profile).not.toHaveProperty('producerNote');
     expect(w.profile).not.toHaveProperty('inputsSnapshot');
     expect(w.profile).not.toHaveProperty('model');

@@ -65,7 +65,7 @@ test('a placed bottle shows its slot instead; no racks, no edit right or an orde
   expect(screen.getByRole('link', { name: /Wine Fridge/ })).toBeInTheDocument();
   unmount();
 
-  for (const over of [{ cellarHasRacks: false }, { canEdit: false }, { bottle: bottle({ status: 'on_order' }) }]) {
+  for (const over of [{ cellarHasRacks: false }, { canEdit: false }, { bottle: bottle({ status: 'ordered' }) }]) {
     const r = renderDetails(over);
     expect(screen.queryByText(/Place in a rack/)).not.toBeInTheDocument();
     r.unmount();

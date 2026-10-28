@@ -128,7 +128,9 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
       // at approval, so it does not count as a changed field at filing.
       const { normalizeClassification } = require('../utils/normalize');
       const tier = normalizeClassification(v);
-      if (!tier) continue;
+      if (!tier) {
+        return fail('invalid', `"${v}" is a regulatory mark, not a classification tier — leave classification out, or name the tier (Grand Cru, Premier Cru, Kabinett, Spätlese…).`);
+      }
       proposedFields[f] = tier;
       continue;
     }
