@@ -46,7 +46,7 @@ function volumeFormat(locale) {
 }
 
 /** Format ml as a friendly volume in the chosen language: 750 → "750 ml", 1500 → "1.5 L" ("1,5 L" in nb). */
-export function formatVolume(ml, locale = i18n.language) {
+export function formatVolume(ml, locale = i18n.language || 'en') {
   if (!isFinite(ml) || ml <= 0) return '';
   const fmt = volumeFormat(locale);
   return ml >= 1000 ? `${fmt.format(ml / 1000)} L` : `${fmt.format(ml)} ml`;

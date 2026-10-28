@@ -24,26 +24,32 @@ const TYPE_TITLES = {
   en: {
     red: 'Red Wines', white: 'White Wines', rosé: 'Rosé Wines',
     sparkling: 'Sparkling Wines', dessert: 'Dessert Wines', fortified: 'Fortified Wines',
+    other: 'Other', unknown: 'Unknown',
   },
   sv: {
     red: 'Röda Viner', white: 'Vita Viner', rosé: 'Rosévin',
     sparkling: 'Mousserande Viner', dessert: 'Dessertviner', fortified: 'Starkvin',
+    other: 'Övrigt', unknown: 'Okänd',
   },
   fr: {
     red: 'Vins Rouges', white: 'Vins Blancs', rosé: 'Vins Rosés',
     sparkling: 'Vins Effervescents', dessert: 'Vins de Dessert', fortified: 'Vins Fortifiés',
+    other: 'Autres', unknown: 'Inconnu',
   },
   de: {
     red: 'Rotweine', white: 'Weißweine', rosé: 'Roséweine',
     sparkling: 'Schaumweine', dessert: 'Dessertweine', fortified: 'Likörweine',
+    other: 'Sonstiges', unknown: 'Unbekannt',
   },
   es: {
     red: 'Vinos Tintos', white: 'Vinos Blancos', rosé: 'Vinos Rosados',
     sparkling: 'Vinos Espumosos', dessert: 'Vinos de Postre', fortified: 'Vinos Fortificados',
+    other: 'Otros', unknown: 'Desconocido',
   },
   it: {
     red: 'Vini Rossi', white: 'Vini Bianchi', rosé: 'Vini Rosati',
     sparkling: 'Spumanti', dessert: 'Vini da Dessert', fortified: 'Vini Liquorosi',
+    other: 'Altro', unknown: 'Sconosciuto',
   },
 };
 
@@ -76,7 +82,7 @@ const CONTINUED_LABEL = {
 // 2026-09-12 — a menu reads naturally at three).
 const LEVEL_FIELDS = ['type', 'country', 'region', 'appellation'];
 const MAX_LEVELS = 3;
-const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified'];
+const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified', 'other', 'unknown'];
 
 /**
  * The grouping levels in force for an auto-mode list: the explicit `levels`
@@ -98,7 +104,9 @@ function groupingLevels(grouping = {}) {
 // but never to the heading it already sits under ("Italy › Italy"): that
 // goes to "Other", which sorts last.
 function groupKeyOf(wine, level, parentKey) {
-  if (level === 'type') return wine.type || 'other';
+  // Mirrors frontend/src/utils/wineListSections.js: Other = a drink that is
+  // not wine; a wine of unknown colour is its own group (release audit 2026-10-28).
+  if (level === 'type') return wine.nonWine ? 'other' : (wine.type || 'unknown');
   if (level === 'country') return wine.country || 'Other';
   const key = level === 'region'
     ? (wine.region || wine.country)
@@ -190,6 +198,7 @@ function resolveEntry(entry, wineMap, layout = {}, lang = 'en') {
     appellation: wine.appellation || '',
     grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
     type: wine.type || '',
+    nonWine: wine.nonWine === true,
     price: entry.listPrice != null ? entry.listPrice : info.avgPrice,
     glassPrice: entry.byGlass && entry.glassPrice != null ? entry.glassPrice : null,
     // Kept apart from glassPrice so a hidden-price menu can still say

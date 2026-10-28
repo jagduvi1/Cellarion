@@ -150,6 +150,9 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
           }
           const options = keyBody.key?.enumOptions || [...listOptions, typed];
           setKeys((prev) => prev.map((k) => (k._id === listKey._id ? { ...k, enumOptions: options } : k)));
+          // In edit mode the key comes from the entry: a retry after a failed
+          // entry save must find the value listed, not PATCH the key again.
+          if (modal.mode === 'edit') setModal({ ...modal, entry: { ...modal.entry, key: { ...modal.entry.key, enumOptions: options } } });
           value = typed;
         }
       }

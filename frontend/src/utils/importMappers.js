@@ -1445,6 +1445,9 @@ function mapCellarionRow(row) {
     region: str('region'),
     appellation: str('appellation'),
     type: mapWineType(str('type')),
+    // The export writes category 'other' for a drink that is not wine: it
+    // re-imports as Other, never as an untyped wine (release audit 2026-10-28).
+    nonWineHint: str('category').toLowerCase() === 'other' || undefined,
     price: num('price'),
     currency: str('currency') || undefined,
     bottleSize: str('bottleSize') || '750ml',

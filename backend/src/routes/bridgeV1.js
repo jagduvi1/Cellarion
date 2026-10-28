@@ -51,7 +51,7 @@ const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
 const IDENTITY_SELECT = 'name producer slug country region appellation classification grapes type colour image imageCredit';
 // The profile fields that are registry content. Never the hold/suspect
 // bookkeeping, the model name, the input snapshot or the producer note.
-const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'source', 'generatedAt', 'verifiedAt'];
+const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'servingTempMin', 'servingTempMax', 'needsAir', 'source', 'generatedAt', 'verifiedAt'];
 
 // Strict: mongoose.isValidObjectId() also accepts any 12-character string, so
 // a nested value could reach $in and raise a CastError 500 (audit 2026-09-08).

@@ -271,6 +271,16 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
         </div>
       )}
 
+      {/* The serving temperature does not depend on the vintage: when the
+          maturity section below is hidden (no vintage, or Unknown), the line
+          gets a section of its own (release audit 2026-10-28). */}
+      {(!bottle.vintage || bottle.vintage === 'Unknown') && servingLine && (
+        <div className="bd-section">
+          <span className="bd-section-label">{t('serving.label', 'Serving')}</span>
+          {servingLine}
+        </div>
+      )}
+
       {/* Sommelier maturity section — shown for NV too (somms can set a drink
           window for non-vintage sparkling); only hidden for unknown vintages */}
       {bottle.vintage && bottle.vintage !== 'Unknown' && wine?.nonWine !== true && (

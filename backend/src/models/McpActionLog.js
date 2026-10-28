@@ -32,6 +32,9 @@ const mcpActionLogSchema = new mongoose.Schema({
     // (support ticket 2026-09-12): recorded so an idempotency_key can replay
     // them after an ambiguous transport failure. Never undo-eligible.
     'support_ticket', 'support_reply', 'wine_request', 'suggest_correction', 'suggest_value', 'propose_key',
+    // A drink moved to Other on the member's word (mark_not_wine): applied
+    // or filed for a curator; an admin restores a row — never undo-eligible.
+    'not_wine',
     // An owner's answer to a curator's question (answer_curator_question,
     // 2026-09-24): single-shot on the inquiry itself, so never undo-eligible.
     'inquiry_answer',

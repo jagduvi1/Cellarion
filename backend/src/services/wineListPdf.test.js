@@ -415,3 +415,21 @@ describe('page breaks between sibling groups (post-ship audit 2026-09-12)', () =
     expect(priceWithSymbol('£', '16')).toBe('£16');
   });
 });
+
+// Release audit 2026-10-28: the PDF groups like the on-screen menu
+// (frontend/src/utils/wineListSections.js) — a drink that is not wine heads
+// "Other", a wine of unknown colour "Unknown", both after the wine types.
+describe('buildSections — the Other category and untyped wines', () => {
+  const cider = { _id: 'w4', name: 'Dry Cider', producer: 'Orchard', type: 'sparkling', nonWine: true, country: { name: 'England' }, region: null, grapes: [] };
+  const untyped = { _id: 'w5', name: 'Mystery', producer: 'Someone', type: null, country: { name: 'Italy' }, region: null, grapes: [] };
+  const wineMap = new Map([mapEntry(WINES.barolo), mapEntry(cider), mapEntry(untyped)]);
+  const list = (language = 'en') => ({
+    structureMode: 'auto', language, autoGrouping: { groupBy: 'type', withinGroup: 'name' },
+    autoGroupEntries: [entry('w1'), entry('w4'), entry('w5')], layout: {},
+  });
+
+  test('a cider saved under a wine type heads Other, an untyped wine Unknown, both after the wine types', () => {
+    expect(buildSections(list(), wineMap).map((s) => s.title)).toEqual(['Red Wines', 'Other', 'Unknown']);
+    expect(buildSections(list('sv'), wineMap).map((s) => s.title)).toEqual(['Röda Viner', 'Övrigt', 'Okänd']);
+  });
+});

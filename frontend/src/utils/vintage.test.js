@@ -75,3 +75,12 @@ describe('vintageInputProps', () => {
     expect(accepts(props, 'nxvx')).toBe(false);
   });
 });
+
+describe('parseVintageInput — hardening (release audit 2026-10-28)', () => {
+  test('an empty field stays empty even when a locale ships an empty word', () => {
+    const blank = (key, fallback) => (key === 'common.nonVintage' ? '' : fallback);
+    expect(parseVintageInput('', blank)).toBe('');
+    expect(parseVintageInput('   ', blank)).toBe('');
+    expect(parseVintageInput('nv', blank)).toBe('NV');
+  });
+});

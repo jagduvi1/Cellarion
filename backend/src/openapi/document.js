@@ -594,7 +594,8 @@ const schemas = {
           properties: {
             channel: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$', description: 'Your name for the sensor, e.g. `fridge`.' },
             type: { type: 'string', enum: ['temperature', 'humidity'] },
-            value: { type: 'number', description: '°C, or % relative humidity.' },
+            value: { type: 'number', description: '°C (or °F when `unit` is F), or % relative humidity.' },
+            unit: { type: 'string', enum: ['C', 'F'], description: 'Unit of a temperature value. Omitted means °C; a °F value is converted on arrival and stored in °C. Any other value rejects the reading with `invalid_unit`.' },
             ts: { type: 'string', format: 'date-time', description: 'When it was measured, if not now.' },
           },
         },

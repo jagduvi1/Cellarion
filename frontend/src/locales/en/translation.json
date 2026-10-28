@@ -2748,6 +2748,8 @@
       "serving": "Serving",
       "servingTemp": "Serving temperature (°C)",
       "servingTempHint": "Leave blank for the style's default. Both ends or neither.",
+      "servingTempMinAria": "Serving temperature, lower end (°C)",
+      "servingTempMaxAria": "Serving temperature, upper end (°C)",
       "needsAir": "Needs air when young",
       "needsAirHint": "The bottle page turns this into \"decant\", \"open ahead\" or \"pour carefully\" from the vintage's phase on the day it is read. Never write serving instructions in the tasting note.",
       "needsAirValue": {

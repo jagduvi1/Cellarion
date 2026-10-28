@@ -278,9 +278,15 @@ describeWithMongo('public API contract', () => {
   test('climate ingest', async () => {
     const res = await expectContract('ingestClimate', 202, {
       token: 'climate',
-      body: { readings: [{ channel: 'fridge', type: 'temperature', value: 12.4 }, { channel: 'fridge', type: 'humidity', value: 'wet' }] },
+      body: { readings: [
+        { channel: 'fridge', type: 'temperature', value: 12.4 },
+        { channel: 'fridge', type: 'humidity', value: 'wet' },
+        // The documented `unit`: °F is converted on arrival, anything else is rejected.
+        { channel: 'fridge', type: 'temperature', value: 55, unit: 'F' },
+        { channel: 'fridge', type: 'temperature', value: 12, unit: 'K' },
+      ] },
     });
-    expect(res.body).toMatchObject({ accepted: 1, rejected: 1 });
+    expect(res.body).toMatchObject({ accepted: 2, rejected: 2 });
     await expectContract('ingestClimate', 400, { token: 'climate', body: { readings: [] } });
     await expectContract('ingestClimate', 401, { token: 'revoked', body: { readings: [] } });
     await expectContract('ingestClimate', 403, { token: 'read', body: { readings: [] } });
