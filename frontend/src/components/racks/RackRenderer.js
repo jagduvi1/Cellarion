@@ -5,6 +5,7 @@ import useSlotDrag from '../../hooks/useSlotDrag';
 import { isReserved } from '../../utils/reservation';
 import { swatchType } from '../../utils/wineColour';
 import './RackRenderer.css';
+import { formatVintage } from '../../utils/vintage';
 
 const WINE_COLORS = {
   red:       { fill: '#8A1028', stroke: '#6A0820' },
@@ -462,7 +463,7 @@ function SlotCircle({ position, cx, cy, R, hitR = null, isNeck = false, isSidewa
       role="button"
       tabIndex={0}
       aria-label={slot
-        ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})${isNeck ? `, ${t('rackView.neckForwardAria', 'neck forward')}` : ''}${isSideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}${isReserved(slot.bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
+        ? `${wine?.name || '?'} (${formatVintage(slot.bottle?.vintage, t)})${isNeck ? `, ${t('rackView.neckForwardAria', 'neck forward')}` : ''}${isSideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}${isReserved(slot.bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
         : `Empty slot ${position}${isSideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}`}
       style={{ cursor: draggable ? 'grab' : 'pointer', ...dimStyle }}
     >

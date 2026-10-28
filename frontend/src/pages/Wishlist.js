@@ -9,6 +9,7 @@ import './AddBottle.css';
 import WineImage from '../components/WineImage';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './Wishlist.css';
+import { formatVintage } from '../utils/vintage';
 
 const PRIORITY_KEYS = { high: 'wishlist.priorityHigh', medium: 'wishlist.priorityMedium', low: 'wishlist.priorityLow' };
 
@@ -261,7 +262,7 @@ function Wishlist() {
                       {wd?.region?.name && <span>• {wd.region.name}</span>}
                       {(wd?.type || wd?.nonWine) && <span className={`wine-type-pill ${swatchType(wd)}`}>{wineTypeLabel(wd, t)}</span>}
                     </div>
-                    {item.vintage && <span className="wishlist-item-vintage">{t('wishlist.vintageLine', { vintage: item.vintage })}</span>}
+                    {item.vintage && <span className="wishlist-item-vintage">{t('wishlist.vintageLine', { vintage: formatVintage(item.vintage, t) })}</span>}
                     {item.notes && <p className="wishlist-item-notes">{item.notes}</p>}
                     {item.status === 'bought' && item.boughtAt && (
                       <span className="wishlist-item-bought-date">{t('wishlist.boughtOn', { date: new Date(item.boughtAt).toLocaleDateString() })}</span>

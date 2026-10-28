@@ -8,6 +8,7 @@ import CellarCredBadge from './CellarCredBadge';
 import Modal from './Modal';
 import timeAgo from '../utils/timeAgo';
 import './ReviewCard.css';
+import { formatVintage } from '../utils/vintage';
 
 export default function ReviewCard({ review, showWine = true, onUpdate, onDelete }) {
   const { t } = useTranslation();
@@ -76,7 +77,7 @@ export default function ReviewCard({ review, showWine = true, onUpdate, onDelete
           </Link>
           <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} plan={author.plan} />
           {review.vintage && (
-            <span className="review-card__vintage">{review.vintage}</span>
+            <span className="review-card__vintage">{formatVintage(review.vintage, t)}</span>
           )}
           {review.visibility === 'private' && (
             <span className="review-card__private-badge">Private</span>

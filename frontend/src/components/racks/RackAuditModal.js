@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import { getTotalSlots, getModularTotalSlots } from '../../utils/rackLayouts';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * Audit mode — a guided physical inventory of one rack. Steps through the
@@ -64,7 +65,7 @@ export default function RackAuditModal({ rack, canEdit, onClearSlot, onClose }) 
   const wineLabel = (slot) => {
     const wine = slot?.bottle?.wineDefinition;
     const name = wine?.name || t('common.unknown', 'Unknown');
-    return slot?.bottle?.vintage ? `${name} (${slot.bottle.vintage})` : name;
+    return slot?.bottle?.vintage ? `${name} (${formatVintage(slot.bottle.vintage, t)})` : name;
   };
 
   return (

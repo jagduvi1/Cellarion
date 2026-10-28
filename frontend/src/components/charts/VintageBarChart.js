@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * `onBarClick(year)` makes each vintage bar a clickable deep-link target.
@@ -14,14 +15,14 @@ function VintageBarChart({ data, onBarClick }) {
   const clickable = typeof onBarClick === 'function';
 
   const renderBar = (d, extraClass = '') => {
-    const title = t('statistics.vintageBottle', { vintage: d.year, count: d.count });
+    const title = t('statistics.vintageBottle', { vintage: formatVintage(d.year, t), count: d.count });
     const content = (
       <>
         <div className="vintage-bar-count">{d.count > 1 ? d.count : ''}</div>
         <div className={`vintage-bar${extraClass ? ` ${extraClass}` : ''}`}
           style={{ height: `${Math.max(4, (d.count / maxCount) * BAR_HEIGHT)}px` }} />
         <div className="vintage-bar-label">
-          {numeric.length > 20 ? String(d.year).slice(-2) : d.year}
+          {d.year === 'NV' ? formatVintage(d.year, t) : numeric.length > 20 ? String(d.year).slice(-2) : d.year}
         </div>
       </>
     );

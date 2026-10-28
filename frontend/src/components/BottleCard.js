@@ -8,6 +8,7 @@ import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import BottlePlaceholder from './BottlePlaceholder';
 import './BottleCard.css';
+import { formatVintage } from '../utils/vintage';
 
 const MATURITY_LABELS = {
   'not-ready': { key: 'maturity.notReady', cls: 'maturity-badge--not-ready' },
@@ -229,7 +230,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           <div className="bottle-grid-name">{displayName}</div>
           <div className="bottle-grid-producer">{displayProducer}</div>
           <div className="bottle-grid-meta">
-            {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
+            {bottle.vintage && <span className="bottle-vintage">{formatVintage(bottle.vintage, t)}</span>}
             {bottle.wineDefinition?.region?.name && (
               <span className="bottle-grid-region">{bottle.wineDefinition.region.name}</span>
             )}
@@ -337,7 +338,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
         </div>
         <div className="bottle-meta">
           <span className="bottle-producer">{displayProducer}</span>
-          {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
+          {bottle.vintage && <span className="bottle-vintage">{formatVintage(bottle.vintage, t)}</span>}
         </div>
         {/* The details picked under "Show on cards" (rating, price, …). */}
         {details && <div className="bottle-details">{details}</div>}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getMaturityStatus, maturityBadgeText } from '../utils/drinkStatus';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
+import { formatVintage } from '../utils/vintage';
 
 /**
  * The cards a public wine page shows around the wine, from the `context` that
@@ -53,7 +54,7 @@ export function WhenToDrinkCard({ context, signedIn }) {
               : t('wineDetail.windowBest', { from: w.peakFrom, until: w.peakUntil, defaultValue: 'Best {{from}}–{{until}}' });
             return (
               <li key={w.vintage}>
-                <span className="wd-ctx-vintage">{w.vintage}</span>
+                <span className="wd-ctx-vintage">{formatVintage(w.vintage, t)}</span>
                 <span>{w.peakFrom != null && w.peakUntil != null ? best : null}</span>
                 {status && <span className="wd-ctx-sub">{maturityBadgeText(status, t)}</span>}
               </li>

@@ -8,6 +8,7 @@ import WineImage from '../components/WineImage';
 import timeAgo from '../utils/timeAgo';
 import { swatchType } from '../utils/wineColour';
 import './SommPrices.css';
+import { formatVintage } from '../utils/vintage';
 
 // Mirror of the backend minimum (routes/somm/prices.js DECLINE_REASON_MIN) —
 // the reason is sent verbatim to the requester(s), so an empty one is useless.
@@ -214,7 +215,7 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
         </div>
 
         <div className="somm-card-right">
-          <span className="somm-vintage-pill">{item.vintage}</span>
+          <span className="somm-vintage-pill">{formatVintage(item.vintage, t)}</span>
           {item.latestPrice ? (
             <span className="sp-last-price">
               {item.latestPrice.price} {item.latestPrice.currency}

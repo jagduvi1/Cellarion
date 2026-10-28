@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { TYPE_COLORS, fmtRating, fmtDelta } from './chartHelpers';
+import { formatVintage } from '../../utils/vintage';
 
 function RegretSignalCard({ regretSignal, targetScale }) {
   const { t } = useTranslation();
@@ -35,7 +36,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
                 <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7A1E2D' }} />
                 <div className="rs-info">
                   <div className="rs-name">{b.name}</div>
-                  <div className="rs-vintage">{b.vintage}</div>
+                  <div className="rs-vintage">{formatVintage(b.vintage, t)}</div>
                 </div>
                 <div className="rs-delta rs-delta--positive">+{fmtDelta(b.delta, targetScale)}</div>
                 <div className="rs-ratings">{fmtRating(b.rating, targetScale)} {'\u2192'} {fmtRating(b.consumedRating, targetScale)}</div>
@@ -53,7 +54,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
                 <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7A1E2D' }} />
                 <div className="rs-info">
                   <div className="rs-name">{b.name}</div>
-                  <div className="rs-vintage">{b.vintage}</div>
+                  <div className="rs-vintage">{formatVintage(b.vintage, t)}</div>
                 </div>
                 <div className="rs-delta rs-delta--negative">{fmtDelta(b.delta, targetScale)}</div>
                 <div className="rs-ratings">{fmtRating(b.rating, targetScale)} {'\u2192'} {fmtRating(b.consumedRating, targetScale)}</div>

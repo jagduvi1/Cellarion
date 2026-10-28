@@ -45,6 +45,7 @@ import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import ActionNotice from '../components/ActionNotice';
 import './CellarRacks.css';
+import { formatVintage } from '../utils/vintage';
 
 function CellarRacks() {
   const { t } = useTranslation();
@@ -2147,7 +2148,7 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
         <div className="slot-case-panel">
           <p className="slot-case-title">
             <strong>{caseGroup.sample.wineDefinition?.name || t('common.unknown')}</strong>
-            {caseGroup.sample.vintage ? ` (${caseGroup.sample.vintage})` : ''}
+            {caseGroup.sample.vintage ? ` (${formatVintage(caseGroup.sample.vintage, t)})` : ''}
           </p>
           <p className="slot-case-hint">
             {t('racks.caseHint', 'Fills the free slots from here onward, in position order.')}
@@ -2223,7 +2224,7 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
                   {g.bottles.length > 1 && <span className="slot-case-badge">×{g.bottles.length}</span>}
                 </strong>
                 <span className="slot-bottle-meta">
-                  {g.sample.wineDefinition?.producer} &middot; {g.sample.vintage}
+                  {g.sample.wineDefinition?.producer} &middot; {formatVintage(g.sample.vintage, t)}
                   {g.sample.wineDefinition?.country?.name ? ` \u00B7 ${g.sample.wineDefinition.country.name}` : ''}
                 </span>
               </div>
@@ -2306,7 +2307,7 @@ function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, on
           {wine?.producer && <p className="slot-detail-producer">{wine.producer}</p>}
           <p className="slot-detail-meta">
             <span className={`slot-bottle-type-dot type-${swatchType(wine, 'red')}`} />
-            {wineTypeLabel(wine, t)} &middot; {bottle?.vintage}
+            {wineTypeLabel(wine, t)} &middot; {formatVintage(bottle?.vintage, t)}
           </p>
           {wine?.country?.name && (
             <p className="slot-detail-meta">

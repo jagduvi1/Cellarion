@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useBackHere } from '../../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { TYPE_COLORS, fmtDays, fmtCurrency } from './chartHelpers';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * "Drink These Now" — the urgency ladder.
@@ -43,7 +44,7 @@ function UrgencyLadder({ bottles, currency }) {
               <Link to={`/cellars/${b.cellarId}/bottles/${b.id}`} state={backHere} className="urgency-info urgency-info--link" title={t('statistics.openBottle')}>
                 <div className="urgency-name" title={b.name}>{b.name}</div>
                 <div className="urgency-meta">
-                  {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{b.vintage}
+                  {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{formatVintage(b.vintage, t)}
                   {b.source === 'somm' && <span className="urgency-source-badge">somm</span>}
                 </div>
               </Link>
@@ -51,7 +52,7 @@ function UrgencyLadder({ bottles, currency }) {
               <div className="urgency-info">
                 <div className="urgency-name" title={b.name}>{b.name}</div>
                 <div className="urgency-meta">
-                  {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{b.vintage}
+                  {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{formatVintage(b.vintage, t)}
                   {b.source === 'somm' && <span className="urgency-source-badge">somm</span>}
                 </div>
               </div>

@@ -6,6 +6,7 @@ import { getStatsOverview } from '../api/stats';
 import { getRestockAlerts, dismissRestockAlert } from '../api/restockAlerts';
 import { writeStored } from '../utils/safeStorage';
 import './Restock.css';
+import { formatVintage } from '../utils/vintage';
 
 // Shared restock math for one category dimension: one entry per consumed
 // name, where rate = bottles consumed per month over the consumption window
@@ -237,7 +238,7 @@ export default function Restock() {
               <div className="restock-alert-card__content">
                 <strong>{alert.wineName}</strong>
                 {alert.wineProducer && <span className="restock-alert-card__producer"> · {alert.wineProducer}</span>}
-                {alert.vintage && alert.vintage !== 'NV' && <span className="restock-alert-card__vintage"> {alert.vintage}</span>}
+                {alert.vintage && alert.vintage !== 'NV' && <span className="restock-alert-card__vintage"> {formatVintage(alert.vintage, t)}</span>}
                 <p className="restock-alert-card__message">
                   {t('restock.alertMessage', 'No similar wines left in your cellar. Consider restocking.')}
                 </p>

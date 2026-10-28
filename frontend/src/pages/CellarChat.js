@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { track } from '../utils/track';
 import { isHostedOrigin } from '../utils/mcpConnect';
 import './CellarChat.css';
+import { formatVintage } from '../utils/vintage';
 
 // ── Session storage keys ─────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ function WineCard({ wine }) {
     <Wrapper className="cellar-chat__wine-card" aria-label={wine.grapes?.join(', ')} {...linkProps}>
       <div className="cellar-chat__wine-card-name">{wine.name}</div>
       <div className="cellar-chat__wine-card-meta">
-        {wine.vintage} · {wine.producer}
+        {formatVintage(wine.vintage, t)} · {wine.producer}
       </div>
       {wine.region && (
         <div className="cellar-chat__wine-card-meta">{wine.region}</div>

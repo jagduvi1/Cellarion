@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { createBottle } from '../api/bottles';
 import Modal from './Modal';
 import { bottleCopyPayload, MAX_COPIES } from '../utils/bottleCopy';
+import { formatVintage } from '../utils/vintage';
 
 // Cap per batch — this flow tops up a bottle you already registered (a case or
 // two), it is not the bulk importer. Matches the sequential-POST budget the
@@ -99,7 +100,7 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
   return (
     <Modal title={t('bottleDetail.addMore.title', 'Add more bottles')} onClose={guardedClose} showClose trapFocus>
       <p style={{ marginTop: 0 }}>
-        <strong>{wine?.name}{bottle.vintage ? ` · ${bottle.vintage}` : ''}</strong>
+        <strong>{wine?.name}{bottle.vintage ? ` · ${formatVintage(bottle.vintage, t)}` : ''}</strong>
       </p>
 
       <div className="form-group">

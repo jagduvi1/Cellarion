@@ -8,6 +8,7 @@ import {
 import { suggestWineValue, proposeRegistryKey } from '../../api/registryData';
 import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import './PersonalDataCard.css';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * Personal typed key/value data on this bottle and its wine (issue #986).
@@ -274,7 +275,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
                 style={{ marginLeft: 4, fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-text-muted)' }}
                 title={t('personalData.vintageScopeTitle', 'Applies only to bottles of this vintage')}
               >
-                ({entry.vintage})
+                ({formatVintage(entry.vintage, t)})
               </span>
             )}
           </span>
@@ -378,7 +379,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
               {t('personalData.promoteIntro', 'Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.', { key: promote.key.name, value: String(promote.value) })}
               {' '}
               {promote.vintage
-                ? t('personalData.promoteScopeVintage', 'It will apply to the {{year}} vintage only.', { year: promote.vintage })
+                ? t('personalData.promoteScopeVintage', 'It will apply to the {{year}} vintage only.', { year: formatVintage(promote.vintage, t) })
                 : t('personalData.promoteScopeWine', 'It will apply to every vintage of this wine.')}
             </p>
             <div className="form-group">
@@ -430,7 +431,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
                       <option value="bottle">{t('personalData.levelBottle', 'This bottle only')}</option>
                     )}
                     {offerVintage && (
-                      <option value="wine-vintage">{t('personalData.levelWineVintage', 'Every bottle of this vintage ({{vintage}})', { vintage })}</option>
+                      <option value="wine-vintage">{t('personalData.levelWineVintage', 'Every bottle of this vintage ({{vintage}})', { vintage: formatVintage(vintage, t) })}</option>
                     )}
                     <option value="wine">{t('personalData.levelWine', 'Every bottle of this wine (all vintages)')}</option>
                   </select>

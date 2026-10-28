@@ -21,6 +21,7 @@ import SearchInput from '../components/SearchInput';
 import './CellarDetail.css';
 import './CellarHistory.css';
 import '../components/BottleUndoNotice.css';
+import { formatVintage } from '../utils/vintage';
 
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 
@@ -626,7 +627,7 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false, canEdit 
           <h3>{wine?.name || t('common.unknownWine')}</h3>
           <p className="history-producer">{wine?.producer}</p>
           <div className="history-meta">
-            <span>{t('history.vintageLabel')} {bottle.vintage}</span>
+            <span>{t('history.vintageLabel')} {formatVintage(bottle.vintage, t)}</span>
             {consumedDate && <span>· {consumedDate}</span>}
             {bottle.price && <span>· {t('history.paidLabel')} {bottle.price} {bottle.currency}</span>}
           </div>

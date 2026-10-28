@@ -38,6 +38,8 @@
     "all": "All",
     "by": "by",
     "unknown": "Unknown",
+    "nonVintage": "NV",
+    "unknownVintage": "Unknown",
     "deletedUser": "[Deleted user]",
     "skipToContent": "Skip to main content",
     "unknownWine": "Unknown Wine",

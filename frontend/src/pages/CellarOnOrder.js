@@ -17,6 +17,7 @@ import {
 } from '../utils/onOrder';
 import './CellarDetail.css';
 import './CellarOnOrder.css';
+import { formatVintage } from '../utils/vintage';
 
 /**
  * Bottles bought for this cellar that have not arrived yet (status
@@ -331,7 +332,7 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onMonthChanged, onA
           </h3>
           {producer && <p className="on-order-producer">{producer}</p>}
           <div className="on-order-meta">
-            <span>{first.vintage || 'NV'}</span>
+            <span>{formatVintage(first.vintage || 'NV', t)}</span>
             {first.bottleSize && first.bottleSize !== '750ml' && <span>· {first.bottleSize}</span>}
             <span className="on-order-qty">· {t('onOrder.qty', { count })}</span>
             {first.price != null && first.price !== '' && (

@@ -12,6 +12,7 @@ import {
   loadArrangeCorner,
   saveArrangeCorner,
 } from '../../utils/rackArrange';
+import { formatVintage } from '../../utils/vintage';
 
 /**
  * "Organize this rack" — pick a strategy and fill corner, preview which
@@ -140,7 +141,7 @@ export default function ArrangeModal({ rack, onPreview, onApply, onClose }) {
               <td className="arrange-pos">{c.to}</td>
               <td>
                 {c.name || t('common.unknown', 'Unknown')}
-                {c.vintage ? ` (${c.vintage})` : ''}
+                {c.vintage ? ` (${formatVintage(c.vintage, t)})` : ''}
               </td>
               <td className="arrange-pos arrange-pos--from">{c.from}</td>
             </tr>

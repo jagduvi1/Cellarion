@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getCellar, getCellarAudit } from '../api/cellars';
 import './CellarAudit.css';
 import { backLabel } from '../utils/backLabel';
+import { formatVintage } from '../utils/vintage';
 
 function formatTimestamp(ts) {
   return new Date(ts).toLocaleString(undefined, {
@@ -76,16 +77,16 @@ function fmtVal(val) {
 function formatDetail(action, detail, t) {
   if (!detail || Object.keys(detail).length === 0) return null;
   if (action === 'bottle.add' && detail.wineName) {
-    return `${detail.wineName}${detail.vintage ? ` · ${detail.vintage}` : ''}${detail.onOrder ? ` · ${t('onOrder.badge')}` : ''}`;
+    return `${detail.wineName}${detail.vintage ? ` · ${formatVintage(detail.vintage, t)}` : ''}${detail.onOrder ? ` · ${t('onOrder.badge')}` : ''}`;
   }
   if (action === 'bottle.change_wine' && detail.toWine) {
-    return `${detail.fromWine || '—'} → ${detail.toWine}${detail.vintage ? ` · ${detail.vintage}` : ''}`;
+    return `${detail.fromWine || '—'} → ${detail.toWine}${detail.vintage ? ` · ${formatVintage(detail.vintage, t)}` : ''}`;
   }
   if (action === 'bottle.consume' && detail.reason) {
     return detail.reason;
   }
   if (action === 'bottle.move.out' || action === 'bottle.move.in') {
-    const wine = detail.wineName ? `${detail.wineName}${detail.vintage ? ` · ${detail.vintage}` : ''} ` : '';
+    const wine = detail.wineName ? `${detail.wineName}${detail.vintage ? ` · ${formatVintage(detail.vintage, t)}` : ''} ` : '';
     return action === 'bottle.move.out'
       ? `${wine}→ ${detail.toCellarName || '—'}`
       : `${wine}← ${detail.fromCellarName || '—'}`;

@@ -3,6 +3,7 @@ import './ImageCarousel.css';
 import AuthImage from './AuthImage';
 import { API_URL } from '../api/apiConstants';
 import { useTranslation } from 'react-i18next';
+import { formatVintage } from '../utils/vintage';
 
 // The owner's own photo carries its review state as a small pill (discussion
 // #1227: "I don't know if some uploads have been rejected or are still
@@ -64,7 +65,7 @@ function ImageCarousel({ images, size = 'medium', vintage, defaultImageId, onSet
             bottle's. Same-vintage and untagged photos carry nothing. */}
         {vintage && currentImage.vintage && String(currentImage.vintage) !== String(vintage) && (
           <div className="carousel-vintage" role="note">
-            {t('imageGallery.otherVintage', '{{vintage}} label', { vintage: currentImage.vintage })}
+            {t('imageGallery.otherVintage', '{{vintage}} label', { vintage: formatVintage(currentImage.vintage, t) })}
           </div>
         )}
         {/* Removing a photo (ticket 6a865f60). Which verb you get depends on

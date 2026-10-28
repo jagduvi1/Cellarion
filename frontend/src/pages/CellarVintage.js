@@ -37,6 +37,7 @@ import { slotLabel } from '../utils/slotLabel';
 import './CellarDetail.css';
 import './BottleDetail.css';
 import './CellarVintage.css';
+import { formatVintage } from '../utils/vintage';
 
 const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
 const AddToPickListModal = lazy(() => import('../components/AddToPickListModal'));
@@ -187,7 +188,7 @@ function CellarVintage() {
   const canSuggest = !!wine && !user?.isDemo && wine.draft !== true;
   const canAdd = canEdit && !!wine && !user?.isDemo && (bottles.length > 0 || !!data?.historyBottleId);
   const first = bottles[0] || null;
-  const title = wine ? `${wine.name} ${vintage}` : t('cellarVintage.title', 'Vintage');
+  const title = wine ? `${wine.name} ${formatVintage(vintage, t)}` : t('cellarVintage.title', 'Vintage');
   // Photos are filed under a bottle and its vintage (BottleImage.vintage), so
   // a photo added here goes through a bottle of this vintage — one still in
   // the cellar, else the last one drunk — and shows on every bottle of it.
@@ -546,11 +547,11 @@ function CellarVintage() {
               {/* 2. The vintage: the sommelier's window, what you keep for it. */}
               <section aria-labelledby="cvb-vintage-title">
                 <div className="cvb-h2-row">
-                  <h2 id="cvb-vintage-title" className="cvb-h2">{t('cellarVintageBeta.vintageTitle', 'This vintage: {{vintage}}', { vintage })}</h2>
+                  <h2 id="cvb-vintage-title" className="cvb-h2">{t('cellarVintageBeta.vintageTitle', 'This vintage: {{vintage}}', { vintage: formatVintage(vintage, t) })}</h2>
                   <CollapseToggle
                     collapsed={isCollapsed('vintage.vintage')}
                     onToggle={() => toggle('vintage.vintage')}
-                    label={t('cellarVintageBeta.vintageTitle', 'This vintage: {{vintage}}', { vintage })}
+                    label={t('cellarVintageBeta.vintageTitle', 'This vintage: {{vintage}}', { vintage: formatVintage(vintage, t) })}
                     controls="cvb-vintage-body"
                   />
                 </div>
