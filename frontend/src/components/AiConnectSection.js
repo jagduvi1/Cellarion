@@ -91,7 +91,9 @@ export default function AiConnectSection() {
           read-only tokens, every change reversible, instant revoke. */}
       <div className="alert alert-info">
         {t('settings.aiConnect.safetyNotice',
-          'If you are unsure, start with a read-only token. Anything an AI changes can be undone under "What your AI has changed", and revoking the token cuts it off instantly.')}
+          'If you are unsure, start with a read-only token. Anything an AI changes can be undone under "{{section}}", and revoking the token cuts it off instantly.',
+          // Named from the section's own heading so the two cannot drift apart.
+          { section: t('settings.aiActivity.title', 'Recent AI activity') })}
       </div>
       <p className="settings-hint">
         {t('settings.aiConnect.hint',

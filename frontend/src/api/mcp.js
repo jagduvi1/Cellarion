@@ -1,6 +1,6 @@
 import { JSON_HEADERS } from './apiConstants';
 
-// Recent AI activity (Settings → "What your AI has changed"). Reads the
+// Recent AI activity (the Settings section of that name). Reads the
 // McpActionLog ledger for the logged-in user and reverts individual actions.
 // JWT-only: these paths live under /api/mcp but are NOT in apiTokenAuth's
 // SCOPE_ALLOWLIST, so a `cel_` token cannot read or unwind the ledger — only

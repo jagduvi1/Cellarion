@@ -1,11 +1,13 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import AiConnectSection from './AiConnectSection';
+import en from '../locales/en/translation.json';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     // Components pass English fallbacks inline — return those so assertions
     // read like the real UI.
-    t: (key, fallback) => (typeof fallback === 'string' ? fallback : key),
+    t: (key, fallback, opts) => (typeof fallback === 'string' ? fallback : key)
+      .replace(/\{\{(\w+)\}\}/g, (m, name) => opts?.[name] ?? m),
   }),
 }));
 
@@ -33,6 +35,21 @@ describe('AiConnectSection', () => {
     // Read-only tokens, reversible changes, instant revoke.
     expect(screen.getByText(/read-only token/i)).toBeInTheDocument();
     expect(screen.getByText(/revoking the token cuts it off instantly/i)).toBeInTheDocument();
+  });
+
+  test('points to the AI activity section by its actual heading', () => {
+    render(<AiConnectSection />);
+    expect(screen.getByText(/can be undone under "Recent AI activity"/)).toBeInTheDocument();
+  });
+
+  // betaNotice is not rendered today, but carries the same sentence: both take
+  // the name as {{section}} so neither can name a heading that no longer exists.
+  test('both notices leave the section name to settings.aiActivity.title', () => {
+    const { betaNotice, safetyNotice } = en.settings.aiConnect;
+    for (const notice of [betaNotice, safetyNotice]) {
+      expect(notice).toContain('"{{section}}"');
+      expect(notice).not.toContain('What your AI has changed');
+    }
   });
 
   test('renders all three configs with a placeholder token and, off-cellarion.app, a CELLARION_URL override', () => {
