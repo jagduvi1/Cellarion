@@ -36,6 +36,12 @@ const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = requ
 // lazy), so it adds no module tree to the curation queue.
 const { stampPromotedScanRetention } = require('./labelScanAccess');
 const { DRAFT_EXCLUDED } = require('./wineVisibility');
+// Not curation work either: a row quarantined as not wine (the Other
+// category) keeps pendingIdentity but never gets an identity completed —
+// it stayed on the curators' list after every quarantine (sommelier ticket
+// 2026-10-28). Spread beside DRAFT_EXCLUDED at every site: the draft-gates
+// guard reads the word next to each pendingIdentity filter.
+const NOT_WINE_EXCLUDED = { nonWine: { $ne: true } };
 // Same reasoning: appellationResolve requires only the Appellation model and
 // utils/normalize, so the curation queue keeps its light module tree.
 const { resolveCanonicalAppellation } = require('./appellationResolve');
@@ -95,7 +101,7 @@ const CREATED_VIA_FILTERS = ['ui', 'import', 'mcp', 'ai'];
 async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, includeUnavailable = false } = {}) {
   // A private draft is pending too (model invariant) but is NOT curation
   // work — it is hidden from curators until its creator publishes it.
-  const filter = { pendingIdentity: true, ...DRAFT_EXCLUDED };
+  const filter = { pendingIdentity: true, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED };
   if (!includeUnavailable) filter.identityUnavailable = { $ne: true };
   // Literal from the static array, never raw input (CodeQL query-injection
   // rule, the aiBudgetRequests pattern).
@@ -115,8 +121,8 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
     // The WORK figure: rows still awaiting an identity, excluding the ones a
     // curator has already dispositioned. Counted separately below so the UI can
     // still say how many of those there are.
-    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: { $ne: true }, ...DRAFT_EXCLUDED }),
-    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: true, ...DRAFT_EXCLUDED }),
+    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: { $ne: true }, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
+    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: true, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
   ]);
 
   const ids = wines.map((w) => w._id);
