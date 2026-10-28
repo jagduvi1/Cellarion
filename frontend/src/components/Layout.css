@@ -383,6 +383,31 @@
 }
 
 /* ══════════════════════════════════════════════
+   Narrow desktop / tablet
+   ══════════════════════════════════════════════ */
+/* Squeezed between the logo and the fixed-width right section, the links
+   wrapped into four or five short rows while the right section kept all its
+   width. Below this width the brand and the right section share the first
+   row and the links get a full-width row of their own underneath. */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .navbar-inner {
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+  }
+
+  .navbar-links {
+    order: 1;
+    flex-basis: 100%;
+    /* Pull the first link's padding out so its text lines up with the logo */
+    margin-left: -0.75rem;
+  }
+
+  .brand-logo-img {
+    height: 52px;
+  }
+}
+
+/* ══════════════════════════════════════════════
    Mobile Styles
    ══════════════════════════════════════════════ */
 @media (max-width: 768px) {
