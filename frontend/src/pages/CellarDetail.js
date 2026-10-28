@@ -959,13 +959,15 @@ function CellarDetail() {
                 {!dataIsMulti && onOrder?.count > 0 && (
                   <Link to={`/cellars/${id}/on-order`} className="on-order-link-bar">
                     <span aria-hidden="true">🚚</span>
-                    <span>{t('onOrder.linkCount', { count: onOrder.count })}</span>
-                    {onOrder.nextExpected && (
-                      <span className={`on-order-link-next${isArrivalLate(onOrder.nextExpected) ? ' is-late' : ''}`}>
-                        · {t(isArrivalLate(onOrder.nextExpected) ? 'onOrder.linkLate' : 'onOrder.linkNext',
-                          { month: formatArrivalMonth(onOrder.nextExpected, i18n.language) })}
-                      </span>
-                    )}
+                    <span className="on-order-link-text">
+                      {t('onOrder.linkCount', { count: onOrder.count })}
+                      {onOrder.nextExpected && (
+                        <span className={`on-order-link-next${isArrivalLate(onOrder.nextExpected) ? ' is-late' : ''}`}>
+                          {' · '}{t(isArrivalLate(onOrder.nextExpected) ? 'onOrder.linkLate' : 'onOrder.linkNext',
+                            { month: formatArrivalMonth(onOrder.nextExpected, i18n.language) })}
+                        </span>
+                      )}
+                    </span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
                   </Link>
                 )}
