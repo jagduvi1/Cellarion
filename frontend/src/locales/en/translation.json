@@ -580,7 +580,7 @@
       "docsLink": "Set-up guides for every client",
       "testError": "Could not verify right now (server busy or unreachable) — this says nothing about your token. Try again in a moment.",
       "beta": "Beta",
-      "betaNotice": "This is a beta feature and you use it at your own risk. It works, but it is new and still being tested — expect rough edges, and changes while we refine it. If you are unsure, connect with a read-only token: anything an AI changes can be undone under \"What your AI has changed\", and revoking the token cuts it off instantly.",
+      "betaNotice": "This is a beta feature and you use it at your own risk. It works, but it is new and still being tested — expect rough edges, and changes while we refine it. If you are unsure, connect with a read-only token: anything an AI changes can be undone under \"{{section}}\", and revoking the token cuts it off instantly.",
       "safetyNotice": "If you are unsure, start with a read-only token. Anything an AI changes can be undone under \"{{section}}\", and revoking the token cuts it off instantly."
     },
     "climateDevices": {

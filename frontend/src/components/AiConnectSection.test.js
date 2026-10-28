@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import AiConnectSection from './AiConnectSection';
+import en from '../locales/en/translation.json';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -39,6 +40,16 @@ describe('AiConnectSection', () => {
   test('points to the AI activity section by its actual heading', () => {
     render(<AiConnectSection />);
     expect(screen.getByText(/can be undone under "Recent AI activity"/)).toBeInTheDocument();
+  });
+
+  // betaNotice is not rendered today, but carries the same sentence: both take
+  // the name as {{section}} so neither can name a heading that no longer exists.
+  test('both notices leave the section name to settings.aiActivity.title', () => {
+    const { betaNotice, safetyNotice } = en.settings.aiConnect;
+    for (const notice of [betaNotice, safetyNotice]) {
+      expect(notice).toContain('"{{section}}"');
+      expect(notice).not.toContain('What your AI has changed');
+    }
   });
 
   test('renders all three configs with a placeholder token and, off-cellarion.app, a CELLARION_URL override', () => {
