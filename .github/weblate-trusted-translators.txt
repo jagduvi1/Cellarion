@@ -10,6 +10,7 @@
 # something other than a non-English locale file for a person.
 
 jagduvi79@gmail.com                                # Johan Eklund (maintainer, sv)
+jagduvi1@users.noreply.hosted.weblate.org  # Johan Eklund (maintainer, sv) — the alias Weblate writes when the e-mail is private
 yeagersthlm@gmail.com                              # Daniel Nylander (sv)
 jrthwlate@users.noreply.hosted.weblate.org         # Priit Jõerüüt (et)
 vetlerb@users.noreply.hosted.weblate.org           # Vetle Ruud Bråten (nb)
