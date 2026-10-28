@@ -29,7 +29,7 @@ import { useBackToClose } from '../utils/useBackToClose';
 import { bottleNoticeName } from '../components/BottleUndoNotice';
 import { handOverBack } from '../hooks/useHandedOverState';
 import { afterPopupEntryGone, isOnPopupEntry } from '../utils/useBackToClose';
-import { formatVintage } from '../utils/vintage';
+import { formatVintage, parseVintageInput, vintageInputProps } from '../utils/vintage';
 
 // How this device last started adding a bottle: 'camera' (the label photo, the
 // default) or 'search' (typing the name). Per device on purpose — the same
@@ -1045,6 +1045,7 @@ function AddBottle() {
       const base = {
         cellar: cellarId,
         ...bottleData,
+        vintage: parseVintageInput(bottleData.vintage, t),
         price: bottleData.price ? parseFloat(bottleData.price) : undefined,
         occasion: bottleData.occasion || undefined,
         drinkFrom: bottleData.drinkFrom ? parseInt(bottleData.drinkFrom, 10) : undefined,
@@ -1812,9 +1813,8 @@ function AddBottle() {
                   value={bottleData.vintage}
                   onChange={(e) => setBottleData({ ...bottleData, vintage: e.target.value })}
                   placeholder={t('addBottle.vintagePlaceholder')}
-                  pattern="^(?:[Nn][Vv]|[Uu]nknown|(?:19|20)\d{2})$"
+                  {...vintageInputProps(t)}
                   title={t('addBottle.vintagePattern')}
-                  maxLength={7}
                   required
                   autoFocus
                 />
@@ -2157,7 +2157,7 @@ function AddBottle() {
                   <AddBottleCustomFields
                     apiFetch={apiFetch}
                     wineId={selectedWine?._id}
-                    vintage={bottleData.vintage}
+                    vintage={parseVintageInput(bottleData.vintage, t)}
                     rows={customFields}
                     onChange={setCustomFields}
                     onKeysLoaded={setSavedPersonalKeys}
