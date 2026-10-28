@@ -15,6 +15,7 @@
  * translation would be load-bearing.
  */
 
+import i18next from 'i18next';
 import { SHIPPED_CODES } from 'virtual:locale-coverage';
 
 import en from './en/translation.json';
@@ -104,6 +105,15 @@ describe('translation files', () => {
       .filter(([base, f]) => !(f.includes('one') && f.includes('other')) || enKeys.includes(base))
       .map(([base, f]) => `${base} (forms: ${f.join(',')}${enKeys.includes(base) ? ' + bare base key' : ''})`);
     expect(broken).toEqual([]);
+  });
+
+  // Strings taking {{count}} need the _one/_other family, or i18next serves
+  // the bare key for every count ("1 wines copied from the registry").
+  test('registry connection counts pick the singular for one wine', async () => {
+    const t = await i18next.createInstance().init({ lng: 'en', resources: { en: { translation: en } } });
+    expect(t('settings.registryConnection.heldCopies', { count: 1 })).toBe('1 wine copied from the registry');
+    expect(t('settings.registryConnection.heldCopies', { count: 2 })).toBe('2 wines copied from the registry');
+    expect(t('settings.registryConnection.removedCopies', { count: 1 })).toBe('1 no longer in the registry');
   });
 
   // The public MCP connect page is the one surface whose copy is load-bearing
