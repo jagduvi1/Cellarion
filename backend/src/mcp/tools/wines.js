@@ -7,7 +7,7 @@ const { z } = require('zod');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
-const { ok, fail, wineSummary, hasContent, objectId } = require('../toolUtil');
+const { ok, fail, wineSummary, hasContent, objectId, classificationsOut } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
@@ -26,7 +26,9 @@ const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 // Fields safe to expose: never normalizedKey / createdBy / productNumber*.
 // `draft` is selected so get_wine can SAY a row is the caller's private draft
 // (the query below already guarantees only the creator can reach one).
-const SAFE_SELECT = 'name producer slug country region appellation classification grapes type colour communityRating aiProfile lwin image imageCredit draft';
+const SAFE_SELECT = 'name producer slug country region appellation classification classifications grapes type colour communityRating aiProfile lwin image imageCredit draft';
+// Every registry read populates the same taxonomy rows (country, region, grapes, classification tiers).
+const TAXONOMY_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }];
 
 // Registry reads on this surface are 'public' scope — served to any token and
 // to the anonymous /api/mcp/public surface — so there is no caller identity to
@@ -68,7 +70,7 @@ registerTool({
         const ids = await findOwnHiddenWineIds(ctx.user.id, args.query);
         if (ids.length) {
           ownHidden = await WineDefinition.find({ _id: { $in: ids }, nonWine: true })
-            .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
+            .select(SAFE_SELECT).populate(TAXONOMY_POPULATE).lean();
         }
       } catch { /* the registry search still answers */ }
     }
@@ -76,7 +78,7 @@ registerTool({
       try {
         const res = await searchService.search(args.query, { limit: REGISTRY_LIMIT });
         const docs = await WineDefinition.find({ _id: { $in: res.ids }, ...SEARCH_VISIBLE })
-          .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
+          .select(SAFE_SELECT).populate(TAXONOMY_POPULATE).lean();
         const byId = new Map(docs.map((d) => [String(d._id), d]));
         wines = res.ids.map((id) => byId.get(String(id))).filter(Boolean);
         viaEngine = true;
@@ -88,13 +90,14 @@ registerTool({
         { score: { $meta: 'textScore' } }
       )
         .select(SAFE_SELECT).sort({ score: { $meta: 'textScore' } })
-        .limit(REGISTRY_LIMIT).populate(['country', 'region', 'grapes']).lean();
+        .limit(REGISTRY_LIMIT).populate(TAXONOMY_POPULATE).lean();
     }
     const data = [
       ...ownHidden.map((w) => ({ ...wineSummary(w), only_in_your_cellar: true, note: OWN_HIDDEN_NOTE })),
       ...wines.map((w) => ({
         ...wineSummary(w),
         classification: w.classification || null,
+        classifications: classificationsOut(w),
         community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
       })),
     ];
@@ -143,13 +146,13 @@ registerTool({
       ? VISIBLE
       : { nonWine: { $ne: true }, $or: [{ pendingIdentity: { $ne: true } }, { draft: true, createdBy: ctx.user.id }] };
     let raw = await WineDefinition.findOne({ _id: args.wine_id, ...visible })
-      .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
+      .select(SAFE_SELECT).populate(TAXONOMY_POPULATE).lean();
     // The caller's own quarantined drink: search_registry lists it for them,
     // so reading it by id works too. Anyone else gets the same not_found.
     let ownHidden = false;
     if (!raw && !anonymous && await isOwnHiddenWine(ctx.user.id, args.wine_id)) {
       raw = await WineDefinition.findOne({ _id: args.wine_id, nonWine: true })
-        .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
+        .select(SAFE_SELECT).populate(TAXONOMY_POPULATE).lean();
       ownHidden = !!raw;
     }
     // Same not_found a missing id gets, so a hidden row's existence never leaks.
@@ -175,6 +178,7 @@ registerTool({
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
       ...wineSummary(w),
       classification: w.classification || null,
+      classifications: classificationsOut(w),
       lwin7: w.lwin?.lwin7 || null,
       community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
       tasting_profile: anonymous ? publicProfileSummary(profile) : profile,

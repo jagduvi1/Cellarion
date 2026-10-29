@@ -793,11 +793,12 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
   const bottles = await Bottle.find({ _id: { $in: pageIds } })
     .populate({
       path: 'wineDefinition',
-      select: 'name producer type appellation classification country region grapes',
+      select: 'name producer type appellation classification country region grapes classifications',
       populate: [
         { path: 'country', select: 'name' },
         { path: 'region', select: 'name' },
         { path: 'grapes', select: 'name' },
+        { path: 'classifications', select: 'name' },
       ],
     })
     .lean();

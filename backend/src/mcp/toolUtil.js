@@ -93,6 +93,18 @@ function accessibleCellars(userId) {
 }
 
 /** Compact registry-wine summary. NEVER include normalizedKey/createdBy/productNumber. */
+/**
+ * The classification taxonomy rows a wine carries, for the API: [{ name,
+ * kind }], only when they were populated (an id-only array answers []).
+ * `classification` (the joined string) stays beside it for older clients.
+ */
+function classificationsOut(wd) {
+  if (!wd || !Array.isArray(wd.classifications)) return [];
+  return wd.classifications
+    .filter((c) => c && typeof c === 'object' && c.name)
+    .map((c) => ({ name: c.name, kind: c.kind || null }));
+}
+
 function wineSummary(wd) {
   if (!wd) return null;
   return {
@@ -198,6 +210,7 @@ const FIELD_DESCRIPTIONS = {
 };
 
 module.exports = {
+  classificationsOut,
   FIELD_DESCRIPTIONS,
   ok,
   fail,

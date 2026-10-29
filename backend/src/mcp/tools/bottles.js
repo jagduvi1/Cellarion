@@ -17,7 +17,7 @@ const { slotLocation } = require('../../utils/rackGeometry');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess,
-  wineSummary, bottleSummary, pageParams, hasContent,
+  wineSummary, bottleSummary, pageParams, hasContent, classificationsOut,
 } = require('../toolUtil');
 const { photosForBottle, photoPresence } = require('../../services/photoState');
 const { servingAdvice, servingSentence } = require('../../utils/servingUtils');
@@ -310,6 +310,7 @@ async function buildBottleDetail(userId, bottleId) {
       wine: wd ? {
         ...wineSummary(wd),
         classification: wd.classification || null,
+        classifications: classificationsOut(wd),
         // Skeleton subdocs (0 reviews / never-enriched all-null profile) are
         // materialized by Mongoose defaults — return null, not empty shells.
         community_rating: wd.communityRating?.reviewCount ? wd.communityRating : null,

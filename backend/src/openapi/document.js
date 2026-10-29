@@ -187,6 +187,7 @@ const schemas = {
       region: { type: ['string', 'null'] },
       appellation: { type: ['string', 'null'] },
       classification: { type: ['string', 'null'] },
+      classifications: { type: 'array', items: { type: 'object', required: ['name', 'kind'], properties: { name: { type: 'string' }, kind: { type: 'string', enum: ['vineyard_rank', 'ripeness', 'ageing', 'other'] } } }, description: 'The classification as curated taxonomy rows, each with its kind (vineyard rank, ripeness tier, ageing tier, other); `classification` is the same, joined into one string.' },
       grapes: { type: 'array', items: { type: 'string' }, description: 'Display names, as on the label.' },
       image: { type: ['string', 'null'], description: 'A thumbnail path on this server (see Images), or null.' },
       profile: {
@@ -304,6 +305,7 @@ const schemas = {
       region: { oneOf: [{ type: 'null' }, ref('NamedRef')] },
       appellation: { type: ['string', 'null'] },
       classification: { type: ['string', 'null'] },
+      classifications: { type: 'array', items: { type: 'object', required: ['name', 'kind'], properties: { name: { type: 'string' }, kind: { type: 'string', enum: ['vineyard_rank', 'ripeness', 'ageing', 'other'] } } }, description: 'The classification as curated taxonomy rows, each with its kind (vineyard rank, ripeness tier, ageing tier, other); `classification` is the same, joined into one string.' },
       grapes: { type: 'array', items: ref('Grape') },
       image: { type: ['string', 'null'], description: 'The registry image URL, or null.' },
       nonWine: { type: 'boolean', description: 'True for a drink that is not wine (cider, beer, spirits): the Other category, kept in the holder\'s cellar outside the shared wine registry; its type is then null.' },

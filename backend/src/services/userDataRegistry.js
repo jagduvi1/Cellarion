@@ -91,6 +91,7 @@ const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
+const Classification = require('../models/Classification');
 const Appellation = require('../models/Appellation');
 const AppellationReviewSkip = require('../models/AppellationReviewSkip');
 const ProfileAuditSample = require('../models/ProfileAuditSample');
@@ -1303,6 +1304,15 @@ const REGISTRY = [
     purge: (ctx) => Grape.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
     exportFragment: null,
     note: 'shared taxonomy; required createdBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: Classification, category: 'creator-ref', userFields: ['createdBy', 'reviewedBy'],
+    purge: (ctx) => Promise.all([
+      Classification.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+      Classification.updateMany({ reviewedBy: ctx.userId }, { $set: { reviewedBy: ctx.deletedUserId } }),
+    ]),
+    exportFragment: null,
+    note: 'shared taxonomy; createdBy and reviewedBy reassigned to [deleted] on erasure (the row and its review stand)',
   },
   {
     model: Appellation, category: 'creator-ref', userFields: ['createdBy'],

@@ -73,6 +73,7 @@ const STATIC_FIELDS = [
   // ("[Grenache, Syrah]" ≠ "Grenache"), which reads as data and lies. Per-grape
   // grouping needs an $unwind stage — a later slice, honestly flagged out.
   dim({ key: 'wine.grapes', label: 'Grapes', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.grapes', taxonomyModel: 'Grape', sortable: false, groupable: false }),
+  dim({ key: 'wine.classifications', label: 'Classification', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.classifications', taxonomyModel: 'Classification', sortable: false, groupable: false }),
 
   // Inventory
   dim({ key: 'bottle.vintage', label: 'Vintage', domain: 'inventory', type: 'text', source: 'bottle', path: 'vintage' }),
