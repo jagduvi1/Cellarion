@@ -32,7 +32,7 @@ const MS_PER_DAY = 86400000;
 const SCAN_EVIDENCE_EXCLUDE = '-scanImage -scanImageBack -scanFieldConflicts';
 
 const WINE_POPULATE = [
-  { path: 'wineDefinition', select: SCAN_EVIDENCE_EXCLUDE, populate: ['country', 'region', 'grapes'] },
+  { path: 'wineDefinition', select: SCAN_EVIDENCE_EXCLUDE, populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }] },
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
 

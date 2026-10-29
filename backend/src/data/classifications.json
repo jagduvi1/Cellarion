@@ -1,0 +1,757 @@
+[
+  {
+    "name": "Grand Cru",
+    "kind": "vineyard_rank",
+    "system": "Burgundy / Champagne / Alsace village and vineyard ranking",
+    "country": "France",
+    "synonyms": []
+  },
+  {
+    "name": "Premier Cru",
+    "kind": "vineyard_rank",
+    "system": "Burgundy / Champagne village and vineyard ranking",
+    "country": "France",
+    "synonyms": [
+      "1er Cru",
+      "1er cru"
+    ]
+  },
+  {
+    "name": "Premier Grand Cru Classé A",
+    "kind": "vineyard_rank",
+    "system": "Saint-Émilion classification",
+    "country": "France",
+    "synonyms": [
+      "1er Grand Cru Classé A"
+    ]
+  },
+  {
+    "name": "Premier Grand Cru Classé B",
+    "kind": "vineyard_rank",
+    "system": "Saint-Émilion classification",
+    "country": "France",
+    "synonyms": [
+      "1er Grand Cru Classé B"
+    ]
+  },
+  {
+    "name": "Premier Grand Cru Classé",
+    "kind": "vineyard_rank",
+    "system": "Saint-Émilion classification",
+    "country": "France",
+    "synonyms": [
+      "1er Grand Cru Classé"
+    ]
+  },
+  {
+    "name": "Grand Cru Classé",
+    "kind": "vineyard_rank",
+    "system": "Bordeaux classifications (Saint-Émilion, Médoc 1855, Graves)",
+    "country": "France",
+    "synonyms": [
+      "Grand Cru Classé en 1855",
+      "Cru Classé",
+      "Grand Cru Classé 1855"
+    ]
+  },
+  {
+    "name": "Premier Cru Classé",
+    "kind": "vineyard_rank",
+    "system": "Médoc classification of 1855",
+    "country": "France",
+    "synonyms": [
+      "1er Cru Classé",
+      "Premier Grand Cru Classé en 1855",
+      "1er Grand Cru Classé en 1855"
+    ]
+  },
+  {
+    "name": "Deuxième Cru Classé",
+    "kind": "vineyard_rank",
+    "system": "Médoc classification of 1855",
+    "country": "France",
+    "synonyms": [
+      "2ème Cru Classé",
+      "Second Cru Classé",
+      "2e Cru Classé",
+      "2ème Grand Cru Classé",
+      "Deuxième Grand Cru Classé",
+      "Second Grand Cru Classé"
+    ]
+  },
+  {
+    "name": "Troisième Cru Classé",
+    "kind": "vineyard_rank",
+    "system": "Médoc classification of 1855",
+    "country": "France",
+    "synonyms": [
+      "3ème Cru Classé",
+      "3e Cru Classé",
+      "3ème Grand Cru Classé",
+      "Troisième Grand Cru Classé"
+    ]
+  },
+  {
+    "name": "Quatrième Cru Classé",
+    "kind": "vineyard_rank",
+    "system": "Médoc classification of 1855",
+    "country": "France",
+    "synonyms": [
+      "4ème Cru Classé",
+      "4e Cru Classé",
+      "4ème Grand Cru Classé",
+      "Quatrième Grand Cru Classé"
+    ]
+  },
+  {
+    "name": "Cinquième Cru Classé",
+    "kind": "vineyard_rank",
+    "system": "Médoc classification of 1855",
+    "country": "France",
+    "synonyms": [
+      "5ème Cru Classé",
+      "5e Cru Classé",
+      "5ème Grand Cru Classé",
+      "Cinquième Grand Cru Classé"
+    ]
+  },
+  {
+    "name": "Cru Classé de Graves",
+    "kind": "vineyard_rank",
+    "system": "Graves classification of 1953/1959",
+    "country": "France",
+    "synonyms": [
+      "Grand Cru Classé de Graves"
+    ]
+  },
+  {
+    "name": "Cru Bourgeois",
+    "kind": "vineyard_rank",
+    "system": "Crus Bourgeois du Médoc",
+    "country": "France",
+    "synonyms": [
+      "Cru Bourgeois du Médoc"
+    ]
+  },
+  {
+    "name": "Cru Bourgeois Supérieur",
+    "kind": "vineyard_rank",
+    "system": "Crus Bourgeois du Médoc",
+    "country": "France",
+    "synonyms": []
+  },
+  {
+    "name": "Cru Bourgeois Exceptionnel",
+    "kind": "vineyard_rank",
+    "system": "Crus Bourgeois du Médoc",
+    "country": "France",
+    "synonyms": []
+  },
+  {
+    "name": "Cru Artisan",
+    "kind": "vineyard_rank",
+    "system": "Crus Artisans du Médoc",
+    "country": "France",
+    "synonyms": []
+  },
+  {
+    "name": "Cru du Beaujolais",
+    "kind": "vineyard_rank",
+    "system": "Beaujolais crus",
+    "country": "France",
+    "synonyms": [
+      "Cru Beaujolais"
+    ]
+  },
+  {
+    "name": "VDP Grosse Lage",
+    "kind": "vineyard_rank",
+    "system": "VDP vineyard classification",
+    "country": "Germany",
+    "synonyms": [
+      "VDP.Grosse Lage",
+      "Grosse Lage",
+      "Große Lage",
+      "VDP.Große Lage",
+      "VDP Große Lage"
+    ]
+  },
+  {
+    "name": "VDP Erste Lage",
+    "kind": "vineyard_rank",
+    "system": "VDP vineyard classification",
+    "country": "Germany",
+    "synonyms": [
+      "VDP.Erste Lage",
+      "Erste Lage"
+    ]
+  },
+  {
+    "name": "VDP Ortswein",
+    "kind": "vineyard_rank",
+    "system": "VDP vineyard classification",
+    "country": "Germany",
+    "synonyms": [
+      "VDP.Ortswein",
+      "Ortswein"
+    ]
+  },
+  {
+    "name": "VDP Gutswein",
+    "kind": "vineyard_rank",
+    "system": "VDP vineyard classification",
+    "country": "Germany",
+    "synonyms": [
+      "VDP.Gutswein",
+      "Gutswein"
+    ]
+  },
+  {
+    "name": "Grosses Gewächs",
+    "kind": "vineyard_rank",
+    "system": "VDP vineyard classification (dry wine from a Grosse Lage)",
+    "country": "Germany",
+    "synonyms": [
+      "Großes Gewächs",
+      "GG",
+      "Grosses Gewaechs",
+      "VDP.Grosses Gewächs",
+      "VDP.Großes Gewächs"
+    ]
+  },
+  {
+    "name": "Erstes Gewächs",
+    "kind": "vineyard_rank",
+    "system": "VDP vineyard classification (dry wine from an Erste Lage)",
+    "country": "Germany",
+    "synonyms": [
+      "VDP.Erstes Gewächs"
+    ]
+  },
+  {
+    "name": "Kabinett",
+    "kind": "ripeness",
+    "system": "Prädikatswein",
+    "country": null,
+    "synonyms": []
+  },
+  {
+    "name": "Spätlese",
+    "kind": "ripeness",
+    "system": "Prädikatswein",
+    "country": null,
+    "synonyms": [
+      "Spatlese",
+      "Spaetlese"
+    ]
+  },
+  {
+    "name": "Auslese",
+    "kind": "ripeness",
+    "system": "Prädikatswein",
+    "country": null,
+    "synonyms": []
+  },
+  {
+    "name": "Beerenauslese",
+    "kind": "ripeness",
+    "system": "Prädikatswein",
+    "country": null,
+    "synonyms": [
+      "BA"
+    ]
+  },
+  {
+    "name": "Trockenbeerenauslese",
+    "kind": "ripeness",
+    "system": "Prädikatswein",
+    "country": null,
+    "synonyms": [
+      "TBA"
+    ]
+  },
+  {
+    "name": "Eiswein",
+    "kind": "ripeness",
+    "system": "Prädikatswein",
+    "country": null,
+    "synonyms": [
+      "Icewine",
+      "Ice Wine"
+    ]
+  },
+  {
+    "name": "Steinfeder",
+    "kind": "ripeness",
+    "system": "Vinea Wachau",
+    "country": "Austria",
+    "synonyms": []
+  },
+  {
+    "name": "Federspiel",
+    "kind": "ripeness",
+    "system": "Vinea Wachau",
+    "country": "Austria",
+    "synonyms": []
+  },
+  {
+    "name": "Smaragd",
+    "kind": "ripeness",
+    "system": "Vinea Wachau",
+    "country": "Austria",
+    "synonyms": []
+  },
+  {
+    "name": "Crianza",
+    "kind": "ageing",
+    "system": "Spanish ageing tiers",
+    "country": "Spain",
+    "synonyms": []
+  },
+  {
+    "name": "Reserva",
+    "kind": "ageing",
+    "system": "Spanish and Portuguese ageing tiers",
+    "country": null,
+    "synonyms": []
+  },
+  {
+    "name": "Gran Reserva",
+    "kind": "ageing",
+    "system": "Spanish ageing tiers",
+    "country": "Spain",
+    "synonyms": []
+  },
+  {
+    "name": "Grande Reserva",
+    "kind": "ageing",
+    "system": "Portuguese ageing tiers",
+    "country": "Portugal",
+    "synonyms": []
+  },
+  {
+    "name": "Garrafeira",
+    "kind": "ageing",
+    "system": "Portuguese ageing tiers",
+    "country": "Portugal",
+    "synonyms": []
+  },
+  {
+    "name": "Riserva",
+    "kind": "ageing",
+    "system": "Italian DOC/DOCG ageing tiers",
+    "country": "Italy",
+    "synonyms": []
+  },
+  {
+    "name": "Gran Selezione",
+    "kind": "ageing",
+    "system": "Chianti Classico",
+    "country": "Italy",
+    "synonyms": []
+  },
+  {
+    "name": "Superiore",
+    "kind": "ageing",
+    "system": "Italian DOC/DOCG tiers",
+    "country": "Italy",
+    "synonyms": [
+      "Classico Superiore"
+    ]
+  },
+  {
+    "name": "Vecchio",
+    "kind": "ageing",
+    "system": "Marsala and Vin Santo ageing",
+    "country": "Italy",
+    "synonyms": []
+  },
+  {
+    "name": "Stravecchio",
+    "kind": "ageing",
+    "system": "Marsala ageing",
+    "country": "Italy",
+    "synonyms": []
+  },
+  {
+    "name": "10 Years Old",
+    "kind": "ageing",
+    "system": "Port and Madeira age statements",
+    "country": "Portugal",
+    "synonyms": [
+      "10 Year Old",
+      "10 Anos",
+      "10 Years",
+      "10 Year Old Tawny",
+      "10 Years Old Tawny",
+      "Tawny 10 Years",
+      "Tawny 10 Years Old",
+      "10 Year Tawny",
+      "10 Year"
+    ]
+  },
+  {
+    "name": "20 Years Old",
+    "kind": "ageing",
+    "system": "Port and Madeira age statements",
+    "country": "Portugal",
+    "synonyms": [
+      "20 Year Old",
+      "20 Anos",
+      "20 Years",
+      "20 Year Old Tawny",
+      "20 Years Old Tawny",
+      "Tawny 20 Years",
+      "Tawny 20 Years Old",
+      "20 Year Tawny",
+      "20 Year"
+    ]
+  },
+  {
+    "name": "30 Years Old",
+    "kind": "ageing",
+    "system": "Port and Madeira age statements",
+    "country": "Portugal",
+    "synonyms": [
+      "30 Year Old",
+      "30 Anos",
+      "30 Years",
+      "30 Year Old Tawny",
+      "30 Years Old Tawny",
+      "Tawny 30 Years",
+      "Tawny 30 Years Old",
+      "30 Year Tawny",
+      "30 Year"
+    ]
+  },
+  {
+    "name": "40 Years Old",
+    "kind": "ageing",
+    "system": "Port and Madeira age statements",
+    "country": "Portugal",
+    "synonyms": [
+      "40 Year Old",
+      "40 Anos",
+      "40 Years",
+      "40 Year Old Tawny",
+      "40 Years Old Tawny",
+      "Tawny 40 Years",
+      "Tawny 40 Years Old",
+      "40 Year Tawny",
+      "40 Year"
+    ]
+  },
+  {
+    "name": "VOS",
+    "kind": "ageing",
+    "system": "Sherry age statements (Vinum Optimum Signatum, 20 years)",
+    "country": "Spain",
+    "synonyms": [
+      "Vinum Optimum Signatum"
+    ]
+  },
+  {
+    "name": "VORS",
+    "kind": "ageing",
+    "system": "Sherry age statements (Vinum Optimum Rare Signatum, 30 years)",
+    "country": "Spain",
+    "synonyms": [
+      "Vinum Optimum Rare Signatum"
+    ]
+  },
+  {
+    "name": "Reserve",
+    "kind": "other",
+    "system": "Producer's own designation, no legal meaning outside Spain and Portugal",
+    "country": null,
+    "synonyms": [
+      "Special Reserve",
+      "Winemaker's Reserve",
+      "Winemakers Reserve",
+      "Private Reserve",
+      "Proprietor's Reserve",
+      "Reserve Collection"
+    ]
+  },
+  {
+    "name": "Réserve",
+    "kind": "other",
+    "system": "Producer's own designation",
+    "country": "France",
+    "synonyms": [
+      "Reserve Speciale",
+      "Réserve Spéciale",
+      "Cuvée Réservée",
+      "Grande Réserve",
+      "Réserve Personnelle"
+    ]
+  },
+  {
+    "name": "Single Vineyard",
+    "kind": "other",
+    "system": "Producer's own designation",
+    "country": null,
+    "synonyms": [
+      "Single-Vineyard",
+      "Single Vineyard Wine"
+    ]
+  },
+  {
+    "name": "Estate",
+    "kind": "other",
+    "system": "Producer's own designation",
+    "country": null,
+    "synonyms": [
+      "Estate Grown",
+      "Estate Bottled",
+      "Estate Wine"
+    ]
+  },
+  {
+    "name": "Premier Cru Supérieur",
+    "kind": "vineyard_rank",
+    "system": "Sauternes classification of 1855",
+    "country": "France",
+    "synonyms": [
+      "Premier Cru Supérieur Classé",
+      "1er Cru Supérieur"
+    ]
+  },
+  {
+    "name": "ÖTW Erste Lage",
+    "kind": "vineyard_rank",
+    "system": "Österreichische Traditionsweingüter vineyard classification",
+    "country": "Austria",
+    "synonyms": [
+      "1ÖTW",
+      "Erste Lage ÖTW",
+      "Erste Lage",
+      "ÖTW"
+    ]
+  },
+  {
+    "name": "Hochgewächs",
+    "kind": "ripeness",
+    "system": "Riesling Hochgewächs (German wine law, Mosel)",
+    "country": "Germany",
+    "synonyms": [
+      "Riesling Hochgewächs"
+    ]
+  },
+  {
+    "name": "5 Puttonyos",
+    "kind": "ripeness",
+    "system": "Tokaji Aszú puttonyos",
+    "country": "Hungary",
+    "synonyms": [
+      "5 Puttonyos Aszú",
+      "Aszú 5 Puttonyos"
+    ]
+  },
+  {
+    "name": "6 Puttonyos",
+    "kind": "ripeness",
+    "system": "Tokaji Aszú puttonyos",
+    "country": "Hungary",
+    "synonyms": [
+      "6 Puttonyos Aszú",
+      "Aszú 6 Puttonyos"
+    ]
+  },
+  {
+    "name": "Vintage Port",
+    "kind": "ageing",
+    "system": "Port categories (IVDP)",
+    "country": "Portugal",
+    "synonyms": [
+      "Porto Vintage",
+      "Vintage Porto"
+    ]
+  },
+  {
+    "name": "Late Bottled Vintage",
+    "kind": "ageing",
+    "system": "Port categories (IVDP)",
+    "country": "Portugal",
+    "synonyms": [
+      "LBV",
+      "LBV Port",
+      "Late Bottled Vintage Port"
+    ]
+  },
+  {
+    "name": "Colheita",
+    "kind": "ageing",
+    "system": "Port and Madeira categories (single-harvest, cask-aged)",
+    "country": "Portugal",
+    "synonyms": [
+      "Colheita Port",
+      "Porto Colheita"
+    ]
+  },
+  {
+    "name": "Crusted Port",
+    "kind": "ageing",
+    "system": "Port categories (IVDP)",
+    "country": "Portugal",
+    "synonyms": [
+      "Crusted"
+    ]
+  },
+  {
+    "name": "Ruby Port",
+    "kind": "ageing",
+    "system": "Port categories (IVDP)",
+    "country": "Portugal",
+    "synonyms": [
+      "Ruby",
+      "Porto Ruby"
+    ]
+  },
+  {
+    "name": "Tawny Port",
+    "kind": "ageing",
+    "system": "Port categories (IVDP)",
+    "country": "Portugal",
+    "synonyms": [
+      "Tawny",
+      "Porto Tawny"
+    ]
+  },
+  {
+    "name": "Reserve Port",
+    "kind": "ageing",
+    "system": "Port categories (IVDP)",
+    "country": "Portugal",
+    "synonyms": [
+      "Ruby Reserve",
+      "Tawny Reserve",
+      "Reserva Port",
+      "Porto Reserva"
+    ]
+  },
+  {
+    "name": "5 Years Old",
+    "kind": "ageing",
+    "system": "Madeira age statements",
+    "country": "Portugal",
+    "synonyms": [
+      "5 Year Old",
+      "5 Anos",
+      "5 Years",
+      "5 Year"
+    ]
+  },
+  {
+    "name": "15 Years Old",
+    "kind": "ageing",
+    "system": "Madeira age statements",
+    "country": "Portugal",
+    "synonyms": [
+      "15 Year Old",
+      "15 Anos",
+      "15 Years",
+      "15 Year"
+    ]
+  },
+  {
+    "name": "Viñedo Singular",
+    "kind": "vineyard_rank",
+    "system": "Rioja vineyard classification (2017)",
+    "country": "Spain",
+    "synonyms": []
+  },
+  {
+    "name": "Vino de Pago",
+    "kind": "vineyard_rank",
+    "system": "Spanish wine law single-estate designation",
+    "country": "Spain",
+    "synonyms": [
+      "Pago",
+      "DO Pago",
+      "Vino de Pago Calificado"
+    ]
+  },
+  {
+    "name": "Vi de Vila",
+    "kind": "vineyard_rank",
+    "system": "DOQ Priorat vineyard classification",
+    "country": "Spain",
+    "synonyms": [
+      "Vi de Vila de Priorat",
+      "Vino de Villa"
+    ]
+  },
+  {
+    "name": "Vi de Paratge",
+    "kind": "vineyard_rank",
+    "system": "DOQ Priorat vineyard classification",
+    "country": "Spain",
+    "synonyms": [
+      "Paratge"
+    ]
+  },
+  {
+    "name": "Vinya Classificada",
+    "kind": "vineyard_rank",
+    "system": "DOQ Priorat vineyard classification",
+    "country": "Spain",
+    "synonyms": [
+      "Viña Clasificada"
+    ]
+  },
+  {
+    "name": "Gran Vinya Classificada",
+    "kind": "vineyard_rank",
+    "system": "DOQ Priorat vineyard classification",
+    "country": "Spain",
+    "synonyms": [
+      "Gran Viña Clasificada"
+    ]
+  },
+  {
+    "name": "Vi de Finca",
+    "kind": "vineyard_rank",
+    "system": "Catalan single-estate designation",
+    "country": "Spain",
+    "synonyms": [
+      "Vi de Finca Qualificada",
+      "Vino de Finca",
+      "Vino de Finca Calificada"
+    ]
+  },
+  {
+    "name": "Joven",
+    "kind": "ageing",
+    "system": "Spanish ageing tiers",
+    "country": "Spain",
+    "synonyms": [
+      "Vino Joven"
+    ]
+  },
+  {
+    "name": "Roble",
+    "kind": "ageing",
+    "system": "Spanish ageing terms (oak-aged below Crianza; regulated in Ribera del Duero)",
+    "country": "Spain",
+    "synonyms": [
+      "Vino Roble"
+    ]
+  },
+  {
+    "name": "Old Vines",
+    "kind": "other",
+    "system": "Producer's own designation",
+    "country": null,
+    "synonyms": [
+      "Old Vine",
+      "Vieilles Vignes",
+      "Viñas Viejas",
+      "Cepas Viejas",
+      "Vinhas Velhas",
+      "Alte Reben",
+      "Vigne Vecchie",
+      "Vecchie Vigne"
+    ]
+  }
+]

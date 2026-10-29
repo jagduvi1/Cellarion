@@ -1016,7 +1016,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
-const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification aiProfile canary';
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification classifications aiProfile canary';
 // The populated places and grapes on the public page carry their public
 // fields only: a bare populate also sent createdBy / reviewedBy, the ids of
 // the members who added or reviewed a region or grape. Descriptions feed the
@@ -1025,6 +1025,7 @@ const PUBLIC_TAXONOMY_POPULATE = [
   { path: 'country', select: 'name slug code translations' },
   { path: 'region', select: 'name slug description country translations' },
   { path: 'grapes', select: 'name slug color description regionalNames translations' },
+  { path: 'classifications', select: 'name kind' },
 ];
 
 // Anti-enumeration limit for the ONE wine endpoint that needs no account.

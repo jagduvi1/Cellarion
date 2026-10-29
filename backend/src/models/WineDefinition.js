@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification } = require('../utils/normalize');
+require('./Classification'); // registers the model the classifications ref and the save hook use
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 const { isStyleType, inferColourFromName } = require('../utils/wineColour');
 
@@ -54,6 +55,14 @@ const wineDefinitionSchema = new mongoose.Schema({
     trim: true,
     default: null
   },
+  // The classification as curated taxonomy rows (models/Classification,
+  // support ticket 2026-10-29): a wine carries several ("Spätlese" and "VDP
+  // Grosse Lage" are two rows). The string above is derived from them on
+  // save and kept for every reader that shows or documents it.
+  classifications: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Classification'
+  }],
   lwin: {
     lwin7: {
       type: String,
@@ -649,6 +658,23 @@ wineDefinitionSchema.index({ type: 1, createdAt: -1 });
 wineDefinitionSchema.index({ country: 1, name: 1 });
 wineDefinitionSchema.index({ region: 1, name: 1 });
 wineDefinitionSchema.index({ grapes: 1, name: 1 });
+wineDefinitionSchema.index({ classifications: 1 });
+
+// The legacy classification string follows the taxonomy rows: whenever the
+// array changes, the string is rewritten from the rows' names in kind order
+// (services/classificationOps), so no reader has to know the taxonomy yet.
+// A write that sets only the string (an older path, or a new wine created
+// with the string alone) leaves the array alone and keeps its string.
+wineDefinitionSchema.pre('save', async function() {
+  if (!this.isModified('classifications')) return;
+  const ids = (this.classifications || []).map((c) => (c && c._id) || c).filter(Boolean);
+  if (this.isNew && !ids.length) return;
+  const rows = ids.length
+    ? await mongoose.model('Classification').find({ _id: { $in: ids } }).select('name kind').lean()
+    : [];
+  const { classificationString } = require('../services/classificationOps');
+  this.classification = classificationString(rows);
+});
 wineDefinitionSchema.index({ type: 1, name: 1 });
 // "More from this producer" on the public wine page (services/winePageContext).
 wineDefinitionSchema.index({ producer: 1, name: 1 });
