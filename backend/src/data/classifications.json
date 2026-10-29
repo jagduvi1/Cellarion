@@ -753,5 +753,84 @@
       "Vigne Vecchie",
       "Vecchie Vigne"
     ]
+  },
+  {
+    "name": "Ausbruch",
+    "kind": "ripeness",
+    "system": "Prädikatswein (Austria)",
+    "country": "Austria",
+    "synonyms": [
+      "Ruster Ausbruch"
+    ]
+  },
+  {
+    "name": "Vendange Tardive",
+    "kind": "ripeness",
+    "system": "Alsace late-harvest designation",
+    "country": "France",
+    "synonyms": [
+      "Vendanges Tardives",
+      "VT"
+    ]
+  },
+  {
+    "name": "Sélection de Grains Nobles",
+    "kind": "ripeness",
+    "system": "Alsace late-harvest designation",
+    "country": "France",
+    "synonyms": [
+      "Selection de Grains Nobles",
+      "SGN"
+    ]
+  },
+  {
+    "name": "Vendemmia Tardiva",
+    "kind": "ripeness",
+    "system": "Italian late-harvest designation",
+    "country": "Italy",
+    "synonyms": []
+  },
+  {
+    "name": "3 Puttonyos",
+    "kind": "ripeness",
+    "system": "Tokaji Aszú puttonyos (historic, before 2013)",
+    "country": "Hungary",
+    "synonyms": [
+      "3 Puttonyos Aszú",
+      "Aszú 3 Puttonyos"
+    ]
+  },
+  {
+    "name": "4 Puttonyos",
+    "kind": "ripeness",
+    "system": "Tokaji Aszú puttonyos (historic, before 2013)",
+    "country": "Hungary",
+    "synonyms": [
+      "4 Puttonyos Aszú",
+      "Aszú 4 Puttonyos"
+    ]
+  },
+  {
+    "name": "Gebietswein",
+    "kind": "vineyard_rank",
+    "system": "Austrian DAC origin pyramid",
+    "country": "Austria",
+    "synonyms": []
+  },
+  {
+    "name": "Ortswein",
+    "kind": "vineyard_rank",
+    "system": "Austrian DAC origin pyramid",
+    "country": "Austria",
+    "synonyms": []
+  },
+  {
+    "name": "Riedenwein",
+    "kind": "vineyard_rank",
+    "system": "Austrian DAC origin pyramid",
+    "country": "Austria",
+    "synonyms": [
+      "Ried"
+    ]
   }
 ]

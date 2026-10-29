@@ -13,6 +13,8 @@ const rateLimit = require('express-rate-limit');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
+const Classification = require('../models/Classification');
+const { loadTaxonomy } = require('../services/classificationOps');
 const WineDefinition = require('../models/WineDefinition');
 const { parsePagination } = require('../utils/pagination');
 const { baseLanguage, localizedName } = require('../utils/localizedName');
@@ -387,6 +389,50 @@ router.get('/grape-names', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[taxonomy] grape names error:', err);
     res.status(500).json({ error: 'Failed to fetch grape names' });
+  }
+});
+
+// ── Classifications ─────────────────────────────────────────────────────────
+
+/**
+ * GET /api/taxonomy/classifications — the classification taxonomy for the
+ * pickers (the admin wine form, a member's draft form): every quality tier
+ * with its kind, system, country and accepted spellings, plus how many wines
+ * carry it. A user-minted row nobody reviewed and no wine uses is left out,
+ * as for grape names. Rows come from the write rule's own in-memory copy, so
+ * a row an admin just added is offered at once; the counts are cached.
+ * Signed-in only, like grape-names.
+ */
+router.get('/classifications', requireAuth, async (req, res) => {
+  const cacheable = () => res.set('Cache-Control', 'private, max-age=30');
+  try {
+    const tax = await loadTaxonomy();
+    let counts = getCachedList('classification-counts');
+    if (!counts) {
+      counts = await countWinesBy('classifications', { unwind: true });
+      listCache.set('classification-counts', { at: Date.now(), body: counts });
+    }
+    const countryIds = [...new Set(tax.rows.map((c) => c.country && String(c.country._id || c.country)).filter(Boolean))];
+    const countries = countryIds.length
+      ? new Map((await Country.find({ _id: { $in: countryIds } }).select('name').lean()).map((c) => [String(c._id), c.name]))
+      : new Map();
+    const classifications = [];
+    for (const c of tax.rows) {
+      const wineCount = counts.get(String(c._id)) || 0;
+      if (c.createdByUser && !c.reviewedAt && wineCount === 0) continue;
+      const countryId = c.country ? String(c.country._id || c.country) : null;
+      classifications.push({
+        _id: c._id, name: c.name, kind: c.kind, system: c.system || null,
+        country: countryId ? { _id: countryId, name: countries.get(countryId) || null } : null,
+        synonyms: c.synonyms || [], wineCount,
+      });
+    }
+    classifications.sort((a, b) => a.name.localeCompare(b.name));
+    cacheable();
+    res.json({ classifications, kinds: Classification.KINDS });
+  } catch (err) {
+    console.error('[taxonomy] classifications list error:', err);
+    res.status(500).json({ error: 'Failed to fetch classifications' });
   }
 });
 

@@ -1,4 +1,5 @@
 const express = require('express');
+const { classificationsOut } = require('../services/classificationOps');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
@@ -48,7 +49,9 @@ const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 // that does not exist); a direct fetch still serves one — that is the path a
 // copier walks, and the fetch is what gets reported.
 const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
-const IDENTITY_SELECT = 'name producer slug country region appellation classification grapes type colour image imageCredit';
+const IDENTITY_SELECT = 'name producer slug country region appellation classification classifications grapes type colour image imageCredit';
+// Every identity read populates the same taxonomy rows.
+const BRIDGE_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }];
 // The profile fields that are registry content. Never the hold/suspect
 // bookkeeping, the model name, the input snapshot or the producer note.
 const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'servingTempMin', 'servingTempMax', 'needsAir', 'source', 'generatedAt', 'verifiedAt'];
@@ -123,6 +126,8 @@ function identity(w) {
     colour: w.colour || null,
     appellation: w.appellation || null,
     classification: w.classification || null,
+    // Additive: the classification as taxonomy rows [{ name, kind }].
+    classifications: classificationsOut(w),
     region: nameOf(w.region),
     country: nameOf(w.country),
     grapes: Array.isArray(w.grapes) ? w.grapes.map((g) => (g && g.name) || null).filter(Boolean) : [],
@@ -244,7 +249,7 @@ router.get('/search', validSearch, quota('searches'), async (req, res) => {
       try {
         const { ids } = await searchService.search(q, { limit: SEARCH_LIMIT });
         const found = await WineDefinition.find({ _id: { $in: ids }, ...SEARCH_VISIBLE })
-          .select(IDENTITY_SELECT).populate(['country', 'region', 'grapes']).lean();
+          .select(IDENTITY_SELECT).populate(BRIDGE_POPULATE).lean();
         const order = new Map(ids.map((id, i) => [String(id), i]));
         found.sort((a, b) => order.get(String(a._id)) - order.get(String(b._id)));
         wines = found;
@@ -257,7 +262,7 @@ router.get('/search', validSearch, quota('searches'), async (req, res) => {
         .select({ ...Object.fromEntries(IDENTITY_SELECT.split(' ').map((f) => [f, 1])), score: { $meta: 'textScore' } })
         .sort({ score: { $meta: 'textScore' } })
         .limit(SEARCH_LIMIT)
-        .populate(['country', 'region', 'grapes'])
+        .populate(BRIDGE_POPULATE)
         .lean();
     }
     // A search is a read of the registry too — ten identities a call, hundreds
@@ -466,7 +471,7 @@ router.get('/requests', async (req, res) => {
     }
     const wineIds = rows.filter((r) => r.status === 'resolved' && r.linkedWineDefinition).map((r) => r.linkedWineDefinition);
     const wines = wineIds.length
-      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').lean()
+      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').populate('classifications', 'name kind').lean()
       : [];
     const byId = new Map(wines.map((w) => [String(w._id), w]));
     res.json({

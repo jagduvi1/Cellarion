@@ -6,6 +6,7 @@ const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Grape = require('../../models/Grape');
 const Classification = require('../../models/Classification');
+const { invalidateClassificationCache } = require('../../services/classificationOps');
 const Appellation = require('../../models/Appellation');
 const WineDefinition = require('../../models/WineDefinition');
 const searchService = require('../../services/search');
@@ -1306,6 +1307,7 @@ router.post('/classifications', async (req, res) => {
       reviewedBy: req.user.id,
     });
     await doc.save();
+    invalidateClassificationCache();
     logAudit(req, 'admin.taxonomy.create', { type: 'classification', id: doc._id }, { name: doc.name, kind: doc.kind });
     res.status(201).json({ classification: doc });
   } catch (error) {
@@ -1353,6 +1355,7 @@ router.put('/classifications/:id', async (req, res) => {
         rewritten += 1;
       }
     }
+    invalidateClassificationCache();
     logAudit(req, 'admin.taxonomy.update', { type: 'classification', id: doc._id }, { from: before, to: { name: doc.name, kind: doc.kind }, winesRewritten: rewritten });
     res.json({ classification: doc, winesRewritten: rewritten });
   } catch (error) {
@@ -1373,6 +1376,7 @@ router.delete('/classifications/:id', async (req, res) => {
       return res.status(400).json({ error: `Cannot delete classification. ${wineCount} wine(s) carry it.` });
     }
     await Classification.findByIdAndDelete(req.params.id);
+    invalidateClassificationCache();
     logAudit(req, 'admin.taxonomy.delete', { type: 'classification', id: doc._id }, { name: doc.name, kind: doc.kind });
     res.json({ message: 'Classification deleted' });
   } catch (error) {
@@ -1392,6 +1396,7 @@ router.post('/classifications/:id/approve', async (req, res) => {
     doc.reviewedAt = new Date();
     doc.reviewedBy = req.user.id;
     await doc.save();
+    invalidateClassificationCache();
     logAudit(req, 'admin.taxonomy.approveClassification', { type: 'classification', id: doc._id }, { name: doc.name });
     res.json({ classification: doc });
   } catch (error) {

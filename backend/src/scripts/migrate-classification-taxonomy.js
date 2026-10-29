@@ -110,9 +110,19 @@ async function run() {
   const stats = { scanned: wines.length, legacyMapped: 0, legacyUnresolved: 0, fromName: 0, unchanged: 0, snapshotMoved: 0 };
   const unresolved = new Map();
   const tally = new Map();
+  // A tier sitting in the APPELLATION field ("Großes Gewächs", "Chianti
+  // Classico Riserva") is reported, not rewritten: an appellation change
+  // re-keys the wine (normalizedKey) and reindexes it, which is the admin
+  // form's job — the curation pass takes this list there.
+  const tierInAppellation = [];
   const backup = createBackupLog('classification-taxonomy');
   let shown = 0;
   for (const w of wines) {
+    const countryName = (w.country && w.country.name) || null;
+    if (w.appellation) {
+      const d = ops.detectFromName({ name: w.appellation, countryName, regionName: w.region && w.region.name, appellation: w.appellation, type: w.type }, { withRest: true });
+      if (d.names.length) tierInAppellation.push({ id: String(w._id), name: w.name, producer: w.producer, appellation: w.appellation, tiers: d.names, rest: d.rest.replace(/^[\s,\-–—:·]+|[\s,\-–—:·]+$/g, '') });
+    }
     const plan = planWine(w, lookup);
     if (!plan) { stats.unchanged += 1; continue; }
     if (plan.unresolved.length) {
@@ -143,6 +153,10 @@ async function run() {
   if (unresolved.size) {
     console.log('\nValues no taxonomy row answers (left untouched — add a row or clear the field):');
     for (const [v, n] of [...unresolved.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${n}  ${v}`);
+  }
+  if (tierInAppellation.length) {
+    console.log(`\nA tier in the appellation field (${tierInAppellation.length} wines — not rewritten; fix through the admin form, which re-keys the wine):`);
+    for (const t of tierInAppellation) console.log(`  ${t.id}  "${t.name}" — ${t.producer}: appellation "${t.appellation}" → "${t.rest || ''}" + [${t.tiers.join(' | ')}]`);
   }
   await mongoose.disconnect();
 }

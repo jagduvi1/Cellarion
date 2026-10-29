@@ -33,6 +33,7 @@ const {
   generateWineKey, pendingWineKey, draftWineKey, normalizeAppellation, normalizeAppellationKey,
   normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity, stripTrailingVintage, normalizeClassification,
 } = require('../utils/normalize');
+const { assignClassification } = require('./classificationOps');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { resolveGrapeIdsStrict } = require('./wineProfileOps');
@@ -206,7 +207,8 @@ async function updateDraft(wine, clean, userId) {
   if (colourErr) return fail('invalid_input', colourErr);
   if (clean.type) wine.type = clean.type;
   if (clean.colour !== undefined) stateColour(wine, clean.colour);
-  if (clean.classification !== undefined) wine.classification = clean.classification || null;
+  // The write rule, lenient for a member's draft (services/classificationOps).
+  if (clean.classification !== undefined) await assignClassification(wine, { classification: clean.classification });
 
   let countryDoc = null;
   if (clean.countryName !== undefined) {

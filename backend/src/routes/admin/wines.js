@@ -13,6 +13,7 @@ const {
   normalizeAppellation,
   normalizeClassification,
 } = require('../../utils/normalize');
+const { assignClassification } = require('../../services/classificationOps');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { validateImageRef } = require('../../services/accountOps');
 const { WINE_COLOURS, stateColour, colourTypeConflict } = require('../../utils/wineColour');
@@ -106,7 +107,8 @@ router.get('/', async (req, res) => {
         const wines = await WineDefinition.find({ _id: { $in: ids }, draft: { $ne: true } })
           .populate('country', 'name')
           .populate('region', 'name')
-          .populate('grapes', 'name');
+          .populate('grapes', 'name')
+          .populate('classifications', 'name kind');
 
         // Preserve Meilisearch relevance order
         const idOrder = new Map(ids.map((id, i) => [id, i]));
@@ -148,6 +150,7 @@ router.get('/', async (req, res) => {
         .populate('country', 'name')
         .populate('region', 'name')
         .populate('grapes', 'name')
+        .populate('classifications', 'name kind')
         .sort(mongoSort)
         .skip(skip)
         .limit(parsedLimit),
@@ -271,13 +274,22 @@ router.post('/', async (req, res) => {
     const imageErr = validateImageRef(image, { allowInline: false });
     if (imageErr) return res.status(400).json({ error: `Wine image: ${imageErr}` });
 
+    // The write rule, strict for an admin (services/classificationOps): the
+    // rows the picker chose, or a typed string resolved against the taxonomy;
+    // a tier the taxonomy lacks is a 400 naming the known tiers.
+    const classificationFields = {};
+    const cls = await assignClassification(classificationFields, {
+      classifications: req.body.classifications, classification: pradikatSplit.classification, countryId: country, strict: true,
+    });
+    if (!cls.ok) return res.status(400).json({ error: cls.message });
+
     const wine = new WineDefinition({
       name: cleanName,
       producer: producerToStore,
       country,
       region: region || null,
       appellation: cleanAppellation,
-      classification: normalizeClassification(pradikatSplit.classification) || undefined,
+      ...classificationFields,
       grapes: grapes || [],
       type: type || null, // no guessed red (ticket 6a85ad44)
       // Kept only on a sparkling/dessert/fortified wine — the model hook drops
@@ -290,7 +302,7 @@ router.post('/', async (req, res) => {
     });
 
     await wine.save();
-    await wine.populate(['country', 'region', 'grapes']);
+    await wine.populate(['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }]);
 
     // Sync to search index (fire-and-forget)
     searchService.indexWine(wine._id);
@@ -1482,7 +1494,8 @@ router.get('/:id', async (req, res) => {
     const wine = await WineDefinition.findById(req.params.id)
       .populate('country', 'name')
       .populate('region', 'name')
-      .populate('grapes', 'name');
+      .populate('grapes', 'name')
+      .populate('classifications', 'name kind');
     // A user's private draft is not registry content, not even to an admin —
     // the same not-found a missing id gets (draft design 2026-09-12).
     if (wine && wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
@@ -1498,7 +1511,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, producer, country, region, appellation, classification, grapes, type, colour, image } = req.body;
+    const { name, producer, country, region, appellation, classification, classifications, grapes, type, colour, image } = req.body;
 
     const wine = await WineDefinition.findById(req.params.id);
     // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
@@ -1523,6 +1536,9 @@ router.put('/:id', async (req, res) => {
     }
     if (classification != null && typeof classification !== 'string') {
       return res.status(400).json({ error: 'Classification must be a string' });
+    }
+    if (classifications != null && !Array.isArray(classifications)) {
+      return res.status(400).json({ error: 'Classifications must be a list' });
     }
     if (country && !isValidId(String(country))) {
       return res.status(400).json({ error: 'Invalid country' });
@@ -1583,7 +1599,16 @@ router.put('/:id', async (req, res) => {
     // Absent = leave alone; '' or null = clear. Normalised the way the mint
     // does it (a regulatory mark stores as no classification), and a change
     // feeds the re-enrich decision below like any other profile input.
-    if (classification !== undefined) wine.classification = normalizeClassification(classification);
+    // The write rule, strict for an admin (services/classificationOps): the
+    // rows the picker chose, or a typed string resolved against the taxonomy;
+    // a tier the taxonomy lacks is a 400 naming the known tiers. Absent =
+    // leave alone; '' / null / [] = clear.
+    if (classifications !== undefined || classification !== undefined) {
+      const cls = await assignClassification(wine, {
+        classifications: classifications === null ? [] : classifications, classification, countryId: country || undefined, strict: true,
+      });
+      if (!cls.ok) return res.status(400).json({ error: cls.message });
+    }
     if (grapes !== undefined) wine.grapes = grapes;
     if (type) wine.type = type;
     // Absent = leave alone; '' or null = clear. The model hook drops it again
@@ -1642,7 +1667,7 @@ router.put('/:id', async (req, res) => {
     // Compared before populate (the snapshot folds ids either way, but the
     // unpopulated doc is the apples-to-apples read).
     const profileInputsChanged = profileInputsSnapshot(wine) !== beforeProfileInputs;
-    await wine.populate(['country', 'region', 'grapes']);
+    await wine.populate(['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }]);
 
     // Sync to the registry index (fire-and-forget). Cellar search
     // (services/bottleSearch) reads the wine live from MongoDB.
@@ -1832,7 +1857,7 @@ router.post('/:id/strip-producer', async (req, res) => {
     // wine no longer has was a second wrong record, and no existing URL breaks.
     wine.normalizedKey = generateWineKey(wine.name, wine.producer, wine.appellation);
     await wine.save();
-    await wine.populate(['country', 'region', 'grapes']);
+    await wine.populate(['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }]);
 
     // Sync to search index (fire-and-forget)
     searchService.indexWine(wine._id);

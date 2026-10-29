@@ -115,6 +115,21 @@ describe('createFieldCorrection validation', () => {
     expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ classification: 'Riserva' });
   });
 
+  test('with the taxonomy loaded, a tier files under its canonical name and an unknown word is refused at once', async () => {
+    const cls = require('./classificationOps');
+    cls.primeClassificationCache([{ _id: 's1', name: 'Spätlese', kind: 'ripeness', country: null, synonyms: ['Spatlese'] }]);
+    try {
+      const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { classification: 'spatlese' } });
+      expect(res.ok).toBe(true);
+      expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ classification: 'Spätlese' });
+      const bad = await ops.createFieldCorrection(ME, { ...GOOD, fields: { classification: 'Grand Vin' } });
+      expect(bad.code).toBe('invalid');
+      expect(bad.message).toMatch(/"Grand Vin" is not in the registry/);
+    } finally {
+      cls.primeClassificationCache(null);
+    }
+  });
+
   test('discussion ban blocks the write before any query', async () => {
     mockUser('newcomer', true);
     const res = await ops.createFieldCorrection(ME, GOOD);

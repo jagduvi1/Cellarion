@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -8,6 +8,7 @@ import {
   adminAssignImageToWine, adminReindexSearch, adminGetWineProposals,
   adminGetOwnerInquiries, adminAskOwnerInquiry,
 } from '../api/admin';
+import { getClassifications } from '../api/taxonomy';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
 import WineDuplicatesModal from '../components/WineDuplicatesModal';
@@ -36,7 +37,7 @@ const emptyForm = {
   type: 'red',
   colour: '',
   appellation: '',
-  classification: '',
+  classifications: [],
   grapes: [],
 };
 
@@ -184,6 +185,8 @@ function AdminWines() {
   const [regions, setRegions] = useState([]);
   const [appellations, setAppellations] = useState([]);
   const [grapes, setGrapes] = useState([]);
+  // The classification taxonomy for the picker ({ _id, name, kind, country }).
+  const [classifications, setClassifications] = useState([]);
 
   // Debounce search input → search state (only fires when empty or ≥2 chars)
   useEffect(() => {
@@ -240,13 +243,15 @@ function AdminWines() {
   useEffect(() => {
     const fetchTaxonomy = async () => {
       try {
-        const [cRes, gRes] = await Promise.all([
+        const [cRes, gRes, kRes] = await Promise.all([
           adminGetCountries(apiFetch),
-          adminGetGrapes(apiFetch)
+          adminGetGrapes(apiFetch),
+          getClassifications(apiFetch)
         ]);
-        const [cData, gData] = await Promise.all([cRes.json(), gRes.json()]);
+        const [cData, gData, kData] = await Promise.all([cRes.json(), gRes.json(), kRes.json()]);
         if (cRes.ok) setCountries(cData.countries || []);
         if (gRes.ok) setGrapes(gData.grapes || []);
+        if (kRes.ok) setClassifications(kData.classifications || []);
       } catch (err) {
         console.error('Failed to load taxonomy:', err);
       }
@@ -310,7 +315,7 @@ function AdminWines() {
           type: w.type || 'red',
           colour: recordedColour(w) || '',
           appellation: w.appellation || '',
-          classification: w.classification || '',
+          classifications: (w.classifications || []).map(c => c._id || c),
           grapes: (w.grapes || []).map(g => g._id || g),
         });
         setEditWine(w);
@@ -320,6 +325,12 @@ function AdminWines() {
       console.error('Failed to load wine:', err);
     }
   };
+
+  // The tiers the picker offers: the selected country's own plus the ones
+  // that belong to no single country, labelled by kind.
+  const classificationOptions = useMemo(() => classifications
+    .filter((c) => !c.country || !formData.country || String(c.country._id || c.country) === String(formData.country))
+    .map((c) => ({ _id: c._id, name: c.name, color: t(`admin.taxonomy.kind.${c.kind}`, c.kind) })), [classifications, formData.country, t]);
 
   const closeForm = () => {
     setShowForm(false);
@@ -345,9 +356,9 @@ function AdminWines() {
         // Only a sparkling/dessert/fortified wine keeps one ('' clears it).
         colour: isStyleType(formData.type) ? (formData.colour || null) : null,
         appellation: formData.appellation.trim() || null,
-        // A quality tier on top of the appellation; the server drops a
-        // regulatory mark (DOCG, AOC) typed here.
-        classification: formData.classification.trim() || null,
+        // The quality tiers as taxonomy rows (ids); the server derives the
+        // string the registry shows from them.
+        classifications: formData.classifications,
         grapes: formData.grapes,
         // Only meaningful on create: skips the server-side duplicate probe
         // after the admin explicitly chose "create anyway".
@@ -705,12 +716,13 @@ function AdminWines() {
               </div>
               <div className="form-group">
                 <label>{t('admin.wines.classificationLabel', 'Classification')}</label>
-                <input
-                  type="text"
-                  value={formData.classification}
-                  onChange={(e) => setFormData({ ...formData, classification: e.target.value })}
-                  placeholder={t('admin.wines.classificationPlaceholder', 'Riserva, Grand Cru Classé, Cru Bourgeois, Spätlese…')}
-                  maxLength={200}
+                <GrapePicker
+                  grapes={classificationOptions}
+                  selected={formData.classifications}
+                  onChange={(ids) => setFormData({ ...formData, classifications: ids })}
+                  placeholder={t('admin.wines.classificationSearch', 'Search the classification tiers…')}
+                  noMatchLabel={t('admin.wines.classificationNoMatch', 'No tier matches. A tier the list lacks is added under Taxonomy → Classifications.')}
+                  allSelectedLabel={t('admin.wines.classificationAllSelected', 'Every tier for this country is selected.')}
                 />
                 <p className="wine-image-hint">{t('admin.wines.classificationHint', 'A quality tier on top of the appellation. Not DOCG, DOC or AOC: that follows from the appellation.')}</p>
               </div>

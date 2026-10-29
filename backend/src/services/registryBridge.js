@@ -18,6 +18,7 @@
  * to statuses, so a hosted-side outage degrades to local-only.
  */
 const WineDefinition = require('../models/WineDefinition');
+const { assignClassification } = require('./classificationOps');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
@@ -193,6 +194,14 @@ async function resolveTaxonomy(w, userId) {
 // out (a wine record never stores its picture inline).
 const remoteImage = (v) => (typeof v === 'string' && /^https?:\/\//i.test(v) ? v : null);
 
+/** The registry's classification for the write rule: its rows by name when it sends them, else its string. */
+function classificationInput(w) {
+  const names = Array.isArray(w.classifications)
+    ? w.classifications.map((c) => (c && typeof c === 'object' ? c.name : c)).filter((n) => typeof n === 'string' && n)
+    : [];
+  return names.length ? { classifications: names } : { classification: w.classification };
+}
+
 function identityFields(w, tax) {
   return {
     name: w.name,
@@ -351,6 +360,10 @@ async function adoptWine(registryId, userId) {
       registrySyncedAt: now,
       ...(profile ? { aiProfile: profile } : {}),
     });
+    // The write rule (services/classificationOps), lenient: the registry's
+    // rows by name, else its string — a tier this install's taxonomy lacks
+    // stays as the string.
+    await assignClassification(wine, classificationInput(w));
     // The registry's colour is authoritative when it sends one — null included.
     // Without the mark, the model hook inferred rosé for a new "… Rosé" copy the
     // registry holds as uncoloured, and the next refresh cleared it again
@@ -410,6 +423,7 @@ async function applyRegistryUpdate(local, w) {
     // Same as adopt: a colour the registry states is stored as stated.
     if (Object.prototype.hasOwnProperty.call(fields, 'colour')) stateColour(wine, fields.colour);
     wine.normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
+    await assignClassification(wine, classificationInput(w));
   } else if (!wine.image && remoteImage(w.image)) {
     wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null;
   }

@@ -668,7 +668,7 @@ wineDefinitionSchema.index({ classifications: 1 });
 wineDefinitionSchema.pre('save', async function() {
   if (!this.isModified('classifications')) return;
   const ids = (this.classifications || []).map((c) => (c && c._id) || c).filter(Boolean);
-  if (this.isNew && !ids.length) return;
+  if (!ids.length) return; // clearing the rows never clears a string a caller set
   const rows = ids.length
     ? await mongoose.model('Classification').find({ _id: { $in: ids } }).select('name kind').lean()
     : [];

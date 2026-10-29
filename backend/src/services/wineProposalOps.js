@@ -77,6 +77,8 @@ const AMENDMENTS_MAX = 10;
 const FIELD_MAX = 200;
 const URL_MAX = 500;
 
+const { assignClassification } = require('./classificationOps');
+
 const fail = (code, message) => ({ ok: false, code, message });
 
 /**
@@ -131,7 +133,14 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
       if (!tier) {
         return fail('invalid', `"${v}" is a regulatory mark, not a classification tier — leave classification out, or name the tier (Grand Cru, Premier Cru, Kabinett, Spätlese…).`);
       }
-      proposedFields[f] = tier;
+      // Resolved against the classification taxonomy at filing, so the filer
+      // learns NOW about a tier the registry does not know, and the admin
+      // diff shows the canonical names that would be written. The wine is
+      // not loaded yet here; a word two systems share resolves by country
+      // again at approval.
+      const cls = await assignClassification({}, { classification: tier, strict: true });
+      if (!cls.ok) return fail('invalid', cls.message);
+      proposedFields[f] = cls.classification || tier;
       continue;
     }
     proposedFields[f] = v;

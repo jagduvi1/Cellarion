@@ -20,6 +20,7 @@ const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
 const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, normalizeString, normalizeWineName, normalizeAppellation, normalizeAppellationKey, normalizeClassification, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { assignClassification } = require('./classificationOps');
 
 // A private draft's untouched clock (models/WineDefinition.draftExpiresAt):
 // reset by every edit and bottle add, swept hourly by services/wineDraftExpiryJob.
@@ -1061,6 +1062,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   });
 
   try {
+    // The write rule: the cleaned string resolves to taxonomy rows and the
+    // stored string follows them (services/classificationOps). Lenient here:
+    // a member's, a scan's or an import's word the taxonomy lacks is kept as
+    // the string, never refused at the mint.
+    await assignClassification(newWine, { classification: trimmedClassification, countryId: countryDoc._id });
     await newWine.save();
   } catch (err) {
     if (err.code === 11000) {

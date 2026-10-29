@@ -51,6 +51,7 @@ const { resolveCanonicalAppellation } = require('../../services/appellationResol
 const { otherProducerSpellings, planProducerRename, displaySpelling } = require('../../services/producerSpelling');
 const { performWineMerge } = require('./wines');
 const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName, resolveGrapeName, normalizeClassification } = require('../../utils/normalize');
+const { assignClassification } = require('../../services/classificationOps');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
@@ -394,10 +395,13 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         if (pf.name) { wine.name = pf.name.trim(); applied.push('name'); }
         if (pf.producer) { wine.producer = pf.producer.trim(); applied.push('producer'); }
         if (pf.classification) {
-          // A regulatory mark proposed as the tier applies as nothing (same
-          // rule as the mint); the proposal still closes as reviewed.
-          const tier = normalizeClassification(pf.classification);
-          if (tier) { wine.classification = tier; applied.push('classification'); }
+          // The write rule (services/classificationOps), strict: a filed tier
+          // the taxonomy lacks is a 400 that names the known tiers — add the
+          // row under Taxonomy → Classifications, then approve. A regulatory
+          // mark applies as nothing, as before.
+          const cls = await assignClassification(wine, { classification: pf.classification, strict: true });
+          if (!cls.ok) return { status: 400, body: { error: cls.message } };
+          if (cls.classification) applied.push('classification');
         }
         if (pf.appellation) {
           // Tier-strip AND curated-registry resolve. Approving a proposal is a

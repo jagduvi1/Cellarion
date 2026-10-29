@@ -4,6 +4,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
 const WineDefinition = require('../../models/WineDefinition');
 const { generateWineKey, normalizeAppellation, normalizeString, normalizeClassification } = require('../../utils/normalize');
+const { assignClassification } = require('../../services/classificationOps');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
@@ -241,13 +242,18 @@ router.put('/:id/resolve', async (req, res) => {
 
       const normalizedKey = generateWineKey(cleanName, producerToStore, cleanAppellation);
 
+      // The write rule (services/classificationOps), lenient: the request
+      // is a member's words — a tier the taxonomy lacks stays as the string.
+      const classificationFields = {};
+      await assignClassification(classificationFields, { classification: pradikatSplit.classification, countryId: country });
+
       linkedWine = new WineDefinition({
         name: cleanName,
         producer: producerToStore,
         country,
         region: region || null,
         appellation: cleanAppellation,
-        classification: normalizeClassification(pradikatSplit.classification) || undefined,
+        ...classificationFields,
         grapes: grapes || [],
         type: type || null, // no guessed red (ticket 6a85ad44)
         // Sparkling/dessert/fortified only; the model hook drops anything else
