@@ -2224,6 +2224,7 @@
       "appellationLabel": "Appellation",
       "selectAppellation": "Select appellation",
       "classificationLabel": "Classification",
+      "classificationPlaceholder": "Riserva, Grand Cru Classé, Cru Bourgeois, Spätlese…",
       "classificationSearch": "Search the classification tiers…",
       "classificationNoMatch": "No tier matches. A tier the list lacks is added under Taxonomy → Classifications.",
       "classificationAllSelected": "Every tier for this country is selected.",
