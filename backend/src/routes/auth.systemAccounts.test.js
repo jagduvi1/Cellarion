@@ -59,7 +59,6 @@ jest.mock('../utils/clientIp', () => {
 const crypto = require('crypto');
 const express = require('express');
 const http = require('http');
-const cookieParser = require('cookie-parser');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/mailgun');
 const { issueTokens } = require('../services/authTokens');
 const { SENTINEL_USERNAME, SENTINEL_EMAIL } = require('../utils/deletedUser');
@@ -70,7 +69,6 @@ let baseUrl;
 beforeAll((done) => {
   const app = express();
   app.use(express.json());
-  app.use(cookieParser());
   app.use('/api/auth', authRouter);
   server = http.createServer(app);
   server.listen(0, () => { baseUrl = `http://127.0.0.1:${server.address().port}`; done(); });
