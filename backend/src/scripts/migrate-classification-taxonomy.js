@@ -74,6 +74,8 @@ function planWine(w, lookup) {
   const existing = (w.classification || '').trim();
   if (existing) {
     const parts = ops.splitClassificationString(existing);
+    // A value of separators only ("-", "/") is junk: cleared, nothing to resolve.
+    if (!parts.length) return { names: [], unresolved: [], source: 'legacy', rows: [] };
     const rows = []; const unresolved = [];
     for (const p of parts) {
       const r = lookup(p, countryName) || lookup(ops.stripNoise(p), countryName);
