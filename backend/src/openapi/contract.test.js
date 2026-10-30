@@ -304,7 +304,22 @@ describeWithMongo('public API contract', () => {
     await expectContract('revokeOwnToken', 403, { token: 'climate' });
   });
 
-  test('an undocumented route a token used to reach still answers, announces its end, and is counted', async () => {
+  // Until the sunset a route a token used to reach still answers, announces
+  // its end and is counted; from that day on it is refused like any route
+  // outside the reference. Each side is tested only while it is true.
+  const { SUNSET: DEPRECATION_SUNSET } = require('../config/apiDeprecations');
+  const beforeSunset = Date.now() < DEPRECATION_SUNSET.getTime();
+
+  (beforeSunset ? test.skip : test)('from the sunset on, an undocumented route a token used to reach answers 403', async () => {
+    const home = String(world.cellars.home._id);
+    const res = await fetch(`${base}/api/cellars/${home}/statistics`, {
+      headers: { Authorization: `Bearer ${world.tokens.read.raw}` },
+    });
+    expect(res.status).toBe(403);
+    expect(res.headers.get('deprecation')).toBeNull();
+  });
+
+  (beforeSunset ? test : test.skip)('an undocumented route a token used to reach still answers, announces its end, and is counted', async () => {
     const ApiDeprecatedUse = require('../models/ApiDeprecatedUse');
     const { SUNSET } = require('../config/apiDeprecations');
     const home = String(world.cellars.home._id);

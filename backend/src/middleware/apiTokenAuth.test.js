@@ -37,6 +37,12 @@ const {
 } = require('./apiTokenAuth');
 const { SUNSET } = require('../config/apiDeprecations');
 
+// A test that expects a route to be "deprecated" pins the clock before the
+// sunset: from that day on the same route is denied by design, so an
+// unpinned test would start failing on that date.
+const BEFORE_SUNSET = new Date(SUNSET.getTime() - 24 * 60 * 60 * 1000);
+afterEach(() => jest.useRealTimers());
+
 beforeEach(() => jest.clearAllMocks());
 
 // ---------------------------------------------------------------------------
@@ -76,6 +82,9 @@ describe('isRequestAllowed (default-deny)', () => {
     ['GET', '/api/auth/whoami'],
     ['POST', '/api/mcp'],
   ])('read scope allows %s %s', (method, path) => {
+    // GET /api/stats and /api/cellars/:id are admitted by a deprecated rule
+    // only, so the clock is pinned before the sunset.
+    jest.useFakeTimers({ now: BEFORE_SUNSET });
     expect(isRequestAllowed(READ, method, path)).toBe(true);
   });
 
@@ -277,8 +286,13 @@ describe('classifyRequest: the documented reads, and the ones on their way out',
     '/api/stats', '/api/stats/value-history', `/api/cellars/${oid}`, `/api/cellars/${oid}/statistics`,
     '/api/cellars/multi/bottles', '/api/bottles/trash', `/api/bottles/${oid}/lot-history`, '/api/bottles/notanid',
   ])('GET %s is deprecated: still answered, until the sunset', (path) => {
-    expect(classifyRequest(READ, 'GET', path)).toBe('deprecated');
-    expect(isRequestAllowed(READ, 'GET', path)).toBe(true);
+    jest.useFakeTimers({ now: BEFORE_SUNSET });
+    try {
+      expect(classifyRequest(READ, 'GET', path)).toBe('deprecated');
+      expect(isRequestAllowed(READ, 'GET', path)).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('a path in another letter case is checked as Express routes it (case-insensitively)', () => {
@@ -291,7 +305,7 @@ describe('classifyRequest: the documented reads, and the ones on their way out',
     // Case changes nothing that was allowed or deprecated.
     expect(classifyRequest(READ, 'GET', '/API/Inventory')).toBe('allowed');
     expect(classifyRequest(READ, 'GET', `/api/bottles/${oid.toUpperCase()}`)).toBe('allowed');
-    expect(classifyRequest(READ, 'GET', '/api/Stats/Value-History')).toBe('deprecated');
+    expect(classifyRequest(READ, 'GET', '/api/Stats/Value-History', BEFORE_SUNSET.getTime())).toBe('deprecated');
   });
 
   test('from the sunset on, a deprecated route is denied', () => {
@@ -346,6 +360,7 @@ describe('authenticateApiToken', () => {
   });
 
   test('a deprecated route is answered with Deprecation, Sunset and Link; a documented one without', async () => {
+    jest.useFakeTimers({ now: BEFORE_SUNSET });
     const headersFor = async (baseUrl, path) => {
       ApiToken.findOne.mockResolvedValue(activeToken());
       User.findById.mockReturnValue(selectable(activeUser()));
@@ -361,9 +376,11 @@ describe('authenticateApiToken', () => {
     expect(old.Sunset).toBe(SUNSET.toUTCString());
     expect(old.Link).toMatch(/\/developers>; rel="deprecation"/);
     expect(await headersFor('/api/stats', '/overview')).toEqual({});
+    jest.useRealTimers();
   });
 
   test('a deprecated route, once answered, is marked on the token that called it; a documented one is not', async () => {
+    jest.useFakeTimers({ now: BEFORE_SUNSET });
     const run = async (baseUrl, path) => {
       const token = activeToken();
       ApiToken.findOne.mockResolvedValue(token);
