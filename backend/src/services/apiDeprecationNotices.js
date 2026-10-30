@@ -120,13 +120,21 @@ async function markTokenDeprecatedUse(token, req, res, now = new Date()) {
  * and sunset: only the update that finds notifiedAt unset sends it.
  */
 async function notifyFirstUse(tokenId, now = new Date()) {
+  // The owner is read BEFORE the claim, as the reminder path does: a failed
+  // read then leaves the notice unclaimed for the next call instead of
+  // losing it. An owner who is never told (demo, deletion pending) is not
+  // claimed for either.
+  const pre = await ApiToken.findOne({ _id: tokenId }).select('user').lean();
+  if (!pre) return null;
+  const owner = await User.findById(pre.user).select(OWNER_FIELDS).lean();
+  if (!owner || owner.deletionScheduledFor || owner.isDemo) return null;
   const token = await ApiToken.findOneAndUpdate(
     { _id: tokenId, revokedAt: null, origin: { $ne: 'oauth' }, 'deprecatedUse.sunset': SUNSET, 'deprecatedUse.notifiedAt': null },
     { $set: { 'deprecatedUse.notifiedAt': now } },
     { new: true },
   ).select('user name deprecatedUse').lean();
   if (!token) return null;
-  return sendNotice(token, { now });
+  return sendNotice(token, { now, owner });
 }
 
 function noticeText(token, { reminderDays, daysLeft }) {
@@ -168,7 +176,8 @@ async function sendNotice(token, { reminderDays = null, now = new Date(), owner 
         routes,
         sunset: SUNSET,
         lastUsedAt: token.deprecatedUse?.lastAt || null,
-        ...(reminderDays ? { daysLeft } : { reminderDays: REMINDER_DAYS }),
+        // The first notice names only the reminders still ahead of it.
+        ...(reminderDays ? { daysLeft } : { reminderDays: REMINDER_DAYS.filter((d) => daysLeft > d) }),
       }));
       emailed = true;
     } catch (err) {

@@ -11,6 +11,7 @@ jest.mock('../models/ApiToken', () => ({
   updateOne: jest.fn(),
   updateMany: jest.fn(),
   find: jest.fn(),
+  findOne: jest.fn(),
   findOneAndUpdate: jest.fn(),
 }));
 jest.mock('../models/User', () => ({ findById: jest.fn(), find: jest.fn() }));
@@ -54,9 +55,21 @@ beforeEach(() => {
   ApiToken.updateOne.mockResolvedValue({ matchedCount: 1 });
   ApiToken.updateMany.mockResolvedValue({ modifiedCount: 0 });
   User.findById.mockReturnValue(query(owner()));
+  // notifyFirstUse reads the token's owner before it claims the notice.
+  ApiToken.findOne.mockReturnValue(query({ _id: 'tok1', user: 'u1' }));
 });
 
 describe('markTokenDeprecatedUse', () => {
+  test('the owner is read before the notice is claimed: a failed read leaves it for the next call', async () => {
+    ApiToken.findOneAndUpdate.mockReturnValue(query({ _id: 'tok1', user: 'u1', name: 'Home Assistant', deprecatedUse: marked() }));
+    User.findById.mockImplementation(() => { throw new Error('primary stepped down'); });
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await markTokenDeprecatedUse({ _id: 'tok1', user: 'u1', origin: 'personal' }, req(), ok, NOW);
+    expect(ApiToken.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
+    err.mockRestore();
+  });
+
   test('the first answered call marks the token under the route Express matched, and its owner is told once', async () => {
     const token = { _id: 'tok1', user: 'u1', name: 'Home Assistant', origin: 'personal' };
     ApiToken.findOneAndUpdate.mockReturnValue(query({ _id: 'tok1', user: 'u1', name: 'Home Assistant', deprecatedUse: marked() }));

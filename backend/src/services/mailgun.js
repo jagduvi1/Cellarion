@@ -943,7 +943,12 @@ async function sendApiDeprecationEmail(toEmail, recipientName, notice) {
     ? `A reminder: your Cellarion API token "${name}" still calls ${what} that API tokens can no longer use from ${date}, in ${notice.daysLeft} day${notice.daysLeft === 1 ? '' : 's'}:`
     : `Your Cellarion API token "${name}" still calls ${what} that API tokens can no longer use from ${date}:`;
   const effect = `From then on ${one ? 'it answers' : 'they answer'} with 403 Forbidden, so whatever uses this token (an integration, a script) stops getting that data unless it changes first. GET /api/inventory covers most of what ${one ? 'it was' : 'they were'} used for, and the API guide shows what to use instead.`;
-  const passOn = 'If someone else made the integration, update it to its latest version or pass this on to them. If something you need is missing from the API, reply to this email.';
+  // A reply reaches someone only where support has its own address; a server
+  // without one replies to the no-reply sender, so it points at the issues.
+  const askUs = supportReplyTo() !== FROM
+    ? 'reply to this email'
+    : 'open an issue at https://github.com/jagduvi1/Cellarion/issues';
+  const passOn = `If someone else made the integration, update it to its latest version or pass this on to them. If something you need is missing from the API, ${askUs}.`;
   const why = [
     notice.lastUsedAt
       ? `You get this email because this token called ${one ? 'it' : 'them'} on ${longDateUtc(notice.lastUsedAt)}.`
