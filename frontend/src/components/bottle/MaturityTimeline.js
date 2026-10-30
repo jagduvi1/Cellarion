@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getMaturityPhases } from '../../utils/maturityUtils';
 import { maturityBadgeText } from '../../utils/drinkStatus';
@@ -7,6 +8,11 @@ import './MaturityTimeline.css';
 // its own start), fading out: long enough to read as "goes on", short enough
 // not to squeeze the closed phases.
 const OPEN_TAIL_YEARS = 3;
+
+// The least distance, in percent of the bar, between two year labels under
+// it. A four-digit year is about a tenth of the bar on a phone, so a label
+// closer than this to the one before is left out (the details list keeps it).
+const MIN_TICK_GAP = 12;
 
 /**
  * Lay the phases (getMaturityPhases: end to end, display-adjusted) out on one
@@ -18,14 +24,17 @@ const OPEN_TAIL_YEARS = 3;
  * a wine past its window has it after.
  *
  * Positions are percentages of the axis; a year occupies one cell and the
- * marker sits in the middle of this year's cell.
+ * marker sits in the middle of this year's cell. `ticks` are the years
+ * printed under the bar: where each phase starts, and where a closed window
+ * ends, minus any that would run into the label before them (the window's
+ * last year outranks a boundary in the middle; the first year always stays).
  *
- * @returns {null | { segments: Array<{ cls, start, end, open, left, width }>, lo, hi, marker, firstYear, lastYear }}
+ * @returns {null | { segments: Array<{ cls, label, start, end, open, left, width }>, ticks: Array<{ year, pos }>, lo, hi, marker, firstYear, lastYear }}
  */
 export function timelineModel(phases, year) {
   if (!Array.isArray(phases) || phases.length === 0) return null;
   const fin = (v) => (Number.isFinite(v) ? v : null);
-  const segs = phases.map((p) => ({ cls: p.cls, start: fin(p.from), end: fin(p.until), open: false }));
+  const segs = phases.map((p) => ({ cls: p.cls, label: p.label, start: fin(p.from), end: fin(p.until), open: false }));
 
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
@@ -53,14 +62,30 @@ export function timelineModel(phases, year) {
   const hi = Math.max(lastYear, year);
   const span = hi - lo + 1;
   const pct = (n) => (n / span) * 100;
+  const segments = segs.map((s) => ({ ...s, left: pct(s.start - lo), width: pct(s.end - s.start + 1) }));
+
+  const candidates = segments.map((s) => ({ year: s.start, pos: s.left }));
+  const last = segments[segments.length - 1];
+  if (!last.open) candidates.push({ year: last.end, pos: last.left + last.width, end: true });
+  const ticks = [];
+  for (const c of candidates) {
+    const prev = ticks[ticks.length - 1];
+    if (prev && c.year === prev.year) continue;
+    if (prev && c.pos - prev.pos < MIN_TICK_GAP) {
+      if (c.end && ticks.length > 1) ticks[ticks.length - 1] = { year: c.year, pos: c.pos };
+      continue;
+    }
+    ticks.push({ year: c.year, pos: c.pos });
+  }
 
   return {
-    segments: segs.map((s) => ({ ...s, left: pct(s.start - lo), width: pct(s.end - s.start + 1) })),
+    segments,
+    ticks,
     lo,
     hi,
     marker: pct(year - lo + 0.5),
     firstYear,
-    lastYear: segs[segs.length - 1].open ? null : lastYear,
+    lastYear: last.open ? null : lastYear,
   };
 }
 
@@ -69,15 +94,25 @@ export function timelineModel(phases, year) {
 // its right edge at 100 %.
 const edgeSafe = (left) => ({ left: `${left}%`, transform: `translateX(-${left}%)` });
 
+// A phase's years in words — the same wording as the phase table.
+function phaseRange(p, t) {
+  if (p.from && p.until) return p.from === p.until ? `${p.from}` : `${p.from}–${p.until}`;
+  if (p.from) return t('bottleDetail.maturityPhaseFrom', { year: p.from, defaultValue: 'from {{year}}' });
+  return t('bottleDetail.maturityPhaseUntil', { year: p.until, defaultValue: 'until {{year}}' });
+}
+
 /**
- * A wine's drink window as one bar — its phases in their colours, with a
- * marker on this year — and the status (the same words as the badge it
- * replaces) above the marker. With `status` null (a personal window is set,
- * which takes precedence over the sommelier's status) the marker says only
- * the year. The phase table below keeps the exact years.
+ * A wine's drink window as one bar — its phases in their colours, the year
+ * each one starts under it, and a marker on this year carrying the status
+ * (the same words as the badge it replaces). With `status` null (a personal
+ * window is set, which takes precedence over the sommelier's status) the
+ * marker says only the year. `details` (the phase table) folds away behind a
+ * toggle: the bar already carries the years.
  */
-function MaturityTimeline({ profile, anchorYear, status, year = new Date().getFullYear() }) {
+function MaturityTimeline({ profile, anchorYear, status, details = null, year = new Date().getFullYear() }) {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const detailsId = useId();
   const phases = getMaturityPhases(profile, {
     early: t('bottleDetail.maturityPhaseEarly'),
     peak:  t('bottleDetail.maturityPhasePeak'),
@@ -107,13 +142,41 @@ function MaturityTimeline({ profile, anchorYear, status, year = new Date().getFu
         <span className={`mt-marker mt-marker--${statusCls}`} style={{ left: `${model.marker}%` }} />
       </div>
       <div className="mt-years" aria-hidden="true">
-        <span className="mt-year" style={edgeSafe(model.segments[0].left)}>{model.firstYear}</span>
-        {model.lastYear !== null && model.lastYear !== model.firstYear && (
-          <span className="mt-year" style={edgeSafe(model.segments[model.segments.length - 1].left + model.segments[model.segments.length - 1].width)}>
-            {model.lastYear}
-          </span>
-        )}
+        {model.ticks.map((tk) => (
+          <span key={tk.year} className="mt-year" style={edgeSafe(tk.pos)}>{tk.year}</span>
+        ))}
       </div>
+      <div className="mt-legend" aria-hidden="true">
+        {model.segments.map((s) => (
+          <span key={s.cls} className="mt-legend-item">
+            <span className={`mt-legend-dot mt-legend-dot--${s.cls}`} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+      {/* What the bar shows, for a screen reader: the phases with their years. */}
+      <span className="mt-sr-only">
+        {phases.map((p) => `${p.label} ${phaseRange(p, t)}`).join(', ')}
+      </span>
+      {details && (
+        <>
+          <button
+            type="button"
+            className="bd-somm-notes-btn mt-details-toggle"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls={detailsId}
+          >
+            {open
+              ? t('bottleDetail.maturityHideDetails', 'Hide details')
+              : t('bottleDetail.maturityShowDetails', 'Show details')}
+            <span className={`bd-somm-notes-chevron${open ? ' bd-somm-notes-chevron--open' : ''}`}>&rsaquo;</span>
+          </button>
+          <div id={detailsId} className="mt-details" hidden={!open}>
+            {details}
+          </div>
+        </>
+      )}
     </div>
   );
 }

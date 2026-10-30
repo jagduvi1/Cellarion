@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import MaturityTimeline, { timelineModel } from './MaturityTimeline';
 
 vi.mock('react-i18next', () => ({
@@ -61,6 +61,29 @@ describe('timelineModel', () => {
   test('no phases, no timeline', () => {
     expect(timelineModel([], 2026)).toBeNull();
   });
+
+  test('the years under the bar: where each phase starts, and where a closed window ends', () => {
+    const m = timelineModel([phase('early', 2024, 2027), phase('peak', 2028, 2035), phase('late', 2036, 2040)], 2026);
+    expect(m.ticks.map((tk) => tk.year)).toEqual([2024, 2028, 2036, 2040]);
+    expect(m.ticks[0].pos).toBe(0);
+    expect(m.ticks[3].pos).toBeCloseTo(100);
+  });
+
+  test('an open window prints no end year', () => {
+    const m = timelineModel([phase('early', 2020, 2024), phase('peak', 2025, undefined)], 2026);
+    expect(m.ticks.map((tk) => tk.year)).toEqual([2020, 2025]);
+  });
+
+  test('a year that would run into the one before it is left out', () => {
+    // A one-year early phase on a twenty-year axis: 2021 sits right next to 2020.
+    const m = timelineModel([phase('early', 2020, 2020), phase('peak', 2021, 2040)], 2026);
+    expect(m.ticks.map((tk) => tk.year)).toEqual([2020, 2040]);
+  });
+
+  test("the window's last year outranks a boundary just before it, the first year always stays", () => {
+    const m = timelineModel([phase('early', 2000, 2030), phase('peak', 2031, 2032)], 2026);
+    expect(m.ticks.map((tk) => tk.year)).toEqual([2000, 2032]);
+  });
 });
 
 describe('MaturityTimeline', () => {
@@ -80,6 +103,30 @@ describe('MaturityTimeline', () => {
   test('without a status (a personal window takes precedence) the marker says only the year', () => {
     render(<MaturityTimeline profile={profile} status={null} year={2026} />);
     expect(document.querySelector('.mt-now-label').textContent).toBe('2026');
+  });
+
+  test('a legend names the phases, and a screen reader hears each phase with its years', () => {
+    render(<MaturityTimeline profile={profile} status={null} year={2026} />);
+    const legend = document.querySelector('.mt-legend');
+    expect(legend.textContent).toContain('bottleDetail.maturityPhaseEarly');
+    expect(legend.textContent).toContain('bottleDetail.maturityPhasePeak');
+    expect(document.querySelector('.mt-sr-only').textContent)
+      .toBe('bottleDetail.maturityPhaseEarly 2024–2027, bottleDetail.maturityPhasePeak 2028–2035');
+  });
+
+  test('the details fold away behind a toggle, closed at first', () => {
+    render(<MaturityTimeline profile={profile} status={null} year={2026} details={<div data-testid="phase-table">table</div>} />);
+    const toggle = screen.getByRole('button', { name: /Show details/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('phase-table')).not.toBeVisible();
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: /Hide details/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('phase-table')).toBeVisible();
+  });
+
+  test('without details there is no toggle', () => {
+    render(<MaturityTimeline profile={profile} status={null} year={2026} />);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   test('a profile without a single year draws nothing', () => {
