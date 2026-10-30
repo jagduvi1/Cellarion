@@ -109,6 +109,9 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
   const proposedFields = {};
   // Varieties the caller declared missing from the taxonomy — audit only.
   let newGrapeNames = [];
+  // The cleaned classification as sent, resolved again once the wine (and so
+  // its country) is loaded.
+  let classificationTier = null;
   const src = fields || {};
   for (const f of Object.keys(src)) {
     if (!FIELDS.includes(f) && !EXTRA_FIELDS.includes(f) && !FIELD_MODIFIERS.includes(f)) {
@@ -136,11 +139,12 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
       // Resolved against the classification taxonomy at filing, so the filer
       // learns NOW about a tier the registry does not know, and the admin
       // diff shows the canonical names that would be written. The wine is
-      // not loaded yet here; a word two systems share resolves by country
-      // again at approval.
+      // not loaded yet here: a word two systems share is settled by the
+      // wine's country below, once it is.
       const cls = await assignClassification({}, { classification: tier, strict: true });
       if (!cls.ok) return fail('invalid', cls.message);
       proposedFields[f] = cls.classification || tier;
+      classificationTier = tier;
       continue;
     }
     proposedFields[f] = v;
@@ -201,6 +205,15 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     populate: ['country', 'region', 'grapes'],
   });
   if (!wine) return fail('not_found', 'Wine not found');
+
+  // A word two tier systems share ("Ortswein" is Austria's tier and a
+  // spelling of VDP Ortswein) resolved above to whichever row came first, and
+  // approval applies the filed NAME as it stands — so the tie is broken here,
+  // by the wine's country, the country approval resolves in.
+  if (classificationTier) {
+    const own = await assignClassification({ country: wine.country }, { classification: classificationTier, strict: true });
+    if (own.ok && own.classification) proposedFields.classification = own.classification;
+  }
 
   // A colour only means something on a style type — judged against the type
   // this suggestion leaves the wine with: its own type field, else the type in

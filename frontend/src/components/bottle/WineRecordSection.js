@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import GrapeTokenInput, { foldGrapeName } from '../GrapeTokenInput';
+import GrapePicker from '../GrapePicker';
 import ContributePrompt from './ContributePrompt';
 import { createWineProposal, getMyWineProposals } from '../../api/wineProposals';
 import { getWinePublicData, suggestWineValue, proposeRegistryKey } from '../../api/registryData';
 import useTaxonomyNames from '../../hooks/useTaxonomyNames';
 import useGrapeNames from '../../hooks/useGrapeNames';
+import useClassifications from '../../hooks/useClassifications';
 import { taxonomyName } from '../../utils/taxonomyName';
 import { WINE_COLOURS, isStyleType, recordedColour, wineTypeLabel, colourLabel } from '../../utils/wineColour';
 import './WineRecordSection.css';
@@ -35,6 +37,16 @@ const NOT_WINE_HIDDEN = new Set(['grapes', 'appellation', 'classification']);
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const GRAPES_MAX = 12;
 const REASON_MIN = 10;
+// The kinds of classification tier, in the order the registry writes a wine's
+// tiers (classificationOps KIND_ORDER), with the English for each label.
+const TIER_KINDS = {
+  vineyard_rank: 'Vineyard rank',
+  ripeness: 'Ripeness tier',
+  ageing: 'Ageing tier',
+  other: 'Other (producer’s own)',
+};
+const KIND_RANK = Object.keys(TIER_KINDS);
+const kindRank = (k) => (KIND_RANK.includes(k) ? KIND_RANK.indexOf(k) : KIND_RANK.length);
 
 const PencilIcon = () => (
   <svg className="wr-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -71,6 +83,10 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   // chosen type is one of those (support ticket 2026-09-17).
   const [proposedColour, setProposedColour] = useState('');
   const [proposedGrapes, setProposedGrapes] = useState([]); // [{ name, isNew? }]
+  // The tier ids chosen in the classification picker; null until the picker is
+  // touched, which reads as "the tiers the wine carries" (the list arrives
+  // after the form opens, so they cannot be chosen at open).
+  const [proposedTiers, setProposedTiers] = useState(null);
   const [reason, setReason] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [busy, setBusy] = useState(false);
@@ -154,17 +170,22 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
 
   // Focus goes INTO the suggest dialog and Tab stays there (trapFocus below).
   // The trap lands on the first control — right for a text field, wrong for the
-  // grape form, whose first control is a chip's "remove" button: there the
-  // dialog itself takes focus, so a screen reader reads the title and a phone
-  // does not throw its keyboard over a form whose first job is often a tap.
+  // grape form and the tier picker, whose first control is a chip's "remove"
+  // button or a search box: there the dialog itself takes focus, so a screen
+  // reader reads the title and a phone does not throw its keyboard over a form
+  // whose first job is often a tap.
   const formRef = useRef(null);
   useEffect(() => {
-    if (modal?.field === 'grapes') formRef.current?.closest('[role="dialog"]')?.focus();
+    if (modal?.field === 'grapes' || modal?.field === 'classification') {
+      formRef.current?.closest('[role="dialog"]')?.focus();
+    }
   }, [modal?.field]);
 
   const displayNames = useTaxonomyNames();
   // Fetched when the grapes form opens, not with the page: most visits never do.
   const grapeList = useGrapeNames(apiFetch, modal?.field === 'grapes');
+  // The same for the classification tiers.
+  const tierList = useClassifications(apiFetch, modal?.field === 'classification');
 
   if (!wine) return null;
 
@@ -197,6 +218,33 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     country: taxonomyName(wine.country, displayNames) || null,
     region: taxonomyName(wine.region, displayNames) || null,
   };
+
+  // The classification tiers the picker offers, as the admin wine form offers
+  // them — the wine's country's own and the ones no single country owns,
+  // labelled by kind — plus every tier the wine carries already, so a
+  // recorded tier is never selected out of sight. What the wine carries: its
+  // rows (populated, or bare ids), and the names in the string derived from
+  // them for a payload without the rows.
+  const recordedTierIds = new Set((Array.isArray(wine.classifications) ? wine.classifications : [])
+    .map((c) => String(c?._id || c)));
+  const recordedTierNames = new Set(String(values.classification || '').split(',')
+    .map((s) => s.trim().toLowerCase()).filter(Boolean));
+  const isRecordedTier = (c) => recordedTierIds.has(String(c._id)) || recordedTierNames.has(c.name.toLowerCase());
+  const wineCountryId = (wine.country && typeof wine.country === 'object' ? wine.country._id : wine.country) || null;
+  const tierOptions = tierList.classifications && tierList.classifications
+    .filter((c) => !c.country || !wineCountryId
+      || String(c.country._id || c.country) === String(wineCountryId) || isRecordedTier(c))
+    .map((c) => ({
+      _id: String(c._id),
+      name: c.name,
+      kind: c.kind,
+      color: t(`wineRecord.classificationKind.${c.kind}`, TIER_KINDS[c.kind] || c.kind),
+    }));
+  const recordedTiers = tierOptions ? tierOptions.filter(isRecordedTier).map((o) => o._id) : [];
+  // The picker once there is something to pick from; while the list loads, a
+  // line saying so; the text field when it failed or offers nothing.
+  const tierPicker = !!tierOptions && tierOptions.length > 0;
+  const tierLoading = !tierOptions && !tierList.error;
 
   const typeLabel = (v) => (v ? t(`statistics.typeLabels.${v}`, v.charAt(0).toUpperCase() + v.slice(1)) : null);
   const isBlank = (f) => (f === 'grapes' ? values.grapes.length === 0 : !values[f]);
@@ -236,6 +284,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     setProposedType(keepType ? values.type : '');
     setProposedColour(keepType ? (values.colour || '') : '');
     setProposedGrapes(values.grapes.map((name) => ({ name })));
+    setProposedTiers(null);
     setReason('');
     setEvidenceUrl('');
     setError(null);
@@ -260,6 +309,18 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
       if (!names.length || sameGrapes(names, values.grapes)) return null;
       const fresh = proposedGrapes.filter((g) => g.isNew).map((g) => g.name);
       return { grapes: names, ...(fresh.length ? { newGrapes: fresh } : {}) };
+    }
+    if (f === 'classification' && tierPicker) {
+      // Untouched means as recorded, and the same tiers in another order are
+      // no change either.
+      if (!proposedTiers) return null;
+      const chosen = tierOptions.filter((o) => proposedTiers.includes(o._id));
+      const same = chosen.length === recordedTiers.length && chosen.every((o) => recordedTiers.includes(o._id));
+      if (!chosen.length || same) return null;
+      // Tier NAMES in one comma-separated string — what the proposal route
+      // resolves against the taxonomy — in the order the registry writes them.
+      chosen.sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
+      return { classification: chosen.map((o) => o.name).join(', ') };
     }
     const next = proposed.trim();
     return next && next !== (values[f] || '') ? { [f]: next } : null;
@@ -669,6 +730,29 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                       </div>
                     )}
                   </>
+                ) : modal.field === 'classification' && (tierPicker || tierLoading) ? (
+                  // Only curated tiers are accepted, so they are chosen from
+                  // the list, not typed: a typed one would fail only once sent.
+                  <div className="form-group">
+                    <span className="wr-group-label" id="wr-tiers-label">{t('wineRecord.proposed', 'Should be')}</span>
+                    {tierPicker ? (
+                      <div role="group" aria-labelledby="wr-tiers-label">
+                        <GrapePicker
+                          grapes={tierOptions}
+                          selected={proposedTiers || recordedTiers}
+                          onChange={setProposedTiers}
+                          placeholder={t('wineRecord.classificationSearch', 'Search the classification tiers…')}
+                          noMatchLabel={t('wineRecord.classificationNoMatch', 'No tier matches. Only the tiers in this list can be recorded.')}
+                          allSelectedLabel={t('wineRecord.classificationAllSelected', 'Every tier in the list is selected.')}
+                        />
+                      </div>
+                    ) : (
+                      <p className="wr-help">{t('common.loading', 'Loading...')}</p>
+                    )}
+                    <p className="wr-help">
+                      {t('wineRecord.classificationHelp', 'This becomes the wine’s complete classification: remove what’s wrong, add what’s missing. DOCG, DOC or AOC is not a tier — it follows from the appellation.')}
+                    </p>
+                  </div>
                 ) : (
                   <div className="form-group">
                     <label htmlFor="wr-proposed">{t('wineRecord.proposed', 'Should be')}</label>
@@ -680,6 +764,20 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                       maxLength={200}
                       required
                     />
+                    {/* Without the tier list the tier is typed; the server
+                        checks it against the taxonomy when it is sent. */}
+                    {modal.field === 'classification' && (
+                      <p className="wr-help wr-help--note">
+                        {tierList.error ? (
+                          <>
+                            {t('wineRecord.classificationLoadFailed', 'Couldn’t load the list of tiers. Type the tier as the label states it.')}{' '}
+                            <button type="button" className="wr-text-btn" onClick={tierList.retry}>
+                              {t('common.retry', 'Retry')}
+                            </button>
+                          </>
+                        ) : t('wineRecord.classificationNoTiers', 'The registry lists no classification tiers for this wine’s country. Type the tier as the label states it.')}
+                      </p>
+                    )}
                   </div>
                 )}
               </>

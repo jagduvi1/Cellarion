@@ -130,6 +130,28 @@ describe('createFieldCorrection validation', () => {
     }
   });
 
+  test('a word two systems share files as the tier of the wine\'s own country', async () => {
+    // Seed order: VDP Ortswein (Germany, spelled "Ortswein" too) comes before
+    // Austria's Ortswein, so without the country the word lands on Germany's.
+    const cls = require('./classificationOps');
+    cls.primeClassificationCache([
+      { _id: 'de1', name: 'VDP Ortswein', kind: 'vineyard_rank', country: 'cDE', synonyms: ['Ortswein'] },
+      { _id: 'at1', name: 'Ortswein', kind: 'vineyard_rank', country: 'cAT', synonyms: [] },
+      { _id: 's1', name: 'Spätlese', kind: 'ripeness', country: null, synonyms: [] },
+    ]);
+    try {
+      findVisibleWine.mockResolvedValue({ ...wineDoc, country: { _id: 'cAT', name: 'Austria' } });
+      expect((await ops.createFieldCorrection(ME, { ...GOOD, fields: { classification: 'Ortswein, Spätlese' } })).ok).toBe(true);
+      expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ classification: 'Ortswein, Spätlese' });
+
+      findVisibleWine.mockResolvedValue({ ...wineDoc, country: { _id: 'cDE', name: 'Germany' } });
+      expect((await ops.createFieldCorrection(ME, { ...GOOD, fields: { classification: 'Ortswein' } })).ok).toBe(true);
+      expect(WineCorrectionProposal.create.mock.calls[1][0].proposedFields).toEqual({ classification: 'VDP Ortswein' });
+    } finally {
+      cls.primeClassificationCache(null);
+    }
+  });
+
   test('discussion ban blocks the write before any query', async () => {
     mockUser('newcomer', true);
     const res = await ops.createFieldCorrection(ME, GOOD);

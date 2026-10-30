@@ -2821,6 +2821,18 @@
     "grapesHelp": "This becomes the wine’s complete grape list: remove what’s wrong, add what’s missing, and leave the rest.",
     "grapesHelpEmpty": "Add every variety in the wine — type a few letters to search.",
     "grapesNewNote": "Not in our grape list yet: {{names}}. A curator will check that before approving your suggestion.",
+    "classificationSearch": "Search the classification tiers…",
+    "classificationNoMatch": "No tier matches. Only the tiers in this list can be recorded.",
+    "classificationAllSelected": "Every tier in the list is selected.",
+    "classificationHelp": "This becomes the wine’s complete classification: remove what’s wrong, add what’s missing. DOCG, DOC or AOC is not a tier — it follows from the appellation.",
+    "classificationLoadFailed": "Couldn’t load the list of tiers. Type the tier as the label states it.",
+    "classificationNoTiers": "The registry lists no classification tiers for this wine’s country. Type the tier as the label states it.",
+    "classificationKind": {
+      "vineyard_rank": "Vineyard rank",
+      "ripeness": "Ripeness tier",
+      "ageing": "Ageing tier",
+      "other": "Other (producer’s own)"
+    },
     "field_producer": "Producer",
     "field_name": "Wine name",
     "field_type": "Type",
