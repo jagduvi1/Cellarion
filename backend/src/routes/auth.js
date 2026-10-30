@@ -422,7 +422,9 @@ router.post('/verify-email', async (req, res) => {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const user = await User.findOne({ emailVerificationTokenHash: tokenHash });
 
-    if (!user || !user.validateEmailVerificationToken(token)) {
+    // A system account (the "[deleted]" sentinel) is never verified or signed
+    // in through a link, whatever token its row may hold.
+    if (!user || isReservedUsername(user.username) || !user.validateEmailVerificationToken(token)) {
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
@@ -491,7 +493,9 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   try {
     const user = await User.findOne({ email: email.toLowerCase() });
 
-    if (!user || user.emailVerified || !EMAIL_VERIFICATION_ENABLED) {
+    // A system account answers like an unknown address: its links would only
+    // land in an outgoing-mail log, where whoever reads it could sign in as it.
+    if (!user || isReservedUsername(user.username) || user.emailVerified || !EMAIL_VERIFICATION_ENABLED) {
       await equalizeLookupTiming(); // L-8: match the found-branch write cost
       return res.status(200).json(genericResponse);
     }
@@ -804,7 +808,8 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
   try {
     const user = await User.findOne({ email: email.toLowerCase() });
 
-    if (!user) {
+    // A system account answers like an unknown address (see resend-verification).
+    if (!user || isReservedUsername(user.username)) {
       await equalizeLookupTiming(); // L-8: match the found-branch write cost
       return res.status(200).json(genericResponse);
     }
@@ -844,7 +849,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const user = await User.findOne({ passwordResetTokenHash: tokenHash });
 
-    if (!user || !user.validatePasswordResetToken(token)) {
+    if (!user || isReservedUsername(user.username) || !user.validatePasswordResetToken(token)) {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
     }
 
