@@ -157,3 +157,19 @@
   font-size: 0.875rem;
   min-height: 40px;
 }
+
+/* Phone: the box gets its own row; scope and button share the one below. */
+@media (max-width: 600px) {
+  .bottles-search {
+    flex-wrap: wrap;
+  }
+
+  .bottles-search-input {
+    flex-basis: 100%;
+  }
+
+  .bottles-search-scope {
+    flex: 1;
+    min-width: 0;
+  }
+}

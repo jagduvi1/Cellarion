@@ -37,21 +37,36 @@ const renderLayout = (path = '/cellars') => render(
 );
 
 
-test('the top bar links to Search with everything in scope', () => {
+const ARIA = 'Search all your bottles';
+
+test('the header has a Search icon next to the bell with everything in scope', () => {
   const { container } = renderLayout();
-  const search = within(container.querySelector('.navbar-links')).getByRole('link', { name: 'nav.search' });
+  const search = within(container.querySelector('.navbar-right')).getByRole('link', { name: ARIA });
   expect(search).toHaveAttribute('href', '/bottles?status=all');
 });
 
-test('the top bar marks Search as the current page on /bottles', () => {
+test('the desktop link row no longer carries a text Search link', () => {
+  const { container } = renderLayout();
+  expect(within(container.querySelector('.navbar-links')).queryByRole('link', { name: /search/i })).toBeNull();
+});
+
+test('the header Search icon is marked current on /bottles', () => {
   const { container } = renderLayout('/bottles');
-  const search = within(container.querySelector('.navbar-links')).getByRole('link', { name: 'nav.search' });
+  const search = within(container.querySelector('.navbar-right')).getByRole('link', { name: ARIA });
   expect(search).toHaveClass('active');
 });
 
-test("the phone's More menu has Search with everything in scope", () => {
+test('the phone bottom bar reads Cellars, Search, Statistics, Community, More', () => {
+  const { container } = renderLayout();
+  const bar = container.querySelector('.bottom-nav');
+  const items = within(bar).getAllByRole('link').map(a => a.getAttribute('href'));
+  expect(items).toEqual(['/cellars', '/bottles?status=all', '/statistics', '/community/discussions']);
+  expect(within(bar).queryByRole('link', { name: 'nav.settings' })).toBeNull();
+});
+
+test('Settings leads the More menu', () => {
   const { container } = renderLayout();
   fireEvent.click(screen.getByRole('button', { name: 'nav.more' }));
-  const search = within(container.querySelector('.mobile-menu')).getByRole('link', { name: 'nav.search' });
-  expect(search).toHaveAttribute('href', '/bottles?status=all');
+  const first = container.querySelector('.mobile-menu a');
+  expect(first).toHaveAttribute('href', '/settings');
 });
