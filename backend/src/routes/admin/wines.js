@@ -40,6 +40,7 @@ const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
 // Pending correction proposals close with their wine THROUGH this service, so
 // a user who filed one is told what happened (it owns the model access).
 const { closePendingForWine } = require('../../services/wineCorrectionNotify');
+const { settleNonWineProposals } = require('../../services/suggestionCred');
 const { repointInquiriesForWineMerge, closeInquiriesForWineDelete } = require('../../services/ownerInquiryOps');
 const WineList = require('../../models/WineList');
 const WishlistItem = require('../../models/WishlistItem');
@@ -738,6 +739,11 @@ router.post('/:id/non-wine', async (req, res) => {
         console.warn('Maturity re-seed after a non-wine restore failed (non-fatal):', err.message);
       }
     }
+
+    // An approved non-wine proposal earns its proposer while the wine stays in
+    // the quarantine: a restore (the undo of an applied flag) takes that Cellar
+    // Cred back, quarantining the wine again gives it back. Never throws.
+    if (wine.nonWine !== wasNonWine) await settleNonWineProposals(wine._id, wine.nonWine === true);
 
     logAudit(req, 'admin.wine.nonWine', { type: 'wine', id: wine._id },
       { value: req.body.value, name: wine.name, producer: wine.producer, ...(req.body.value === true ? { pendingRemoved } : {}) });

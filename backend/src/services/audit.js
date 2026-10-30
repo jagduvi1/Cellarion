@@ -98,8 +98,10 @@ function logAudit(req, action, resource = {}, detail = {}) {
     },
   }, action);
 
-  // Persist to MongoDB asynchronously — never blocks the response
-  AuditLog.create(entry).catch(err =>
+  // Persist to MongoDB asynchronously — never blocks the response. The
+  // promise (which never rejects) is returned at the end for the rare caller
+  // that must wait for the row, such as a script about to disconnect.
+  const persisted = AuditLog.create(entry).catch(err =>
     logger.error({ err }, 'Failed to persist audit log entry')
   );
 
@@ -146,6 +148,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
       }
     }
   }
+  return persisted;
 }
 
 module.exports = { logAudit, logger };

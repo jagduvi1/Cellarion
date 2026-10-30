@@ -22,6 +22,7 @@ const { isValidId, parseAndValidateVintage } = require('../utils/validation');
 const { localizedName, sanitizeTranslations } = require('../utils/localizedName');
 const { logAudit } = require('./audit');
 const { createNotification } = require('./notifications');
+const { awardValue, SUPERSEDED_REASON } = require('./suggestionCred');
 
 // Names that would shadow first-class record fields — a key called
 // "producer" or "region" must never exist beside the real thing.
@@ -483,13 +484,14 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req, asWi
   // rejected (not deleted — audit finding: a crash between two writes must
   // never destroy the only durable copy of a published value; a demoted row
   // can be re-published by hand), then this row takes the published slot
-  // the partial unique index keeps singular.
+  // the partial unique index keeps singular. The demoted row keeps its
+  // suggester's Cellar Cred (services/suggestionCred reads SUPERSEDED_REASON).
   const widened = !!asWineDefault && !!row.vintage;
   const targetVintage = asWineDefault ? null : (row.vintage || null);
   const suggestedFor = row.vintage || null;
   await RegistryDataValue.updateOne(
     { wineDefinition: row.wineDefinition, key: row.key._id, vintage: targetVintage, status: 'published' },
-    { $set: { status: 'rejected', rejectReason: 'Superseded by a newer approval', decidedBy: adminId, decidedAt: new Date() } }
+    { $set: { status: 'rejected', rejectReason: SUPERSEDED_REASON, decidedBy: adminId, decidedAt: new Date() } }
   );
   row.vintage = targetVintage;
   row.status = 'published';
@@ -499,6 +501,9 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req, asWi
   logAudit(req || null, 'registry_data.value_publish',
     { type: 'wine', id: row.wineDefinition },
     { key: row.key?.name, valueId: row._id, value: row.value, vintage: targetVintage, ...(widened ? { widenedFrom: suggestedFor } : {}) });
+  // Published: the suggester's Cellar Cred, once per row — never for a
+  // curator's own value or a staff account's. Never throws.
+  await awardValue(row);
   const where = targetVintage
     ? `on the ${targetVintage} vintage`
     : (widened ? `on the wine for every vintage (a curator judged your ${suggestedFor} figure to be the producer's general spec)` : 'on the wine');

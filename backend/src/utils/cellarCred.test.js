@@ -49,6 +49,11 @@ describe('constants', () => {
       expect(validCategories).toContain(cat);
     }
   });
+
+  it('accepted suggestions are curator events: a wine correction 5, a published registry value 2', () => {
+    expect([POINT_VALUES.wine_correction_accepted, CATEGORY_MAP.wine_correction_accepted]).toEqual([5, 'curator']);
+    expect([POINT_VALUES.registry_value_published, CATEGORY_MAP.registry_value_published]).toEqual([2, 'curator']);
+  });
 });
 
 describe('incrementCred — no plan rewards', () => {

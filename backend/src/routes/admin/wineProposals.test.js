@@ -64,6 +64,17 @@ jest.mock('../../services/wineProfileOps', () => ({
   WINE_TYPES: ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'],
   resolveGrapeIdsStrict: jest.fn(),
 }));
+// The proposer's Cellar Cred is the helper's business (services/suggestionCred,
+// unit-tested there); here it is the seam the approve must go through.
+jest.mock('../../services/suggestionCred', () => ({
+  awardProposal: jest.fn().mockResolvedValue(true),
+  settleNonWineProposals: jest.fn().mockResolvedValue({ awarded: 0, reversed: 0 }),
+}));
+// The classification write rule reads the taxonomy; only its answer matters here.
+jest.mock('../../services/classificationOps', () => ({
+  ...jest.requireActual('../../services/classificationOps'),
+  assignClassification: jest.fn(),
+}));
 
 const express = require('express');
 const http = require('http');
@@ -573,6 +584,23 @@ describe('POST /:id/approve', () => {
     expect(revert).toBeTruthy();
   });
 
+  test('field_correction: a tier the classification list lacks → 400 and the claim is reverted', async () => {
+    const { assignClassification } = require('../../services/classificationOps');
+    claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { classification: 'Gran Cru Supremo' } });
+    const wine = { _id: W1, name: 'X', producer: 'Y', country: 'c1', save: jest.fn() };
+    WineDefinition.findById.mockResolvedValue(wine);
+    assignClassification.mockResolvedValueOnce({ ok: false, message: '"Gran Cru Supremo" is not in the registry\'s classification list.' });
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/classification list/);
+    // Back to the queue: an approved row with nothing applied is the
+    // half-approved state the claim revert exists to prevent.
+    const revert = WineCorrectionProposal.updateOne.mock.calls.find(c => c[1]?.$set?.status === 'pending');
+    expect(revert).toBeTruthy();
+    expect(wine.save).not.toHaveBeenCalled();
+  });
+
   test('merge: invokes the EXTRACTED performWineMerge with source=proposal wine, target=mergeTargetId', async () => {
     claim({ _id: P1, kind: 'merge', wineDefinition: W1, mergeTargetId: W2 });
     performWineMerge.mockResolvedValue({ bottlesMoved: 3, imageAction: 'none', source: {}, target: { name: 'Barolo', producer: 'E. Pira e Figli' } });
@@ -611,6 +639,8 @@ describe('POST /:id/approve', () => {
     expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: W1, status: 'pending' });
     expect((await res.json()).appliedNote).toMatch(/2 pending/);
     expect(searchService.indexWine).toHaveBeenCalledWith(W1);
+    // Earlier flags a restore took back stand again with the quarantine.
+    expect(require('../../services/suggestionCred').settleNonWineProposals).toHaveBeenCalledWith(W1, true);
     // The vectors go with the row (audit 2026-10-14): nothing left for
     // semantic search or the similar-wines graph to find.
     expect(require('../../models/WineEmbedding').deleteMany).toHaveBeenCalledWith({ wineDefinition: W1 });
@@ -1006,5 +1036,76 @@ describe('bulk-approve follow-through', () => {
     expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine1, true);
     expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine2, true);
     expect(reembedActiveVintages).toHaveBeenCalledTimes(2);
+  });
+});
+
+// An accepted correction earns its proposer Cellar Cred — the daily
+// suggestion budget rises with it. Who earns, and once only, is
+// services/suggestionCred's rule; the route's job is to call it for every
+// approve that applied, single or bulk, and for nothing else.
+describe('Cellar Cred for the proposer', () => {
+  const { awardProposal } = require('../../services/suggestionCred');
+  const MEMBER_ID = '64b000000000000000000002';
+  const P2 = '64b0000000000000000000a2';
+  const P3 = '64b0000000000000000000a3';
+  const fix = (id, over = {}) => ({
+    _id: id, kind: 'field_correction', wineDefinition: W1, proposer: MEMBER_ID, decidedBy: ADMIN_ID,
+    status: 'approved', proposedFields: { producer: 'Niepoort' }, ...over,
+  });
+  const wine = () => ({ _id: W1, name: 'Douro Tinto', producer: 'Fabelhaft', appellation: 'Douro', country: 'c1', save: jest.fn().mockResolvedValue(undefined) });
+
+  test('a single approve that applied awards the approved row — after its receipt is written', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(fix(P1));
+    WineDefinition.findById.mockResolvedValue(wine());
+
+    expect((await post(`/${P1}/approve`)).status).toBe(200);
+    expect(awardProposal).toHaveBeenCalledTimes(1);
+    expect(awardProposal.mock.calls[0][0]).toMatchObject({ _id: P1, proposer: MEMBER_ID, status: 'approved' });
+    // The helper only pays a row that carries its appliedNote.
+    const noteWrite = WineCorrectionProposal.updateOne.mock.calls.findIndex((c) => c[1]?.$set?.appliedNote);
+    expect(WineCorrectionProposal.updateOne.mock.invocationCallOrder[noteWrite])
+      .toBeLessThan(awardProposal.mock.invocationCallOrder[0]);
+  });
+
+  test('every kind goes through the same award — a merge and a non-wine flag too', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValueOnce(fix(P1, { kind: 'merge', mergeTargetId: W2, proposedFields: undefined }));
+    performWineMerge.mockResolvedValue({ bottlesMoved: 0, imageAction: 'none', source: {}, target: { name: 'Barolo', producer: 'Pira' } });
+    expect((await post(`/${P1}/approve`)).status).toBe(200);
+
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValueOnce(fix(P2, { kind: 'non_wine', proposedFields: undefined }));
+    WineDefinition.findById.mockResolvedValue({ ...wine(), nonWine: false });
+    WineVintageProfile.deleteMany.mockResolvedValue({ deletedCount: 0 });
+    expect((await post(`/${P2}/approve`)).status).toBe(200);
+
+    expect(awardProposal.mock.calls.map((c) => [c[0]._id, c[0].kind])).toEqual([[P1, 'merge'], [P2, 'non_wine']]);
+  });
+
+  test('bulk-approve awards each row that applied, and none that did not', async () => {
+    WineCorrectionProposal.findOneAndUpdate
+      .mockResolvedValueOnce(fix(P1))
+      .mockResolvedValueOnce(null) // decided elsewhere → 409
+      .mockResolvedValueOnce(fix(P3, { proposedFields: { name: 'Reserva' } }));
+    WineCorrectionProposal.exists.mockResolvedValueOnce(true);
+    WineDefinition.findById.mockImplementation(async () => wine());
+
+    const data = await (await post('/bulk-approve', { ids: [P1, P2, P3] })).json();
+    expect(data.approved).toBe(2);
+    expect(awardProposal.mock.calls.map((c) => c[0]._id)).toEqual([P1, P3]);
+  });
+
+  test('an approve that could not apply — claim reverted — awards nothing', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(fix(P1, { proposedFields: { name: 'Barolo' } }));
+    WineDefinition.findById.mockResolvedValue({ ...wine(), save: jest.fn().mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 })) });
+
+    expect((await post(`/${P1}/approve`)).status).toBe(409);
+    expect(awardProposal).not.toHaveBeenCalled();
+  });
+
+  test('a rejection awards nothing', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(fix(P1, { status: 'rejected' }));
+    WineDefinition.findById.mockReturnValue({ select: () => ({ lean: async () => ({ _id: W1, name: 'Douro Tinto', producer: 'Fabelhaft' }) }) });
+
+    expect((await post(`/${P1}/reject`, { reason: 'The label says otherwise.' })).status).toBe(200);
+    expect(awardProposal).not.toHaveBeenCalled();
   });
 });

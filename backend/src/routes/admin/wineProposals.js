@@ -58,6 +58,7 @@ const { stripHtml } = require('../../utils/sanitize');
 // Telling the submitter lives in a service: merges and deletes close pending
 // corrections too (routes/admin/wines.js) and owe the same notification.
 const { notifyProposer } = require('../../services/wineCorrectionNotify');
+const { awardProposal, settleNonWineProposals } = require('../../services/suggestionCred');
 
 router.use(requireAuth, requireRole('admin'));
 
@@ -400,7 +401,10 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
           // row under Taxonomy → Classifications, then approve. A regulatory
           // mark applies as nothing, as before.
           const cls = await assignClassification(wine, { classification: pf.classification, strict: true });
-          if (!cls.ok) return { status: 400, body: { error: cls.message } };
+          if (!cls.ok) {
+            await revertClaim();
+            return { status: 400, body: { error: cls.message } };
+          }
           if (cls.classification) applied.push('classification');
         }
         if (pf.appellation) {
@@ -663,6 +667,10 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         // self-healing index sync drop it from search.
         wine.nonWine = true;
         await wine.save();
+        // Earlier flags on this wine that a restore took back stand again (as
+        // when an admin re-quarantines it with the toggle); this row's
+        // receipt is written below, and awardProposal pays it.
+        await settleNonWineProposals(wine._id, true);
         searchService.indexWine(wine._id);
         // Its vectors go too, or semantic search and the similar-wines graph
         // would keep showing the row (audit 2026-10-14).
@@ -692,6 +700,11 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         ...(proposal.mergeTargetId ? { mergeTargetId: proposal.mergeTargetId } : {}),
         appliedNote,
       });
+
+    // Accepted and applied: the proposer's Cellar Cred, once per row — the
+    // self-apply door and staff proposals earn nothing (services/suggestionCred).
+    // Never throws; the decision above stands either way.
+    await awardProposal(proposal);
 
     notifyProposer(proposal, correctedWine, req.user.id, true);
 

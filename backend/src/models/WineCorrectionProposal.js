@@ -128,6 +128,10 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
   // What the approve actually did (fields applied / bottles moved / queue rows
   // cleared) — the reviewer-facing receipt.
   appliedNote: { type: String, trim: true, maxlength: 500 },
+  // When the proposer's Cellar Cred for this accepted proposal was awarded
+  // (services/suggestionCred); null = not awarded — not yet, not earning, or
+  // taken back. Written only by conditional updates, so a row earns once.
+  credAwardedAt: { type: Date, default: null },
   // Later filings by the SAME proposer while the row was pending (support
   // ticket 2026-09-12): each one merged its fields into proposedFields and is
   // recorded here with its own reason and evidence, so the original reason

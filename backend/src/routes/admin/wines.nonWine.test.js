@@ -46,6 +46,10 @@ jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
+// The non-wine proposals' Cellar Cred follows the quarantine (suggestionCred.test.js).
+jest.mock('../../services/suggestionCred', () => ({
+  settleNonWineProposals: jest.fn().mockResolvedValue({ awarded: 0, reversed: 0 }),
+}));
 
 const express = require('express');
 const http = require('http');
@@ -146,6 +150,36 @@ test('setting false on a row that was never quarantined re-seeds nothing', async
   expect(res.status).toBe(200);
   expect(Bottle.distinct).not.toHaveBeenCalled();
   expect(require('../../services/embeddingJob').reembedActiveVintages).not.toHaveBeenCalled();
+});
+
+// An approved non-wine proposal earns its proposer while the wine stays in the
+// quarantine: the restore is the undo of an applied flag (Admin → Proposals →
+// Decided → Restore calls this route), so it takes that Cellar Cred back.
+describe('Cellar Cred of the non-wine proposals', () => {
+  const { settleNonWineProposals } = require('../../services/suggestionCred');
+
+  test('a restore takes it back, a quarantine gives it back — once the flag is saved', async () => {
+    const quarantined = { ...wineDoc(), nonWine: true };
+    quarantined.save = jest.fn().mockResolvedValue(quarantined);
+    WineDefinition.findById.mockResolvedValue(quarantined);
+    Bottle.distinct.mockResolvedValue([]);
+    expect((await toggle(WINE_ID, { value: false })).status).toBe(200);
+    expect(settleNonWineProposals).toHaveBeenLastCalledWith(WINE_ID, false);
+    expect(quarantined.save.mock.invocationCallOrder[0]).toBeLessThan(settleNonWineProposals.mock.invocationCallOrder[0]);
+
+    WineDefinition.findById.mockResolvedValue(wineDoc());
+    expect((await toggle(WINE_ID, { value: true })).status).toBe(200);
+    expect(settleNonWineProposals).toHaveBeenLastCalledWith(WINE_ID, true);
+    expect(settleNonWineProposals).toHaveBeenCalledTimes(2);
+  });
+
+  test('a toggle that changes nothing settles nothing', async () => {
+    WineDefinition.findById.mockResolvedValue({ ...wineDoc(), nonWine: true, save: jest.fn() });
+    expect((await toggle(WINE_ID, { value: true })).status).toBe(200);
+    WineDefinition.findById.mockResolvedValue(wineDoc());
+    expect((await toggle(WINE_ID, { value: false })).status).toBe(200);
+    expect(settleNonWineProposals).not.toHaveBeenCalled();
+  });
 });
 
 // The maturity queue: quarantine from Admin → Wines drops the PENDING rows,

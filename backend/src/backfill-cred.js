@@ -19,6 +19,8 @@ const Discussion = require('./models/Discussion');
 const DiscussionReply = require('./models/DiscussionReply');
 const ReviewVote = require('./models/ReviewVote');
 const DiscussionReaction = require('./models/DiscussionReaction');
+const WineCorrectionProposal = require('./models/WineCorrectionProposal');
+const RegistryDataValue = require('./models/RegistryDataValue');
 const { POINT_VALUES, getTier, getSpecialty } = require('./utils/cellarCred');
 
 async function backfill() {
@@ -31,15 +33,22 @@ async function backfill() {
   for (const u of users) {
     const uid = u._id;
 
-    // Curator
-    const [wineReqs, grapeReqs, reports] = await Promise.all([
+    // Curator. Accepted corrections and published values count where their
+    // award is held — the credAwardedAt marker services/suggestionCred sets
+    // (scripts/backfill-cred-accepted-suggestions marks the older ones) — so
+    // a recompute keeps its exclusions and its reversals.
+    const [wineReqs, grapeReqs, reports, corrections, values] = await Promise.all([
       WineRequest.countDocuments({ user: uid, status: 'resolved', requestType: 'new_wine' }),
       WineRequest.countDocuments({ user: uid, status: 'resolved', requestType: 'grape_suggestion' }),
       WineReport.countDocuments({ user: uid, status: 'resolved' }),
+      WineCorrectionProposal.countDocuments({ proposer: uid, credAwardedAt: { $ne: null } }),
+      RegistryDataValue.countDocuments({ suggestedBy: uid, credAwardedAt: { $ne: null } }),
     ]);
     const curator = wineReqs * POINT_VALUES.wine_request_approved
                   + grapeReqs * POINT_VALUES.grape_suggestion_approved
-                  + reports * POINT_VALUES.wine_report_resolved;
+                  + reports * POINT_VALUES.wine_report_resolved
+                  + corrections * POINT_VALUES.wine_correction_accepted
+                  + values * POINT_VALUES.registry_value_published;
 
     // Photographer
     const [approved, assigned] = await Promise.all([
