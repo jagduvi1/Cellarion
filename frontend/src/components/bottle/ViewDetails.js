@@ -308,14 +308,23 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
               {timelineOn ? (
                 <>
                   <BetaBadge feature="maturityTimeline" note={t('bottleDetail.maturityTimelineBeta', 'The drink window as a timeline is in early access.')} />
-                  <MaturityTimeline profile={vintageProfile} anchorYear={anchorYear} status={personalWindow ? null : maturityStatus} />
+                  <MaturityTimeline
+                    profile={vintageProfile}
+                    anchorYear={anchorYear}
+                    status={personalWindow ? null : maturityStatus}
+                    details={<MaturityPhaseTable profile={vintageProfile} anchorYear={anchorYear} />}
+                  />
                 </>
-              ) : maturityStatus && !personalWindow && (
-                <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
-                  {maturityBadgeText(maturityStatus, t)}
-                </span>
+              ) : (
+                <>
+                  {maturityStatus && !personalWindow && (
+                    <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
+                      {maturityBadgeText(maturityStatus, t)}
+                    </span>
+                  )}
+                  <MaturityPhaseTable profile={vintageProfile} anchorYear={anchorYear} />
+                </>
               )}
-              <MaturityPhaseTable profile={vintageProfile} anchorYear={anchorYear} />
               {vintageProfile.sommNotes && (
                 <div className="bd-somm-notes-toggle">
                   <button
@@ -324,7 +333,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
                     aria-expanded={showSommNotes}
                   >
                     {t('bottleDetail.sommNotes')}
-                    <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`}>&rsaquo;</span>
+                    <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`} aria-hidden="true">&rsaquo;</span>
                   </button>
                   {showSommNotes && (
                     <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>

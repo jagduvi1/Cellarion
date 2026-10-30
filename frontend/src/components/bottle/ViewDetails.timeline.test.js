@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ViewDetails from './ViewDetails';
 
@@ -47,14 +47,18 @@ test('flag off: the status badge above the phase table, no timeline', () => {
   expect(document.querySelector('.bd-maturity-table')).not.toBeNull();
 });
 
-test('flag on: the timeline carries the status, the badge of its own is gone, the table stays', () => {
+test('flag on: the timeline carries the status, the badge of its own is gone, the table folds into the details', () => {
   timelineOn = true;
   renderDetails();
   expect(screen.getByTestId('maturity-timeline')).toBeInTheDocument();
   expect(screen.getByTestId('beta-badge')).toHaveTextContent('maturityTimeline');
   expect(document.querySelector('.bd-maturity-reviewed > .maturity-badge')).toBeNull();
   expect(document.querySelector('.mt-now-label').className).toContain('maturity-badge--early');
-  expect(document.querySelector('.bd-maturity-table')).not.toBeNull();
+  const table = document.querySelector('.mt-details .bd-maturity-table');
+  expect(table).not.toBeNull();
+  expect(table).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /Show details/ }));
+  expect(table).toBeVisible();
 });
 
 test('flag on with a personal window: the marker shows only the year, not the sommelier\'s status', () => {

@@ -1334,6 +1334,8 @@
     "maturityPhasePeak": "Peak ⭐",
     "maturityPhaseLate": "Late",
     "maturityTimelineBeta": "The drink window as a timeline is in early access.",
+    "maturityShowDetails": "Show details",
+    "maturityHideDetails": "Hide details",
     "rackSlot": "slot",
     "grapes": "Grape Varieties",
     "noGrapes": "No grape varieties listed",

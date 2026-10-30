@@ -574,10 +574,19 @@ function CellarVintage() {
                         {timelineOn && !nvUnanchored ? (
                           <>
                             <BetaBadge feature="maturityTimeline" note={t('bottleDetail.maturityTimelineBeta', 'The drink window as a timeline is in early access.')} />
-                            <MaturityTimeline profile={profile} anchorYear={anchorYear} status={maturityStatus} />
+                            <MaturityTimeline
+                              profile={profile}
+                              anchorYear={anchorYear}
+                              status={maturityStatus}
+                              details={<MaturityPhaseTable profile={profile} anchorYear={anchorYear} />}
+                            />
                           </>
-                        ) : maturityStatus && <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityBadgeText(maturityStatus, t)}</span>}
-                        {!nvUnanchored && <MaturityPhaseTable profile={profile} anchorYear={anchorYear} />}
+                        ) : (
+                          <>
+                            {maturityStatus && <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityBadgeText(maturityStatus, t)}</span>}
+                            {!nvUnanchored && <MaturityPhaseTable profile={profile} anchorYear={anchorYear} />}
+                          </>
+                        )}
                         {profile.sommNotes && <p className="bd-maturity-notes">{profile.sommNotes}</p>}
                       </div>
                     )}
