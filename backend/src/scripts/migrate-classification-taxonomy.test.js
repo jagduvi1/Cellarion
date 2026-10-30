@@ -33,6 +33,11 @@ test('a legacy string with two tiers maps to two rows; the canonical spelling re
   expect(plan.rows.map((r) => r._id)).toEqual(['r1', 'r2']);
 });
 
+test('a legacy value of separators only is cleared, not crashed on (prod apply 2026-10-30)', () => {
+  expect(planWine({ name: 'X', classification: ' - ', country: { name: 'Italy' } }, lookup)).toEqual({ names: [], unresolved: [], source: 'legacy', rows: [] });
+  expect(planWine({ name: 'X', classification: '/', country: null }, lookup)).toEqual({ names: [], unresolved: [], source: 'legacy', rows: [] });
+});
+
 test('a legacy value no row answers is left alone and reported, even beside a resolvable one', () => {
   const plan = planWine({ name: 'X', classification: 'Riserva, Brut', country: { name: 'Italy' } }, lookup);
   expect(plan).toEqual({ names: [], unresolved: ['Brut'], source: 'legacy' });

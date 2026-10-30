@@ -465,20 +465,13 @@
     "system": "Producer's own designation, no legal meaning outside Spain and Portugal",
     "country": null,
     "synonyms": [
+      "Réserve",
       "Special Reserve",
       "Winemaker's Reserve",
       "Winemakers Reserve",
       "Private Reserve",
       "Proprietor's Reserve",
-      "Reserve Collection"
-    ]
-  },
-  {
-    "name": "Réserve",
-    "kind": "other",
-    "system": "Producer's own designation",
-    "country": "France",
-    "synonyms": [
+      "Reserve Collection",
       "Reserve Speciale",
       "Réserve Spéciale",
       "Cuvée Réservée",
