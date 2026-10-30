@@ -1423,7 +1423,7 @@ export default function CellarRoom() {
                 <div className="room-bottle-panel-info">
                   {(wine?.producer || bottle?.vintage) && (
                     <p className="room-bottle-producer">
-                      {wine?.producer && <span>{wine.producer}</span>}
+                      {wine?.producer && <span>{wine.producer}</span>}{' '}
                       {bottle?.vintage && <span>{formatVintage(bottle.vintage, t)}</span>}
                     </p>
                   )}
