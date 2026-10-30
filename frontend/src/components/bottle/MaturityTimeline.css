@@ -1,0 +1,82 @@
+/* Drink window as one timeline (early-access flag maturityTimeline). Each
+   phase takes its status badge's colour, so the marker's label matches the
+   segment it sits in; the phase table's dots right below follow, so the
+   table reads as the bar's legend. (Peak is green here, not the dots' usual
+   primary: in the dark theme primary and accent are too close to tell early
+   from peak on a bar.) */
+.mt-timeline {
+  margin: 0.15rem 0 0.75rem;
+}
+
+.mt-now-row {
+  position: relative;
+  height: 1.55rem;
+}
+
+.mt-now-label {
+  position: absolute;
+  bottom: 0.25rem;
+  white-space: nowrap;
+}
+
+.mt-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--color-border);
+}
+
+.mt-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 5px;
+  /* A hairline between neighbouring phases. */
+  box-shadow: inset -2px 0 0 var(--color-surface);
+}
+
+.mt-seg--early { background: var(--color-accent); }
+.mt-seg--peak  { background: var(--color-success); }
+.mt-seg--late  { background: #9A8474; }
+
+.mt-timeline + .bd-maturity-table .bd-maturity-phase-dot--peak { background: var(--color-success); }
+
+/* A last phase with no end year: it goes on, so it fades out instead of
+   stopping at a year nobody set. */
+.mt-seg--open {
+  box-shadow: none;
+  -webkit-mask-image: linear-gradient(to right, #000 55%, transparent);
+  mask-image: linear-gradient(to right, #000 55%, transparent);
+}
+
+.mt-marker {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  background: var(--color-text);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.mt-marker--not-ready { background: var(--color-info); }
+.mt-marker--early     { background: var(--color-accent); }
+.mt-marker--peak      { background: var(--color-success); }
+.mt-marker--late      { background: #9A8474; }
+.mt-marker--declining { background: var(--color-danger); }
+
+.mt-years {
+  position: relative;
+  height: 1.1rem;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mt-year {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
