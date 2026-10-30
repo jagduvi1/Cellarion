@@ -118,14 +118,16 @@
 }
 
 /* Middle dot between producer and vintage (and vintage and region in the
-   grid). Generated, so it disappears with the vintage; the empty alt text
-   keeps screen readers from announcing it, and the plain line before it is
-   the fallback for browsers without the alt-text syntax. */
-.bottle-meta > span + span::before,
-.bottle-grid-meta > span + span::before {
+   grid). Generated after the first item only when something follows, so it
+   disappears with the vintage, and when the line wraps it stays at the end
+   of the first line instead of starting the next. The empty alt text keeps
+   screen readers from announcing it, and the plain line before it is the
+   fallback for browsers without the alt-text syntax. */
+.bottle-meta > span:not(:last-child)::after,
+.bottle-grid-meta > span:not(:last-child)::after {
   content: '·';
   content: '·' / '';
-  margin-right: 0.35rem;
+  margin-left: 0.35rem;
 }
 
 /* The details picked under "Show on cards" — one line, ellipsised. */

@@ -378,12 +378,13 @@
   font-size: 0.85rem;
 }
 
-/* producer · vintage, the same separator as the bottle cards. The flex gap
-   keeps the two apart for screen readers too, which skip the dot. */
-.room-bottle-producer > span + span::before {
+/* producer · vintage, the same separator as the bottle cards: after the
+   producer, so a wrapped vintage never starts its line with a dot. The flex
+   gap keeps the two apart for screen readers too, which skip the dot. */
+.room-bottle-producer > span:not(:last-child)::after {
   content: '·';
   content: '·' / '';
-  margin-right: 0.35rem;
+  margin-left: 0.35rem;
 }
 
 .room-bottle-meta {
