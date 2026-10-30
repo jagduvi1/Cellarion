@@ -83,6 +83,16 @@ const FEATURES = Object.freeze([
     defaultState: 'beta',
     since: '2026-10-17',
   }),
+  // The drink window drawn as one timeline — the phases as a bar with a
+  // marker on this year — in place of the status badge above the phase
+  // table, on the bottle page and the vintage page. The window data is the
+  // same for everyone; the flag only decides how it is drawn.
+  Object.freeze({
+    key: 'maturityTimeline',
+    title: 'Drink window as a timeline',
+    defaultState: 'beta',
+    since: '2026-10-30',
+  }),
 ]);
 
 const FEATURE_KEYS = Object.freeze(FEATURES.map((f) => f.key));

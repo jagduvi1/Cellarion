@@ -17,6 +17,9 @@ import WineRecordSection from './WineRecordSection';
 import CollapsibleBlock from '../CollapsibleBlock';
 import DraftWineBanner from './DraftWineBanner';
 import MaturityPhaseTable from './MaturityPhaseTable';
+import MaturityTimeline from './MaturityTimeline';
+import BetaBadge from '../BetaBadge';
+import { useFeature } from '../../utils/featureFlags';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 import { markNotWine } from '../../api/wines';
@@ -36,6 +39,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
   // treat it as still awaiting review rather than showing wrong years.
   const maturityReviewed = vintageProfile?.status === 'reviewed' && (!isNv || vintageProfile.relative);
   const [showSommNotes, setShowSommNotes] = useState(false);
+  const timelineOn = useFeature('maturityTimeline');
   const wine = bottle.wineDefinition;
   // Serving line: the sommelier's trait (or the style's default) read against
   // the phase this bottle is in today — the owner's own window first, then the
@@ -297,9 +301,16 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
             </div>
           ) : (
             <div className="bd-maturity-reviewed">
-              {/* Profile status badge hidden while a personal window is set —
-                  the personal window (above) takes precedence. */}
-              {maturityStatus && !personalWindow && (
+              {/* Profile status hidden while a personal window is set — the
+                  personal window (above) takes precedence. In early access
+                  the status rides on the timeline's marker instead of a
+                  badge of its own. */}
+              {timelineOn ? (
+                <>
+                  <BetaBadge feature="maturityTimeline" note={t('bottleDetail.maturityTimelineBeta', 'The drink window as a timeline is in early access.')} />
+                  <MaturityTimeline profile={vintageProfile} anchorYear={anchorYear} status={personalWindow ? null : maturityStatus} />
+                </>
+              ) : maturityStatus && !personalWindow && (
                 <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
                   {maturityBadgeText(maturityStatus, t)}
                 </span>

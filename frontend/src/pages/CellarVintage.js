@@ -15,6 +15,8 @@ import { useCollapsedBlocks } from '../utils/collapsedBlocks';
 import Modal from '../components/Modal';
 import CellarPageHeader from '../components/CellarPageHeader';
 import MaturityPhaseTable from '../components/bottle/MaturityPhaseTable';
+import MaturityTimeline from '../components/bottle/MaturityTimeline';
+import BetaBadge from '../components/BetaBadge';
 import LotHistory from '../components/bottle/LotHistory';
 import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import TastingProfileCard from '../components/bottle/TastingProfileCard';
@@ -183,6 +185,7 @@ function CellarVintage() {
   // 2026-10-14). Same rule as the bottle page: an owner or editor, bottles
   // still in the cellar.
   const pickListsOn = useFeature('pickLists');
+  const timelineOn = useFeature('maturityTimeline');
   const pickable = bottles.filter((b) => b.status === 'active');
   const canPickList = pickListsOn && canEdit && pickable.length > 0;
   const canSuggest = !!wine && !user?.isDemo && wine.draft !== true;
@@ -568,7 +571,12 @@ function CellarVintage() {
                       </div>
                     ) : (
                       <div className="bd-maturity-reviewed">
-                        {maturityStatus && <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityBadgeText(maturityStatus, t)}</span>}
+                        {timelineOn && !nvUnanchored ? (
+                          <>
+                            <BetaBadge feature="maturityTimeline" note={t('bottleDetail.maturityTimelineBeta', 'The drink window as a timeline is in early access.')} />
+                            <MaturityTimeline profile={profile} anchorYear={anchorYear} status={maturityStatus} />
+                          </>
+                        ) : maturityStatus && <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityBadgeText(maturityStatus, t)}</span>}
                         {!nvUnanchored && <MaturityPhaseTable profile={profile} anchorYear={anchorYear} />}
                         {profile.sommNotes && <p className="bd-maturity-notes">{profile.sommNotes}</p>}
                       </div>

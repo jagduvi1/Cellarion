@@ -37,6 +37,12 @@ export function betaFeatureText(t, key) {
         description: t('earlyAccess.features.rackSlotMove.description', 'Move a bottle to another slot without dragging — made for phones, where dragging does not work. Tap the bottle, choose Move, then tap the slot it should go to. On a bottle in the same rack the two swap places.'),
         where: t('earlyAccess.features.rackSlotMove.where', 'On the Racks page: tap a bottle, then Move.'),
       };
+    case 'maturityTimeline':
+      return {
+        name: t('earlyAccess.features.maturityTimeline.name', 'Drink window as a timeline'),
+        description: t('earlyAccess.features.maturityTimeline.description', 'See a wine\'s drink window as one bar — early, peak and late — with a marker on this year, so you can tell at a glance how far the wine has come. The exact years stay listed below it.'),
+        where: t('earlyAccess.features.maturityTimeline.where', 'On a bottle\'s page and a vintage\'s page, under Aging & Maturity.'),
+      };
     default:
       return { name: key, description: '', where: '' };
   }
