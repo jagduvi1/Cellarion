@@ -16,10 +16,12 @@
  * here names a route: what is deprecated is DEPRECATED_RULES, and when it
  * ends is SUNSET.
  *
- * The email is a service message about the owner's own integration, like the
- * lockout alert: it goes out whatever their email settings. It is bounded —
- * the first notice plus one per REMINDER_DAYS entry, per token — and stops by
- * itself once the token stops calling these routes or is revoked.
+ * The email respects an owner who opted out of all email (User.emailOptOutAt,
+ * as the privacy policy promises): they still get the in-app notice, push
+ * where it is on, and the warning in Settings. It carries the one-click
+ * unsubscribe link like every member email. It is bounded — the first notice
+ * plus one per REMINDER_DAYS entry, per token — and stops by itself once the
+ * token stops calling these routes or is revoked.
  */
 const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
@@ -52,7 +54,7 @@ const EMAIL_TIMEOUT_MS = 10 * 1000;
 const TOKENS_LINK = '/settings#api-tokens';
 const MAX_ROUTES_SHOWN = 5;
 
-const OWNER_FIELDS = 'email emailVerified username displayName isDemo deletionScheduledFor';
+const OWNER_FIELDS = 'email emailVerified emailOptOutAt username displayName isDemo deletionScheduledFor';
 
 const longDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const forSunset = (mark) => !!(mark && mark.sunset && new Date(mark.sunset).getTime() === SUNSET.getTime());
@@ -169,9 +171,10 @@ async function sendNotice(token, { reminderDays = null, now = new Date(), owner 
   await createNotification(user._id, 'api_deprecation', title, message, TOKENS_LINK);
 
   let emailed = false;
-  if (EMAIL_VERIFICATION_ENABLED && user.email && user.emailVerified) {
+  if (EMAIL_VERIFICATION_ENABLED && user.email && user.emailVerified && !user.emailOptOutAt) {
     try {
       await withTimeout(sendApiDeprecationEmail(user.email, user.displayName || user.username || 'there', {
+        recipientId: user._id,
         tokenName: token.name,
         routes,
         sunset: SUNSET,

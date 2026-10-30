@@ -175,12 +175,21 @@ describe('markTokenDeprecatedUse', () => {
     expect(createNotification).toHaveBeenCalledTimes(1);
   });
 
-  test('the email is a service message: sent whatever the email settings, but only to a verified address', async () => {
+  test('the email respects an opt-out of all email and needs a verified address; the bell tells everyone', async () => {
     ApiToken.findOneAndUpdate.mockReturnValue(query({ _id: 'tok1', user: 'u1', name: 'HA', deprecatedUse: marked() }));
 
-    User.findById.mockReturnValue(query(owner({ emailOptOutAt: new Date(), preferences: { notifications: { supportReply: { email: false } } } })));
+    User.findById.mockReturnValue(query(owner({ emailOptOutAt: new Date() })));
+    await markTokenDeprecatedUse({ _id: 'tok1', user: 'u1', name: 'HA' }, req(), ok, NOW);
+    expect(sendApiDeprecationEmail).not.toHaveBeenCalled();
+    expect(createNotification).toHaveBeenCalledTimes(1);
+
+    jest.clearAllMocks();
+    ApiToken.updateOne.mockResolvedValue({ matchedCount: 1 });
+    ApiToken.findOneAndUpdate.mockReturnValue(query({ _id: 'tok1', user: 'u1', name: 'HA', deprecatedUse: marked() }));
+    User.findById.mockReturnValue(query(owner()));
     await markTokenDeprecatedUse({ _id: 'tok1', user: 'u1', name: 'HA' }, req(), ok, NOW);
     expect(sendApiDeprecationEmail).toHaveBeenCalledTimes(1);
+    expect(sendApiDeprecationEmail.mock.calls[0][2].recipientId).toBe('u1');
 
     jest.clearAllMocks();
     ApiToken.updateOne.mockResolvedValue({ matchedCount: 1 });

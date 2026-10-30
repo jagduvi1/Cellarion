@@ -908,11 +908,12 @@ const listWords = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', '
  * reminder before the date. Names the token, the routes and the date, and
  * points to what replaces them.
  *
- * A service message about the recipient's own account, like the lockout
- * alert: it goes out whatever their email settings, so it carries no
- * unsubscribe link. It ends by itself once the token stops calling these
- * routes or is revoked. Reply-To reaches a person: the email asks to hear
- * what is missing from the API.
+ * Sent only to members who have not opted out of all email (the caller
+ * checks; the bell and Settings tell the rest), and it carries the one-click
+ * unsubscribe link like every member email. It ends by itself once the token
+ * stops calling these routes or is revoked. Reply-To reaches a person where
+ * support has an address: the email asks to hear what is missing from the
+ * API.
  *
  * @param {string} toEmail
  * @param {string} recipientName  display/username (greeting)
@@ -930,6 +931,10 @@ async function sendApiDeprecationEmail(toEmail, recipientName, notice) {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const guideUrl = `${frontendUrl}/developers`;
   const tokensUrl = `${frontendUrl}/settings#api-tokens`;
+  const { createUnsubscribeToken } = require('../utils/unsubscribe');
+  const unsubLink = notice.recipientId
+    ? `${frontendUrl}/api/users/unsubscribe?token=${createUnsubscribeToken(notice.recipientId)}`
+    : null;
   // The token's name is the owner's text: one line, bounded, before it becomes a header.
   const name = String(notice.tokenName || 'API token').replace(/[\r\n]+/g, ' ').trim().slice(0, 100);
   const routes = (notice.routes || []).map(String);
@@ -956,7 +961,6 @@ async function sendApiDeprecationEmail(toEmail, recipientName, notice) {
     reminder
       ? 'No more reminders come once it stops, or once you revoke it.'
       : (notice.reminderDays?.length ? `Reminders follow ${listWords(notice.reminderDays)} days before the date while it still does.` : ''),
-    'It is a notice about your own account, so it is sent whatever your email settings.',
   ].filter(Boolean).join(' ');
 
   await mg.messages.create(DOMAIN, {
@@ -978,7 +982,8 @@ async function sendApiDeprecationEmail(toEmail, recipientName, notice) {
       '',
       `Your API tokens: ${tokensUrl}`,
       '',
-      why
+      why,
+      ...(unsubLink ? ['', `Unsubscribe from all Cellarion emails: ${unsubLink}`] : []),
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
@@ -998,6 +1003,7 @@ async function sendApiDeprecationEmail(toEmail, recipientName, notice) {
         <p><a href="${tokensUrl}">Your API tokens</a></p>
         <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
         <p style="color:#9A9484;font-size:0.85em;">${escapeHtml(why)}</p>
+        ${unsubLink ? `<p style="color:#9A9484;font-size:0.85em;"><a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all Cellarion emails</a></p>` : ''}
       </div>
     `
   });

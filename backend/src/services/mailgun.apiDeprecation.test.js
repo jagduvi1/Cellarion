@@ -1,13 +1,14 @@
 /**
  * services/mailgun sendApiDeprecationEmail: the owner of a token still
  * calling routes on their way out is told which token, which routes, the day
- * they stop answering tokens, and what replaces them. A service message about
- * their own account: no unsubscribe link, and a Reply-To that reaches a
- * person, since it asks to hear what is missing. The token's name is the
+ * they stop answering tokens, and what replaces them. Like every member email
+ * it carries the one-click unsubscribe link, and a Reply-To that reaches a
+ * person where support has an address, since it asks to hear what is missing. The token's name is the
  * owner's text, so it cannot break out of the subject header, and it is
  * escaped in the HTML.
  */
 process.env.MAILGUN_API_KEY = 'key-test';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 process.env.MAILGUN_DOMAIN = 'mg.test';
 process.env.FRONTEND_URL = 'https://cellarion.test';
 
@@ -28,6 +29,7 @@ beforeEach(() => {
 
 test('the first notice names the token, the routes, the day and the replacement, and links the guide and the tokens', async () => {
   await sendApiDeprecationEmail('anna@example.com', 'Anna', {
+    recipientId: '66f0a1b2c3d4e5f6a7b8c901',
     tokenName: 'Home Assistant', routes: ['GET /api/cellars/:id', 'GET /api/stats/value-history'],
     sunset: SUNSET, lastUsedAt: new Date('2026-10-30T09:00:00Z'), reminderDays: [90, 30],
   });
@@ -40,13 +42,13 @@ test('the first notice names the token, the routes, the day and the replacement,
     '"Home Assistant"', '- GET /api/cellars/:id', '- GET /api/stats/value-history', '1 May 2027', '403',
     'GET /api/inventory', 'https://cellarion.test/developers', 'https://cellarion.test/settings#api-tokens',
     'called them on 30 October 2026', 'Reminders follow 90 and 30 days before the date',
-    'sent whatever your email settings',
   ]) expect(msg.text).toContain(part);
   expect(msg.html).toContain('<code>GET /api/cellars/:id</code>');
   expect(msg.html).toContain('href="https://cellarion.test/developers"');
   expect(msg.html).toContain('href="https://cellarion.test/settings#api-tokens"');
-  // A service message: no unsubscribe link to follow.
-  expect(msg.text).not.toMatch(/unsubscribe/i);
+  // Like every member email: the one-click link that stops all of them.
+  expect(msg.text).toMatch(/Unsubscribe from all Cellarion emails: https:\/\/cellarion\.test\/api\/users\/unsubscribe\?token=/);
+  expect(msg.html).toContain('Unsubscribe from all Cellarion emails</a>');
   // Replies reach a person (a non-hosted install answers with its own From).
   expect(msg['h:Reply-To']).toBe('Cellarion <no-reply@mg.test>');
 });

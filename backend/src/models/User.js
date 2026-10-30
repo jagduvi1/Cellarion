@@ -317,11 +317,8 @@ const userSchema = new mongoose.Schema({
   // top of the per-category switches, so a category added after they clicked
   // (support replies, 2026-09-26) is off for them too — the objection covers
   // email as such, not the categories that existed that day (audit
-  // 2026-09-27 M7). Service messages about the account itself (the lockout
-  // alert, an API token calling routes that stop working) are not
-  // notifications and go regardless. Cleared when they turn any email back
-  // on in Settings (services/accountOps): from then on the per-category
-  // switches decide.
+  // 2026-09-27 M7). Cleared when they turn any email back on in Settings
+  // (services/accountOps): from then on the per-category switches decide.
   emailOptOutAt: {
     type: Date,
     default: null
