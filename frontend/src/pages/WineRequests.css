@@ -192,7 +192,9 @@
 }
 
 @media (max-width: 768px) {
-  .winerequest-desktop-create { display: none; }
+  /* The FAB takes over; .page-header's own rule would otherwise keep the
+     empty actions box, and its gap, under the title. */
+  .page-header .winerequest-desktop-create { display: none; }
   .winerequest-fab { display: flex; }
 }
 

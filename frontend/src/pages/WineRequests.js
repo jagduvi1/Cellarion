@@ -182,8 +182,8 @@ function WineRequests() {
     <div className="wine-requests-page">
       <div className="page-header">
         <h1>{t('wineRequests.title')}</h1>
-        <div className="header-actions">
-          <button onClick={toggleForm} className="btn btn-primary winerequest-desktop-create">
+        <div className="header-actions winerequest-desktop-create">
+          <button onClick={toggleForm} className="btn btn-primary">
             {showForm ? t('common.cancel') : `+ ${t('wineRequests.newRequest')}`}
           </button>
         </div>
