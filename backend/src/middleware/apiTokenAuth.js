@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { logAudit } = require('../services/audit');
 const { DEPRECATED_RULES, SUNSET } = require('../config/apiDeprecations');
 const { setDeprecationHeaders, recordDeprecatedUse } = require('../services/apiDeprecation');
+const { markTokenDeprecatedUse } = require('../services/apiDeprecationNotices');
 
 const { TOKEN_PREFIX } = ApiToken;
 
@@ -238,7 +239,12 @@ async function authenticateApiToken(req, res, next, rawToken) {
       setDeprecationHeaders(res);
       // Counted once answered, under the route Express matched — never the
       // raw path, which the caller writes (a made-up path would be a new row).
-      res.on('finish', () => recordDeprecatedUse(req, res));
+      // And marked on the token itself, so its owner can be told
+      // (services/apiDeprecationNotices). Both fire-and-forget.
+      res.on('finish', () => {
+        recordDeprecatedUse(req, res);
+        markTokenDeprecatedUse(token, req, res);
+      });
     }
 
     // Same effective-plan downgrade as the JWT path in requireAuth.

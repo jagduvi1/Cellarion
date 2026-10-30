@@ -899,6 +899,105 @@ async function sendNewMemberEmptyEmail(toEmail, recipientName, recipientId) {
   });
 }
 
+const longDateUtc = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const listWords = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : String(items[0] ?? ''));
+
+/**
+ * One of the recipient's API tokens still calls routes that stop answering
+ * tokens at a sunset (services/apiDeprecationNotices): the first notice, or a
+ * reminder before the date. Names the token, the routes and the date, and
+ * points to what replaces them.
+ *
+ * A service message about the recipient's own account, like the lockout
+ * alert: it goes out whatever their email settings, so it carries no
+ * unsubscribe link. It ends by itself once the token stops calling these
+ * routes or is revoked. Reply-To reaches a person: the email asks to hear
+ * what is missing from the API.
+ *
+ * @param {string} toEmail
+ * @param {string} recipientName  display/username (greeting)
+ * @param {object} notice
+ * @param {string} notice.tokenName       the token's name, as its owner wrote it
+ * @param {string[]} notice.routes        route keys, e.g. 'GET /api/cellars/:id'
+ * @param {Date}   notice.sunset          when they stop answering tokens
+ * @param {Date}   [notice.lastUsedAt]    when the token last called one
+ * @param {number} [notice.daysLeft]      set on a reminder: days until the sunset
+ * @param {number[]} [notice.reminderDays] set on the first notice: when reminders follow
+ */
+async function sendApiDeprecationEmail(toEmail, recipientName, notice) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const guideUrl = `${frontendUrl}/developers`;
+  const tokensUrl = `${frontendUrl}/settings#api-tokens`;
+  // The token's name is the owner's text: one line, bounded, before it becomes a header.
+  const name = String(notice.tokenName || 'API token').replace(/[\r\n]+/g, ' ').trim().slice(0, 100);
+  const routes = (notice.routes || []).map(String);
+  const one = routes.length === 1;
+  const date = longDateUtc(notice.sunset);
+  const reminder = Number.isFinite(notice.daysLeft);
+  const what = one ? 'a route' : 'routes';
+
+  const subject = `${reminder ? 'Reminder: your' : 'Your'} API token "${name}" uses ${what} that stop${one ? 's' : ''} working on ${date}`;
+  const intro = reminder
+    ? `A reminder: your Cellarion API token "${name}" still calls ${what} that API tokens can no longer use from ${date}, in ${notice.daysLeft} day${notice.daysLeft === 1 ? '' : 's'}:`
+    : `Your Cellarion API token "${name}" still calls ${what} that API tokens can no longer use from ${date}:`;
+  const effect = `From then on ${one ? 'it answers' : 'they answer'} with 403 Forbidden, so whatever uses this token (an integration, a script) stops getting that data unless it changes first. GET /api/inventory covers most of what ${one ? 'it was' : 'they were'} used for, and the API guide shows what to use instead.`;
+  const passOn = 'If someone else made the integration, update it to its latest version or pass this on to them. If something you need is missing from the API, reply to this email.';
+  const why = [
+    notice.lastUsedAt
+      ? `You get this email because this token called ${one ? 'it' : 'them'} on ${longDateUtc(notice.lastUsedAt)}.`
+      : `You get this email because this token calls ${one ? 'it' : 'them'}.`,
+    reminder
+      ? 'No more reminders come once it stops, or once you revoke it.'
+      : (notice.reminderDays?.length ? `Reminders follow ${listWords(notice.reminderDays)} days before the date while it still does.` : ''),
+    'It is a notice about your own account, so it is sent whatever your email settings.',
+  ].filter(Boolean).join(' ');
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    'h:Reply-To': supportReplyTo(),
+    subject,
+    text: [
+      `Hello ${recipientName},`,
+      '',
+      intro,
+      '',
+      ...routes.map((r) => `- ${r}`),
+      '',
+      effect,
+      guideUrl,
+      '',
+      passOn,
+      '',
+      `Your API tokens: ${tokensUrl}`,
+      '',
+      why
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
+        <p>Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p>${escapeHtml(intro)}</p>
+        <ul style="margin:0 0 1rem;padding-left:1.25rem;">${routes.map((r) => `<li><code>${escapeHtml(r)}</code></li>`).join('')}</ul>
+        <p>${escapeHtml(effect)}</p>
+        <p style="margin:1.5rem 0;">
+          <a href="${guideUrl}"
+             style="background:#7B9E88;color:#0d0d0d;padding:10px 22px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            Open the API guide
+          </a>
+        </p>
+        <p>${escapeHtml(passOn)}</p>
+        <p><a href="${tokensUrl}">Your API tokens</a></p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">${escapeHtml(why)}</p>
+      </div>
+    `
+  });
+}
+
 /**
  * Warn the site admin that today's AI calls reached a share of the site-wide
  * daily cap (services/aiCapAlertJob). At the cap every AI feature is off for
@@ -979,4 +1078,4 @@ async function sendAiCapAlertEmail(toEmail, alert) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, sendOwnerInquiryEmail, sendNewMemberCellarEmail, sendNewMemberEmptyEmail, EMAIL_VERIFICATION_ENABLED };
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, sendOwnerInquiryEmail, sendNewMemberCellarEmail, sendNewMemberEmptyEmail, sendApiDeprecationEmail, EMAIL_VERIFICATION_ENABLED };

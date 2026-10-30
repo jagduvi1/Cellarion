@@ -22,10 +22,13 @@ jest.mock('../models/ApiToken', () => {
 });
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+// What a marked token leads to is services/apiDeprecationNotices.test.js.
+jest.mock('../services/apiDeprecationNotices', () => ({ markTokenDeprecatedUse: jest.fn(() => Promise.resolve()) }));
 
 const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
+const { markTokenDeprecatedUse } = require('../services/apiDeprecationNotices');
 const {
   isApiTokenCredential,
   authenticateApiToken,
@@ -358,6 +361,31 @@ describe('authenticateApiToken', () => {
     expect(old.Sunset).toBe(SUNSET.toUTCString());
     expect(old.Link).toMatch(/\/developers>; rel="deprecation"/);
     expect(await headersFor('/api/stats', '/overview')).toEqual({});
+  });
+
+  test('a deprecated route, once answered, is marked on the token that called it; a documented one is not', async () => {
+    const run = async (baseUrl, path) => {
+      const token = activeToken();
+      ApiToken.findOne.mockResolvedValue(token);
+      User.findById.mockReturnValue(selectable(activeUser()));
+      const handlers = {};
+      const res = { ...mockRes(), setHeader: jest.fn(), on: jest.fn((event, fn) => { handlers[event] = fn; }) };
+      const req = mockReq('GET', baseUrl, path);
+      const next = jest.fn();
+      await authenticateApiToken(req, res, next, RAW);
+      expect(next).toHaveBeenCalled();
+      return { token, req, res, handlers };
+    };
+
+    const old = await run('/api/cellars', `/${'a'.repeat(24)}`);
+    expect(markTokenDeprecatedUse).not.toHaveBeenCalled(); // not before it is answered
+    old.handlers.finish();
+    expect(markTokenDeprecatedUse).toHaveBeenCalledWith(old.token, old.req, old.res);
+
+    markTokenDeprecatedUse.mockClear();
+    const documented = await run('/api/stats', '/overview');
+    expect(documented.handlers.finish).toBeUndefined();
+    expect(markTokenDeprecatedUse).not.toHaveBeenCalled();
   });
 
   test('unknown or revoked token → 401 (findOne filters revokedAt null)', async () => {

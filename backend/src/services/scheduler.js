@@ -21,6 +21,7 @@ const { runRegistryReadReport } = require('./registryReadReportJob');
 const embeddingJob = require('./embeddingJob');
 const registryBridge = require('./registryBridge');
 const { runReceiptRetentionSweep } = require('./receiptArchive');
+const { runDeprecationReminders } = require('./apiDeprecationNotices');
 
 /**
  * Start all scheduled cron jobs.
@@ -288,6 +289,20 @@ function startScheduler() {
     }
   });
 
+  // API deprecation reminders: daily at 08:11 UTC, morning in Europe, on an
+  // off-minute. Reminds the owners of tokens still calling a route on its way
+  // out as the sunset nears (config/apiDeprecations), at most once per token
+  // and reminder; past the sunset it only clears the token markers
+  // (services/apiDeprecationNotices).
+  cron.schedule('11 8 * * *', async () => {
+    try {
+      const r = await runDeprecationReminders();
+      if (r?.sent || r?.cleared) console.log('[scheduler] API deprecation reminders:', JSON.stringify(r));
+    } catch (err) {
+      console.error('[scheduler] API deprecation reminders failed:', err);
+    }
+  });
+
   // Private-draft expiry: hourly, because the 24-hour warning before an empty
   // draft is deleted cannot be honoured by a daily pass (draft design 2026-09-12).
   cron.schedule('23 * * * *', async () => {
@@ -301,7 +316,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC)');
+  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC, api-deprecation-reminders daily 08:11 UTC)');
 }
 
 /**

@@ -17,7 +17,7 @@ import { listApiTokens, createApiToken, revokeApiToken } from '../api/tokens';
 const ALL_SCOPES = ['read', 'consume', 'write'];
 
 function ApiTokensSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { apiFetch, user } = useAuth();
 
   const [tokens, setTokens] = useState([]);
@@ -122,6 +122,9 @@ function ApiTokensSection() {
 
   const scopeLabel = (scope) => t(`settings.apiTokens.scope_${scope}`);
   const formatDate = (d) => d ? new Date(d).toLocaleDateString() : null;
+  // The sunset is a UTC instant at midnight: shown as that day everywhere,
+  // as /developers and the notice email give it.
+  const sunsetDay = (d) => new Date(d).toLocaleDateString(i18n.language, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
   return (
     <div className="card settings-card">
@@ -150,6 +153,25 @@ function ApiTokensSection() {
                     ? `${t('settings.apiTokens.lastUsed')} ${formatDate(tok.lastUsedAt)}`
                     : t('settings.apiTokens.neverUsed')}
                 </span>
+                {/* Routes on their way out this token still called lately
+                    (backend services/apiDeprecationNotices). */}
+                {tok.deprecatedUse?.routes?.length > 0 && (
+                  <div className="alert alert-warning api-token-deprecated">
+                    {t('settings.apiTokens.deprecatedUse', {
+                      count: tok.deprecatedUse.routes.length,
+                      date: sunsetDay(tok.deprecatedUse.sunset),
+                      defaultValue: tok.deprecatedUse.routes.length === 1
+                        ? 'Still calls a route that API tokens can no longer use from {{date}}:'
+                        : 'Still calls routes that API tokens can no longer use from {{date}}:',
+                    })}
+                    {' '}
+                    {tok.deprecatedUse.routes.map((route, i) => (
+                      <span key={route}>{i > 0 && ', '}<code>{route}</code></span>
+                    ))}
+                    {'. '}
+                    <Link to="/developers">{t('settings.apiTokens.deprecatedUseLink', 'What to use instead')}</Link>
+                  </div>
+                )}
               </div>
               <button
                 type="button"

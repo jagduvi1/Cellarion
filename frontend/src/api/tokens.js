@@ -3,7 +3,9 @@ import { JSON_HEADERS } from './apiConstants';
 // Personal API tokens (Settings → API tokens). Scoped machine credentials for
 // integrations like Home Assistant — see backend/src/routes/tokens.js.
 
-// GET /api/tokens — [{ id, name, scopes, lastUsedAt, createdAt }]
+// GET /api/tokens — [{ id, name, scopes, lastUsedAt, createdAt, deprecatedUse }]
+// deprecatedUse: { routes, firstAt, lastAt, sunset } while the token still
+// calls routes on their way out, else null.
 export const listApiTokens = (apiFetch) => apiFetch('/api/tokens');
 
 // POST /api/tokens — body: { name, scopes, password }. Returns { token, ... }

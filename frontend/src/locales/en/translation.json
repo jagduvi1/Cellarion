@@ -488,7 +488,10 @@
       "scope_write": "write",
       "scopeDesc_write": "Write (AI agent) — let a connected AI add, edit and organise bottles via MCP. Broadest scope; grant only to an assistant you trust.",
       "developersLink": "Building an integration? Read the API guide for developers",
-      "scopesHelpLink": "What each scope allows, and the terms of use (API guide, opens in a new tab)"
+      "scopesHelpLink": "What each scope allows, and the terms of use (API guide, opens in a new tab)",
+      "deprecatedUse_one": "Still calls a route that API tokens can no longer use from {{date}}:",
+      "deprecatedUse_other": "Still calls routes that API tokens can no longer use from {{date}}:",
+      "deprecatedUseLink": "What to use instead"
     },
     "bridge": {
       "title": "Connect a self-hosted Cellarion",

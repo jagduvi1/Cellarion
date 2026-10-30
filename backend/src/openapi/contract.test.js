@@ -329,6 +329,20 @@ describeWithMongo('public API contract', () => {
     expect(junk.status).toBeGreaterThanOrEqual(400);
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(await ApiDeprecatedUse.countDocuments()).toBe(1);
+
+    // The token that called is marked with the route, and its owner is told
+    // once, whatever it calls next (services/apiDeprecationNotices).
+    const ApiToken = require('../models/ApiToken');
+    const Notification = require('../models/Notification');
+    const told = () => Notification.countDocuments({ user: world.users.alice._id, type: 'api_deprecation' });
+    for (let i = 0; i < 40 && (await told()) === 0; i++) await new Promise((resolve) => setTimeout(resolve, 50));
+    const mark = (await ApiToken.findById(world.tokens.read.doc._id).lean()).deprecatedUse;
+    expect(mark).toMatchObject({ sunset: SUNSET, routes: ['GET /api/cellars/:id/statistics'] });
+    expect(mark.notifiedAt).toBeInstanceOf(Date);
+    expect(await told()).toBe(1);
+    await fetch(`${base}/api/cellars/${home}/statistics`, { headers: { Authorization: `Bearer ${world.tokens.read.raw}` } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await told()).toBe(1);
   });
 
   test('a path in another letter case cannot reach what tokens are kept from', async () => {

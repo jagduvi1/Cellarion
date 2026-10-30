@@ -41,9 +41,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       # A real MongoDB for the public API contract test
-      # (backend/src/openapi/contract.test.js) and the cleanup-unused-wines
-      # run (backend/src/scripts/cleanup-unused-wines.db.test.js), the same
-      # major as production. Each test uses its own database.
+      # (backend/src/openapi/contract.test.js), the cleanup-unused-wines
+      # run (backend/src/scripts/cleanup-unused-wines.db.test.js) and the
+      # API deprecation notices (backend/src/services/
+      # apiDeprecationNotices.mongo.test.js), the same major as production.
+      # Each test uses its own database.
       mongo:
         image: mongo:7
         ports:
@@ -71,6 +73,7 @@ jobs:
         env:
           CONTRACT_MONGO_URI: mongodb://localhost:27017/cellarion_contract_ci
           CLEANUP_MONGO_URI: mongodb://localhost:27017/cellarion_cleanup_ci
+          NOTICES_MONGO_URI: mongodb://localhost:27017/cellarion_notices_ci
         run: npm test
 
   frontend:

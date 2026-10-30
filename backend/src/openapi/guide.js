@@ -116,7 +116,7 @@ What is in this reference is **stable**:
 
 ### Being removed
 
-Until now a \`read\` token could also reach other \`GET\` routes under \`/api/cellars\`, \`/api/bottles\`, \`/api/stats\` and \`/api/notifications\` that are not in this reference, such as \`/api/cellars/{id}\` or \`/api/stats/value-history\`. They are deprecated from ${longDate(DEPRECATED_SINCE)}: their answers carry \`Deprecation\`, \`Sunset\` and \`Link\` headers, and **from ${longDate(SUNSET)} they answer tokens with \`403\`**. \`GET /api/inventory\` covers most of what they were used for; if something you need is missing, [open an issue](https://github.com/jagduvi1/Cellarion/issues) before then.
+Until now a \`read\` token could also reach other \`GET\` routes under \`/api/cellars\`, \`/api/bottles\`, \`/api/stats\` and \`/api/notifications\` that are not in this reference, such as \`/api/cellars/{id}\` or \`/api/stats/value-history\`. They are deprecated from ${longDate(DEPRECATED_SINCE)}: their answers carry \`Deprecation\`, \`Sunset\` and \`Link\` headers, and **from ${longDate(SUNSET)} they answer tokens with \`403\`**. \`GET /api/inventory\` covers most of what they were used for; if something you need is missing, [open an issue](https://github.com/jagduvi1/Cellarion/issues) before then. The owner of a token that still calls them is notified, reminded as the date nears, and sees which routes on the token under *Settings → API tokens*.
 
 ## Security
 

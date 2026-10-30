@@ -920,10 +920,22 @@ const REGISTRY = [
     // Export metadata only. The tokenHash / refreshTokenHash NEVER leave the
     // database — they are not the user's data, they are the credential itself.
     // `origin` distinguishes user-minted PATs from OAuth AI connections.
+    // `deprecatedUse`: which deprecated routes the token called and when its
+    // owner was told (services/apiDeprecationNotices), null when none.
     exportFragment: async (ctx) => ({
       apiTokens: markTrunc(ctx, 'apiTokens', await ApiToken.find({ user: ctx.userId })
-        .select('name scopes origin lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
-        .map(t => ({ name: t.name, scopes: t.scopes, origin: t.origin || 'personal', lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt })),
+        .select('name scopes origin lastUsedAt createdAt revokedAt deprecatedUse').limit(EXPORT_MAX).lean())
+        .map(t => ({
+          name: t.name, scopes: t.scopes, origin: t.origin || 'personal', lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt,
+          deprecatedUse: t.deprecatedUse?.sunset ? {
+            sunset: t.deprecatedUse.sunset,
+            firstAt: t.deprecatedUse.firstAt || null,
+            lastAt: t.deprecatedUse.lastAt || null,
+            routes: t.deprecatedUse.routes || [],
+            notifiedAt: t.deprecatedUse.notifiedAt || null,
+            reminders: (t.deprecatedUse.reminders || []).map(r => ({ daysBefore: r.daysBefore, at: r.at })),
+          } : null,
+        })),
     }),
   },
 
