@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetTaxonomy, adminGetCountries, adminGetGrapes, adminGetRegions,
   adminCreateTaxonomy, adminUpdateTaxonomy, adminDeleteTaxonomy,
-  adminMergeTaxonomy, adminApproveRegion, adminApproveGrape,
+  adminMergeTaxonomy, adminApproveRegion, adminApproveGrape, adminApproveClassification,
 } from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
 import ConfirmModal from '../components/ConfirmModal';
@@ -12,6 +12,8 @@ import Modal from '../components/Modal';
 import BottleSizesAdmin from '../components/BottleSizesAdmin';
 import AppellationUnmatchedModal from '../components/AppellationUnmatchedModal';
 import './AdminTaxonomy.css';
+
+const CLASSIFICATION_KINDS = ['vineyard_rank', 'ripeness', 'ageing', 'other'];
 
 function AdminTaxonomy() {
   const { t } = useTranslation();
@@ -45,7 +47,8 @@ function AdminTaxonomy() {
     countries: '/api/admin/taxonomy/countries',
     regions: '/api/admin/taxonomy/regions',
     grapes: '/api/admin/taxonomy/grapes',
-    appellations: '/api/admin/taxonomy/appellations'
+    appellations: '/api/admin/taxonomy/appellations',
+    classifications: '/api/admin/taxonomy/classifications'
   };
 
   useEffect(() => {
@@ -285,7 +288,9 @@ function AdminTaxonomy() {
   const handleApprove = async (id) => {
     setError(null);
     try {
-      const approve = activeTab === 'grapes' ? adminApproveGrape : adminApproveRegion;
+      const approve = activeTab === 'grapes' ? adminApproveGrape
+        : activeTab === 'classifications' ? adminApproveClassification
+          : adminApproveRegion;
       const res = await approve(apiFetch, id);
       const data = await res.json();
       if (res.ok) fetchItems();
@@ -347,6 +352,16 @@ function AdminTaxonomy() {
         region: item.region?._id || item.region || '',
         synonyms: (item.synonyms || []).join(', ')
       });
+    } else if (activeTab === 'classifications') {
+      setFormData({
+        name: item.name,
+        kind: item.kind || 'other',
+        system: item.system || '',
+        country: item.country?._id || item.country || '',
+        synonymsText: (item.synonyms || []).join(', '),
+        synonyms: item.synonyms || [],
+        description: item.description || ''
+      });
     }
   };
 
@@ -398,6 +413,16 @@ function AdminTaxonomy() {
         synonyms: fd.synonyms ? fd.synonyms.split(',').map(s => s.trim()).filter(Boolean) : []
       };
     }
+    if (activeTab === 'classifications') {
+      return {
+        name: fd.name,
+        kind: fd.kind || 'other',
+        system: fd.system || null,
+        country: fd.country || null,
+        synonyms: fd.synonyms || [],
+        description: fd.description || ''
+      };
+    }
     return fd;
   };
 
@@ -405,7 +430,8 @@ function AdminTaxonomy() {
     countries: t('admin.taxonomy.addCountry'),
     regions: t('admin.taxonomy.addRegion'),
     grapes: t('admin.taxonomy.addGrape'),
-    appellations: t('admin.taxonomy.addAppellation')
+    appellations: t('admin.taxonomy.addAppellation'),
+    classifications: t('admin.taxonomy.addClassification')
   }[activeTab] || '';
 
   const renderCountryForm = () => (
@@ -778,11 +804,76 @@ function AdminTaxonomy() {
     </div>
   );
 
+  const renderClassificationForm = () => (
+    <div className="form-row-2">
+      <div className="form-group">
+        <label>{t('admin.taxonomy.classificationNameLabel')}</label>
+        <input
+          type="text"
+          value={formData.name || ''}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          required
+        />
+      </div>
+      <div className="form-group">
+        <label>{t('admin.taxonomy.kindLabel')}</label>
+        <select
+          value={formData.kind || 'other'}
+          onChange={(e) => setFormData({ ...formData, kind: e.target.value })}
+        >
+          {CLASSIFICATION_KINDS.map((k) => <option key={k} value={k}>{t(`admin.taxonomy.kind.${k}`)}</option>)}
+        </select>
+      </div>
+      <div className="form-group">
+        <label>{t('admin.taxonomy.systemLabel')}</label>
+        <input
+          type="text"
+          value={formData.system || ''}
+          onChange={(e) => setFormData({ ...formData, system: e.target.value })}
+          placeholder={t('admin.taxonomy.systemPlaceholder')}
+          maxLength={80}
+        />
+      </div>
+      <div className="form-group">
+        <label>{t('admin.taxonomy.classificationCountryLabel')}</label>
+        <select
+          value={formData.country || ''}
+          onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+        >
+          <option value="">{t('admin.taxonomy.anyCountry')}</option>
+          {allCountries.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div className="form-group">
+        <label>{t('admin.taxonomy.synonymsLabel')}</label>
+        <input
+          type="text"
+          value={formData.synonymsText || ''}
+          onChange={(e) => setFormData({
+            ...formData,
+            synonymsText: e.target.value,
+            synonyms: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+          })}
+          placeholder={t('admin.taxonomy.classificationSynonymsPlaceholder')}
+        />
+      </div>
+      <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <label>{t('admin.taxonomy.classificationDescriptionLabel')}</label>
+        <textarea
+          rows={3}
+          value={formData.description || ''}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+        />
+      </div>
+    </div>
+  );
+
   const renderForm = () => {
     if (activeTab === 'countries') return renderCountryForm();
     if (activeTab === 'regions') return renderRegionForm();
     if (activeTab === 'grapes') return renderGrapeForm();
     if (activeTab === 'appellations') return renderAppellationForm();
+    if (activeTab === 'classifications') return renderClassificationForm();
   };
 
   const renderItem = (item) => {
@@ -814,6 +905,19 @@ function AdminTaxonomy() {
           {item.name}
           {item.region?.name && <em> — {item.region.name}</em>}
           {item.country?.name && <span className="taxonomy-badge">{item.country.name}</span>}
+        </span>
+      );
+    }
+    if (activeTab === 'classifications') {
+      const countryId = item.country?._id || item.country;
+      const countryName = item.country?.name || allCountries.find(c => c._id === countryId)?.name;
+      return (
+        <span>
+          {item.name}
+          <span className="taxonomy-badge">{t(`admin.taxonomy.kind.${item.kind}`, item.kind)}</span>
+          {item.system && <em> — {item.system}</em>}
+          {countryName && <span className="taxonomy-badge">{countryName}</span>}
+          {item.synonyms?.length > 0 && <em className="taxonomy-synonyms"> ({item.synonyms.join(', ')})</em>}
         </span>
       );
     }
@@ -851,7 +955,7 @@ function AdminTaxonomy() {
       </div>
 
       <div className="tabs">
-        {['countries', 'regions', 'appellations', 'grapes', 'bottleSizes'].map(tab => (
+        {['countries', 'regions', 'appellations', 'grapes', 'classifications', 'bottleSizes'].map(tab => (
           <button
             key={tab}
             className={`tab ${activeTab === tab ? 'active' : ''}`}
@@ -920,7 +1024,9 @@ function AdminTaxonomy() {
                     <>
                       <span
                         className="taxonomy-badge taxonomy-badge--pending"
-                        title={t(activeTab === 'grapes' ? 'admin.taxonomy.pendingGrapeTitle' : 'admin.taxonomy.pendingRegionTitle')}
+                        title={t(activeTab === 'grapes' ? 'admin.taxonomy.pendingGrapeTitle'
+                          : activeTab === 'classifications' ? 'admin.taxonomy.pendingClassificationTitle'
+                            : 'admin.taxonomy.pendingRegionTitle')}
                       >
                         {t('admin.taxonomy.pendingRegion')}
                       </span>

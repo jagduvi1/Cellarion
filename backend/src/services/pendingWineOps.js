@@ -31,6 +31,7 @@ const Country = require('../models/Country');
 // services/findOrCreateWine: one definition of the key shape, and no dependency
 // from the curation queue onto the resolver's module tree to build a string.
 const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity, normalizeClassification } = require('../utils/normalize');
+const { assignClassification } = require('./classificationOps');
 const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = require('../utils/crossFieldChecks');
 // Top-level: labelScanAccess requires nothing at load (its own model require is
 // lazy), so it adds no module tree to the curation queue.
@@ -367,9 +368,12 @@ async function applyPendingFix(wine, clean, userId) {
       ? await resolveCanonicalAppellation(normalizeAppellation(clean.appellation))
       : null;
   }
-  // '' clears; a regulatory mark stores as none (utils/normalize).
+  // '' clears; a regulatory mark stores as none. The write rule is strict for
+  // a curator (services/classificationOps): a tier the taxonomy lacks is
+  // refused with the known tiers.
   if (clean.classification !== undefined) {
-    wine.classification = clean.classification ? normalizeClassification(clean.classification) : null;
+    const cls = await assignClassification(wine, { classification: clean.classification, strict: true });
+    if (!cls.ok) return { ok: false, code: 'invalid_input', message: cls.message };
   }
   // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
   const colourErr = colourTypeConflict(clean.type || wine.type, clean.colour);

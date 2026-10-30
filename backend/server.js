@@ -185,6 +185,16 @@ connectDB().then(async () => {
     console.warn('Meilisearch initialization failed, continuing with MongoDB search:', err.message);
   }
 
+  // The classification taxonomy (src/data/classifications.json) on a registry
+  // that has none yet: a fresh install, or the first boot after the feature
+  // shipped. Idempotent; the migration script re-seeds on --apply.
+  try {
+    const seeded = await require('./src/services/classificationOps').ensureClassificationSeed();
+    if (seeded.seeded) console.log(`[seed] classification taxonomy: ${seeded.created} rows`);
+  } catch (err) {
+    console.error('[seed] classification taxonomy failed (will retry next boot):', err.message);
+  }
+
   // Purge expired soft-deleted reply texts on startup and every 24h
   const DiscussionReply = require('./src/models/DiscussionReply');
   DiscussionReply.purgeExpiredDeletes().catch(() => {});

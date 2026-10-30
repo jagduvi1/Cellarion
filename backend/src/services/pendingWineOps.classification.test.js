@@ -92,3 +92,30 @@ describe('applyPendingFix — classification', () => {
     expect(wine.classification).toBe('Riserva');
   });
 });
+
+describe('applyPendingFix — classification against the taxonomy (strict for a curator)', () => {
+  const ops = require('./classificationOps');
+  beforeEach(() => ops.primeClassificationCache([
+    { _id: 'r1', name: 'Riserva', kind: 'ageing', country: null, synonyms: [] },
+    { _id: 'r2', name: 'Gran Selezione', kind: 'ageing', country: null, synonyms: [] },
+  ]));
+  afterEach(() => ops.primeClassificationCache(null));
+
+  test('a known tier stores its rows and the canonical string', async () => {
+    const wine = pendingWine();
+    const res = await applyPendingFix(wine, { classification: 'riserva DOCG' }, CURATOR);
+    expect(res.ok).toBe(true);
+    expect(wine.classification).toBe('Riserva');
+    expect(wine.classifications).toEqual(['r1']);
+  });
+
+  test('a word the taxonomy lacks is refused with the known tiers, and nothing is saved', async () => {
+    const wine = pendingWine();
+    const res = await applyPendingFix(wine, { classification: 'Grand Vin de Bordeaux' }, CURATOR);
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('invalid_input');
+    expect(res.message).toMatch(/"Grand Vin de Bordeaux" is not in the registry/);
+    expect(res.message).toMatch(/Riserva/);
+    expect(wine.save).not.toHaveBeenCalled();
+  });
+});

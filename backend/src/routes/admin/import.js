@@ -3,6 +3,7 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, normalizeAppellationKey, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName, normalizeClassification } = require('../../utils/normalize');
+const { loadTaxonomy, resolveLoaded, splitClassificationString, classificationString } = require('../../services/classificationOps');
 const { STYLE_TYPES, isStyleType, inferColourFromName } = require('../../utils/wineColour');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
@@ -381,6 +382,7 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     if (batch.length === 0) return;
     const rows = batch;
     batch = [];
+    const tax = await loadTaxonomy();
 
     const ops = rows.map(({ mapped, countryId, regionId, normalizedKey, legacyKeys }) => {
       const filter = buildUpsertFilter({ normalizedKey, legacyKeys, lwin7: mapped.lwin7 });
@@ -415,7 +417,20 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
 
       if (regionId) setFields.region = { $ifNull: ['$region', regionId] };
       if (mapped.appellation) setFields.appellation = { $ifNull: ['$appellation', { $literal: mapped.appellation }] };
-      if (mapped.classification) setFields.classification = { $ifNull: ['$classification', { $literal: mapped.classification }] };
+      if (mapped.classification) {
+        // The write rule for a pipeline update (services/classificationOps):
+        // the string resolves to taxonomy rows, lenient — a word the taxonomy
+        // lacks keeps the string. Both land only on a row that stored no
+        // classification yet, so a string and its rows never drift apart.
+        const cls = resolveLoaded(tax, splitClassificationString(mapped.classification), countryId);
+        const stored = cls.rows.length ? classificationString(cls.rows) : mapped.classification;
+        setFields.classification = { $ifNull: ['$classification', { $literal: stored }] };
+        if (cls.rows.length) {
+          setFields.classifications = {
+            $cond: [{ $eq: [{ $ifNull: ['$classification', null] }, null] }, { $literal: cls.rows.map((r) => r._id) }, { $ifNull: ['$classifications', []] }],
+          };
+        }
+      }
       if (mapped.lwin7) setFields['lwin.lwin7'] = { $ifNull: ['$lwin.lwin7', { $literal: mapped.lwin7 }] };
 
       return {

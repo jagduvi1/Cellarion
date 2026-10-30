@@ -3,14 +3,17 @@ import { useTranslation } from 'react-i18next';
 import './GrapePicker.css';
 
 /**
- * GrapePicker — searchable multi-select for grape varieties.
+ * GrapePicker — searchable multi-select for grape varieties (and, with its
+ * own wording, any small taxonomy list: the classification tiers).
  *
  * Props:
- *   grapes   — full list of grape objects { _id, name, color }
- *   selected — array of selected grape _id strings
+ *   grapes   — full list of objects { _id, name, color } (color = the small
+ *              label shown after the name)
+ *   selected — array of selected _id strings
  *   onChange — callback(newSelectedIds[])
+ *   placeholder / noMatchLabel / allSelectedLabel — wording overrides
  */
-function GrapePicker({ grapes = [], selected = [], onChange }) {
+function GrapePicker({ grapes = [], selected = [], onChange, placeholder, noMatchLabel, allSelectedLabel }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
 
@@ -48,7 +51,7 @@ function GrapePicker({ grapes = [], selected = [], onChange }) {
       <input
         type="text"
         className="gpw-search"
-        placeholder={t('grapePicker.searchPlaceholder', { count: grapes.length })}
+        placeholder={placeholder || t('grapePicker.searchPlaceholder', { count: grapes.length })}
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
@@ -57,7 +60,7 @@ function GrapePicker({ grapes = [], selected = [], onChange }) {
       <div className="gpw-options">
         {availableGrapes.length === 0 ? (
           <span className="gpw-empty">
-            {search ? t('grapePicker.noMatch', { search }) : t('grapePicker.allSelected')}
+            {search ? (noMatchLabel || t('grapePicker.noMatch', { search })) : (allSelectedLabel || t('grapePicker.allSelected'))}
           </span>
         ) : (
           availableGrapes.map(g => (

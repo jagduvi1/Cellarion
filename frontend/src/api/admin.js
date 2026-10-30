@@ -184,6 +184,10 @@ export const adminApproveRegion = (apiFetch, regionId) =>
 export const adminApproveGrape = (apiFetch, grapeId) =>
   apiFetch(`/api/admin/taxonomy/grapes/${grapeId}/approve`, { method: 'POST' });
 
+/** Record that an admin reviewed a member-added classification tier. */
+export const adminApproveClassification = (apiFetch, id) =>
+  apiFetch(`/api/admin/taxonomy/classifications/${id}/approve`, { method: 'POST' });
+
 // Force a full Meilisearch rebuild from the running process — the restore
 // runbook's missing step (a stale index silently disables the dedup net).
 export const adminReindexSearch = (apiFetch) =>

@@ -36,6 +36,7 @@ require('./arrange');
 require('./notify');
 require('./ownerQuestions');
 require('./publicContent');
+require('./classifications');
 require('./taxonomy');
 require('./images');
 require('./account');

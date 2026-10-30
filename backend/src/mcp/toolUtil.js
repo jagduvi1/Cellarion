@@ -98,12 +98,7 @@ function accessibleCellars(userId) {
  * kind }], only when they were populated (an id-only array answers []).
  * `classification` (the joined string) stays beside it for older clients.
  */
-function classificationsOut(wd) {
-  if (!wd || !Array.isArray(wd.classifications)) return [];
-  return wd.classifications
-    .filter((c) => c && typeof c === 'object' && c.name)
-    .map((c) => ({ name: c.name, kind: c.kind || null }));
-}
+const { classificationsOut } = require('../services/classificationOps');
 
 function wineSummary(wd) {
   if (!wd) return null;
@@ -206,7 +201,7 @@ function pageParams(args, defLimit, maxLimit) {
 const FIELD_DESCRIPTIONS = {
   region: 'The wine region NAME where THIS wine is grown (e.g. "Piedmont", "Barossa Valley") — never assumed from where the producer is based.',
   appellation: 'The appellation as its register names it, WITHOUT the regulatory mark: "Barolo" not "Barolo DOCG", "Pauillac" not "Pauillac AOC". Premier/Grand Cru stays only where it is part of the legal name ("Chablis Premier Cru", "Saint-Émilion Grand Cru"). Never a quality tier.',
-  classification: 'A quality tier granted ON TOP of the appellation: Riserva, Gran Reserva, Grand Cru Classé en 1855, Cru Bourgeois, Premier Cru in Champagne, a German Prädikat (Kabinett, Spätlese). NEVER the regulatory mark (DOCG, DOC, AOC, IGT, AVA) — that follows from the appellation and is dropped on write.',
+  classification: 'A quality tier granted ON TOP of the appellation, named as the registry\'s classification list has it (list_classifications): Riserva, Gran Reserva, Grand Cru Classé, Cru Bourgeois, Premier Cru in Champagne, a German Prädikat (Kabinett, Spätlese), VDP Grosse Lage … Several tiers comma-separated ("Spätlese, VDP Grosse Lage"). NEVER the regulatory mark (DOCG, DOC, AOC, IGT, AVA) — that follows from the appellation and is dropped on write; a word the list lacks is refused with the known tiers.',
 };
 
 module.exports = {
