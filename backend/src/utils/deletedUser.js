@@ -6,8 +6,10 @@ const User = require('../models/User');
 // row (the row itself is removed); their threads + replies get re-pointed
 // at this sentinel so the conversation stays intact for other users.
 //
-// The sentinel can never be authenticated as: the bcrypt hash is intentionally
-// invalid and profileVisibility is private (excludes from search).
+// The sentinel can never be authenticated as: its password is a random secret
+// nobody ever sees, the auth routes never issue it a verification or reset
+// link (routes/auth.js, isReservedUsername), and profileVisibility is private
+// (excludes it from search).
 //
 // The sentinel is found BY USERNAME, so a person holding its name would become
 // it and inherit every erased member's content. Every double-underscore name is
@@ -35,14 +37,16 @@ async function getOrCreateDeletedUser() {
     return cachedId;
   }
 
-  // Required password field. Audit 2026-09 O05-6: the old literal "invalid
-  // hash" string was itself hashed by the pre-save hook and so became a VALID
-  // password anyone could read in the repository. A random secret nobody ever
-  // sees is unknowable in practice, whatever the hook does to it.
+  // Required password field: a random secret nobody ever sees, so it is
+  // unknowable whatever the pre-save hook does to it (a fixed string here
+  // would be a valid password anyone could read in the repository). The
+  // schema's complexity rule runs on create, so the fixed "Aa1!" prefix
+  // supplies the upper, lower, digit and special classes — the same pattern
+  // as the demo accounts — and the random hex the length.
   const created = await User.create({
     username: SENTINEL_USERNAME,
     email: SENTINEL_EMAIL,
-    password: crypto.randomBytes(48).toString('hex'),
+    password: 'Aa1!' + crypto.randomBytes(48).toString('hex'),
     displayName: null,
     profileVisibility: 'private',
     emailVerified: false,
