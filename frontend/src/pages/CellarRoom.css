@@ -375,6 +375,13 @@
   font-size: 0.85rem;
 }
 
+/* producer · vintage, the same separator as the bottle cards. */
+.room-bottle-producer > span + span::before {
+  content: '·';
+  content: '·' / '';
+  margin: 0 0.35rem;
+}
+
 .room-bottle-meta {
   display: flex;
   align-items: center;
