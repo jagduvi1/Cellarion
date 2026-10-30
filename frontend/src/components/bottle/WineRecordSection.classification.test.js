@@ -201,3 +201,19 @@ test('no tiers for the wine\'s country says so and leaves the typed field', asyn
   expect(screen.getByLabelText('Should be')).toHaveValue('Spätlese');
   expect(screen.queryByPlaceholderText('Search the classification tiers…')).toBeNull();
 });
+
+test("tiers that would pass the route's 200-character limit are not sent, and the form says why", async () => {
+  const long = Array.from({ length: 8 }, (_, i) => ({
+    _id: `kLong${i}`, name: `Very Long Regional Vineyard Rank ${i}`, kind: 'vineyard_rank', country: GERMANY, synonyms: [],
+  }));
+  getClassifications.mockResolvedValue(ok({ classifications: [...TIERS, ...long] }));
+  renderSection();
+  await screen.findByText('Dönnhoff');
+  await openPicker();
+  giveReason();
+
+  for (const tier of long) fireEvent.click(screen.getByRole('button', { name: new RegExp(tier.name) }));
+  expect(await screen.findByText(/Too many tiers for one suggestion/)).toBeInTheDocument();
+  expect(screen.getByText('Send suggestion').closest('button')).toBeDisabled();
+  expect(createWineProposal).not.toHaveBeenCalled();
+});

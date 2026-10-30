@@ -52,6 +52,7 @@ function GrapePicker({ grapes = [], selected = [], onChange, placeholder, noMatc
         type="text"
         className="gpw-search"
         placeholder={placeholder || t('grapePicker.searchPlaceholder', { count: grapes.length })}
+        aria-label={placeholder || t('grapePicker.searchPlaceholder', { count: grapes.length })}
         value={search}
         onChange={e => setSearch(e.target.value)}
       />

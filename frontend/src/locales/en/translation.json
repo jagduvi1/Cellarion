@@ -2824,6 +2824,7 @@
     "classificationSearch": "Search the classification tiers…",
     "classificationNoMatch": "No tier matches. Only the tiers in this list can be recorded.",
     "classificationAllSelected": "Every tier in the list is selected.",
+    "classificationTooLong": "Too many tiers for one suggestion: together they may be 200 characters at most.",
     "classificationHelp": "This becomes the wine’s complete classification: remove what’s wrong, add what’s missing. DOCG, DOC or AOC is not a tier — it follows from the appellation.",
     "classificationLoadFailed": "Couldn’t load the list of tiers. Type the tier as the label states it.",
     "classificationNoTiers": "The registry lists no classification tiers for this wine’s country. Type the tier as the label states it.",

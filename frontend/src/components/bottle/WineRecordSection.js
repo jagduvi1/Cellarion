@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
@@ -37,6 +37,8 @@ const NOT_WINE_HIDDEN = new Set(['grapes', 'appellation', 'classification']);
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const GRAPES_MAX = 12;
 const REASON_MIN = 10;
+// The proposal route's limit for one field (FIELD_MAX in services/wineProposalOps).
+const FIELD_TEXT_MAX = 200;
 // The kinds of classification tier, in the order the registry writes a wine's
 // tiers (classificationOps KIND_ORDER), with the English for each label.
 const TIER_KINDS = {
@@ -87,6 +89,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   // touched, which reads as "the tiers the wine carries" (the list arrives
   // after the form opens, so they cannot be chosen at open).
   const [proposedTiers, setProposedTiers] = useState(null);
+  const tiersLabelId = useId();
   const [reason, setReason] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [busy, setBusy] = useState(false);
@@ -291,6 +294,14 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   };
 
   // What this form would send, or null while nothing has actually changed.
+  // The chosen tiers as the proposal route reads them: names, comma-separated,
+  // in the order the registry writes them.
+  const tiersText = (ids) => tierOptions
+    .filter((o) => ids.includes(o._id))
+    .sort((a, b) => kindRank(a.kind) - kindRank(b.kind))
+    .map((o) => o.name)
+    .join(', ');
+
   const draftFields = () => {
     if (!modal) return null;
     const f = modal.field;
@@ -317,10 +328,11 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
       const chosen = tierOptions.filter((o) => proposedTiers.includes(o._id));
       const same = chosen.length === recordedTiers.length && chosen.every((o) => recordedTiers.includes(o._id));
       if (!chosen.length || same) return null;
-      // Tier NAMES in one comma-separated string — what the proposal route
-      // resolves against the taxonomy — in the order the registry writes them.
-      chosen.sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
-      return { classification: chosen.map((o) => o.name).join(', ') };
+      // Past the route's field limit the server would refuse it, so nothing is
+      // sent and the form says why.
+      const text = tiersText(proposedTiers);
+      if (text.length > FIELD_TEXT_MAX) return null;
+      return { classification: text };
     }
     const next = proposed.trim();
     return next && next !== (values[f] || '') ? { [f]: next } : null;
@@ -734,9 +746,9 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                   // Only curated tiers are accepted, so they are chosen from
                   // the list, not typed: a typed one would fail only once sent.
                   <div className="form-group">
-                    <span className="wr-group-label" id="wr-tiers-label">{t('wineRecord.proposed', 'Should be')}</span>
+                    <span className="wr-group-label" id={tiersLabelId}>{t('wineRecord.proposed', 'Should be')}</span>
                     {tierPicker ? (
-                      <div role="group" aria-labelledby="wr-tiers-label">
+                      <div role="group" aria-labelledby={tiersLabelId}>
                         <GrapePicker
                           grapes={tierOptions}
                           selected={proposedTiers || recordedTiers}
@@ -745,6 +757,11 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                           noMatchLabel={t('wineRecord.classificationNoMatch', 'No tier matches. Only the tiers in this list can be recorded.')}
                           allSelectedLabel={t('wineRecord.classificationAllSelected', 'Every tier in the list is selected.')}
                         />
+                        {proposedTiers && tiersText(proposedTiers).length > FIELD_TEXT_MAX && (
+                          <p className="wr-help" role="status">
+                            {t('wineRecord.classificationTooLong', 'Too many tiers for one suggestion: together they may be 200 characters at most.')}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <p className="wr-help">{t('common.loading', 'Loading...')}</p>
