@@ -333,7 +333,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
                     aria-expanded={showSommNotes}
                   >
                     {t('bottleDetail.sommNotes')}
-                    <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`}>&rsaquo;</span>
+                    <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`} aria-hidden="true">&rsaquo;</span>
                   </button>
                   {showSommNotes && (
                     <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>

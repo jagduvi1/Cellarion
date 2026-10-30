@@ -25,9 +25,10 @@ const MIN_TICK_GAP = 12;
  *
  * Positions are percentages of the axis; a year occupies one cell and the
  * marker sits in the middle of this year's cell. `ticks` are the years
- * printed under the bar: where each phase starts, and where a closed window
- * ends, minus any that would run into the label before them (the window's
- * last year outranks a boundary in the middle; the first year always stays).
+ * printed under the bar: where each phase starts, where one ends before a
+ * gap, and where a closed window ends, minus any that would run into the
+ * label before them (the window's last year outranks a boundary in the
+ * middle; the first year always stays).
  *
  * @returns {null | { segments: Array<{ cls, label, start, end, open, left, width }>, ticks: Array<{ year, pos }>, lo, hi, marker, firstYear, lastYear }}
  */
@@ -47,7 +48,7 @@ export function timelineModel(phases, year) {
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
     const next = segs[i + 1];
-    if (s.start === null) s.start = segs[i - 1].end + 1; // the one before was just given an end
+    if (s.start === null) s.start = i > 0 ? segs[i - 1].end + 1 : year; // the one before was just given an end
     if (s.end === null) {
       if (next && next.start !== null) s.end = Math.max(s.start, next.start - 1);
       else if (next) s.end = s.start;
@@ -64,7 +65,14 @@ export function timelineModel(phases, year) {
   const pct = (n) => (n / span) * 100;
   const segments = segs.map((s) => ({ ...s, left: pct(s.start - lo), width: pct(s.end - s.start + 1) }));
 
-  const candidates = segments.map((s) => ({ year: s.start, pos: s.left }));
+  const candidates = [];
+  segments.forEach((s, i) => {
+    candidates.push({ year: s.start, pos: s.left });
+    // A gap follows: print where this phase ends too, or the reader cannot
+    // tell from the bar alone.
+    const next = segments[i + 1];
+    if (next && next.start > s.end + 1) candidates.push({ year: s.end, pos: s.left + s.width });
+  });
   const last = segments[segments.length - 1];
   if (!last.open) candidates.push({ year: last.end, pos: last.left + last.width, end: true });
   const ticks = [];
@@ -154,10 +162,13 @@ function MaturityTimeline({ profile, anchorYear, status, details = null, year = 
           </span>
         ))}
       </div>
-      {/* What the bar shows, for a screen reader: the phases with their years. */}
-      <span className="mt-sr-only">
-        {phases.map((p) => `${p.label} ${phaseRange(p, t)}`).join(', ')}
-      </span>
+      {/* What the bar shows, for a screen reader: the phases with their years
+          (not while the details are open: the table says the same). */}
+      {(!details || !open) && (
+        <span className="mt-sr-only">
+          {phases.map((p) => `${p.label} ${phaseRange(p, t)}`).join(', ')}
+        </span>
+      )}
       {details && (
         <>
           <button
@@ -170,7 +181,7 @@ function MaturityTimeline({ profile, anchorYear, status, details = null, year = 
             {open
               ? t('bottleDetail.maturityHideDetails', 'Hide details')
               : t('bottleDetail.maturityShowDetails', 'Show details')}
-            <span className={`bd-somm-notes-chevron${open ? ' bd-somm-notes-chevron--open' : ''}`}>&rsaquo;</span>
+            <span className={`bd-somm-notes-chevron${open ? ' bd-somm-notes-chevron--open' : ''}`} aria-hidden="true">&rsaquo;</span>
           </button>
           <div id={detailsId} className="mt-details" hidden={!open}>
             {details}

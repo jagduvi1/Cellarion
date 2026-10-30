@@ -74,6 +74,11 @@ describe('timelineModel', () => {
     expect(m.ticks.map((tk) => tk.year)).toEqual([2020, 2025]);
   });
 
+  test('a gap after a phase prints the year that phase ends', () => {
+    const m = timelineModel([phase('early', 2020, 2022), phase('peak', 2025, 2030)], 2026);
+    expect(m.ticks.map((tk) => tk.year)).toEqual([2020, 2022, 2025, 2030]);
+  });
+
   test('a year that would run into the one before it is left out', () => {
     // A one-year early phase on a twenty-year axis: 2021 sits right next to 2020.
     const m = timelineModel([phase('early', 2020, 2020), phase('peak', 2021, 2040)], 2026);
@@ -119,9 +124,12 @@ describe('MaturityTimeline', () => {
     const toggle = screen.getByRole('button', { name: /Show details/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByTestId('phase-table')).not.toBeVisible();
+    expect(document.querySelector('.mt-sr-only')).not.toBeNull();
     fireEvent.click(toggle);
     expect(screen.getByRole('button', { name: /Hide details/ })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('phase-table')).toBeVisible();
+    // The open table says what the summary said: a screen reader hears it once.
+    expect(document.querySelector('.mt-sr-only')).toBeNull();
   });
 
   test('without details there is no toggle', () => {
