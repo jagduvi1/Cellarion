@@ -1,5 +1,5 @@
 .settings-page {
-  max-width: 500px;
+  max-width: var(--page-width-narrow);
   margin: 0 auto;
 }
 

@@ -131,6 +131,13 @@
 
   /* Mobile bottom nav */
   --bottom-nav-height: 64px;
+
+  /* Page widths: every top-level page uses one of these as its max-width, so
+     the left edge only moves between three places. Statistics, the widest,
+     takes the full width of .main-content instead. */
+  --page-width-narrow: 720px;
+  --page-width-default: 900px;
+  --page-width-wide: 1200px;
 }
 
 /* ── Dark Mode ── */

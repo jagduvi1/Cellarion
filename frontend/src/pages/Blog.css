@@ -1,6 +1,6 @@
 /* ── Blog list page ── */
 .blog-page {
-  max-width: 1100px;
+  max-width: var(--page-width-wide);
   margin: 0 auto;
 }
 
@@ -385,7 +385,10 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 0 0 16px;
+  /* Centred under the centred title, at the narrow width: across the whole
+     wide page the field read as a bar of its own. */
+  max-width: var(--page-width-narrow);
+  margin: 0 auto 16px;
 }
 .blog-search input[type="search"] {
   flex: 1 1 220px;
@@ -419,6 +422,7 @@
 }
 .blog-search-summary {
   margin: 0 0 16px;
+  text-align: center;
   font-size: 0.9rem;
   color: var(--color-text-muted);
 }
