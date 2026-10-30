@@ -24,7 +24,7 @@
     "cors": "^2.8.5",
     "csv-parse": "^7.0.2",
     "dotenv": "^16.3.1",
-    "express": "^4.22.2",
+    "express": "^4.22.3",
     "express-rate-limit": "^7.1.5",
     "form-data": "^4.0.6",
     "helmet": "^7.1.0",
@@ -58,7 +58,7 @@
   },
   "overrides": {
     "brace-expansion": "^2.1.7",
-    "qs": "^6.16.0"
+    "qs": "^6.17.1"
   },
   "jest": {
     "transform": {
