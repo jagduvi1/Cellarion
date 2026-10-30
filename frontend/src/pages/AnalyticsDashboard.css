@@ -86,8 +86,11 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 6px 10px;
-  font-size: 1.05rem;
-  font-weight: 600;
+  /* The board picker IS the page title: same font and size as every other
+     page's h1. */
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
   max-width: 60vw;
 }
 

@@ -10,8 +10,6 @@
 }
 
 .blog-header h1 {
-  font-family: var(--font-heading);
-  font-size: 2.2rem;
   margin-bottom: 0.5rem;
 }
 
@@ -363,7 +361,6 @@
 
 /* ── Responsive ── */
 @media (max-width: 600px) {
-  .blog-header h1,
   .blog-article-header h1 {
     font-size: 1.6rem;
   }
