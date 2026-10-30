@@ -58,6 +58,7 @@ const { stripHtml } = require('../../utils/sanitize');
 // Telling the submitter lives in a service: merges and deletes close pending
 // corrections too (routes/admin/wines.js) and owe the same notification.
 const { notifyProposer } = require('../../services/wineCorrectionNotify');
+const { awardProposal } = require('../../services/suggestionCred');
 
 router.use(requireAuth, requireRole('admin'));
 
@@ -400,7 +401,10 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
           // row under Taxonomy → Classifications, then approve. A regulatory
           // mark applies as nothing, as before.
           const cls = await assignClassification(wine, { classification: pf.classification, strict: true });
-          if (!cls.ok) return { status: 400, body: { error: cls.message } };
+          if (!cls.ok) {
+            await revertClaim();
+            return { status: 400, body: { error: cls.message } };
+          }
           if (cls.classification) applied.push('classification');
         }
         if (pf.appellation) {
@@ -692,6 +696,11 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         ...(proposal.mergeTargetId ? { mergeTargetId: proposal.mergeTargetId } : {}),
         appliedNote,
       });
+
+    // Accepted and applied: the proposer's Cellar Cred, once per row — the
+    // self-apply door and staff proposals earn nothing (services/suggestionCred).
+    // Never throws; the decision above stands either way.
+    await awardProposal(proposal);
 
     notifyProposer(proposal, correctedWine, req.user.id, true);
 

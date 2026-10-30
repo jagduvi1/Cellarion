@@ -11,7 +11,9 @@
 const User = require('../models/User');
 
 // Daily suggestion budget per contribution tier (User.contribution.tier).
-// Proven contributors fast-track; new accounts cannot swamp the queues.
+// Proven contributors fast-track; new accounts cannot swamp the queues. The
+// tier follows the Cellar Cred score, which a member's accepted suggestions
+// raise (services/suggestionCred) — the promise the refusal below makes.
 const TIER_DAILY = {
   newcomer: 3,
   contributor: 5,

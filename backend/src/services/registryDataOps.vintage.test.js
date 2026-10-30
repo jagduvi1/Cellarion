@@ -22,6 +22,11 @@ jest.mock('./contributionGate', () => ({
 jest.mock('./wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn(() => Promise.resolve()) }));
+// A publish pays Cellar Cred through this helper (suggestionCred.test.js).
+jest.mock('./suggestionCred', () => ({
+  SUPERSEDED_REASON: jest.requireActual('./suggestionCred').SUPERSEDED_REASON,
+  awardValue: jest.fn().mockResolvedValue(true),
+}));
 
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');

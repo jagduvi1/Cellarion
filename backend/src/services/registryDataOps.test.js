@@ -21,12 +21,19 @@ jest.mock('./contributionGate', () => ({
 jest.mock('./wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn(() => Promise.resolve()) }));
+// The suggester's Cellar Cred is unit-tested in suggestionCred.test.js; here
+// it is the seam a publish must call. The supersede reason stays the real one.
+jest.mock('./suggestionCred', () => ({
+  SUPERSEDED_REASON: jest.requireActual('./suggestionCred').SUPERSEDED_REASON,
+  awardValue: jest.fn().mockResolvedValue(true),
+}));
 
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
 const { checkContributionGate } = require('./contributionGate');
 const { findVisibleWine } = require('./wineVisibility');
 const { createNotification } = require('./notifications');
+const { awardValue, SUPERSEDED_REASON } = require('./suggestionCred');
 const ops = require('./registryDataOps');
 
 const oid = (c) => c.repeat(24);
@@ -346,6 +353,34 @@ describe('admin decisions', () => {
     expect(res.ok).toBe(true);
     expect(row.status).toBe('rejected');
     expect(RegistryDataValue.updateOne).not.toHaveBeenCalled();
+  });
+
+  // Accepted contributions raise the daily suggestion budget: a published
+  // value earns its suggester Cellar Cred (who earns, and once only, is
+  // services/suggestionCred's rule). The demoted value keeps what it earned,
+  // which the shared supersede reason is how the helper tells.
+  test('publishing awards the suggester through the helper, after the row is saved; a rejection awards nothing', async () => {
+    const row = () => ({
+      _id: oid('9'), wineDefinition: WINE, key: acceptedKey, value: 13.5,
+      status: 'suggested', suggestedBy: ME, save: jest.fn().mockResolvedValue(undefined),
+    });
+    const published = row();
+    RegistryDataValue.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(published) });
+    RegistryDataValue.updateOne.mockResolvedValue({ modifiedCount: 1 });
+
+    await ops.decideValue(ADMIN, oid('9'), 'publish');
+    expect(awardValue).toHaveBeenCalledTimes(1);
+    expect(awardValue).toHaveBeenCalledWith(published);
+    expect(published).toMatchObject({ status: 'published', decidedBy: ADMIN, suggestedBy: ME });
+    expect(published.save.mock.invocationCallOrder[0]).toBeLessThan(awardValue.mock.invocationCallOrder[0]);
+    expect(RegistryDataValue.updateOne).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'published' }),
+      { $set: expect.objectContaining({ status: 'rejected', rejectReason: SUPERSEDED_REASON }) }
+    );
+
+    RegistryDataValue.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(row()) });
+    await ops.decideValue(ADMIN, oid('9'), 'reject', 'unsourced');
+    expect(awardValue).toHaveBeenCalledTimes(1);
   });
 
   // ── Contributor feedback (2026-08-30) ────────────────────────────────────

@@ -71,6 +71,10 @@ const registryDataValueSchema = new mongoose.Schema({
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   decidedAt: { type: Date, default: null },
   rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 was too short for a real explanation (registry backlog 2026-09-06)
+  // When the suggester's Cellar Cred for publishing this value was awarded
+  // (services/suggestionCred); null = not awarded — not yet, or not earning.
+  // Kept when a newer value supersedes this one: the contribution stood.
+  credAwardedAt: { type: Date, default: null },
   // Which surface suggested this value, and which bridge key / install if it
   // came from one (utils/contributionOrigin.js).
   ...originSchemaFields(mongoose),

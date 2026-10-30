@@ -1,9 +1,10 @@
 /**
  * Cellar Cred — contribution score and badge system.
  *
- * Users earn points for approved contributions (wine requests, images,
- * reviews, forum activity). Points accumulate into tiers that display
- * badges on profiles and posts.
+ * Users earn points for approved contributions (wine requests, accepted
+ * wine corrections and registry values, images, reviews, forum activity).
+ * Points accumulate into tiers that display badges on profiles and posts —
+ * and set the daily suggestion budget (services/contributionGate).
  *
  * Cellar Cred does NOT change a user's subscription plan. Every feature is
  * free for all tiers, so contribution no longer grants supporter/patron — the
@@ -19,6 +20,11 @@ const POINT_VALUES = {
   wine_request_approved:    10,
   grape_suggestion_approved: 5,
   wine_report_resolved:      5,
+  // Accepted suggestions, awarded once per row by services/suggestionCred:
+  // a wine correction an admin approved (any kind), a registry value a
+  // curator published.
+  wine_correction_accepted:  5,
+  registry_value_published:  2,
   image_approved:            8,
   image_assigned_official:  15,
   review_created_public:     3,
@@ -33,6 +39,8 @@ const CATEGORY_MAP = {
   wine_request_approved:    'curator',
   grape_suggestion_approved:'curator',
   wine_report_resolved:     'curator',
+  wine_correction_accepted: 'curator',
+  registry_value_published: 'curator',
   image_approved:           'photographer',
   image_assigned_official:  'photographer',
   review_created_public:    'critic',
