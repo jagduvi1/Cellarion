@@ -2,7 +2,6 @@
 .blog-page {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 2rem 1rem;
 }
 
 .blog-header {
@@ -11,7 +10,7 @@
 }
 
 .blog-header h1 {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-heading);
   font-size: 2.2rem;
   margin-bottom: 0.5rem;
 }

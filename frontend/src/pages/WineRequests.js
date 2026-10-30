@@ -180,11 +180,13 @@ function WineRequests() {
 
   return (
     <div className="wine-requests-page">
-      <div className="winerequest-header">
+      <div className="page-header">
         <h1>{t('wineRequests.title')}</h1>
-        <button onClick={toggleForm} className="btn btn-primary winerequest-desktop-create">
-          {showForm ? t('common.cancel') : `+ ${t('wineRequests.newRequest')}`}
-        </button>
+        <div className="header-actions">
+          <button onClick={toggleForm} className="btn btn-primary winerequest-desktop-create">
+            {showForm ? t('common.cancel') : `+ ${t('wineRequests.newRequest')}`}
+          </button>
+        </div>
       </div>
 
       <button className="fab winerequest-fab" onClick={toggleForm} aria-label="New Request">

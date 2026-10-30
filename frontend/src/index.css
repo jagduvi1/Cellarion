@@ -307,6 +307,13 @@ a:hover {
   margin: 0;
 }
 
+.page-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 /* ── Back link ── */
 .back-link {
   color: var(--color-primary);

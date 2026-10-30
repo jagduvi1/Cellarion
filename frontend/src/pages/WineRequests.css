@@ -3,20 +3,6 @@
   margin: 0 auto;
 }
 
-.winerequest-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  gap: 1rem;
-}
-
-.winerequest-header h1 {
-  margin: 0;
-  font-family: var(--font-heading);
-  color: var(--color-text);
-}
-
 .winerequest-fab {
   display: none;
   position: fixed;

@@ -1,26 +1,6 @@
 .bottles-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-}
-
-.bottles-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.bottles-header h1 {
-  margin: 0;
-  font-size: 1.6rem;
-}
-
-.bottles-subtitle {
-  margin: 0.25rem 0 0;
-  color: var(--color-text-muted, #9A9484);
-  font-size: 0.95rem;
 }
 
 .bottles-chips-row {

@@ -1,7 +1,6 @@
 .restock-page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
 }
 
 .restock-page h1 {
@@ -289,10 +288,6 @@
 }
 
 @media (max-width: 768px) {
-  .restock-page {
-    padding: 1rem;
-  }
-
   .restock-pace__stats {
     display: grid;
     grid-template-columns: 1fr 1fr;

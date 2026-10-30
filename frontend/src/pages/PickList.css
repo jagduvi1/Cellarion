@@ -6,6 +6,11 @@
 .pick-list-page {
   max-width: 760px;
   margin: 0 auto;
+}
+
+/* The overview sits in the Layout, whose .main-content gives it its spacing;
+   the list page is outside it and needs its own. */
+.pick-list-page {
   padding: 1.25rem 1rem 3rem;
 }
 

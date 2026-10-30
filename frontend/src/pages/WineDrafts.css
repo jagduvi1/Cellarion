@@ -1,10 +1,10 @@
 .wine-drafts-page {
   max-width: 900px;
   margin: 0 auto;
-  padding: 1rem;
 }
 
 .wine-drafts-intro {
+  margin: 0.25rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.95rem;
 }

@@ -133,11 +133,13 @@ export default function Journal() {
 
   return (
     <div className="journal-page">
-      <div className="journal-header">
+      <div className="page-header">
         <h1>{t('journal.title', 'Wine Journal')}</h1>
-        <button className="btn btn-primary" onClick={() => { setEditEntry(null); setFormOpen(true); }}>
-          + {t('journal.newEntry', 'New Entry')}
-        </button>
+        <div className="header-actions">
+          <button className="btn btn-primary" onClick={() => { setEditEntry(null); setFormOpen(true); }}>
+            + {t('journal.newEntry', 'New Entry')}
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

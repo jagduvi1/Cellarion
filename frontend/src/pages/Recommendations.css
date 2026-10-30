@@ -1,7 +1,6 @@
 .recommendations-page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
 }
 
 .recommendations-page h1 {
@@ -180,10 +179,6 @@
 }
 
 @media (max-width: 768px) {
-  .recommendations-page {
-    padding: 1rem;
-  }
-
   .rec-card__wine {
     flex-wrap: wrap;
   }
