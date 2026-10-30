@@ -88,7 +88,11 @@ const notificationSchema = new mongoose.Schema({
       // beta feature went out to everyone (a thank-you to whoever sent
       // feedback on it). Once per feature each.
       'early_access_new',
-      'early_access_released'
+      'early_access_released',
+      // One of the member's API tokens still calls routes that stop answering
+      // tokens at a sunset (services/apiDeprecationNotices): once on its first
+      // such call, then reminders before the date while it still calls them.
+      'api_deprecation'
     ],
     required: true
   },

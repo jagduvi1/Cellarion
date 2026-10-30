@@ -125,6 +125,30 @@ const apiTokenSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+
+  // ─── Deprecated routes this token still calls (config/apiDeprecations) ────
+  // Written when the token is answered on a deprecated route, so its owner —
+  // the one person whose integration would break — can be told before the
+  // sunset (services/apiDeprecationNotices). `routes` holds the declared
+  // Express routes ('GET /api/cellars/:id'), as ApiDeprecatedUse counts them,
+  // never a requested path. `sunset` is the SUNSET the record belongs to: a
+  // record from an earlier deprecation, or from before the date moved, starts
+  // over. Absent on a token that never called one; exported and deleted with
+  // the token, and cleared once its sunset has passed.
+  deprecatedUse: {
+    sunset: { type: Date },
+    firstAt: { type: Date },
+    lastAt: { type: Date },
+    routes: { type: [String], default: undefined },
+    // When the first notice and each reminder (by days before the sunset)
+    // went out. Each is stamped by an atomic conditional update BEFORE it is
+    // sent, so no notice can go twice.
+    notifiedAt: { type: Date },
+    reminders: {
+      type: [new mongoose.Schema({ daysBefore: Number, at: Date }, { _id: false })],
+      default: undefined,
+    },
+  },
 });
 
 // Look up an OAuth connection by its (hashed) refresh token during a refresh

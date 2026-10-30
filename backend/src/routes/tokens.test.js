@@ -161,6 +161,38 @@ describe('GET /api/tokens', () => {
     // Owner-scoped and active-only
     expect(ApiToken.find).toHaveBeenCalledWith({ user: 'u1', revokedAt: null });
   });
+
+  // Settings warns on a token still calling routes on their way out
+  // (services/apiDeprecationNotices); a new field, the rest unchanged.
+  test('a token still calling deprecated routes carries them and the sunset; the others carry null', async () => {
+    const { SUNSET } = require('../config/apiDeprecations');
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = new Date(SUNSET.getTime() - 100 * DAY);
+    // Only the clock is fixed; the HTTP round trip keeps real timers.
+    jest.useFakeTimers({ now, doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'] });
+    try {
+      const lastAt = new Date(now.getTime() - DAY);
+      const lean = jest.fn().mockResolvedValue([
+        { _id: 't1', name: 'HA', scopes: ['read'], lastUsedAt: lastAt, createdAt: lastAt,
+          deprecatedUse: { sunset: SUNSET, firstAt: lastAt, lastAt, routes: ['GET /api/cellars/:id'], notifiedAt: lastAt, reminders: [] } },
+        { _id: 't2', name: 'Script', scopes: ['read'], lastUsedAt: null, createdAt: lastAt },
+      ]);
+      const select = jest.fn(() => ({ lean }));
+      ApiToken.find.mockReturnValue({ sort: () => ({ select }) });
+
+      const res = await request('GET', '/api/tokens');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(select.mock.calls[0][0]).toContain('deprecatedUse');
+      expect(body[0]).toEqual({
+        id: 't1', name: 'HA', scopes: ['read'], lastUsedAt: lastAt.toISOString(), createdAt: lastAt.toISOString(),
+        deprecatedUse: { routes: ['GET /api/cellars/:id'], firstAt: lastAt.toISOString(), lastAt: lastAt.toISOString(), sunset: SUNSET.toISOString() },
+      });
+      expect(body[1].deprecatedUse).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('DELETE /api/tokens/:id', () => {
