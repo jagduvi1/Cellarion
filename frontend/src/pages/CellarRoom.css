@@ -370,16 +370,20 @@
 }
 
 .room-bottle-producer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   margin: 0 0 0.25rem;
   color: var(--color-text-secondary);
   font-size: 0.85rem;
 }
 
-/* producer · vintage, the same separator as the bottle cards. */
+/* producer · vintage, the same separator as the bottle cards. The flex gap
+   keeps the two apart for screen readers too, which skip the dot. */
 .room-bottle-producer > span + span::before {
   content: '·';
   content: '·' / '';
-  margin: 0 0.35rem;
+  margin-right: 0.35rem;
 }
 
 .room-bottle-meta {
