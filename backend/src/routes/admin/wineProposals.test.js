@@ -66,7 +66,10 @@ jest.mock('../../services/wineProfileOps', () => ({
 }));
 // The proposer's Cellar Cred is the helper's business (services/suggestionCred,
 // unit-tested there); here it is the seam the approve must go through.
-jest.mock('../../services/suggestionCred', () => ({ awardProposal: jest.fn().mockResolvedValue(true) }));
+jest.mock('../../services/suggestionCred', () => ({
+  awardProposal: jest.fn().mockResolvedValue(true),
+  settleNonWineProposals: jest.fn().mockResolvedValue({ awarded: 0, reversed: 0 }),
+}));
 // The classification write rule reads the taxonomy; only its answer matters here.
 jest.mock('../../services/classificationOps', () => ({
   ...jest.requireActual('../../services/classificationOps'),
@@ -636,6 +639,8 @@ describe('POST /:id/approve', () => {
     expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: W1, status: 'pending' });
     expect((await res.json()).appliedNote).toMatch(/2 pending/);
     expect(searchService.indexWine).toHaveBeenCalledWith(W1);
+    // Earlier flags a restore took back stand again with the quarantine.
+    expect(require('../../services/suggestionCred').settleNonWineProposals).toHaveBeenCalledWith(W1, true);
     // The vectors go with the row (audit 2026-10-14): nothing left for
     // semantic search or the similar-wines graph to find.
     expect(require('../../models/WineEmbedding').deleteMany).toHaveBeenCalledWith({ wineDefinition: W1 });

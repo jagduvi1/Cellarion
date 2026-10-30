@@ -155,16 +155,17 @@ describe('an accepted wine correction', () => {
     expect(incrementCred).not.toHaveBeenCalled();
   });
 
-  test('a failed points write releases the claim, so a later run can pay it', async () => {
+  test('a failed points write keeps the claim: the points may already have landed, and a row is never paid twice', async () => {
     db.proposals.push(proposal());
     incrementCred.mockRejectedValueOnce(new Error('primary stepped down'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(await cred.awardProposal(proposal())).toBe(false);
-    expect(db.proposals[0].credAwardedAt).toBeNull();
-
-    expect(await cred.awardProposal(proposal())).toBe(true);
     expect(db.proposals[0].credAwardedAt).toBeInstanceOf(Date);
+
+    // A second attempt (the live path again, or the backfill) pays nothing.
+    expect(await cred.awardProposal(proposal())).toBe(false);
+    expect(incrementCred).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
 

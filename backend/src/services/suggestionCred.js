@@ -119,7 +119,7 @@ async function planAwards(kind, rows) {
 /**
  * Pay out `earning` (from planAwards): per row, claim the marker, then award.
  * A row already claimed — by the live path, an earlier run — is passed over.
- * A points write that fails releases its claim, so a later run can retry it.
+ * A points write that fails keeps its claim (see below).
  * @returns {Promise<Array<{row: object, userId: string}>>} the rows awarded
  */
 async function awardRows(kind, earning) {
@@ -137,8 +137,11 @@ async function awardRows(kind, earning) {
       await incrementCred(entry.userId, event);
       awarded.push(entry);
     } catch (err) {
-      await Model.updateOne({ _id: entry.row._id, credAwardedAt: at }, { $set: { credAwardedAt: null } }, QUIET).catch(() => {});
-      console.warn(`[suggestionCred] ${event} for ${entry.row._id} not awarded:`, err.message);
+      // The claim stays: adjustCred is two writes (score, then tier), so the
+      // points may already have landed, and a released claim would pay this
+      // row a second time. A lost write is repaired by the full recompute
+      // (backfill-cred.js), which counts the marked rows.
+      console.warn(`[suggestionCred] ${event} for ${entry.row._id} may not be awarded:`, err.message);
     }
   }
   return awarded;
@@ -157,14 +160,16 @@ async function reverseRow(kind, row) {
     await decrementCred(idOf(row[earner]), event);
     return true;
   } catch (err) {
-    await Model.updateOne({ _id: row._id, credAwardedAt: null }, { $set: { credAwardedAt: row.credAwardedAt } }, QUIET).catch(() => {});
-    console.warn(`[suggestionCred] ${event} for ${row._id} not taken back:`, err.message);
+    // The marker stays released, as in awardRows: the points may already be
+    // gone, and the full recompute repairs a lost write.
+    console.warn(`[suggestionCred] ${event} for ${row._id} may not be taken back:`, err.message);
     return false;
   }
 }
 
-// The live award, after the decision is recorded. Never throws: a missed
-// award is logged and leaves the marker null, so the backfill still pays it.
+// The live award, after the decision is recorded. Never throws: a failure
+// before the claim leaves the marker null, so the backfill still pays the
+// row; one after it is repaired by the full recompute.
 async function awardAccepted(kind, row) {
   try {
     const { earning } = await planAwards(kind, [row]);

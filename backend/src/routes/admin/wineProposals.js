@@ -58,7 +58,7 @@ const { stripHtml } = require('../../utils/sanitize');
 // Telling the submitter lives in a service: merges and deletes close pending
 // corrections too (routes/admin/wines.js) and owe the same notification.
 const { notifyProposer } = require('../../services/wineCorrectionNotify');
-const { awardProposal } = require('../../services/suggestionCred');
+const { awardProposal, settleNonWineProposals } = require('../../services/suggestionCred');
 
 router.use(requireAuth, requireRole('admin'));
 
@@ -667,6 +667,10 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         // self-healing index sync drop it from search.
         wine.nonWine = true;
         await wine.save();
+        // Earlier flags on this wine that a restore took back stand again (as
+        // when an admin re-quarantines it with the toggle); this row's
+        // receipt is written below, and awardProposal pays it.
+        await settleNonWineProposals(wine._id, true);
         searchService.indexWine(wine._id);
         // Its vectors go too, or semantic search and the similar-wines graph
         // would keep showing the row (audit 2026-10-14).

@@ -87,10 +87,9 @@ async function backfill({ apply = false, batchSize = BATCH } = {}) {
 
   // One trace per member whose score this run changed.
   if (apply) {
-    for (const m of members) {
-      logAudit(null, 'cred.accepted_suggestions.backfill', { type: 'user', id: m.userId },
-        { corrections: m.corrections, values: m.values, points: m.points, scoreBefore: m.scoreBefore, tierBefore: m.tierBefore, tierAfter: m.tierAfter });
-    }
+    // Awaited, so every row is written before the script disconnects.
+    await Promise.all(members.map((m) => logAudit(null, 'cred.accepted_suggestions.backfill', { type: 'user', id: m.userId },
+      { corrections: m.corrections, values: m.values, points: m.points, scoreBefore: m.scoreBefore, tierBefore: m.tierBefore, tierAfter: m.tierAfter })));
   }
 
   const sum = (field) => members.reduce((n, m) => n + m[field], 0);
@@ -131,9 +130,6 @@ async function main() {
   console.log(`Mode: ${apply ? 'APPLY (awards are written)' : 'DRY-RUN (no changes; pass --apply to award)'}\n`);
   printReport(await backfill({ apply }), { apply });
   console.log(apply ? '\nDone.' : '\nDry-run complete — nothing written. Re-run with --apply to award.');
-  // logAudit persists fire-and-forget: let the last rows land before the
-  // connection closes, or they are dropped silently.
-  if (apply) await new Promise((resolve) => setTimeout(resolve, 1000));
   await mongoose.disconnect();
 }
 
