@@ -14,15 +14,16 @@
   padding: 1.25rem 1rem 3rem;
 }
 
+/* The beta strip sits between the page header and the lists: the header's
+   own margin above it, the same space below it. */
+.pick-lists-page .beta-strip {
+  margin: 0 0 1.25rem;
+}
+
 /* Outside the Layout, nothing else keeps the page clear of a phone's status
    bar in a home-screen install (release audit 2026-10-13). */
 .pick-list-page {
   padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
-}
-
-.pick-lists-intro {
-  color: var(--color-text-secondary);
-  margin: 0.5rem 0 1.25rem;
 }
 
 .pick-lists-index {

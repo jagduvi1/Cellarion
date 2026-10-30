@@ -3,17 +3,6 @@
   margin: 0 auto;
 }
 
-.restock-page h1 {
-  margin: 0 0 0.25rem;
-  color: var(--color-text);
-}
-
-.restock-subtitle {
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
-  margin: 0 0 1.5rem;
-}
-
 .restock-loading,
 .restock-empty {
   text-align: center;

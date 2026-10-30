@@ -105,7 +105,9 @@ export default function Recommendations() {
 
   return (
     <div className="recommendations-page">
-      <h1>{t('recommendations.title')}</h1>
+      <div className="page-header">
+        <h1>{t('recommendations.title')}</h1>
+      </div>
 
       <div className="rec-tabs">
         <button

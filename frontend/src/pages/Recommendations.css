@@ -3,11 +3,6 @@
   margin: 0 auto;
 }
 
-.recommendations-page h1 {
-  margin: 0 0 1.25rem;
-  color: var(--color-text);
-}
-
 .rec-tabs {
   display: flex;
   gap: 0;
