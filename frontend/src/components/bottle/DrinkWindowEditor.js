@@ -57,8 +57,12 @@ const windowOf = (b) => ({
  * `initial` is a closed window ({ drinkFrom, peakFrom, peakUntil, drinkTo },
  * the peak null when there is none) and `axis` ({ lo, hi }) the years the bar
  * spans, both fixed by the caller for the whole edit.
+ *
+ * `save` writes the four fields somewhere else than the one bottle (the
+ * vintage page: every bottle of the vintage at once). It gets them and
+ * answers { ok, error?, stored? }, `stored` being the years as kept.
  */
-function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = false, openSides = null, onSaved, onCancel }) {
+function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = false, openSides = null, save: saveFields = null, onSaved, onCancel }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [win, setWin] = useState(initial);
@@ -147,20 +151,24 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
     : { ...w, ...middleThird(w.drinkFrom, w.drinkTo) }));
 
   const failed = t('bottleDetail.windowSaveFailed', 'Could not save your window. Please try again.');
+  const store = saveFields || (async (next) => {
+    const res = await updateBottle(apiFetch, bottleId, next);
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? { ok: true, stored: data.bottle } : { ok: false, error: data.error };
+  });
   const save = async (next) => {
     const invalid = validateDrinkWindowFields(next, t);
     if (invalid) { setError(invalid); return; }
     setSaving(true);
     setError(null);
     try {
-      const res = await updateBottle(apiFetch, bottleId, next);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || failed);
+      const result = await store(next);
+      if (!result?.ok) {
+        setError(result?.error || failed);
         setSaving(false);
         return;
       }
-      onSaved(windowOf(data.bottle || next));
+      onSaved(windowOf(result.stored || next));
     } catch {
       setError(failed);
       setSaving(false);

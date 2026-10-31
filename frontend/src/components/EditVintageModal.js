@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { bulkUpdateBottles } from '../api/bottles';
@@ -25,12 +25,22 @@ const filled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
  * and only the fields the user changed are sent, so a bottle's own note or
  * window is never overwritten by accident. A bottle whose own years clash
  * with the new ones is skipped and counted, as in the bulk drink window.
+ *
+ * `focus` 'drinkWindow' (the page's own window link) opens it on the drink
+ * from year instead of the dialog's first button.
  */
-export default function EditVintageModal({ bottles, title, onClose, onDone }) {
+export default function EditVintageModal({ bottles, title, focus = null, onClose, onDone }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const notesId = useId();
   const count = bottles.length;
+  const drinkFromRef = useRef(null);
+  // Runs after the dialog's own opening focus (a child's effects run first).
+  useEffect(() => {
+    if (focus !== 'drinkWindow') return;
+    try { drinkFromRef.current?.scrollIntoView({ block: 'center' }); } catch { /* old browser */ }
+    drinkFromRef.current?.focus({ preventScroll: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // What the bottles share per field: the common value, or `differs`.
   const start = useMemo(() => {
@@ -109,6 +119,7 @@ export default function EditVintageModal({ bottles, title, onClose, onDone }) {
             <label className="form-group" key={k}>
               <span>{t(YEAR_LABELS[k])}</span>
               <input
+                ref={k === 'drinkFrom' ? drinkFromRef : undefined}
                 type="number" inputMode="numeric" min={DRINK_YEAR_MIN} max={DRINK_YEAR_MAX} step="1"
                 value={form[k]} onChange={set(k)} disabled={saving}
                 placeholder={start[k].differs ? t('editVintage.differsShort', 'Differs') : ''}

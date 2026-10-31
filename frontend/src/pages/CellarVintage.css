@@ -78,7 +78,8 @@
   border-top: 1px solid var(--color-border-light);
 }
 
-/* "Show all N bottles" inside a sentence (the notes-differ hint). */
+/* A link inside a sentence: "Show all N bottles" in the notes-differ hint,
+   the way to the vintage's own drink window. */
 .cvb-inline-link {
   padding: 0;
   border: none;
@@ -219,6 +220,11 @@ a.cvb-summary-item:hover {
 }
 
 .cvb-edit-vintage {
+  align-self: flex-start;
+}
+
+/* "Adjust" under the vintage's own timeline: as wide as its words. */
+.cvb-block > .dwe-link {
   align-self: flex-start;
 }
 

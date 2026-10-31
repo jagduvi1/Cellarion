@@ -1021,6 +1021,15 @@
   font-size: 0.85rem;
 }
 
+/* The way to a window of one's own: a line under the sommelier's window. */
+.bd-own-window-offer {
+  margin-top: 0.5rem;
+}
+
+.bd-section-label + .bd-own-window-offer {
+  margin-top: 0;
+}
+
 /* ── Reservation ("spoken for") ── */
 .bd-reservation {
   display: flex;

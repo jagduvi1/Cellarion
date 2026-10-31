@@ -35,10 +35,20 @@ export function changedLotFields(original, payload) {
   return out;
 }
 
-function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = [] }) {
+function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = [], focus = null }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const galleryRef = useRef(null);
+  // Opened from the page's own drink-window link (focus 'drinkWindow'): the
+  // window's years sit below the purchase and note fields, so the form opens
+  // on them rather than at its top.
+  const windowRef = useRef(null);
+  const drinkFromRef = useRef(null);
+  useEffect(() => {
+    if (focus !== 'drinkWindow') return;
+    try { windowRef.current?.scrollIntoView({ block: 'center' }); } catch { /* old browser */ }
+    drinkFromRef.current?.focus({ preventScroll: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // The error shows at the top of the form; Save is at the bottom. On a phone
   // a refused save looked like nothing happened — bring the message into view.
   const errorRef = useRef(null);
@@ -228,12 +238,13 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
         />
       </div>
 
-      <div className="form-group">
+      <div className="form-group" ref={windowRef}>
         <label>{t('addBottle.drinkWindow')}</label>
         <div className="bd-edit-grid">
           <div className="form-group">
             <label>{t('addBottle.drinkFrom')}</label>
             <input
+              ref={drinkFromRef}
               type="number"
               inputMode="numeric"
               value={form.drinkFrom}

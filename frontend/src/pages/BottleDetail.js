@@ -91,6 +91,10 @@ function BottleDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
+  // Where the edit form opens: at its top from the Edit buttons, at the
+  // drink-window years from the window's own link in the details.
+  const [editFocus, setEditFocus] = useState(null);
+  useEffect(() => { if (!editing) setEditFocus(null); }, [editing]);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [changeWineOpen, setChangeWineOpen] = useState(false);
@@ -714,6 +718,7 @@ function BottleDetail() {
         <EditForm
           bottle={bottle}
           lotSiblingIds={lotSiblingIds}
+          focus={editFocus}
           onSaved={handleBottleUpdated}
           onCancel={() => setEditing(false)}
           onImageUploaded={(url) => setPendingImage(url)}
@@ -731,7 +736,7 @@ function BottleDetail() {
           userCurrency={user?.preferences?.currency || 'USD'}
           canEdit={canEdit}
           hasImage={!!(defaultImage || pendingImage || bottle.wineDefinition?.image)}
-          onEdit={() => setEditing(true)}
+          onEdit={(opts) => { setEditFocus(opts?.focus === 'drinkWindow' ? 'drinkWindow' : null); setEditing(true); }}
           suggestFixSignal={suggestFixSignal}
           recordFold={blockProps('vintage.record', t('wineRecord.title', 'Wine record'))}
           onRemove={() => setConsumeOpen(true)}

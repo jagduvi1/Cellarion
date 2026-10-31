@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeature } from '../utils/featureFlags';
 import { getCellarVintage } from '../api/cellars';
-import { getBottle } from '../api/bottles';
+import { getBottle, bulkUpdateBottles } from '../api/bottles';
 import { lookupMaturityProfile, lookupPriceHistory } from '../api/somm';
 import AuthImage from '../components/AuthImage';
 import BottlePlaceholder from '../components/BottlePlaceholder';
@@ -16,6 +16,8 @@ import Modal from '../components/Modal';
 import CellarPageHeader from '../components/CellarPageHeader';
 import MaturityPhaseTable from '../components/bottle/MaturityPhaseTable';
 import MaturityTimeline from '../components/bottle/MaturityTimeline';
+import DrinkWindowEditor from '../components/bottle/DrinkWindowEditor';
+import { editorStart, personalPhaseLabels } from '../components/bottle/PersonalWindowTimeline';
 import BetaBadge from '../components/BetaBadge';
 import LotHistory from '../components/bottle/LotHistory';
 import PersonalDataCard from '../components/bottle/PersonalDataCard';
@@ -27,8 +29,8 @@ import PriceHistoryTimeline from '../components/bottle/PriceHistoryTimeline';
 import PriceTrackingToggle from '../components/bottle/PriceTrackingToggle';
 import { fetchRates } from '../utils/currency';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
-import { getMaturityStatus, maturityBadgeText } from '../utils/drinkStatus';
-import { bottleAnchorYear } from '../utils/maturityUtils';
+import { getMaturityStatus, maturityBadgeText, getPersonalWindowStatus, personalWindowBadgeText } from '../utils/drinkStatus';
+import { bottleAnchorYear, getMaturityPhases, getPersonalWindowPhases } from '../utils/maturityUtils';
 import { totalsByCurrency } from '../utils/onOrder';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
@@ -88,7 +90,7 @@ function CellarVintage() {
   const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [modal, setModal] = useState(null); // 'drink' | 'pickList' | 'edit' | 'add' | 'report' | 'reportWine' | 'recommend' | 'barcode'
+  const [modal, setModal] = useState(null); // 'drink' | 'pickList' | 'edit' | 'editWindow' | 'add' | 'report' | 'reportWine' | 'recommend' | 'barcode'
   const [priceHistory, setPriceHistory] = useState(null);
   const [rates, setRates] = useState(null);
   const [galleryEmpty, setGalleryEmpty] = useState(false);
@@ -108,6 +110,18 @@ function CellarVintage() {
   const [drunkNotice, setDrunkNotice] = useState(null);
   useEffect(() => { setDrunkNotice(null); }, [id, wineId, vintageParam]);
   useEffect(() => { if (notice) setDrunkNotice(null); }, [notice]);
+  // Early access (flag maturityTimeline): the vintage's own window slid on
+  // the timeline's bar, in place. It belongs to this vintage's bottles.
+  const [windowEdit, setWindowEdit] = useState(null);
+  useEffect(() => { setWindowEdit(null); }, [id, wineId, vintageParam]);
+  // Closing the editor hands the keyboard back to the window's action.
+  const windowActionRef = useRef(null);
+  const windowRefocus = useRef(false);
+  useEffect(() => {
+    if (windowEdit || !windowRefocus.current) return;
+    windowRefocus.current = false;
+    windowActionRef.current?.focus();
+  }, [windowEdit]);
 
   const vintage = safeDecode(vintageParam || 'NV');
   const pagePath = `/cellars/${id}/vintages/${wineId}/${encodeURIComponent(vintage)}`;
@@ -281,6 +295,12 @@ function CellarVintage() {
   const windowDiffers = windowFields.some((s) => s.kind === 'differs');
   const [from, to, peakFrom, peakUntil] = windowFields.map((s) => (s.kind === 'shared' ? s.value : null));
   const notes = sharedState('notes');
+  // The shared window in whole years, as the bottle page reads a bottle's
+  // own: the early-access timeline draws it. None while the bottles differ.
+  const toYear = (v) => (v === null ? null : parseInt(v, 10));
+  const ownWindow = windowDiffers ? null : getPersonalWindowStatus({
+    drinkFrom: toYear(from), drinkTo: toYear(to), peakFrom: toYear(peakFrom), peakUntil: toYear(peakUntil),
+  });
 
   const anchorYear = bottleAnchorYear(first);
   // An NV window is meaningful only in relative mode (offsets from purchase)
@@ -376,6 +396,46 @@ function CellarVintage() {
   const canDrink = canEdit && bottles.length > 0;
   const canEditVintage = canEdit && bottles.length > 0;
   const hasActions = canDrink || canEditVintage || canAdd || hasMore;
+
+  // The way to the vintage's own window, for whoever may edit it: Edit
+  // vintage opened at its drink-window years, or in early access the sliding
+  // editor in place — from the window the bottles share, else from the
+  // sommelier's reviewed years, else from this year.
+  const thisYear = new Date().getFullYear();
+  const ownLabels = personalPhaseLabels(t);
+  const openWindowEditor = () => {
+    if (!timelineOn) { setModal('editWindow'); return; }
+    const sommPhases = profileReviewed && !nvUnanchored ? getMaturityPhases(profile, ownLabels, anchorYear) : [];
+    setWindowEdit(editorStart({ personalWindow: ownWindow, sommPhases, vintageYear: parseInt(vintage, 10), labels: ownLabels, year: thisYear }));
+  };
+  const closeWindowEditor = () => { windowRefocus.current = true; setWindowEdit(null); };
+  // Saved on every bottle of the vintage here through the bulk route Edit
+  // vintage uses: a bottle it may not change is skipped and counted, as there.
+  const saveVintageWindow = async (fields) => {
+    try {
+      const res = await bulkUpdateBottles(apiFetch, bottles.map((b) => b._id), fields);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: body.error || t('bulk.failed') };
+      const skipped = (body.skipped || []).length;
+      setNotice(skipped
+        ? `${t('bulk.doneInfo', { count: body.done ?? 0 })} ${t('bulk.windowSkippedInfo', { count: skipped })}`
+        : t('cellarVintageBeta.savedNote', 'Saved for the vintage.'));
+    } catch {
+      return { ok: false, error: t('bulk.failed') };
+    }
+    // The editor closes on the page as reloaded, where its action now is.
+    await load();
+    return { ok: true, stored: fields };
+  };
+  // A quiet link after the window's words.
+  const windowLink = (label, ariaLabel) => canEditVintage && (
+    <span>
+      {' · '}
+      <button ref={windowActionRef} type="button" className="cvb-inline-link" aria-label={ariaLabel} onClick={openWindowEditor}>
+        {label}
+      </button>
+    </span>
+  );
 
   const moreMenu = (where) => hasMore && (
     <div className={`bd-overflow-wrap${where === 'bar' ? ' bd-overflow-wrap--mobile' : ''}`}>
@@ -595,17 +655,59 @@ function CellarVintage() {
                     <span className="bd-section-label">{t('cellarVintage.yourWindow', 'Your drink window')}</span>
                     {bottles.length === 0 ? (
                       <span className="cvb-muted">{t('cellarVintageBeta.noBottlesForWindow', 'Kept on the bottles; none left in this cellar.')}</span>
+                    ) : windowEdit ? (
+                      <DrinkWindowEditor
+                        initial={windowEdit.initial}
+                        axis={windowEdit.axis}
+                        labels={ownLabels}
+                        year={thisYear}
+                        canRemove={!!ownWindow}
+                        openSides={windowEdit.openSides}
+                        save={saveVintageWindow}
+                        onCancel={closeWindowEditor}
+                        onSaved={closeWindowEditor}
+                      />
                     ) : windowDiffers ? (
-                      <span className="cvb-muted">{t('cellarVintageBeta.windowDiffers', 'Differs between the bottles. Edit vintage sets one for all of them.')}</span>
-                    ) : from || to || peakFrom || peakUntil ? (
-                      <span>
-                        {from || to ? `${from || '…'}–${to || '…'}` : null}
-                        {(peakFrom || peakUntil) && (
-                          <span className="cellar-vintage-peak">{from || to ? ' · ' : ''}{t('cellarVintage.peak', 'peak {{range}}', { range: `${peakFrom || '…'}–${peakUntil || '…'}` })}</span>
-                        )}
+                      <span className="cvb-muted">
+                        {t('cellarVintageBeta.windowDiffers', 'Differs between the bottles. Edit vintage sets one for all of them.')}
+                        {windowLink(t('cellarVintageBeta.windowSetForAll', 'Set one window for all'))}
                       </span>
+                    ) : !(from || to || peakFrom || peakUntil) ? (
+                      <span className="cvb-muted">
+                        {t('cellarVintageBeta.notSet', 'Not set yet.')}
+                        {windowLink(t('bottleDetail.windowSetOwn', 'Set your own window'))}
+                      </span>
+                    ) : timelineOn && ownWindow ? (
+                      // The bottle page's own-window timeline, its status on the marker.
+                      <>
+                        <MaturityTimeline
+                          phases={getPersonalWindowPhases(ownWindow, ownLabels, thisYear)}
+                          status={ownWindow}
+                          statusLabel={personalWindowBadgeText(ownWindow, t)}
+                          year={thisYear}
+                        />
+                        {canEditVintage && (
+                          <button
+                            ref={windowActionRef}
+                            type="button"
+                            className="bd-somm-notes-btn dwe-link"
+                            onClick={openWindowEditor}
+                            aria-label={t('bottleDetail.windowAdjustLabel', 'Adjust your drink window')}
+                          >
+                            {t('bottleDetail.windowAdjust', 'Adjust')}
+                          </button>
+                        )}
+                      </>
                     ) : (
-                      <span className="cvb-muted">{t('cellarVintageBeta.notSet', 'Not set yet.')}</span>
+                      <span>
+                        <span>
+                          {from || to ? `${from || '…'}–${to || '…'}` : null}
+                          {(peakFrom || peakUntil) && (
+                            <span className="cellar-vintage-peak">{from || to ? ' · ' : ''}{t('cellarVintage.peak', 'peak {{range}}', { range: `${peakFrom || '…'}–${peakUntil || '…'}` })}</span>
+                          )}
+                        </span>
+                        {windowLink(t('bottleDetail.windowChange', 'Change'), t('bottleDetail.windowChangeLabel', 'Change your drink window'))}
+                      </span>
                     )}
                   </div>
                   <div className="cvb-block">
@@ -769,10 +871,11 @@ function CellarVintage() {
         {modal === 'pickList' && (
           <AddToPickListModal choices={pickable} onClose={() => setModal(null)} onDone={() => setModal(null)} />
         )}
-        {modal === 'edit' && (
+        {(modal === 'edit' || modal === 'editWindow') && (
           <EditVintageModal
             bottles={bottles}
             title={title}
+            focus={modal === 'editWindow' ? 'drinkWindow' : null}
             onClose={() => setModal(null)}
             onDone={() => { setModal(null); setNotice(t('cellarVintageBeta.savedNote', 'Saved for the vintage.')); load(); }}
           />

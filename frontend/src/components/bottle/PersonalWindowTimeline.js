@@ -68,13 +68,34 @@ export function editorAxis(win, { vintageYear, sommLastYear, year }) {
 }
 
 /**
+ * What an edit opens on: the window the handles start from, the years the
+ * bar spans and, for the member's own window, which of its ends are open —
+ * saved open again unless their handle is moved (the editor needs a year to
+ * draw it at). `sommPhases` are the sommelier's reviewed phases, or none.
+ */
+export function editorStart({ personalWindow, sommPhases, vintageYear, labels, year }) {
+  const initial = startingWindow(personalWindow, sommPhases, labels, year);
+  const axis = editorAxis(initial, { vintageYear, sommLastYear: lastEnd(timelineModel(sommPhases, year)), year });
+  const openSides = personalWindow
+    ? { drinkFrom: !Number.isFinite(personalWindow.from), drinkTo: !Number.isFinite(personalWindow.to) }
+    : null;
+  return { initial, axis, openSides };
+}
+
+/**
  * "Your drink window" in early access: the member's own window as a timeline
  * (the sommelier's bar, with the personal status on the marker), and for
  * whoever may edit the bottle an "Adjust" that slides its years on the same
  * bar. Without a window of their own, an editor is offered one starting from
- * the sommelier's years. `onSaved` gets the four stored years.
+ * the sommelier's reviewed years, else from this year. `onSaved` gets the
+ * four stored years.
+ *
+ * `inline` drops the section and its heading: the offer of a window then
+ * sits inside the sommelier's section, under the window it starts from.
+ * `focusAction` puts the keyboard on the action when it appears — the window
+ * was just made or removed in the other place.
  */
-function PersonalWindowTimeline({ bottle, personalWindow, vintageProfile, anchorYear, sommReviewed = false, canEdit = false, onSaved, year = new Date().getFullYear() }) {
+function PersonalWindowTimeline({ bottle, personalWindow, vintageProfile, anchorYear, sommReviewed = false, canEdit = false, inline = false, focusAction = false, onSaved, year = new Date().getFullYear() }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(null);
   const actionRef = useRef(null);
@@ -86,71 +107,65 @@ function PersonalWindowTimeline({ bottle, personalWindow, vintageProfile, anchor
     refocus.current = false;
     actionRef.current?.focus();
   }, [editing]);
+  useEffect(() => {
+    if (focusAction) actionRef.current?.focus();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const offerOwn = canEdit && sommReviewed;
-  if (!personalWindow && !editing && !offerOwn) return null;
+  if (!personalWindow && !editing && !canEdit) return null;
   const labels = personalPhaseLabels(t);
 
   const startEditing = () => {
     const sommPhases = sommReviewed && vintageProfile ? getMaturityPhases(vintageProfile, labels, anchorYear) : [];
-    const initial = startingWindow(personalWindow, sommPhases, labels, year);
-    const axis = editorAxis(initial, {
-      vintageYear: parseInt(bottle.vintage, 10),
-      sommLastYear: lastEnd(timelineModel(sommPhases, year)),
-      year,
-    });
-    // An end the member's own window leaves open is saved open again unless
-    // its handle is moved (the editor needs a year to draw it at).
-    const openSides = personalWindow
-      ? { drinkFrom: !Number.isFinite(personalWindow.from), drinkTo: !Number.isFinite(personalWindow.to) }
-      : null;
-    setEditing({ initial, axis, openSides });
+    setEditing(editorStart({ personalWindow, sommPhases, vintageYear: parseInt(bottle.vintage, 10), labels, year }));
   };
   const stopEditing = () => {
     refocus.current = true;
     setEditing(null);
   };
 
+  const body = editing ? (
+    <DrinkWindowEditor
+      bottleId={bottle._id}
+      initial={editing.initial}
+      axis={editing.axis}
+      labels={labels}
+      year={year}
+      canRemove={!!personalWindow}
+      openSides={editing.openSides}
+      onCancel={stopEditing}
+      onSaved={(win) => { onSaved?.(win); stopEditing(); }}
+    />
+  ) : personalWindow ? (
+    <>
+      <MaturityTimeline
+        phases={getPersonalWindowPhases(personalWindow, labels, year)}
+        status={personalWindow}
+        statusLabel={personalWindowBadgeText(personalWindow, t)}
+        year={year}
+      />
+      {canEdit && (
+        <button
+          ref={actionRef}
+          type="button"
+          className="bd-somm-notes-btn dwe-link"
+          onClick={startEditing}
+          aria-label={t('bottleDetail.windowAdjustLabel', 'Adjust your drink window')}
+        >
+          {t('bottleDetail.windowAdjust', 'Adjust')}
+        </button>
+      )}
+    </>
+  ) : (
+    <button ref={actionRef} type="button" className="bd-somm-notes-btn dwe-link" onClick={startEditing}>
+      {t('bottleDetail.windowSetOwn', 'Set your own window')}
+    </button>
+  );
+
+  if (inline) return <div className="bd-own-window-offer" data-testid="personal-window-offer">{body}</div>;
   return (
     <div className="bd-section" data-testid="personal-window">
       <span className="bd-section-label">{t('bottleDetail.personalWindow')}</span>
-      {editing ? (
-        <DrinkWindowEditor
-          bottleId={bottle._id}
-          initial={editing.initial}
-          axis={editing.axis}
-          labels={labels}
-          year={year}
-          canRemove={!!personalWindow}
-          openSides={editing.openSides}
-          onCancel={stopEditing}
-          onSaved={(win) => { onSaved?.(win); stopEditing(); }}
-        />
-      ) : personalWindow ? (
-        <>
-          <MaturityTimeline
-            phases={getPersonalWindowPhases(personalWindow, labels, year)}
-            status={personalWindow}
-            statusLabel={personalWindowBadgeText(personalWindow, t)}
-            year={year}
-          />
-          {canEdit && (
-            <button
-              ref={actionRef}
-              type="button"
-              className="bd-somm-notes-btn dwe-link"
-              onClick={startEditing}
-              aria-label={t('bottleDetail.windowAdjustLabel', 'Adjust your drink window')}
-            >
-              {t('bottleDetail.windowAdjust', 'Adjust')}
-            </button>
-          )}
-        </>
-      ) : (
-        <button ref={actionRef} type="button" className="bd-somm-notes-btn dwe-link" onClick={startEditing}>
-          {t('bottleDetail.windowSetOwn', 'Set your own window')}
-        </button>
-      )}
+      {body}
     </div>
   );
 }
