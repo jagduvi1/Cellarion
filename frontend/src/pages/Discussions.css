@@ -1,7 +1,7 @@
+/* The list sits inside the Community page (.review-feed-page), which with
+   .main-content already gives it its width and spacing. */
 .discussions-page {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 1rem 1rem 2rem;
+  min-width: 0;
 }
 
 /* ── Header ── */
@@ -150,10 +150,6 @@
 }
 
 @media (max-width: 600px) {
-  .discussions-page {
-    padding: 0.75rem 0.75rem 2rem;
-  }
-
   .discussions__controls {
     flex-direction: column;
     align-items: stretch;
