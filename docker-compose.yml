@@ -8,7 +8,7 @@ services:
     # Digest-pinned (security audit L-11): mongo:7 is a moving minor tag.
     # Dependabot's docker-compose ecosystem bumps this; the tag is kept for
     # readability.
-    image: mongo:7@sha256:c53852c00c23ca9f23fc39690350ffa9a80e3642fe8f96879726d8da0abe80a7
+    image: mongo:7@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4
     container_name: cellarion-mongo
     restart: unless-stopped
     security_opt:
@@ -48,7 +48,7 @@ services:
     # Digest-pinned (security audit L-11) to the multi-arch index digest, so
     # amd64 and arm64 hosts both pull. Dependabot's docker-compose ecosystem
     # bumps the tag and digest together.
-    image: getmeili/meilisearch:v1.55.0@sha256:ff546679970126f8822e15d1b6a06bfbff1f2ce2e43f810cfb5258012f92de5c
+    image: getmeili/meilisearch:v1.56.0@sha256:1f578fa865f8251894b3bf38d6668d6209a3f451f8f65ab953e129d4c1db5ef4
     container_name: cellarion-meilisearch
     restart: unless-stopped
     security_opt:
@@ -331,7 +331,7 @@ services:
   umami-db:
     # Digest-pinned (security audit L-11). Dependabot's docker-compose ecosystem
     # bumps it.
-    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
     container_name: cellarion-umami-db
     restart: unless-stopped
     profiles: ["analytics"]
