@@ -92,7 +92,9 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
     focusAction: ownWindowMoved,
     onSaved: (win) => { setOwnWindowMoved(true); onBottleChange?.(win); },
   };
-  const ownWindowOffer = canEdit && !personalWindow ? (
+  // Not on a drink that is not wine; under the sommelier's section only once
+  // its profile has loaded, since the editor starts from those years.
+  const ownWindowOffer = canEdit && !personalWindow && wine?.nonWine !== true && (!sommShown || !!vintageProfile) ? (
     timelineOn ? (
       <PersonalWindowTimeline {...ownTimelineProps} inline />
     ) : (
@@ -281,7 +283,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
           the offer of one sits in the sommelier's section below, and here
           only when that section is not shown. */}
       {timelineOn ? (
-        (personalWindow || !sommShown) && <PersonalWindowTimeline {...ownTimelineProps} />
+        (personalWindow || (!sommShown && wine?.nonWine !== true)) && <PersonalWindowTimeline {...ownTimelineProps} />
       ) : personalWindow ? (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.personalWindow')}</span>

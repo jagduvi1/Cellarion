@@ -581,8 +581,10 @@ describe('the vintage\'s own drink window', () => {
       fireEvent.click(within(windowBlock()).getByRole('button', { name: 'bottleDetail.windowAdjustLabel' }));
       expect([sliderYear('bottleDetail.windowHandleDrinkFrom'), sliderYear('bottleDetail.windowHandleDrinkTo')]).toEqual([2025, 2045]);
       fireEvent.keyDown(screen.getByRole('slider', { name: 'bottleDetail.windowHandleDrinkFrom' }), { key: 'ArrowRight' });
+      // The editor says it writes to every bottle here, as Edit vintage does.
+      expect(within(windowBlock()).getByText('editVintage.intro:3')).toBeInTheDocument();
       const before = loads();
-      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'common.save' }));
+      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'editVintage.submit' }));
 
       expect(await screen.findByText('cellarVintageBeta.savedNote')).toBeInTheDocument();
       expect(sentBulk()).toEqual({
@@ -608,7 +610,7 @@ describe('the vintage\'s own drink window', () => {
       expect([sliderYear('bottleDetail.windowHandleDrinkFrom'), sliderYear('bottleDetail.windowHandleDrinkTo')]).toEqual([2030, 2045]);
       // Not a window of their own yet: nothing to remove.
       expect(screen.queryByRole('button', { name: 'bottleDetail.windowRemoveMine' })).toBeNull();
-      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'common.save' }));
+      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'editVintage.submit' }));
       await waitFor(() => expect(bulkCalls()).toHaveLength(1));
       expect(sentBulk()).toEqual({
         action: 'update',
@@ -635,7 +637,7 @@ describe('the vintage\'s own drink window', () => {
       const { unmount } = renderPage();
       await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
       fireEvent.click(within(windowBlock()).getByRole('button', { name: 'bottleDetail.windowAdjustLabel' }));
-      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'common.save' }));
+      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'editVintage.submit' }));
       expect(await screen.findByText('bulk.doneInfo:2 bulk.windowSkippedInfo:1')).toBeInTheDocument();
       unmount();
 
@@ -643,7 +645,7 @@ describe('the vintage\'s own drink window', () => {
       renderPage();
       await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
       fireEvent.click(within(windowBlock()).getByRole('button', { name: 'bottleDetail.windowAdjustLabel' }));
-      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'common.save' }));
+      fireEvent.click(within(windowBlock()).getByRole('button', { name: 'editVintage.submit' }));
       expect(await within(windowBlock()).findByRole('alert')).toHaveTextContent('Not allowed');
       expect(within(windowBlock()).getAllByRole('slider')).toHaveLength(2);
     });

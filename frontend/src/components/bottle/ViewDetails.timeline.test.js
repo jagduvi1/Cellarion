@@ -221,6 +221,33 @@ test('a window made under the sommelier\'s moves to its own section with the key
   expect(within(offer).getByRole('button', { name: 'Set your own window' })).toHaveFocus();
 });
 
+test('a drink that is not wine gets no drink-window offer, in early access or not', () => {
+  const notWine = { wineDefinition: { _id: 'w1', name: 'IPA', type: 'other', grapes: [], nonWine: true } };
+  timelineOn = true;
+  const { unmount } = renderDetails(notWine);
+  expect(screen.queryByRole('button', { name: /Set your own/ })).toBeNull();
+  unmount();
+  timelineOn = false;
+  renderDetails(notWine);
+  expect(screen.queryByRole('button', { name: /Set your own/ })).toBeNull();
+});
+
+test("the offer waits for the sommelier's profile, which the handles start from", () => {
+  timelineOn = true;
+  const { rerender } = renderDetails({}, { vintageProfile: null });
+  expect(screen.queryByRole('button', { name: 'Set your own window' })).toBeNull();
+  rerender(
+    <MemoryRouter>
+      <ViewDetails
+        bottle={{ _id: 'b1', vintage: '2018', status: 'active', quantity: 1, wineDefinition: { _id: 'w1', name: 'Barolo', type: 'red', grapes: [] } }}
+        rackInfo={null} cellarId="c1" vintageProfile={vintageProfile} priceHistory={[]} currentRelease={null}
+        rates={{}} userCurrency="USD" canEdit hasImage={false} onEdit={vi.fn()} onRemove={vi.fn()} onReportWine={vi.fn()}
+      />
+    </MemoryRouter>
+  );
+  expect(screen.getByRole('button', { name: 'Set your own window' })).toBeInTheDocument();
+});
+
 describe('classic (no early access)', () => {
   test("no window yet: an editor gets 'Set your own drink window' under the sommelier's window, opening the edit form there", () => {
     const onEdit = vi.fn();

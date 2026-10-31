@@ -428,7 +428,8 @@ function CellarVintage() {
     return { ok: true, stored: fields };
   };
   // A quiet link after the window's words.
-  const windowLink = (label, ariaLabel) => canEditVintage && (
+  // Offered once the sommelier's window has loaded: the editor starts from it.
+  const windowLink = (label, ariaLabel) => canEditVintage && profileLoaded && (
     <span>
       {' · '}
       <button ref={windowActionRef} type="button" className="cvb-inline-link" aria-label={ariaLabel} onClick={openWindowEditor}>
@@ -664,6 +665,10 @@ function CellarVintage() {
                         canRemove={!!ownWindow}
                         openSides={windowEdit.openSides}
                         save={saveVintageWindow}
+                        // One window for every bottle here: the editor says how
+                        // many, as Edit vintage does.
+                        intro={t('editVintage.intro', { count: bottles.length })}
+                        saveLabel={t('editVintage.submit', 'Save for the vintage')}
                         onCancel={closeWindowEditor}
                         onSaved={closeWindowEditor}
                       />
