@@ -49,6 +49,20 @@ test('a conflicting save is replayed on a fresh copy — the other sign-in\'s se
   expect(r.cookie).toHaveBeenCalledWith('refreshToken', expect.any(String), expect.any(Object));
 });
 
+// The active day is set inside the step that is replayed, so the copy that is
+// actually saved carries it too, and setting it never makes a save non-replayable.
+test('the replayed copy records the sign-in\'s active day as well', async () => {
+  const stale = doc({ save: jest.fn().mockRejectedValue(versionError()) });
+  const fresh = doc({ sessions: [other] });
+  User.findById.mockResolvedValue(fresh);
+
+  await issueTokens(stale, res(), {});
+
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  expect(fresh.lastActiveAt).toEqual(today);
+  expect(fresh.save).toHaveBeenCalledTimes(1);
+});
+
 test('a doc with other unsaved changes is never replayed (a password change must not be dropped)', async () => {
   const changing = doc({ modified: ['password', 'sessions', 'refreshTokenHash'], save: jest.fn().mockRejectedValue(versionError()) });
   await expect(issueTokens(changing, res(), {})).rejects.toThrow(/No matching document/);

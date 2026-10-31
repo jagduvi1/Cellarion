@@ -18,7 +18,7 @@ const User = require('../models/User');
 const tokens = require('./authTokens');
 
 const sha256 = (v) => crypto.createHash('sha256').update(v).digest('hex');
-const NOW = 1756944000000; // 2026-09-04T00:00:00Z
+const NOW = 1756944000000; // 2025-09-04T00:00:00Z
 const DAY = 24 * 60 * 60 * 1000;
 
 const makeUser = (overrides = {}) => ({
@@ -147,6 +147,36 @@ describe('issueTokens — rotating one device session', () => {
     await tokens.issueTokens(user, res, { session: user.sessions[0] });
     expect(res.cookie.mock.calls[0][2].maxAge).toBeUndefined();
     expect(user.sessions[0].persistent).toBe(false);
+  });
+});
+
+// User.lastActiveAt: every sign-in and every session renewal passes through
+// issueTokens, which saves the user anyway, so the day is recorded there.
+describe('issueTokens — the account\'s last active day', () => {
+  // NOW is a UTC midnight, so NOW + n * DAY is the midnight of n days later.
+  const dayAt = (n) => new Date(NOW + n * DAY);
+
+  test('a sign-in records the day, as midnight UTC', async () => {
+    nowSpy.mockReturnValue(NOW + 15 * 60 * 60 * 1000); // 15:00 UTC
+    const user = makeUser();
+    await tokens.issueTokens(user, makeRes(), { client: 'phone' });
+    expect(user.lastActiveAt).toEqual(dayAt(0));
+  });
+
+  test('a session renewal on a later day moves it forward', async () => {
+    const user = makeUser();
+    await tokens.issueTokens(user, makeRes(), { client: 'phone' });
+    nowSpy.mockReturnValue(NOW + 3 * DAY + 60 * 1000);
+    await tokens.issueTokens(user, makeRes(), { session: user.sessions[0] });
+    expect(user.lastActiveAt).toEqual(dayAt(3));
+    expect(user.save).toHaveBeenCalled();
+  });
+
+  test('it never moves back', async () => {
+    const later = dayAt(6);
+    const user = makeUser({ lastActiveAt: later });
+    await tokens.issueTokens(user, makeRes(), { client: 'phone' });
+    expect(user.lastActiveAt).toBe(later);
   });
 });
 

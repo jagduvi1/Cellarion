@@ -40,6 +40,16 @@ describe('toJSON', () => {
     });
     expect(withSub.toJSON().hasStripeSubscription).toBe(true);
   });
+
+  it('keeps lastActiveAt (retention bookkeeping) out of what the client receives', () => {
+    const user = new User({ username: 'c', email: 'c@cellarion.app', password: 'x', lastActiveAt: new Date('2026-10-31T00:00:00Z') });
+    expect(user.lastActiveAt).toEqual(new Date('2026-10-31T00:00:00Z'));
+    expect(user.toJSON().lastActiveAt).toBeUndefined();
+  });
+
+  it('lastActiveAt defaults to null (not seen since the field existed)', () => {
+    expect(new User({ username: 'd', email: 'd@cellarion.app', password: 'x' }).lastActiveAt).toBeNull();
+  });
 });
 
 describe('BCRYPT_COST (L-1)', () => {

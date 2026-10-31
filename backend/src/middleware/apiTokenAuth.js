@@ -4,6 +4,7 @@ const { logAudit } = require('../services/audit');
 const { DEPRECATED_RULES, SUNSET } = require('../config/apiDeprecations');
 const { setDeprecationHeaders, recordDeprecatedUse } = require('../services/apiDeprecation');
 const { markTokenDeprecatedUse } = require('../services/apiDeprecationNotices');
+const { touchLastActive } = require('../services/lastActive');
 
 const { TOKEN_PREFIX } = ApiToken;
 
@@ -267,8 +268,11 @@ async function authenticateApiToken(req, res, next, rawToken) {
     if (hourUp || newDay) {
       ApiToken.updateOne({ _id: token._id }, { $set: { lastUsedAt: now } }).catch(() => {});
       // Audit the token id, never the token itself — once a day (see utcDay).
+      // The same day counts as account activity: an integration at work is the
+      // member using Cellarion (User.lastActiveAt).
       if (newDay) {
         logAudit(req, 'token.used', { type: 'apiToken', id: token._id }, {});
+        touchLastActive(user._id, now);
       }
     }
 
