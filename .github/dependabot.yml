@@ -38,6 +38,12 @@ updates:
       # Active LTS. Bump/remove this when moving to the next LTS.
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+      # A Python minor (3.14 → 3.15) is taken deliberately too: rembg's
+      # dependencies must publish wheels for it first, or pip falls back to
+      # building them from source and the slim image has no compiler. Digest
+      # bumps within the pinned minor still come through.
+      - dependency-name: python
+        update-types: ["version-update:semver-minor"]
 
   # Images docker-compose.yml pulls (mongo, meilisearch, umami, postgres). All
   # are tag + digest pinned, so these bump the @sha256, and the tag too when a
