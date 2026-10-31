@@ -1048,6 +1048,17 @@ function WineListEditor() {
           <label className="wle-checkbox">
             <input
               type="checkbox"
+              checked={layout.showStock || false}
+              onChange={e => setWineList({
+                ...wineList,
+                layout: { ...layout, showStock: e.target.checked }
+              })}
+            />
+            {t('wineLists.showStock', 'Show how many bottles there are of each wine')}
+          </label>
+          <label className="wle-checkbox">
+            <input
+              type="checkbox"
               checked={layout.newPageEachSection || false}
               onChange={e => setWineList({
                 ...wineList,

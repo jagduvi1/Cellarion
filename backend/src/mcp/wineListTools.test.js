@@ -139,7 +139,7 @@ describe('list_wine_lists / get_wine_list', () => {
     ]));
     WineList.findOne.mockReturnValue(chain(makeList({
       autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: true, withinGroup: 'producer' },
-      layout: { hideOutOfStock: true, hidePrices: true, markLastBottle: true },
+      layout: { hideOutOfStock: true, hidePrices: true, markLastBottle: true, showStock: true },
       autoGroupEntries: [
         { wine: WINE, vintage: '2019', bottleSize: '750ml', listPrice: 95 },
         { wine: W2, vintage: 'NV', bottleSize: '750ml', listPrice: 30 },
@@ -154,6 +154,7 @@ describe('list_wine_lists / get_wine_list', () => {
     expect(data.grouping).toEqual({ levels: ['type', 'country', 'region'], collapse_single_group: true, within_group: 'producer' });
     expect(data.hide_prices).toBe(true);
     expect(data.mark_last_bottle).toBe(true);
+    expect(data.show_stock).toBe(true);
   });
 });
 

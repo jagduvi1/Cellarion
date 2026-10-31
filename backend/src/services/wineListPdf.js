@@ -72,6 +72,21 @@ const LAST_BOTTLE_LABEL = {
   de: 'Letzte Flasche', es: 'Última botella', it: 'Ultima bottiglia',
 };
 
+// The bottle count (layout.showStock), in the list's language: [one, other].
+// French counts 0 and 1 in the singular. Mirrored in the frontend
+// (utils/wineListSections.js) — keep the two in sync.
+const BOTTLE_COUNT_LABEL = {
+  en: ['bottle', 'bottles'], sv: ['flaska', 'flaskor'], fr: ['bouteille', 'bouteilles'],
+  de: ['Flasche', 'Flaschen'], es: ['botella', 'botellas'], it: ['bottiglia', 'bottiglie'],
+};
+
+/** "3 bottles", "1 flaska", "0 bouteille" — a count in the list's language. */
+function bottleCountText(count, lang = 'en') {
+  const [one, other] = BOTTLE_COUNT_LABEL[lang] || BOTTLE_COUNT_LABEL.en;
+  const singular = lang === 'fr' ? count <= 1 : count === 1;
+  return `${count} ${singular ? one : other}`;
+}
+
 // Suffix on a heading repeated after a page break
 const CONTINUED_LABEL = {
   en: 'continued', sv: 'forts.', fr: 'suite', de: 'Fortsetzung', es: 'continuación', it: 'continua',
@@ -207,6 +222,9 @@ function resolveEntry(entry, wineMap, layout = {}, lang = 'en') {
     // Live cellar stock of exactly one — the marker is only ever shown for
     // the last bottle, never a count (support ticket 2026-09-12).
     lastBottle: !!layout.markLastBottle && info.stock === 1,
+    // The live count, only when the list shows counts (layout.showStock);
+    // null otherwise, so no renderer and no payload carries it.
+    bottleCount: layout.showStock ? info.stock : null,
     sortOrder: entry.sortOrder || 0,
     stock: info.stock,
     wineDefinitionId: wine._id?.toString(),
@@ -464,7 +482,7 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
       // An entry is never split: name + price line, and the producer/grape
       // line under it, move to the next page together (with a pending
       // run-in sub-header, which would otherwise be orphaned).
-      const need = entryHeight(wine) + (sub ? 20 : 0);
+      const need = entryHeight(wine, lang) + (sub ? 20 : 0);
       if (doc.y + need > bottomLimit) {
         breakPage({ repeatHeadings: true });
         lastSubHeader = null;
@@ -483,7 +501,7 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
 
       renderWineEntry(doc, wine, {
         margin, contentWidth, font, fontBold, fontItalic,
-        scheme, currencySymbol, glassLabel, hidePrices,
+        scheme, currencySymbol, glassLabel, hidePrices, lang,
       });
     }
   }
@@ -525,11 +543,21 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   return doc;
 }
 
-/** Height renderWineEntry will use for a wine (see its final `doc.y` line). */
-function entryHeight(wine) {
+/**
+ * The smaller second line of an entry: producer — region · grapes · bottle
+ * count. One helper for the renderer and for entryHeight, so the page-break
+ * check measures exactly what is printed.
+ */
+function entryDetails(wine, lang = 'en') {
   const grapes = (wine.grapes || []).slice(0, 3).join(', ');
   const producerRegion = [wine.producer, wine.region].filter(Boolean).join(' — ');
-  return [producerRegion, grapes].filter(Boolean).length ? 26 : 15;
+  const count = wine.bottleCount != null ? bottleCountText(wine.bottleCount, lang) : '';
+  return [producerRegion, grapes, count].filter(Boolean).join(' · ');
+}
+
+/** Height renderWineEntry will use for a wine (see its final `doc.y` line). */
+function entryHeight(wine, lang = 'en') {
+  return entryDetails(wine, lang) ? 26 : 15;
 }
 
 /** "CHF 16", "zł 160", "Fr. 16" but "$16": a space after a symbol ending in a letter (any script) or a dot, none after a sign. */
@@ -587,7 +615,7 @@ function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth,
 }
 
 function renderWineEntry(doc, wine, opts) {
-  const { margin, contentWidth, font, fontBold, fontItalic, scheme, currencySymbol, glassLabel, hidePrices } = opts;
+  const { margin, contentWidth, font, fontBold, fontItalic, scheme, currencySymbol, glassLabel, hidePrices, lang } = opts;
   const indent = margin + 20;
   const priceColWidth = 100;
   const nameColWidth = contentWidth - 20 - priceColWidth;
@@ -634,9 +662,7 @@ function renderWineEntry(doc, wine, opts) {
     }
   }
 
-  const grapes = (wine.grapes || []).slice(0, 3).join(', ');
-  const producerRegion = [wine.producer, wine.region].filter(Boolean).join(' — ');
-  const details = [producerRegion, grapes].filter(Boolean).join(' · ');
+  const details = entryDetails(wine, lang);
   if (details) {
     doc.font(fontItalic).fontSize(8).fillColor(scheme.subheading);
     doc.text(details, indent, y + 13, { width: nameColWidth + priceColWidth, lineBreak: false });
@@ -647,5 +673,5 @@ function renderWineEntry(doc, wine, opts) {
 
 module.exports = {
   generateWineListPdf, buildSections, resolveEntry, groupingLevels, priceWithSymbol,
-  LEVEL_FIELDS, MAX_LEVELS, LAST_BOTTLE_LABEL, CONTINUED_LABEL,
+  LEVEL_FIELDS, MAX_LEVELS, LAST_BOTTLE_LABEL, CONTINUED_LABEL, BOTTLE_COUNT_LABEL, bottleCountText,
 };

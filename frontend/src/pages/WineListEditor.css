@@ -594,6 +594,16 @@
 
 /* Responsive */
 @media (max-width: 600px) {
+  /* Six tabs do not fit one row on a phone: they wrap, so every tab stays
+     in reach instead of running off the edge. */
+  .wle-tabs {
+    flex-wrap: wrap;
+  }
+
+  .wle-tab {
+    padding: 0.55rem 0.8rem;
+  }
+
   .wle-header-row {
     flex-direction: column;
     align-items: stretch;

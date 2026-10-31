@@ -193,6 +193,7 @@ registerTool({
       currency: list.layout?.currency || 'USD',
       hide_prices: !!list.layout?.hidePrices,
       mark_last_bottle: !!list.layout?.markLastBottle,
+      show_stock: !!list.layout?.showStock,
       glass_pricing_rule: {
         glasses_per_bottle: list.layout?.glassesPerBottle ?? 6,
         markup_percent: list.layout?.glassMarkup ?? 0,
