@@ -224,6 +224,10 @@ const wineListSchema = new mongoose.Schema({
     // Read live at render time: the web menu follows the cellar, a printed
     // sheet is a snapshot of the moment it was printed.
     markLastBottle: { type: Boolean, default: false },
+    // Show how many bottles of each wine the cellar holds, read live like the
+    // last-bottle mark. Off by default: the shared menu needs no login, so a
+    // count reaches guests only when the owner chooses to show it.
+    showStock: { type: Boolean, default: false },
     // PDF: every top-level section (a wine type, in auto mode) starts on a
     // fresh page.
     newPageEachSection: { type: Boolean, default: false },

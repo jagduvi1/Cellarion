@@ -63,6 +63,9 @@ router.get('/:shareToken', async (req, res) => {
         type: w.type,
         byGlass: w.byGlass,
         lastBottle: w.lastBottle,
+        // Sent only when the owner shows counts (layout.showStock): this
+        // endpoint has no auth, so a count the list does not show is absent.
+        ...(w.bottleCount != null ? { bottleCount: w.bottleCount } : {}),
         // A list that hides its prices never sends them: this endpoint has
         // no auth, so "hidden" must mean absent from the payload.
         ...(hidePrices ? {} : { price: w.price, glassPrice: w.glassPrice }),

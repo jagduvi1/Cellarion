@@ -433,3 +433,52 @@ describe('buildSections — the Other category and untyped wines', () => {
     expect(buildSections(list('sv'), wineMap).map((s) => s.title)).toEqual(['Röda Viner', 'Övrigt', 'Okänd']);
   });
 });
+
+// --- The bottle count (layout.showStock) ---------------------------------------
+
+describe('the bottle count', () => {
+  const { bottleCountText } = require('./wineListPdf');
+
+  test('resolveEntry carries the live count only when the list shows counts', () => {
+    const three = new Map([mapEntry(WINES.barolo, { stock: 3 })]);
+    expect(resolveEntry(entry('w1'), three, { showStock: true }).bottleCount).toBe(3);
+    expect(resolveEntry(entry('w1'), three, {}).bottleCount).toBeNull();
+    const none = new Map([mapEntry(WINES.barolo, { stock: 0 })]);
+    expect(resolveEntry(entry('w1'), none, { showStock: true }).bottleCount).toBe(0);
+  });
+
+  test('the count reads in the list language, French singular for 0 and 1', () => {
+    expect(bottleCountText(1)).toBe('1 bottle');
+    expect(bottleCountText(3)).toBe('3 bottles');
+    expect(bottleCountText(1, 'sv')).toBe('1 flaska');
+    expect(bottleCountText(2, 'de')).toBe('2 Flaschen');
+    expect(bottleCountText(0, 'fr')).toBe('0 bouteille');
+    expect(bottleCountText(2, 'fr')).toBe('2 bouteilles');
+    expect(bottleCountText(2, 'xx')).toBe('2 bottles');
+  });
+
+  test('the PDF prints the count on the second line only when the list shows counts', async () => {
+    // Content streams are compressed, so the written strings are captured at the source.
+    const PDFDocument = require('pdfkit');
+    const render = async (layout) => {
+      const written = [];
+      const orig = PDFDocument.prototype.text;
+      const spy = jest.spyOn(PDFDocument.prototype, 'text').mockImplementation(function (str, ...rest) {
+        written.push(String(str));
+        return orig.call(this, str, ...rest);
+      });
+      try {
+        const doc = await generateWineListPdf({
+          name: 'Hemma', structureMode: 'auto', language: 'sv',
+          autoGrouping: { levels: ['type'] }, autoGroupEntries: [entry('w1')], layout, branding: {},
+        }, new Map([mapEntry(WINES.barolo, { stock: 3 })]));
+        await new Promise((resolve, reject) => { doc.on('data', () => {}); doc.on('end', resolve); doc.on('error', reject); });
+      } finally {
+        spy.mockRestore();
+      }
+      return written;
+    };
+    expect(await render({ showStock: true })).toContain('Conterno — Piedmont · Nebbiolo · 3 flaskor');
+    expect((await render({})).some((t) => /flaskor/.test(t))).toBe(false);
+  });
+});

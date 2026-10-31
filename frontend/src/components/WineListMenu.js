@@ -1,4 +1,4 @@
-import { GLASS_LABEL, LAST_BOTTLE_LABEL } from '../utils/wineListSections';
+import { GLASS_LABEL, LAST_BOTTLE_LABEL, bottleCountText } from '../utils/wineListSections';
 import './WineListMenu.css';
 
 // Same palettes as the PDF generator (backend/src/services/wineListPdf.js)
@@ -72,7 +72,9 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
                   const sizeSuffix = wine.bottleSize && wine.bottleSize !== '750ml' ? ` (${wine.bottleSize})` : '';
                   const grapes = (wine.grapes || []).slice(0, 3).join(', ');
                   const producerRegion = [wine.producer, wine.region].filter(Boolean).join(' — ');
-                  const details = [producerRegion, grapes].filter(Boolean).join(' · ');
+                  // The count is present only when the list shows it.
+                  const count = wine.bottleCount != null ? bottleCountText(wine.bottleCount, language) : '';
+                  const details = [producerRegion, grapes, count].filter(Boolean).join(' · ');
                   const priceText = renderPrice(wine);
                   return (
                     <li key={wine.key || j} className="wlm-wine">

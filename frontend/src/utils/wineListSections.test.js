@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSections, groupingLevels, localName } from './wineListSections';
+import { buildSections, groupingLevels, localName, bottleCountText } from './wineListSections';
 
 const WINES = {
   barolo: {
@@ -165,6 +165,22 @@ describe('nested auto grouping, hidden prices and the last-bottle marker (suppor
     const byName = Object.fromEntries(sections.flatMap(s => s.wines).map(w => [w.name, w]));
     expect(byName['Barolo Riserva']).toMatchObject({ lastBottle: true, byGlass: true, glassPrice: 14 });
     expect(byName['Chablis'].lastBottle).toBe(false);
+  });
+
+  it('carries the live bottle count only when the list shows counts', () => {
+    const list = (layout) => buildSections({
+      structureMode: 'auto', autoGrouping: { levels: ['type'] }, autoGroupEntries: [entry('w1')], layout,
+    }, winesByKey).flatMap(s => s.wines)[0];
+    expect(list({ showStock: true }).bottleCount).toBe(1); // this cellar holds one Barolo
+    expect(list({}).bottleCount).toBeNull();
+  });
+
+  it('says the count in the list language, as the PDF does', () => {
+    expect(bottleCountText(1)).toBe('1 bottle');
+    expect(bottleCountText(4, 'sv')).toBe('4 flaskor');
+    expect(bottleCountText(1, 'fr')).toBe('1 bouteille');
+    expect(bottleCountText(0, 'fr')).toBe('0 bouteille');
+    expect(bottleCountText(2, 'it')).toBe('2 bottiglie');
   });
 
   it('groupingLevels caps at three distinct known fields and falls back to groupBy', () => {

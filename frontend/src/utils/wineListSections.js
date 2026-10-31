@@ -51,6 +51,21 @@ export const GLASS_LABEL = {
 };
 
 // The "last bottle" badge (layout.markLastBottle), in the list's language
+// The bottle count (layout.showStock), in the list's language: [one, other].
+// French counts 0 and 1 in the singular. Mirrors the backend
+// (services/wineListPdf.js) — keep the two in sync.
+export const BOTTLE_COUNT_LABEL = {
+  en: ['bottle', 'bottles'], sv: ['flaska', 'flaskor'], fr: ['bouteille', 'bouteilles'],
+  de: ['Flasche', 'Flaschen'], es: ['botella', 'botellas'], it: ['bottiglia', 'bottiglie'],
+};
+
+/** "3 bottles", "1 flaska", "0 bouteille" — a count in the list's language. */
+export function bottleCountText(count, lang = 'en') {
+  const [one, other] = BOTTLE_COUNT_LABEL[lang] || BOTTLE_COUNT_LABEL.en;
+  const singular = lang === 'fr' ? count <= 1 : count === 1;
+  return `${count} ${singular ? one : other}`;
+}
+
 export const LAST_BOTTLE_LABEL = {
   en: 'Last bottle', sv: 'Sista flaskan', fr: 'Dernière bouteille',
   de: 'Letzte Flasche', es: 'Última botella', it: 'Ultima bottiglia',
@@ -113,6 +128,8 @@ function resolveEntry(entry, winesByKey, layout = {}, lang = 'en') {
     glassPrice: entry.byGlass && entry.glassPrice != null ? entry.glassPrice : null,
     byGlass: !!entry.byGlass,
     lastBottle: !!layout.markLastBottle && item.stock === 1,
+    // The live count, only when the list shows counts (layout.showStock).
+    bottleCount: layout.showStock ? item.stock : null,
     sortOrder: entry.sortOrder || 0,
   };
 }
