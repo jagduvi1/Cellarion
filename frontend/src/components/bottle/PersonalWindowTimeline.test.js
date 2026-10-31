@@ -18,8 +18,8 @@ vi.mock('../../api/bottles', () => ({ updateBottle: vi.fn() }));
 vi.mock('../BetaBadge', () => ({ default: ({ feature }) => <div data-testid="beta-badge">{feature}</div> }));
 
 const { updateBottle } = await import('../../api/bottles');
-const { default: PersonalWindowTimeline, startingWindow, editorAxis, personalPhaseLabels } = await import('./PersonalWindowTimeline');
-const { handleLimits, middleThird } = await import('./DrinkWindowEditor');
+const { default: PersonalWindowTimeline, startingWindow, editorAxis, editorStart, personalPhaseLabels } = await import('./PersonalWindowTimeline');
+const { default: DrinkWindowEditor, handleLimits, middleThird } = await import('./DrinkWindowEditor');
 const { getMaturityPhases } = await import('../../utils/maturityUtils');
 const { getPersonalWindowStatus } = await import('../../utils/drinkStatus');
 
@@ -85,6 +85,54 @@ describe('editorAxis', () => {
 
   test('never past the years the server accepts', () => {
     expect(editorAxis({ drinkFrom: 1900, drinkTo: 2195 }, { vintageYear: 1900, year: Y })).toEqual({ lo: 1900, hi: 2200 });
+  });
+});
+
+describe('editorStart', () => {
+  test('the starting window, its bar, and which of the member\'s own ends are open', () => {
+    const pw = getPersonalWindowStatus({ drinkFrom: 2024 }, Y);
+    expect(editorStart({ personalWindow: pw, sommPhases: [], vintageYear: 2018, labels, year: Y })).toEqual({
+      initial: { drinkFrom: 2024, peakFrom: null, peakUntil: null, drinkTo: Y + 3 },
+      axis: { lo: 2017, hi: Y + 15 },
+      openSides: { drinkFrom: false, drinkTo: true },
+    });
+  });
+
+  test('no window of one\'s own: nothing open, the sommelier\'s last year widens the bar', () => {
+    const somm = getMaturityPhases({ status: 'reviewed', vintage: '2018', peakFrom: 2024, peakUntil: 2050 }, labels);
+    expect(editorStart({ personalWindow: null, sommPhases: somm, vintageYear: NaN, labels, year: Y })).toEqual({
+      initial: { drinkFrom: 2024, peakFrom: null, peakUntil: null, drinkTo: 2050 },
+      axis: { lo: 2023, hi: 2055 },
+      openSides: null,
+    });
+  });
+});
+
+describe('DrinkWindowEditor with a save of its own', () => {
+  const initial = { drinkFrom: 2024, peakFrom: null, peakUntil: null, drinkTo: 2030 };
+  const axis = { lo: 2017, hi: 2045 };
+  const renderEditor = (props) => render(
+    <DrinkWindowEditor initial={initial} axis={axis} labels={labels} year={Y} onCancel={vi.fn()} {...props} />,
+  );
+
+  test('Save hands the four fields to it, never to the one bottle, and passes on what it stored', async () => {
+    const save = vi.fn(async () => ({ ok: true, stored: { drinkFrom: 2025, peakFrom: null, peakUntil: null, drinkTo: 2030 } }));
+    const onSaved = vi.fn();
+    renderEditor({ save, onSaved });
+    fireEvent.keyDown(slider('Drink from'), { key: 'ArrowRight' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith({ drinkFrom: 2025, peakFrom: null, peakUntil: null, drinkTo: 2030 }));
+    expect(save).toHaveBeenCalledWith({ drinkFrom: 2025, peakFrom: null, peakUntil: null, drinkTo: 2030 });
+    expect(updateBottle).not.toHaveBeenCalled();
+  });
+
+  test('a refusal shows its message and keeps the handles', async () => {
+    const onSaved = vi.fn();
+    renderEditor({ save: async () => ({ ok: false, error: 'Could not apply the change.' }), onSaved });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not apply the change.');
+    expect(screen.getAllByRole('slider')).toHaveLength(2);
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });
 
@@ -253,6 +301,33 @@ describe('PersonalWindowTimeline', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set your own window' }));
     expect([yearOf('Drink from'), yearOf('Peak from'), yearOf('Peak until'), yearOf('Drink until')]).toEqual([2023, 2027, 2033, 2040]);
     expect(screen.queryByRole('button', { name: 'Remove my window' })).toBeNull();
+  });
+
+  test('no window and nothing reviewed by the sommelier: still offered, from this year to five years on', async () => {
+    updateBottle.mockResolvedValue(okRes({ bottle: { _id: 'b1', drinkFrom: Y, peakFrom: null, peakUntil: null, drinkTo: Y + 5 } }));
+    const vintageProfile = { status: 'pending', vintage: '2018', peakFrom: 2030, peakUntil: 2040 };
+    renderWindow({}, { sommReviewed: false, vintageProfile });
+    fireEvent.click(screen.getByRole('button', { name: 'Set your own window' }));
+    // An unreviewed profile's years are not a starting point.
+    expect([yearOf('Drink from'), yearOf('Drink until')]).toEqual([Y, Y + 5]);
+    expect(screen.queryByRole('slider', { name: 'Peak from' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateBottle).toHaveBeenCalledWith(apiFetch, 'b1', { drinkFrom: Y, peakFrom: null, peakUntil: null, drinkTo: Y + 5 }));
+  });
+
+  test('inline: the offer and its editor without a section or heading of their own', () => {
+    renderWindow({}, { inline: true });
+    expect(screen.queryByText('bottleDetail.personalWindow')).toBeNull();
+    expect(screen.queryByTestId('personal-window')).toBeNull();
+    const offer = screen.getByTestId('personal-window-offer');
+    expect(offer).not.toHaveClass('bd-section');
+    fireEvent.click(screen.getByRole('button', { name: 'Set your own window' }));
+    expect(offer.querySelectorAll('[role="slider"]')).toHaveLength(2);
+  });
+
+  test('focusAction puts the keyboard on the action as it appears', () => {
+    renderWindow({ drinkFrom: 2024, drinkTo: 2030 }, { focusAction: true });
+    expect(screen.getByRole('button', { name: 'Adjust your drink window' })).toHaveFocus();
   });
 
   // jsdom has no PointerEvent: a MouseEvent carries clientX and button.

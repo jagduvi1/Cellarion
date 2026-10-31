@@ -57,8 +57,12 @@ const windowOf = (b) => ({
  * `initial` is a closed window ({ drinkFrom, peakFrom, peakUntil, drinkTo },
  * the peak null when there is none) and `axis` ({ lo, hi }) the years the bar
  * spans, both fixed by the caller for the whole edit.
+ *
+ * `save` writes the four fields somewhere else than the one bottle (the
+ * vintage page: every bottle of the vintage at once). It gets them and
+ * answers { ok, error?, stored? }, `stored` being the years as kept.
  */
-function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = false, openSides = null, onSaved, onCancel }) {
+function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = false, openSides = null, save: saveFields = null, intro = null, saveLabel = null, onSaved, onCancel }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [win, setWin] = useState(initial);
@@ -147,20 +151,24 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
     : { ...w, ...middleThird(w.drinkFrom, w.drinkTo) }));
 
   const failed = t('bottleDetail.windowSaveFailed', 'Could not save your window. Please try again.');
+  const store = saveFields || (async (next) => {
+    const res = await updateBottle(apiFetch, bottleId, next);
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? { ok: true, stored: data.bottle } : { ok: false, error: data.error };
+  });
   const save = async (next) => {
     const invalid = validateDrinkWindowFields(next, t);
     if (invalid) { setError(invalid); return; }
     setSaving(true);
     setError(null);
     try {
-      const res = await updateBottle(apiFetch, bottleId, next);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || failed);
+      const result = await store(next);
+      if (!result?.ok) {
+        setError(result?.error || failed);
         setSaving(false);
         return;
       }
-      onSaved(windowOf(data.bottle || next));
+      onSaved(windowOf(result.stored || next));
     } catch {
       setError(failed);
       setSaving(false);
@@ -201,6 +209,7 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
   return (
     <div className="dwe" onKeyDown={onEditorKeyDown}>
       <BetaBadge feature="maturityTimeline" note={t('bottleDetail.windowAdjustBeta', 'Sliding your own drink window is in early access.')} />
+      {intro && <p className="dwe-hint">{intro}</p>}
       <p id={hintId} className="dwe-hint">{t('bottleDetail.windowAdjustHint', 'Drag a handle, or use the arrow keys, one year at a time.')}</p>
       <div className="dwe-axis-wrap">
         <div className="dwe-axis" ref={axisRef}>
@@ -276,7 +285,7 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
           {t('common.cancel', 'Cancel')}
         </button>
         <button type="button" className="btn btn-primary btn-small" onClick={() => save(keepOpenEnds(windowOf(win)))} disabled={saving}>
-          {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+          {saving ? t('common.saving', 'Saving…') : (saveLabel || t('common.save', 'Save'))}
         </button>
       </div>
     </div>

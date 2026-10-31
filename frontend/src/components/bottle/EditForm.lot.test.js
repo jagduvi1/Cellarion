@@ -82,6 +82,28 @@ describe('EditForm lot checkbox', () => {
     expect(bulkUpdateBottles).not.toHaveBeenCalled();
   });
 
+  test('opened from the page\'s window link: the drink-window years are scrolled into view and "drink from" has the keyboard', () => {
+    const scrolled = vi.fn();
+    const had = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      const { unmount } = render(<EditForm bottle={BOTTLE} focus="drinkWindow" onSaved={() => {}} onCancel={() => {}} />);
+      const drinkFrom = screen.getByPlaceholderText('addBottle.drinkFromPlaceholder');
+      expect(drinkFrom).toHaveFocus();
+      expect(scrolled).toHaveBeenCalledWith({ block: 'center' });
+      expect(scrolled.mock.contexts[0]).toContainElement(drinkFrom);
+      unmount();
+
+      // From the Edit buttons: the form opens at its top, as before.
+      scrolled.mockClear();
+      render(<EditForm bottle={BOTTLE} onSaved={() => {}} onCancel={() => {}} />);
+      expect(screen.getByPlaceholderText('addBottle.drinkFromPlaceholder')).not.toHaveFocus();
+      expect(scrolled).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = had;
+    }
+  });
+
   test('unticked: siblings are never touched', async () => {
     updateBottle.mockResolvedValue(okRes({ bottle: BOTTLE }));
     const onSaved = vi.fn();

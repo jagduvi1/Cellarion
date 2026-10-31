@@ -77,6 +77,34 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
     pending: t('bottleDetail.notWinePending', 'A curator is already looking at this one.'),
     error: t('bottleDetail.notWineError', 'That did not work. Please try again later.'),
   };
+  // The way to a window of one's own, for whoever may edit the bottle and has
+  // none yet: under the sommelier's window, which it starts from. In early
+  // access it opens the sliding editor in place; otherwise the edit form, at
+  // its drink-window years.
+  const editOwnWindow = () => onEdit?.({ focus: 'drinkWindow' });
+  // A window made under the sommelier's, or removed from its own section,
+  // shows in the other place: the keyboard follows it there.
+  const [ownWindowMoved, setOwnWindowMoved] = useState(false);
+  const ownTimelineProps = {
+    bottle, personalWindow, vintageProfile, anchorYear,
+    sommReviewed: sommShown && maturityReviewed,
+    canEdit,
+    focusAction: ownWindowMoved,
+    onSaved: (win) => { setOwnWindowMoved(true); onBottleChange?.(win); },
+  };
+  // Not on a drink that is not wine; under the sommelier's section only once
+  // its profile has loaded, since the editor starts from those years.
+  const ownWindowOffer = canEdit && !personalWindow && wine?.nonWine !== true && (!sommShown || !!vintageProfile) ? (
+    timelineOn ? (
+      <PersonalWindowTimeline {...ownTimelineProps} inline />
+    ) : (
+      <div className="bd-own-window-offer">
+        <button type="button" className="bd-somm-notes-btn dwe-link" onClick={editOwnWindow}>
+          {t('bottleDetail.windowSetOwnDrink', 'Set your own drink window')}
+        </button>
+      </div>
+    )
+  ) : null;
   const record = (
     <WineRecordSection
       wine={wine}
@@ -251,18 +279,12 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
           badge is suppressed while this is set. In early access it is a
           timeline too, whose years an editor slides on the bar; saving
           writes the same four fields as the edit form and patches the page's
-          bottle with what the server stored. */}
+          bottle with what the server stored. Without a window of one's own
+          the offer of one sits in the sommelier's section below, and here
+          only when that section is not shown. */}
       {timelineOn ? (
-        <PersonalWindowTimeline
-          bottle={bottle}
-          personalWindow={personalWindow}
-          vintageProfile={vintageProfile}
-          anchorYear={anchorYear}
-          sommReviewed={sommShown && maturityReviewed}
-          canEdit={canEdit}
-          onSaved={onBottleChange}
-        />
-      ) : personalWindow && (
+        (personalWindow || (!sommShown && wine?.nonWine !== true)) && <PersonalWindowTimeline {...ownTimelineProps} />
+      ) : personalWindow ? (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.personalWindow')}</span>
           <div className="bd-personal-window">
@@ -279,7 +301,22 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
                   ? t('bottleDetail.windowFromYear', { year: personalWindow.from })
                   : t('bottleDetail.windowUntilYear', { year: personalWindow.to })}
             </span>
+            {canEdit && (
+              <button
+                type="button"
+                className="bd-somm-notes-btn dwe-link"
+                onClick={editOwnWindow}
+                aria-label={t('bottleDetail.windowChangeLabel', 'Change your drink window')}
+              >
+                {t('bottleDetail.windowChange', 'Change')}
+              </button>
+            )}
           </div>
+        </div>
+      ) : !sommShown && ownWindowOffer && (
+        <div className="bd-section">
+          <span className="bd-section-label">{t('bottleDetail.personalWindow')}</span>
+          {ownWindowOffer}
         </div>
       )}
 
@@ -350,6 +387,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
               )}
             </div>
           )}
+          {ownWindowOffer}
           {/* Serving line in every state: the temperature is the style's
               until the sommelier sets one, and the air advice follows the
               phase once a window exists (the owner's own, or the sommelier's). */}

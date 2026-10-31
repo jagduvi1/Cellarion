@@ -78,6 +78,15 @@ test('nothing changed closes without a request; a window the wrong way round is 
   expect(api).not.toHaveBeenCalled();
 });
 
+test('opened from the vintage\'s window link: "drink from" has the keyboard, not the dialog\'s first button', () => {
+  const { unmount } = render(<EditVintageModal bottles={[b('b1'), b('b2')]} focus="drinkWindow" onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(year('addBottle.drinkFrom')).toHaveFocus();
+  unmount();
+  // From Edit vintage: the dialog's own opening focus, as before.
+  render(<EditVintageModal bottles={[b('b1'), b('b2')]} onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(year('addBottle.drinkFrom')).not.toHaveFocus();
+});
+
 test('a bottle whose own years clash is counted as skipped in the outcome', async () => {
   api = vi.fn(async () => ({ ok: true, json: async () => ({ done: 2, doneIds: ['b1', 'b2'], skipped: [{ id: 'b3', reason: 'invalid' }] }) }));
   render(<EditVintageModal bottles={[b('b1'), b('b2'), b('b3', { peakFrom: 2026 })]} onClose={vi.fn()} onDone={vi.fn()} />);
