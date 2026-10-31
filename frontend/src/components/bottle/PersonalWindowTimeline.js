@@ -99,7 +99,12 @@ function PersonalWindowTimeline({ bottle, personalWindow, vintageProfile, anchor
       sommLastYear: lastEnd(timelineModel(sommPhases, year)),
       year,
     });
-    setEditing({ initial, axis });
+    // An end the member's own window leaves open is saved open again unless
+    // its handle is moved (the editor needs a year to draw it at).
+    const openSides = personalWindow
+      ? { drinkFrom: !Number.isFinite(personalWindow.from), drinkTo: !Number.isFinite(personalWindow.to) }
+      : null;
+    setEditing({ initial, axis, openSides });
   };
   const stopEditing = () => {
     refocus.current = true;
@@ -117,6 +122,7 @@ function PersonalWindowTimeline({ bottle, personalWindow, vintageProfile, anchor
           labels={labels}
           year={year}
           canRemove={!!personalWindow}
+          openSides={editing.openSides}
           onCancel={stopEditing}
           onSaved={(win) => { onSaved?.(win); stopEditing(); }}
         />

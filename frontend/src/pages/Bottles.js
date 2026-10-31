@@ -143,6 +143,10 @@ function Bottles() {
   const changeStatusScope = (e) => {
     const next = new URLSearchParams(searchParams);
     if (e.target.value === 'active') next.delete('status'); else next.set('status', e.target.value);
+    // What is typed in the box counts too: type a name, then pick where to
+    // look, and the list answers both.
+    const query = searchDraft.trim();
+    if (query) next.set('search', query); else next.delete('search');
     next.delete('page');
     setSearchParams(next, { replace: true });
   };

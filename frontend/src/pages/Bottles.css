@@ -139,8 +139,9 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: 0.875rem;
-  min-height: 40px;
+  /* 16px: anything smaller makes iOS Safari zoom the page on focus. */
+  font-size: 16px;
+  min-height: 44px;
 }
 
 .bottles-search-input:focus {
@@ -154,8 +155,9 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: 0.875rem;
-  min-height: 40px;
+  /* 16px: anything smaller makes iOS Safari zoom the page on focus. */
+  font-size: 16px;
+  min-height: 44px;
 }
 
 /* Phone: the box gets its own row; scope and button share the one below. */

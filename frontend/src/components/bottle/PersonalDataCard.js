@@ -338,10 +338,12 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
 
   // The secondary "Keep it private" is a plain button (Enter sends the
   // primary action), so it asks the form to validate itself first.
-  const keepPrivate = (e) => {
+  // Enter in the form saves privately, as it always has: filing a figure
+  // publicly takes a click on this button, never a reflex key.
+  const addToRecord = (e) => {
     const f = e.currentTarget.form;
     if (f && typeof f.reportValidity === 'function' && !f.reportValidity()) return;
-    submit(e);
+    submitPublic(e);
   };
 
   const remove = async (entry) => {
@@ -365,7 +367,10 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
     setPromoteReason('');
     setPromoteError(null);
     setPromoteDone(null);
-    setPromoteScope(yearOf(entry.vintage) || bottleYear ? 'vintage' : 'wine');
+    // An entry the member declared for every bottle of the wine shares
+    // wine-wide; a bottle's or a vintage's figure shares into its vintage.
+    const wineWide = entry.level === 'wine' && !yearOf(entry.vintage);
+    setPromoteScope(!wineWide && (yearOf(entry.vintage) || bottleYear) ? 'vintage' : 'wine');
   };
 
   const submitPromote = async (e) => {
@@ -639,7 +644,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
             : t('personalData.addTitle', 'Add wine data')}
           onClose={closeModal}
         >
-          <form onSubmit={steer === 'offer' ? submitPublic : submit} className="pd-form">
+          <form onSubmit={submit} className="pd-form">
             {error && <div className="alert alert-error" style={{ marginBottom: 8 }}>{error}</div>}
 
             {modal.mode === 'add' && (
@@ -833,10 +838,10 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
               </button>
               {steer === 'offer' ? (
                 <>
-                  <button type="button" className="btn" onClick={keepPrivate} disabled={busy}>
+                  <button type="submit" className="btn" disabled={busy}>
                     {t('personalData.keepPrivate', 'Keep it private')}
                   </button>
-                  <button type="submit" className="btn btn-primary" disabled={busy}>
+                  <button type="button" className="btn btn-primary" onClick={addToRecord} disabled={busy}>
                     {t('personalData.addToRecord', 'Add to the wine record')}
                   </button>
                 </>

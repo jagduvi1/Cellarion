@@ -58,7 +58,7 @@ const windowOf = (b) => ({
  * the peak null when there is none) and `axis` ({ lo, hi }) the years the bar
  * spans, both fixed by the caller for the whole edit.
  */
-function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = false, onSaved, onCancel }) {
+function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = false, openSides = null, onSaved, onCancel }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [win, setWin] = useState(initial);
@@ -68,6 +68,9 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
   const axisRef = useRef(null);
   const handleRefs = useRef({});
   const drag = useRef(null);
+  // The handles the member has moved: an end the stored window leaves open
+  // is drawn somewhere to have a handle, and stays open unless it was moved.
+  const moved = useRef(new Set());
   const hasPeak = win.peakFrom != null;
 
   // Opening the editor puts the keyboard on its first handle.
@@ -79,7 +82,9 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
   const setYear = (key, value) => setWin((w) => {
     const [min, max] = handleLimits(w, key, axis);
     const v = Math.min(max, Math.max(min, value));
-    return v === w[key] ? w : { ...w, [key]: v };
+    if (v === w[key]) return w;
+    moved.current.add(key);
+    return { ...w, [key]: v };
   });
 
   const onKeyDown = (key) => (e) => {
@@ -119,6 +124,9 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
   const onPointerMove = (e) => {
     const d = drag.current;
     if (!d || d.pointerId !== e.pointerId) return;
+    // A mouse released outside the handle never sent its pointerup here:
+    // with no button held the drag is over, not a hover that moves things.
+    if (e.pointerType === 'mouse' && e.buttons === 0) { drag.current = null; return; }
     if (d.undecided) {
       if (Math.abs(e.clientX - d.x) < 3) return;
       const startKey = IS_END[d.key] ? ROW_PARTNER[d.key] : d.key;
@@ -159,8 +167,16 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
     }
   };
 
+  const keepOpenEnds = (w) => {
+    const out = { ...w };
+    for (const k of ['drinkFrom', 'drinkTo']) if (openSides?.[k] && !moved.current.has(k)) out[k] = null;
+    return out;
+  };
+
   const onEditorKeyDown = (e) => {
-    if (e.key === 'Escape' && !saving) { e.stopPropagation(); onCancel(); }
+    // Escape in a dialog opened from inside the editor (the Beta feedback)
+    // closes that dialog, not the editor.
+    if (e.key === 'Escape' && !saving && !e.target.closest?.('[role="dialog"]')) { e.stopPropagation(); onCancel(); }
   };
 
   const names = {
@@ -225,6 +241,7 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
                 onPointerMove={onPointerMove}
                 onPointerUp={endDrag}
                 onPointerCancel={endDrag}
+                onLostPointerCapture={endDrag}
               >
                 <span className="dwe-knob" />
                 <span className={`dwe-year dwe-year--${side}`}>{win[k]}</span>
@@ -258,7 +275,7 @@ function DrinkWindowEditor({ bottleId, initial, axis, labels, year, canRemove = 
         <button type="button" className="btn btn-secondary btn-small" onClick={onCancel} disabled={saving}>
           {t('common.cancel', 'Cancel')}
         </button>
-        <button type="button" className="btn btn-primary btn-small" onClick={() => save(windowOf(win))} disabled={saving}>
+        <button type="button" className="btn btn-primary btn-small" onClick={() => save(keepOpenEnds(windowOf(win)))} disabled={saving}>
           {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
         </button>
       </div>

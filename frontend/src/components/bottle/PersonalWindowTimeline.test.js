@@ -178,6 +178,25 @@ describe('PersonalWindowTimeline', () => {
     expect(updateBottle).toHaveBeenCalledWith(apiFetch, 'b1', { drinkFrom: 2025, peakFrom: 2027, peakUntil: 2030, drinkTo: 2035 });
   });
 
+  test('an open end stays open when Save is pressed without moving its handle', async () => {
+    updateBottle.mockResolvedValue(okRes({ bottle: { _id: 'b1', drinkFrom: 2020, drinkTo: null } }));
+    renderWindow({ drinkFrom: 2020 });
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust your drink window' }));
+    // The open end is drawn where the bar fades out, so it has a handle.
+    expect(yearOf('Drink until')).toBe(2029);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateBottle).toHaveBeenCalledWith(apiFetch, 'b1', { drinkFrom: 2020, peakFrom: null, peakUntil: null, drinkTo: null }));
+  });
+
+  test('moving the handle of an open end closes it at the chosen year', async () => {
+    updateBottle.mockResolvedValue(okRes({ bottle: { _id: 'b1', drinkFrom: 2020, drinkTo: 2030 } }));
+    renderWindow({ drinkFrom: 2020 });
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust your drink window' }));
+    fireEvent.keyDown(slider('Drink until'), { key: 'ArrowRight' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateBottle).toHaveBeenCalledWith(apiFetch, 'b1', { drinkFrom: 2020, peakFrom: null, peakUntil: null, drinkTo: 2030 }));
+  });
+
   test('Mark a peak adds the middle third; Remove peak saves the window without one', async () => {
     updateBottle.mockResolvedValue(okRes({ bottle: { drinkFrom: 2024, drinkTo: 2035 } }));
     renderWindow({ drinkFrom: 2024, drinkTo: 2035 });

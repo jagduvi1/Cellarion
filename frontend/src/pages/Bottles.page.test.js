@@ -110,6 +110,13 @@ test('choosing a wider scope puts the status in the address and reloads the list
   expect(new URLSearchParams(url.split('?')[1]).get('status')).toBe('all');
 });
 
+test('text typed but not yet searched counts when the scope changes', async () => {
+  renderAt('/bottles');
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: ' Barolo ' } });
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'consumed' } });
+  await waitFor(() => expect(where.search).toBe('?status=consumed&search=Barolo'));
+});
+
 test('going back to in-cellar drops the status from the address', async () => {
   renderAt('/bottles?status=all');
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'active' } });
