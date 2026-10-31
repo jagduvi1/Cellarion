@@ -70,8 +70,13 @@ router.post('/wine/:id', requireNonDemo, async (req, res, next) => {
     );
     if (!result.ok) return sendFail(res, result);
     // Registry Bridge (self-hosted installs): a value on a wine copied from
-    // the shared registry is also suggested there. Fire-and-forget.
-    registryBridge.forwardValueFor(req.params.id, { keyId, keyName, value, reason, evidenceUrl, vintage }).catch(() => {});
+    // the shared registry is also suggested there. Fire-and-forget. The key
+    // travels by the canonical name the service resolved, never by the
+    // member's own spelling or a translation of it.
+    const canonical = result.value?.key?.name;
+    registryBridge.forwardValueFor(req.params.id, {
+      keyId, keyName: canonical || keyName, value, reason, evidenceUrl, vintage,
+    }).catch(() => {});
     res.status(201).json({ value: result.value });
   } catch (err) {
     next(err);

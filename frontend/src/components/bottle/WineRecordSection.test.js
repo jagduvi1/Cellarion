@@ -164,6 +164,65 @@ test('public data fields render with values and blanks — never with who contri
   }));
 });
 
+// A blank public figure is an invitation, not an error: it offers a quiet Add
+// without the fix mode, which reads like reporting something wrong.
+describe('Add on an empty public row, without suggest mode', () => {
+  const ABV = { _id: 'k1', name: 'ABV', type: 'decimal', unit: '%', enumOptions: null };
+  const ORGANIC = { _id: 'k2', name: 'Organic', type: 'boolean', unit: null, enumOptions: null };
+  const CLOSURE = { _id: 'k3', name: 'Closure', type: 'enum', unit: null, enumOptions: ['cork', 'screwcap'] };
+
+  test('only a blank, unclaimed row offers it, and it opens the value form directly', async () => {
+    getWinePublicData.mockResolvedValue(ok({
+      fields: [
+        { key: ABV, value: 13.5, mySuggestion: null, hasPendingSuggestion: false },
+        { key: ORGANIC, value: null, mySuggestion: null, hasPendingSuggestion: false },
+        { key: CLOSURE, value: null, mySuggestion: null, hasPendingSuggestion: true },
+      ],
+    }));
+    suggestWineValue.mockResolvedValue(ok({ value: { _id: 'v1', status: 'suggested' } }));
+    renderSection({ vintage: '2019' });
+    await screen.findByText('More data');
+
+    // Not in suggest mode, and no per-row fix action anywhere on the record.
+    expect(screen.getByText('Suggest a fix')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Suggest a fix for Producer')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Suggest a value for ABV')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Suggest a value for Closure')).not.toBeInTheDocument();
+    const add = screen.getByLabelText('Suggest a value for Organic');
+    expect(add).toHaveTextContent(/^Add$/);
+
+    fireEvent.click(add);
+    expect(await screen.findByText('Suggest a value: Organic')).toBeInTheDocument();
+    // Same form as the fix mode's: this vintage is the default slot.
+    expect(screen.getByLabelText(/applies to 2019 only/)).toBeChecked();
+    fireEvent.change(screen.getByLabelText('Value'), { target: { value: 'true' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(suggestWineValue).toHaveBeenCalledWith(expect.any(Function), 'w1', {
+      keyId: 'k2', value: true, vintage: '2019',
+    }));
+  });
+
+  test('in suggest mode the row keeps its one "Add value" action', async () => {
+    getWinePublicData.mockResolvedValue(ok({
+      fields: [{ key: ORGANIC, value: null, mySuggestion: null, hasPendingSuggestion: false }],
+    }));
+    renderSection();
+    await screen.findByLabelText('Suggest a value for Organic');
+    enterSuggestMode();
+    expect(screen.getAllByLabelText('Suggest a value for Organic')).toHaveLength(1);
+    expect(screen.getByLabelText('Suggest a value for Organic')).toHaveTextContent('Add value');
+  });
+
+  test('a reader who cannot suggest sees the blank and nothing to press', async () => {
+    getWinePublicData.mockResolvedValue(ok({
+      fields: [{ key: ORGANIC, value: null, mySuggestion: null, hasPendingSuggestion: false }],
+    }));
+    renderSection({ canSuggest: false });
+    expect(await screen.findByText('Organic')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Suggest a value for Organic')).not.toBeInTheDocument();
+  });
+});
+
 test('my pending public suggestion shows the pending marker', async () => {
   getWinePublicData.mockResolvedValue(ok({
     fields: [

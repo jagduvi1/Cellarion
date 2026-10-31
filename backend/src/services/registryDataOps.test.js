@@ -119,6 +119,54 @@ describe('suggestValue', () => {
     expect((await ops.suggestValue(ME, { wineId: WINE, value: 1 })).code).toBe('invalid');
   });
 
+  // A member names the figure in their own language — "Alkoholhalt" is ABV.
+  // Without this the promotion from a personal entry 404'd and then proposed
+  // the same field again under the translated name.
+  describe('keyName through the translations', () => {
+    const translated = {
+      ...acceptedKey,
+      translations: { sv: 'Alkoholhalt', fr: 'Degré d’alcool', de: 'Alkoholgehalt' },
+    };
+    beforeEach(() => {
+      RegistryDataKey.findOne.mockResolvedValue(null); // no exact nameKey hit
+      RegistryDataKey.find.mockReturnValue(chain([translated]));
+      RegistryDataValue.findOne.mockResolvedValue(null);
+      RegistryDataValue.create.mockResolvedValue({ _id: oid('9'), value: 13.5, status: 'suggested' });
+    });
+
+    test('a translated name resolves to the accepted key, ignoring case, accents and punctuation', async () => {
+      for (const keyName of ['alkoholhalt', "degré d'alcool", 'Degre d’Alcool', 'ALKOHOLGEHALT']) {
+        RegistryDataValue.create.mockClear();
+        const res = await ops.suggestValue(ME, { wineId: WINE, keyName, value: '13,5' });
+        expect(res.ok).toBe(true);
+        expect(res.value.key.name).toBe('ABV');
+        expect(RegistryDataValue.create).toHaveBeenCalledWith(expect.objectContaining({ key: KEY, value: 13.5 }));
+      }
+    });
+
+    test('only the ACCEPTED vocabulary is searched — a proposed or rejected key never matches', async () => {
+      await ops.suggestValue(ME, { wineId: WINE, keyName: 'Alkoholhalt', value: 13.5 });
+      expect(RegistryDataKey.findOne).toHaveBeenCalledWith({ nameKey: { $eq: 'alkoholhalt' }, status: 'accepted' });
+      expect(RegistryDataKey.find).toHaveBeenCalledWith({ status: 'accepted' });
+    });
+
+    test('an unknown name is still not_found, and nothing is written', async () => {
+      const res = await ops.suggestValue(ME, { wineId: WINE, keyName: 'Residual sugar', value: 3 });
+      expect(res).toMatchObject({ ok: false, code: 'not_found' });
+      expect(RegistryDataValue.create).not.toHaveBeenCalled();
+    });
+
+    test('findAcceptedKeyByName: exact hit first, translation second, blank never', async () => {
+      RegistryDataKey.findOne.mockResolvedValueOnce(acceptedKey);
+      expect(await ops.findAcceptedKeyByName('ABV')).toBe(acceptedKey);
+      expect(RegistryDataKey.find).not.toHaveBeenCalled();
+
+      expect((await ops.findAcceptedKeyByName('alkoholhalt'))._id).toBe(KEY);
+      expect(await ops.findAcceptedKeyByName('Closure')).toBeNull();
+      expect(await ops.findAcceptedKeyByName('  ')).toBeNull();
+    });
+  });
+
   test('value validated against the key type before any write', async () => {
     RegistryDataKey.findOne.mockResolvedValue(acceptedKey);
     const res = await ops.suggestValue(ME, { ...GOOD, value: 'strong' });

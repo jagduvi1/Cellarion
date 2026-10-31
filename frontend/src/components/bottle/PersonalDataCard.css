@@ -78,6 +78,50 @@
   margin: 0.35rem 0 0;
 }
 
+/* A typed name the shared wine record already has a field for. The offer is
+   set apart a little (it changes what Save does); the other notes are plain. */
+.pd-public-note {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.pd-public-note--offer {
+  padding: 0.45rem 0.65rem;
+  border-left: 3px solid var(--color-primary, #7c2d3a);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+}
+
+/* Which slot a public figure lands in — same look as the wine record's own
+   value form. */
+.pd-scope-choice {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem 0.6rem;
+}
+
+.pd-scope-choice legend {
+  padding: 0 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pd-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pd-scope-option input {
+  margin-top: 0.2rem;
+  flex: none;
+}
+
 /* "Add a new value to the list" under a list key's select: a quiet text
    button, the one way to extend a list after its creation. */
 .pd-add-option {
@@ -157,6 +201,15 @@
 .pd-entry-actions .btn {
   padding: 0.2rem 0.55rem;
   font-size: 0.75rem;
+}
+
+/* Status beside an own entry ("matches the wine record") — read, not tapped. */
+.pd-entry-note {
+  align-self: center;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 /* Phone width: key above value, actions tucked to the right of the key */

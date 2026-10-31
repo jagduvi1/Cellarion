@@ -386,6 +386,15 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
 
   const formatPublicValue = (field) => formatTypedValue(field.key, field.value, t);
 
+  const openValueModal = (field) => {
+    setValueModal({ field });
+    setValueInput('');
+    setValueReason('');
+    setValueScope(bottleVintage ? 'vintage' : 'wine');
+    setValueVintage('');
+    setError(null);
+  };
+
   const submitValue = async (e) => {
     e.preventDefault();
     if (busy) return;
@@ -619,19 +628,24 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                     <button
                       type="button"
                       className="wr-suggest-btn"
-                      onClick={() => {
-                        setValueModal({ field });
-                        setValueInput('');
-                        setValueReason('');
-                        setValueScope(bottleVintage ? 'vintage' : 'wine');
-                        setValueVintage('');
-                        setError(null);
-                      }}
+                      onClick={() => openValueModal(field)}
                       aria-label={t('wineRecord.suggestValueFor', 'Suggest a value for {{field}}', { field: keyLabel(field.key) })}
                     >
                       {shown && field.resolvedFrom === 'wine' && bottleVintage
                         ? t('wineRecord.addVintageValue', 'Add {{year}} value', { year: bottleVintage })
                         : shown ? t('wineRecord.fix', 'Fix') : t('wineRecord.suggestValue', 'Add value')}
+                    </button>
+                  ) : canSuggest && !shown ? (
+                    // A blank public figure is a contribution anyone holding
+                    // the bottle can make — offered quietly, without the fix
+                    // mode, which reads like reporting an error.
+                    <button
+                      type="button"
+                      className="wr-text-btn"
+                      onClick={() => openValueModal(field)}
+                      aria-label={t('wineRecord.suggestValueFor', 'Suggest a value for {{field}}', { field: keyLabel(field.key) })}
+                    >
+                      {t('wineRecord.add', 'Add')}
                     </button>
                   ) : null}
                 </div>

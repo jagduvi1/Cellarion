@@ -9,6 +9,8 @@
 const { z } = require('zod');
 const { registerTool } = require('../registry');
 const personalData = require('../../services/personalData');
+const registryData = require('../../services/registryDataOps');
+const { matchKeyByName } = require('../../utils/registryKeyName');
 const { logAudit } = require('../../services/audit');
 const {
   ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess,
@@ -71,6 +73,42 @@ registerTool({
   },
 });
 
+const idOf = (v) => (v && v._id ? String(v._id) : (v ? String(v) : null));
+
+/**
+ * A personal entry under a name the PUBLIC vocabulary already has (ABV,
+ * Alkoholhalt …) is usually a fact every owner of the wine could use: the
+ * caller hears what the wine record holds for it, or that it holds nothing
+ * and suggest_wine_public_value would offer the figure. Null when the key is
+ * not public or the wine has no record to read; never fails the write.
+ */
+async function publicKeyHint(ctx, bottle, keyName) {
+  const wineId = idOf(bottle && bottle.wineDefinition);
+  if (!wineId) return null;
+  try {
+    const res = await registryData.dataForWine(wineId, ctx.user.id, {
+      roles: ctx.user.roles, vintage: bottle.vintage,
+    });
+    if (!res || !res.ok) return null;
+    const key = matchKeyByName((res.fields || []).map((f) => f.key), keyName);
+    if (!key) return null;
+    const field = res.fields.find((f) => f.key === key);
+    const year = res.vintage || null;
+    if (field.value !== null && field.value !== undefined) {
+      const where = field.resolvedFrom === 'vintage' ? `for ${field.resolvedVintage}` : 'for every vintage';
+      return `The shared wine record already holds ${key.name} = ${JSON.stringify(field.value)}${key.unit ? ' ' + key.unit : ''} (${where}).`;
+    }
+    if (field.mySuggestion || field.hasPendingSuggestion) {
+      return `${key.name} is part of the shared wine record; a suggested value for it is already awaiting curator review.`;
+    }
+    return `${key.name} is part of the shared wine record and this wine has no published value${year ? ` for ${year}` : ''}. ` +
+      `suggest_wine_public_value (wine_id ${wineId}, key_id ${key._id}${year ? `, vintage ${year}` : ''}) would offer this figure ` +
+      'to every owner of the wine — a curator reviews it first. Ask the user before filing it.';
+  } catch {
+    return null;
+  }
+}
+
 registerTool({
   name: 'add_personal_data',
   title: 'Add a personal data entry to a bottle or its wine',
@@ -128,12 +166,14 @@ registerTool({
       { type: args.level, id: result.entry._id, cellarId: access.cellar._id },
       { key: result.entry.key.name, keyCreated: result.keyCreated, via: 'mcp' });
 
+    const hint = await publicKeyHint(ctx, access.bottle, result.entry.key.name);
     const envelope = {
       summary: `Added ${args.level}-level "${result.entry.key.name}" = ${JSON.stringify(result.entry.value)}${result.entry.key.unit ? ' ' + result.entry.key.unit : ''}`,
       data: {
         entry: entryOut(result.entry),
         key_created: result.keyCreated,
         undo: 'undo_last removes this entry again if it was a mistake',
+        ...(hint ? { hint } : {}),
       },
     };
     await logAction(ctx, {
