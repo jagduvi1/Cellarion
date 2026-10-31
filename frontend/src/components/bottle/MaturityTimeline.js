@@ -30,9 +30,12 @@ const MIN_TICK_GAP = 12;
  * label before them (the window's last year outranks a boundary in the
  * middle; the first year always stays).
  *
+ * `axis` ({ lo, hi }) fixes the axis instead, for a bar whose years must not
+ * move while handles are dragged along it; it has to hold every phase.
+ *
  * @returns {null | { segments: Array<{ cls, label, start, end, open, left, width }>, ticks: Array<{ year, pos }>, lo, hi, marker, firstYear, lastYear }}
  */
-export function timelineModel(phases, year) {
+export function timelineModel(phases, year, axis = null) {
   if (!Array.isArray(phases) || phases.length === 0) return null;
   const fin = (v) => (Number.isFinite(v) ? v : null);
   const segs = phases.map((p) => ({ cls: p.cls, label: p.label, start: fin(p.from), end: fin(p.until), open: false }));
@@ -59,8 +62,8 @@ export function timelineModel(phases, year) {
 
   const firstYear = segs[0].start;
   const lastYear = segs[segs.length - 1].end;
-  const lo = Math.min(firstYear, year);
-  const hi = Math.max(lastYear, year);
+  const lo = axis ? axis.lo : Math.min(firstYear, year);
+  const hi = axis ? axis.hi : Math.max(lastYear, year);
   const span = hi - lo + 1;
   const pct = (n) => (n / span) * 100;
   const segments = segs.map((s) => ({ ...s, left: pct(s.start - lo), width: pct(s.end - s.start + 1) }));
@@ -116,12 +119,16 @@ function phaseRange(p, t) {
  * window is set, which takes precedence over the sommelier's status) the
  * marker says only the year. `details` (the phase table) folds away behind a
  * toggle: the bar already carries the years.
+ *
+ * The phases come from the sommelier's `profile`, or ready-made in `phases`
+ * (the member's own window: getPersonalWindowPhases) with `statusLabel` as
+ * the marker's words, since a personal status has wording of its own.
  */
-function MaturityTimeline({ profile, anchorYear, status, details = null, year = new Date().getFullYear() }) {
+function MaturityTimeline({ profile, anchorYear, phases: givenPhases = null, status, statusLabel = null, details = null, year = new Date().getFullYear() }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const detailsId = useId();
-  const phases = getMaturityPhases(profile, {
+  const phases = givenPhases || getMaturityPhases(profile, {
     early: t('bottleDetail.maturityPhaseEarly'),
     peak:  t('bottleDetail.maturityPhasePeak'),
     late:  t('bottleDetail.maturityPhaseLate'),
@@ -130,7 +137,7 @@ function MaturityTimeline({ profile, anchorYear, status, details = null, year = 
   if (!model) return null;
 
   const statusCls = status?.status || 'pending';
-  const label = status ? `${year} · ${maturityBadgeText(status, t)}` : String(year);
+  const label = status ? `${year} · ${statusLabel ?? maturityBadgeText(status, t)}` : String(year);
 
   return (
     <div className="mt-timeline" data-testid="maturity-timeline">

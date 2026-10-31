@@ -80,6 +80,21 @@ export function getPersonalWindowStatus(bottle, currentYear = CURRENT_YEAR) {
 }
 
 /**
+ * A personal window's badge text, translated: the status, with the year of
+ * the next change where one is coming ("Not ready — from 2028").
+ */
+export function personalWindowBadgeText(pw, t) {
+  if (!pw) return '';
+  switch (pw.status) {
+    case 'not-ready': return t('bottleDetail.personalNotReady', { year: pw.from });
+    case 'declining': return t('bottleDetail.personalPast');
+    case 'early':     return t('bottleDetail.personalEarly', { year: pw.peakFrom });
+    case 'late':      return t('bottleDetail.personalLate');
+    default:          return t('bottleDetail.personalDrinkNow');
+  }
+}
+
+/**
  * A bottle's effective drink status: the user's OWN drinkFrom/drinkTo window
  * takes precedence over the sommelier vintage-profile window when set.
  * Returns null, or { status, source: 'personal' | 'profile', ... } — profile

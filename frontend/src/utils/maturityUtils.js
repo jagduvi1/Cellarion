@@ -86,6 +86,42 @@ export function getMaturityPhases(profile, labels, anchorYear) {
 }
 
 /**
+ * The phases of a member's OWN drink window, in the shape getMaturityPhases
+ * gives the sommelier's, so one timeline draws both. With a peak: early up to
+ * the year before it, the peak, late from the year after it — a phase with no
+ * year of its own is left out. Without a peak, one phase for the whole window
+ * in the peak colour: the whole span classifies as "drink now"
+ * (getPersonalWindowStatus). A missing side stays missing, so the timeline
+ * opens the tail or starts the window this year, as it does for the
+ * sommelier's.
+ *
+ * @param {{ from, to, peakFrom, peakUntil }} win - getPersonalWindowStatus's years
+ * @param {{ early: string, peak: string, late: string, drink: string }} labels - Translated phase labels
+ * @param {number} [year] - this year: an early phase with no start exists only before the peak
+ * @returns {Array<{ label: string, cls: string, from: number|undefined, until: number|undefined }>}
+ */
+export function getPersonalWindowPhases(win, labels, year = new Date().getFullYear()) {
+  const num = (v) => (Number.isFinite(v) ? v : undefined);
+  const from = num(win?.from);
+  const to = num(win?.to);
+  const peakFrom = num(win?.peakFrom);
+  const peakUntil = num(win?.peakUntil);
+  if (peakFrom === undefined && peakUntil === undefined) {
+    if (from === undefined && to === undefined) return [];
+    return [{ label: labels.drink, cls: 'peak', from, until: to }];
+  }
+  const phases = [];
+  if (peakFrom !== undefined && (from !== undefined ? from < peakFrom : year < peakFrom)) {
+    phases.push({ label: labels.early, cls: 'early', from, until: peakFrom - 1 });
+  }
+  phases.push({ label: labels.peak, cls: 'peak', from: peakFrom ?? from, until: peakUntil ?? to });
+  if (peakUntil !== undefined && (to === undefined || to > peakUntil)) {
+    phases.push({ label: labels.late, cls: 'late', from: peakUntil + 1, until: to });
+  }
+  return phases;
+}
+
+/**
  * Determine whether a maturity phase is currently active.
  *
  * @param {{ from: number|undefined, until: number|undefined }} phase

@@ -1,4 +1,4 @@
-import { getMaturityPhases, isPhaseActive, bottleAnchorYear } from './maturityUtils';
+import { getMaturityPhases, getPersonalWindowPhases, isPhaseActive, bottleAnchorYear } from './maturityUtils';
 
 // ---------------------------------------------------------------------------
 // bottleAnchorYear — must read the year in UTC, mirroring the backend
@@ -254,5 +254,59 @@ describe('isPhaseActive', () => {
   it('returns false when only until is set (no from)', () => {
     // The function only checks from-based conditions; with no from, returns false
     expect(isPhaseActive({ from: undefined, until: 2030 }, 2025)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getPersonalWindowPhases — the member's own window in the timeline's phases
+// ---------------------------------------------------------------------------
+describe('getPersonalWindowPhases', () => {
+  const L = { early: 'Early', peak: 'Peak', late: 'Late', drink: 'Drink' };
+  const brief = (phases) => phases.map(({ cls, label, from, until }) => ({ cls, label, from, until }));
+
+  it('with a peak: early up to the year before it, the peak, late from the year after it', () => {
+    expect(brief(getPersonalWindowPhases({ from: 2024, peakFrom: 2027, peakUntil: 2030, to: 2035 }, L, 2026))).toEqual([
+      { cls: 'early', label: 'Early', from: 2024, until: 2026 },
+      { cls: 'peak',  label: 'Peak',  from: 2027, until: 2030 },
+      { cls: 'late',  label: 'Late',  from: 2031, until: 2035 },
+    ]);
+  });
+
+  it("a peak on the window's first or last year leaves out the phase with no year of its own", () => {
+    expect(brief(getPersonalWindowPhases({ from: 2024, peakFrom: 2024, peakUntil: 2035, to: 2035 }, L, 2026)))
+      .toEqual([{ cls: 'peak', label: 'Peak', from: 2024, until: 2035 }]);
+  });
+
+  it('without a peak: one phase for the whole window, in the peak colour, named as drinking', () => {
+    expect(brief(getPersonalWindowPhases({ from: 2024, to: 2030, peakFrom: null, peakUntil: null }, L, 2026)))
+      .toEqual([{ cls: 'peak', label: 'Drink', from: 2024, until: 2030 }]);
+  });
+
+  it('open ends stay open, for the timeline to fade out or start this year', () => {
+    expect(brief(getPersonalWindowPhases({ from: 2024, to: null }, L, 2026)))
+      .toEqual([{ cls: 'peak', label: 'Drink', from: 2024, until: undefined }]);
+    expect(brief(getPersonalWindowPhases({ from: null, to: 2030 }, L, 2026)))
+      .toEqual([{ cls: 'peak', label: 'Drink', from: undefined, until: 2030 }]);
+    // A peak with no end of the window after it: late goes on.
+    expect(brief(getPersonalWindowPhases({ from: 2020, peakFrom: 2022, peakUntil: 2025, to: null }, L, 2026)).pop())
+      .toEqual({ cls: 'late', label: 'Late', from: 2026, until: undefined });
+  });
+
+  it('no start but a peak ahead: early from now; the peak already reached: no early phase', () => {
+    expect(brief(getPersonalWindowPhases({ from: null, peakFrom: 2028, peakUntil: 2030, to: 2032 }, L, 2026))[0])
+      .toEqual({ cls: 'early', label: 'Early', from: undefined, until: 2027 });
+    expect(getPersonalWindowPhases({ from: null, peakFrom: 2024, peakUntil: 2030, to: 2032 }, L, 2026)[0].cls).toBe('peak');
+  });
+
+  it("a one-sided peak runs to the window's end on the other side", () => {
+    expect(brief(getPersonalWindowPhases({ from: 2020, peakFrom: 2023, peakUntil: null, to: 2030 }, L, 2026))).toEqual([
+      { cls: 'early', label: 'Early', from: 2020, until: 2022 },
+      { cls: 'peak',  label: 'Peak',  from: 2023, until: 2030 },
+    ]);
+  });
+
+  it('no window at all, no phases', () => {
+    expect(getPersonalWindowPhases(null, L, 2026)).toEqual([]);
+    expect(getPersonalWindowPhases({ from: null, to: null, peakFrom: null, peakUntil: null }, L, 2026)).toEqual([]);
   });
 });

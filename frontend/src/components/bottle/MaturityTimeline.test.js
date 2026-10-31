@@ -58,6 +58,14 @@ describe('timelineModel', () => {
     expect(b.left).toBeGreaterThan(a.left + a.width);
   });
 
+  test('a fixed axis keeps its years whatever the phases span', () => {
+    const m = timelineModel([phase('peak', 2024, 2030)], 2026, { lo: 2017, hi: 2041 });
+    expect([m.lo, m.hi]).toEqual([2017, 2041]);
+    // 25 one-year cells: 2024 starts at the eighth.
+    expect(m.segments[0].left).toBeCloseTo((7 / 25) * 100);
+    expect(m.marker).toBeCloseTo((9.5 / 25) * 100);
+  });
+
   test('no phases, no timeline', () => {
     expect(timelineModel([], 2026)).toBeNull();
   });
@@ -135,6 +143,21 @@ describe('MaturityTimeline', () => {
   test('without details there is no toggle', () => {
     render(<MaturityTimeline profile={profile} status={null} year={2026} />);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  test('ready-made phases with words of their own on the marker, no profile needed', () => {
+    render(
+      <MaturityTimeline
+        phases={[phase('peak', 2024, 2030)]}
+        status={{ status: 'peak', source: 'personal' }}
+        statusLabel="Drink now"
+        year={2026}
+      />
+    );
+    const label = document.querySelector('.mt-now-label');
+    expect(label.textContent).toBe('2026 · Drink now');
+    expect(label.className).toContain('maturity-badge--peak');
+    expect(document.querySelectorAll('.mt-seg')).toHaveLength(1);
   });
 
   test('a profile without a single year draws nothing', () => {
