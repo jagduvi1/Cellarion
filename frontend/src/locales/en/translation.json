@@ -983,6 +983,7 @@
     "ratingChipRange": "{{min}} to {{max}}",
     "noBottles": "No bottles in this cellar yet.",
     "noSearchResults": "No bottles match your search.",
+    "searchAllCellars": "Search all cellars for \"{{query}}\"",
     "toggleFilters": "Filters",
     "compactView": "Compact view",
     "showNotes": "Show notes",

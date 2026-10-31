@@ -92,3 +92,23 @@ test('a cellar that is gone gets no Retry that could never work', async () => {
   expect(await screen.findByText('Cellar not found')).toBeInTheDocument();
   expect(screen.queryByText('common.retry')).not.toBeInTheDocument();
 });
+
+// A search that finds nothing in one cellar is the moment to offer every cellar.
+const renderCellarAt = (url) => render(
+  <MemoryRouter initialEntries={[url]}>
+    <Routes><Route path="/cellars/:id" element={<CellarDetail />} /></Routes>
+  </MemoryRouter>,
+);
+
+test('a search with no match offers to search every cellar for the same words', async () => {
+  renderCellarAt('/cellars/c1?search=Two%20Wolves');
+  expect(await screen.findByText('cellarDetail.noSearchResults')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'cellarDetail.searchAllCellars' }))
+    .toHaveAttribute('href', '/bottles?status=all&search=Two+Wolves');
+});
+
+test('an empty cellar with no search offers no wider search', async () => {
+  renderCellar();
+  await screen.findByText('cellarDetail.noBottles');
+  expect(screen.queryByRole('link', { name: 'cellarDetail.searchAllCellars' })).not.toBeInTheDocument();
+});
