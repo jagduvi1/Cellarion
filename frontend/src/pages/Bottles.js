@@ -128,6 +128,19 @@ function Bottles() {
   const [searchDraft, setSearchDraft] = useState(filters.search || '');
   useEffect(() => { setSearchDraft(filters.search || ''); }, [filters.search]);
 
+  // "/" jumps to the search box, unless the person is already typing somewhere.
+  const searchInput = useRef(null);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+      e.preventDefault();
+      searchInput.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const submitSearch = (e) => {
     e.preventDefault();
     const next = new URLSearchParams(searchParams);
@@ -235,6 +248,7 @@ function Bottles() {
 
       <form className="bottles-search" role="search" onSubmit={submitSearch}>
         <input
+          ref={searchInput}
           type="search"
           className="bottles-search-input"
           value={searchDraft}

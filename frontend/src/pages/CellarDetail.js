@@ -1004,6 +1004,13 @@ function CellarDetail() {
             (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.ratingBand || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
+                {filters.search && !multiScope && (
+                  <p>
+                    <Link to={`/bottles?${new URLSearchParams({ status: 'all', search: filters.search })}`}>
+                      {t('cellarDetail.searchAllCellars', { query: filters.search, defaultValue: 'Search all cellars for "{{query}}"' })}
+                    </Link>
+                  </p>
+                )}
               </div>
             ) : (
               <div className="empty-state">
