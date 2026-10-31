@@ -415,6 +415,21 @@ describe('steering public facts toward the wine record', () => {
     expect(suggestWineValue).not.toHaveBeenCalled();
   });
 
+  test('Enter in the form saves privately: a public filing takes the button, never a reflex key', async () => {
+    getWinePublicData.mockResolvedValue(ok({ fields: [publicField()] }));
+    addPersonalData.mockResolvedValue(ok({ entry: entry() }));
+    renderWine();
+    await screen.findByText('Nothing recorded yet.');
+    await openAddAndType('Alkoholhalt');
+    await screen.findByText(/ABV is part of the shared wine record/);
+    const value = screen.getByLabelText(/^Value$/);
+    fireEvent.change(value, { target: { value: '13,5' } });
+    fireEvent.submit(value.closest('form'));
+
+    await waitFor(() => expect(addPersonalData).toHaveBeenCalled());
+    expect(suggestWineValue).not.toHaveBeenCalled();
+  });
+
   test('a public name the record already holds says what it holds; saving privately stays the plain Save', async () => {
     getWinePublicData.mockResolvedValue(ok({ fields: [publicField({ value: 13.5, resolvedFrom: 'wine', wineValue: 13.5 })] }));
     renderWine();
@@ -466,6 +481,18 @@ describe('steering public facts toward the wine record', () => {
       ));
       expect(proposeRegistryKey).not.toHaveBeenCalled();
       expect(await screen.findByText('Thank you — your value is in the registry review queue.')).toBeInTheDocument();
+    });
+
+    test('an entry declared for every bottle of the wine shares wine-wide by default', async () => {
+      getPersonalData.mockResolvedValue(ok({ bottleEntries: [], wineEntries: [own({ level: 'wine' })] }));
+      getWinePublicData.mockResolvedValue(ok({ fields: [publicField()] }));
+      renderWine();
+      fireEvent.click(await screen.findByText('Share with the wine record'));
+      expect(await screen.findByLabelText(/applies to all vintages/)).toBeChecked();
+      fireEvent.click(screen.getByText('Send suggestion'));
+      await waitFor(() => expect(suggestWineValue).toHaveBeenCalledWith(
+        expect.any(Function), 'w1', { keyId: 'pk1', value: 13.5 }
+      ));
     });
 
     test('the record says the same: a quiet note instead of any button', async () => {
