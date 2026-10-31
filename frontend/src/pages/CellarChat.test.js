@@ -138,7 +138,7 @@ describe('CellarChat → wine cards', () => {
     fireEvent.change(box, { target: { value: 'what should I open tonight?' } });
     await act(async () => { fireEvent.submit(box.closest('form')); });
     expect(await screen.findByText('Barolo Bussia')).toBeInTheDocument();
-    expect(screen.getByText(/NV · Prunotto/)).toBeInTheDocument();
+    expect(screen.getByText(/Prunotto · NV/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Barolo Bussia/ })).toHaveAttribute('href', '/cellars/c1/bottles/b1');
   });
 });

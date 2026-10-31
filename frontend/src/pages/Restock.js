@@ -238,7 +238,7 @@ export default function Restock() {
               <div className="restock-alert-card__content">
                 <strong>{alert.wineName}</strong>
                 {alert.wineProducer && <span className="restock-alert-card__producer"> · {alert.wineProducer}</span>}
-                {alert.vintage && alert.vintage !== 'NV' && <span className="restock-alert-card__vintage"> {formatVintage(alert.vintage, t)}</span>}
+                {alert.vintage && alert.vintage !== 'NV' && <span className="restock-alert-card__vintage">{alert.wineProducer ? ' · ' : ' '}{formatVintage(alert.vintage, t)}</span>}
                 <p className="restock-alert-card__message">
                   {t('restock.alertMessage', 'No similar wines left in your cellar. Consider restocking.')}
                 </p>

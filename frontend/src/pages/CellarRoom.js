@@ -1421,11 +1421,17 @@ export default function CellarRoom() {
                 </div>
                 <WineImage image={wine?.image} alt={wine?.name} className="room-bottle-panel-img" />
                 <div className="room-bottle-panel-info">
-                  {wine?.producer && <p className="room-bottle-producer">{wine.producer}</p>}
-                  <div className="room-bottle-meta">
-                    {(wine?.type || wine?.nonWine) && <span className={`room-bottle-type type-${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>}
-                    {bottle?.vintage && <span>{formatVintage(bottle.vintage, t)}</span>}
-                  </div>
+                  {(wine?.producer || bottle?.vintage) && (
+                    <p className="room-bottle-producer">
+                      {wine?.producer && <span>{wine.producer}</span>}{' '}
+                      {bottle?.vintage && <span>{formatVintage(bottle.vintage, t)}</span>}
+                    </p>
+                  )}
+                  {(wine?.type || wine?.nonWine) && (
+                    <div className="room-bottle-meta">
+                      <span className={`room-bottle-type type-${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>
+                    </div>
+                  )}
                   {wine?.country?.name && (
                     <p className="room-bottle-region">
                       {wine.country.name}{wine?.region?.name ? `, ${wine.region.name}` : ''}

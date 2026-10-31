@@ -49,7 +49,7 @@ function WineCard({ wine }) {
     <Wrapper className="cellar-chat__wine-card" aria-label={wine.grapes?.join(', ')} {...linkProps}>
       <div className="cellar-chat__wine-card-name">{wine.name}</div>
       <div className="cellar-chat__wine-card-meta">
-        {formatVintage(wine.vintage, t)} · {wine.producer}
+        {[wine.producer, formatVintage(wine.vintage, t)].filter(Boolean).join(' · ')}
       </div>
       {wine.region && (
         <div className="cellar-chat__wine-card-meta">{wine.region}</div>

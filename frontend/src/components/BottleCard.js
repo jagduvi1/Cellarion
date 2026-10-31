@@ -337,7 +337,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           {isGroup && <span className="bottle-count-pill">×{groupCount}</span>}
         </div>
         <div className="bottle-meta">
-          <span className="bottle-producer">{displayProducer}</span>
+          {displayProducer && <span className="bottle-producer">{displayProducer}</span>}
           {bottle.vintage && <span className="bottle-vintage">{formatVintage(bottle.vintage, t)}</span>}
         </div>
         {/* The details picked under "Show on cards" (rating, price, …). */}

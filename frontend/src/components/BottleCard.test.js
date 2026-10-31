@@ -271,3 +271,25 @@ describe('BottleCard vintage', () => {
     expect(screen.getByText('2013')).toBeInTheDocument();
   });
 });
+
+/**
+ * The list view's meta line puts a generated dot before its second span, so
+ * the producer span must be left out when there is no producer — otherwise a
+ * producer-less bottle reads "· 2019" (Johan, #1739).
+ */
+describe('BottleCard meta line without a producer', () => {
+  const metaSpans = (container) => [...container.querySelectorAll('.bottle-meta > span')];
+
+  test('the vintage is the only span, so no dot goes in front of it', () => {
+    const { container } = renderCard({
+      bottle: { ...BOTTLE, wineDefinition: { ...BOTTLE.wineDefinition, producer: '' } },
+    });
+    expect(container.querySelector('.bottle-producer')).toBeNull();
+    expect(metaSpans(container).map(s => s.className)).toEqual(['bottle-vintage']);
+  });
+
+  test('with a producer, the producer comes first and the vintage second', () => {
+    const { container } = renderCard();
+    expect(metaSpans(container).map(s => s.textContent)).toEqual(['G.D. Vajra', '2013']);
+  });
+});
