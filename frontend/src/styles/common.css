@@ -120,7 +120,9 @@
   font-size: 0.9rem;
 }
 
-.form-group input:not([type="checkbox"]),
+/* Text-like fields only: a radio given the field box renders as a full-width
+   44px circle above its label. */
+.form-group input:not([type="checkbox"]):not([type="radio"]),
 .form-group textarea,
 .form-group select {
   width: 100%;
