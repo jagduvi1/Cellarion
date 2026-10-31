@@ -122,3 +122,25 @@ test('going back to in-cellar drops the status from the address', async () => {
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'active' } });
   await waitFor(() => expect(where.search).toBe(''));
 });
+
+// "/" jumps to the search box (the GitHub / YouTube convention), unless the
+// person is already typing somewhere.
+test('"/" focuses the search box', async () => {
+  renderAt('/bottles');
+  fireEvent.keyDown(document.body, { key: '/' });
+  expect(screen.getByRole('searchbox')).toHaveFocus();
+});
+
+test('"/" typed into another field is left alone', async () => {
+  renderAt('/bottles');
+  const scope = screen.getByRole('combobox');
+  scope.focus();
+  fireEvent.keyDown(scope, { key: '/' });
+  expect(screen.getByRole('searchbox')).not.toHaveFocus();
+});
+
+test('"/" with a modifier held is left alone', async () => {
+  renderAt('/bottles');
+  fireEvent.keyDown(document.body, { key: '/', ctrlKey: true });
+  expect(screen.getByRole('searchbox')).not.toHaveFocus();
+});
