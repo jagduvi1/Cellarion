@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMaturityStatus, getPersonalWindowStatus, maturityBadgeText } from '../../utils/drinkStatus';
+import { getMaturityStatus, getPersonalWindowStatus, maturityBadgeText, personalWindowBadgeText } from '../../utils/drinkStatus';
 import { servingAdvice, servingText } from '../../utils/serving';
 import { temperatureUnitOf } from '../../utils/temperature';
 import { isReserved, reservationSummary } from '../../utils/reservation';
@@ -18,6 +18,7 @@ import CollapsibleBlock from '../CollapsibleBlock';
 import DraftWineBanner from './DraftWineBanner';
 import MaturityPhaseTable from './MaturityPhaseTable';
 import MaturityTimeline from './MaturityTimeline';
+import PersonalWindowTimeline from './PersonalWindowTimeline';
 import BetaBadge from '../BetaBadge';
 import { useFeature } from '../../utils/featureFlags';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
@@ -25,7 +26,7 @@ import PriceTrackingToggle from './PriceTrackingToggle';
 import { markNotWine } from '../../api/wines';
 import { formatVintage } from '../../utils/vintage';
 
-function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, onWineChanged, draftNotice = null, recordFold = null }) {
+function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, onWineChanged, onBottleChange, draftNotice = null, recordFold = null }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
@@ -41,6 +42,8 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
   const [showSommNotes, setShowSommNotes] = useState(false);
   const timelineOn = useFeature('maturityTimeline');
   const wine = bottle.wineDefinition;
+  // The sommelier's section shows for every known vintage (NV too) of a wine.
+  const sommShown = !!bottle.vintage && bottle.vintage !== 'Unknown' && wine?.nonWine !== true;
   // Serving line: the sommelier's trait (or the style's default) read against
   // the phase this bottle is in today — the owner's own window first, then the
   // sommelier's — so the decanting advice follows the wine's age, not a date
@@ -245,21 +248,26 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
       )}
       {/* Personal drink window — the user's own drinkFrom/drinkTo. Takes
           precedence over the sommelier profile status below, so the profile
-          badge is suppressed while this is set. */}
-      {personalWindow && (
+          badge is suppressed while this is set. In early access it is a
+          timeline too, whose years an editor slides on the bar; saving
+          writes the same four fields as the edit form and patches the page's
+          bottle with what the server stored. */}
+      {timelineOn ? (
+        <PersonalWindowTimeline
+          bottle={bottle}
+          personalWindow={personalWindow}
+          vintageProfile={vintageProfile}
+          anchorYear={anchorYear}
+          sommReviewed={sommShown && maturityReviewed}
+          canEdit={canEdit}
+          onSaved={onBottleChange}
+        />
+      ) : personalWindow && (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.personalWindow')}</span>
           <div className="bd-personal-window">
             <span className={`maturity-badge maturity-badge--${personalWindow.status}`}>
-              {personalWindow.status === 'not-ready'
-                ? t('bottleDetail.personalNotReady', { year: personalWindow.from })
-                : personalWindow.status === 'declining'
-                  ? t('bottleDetail.personalPast')
-                  : personalWindow.status === 'early'
-                    ? t('bottleDetail.personalEarly', { year: personalWindow.peakFrom })
-                    : personalWindow.status === 'late'
-                      ? t('bottleDetail.personalLate')
-                      : t('bottleDetail.personalDrinkNow')}
+              {personalWindowBadgeText(personalWindow, t)}
             </span>
             <span className="bd-window-source" title={t('bottleDetail.yourWindowTooltip')}>
               {t('bottleDetail.yourWindow')}
@@ -287,7 +295,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
 
       {/* Sommelier maturity section — shown for NV too (somms can set a drink
           window for non-vintage sparkling); only hidden for unknown vintages */}
-      {bottle.vintage && bottle.vintage !== 'Unknown' && wine?.nonWine !== true && (
+      {sommShown && (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.sommMaturity')}</span>
           {!vintageProfile ? (

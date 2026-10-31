@@ -739,6 +739,7 @@ function BottleDetail() {
           wineDraft={bottle.wineDraft || null}
           onDraftChanged={(notice) => { setDraftNotice(typeof notice === 'string' ? notice : null); fetchBottle(); }}
           onWineChanged={fetchBottle}
+          onBottleChange={(patch) => setBottle(prev => ({ ...prev, ...patch }))}
           draftNotice={draftNotice}
         />
       )}

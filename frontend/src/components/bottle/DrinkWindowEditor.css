@@ -1,0 +1,165 @@
+/* Sliding one's own drink window on the timeline's bar (early-access flag
+   maturityTimeline). The window's two ends are handles above the bar, the
+   peak's two below it, so a peak starting the year the window starts never
+   hides a handle. The bar itself is the timeline's (.mt-track, .mt-seg). */
+
+.dwe-hint {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* Room at both ends for a handle on the bar's first or last year; nothing
+   past it may widen the page on a phone. */
+.dwe-axis-wrap {
+  padding: 0 16px;
+  overflow: hidden;
+}
+
+.dwe-axis {
+  position: relative;
+  height: 100px;
+}
+
+/* Placed on the editing axis; outranks .mt-track's own position. */
+.dwe-axis .dwe-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 45px;
+}
+
+/* This year: thinner and quieter than a boundary, which it is not. */
+.dwe-track .mt-marker {
+  width: 2px;
+  background: var(--color-text-muted);
+}
+
+.dwe-handle {
+  position: absolute;
+  width: 32px;
+  height: 40px;
+  margin-left: -16px;
+  cursor: grab;
+  /* The page must not scroll while a finger drags a handle. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.dwe-handle:active {
+  cursor: grabbing;
+}
+
+.dwe-handle:focus-visible {
+  z-index: 2;
+}
+
+.dwe-handle--window {
+  top: 5px;
+  color: var(--color-text);
+}
+
+.dwe-handle--peak {
+  top: 55px;
+  color: var(--color-success);
+}
+
+.dwe-knob {
+  position: absolute;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.1s;
+}
+
+.dwe-handle--window .dwe-knob { bottom: 0; }
+.dwe-handle--peak .dwe-knob   { top: 0; }
+
+.dwe-handle:active .dwe-knob {
+  transform: scale(1.15);
+}
+
+.dwe-handle:focus-visible .dwe-knob {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* The boundary itself: a line through the bar under the knob. */
+.dwe-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  background: currentColor;
+}
+
+.dwe-handle--window::after { top: 100%; }
+.dwe-handle--peak::after   { bottom: 100%; }
+
+.dwe-year {
+  position: absolute;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dwe-handle--window .dwe-year { top: 0; }
+.dwe-handle--peak .dwe-year   { bottom: 0; }
+.dwe-year--left  { right: 50%; margin-right: 3px; }
+.dwe-year--right { left: 50%; margin-left: 3px; }
+
+.dwe-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.25rem;
+  margin-top: 0.4rem;
+}
+
+/* The text buttons here and under the personal timeline ("Adjust", "Set
+   your own window"): actions, so in the primary colour, and tall enough to
+   hit on a phone. */
+.dwe-link.bd-somm-notes-btn {
+  min-height: 32px;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.dwe-link.bd-somm-notes-btn:hover:not(:disabled) {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+.dwe-link.dwe-link--danger,
+.dwe-link.dwe-link--danger:hover:not(:disabled) {
+  color: var(--color-danger);
+}
+
+.dwe-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dwe-error {
+  margin: 0.5rem 0 0;
+}
+
+.dwe-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
