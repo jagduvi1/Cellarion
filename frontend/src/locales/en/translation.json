@@ -2882,7 +2882,7 @@
   "personalData": {
     "title": "Your wine data",
     "add": "+ Add",
-    "intro": "Anything the record doesn’t cover — ABV, provenance, cork condition. Visible to everyone who shares this cellar, never published to the shared registry.",
+    "intro": "Notes about your own bottles — provenance, where you bought it, cork condition. Visible to everyone who shares this cellar, never published. Facts about the wine itself, like ABV, belong in the wine record, where every owner sees them.",
     "empty": "Nothing recorded yet.",
     "bottleSection": "This bottle",
     "wineSection": "This wine (all bottles of it)",
@@ -2925,7 +2925,16 @@
     "promoteScopeVintage": "It will apply to the {{year}} vintage only.",
     "promoteScopeWine": "It will apply to every vintage of this wine.",
     "promotedValue": "Thank you — your value is in the registry review queue.",
-    "promotedKey": "Thank you — the field itself was proposed first; once a curator accepts it, values can follow."
+    "promotedKey": "Thank you — the field itself was proposed first; once a curator accepts it, values can follow.",
+    "publicKeyOffer": "{{key}} is part of the shared wine record — add it there and every owner of this wine sees it. A curator checks it first.",
+    "publicKeyRecorded": "The wine record already has {{key}}: {{value}}.",
+    "publicKeyPending": "{{key}} is part of the shared wine record, and a suggested value for it is already waiting for a curator.",
+    "offerLater": "Is this a fact every bottle of this wine shares? You can offer it to the shared registry after saving.",
+    "addToRecord": "Add to the wine record",
+    "keepPrivate": "Keep it private",
+    "share": "Share with the wine record",
+    "shareIntro": "Offer “{{value}}” to the wine record as {{key}}, where every owner of this wine sees it. A curator checks it first.",
+    "matchesRecord": "matches the wine record"
   },
   "priceTracking": {
     "trigger": "Track market price",

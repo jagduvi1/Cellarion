@@ -23,6 +23,7 @@ const { localizedName, sanitizeTranslations } = require('../utils/localizedName'
 const { logAudit } = require('./audit');
 const { createNotification } = require('./notifications');
 const { awardValue, SUPERSEDED_REASON } = require('./suggestionCred');
+const { matchKeyByName } = require('../utils/registryKeyName');
 
 // Names that would shadow first-class record fields — a key called
 // "producer" or "region" must never exist beside the real thing.
@@ -162,10 +163,27 @@ async function listAcceptedKeys({ locale } = {}) {
 }
 
 /**
+ * The ACCEPTED key a member's name for it means, or null. The exact name
+ * comes first (indexed); otherwise the cached vocabulary is matched on the
+ * canonical name and every translation, ignoring case, accents and
+ * punctuation (utils/registryKeyName) — "Alkoholhalt" is ABV. A proposed or
+ * rejected key never matches: values are filed against accepted keys only.
+ */
+async function findAcceptedKeyByName(name) {
+  if (typeof name !== 'string' || !name.trim()) return null;
+  const exact = await RegistryDataKey.findOne({
+    nameKey: { $eq: name.trim().toLowerCase() },
+    status: 'accepted',
+  });
+  if (exact) return exact;
+  return matchKeyByName(await acceptedKeys(), name);
+}
+
+/**
  * Suggest a value for an ACCEPTED key on a visible wine. The key may be
  * addressed by id (keyId) or by NAME (keyName — the promotion path from a
- * personal entry resolves against nameKey server-side, so clients never
- * duplicate the matching rule).
+ * personal entry resolves server-side through findAcceptedKeyByName, so
+ * clients never duplicate the matching rule).
  *
  * `vintage` picks the slot: omitted/blank = the wine-wide default, 'YYYY' =
  * an override for that bottling only. A figure read off a label or a
@@ -179,10 +197,7 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
     if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
     key = await RegistryDataKey.findOne({ _id: { $eq: String(keyId) }, status: 'accepted' });
   } else if (typeof keyName === 'string' && keyName.trim()) {
-    key = await RegistryDataKey.findOne({
-      nameKey: { $eq: keyName.trim().toLowerCase() },
-      status: 'accepted',
-    });
+    key = await findAcceptedKeyByName(keyName);
   } else {
     return fail('invalid', 'Pass keyId or keyName');
   }
@@ -554,6 +569,7 @@ module.exports = {
   REVIEW_QUEUE_LIMIT,
   proposeKey,
   listAcceptedKeys,
+  findAcceptedKeyByName,
   suggestValue,
   dataForWine,
   listReviewQueues,
