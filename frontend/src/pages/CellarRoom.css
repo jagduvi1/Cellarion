@@ -388,7 +388,9 @@
   margin-right: calc(0.35rem - 0.25em);
 }
 
-.room-bottle-producer > span:last-child {
+/* Only the vintage (the second span): a producer without a vintage is the
+   last child too, and must still be able to wrap. */
+.room-bottle-producer > span + span {
   white-space: nowrap;
 }
 
