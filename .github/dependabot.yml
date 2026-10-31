@@ -38,6 +38,14 @@ updates:
       # Active LTS. Bump/remove this when moving to the next LTS.
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+      # Python minors (rembg): a new Python line arrives before numpy and
+      # onnxruntime ship wheels for it, so pip falls back to compiling from
+      # source in a slim image with no compiler and the build fails (3.15 did
+      # exactly that). Digest bumps within the pinned minor still come
+      # through; move to the next minor deliberately, once rembg's
+      # dependencies publish wheels for it.
+      - dependency-name: python
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   # Images docker-compose.yml pulls (mongo, meilisearch, umami, postgres). All
   # are tag + digest pinned, so these bump the @sha256, and the tag too when a
