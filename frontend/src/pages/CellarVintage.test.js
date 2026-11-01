@@ -165,6 +165,30 @@ test('a row opens the bottle page, which is told to lead back here', async () =>
   expect(screen.getByTestId('where').textContent).toBe('/cellars/c1/bottles/b2|{"fromVintage":"/cellars/c1/vintages/w1/2015"}');
 });
 
+// Opened from the cellar list — "all my cellars" chosen on another cellar's
+// page — the way back is that list, and its bottles hand it on, so Drink,
+// Delete or Move on a bottle page lands on the list as it was left.
+test('opened from a cellar list, the page leads back to it and hands it on to its bottles', async () => {
+  renderPage({ pathname: '/cellars/c1/vintages/w1/2015', state: { cellarList: '/cellars/c2' } });
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+  expect(screen.getByText('bottleDetail.backToCellar').closest('a')).toHaveAttribute('href', '/cellars/c2');
+  const rows = [...document.querySelectorAll('.cvb-bottle-list > li')];
+  fireEvent.click(within(rows[1]).getByRole('link'));
+  expect(screen.getByTestId('where').textContent)
+    .toBe('/cellars/c1/bottles/b2|{"fromVintage":"/cellars/c1/vintages/w1/2015","cellarList":"/cellars/c2"}');
+});
+
+test('opened from this cellar\'s own list, the back link keeps the cellar\'s name; a stray path is ignored', async () => {
+  const first = renderPage({ pathname: '/cellars/c1/vintages/w1/2015', state: { cellarList: '/cellars/c1' } });
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+  expect(screen.getByText('history.backTo:{"cellarName":"Home"}').closest('a')).toHaveAttribute('href', '/cellars/c1');
+  first.unmount();
+
+  renderPage({ pathname: '/cellars/c1/vintages/w1/2015', state: { cellarList: '//evil.example/cellars/c2' } });
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+  expect(screen.getByText('history.backTo:{"cellarName":"Home"}').closest('a')).toHaveAttribute('href', '/cellars/c1');
+});
+
 test('Drink, Edit vintage and Add act on this vintage\'s bottles; the page reloads after each', async () => {
   renderPage();
   await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');

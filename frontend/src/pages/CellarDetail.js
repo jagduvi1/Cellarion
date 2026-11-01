@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Suspense, Fragment } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useCameBack } from '../utils/useBackHere';
+import { useCameBack, useBackHere } from '../utils/useBackHere';
 import { validScope, keepKnownCellars } from '../utils/savedScope';
 import useHandedOverState from '../hooks/useHandedOverState';
 import { useTranslation } from 'react-i18next';
@@ -1124,6 +1124,12 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // A bottle opened from this list comes back to it — this cellar's page, with
+  // "all my cellars" still chosen if it was — on Back and after Drink, Delete
+  // or Move, even when the bottle itself lives in another cellar.
+  const backHere = useBackHere('cellar');
+  // The vintage page an entry opens hands the same place on to its bottles.
+  const openVintage = (href) => navigate(href, { state: { cellarList: backHere.backTo } });
   // "Show on cards" (forum feedback 2026-10-12): extra details the user picks
   // for every card — rating, price, size, region, purchase date — per device.
   const [cardFields, setCardFields] = useState(readCardFields);
@@ -1375,7 +1381,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
           // Cross-cellar view, flat (ungrouped) item: linked to + badged with its cellar.
           if (multi && !Array.isArray(item?.bottles)) {
             return (
-              <BottleCard
+              <BottleCard linkState={backHere}
                 key={item._id}
                 bottle={item}
                 details={detailsOf([item])}
@@ -1399,9 +1405,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             const pageHref = vintageHref(rep, groupCellarId);
             if (item.count === 1) {
               return (
-                <BottleCard
+                <BottleCard linkState={backHere}
                   key={rep._id} bottle={rep} details={detailsOf([rep])} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} onLongPress={canBulkMove ? () => enterSelectWith(idsOf(item)) : undefined}
-                  onClick={pageHref ? () => navigate(pageHref) : undefined}
+                  onClick={pageHref ? () => openVintage(pageHref) : undefined}
                   onDrinkOne={canConsume ? () => setDrinkGroup(item) : undefined}
                   actionsInline
                 />
@@ -1409,7 +1415,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             }
             if (!expandedGroups.has(item.key)) {
               return (
-                <BottleCard
+                <BottleCard linkState={backHere}
                   key={item.key}
                   bottle={rep}
                   rackMap={rackMap}
@@ -1418,7 +1424,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   viewMode={viewMode}
                   groupCount={item.count}
                   details={detailsOf(item.bottles)}
-                  onClick={pageHref ? () => navigate(pageHref) : () => toggleGroup(item.key)}
+                  onClick={pageHref ? () => openVintage(pageHref) : () => toggleGroup(item.key)}
                   onExpand={pageHref ? () => toggleGroup(item.key) : undefined}
                   actionsInline
                   onDrinkOne={canConsume ? () => setDrinkGroup(item) : undefined}
@@ -1442,14 +1448,14 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   </button>
                 </div>
                 {item.bottles.map(b => (
-                  <BottleCard key={b._id} bottle={b} details={detailsOf([b])} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([b._id])} onToggleSelect={() => toggleIds([b._id])} onLongPress={canBulkMove ? () => enterSelectWith([b._id]) : undefined} />
+                  <BottleCard linkState={backHere} key={b._id} bottle={b} details={detailsOf([b])} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([b._id])} onToggleSelect={() => toggleIds([b._id])} onLongPress={canBulkMove ? () => enterSelectWith([b._id]) : undefined} />
                 ))}
               </Fragment>
             );
           }
           // Defensive fallback: a plain bottle item (responses are always grouped)
           return (
-            <BottleCard key={item._id} bottle={item} details={detailsOf([item])} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([item._id])} onToggleSelect={() => toggleIds([item._id])} onLongPress={canBulkMove ? () => enterSelectWith([item._id]) : undefined} />
+            <BottleCard linkState={backHere} key={item._id} bottle={item} details={detailsOf([item])} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([item._id])} onToggleSelect={() => toggleIds([item._id])} onLongPress={canBulkMove ? () => enterSelectWith([item._id]) : undefined} />
           );
         })}
       </div>

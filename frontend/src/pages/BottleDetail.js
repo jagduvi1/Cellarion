@@ -36,7 +36,7 @@ import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './BottleDetail.css';
 import { backLabel as backLabelText } from '../utils/backLabel';
 import { isSafeInternalPath } from '../utils/postLoginRedirect';
-import { backPlaceLabel, RETURNING } from '../utils/useBackHere';
+import { backPlaceLabel, cellarListFrom, RETURNING } from '../utils/useBackHere';
 
 // Lazy-load heavy components only needed on user interaction
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
@@ -66,6 +66,18 @@ function BottleDetail() {
   const handedBack = handedPlace && isSafeInternalPath(location.state?.backTo)
     ? { to: location.state.backTo, label: t(handedPlace[0], handedPlace[1]) }
     : null;
+  // After an action that ends the visit (Drink, Delete, Move), go back to the
+  // cellar list the visit started from when that list handed itself over
+  // (directly, or through the vintage page) — as a coming back, so its scope
+  // ("all my cellars"), filters and place are restored the way Back restores
+  // them. Otherwise this bottle's own cellar list. The notice (with Undo)
+  // rides along either way.
+  const cellarList = cellarListFrom(location.state);
+  const leaveToList = (bottleNotice) => {
+    const notice = bottleNotice ? { bottleNotice } : {};
+    if (cellarList) navigate(cellarList, { state: { ...RETURNING, ...notice } });
+    else navigate(`/cellars/${cellarId}`, bottleNotice ? { state: notice } : undefined);
+  };
   // Opened from a row on the vintage page: back goes there.
   // Only an in-app cellar path is taken from the router state.
   const fromVintage = typeof location.state?.fromVintage === 'string' && location.state.fromVintage.startsWith('/cellars/')
@@ -258,7 +270,8 @@ function BottleDetail() {
       if (res.ok && data.batchId) {
         const bottleNotice = { kind: 'deleted', bottleId, batchId: data.batchId, name: noticeName(), onOrder: isOnOrder(bottle) };
         // A cancelled order goes back to the list it came from.
-        navigate(isOnOrder(bottle) ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`, { state: { bottleNotice } });
+        if (isOnOrder(bottle)) navigate(`/cellars/${cellarId}/on-order`, { state: { bottleNotice } });
+        else leaveToList(bottleNotice);
       } else {
         setMistakeOpen(false);
         setError(data.error || t('bottleDetail.mistakeError', 'Could not move the bottle to Recently deleted. Please try again.'));
@@ -307,7 +320,7 @@ function BottleDetail() {
           setConsumeOpen(false);
           setJournalPromptOpen(true);
         } else {
-          navigate(`/cellars/${cellarId}`, { state: { bottleNotice: leaveNoticeRef.current } });
+          leaveToList(leaveNoticeRef.current);
         }
       } else {
         // Close the modal so the inline error banner is visible behind it.
@@ -440,7 +453,7 @@ function BottleDetail() {
 
   const handleMoved = () => {
     setMoveOpen(false);
-    navigate(`/cellars/${cellarId}`); // stay with the source cellar — back to its list
+    leaveToList(); // stay with the source cellar (or the list this visit started from)
   };
 
   const handleAddedMore = (n) => {
@@ -523,7 +536,8 @@ function BottleDetail() {
       {/* ── Clean header ── */}
       <div className="bd-page-header">
         <div className="bd-header-top">
-          <Link to={backTo} state={RETURNING} className="back-link">
+          {/* Back to the vintage page keeps the cellar list it was opened from. */}
+          <Link to={backTo} state={cellarList && backTo === fromVintage ? { ...RETURNING, cellarList } : RETURNING} className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {backLabelText(backLabel)}
           </Link>
@@ -968,7 +982,7 @@ function BottleDetail() {
             bottle={bottle}
             onDone={() => {
               setJournalPromptOpen(false);
-              navigate(`/cellars/${cellarId}`, { state: { bottleNotice: leaveNoticeRef.current } });
+              leaveToList(leaveNoticeRef.current);
             }}
           />
         )}
