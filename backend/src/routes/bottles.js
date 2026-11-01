@@ -1173,21 +1173,29 @@ router.post('/:id/open', requireBottleAccess('editor'), async (req, res) => {
   try {
     // openedAt: when it was really opened — an open queued offline (#1355) is
     // sent later. Validated by the service (not future, at most 90 days back).
-    const result = await openBottle(req.bottle, { preservationMethod: req.body?.preservationMethod, openedAt: req.body?.openedAt }, req);
+    // takeOutOfRack: the bottle leaves its slot (on the counter, not back in
+    // the rack); takenOutOf names the slot it left, null when it stayed.
+    const result = await openBottle(req.bottle, {
+      preservationMethod: req.body?.preservationMethod,
+      openedAt: req.body?.openedAt,
+      takeOutOfRack: req.body?.takeOutOfRack,
+    }, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
-    res.json({ bottle: result.bottle });
+    res.json({ bottle: result.bottle, takenOutOf: result.takenOutOf });
   } catch (error) {
     console.error('Open bottle error:', error);
     res.status(500).json({ error: 'Failed to open bottle' });
   }
 });
 
-// DELETE /api/bottles/:id/open — undo an accidental open (clears pours too)
+// DELETE /api/bottles/:id/open — undo an accidental open (clears pours too).
+// A bottle taken out of its rack when opened goes back into that slot while
+// it is free; putBack names the slot, null when it stays unplaced.
 router.delete('/:id/open', requireBottleAccess('editor'), async (req, res) => {
   try {
     const result = await closeBottle(req.bottle, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
-    res.json({ bottle: result.bottle });
+    res.json({ bottle: result.bottle, putBack: result.putBack });
   } catch (error) {
     console.error('Undo open error:', error);
     res.status(500).json({ error: 'Failed to undo open' });

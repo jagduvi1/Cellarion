@@ -298,6 +298,18 @@ const bottleSchema = new mongoose.Schema({
   // Set by the daily notifier when the open-bottle expiry alert fires, so it
   // fires exactly once per opening. Reset on open / undo-open.
   openBottleNotifiedAt: { type: Date, default: null },
+  // The rack slot the bottle left when it was opened with "Take it out of the
+  // rack" (a recorked bottle on the counter, not a Coravin back in its slot).
+  // Undoing the open puts it back there while that slot is still free and the
+  // bottle has not been placed anew. Null when it stayed in its slot. Cleared
+  // on undo-open and on consume.
+  openedFromSlot: {
+    type: new mongoose.Schema({
+      rack: { type: mongoose.Schema.Types.ObjectId, ref: 'Rack', required: true },
+      position: { type: Number, required: true },
+    }, { _id: false }),
+    default: null,
+  },
   // Drink-window notification tracking — set by the daily notifier job
   drinkWindowNotifiedStatus: { type: String, default: null },
   drinkWindowNotifiedAt:     { type: Date,   default: null },

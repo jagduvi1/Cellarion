@@ -128,6 +128,14 @@ describe('applyOp — the device copy follows the server', () => {
     expect(after(op(`/api/bottles/${b1}/open`, 'POST', { preservationMethod: 'coravin' })).bottleById.get(b1).preservationMethod).toBe('coravin');
   });
 
+  it('open with "Take it out of the rack" frees the slot; without it the bottle stays', () => {
+    const out = after(op(`/api/bottles/${b1}/open`, 'POST', { preservationMethod: 'recorked', takeOutOfRack: true }));
+    expect(out.bottleById.get(b1).preservationMethod).toBe('recorked');
+    expect(out.placement.has(b1)).toBe(false);
+    const kept = after(op(`/api/bottles/${b1}/open`, 'POST', { preservationMethod: 'coravin', takeOutOfRack: false }));
+    expect(kept.placement.get(b1).position).toBe(1);
+  });
+
   it('does not touch the original snapshot', () => {
     applyOp(SNAP, op(`/api/bottles/${b1}/consume`, 'POST', {}));
     expect(SNAP.bottles).toHaveLength(4);
