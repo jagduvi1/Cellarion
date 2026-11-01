@@ -1000,11 +1000,11 @@ export default function CellarRoom() {
     }
   };
 
-  const confirmPartial = async (method) => {
+  const confirmPartial = async (method, takeOutOfRack) => {
     const { bottleId } = partialPicker;
     setPartialBusy(true);
     try {
-      const res = await openBottle(apiFetch, bottleId, method);
+      const res = await openBottle(apiFetch, bottleId, method, { takeOutOfRack });
       if (!res.ok) {
         failed(res, await res.json().catch(() => ({})), t('racks.errors.open', 'The bottle could not be opened.'));
         return;

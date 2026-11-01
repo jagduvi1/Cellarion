@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   bottleSizeMl, pouredMl, remainingMl, glassesLeft,
-  drinkByDate, daysLeft, freshnessStatus, PRESERVATION_METHODS,
+  drinkByDate, daysLeft, freshnessStatus, PRESERVATION_METHODS, takeOutByDefault,
 } from './openBottle';
 
 const DAY = 86400000;
@@ -81,5 +81,14 @@ describe('freshness window', () => {
     for (const m of PRESERVATION_METHODS) {
       expect(m.freshnessDays).toBeGreaterThan(0);
     }
+  });
+});
+
+// A Coravin'd bottle goes straight back into its slot; a recorked, stoppered
+// or pumped one stands in the kitchen until it is finished.
+describe('takeOutByDefault', () => {
+  it('is off for Coravin only', () => {
+    expect(takeOutByDefault('coravin')).toBe(false);
+    for (const id of ['inert-gas', 'vacuum', 'sparkling-stopper', 'recorked']) expect(takeOutByDefault(id)).toBe(true);
   });
 });

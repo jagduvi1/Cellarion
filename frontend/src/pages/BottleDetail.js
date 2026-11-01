@@ -13,6 +13,7 @@ import { useFeature } from '../utils/featureFlags';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import { slotLabel } from '../utils/slotLabel';
 import OpenBottlePanel from '../components/bottle/OpenBottlePanel';
+import TakeOutOfRackChoice, { takeOutState } from '../components/bottle/TakeOutOfRackChoice';
 import { PRESERVATION_METHODS } from '../utils/openBottle';
 import { fetchRates } from '../utils/currency';
 import SITE_URL from '../config/siteUrl';
@@ -142,6 +143,12 @@ function BottleDetail() {
   const leaveNoticeRef = useRef(null);
   const [openPickerOpen, setOpenPickerOpen] = useState(false);
   const [openingMethod, setOpeningMethod] = useState('coravin');
+  // "Take it out of the rack": null follows the method's default (Coravin
+  // stays in its slot); true/false once ticked or unticked. Each opening of
+  // the dialog starts from the default again.
+  const [takeOutTouched, setTakeOutTouched] = useState(null);
+  useEffect(() => { if (openPickerOpen) setTakeOutTouched(null); }, [openPickerOpen]);
+  const takeOut = takeOutState(openingMethod, takeOutTouched);
   const [openingBusy, setOpeningBusy] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
   const [defaultImage, setDefaultImage] = useState(null);
@@ -287,9 +294,12 @@ function BottleDetail() {
   const handleOpenBottle = async () => {
     setOpeningBusy(true);
     try {
-      const res = await openBottle(apiFetch, bottleId, openingMethod);
+      // Only a bottle in a rack has a slot to leave.
+      const res = await openBottle(apiFetch, bottleId, openingMethod, rackInfo ? { takeOutOfRack: takeOut } : {});
       const data = await res.json();
       if (res.ok) {
+        // Out of its slot now (also when the open was queued offline).
+        if (rackInfo && takeOut) setRackInfo(null);
         setBottle(prev => ({
           ...prev,
           openedAt: data.bottle.openedAt,
@@ -603,7 +613,11 @@ function BottleDetail() {
         <OpenBottlePanel
           bottle={bottle}
           canEdit={canEdit}
-          onBottleChange={(patch) => setBottle(prev => ({ ...prev, ...patch }))}
+          onBottleChange={(patch, data) => {
+            setBottle(prev => ({ ...prev, ...patch }));
+            // Undoing an open that took it out of its rack put it back: show where.
+            if (data?.putBack) fetchBottle();
+          }}
           onFinish={() => setConsumeOpen(true)}
         />
       )}
@@ -1014,6 +1028,9 @@ function BottleDetail() {
                   </label>
                 ))}
               </div>
+              {rackInfo && (
+                <TakeOutOfRackChoice checked={takeOut} onChange={setTakeOutTouched} disabled={openingBusy} />
+              )}
               <div className="modal-actions">
                 <button className="btn btn-secondary" onClick={() => setOpenPickerOpen(false)} disabled={openingBusy}>
                   {t('common.cancel')}

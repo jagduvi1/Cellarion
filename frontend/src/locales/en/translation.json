@@ -4109,6 +4109,8 @@
     "pickerTitle": "Open this bottle",
     "pickerText": "How will you preserve it? This sets the drink-by window — the bottle stays in your cellar until you finish it.",
     "confirmBtn": "Open bottle",
+    "takeOut": "Take it out of the rack",
+    "takeOutHint": "Frees its slot while it stands open. Undo puts it back.",
     "openBtnShort": "Open",
     "freshness": "about {{days}} days",
     "method": {

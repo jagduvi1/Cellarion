@@ -5,7 +5,11 @@
  * audit actions (which drive the SSE nudge), and the restore window.
  */
 
-jest.mock('../models/Rack', () => ({ updateMany: jest.fn().mockResolvedValue({}) }));
+jest.mock('../models/Rack', () => ({
+  updateMany: jest.fn().mockResolvedValue({}),
+  findOne: jest.fn(),
+  exists: jest.fn(),
+}));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./restockChecker', () => ({ checkRestockGap: jest.fn().mockResolvedValue(undefined), resolveRestockAlerts: jest.fn().mockResolvedValue(undefined) }));
 
@@ -741,13 +745,141 @@ describe('open-bottle ops (openBottle / pourFromBottle / closeBottle)', () => {
     expect(res.prevOpenState).toEqual({
       openedAt, preservationMethod: 'vacuum',
       pours: [{ at: openedAt, ml: 125 }], openBottleNotifiedAt: notified,
+      openedFromSlot: null,
     });
+    expect(res.putBack).toBeNull(); // it stayed in its slot when opened: nothing to put back
     expect(bottle.openedAt).toBeNull();
     expect(bottle.preservationMethod).toBeUndefined();
     expect(bottle.pours).toEqual([]);
     expect(bottle.openBottleNotifiedAt).toBeNull();
     expect(bottle.save).toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.open_undo', { type: 'bottle', id: 'b1', cellarId: 'c1' });
+  });
+});
+
+// "Take it out of the rack" when opening (a support ticket, 2026-10-31): a
+// recorked bottle on the kitchen counter is no longer in its slot. The slot is
+// freed and remembered, so undoing the open puts the bottle back while that
+// slot is still free. A Coravin bottle keeps its slot: the caller decides.
+describe('open-bottle ops: taking the bottle out of its rack', () => {
+  const { openBottle, closeBottle } = require('./bottleOps');
+  const leanRack = (rack) => ({ select: () => ({ lean: async () => rack }) });
+  const RACK = { _id: 'r1', name: 'Left wall', slots: [{ position: 7, bottle: 'b1' }, { position: 8, bottle: 'b2' }] };
+  const rackDoc = (slots) => ({
+    _id: 'r1', name: 'Left wall', type: 'grid', rows: 4, cols: 8, disabledPositions: [], slots: [...slots],
+    save: jest.fn().mockResolvedValue(undefined),
+  });
+  const openedFrom = (over = {}) => freshBottle({
+    openedAt: new Date('2026-10-30T19:00:00Z'), preservationMethod: 'recorked', pours: [],
+    openedFromSlot: { rack: 'r1', position: 7 }, ...over,
+  });
+
+  test('takeOutOfRack: the slot is remembered, freed AFTER the save, and named in the answer', async () => {
+    Rack.findOne.mockReturnValueOnce(leanRack(RACK));
+    const bottle = freshBottle();
+    const order = [];
+    bottle.save.mockImplementation(async () => order.push('save'));
+    Rack.updateMany.mockImplementation(async () => order.push('rack'));
+
+    const res = await openBottle(bottle, { preservationMethod: 'recorked', takeOutOfRack: true }, REQ);
+
+    expect(res.error).toBeUndefined();
+    expect(bottle.openedFromSlot).toEqual({ rack: 'r1', position: 7 });
+    expect(res.takenOutOf).toEqual({ rackId: 'r1', rackName: 'Left wall', position: 7 });
+    expect(order).toEqual(['save', 'rack']);
+    expect(Rack.updateMany).toHaveBeenCalledWith(
+      { 'slots.bottle': 'b1' }, { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } }
+    );
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.open',
+      { type: 'bottle', id: 'b1', cellarId: 'c1' }, { preservationMethod: 'recorked', takenOutOfRack: true });
+  });
+
+  test('without it (or for an unplaced bottle) the rack is left alone', async () => {
+    const kept = freshBottle();
+    const res = await openBottle(kept, { preservationMethod: 'coravin' }, REQ);
+    expect(res.takenOutOf).toBeNull();
+    expect(kept.openedFromSlot).toBeNull();
+    expect(Rack.findOne).not.toHaveBeenCalled();
+    expect(Rack.updateMany).not.toHaveBeenCalled();
+
+    Rack.findOne.mockReturnValueOnce(leanRack(null));
+    const unplaced = freshBottle();
+    const res2 = await openBottle(unplaced, { preservationMethod: 'vacuum', takeOutOfRack: true }, REQ);
+    expect(res2.takenOutOf).toBeNull();
+    expect(unplaced.openedFromSlot).toBeNull();
+    expect(Rack.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('takeOutOfRack must be a boolean; nothing is changed otherwise', async () => {
+    const bottle = freshBottle();
+    const res = await openBottle(bottle, { preservationMethod: 'vacuum', takeOutOfRack: 'yes' }, REQ);
+    expect(res.error.status).toBe(400);
+    expect(bottle.save).not.toHaveBeenCalled();
+    expect(bottle.openedAt).toBeUndefined();
+  });
+
+  test('undoing the open puts it back into the free slot it left', async () => {
+    Rack.exists.mockResolvedValueOnce(null); // not placed anew
+    const rack = rackDoc([{ position: 8, bottle: 'b2' }]);
+    Rack.findOne.mockResolvedValueOnce(rack);
+    const bottle = openedFrom();
+
+    const res = await closeBottle(bottle, REQ);
+
+    expect(res.putBack).toEqual({ rackId: 'r1', rackName: 'Left wall', position: 7 });
+    expect(res.prevOpenState.openedFromSlot).toEqual({ rack: 'r1', position: 7 });
+    expect(bottle.openedFromSlot).toBeNull();
+    expect(Rack.findOne).toHaveBeenCalledWith({ _id: 'r1', cellar: 'c1', deletedAt: null });
+    expect(rack.slots).toContainEqual({ position: 7, bottle: 'b1' });
+    expect(rack.save).toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.open_undo',
+      { type: 'bottle', id: 'b1', cellarId: 'c1' }, { putBackInRack: true });
+  });
+
+  test('it stays unplaced when the slot is taken, the rack is gone, or it was placed anew', async () => {
+    // Another bottle took the slot meanwhile: never displaced.
+    Rack.exists.mockResolvedValueOnce(null);
+    const taken = rackDoc([{ position: 7, bottle: 'b9' }]);
+    Rack.findOne.mockResolvedValueOnce(taken);
+    expect((await closeBottle(openedFrom(), REQ)).putBack).toBeNull();
+    expect(taken.save).not.toHaveBeenCalled();
+
+    // The rack was deleted (or belongs to another cellar now).
+    Rack.exists.mockResolvedValueOnce(null);
+    Rack.findOne.mockResolvedValueOnce(null);
+    expect((await closeBottle(openedFrom(), REQ)).putBack).toBeNull();
+
+    // Placed in a rack again since: that is where it lives now.
+    Rack.findOne.mockClear();
+    Rack.exists.mockResolvedValueOnce({ _id: 'r2' });
+    expect((await closeBottle(openedFrom(), REQ)).putBack).toBeNull();
+    expect(Rack.findOne).not.toHaveBeenCalled();
+
+    // The rack shrank, or the slot was disabled.
+    Rack.exists.mockResolvedValueOnce(null);
+    Rack.findOne.mockResolvedValueOnce({ ...rackDoc([]), rows: 1, cols: 4 });
+    expect((await closeBottle(openedFrom(), REQ)).putBack).toBeNull();
+    Rack.exists.mockResolvedValueOnce(null);
+    Rack.findOne.mockResolvedValueOnce({ ...rackDoc([]), disabledPositions: [7] });
+    expect((await closeBottle(openedFrom(), REQ)).putBack).toBeNull();
+  });
+
+  test('a lost race on the rack leaves it unplaced instead of failing the undo', async () => {
+    Rack.exists.mockResolvedValueOnce(null);
+    const rack = rackDoc([]);
+    rack.save.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: 11000 }));
+    Rack.findOne.mockResolvedValueOnce(rack);
+    const bottle = openedFrom();
+    const res = await closeBottle(bottle, REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.putBack).toBeNull();
+    expect(bottle.openedAt).toBeNull(); // the undo itself stands
+  });
+
+  test('drinking it forgets the slot it left', async () => {
+    const bottle = openedFrom();
+    await consumeBottle(bottle, { reason: 'drank' }, REQ);
+    expect(bottle.openedFromSlot).toBeNull();
   });
 });
 
