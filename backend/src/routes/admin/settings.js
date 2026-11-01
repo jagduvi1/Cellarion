@@ -313,16 +313,22 @@ router.get('/inactive-accounts', async (req, res) => {
   try {
     const ia = require('../../services/inactiveAccounts');
     const { EMAIL_VERIFICATION_ENABLED } = require('../../services/mailgun');
-    const User = require('../../models/User');
     const AuditLog = require('../../models/AuditLog');
     const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [settings, today, firstNotices, finalNotices, deleted] = await Promise.all([
+    // What the job did is read from its own audit rows (the stamps on accounts
+    // disappear when a timeline ends, so they would undercount).
+    const audited = (action, detail = {}) => AuditLog.countDocuments({ action, timestamp: { $gte: since30 }, ...detail });
+    const User = require('../../models/User');
+    const [settings, preview, onTimeline, firstNotices, finalNotices, deleted] = await Promise.all([
       ia.getSettings(),
       ia.preview(),
-      User.countDocuments({ 'inactivityNotice.firstSentAt': { $gte: since30 } }),
-      User.countDocuments({ 'inactivityNotice.finalSentAt': { $gte: since30 } }),
-      AuditLog.countDocuments({ action: 'user.inactivity_deleted', timestamp: { $gte: since30 } }),
+      // Accounts on a timeline right now, whether or not a step is due today.
+      User.countDocuments({ 'inactivityNotice.firstSentAt': { $ne: null } }),
+      audited('user.inactivity_notice', { 'detail.notice': 'first' }),
+      audited('user.inactivity_notice', { 'detail.notice': 'final' }),
+      audited('user.inactivity_deleted'),
     ]);
+    const today = preview.counts || {};
     res.json({
       ...settings,
       mailConfigured: EMAIL_VERIFICATION_ENABLED,
@@ -332,17 +338,19 @@ router.get('/inactive-accounts', async (req, res) => {
         firstNoticeDays: ia.FIRST_NOTICE_DAYS,
         finalNoticeDays: ia.FINAL_NOTICE_DAYS,
       },
+      // Use has been recorded since this day; nobody counts as unused from
+      // earlier, so no account can be deleted before the earliest date.
+      trackedSince: preview.trackedSince,
+      earliestDeletion: ia.addMonths(preview.trackedSince, ia.MONTHS_EMPTY),
       today: {
         first: today.first || 0,
         final: today.final || 0,
         delete: today.delete || 0,
-        waiting: today.wait || 0,
         exempt: Object.entries(today)
           .filter(([k]) => k.startsWith('skip:') && k !== 'skip:active')
           .reduce((n, [, v]) => n + v, 0),
       },
-      // Accounts still on a timeline that started in the window (a timeline
-      // ends when the account is used again, so these are lower bounds).
+      onTimeline,
       last30Days: { firstNotices, finalNotices, deleted },
     });
   } catch (err) {

@@ -289,11 +289,13 @@ const userSchema = new mongoose.Schema({
     index: true
   },
   // The inactive-account timeline (services/inactiveAccounts), present only
-  // while one is running: when each of the two notices went out, whether the
-  // first reached an inbox, the deletion date they announced, and the
-  // lastActiveAt the timeline is based on (unusedSince). Over as soon as the
-  // account is used again (lastActiveAt moves past unusedSince), and cleared
-  // when an admin turns the rule on (every timeline restarts with 30 days).
+  // while one is running: when each of the two notices went out (written only
+  // once the mail service accepted it, or at once for an account with no
+  // confirmed address — emailed false), the deletion date they announced, the
+  // lastActiveAt the timeline is based on (unusedSince), and the claims of a
+  // run sending a notice (sendingAt, finalSendingAt) or erasing (erasingAt). Over as soon as the account is used again
+  // (lastActiveAt moves past unusedSince), and cleared when an admin turns the
+  // rule on (every timeline restarts with 30 days).
   // Never sent to the client (toJSON); part of the export; goes with the row.
   inactivityNotice: {
     type: new mongoose.Schema({
@@ -302,6 +304,9 @@ const userSchema = new mongoose.Schema({
       deleteAfter: { type: Date, default: null },
       emailed: { type: Boolean, default: false },
       unusedSince: { type: Date, default: null },
+      sendingAt: { type: Date, default: null },
+      finalSendingAt: { type: Date, default: null },
+      erasingAt: { type: Date, default: null },
     }, { _id: false }),
     default: undefined
   },
@@ -353,8 +358,9 @@ const userSchema = new mongoose.Schema({
   // (services/accountOps): from then on the per-category switches decide.
   // The exceptions are messages about the account itself, which the Privacy
   // Policy (section 8) names: email verification and password reset (the
-  // person asked for them), the account-lockout alert (security), and the two
-  // notices before an unused account is deleted (services/inactiveAccounts).
+  // person asked for them), the account-lockout alert (security), the one
+  // supporter thank-you (services/supporterThankYou), and the two notices
+  // before an unused account is deleted (services/inactiveAccounts).
   emailOptOutAt: {
     type: Date,
     default: null
@@ -565,6 +571,9 @@ userSchema.index({ 'authProviders.provider': 1, 'authProviders.providerId': 1 })
 // the global concurrency ceiling. A partial index keyed to demo rows keeps both
 // cheap and stays empty (zero bytes) for the overwhelming majority of real users.
 userSchema.index({ demoExpiresAt: 1 }, { partialFilterExpression: { isDemo: true } });
+// The inactive-account job's "next step due" query reads accounts on a
+// timeline by their deletion date; only those few rows carry the field.
+userSchema.index({ 'inactivityNotice.deleteAfter': 1 }, { sparse: true });
 
 // Heal legacy notification-pref shapes before save. Old docs stored
 // `drinkWindow: false` (single boolean); the current schema expects

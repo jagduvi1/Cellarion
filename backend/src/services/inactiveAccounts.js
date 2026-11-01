@@ -15,6 +15,12 @@
  * sooner than 30 days after the first notice and 7 days after the final one,
  * whenever the job happens to run.
  *
+ * Nobody is counted as unused from before the day this install started
+ * recording use (lastActive.getTrackingSince): older history is mostly gone
+ * (sessions last 30 days, the activity log 90), and a missing trace is not
+ * proof of absence. So no account can reach a notice before that day plus the
+ * period, whatever its creation date or backfilled lastActiveAt says.
+ *
  * Never inactive, whatever the date: demo accounts (they expire on their own),
  * staff (admin, sommelier, moderator), the system accounts (usernames starting
  * with "__"), an account already being deleted, a paying supporter, and the
@@ -22,9 +28,12 @@
  * owner would erase the cellar under them.
  *
  * The notices are messages about the account itself, so they are emailed even
- * to someone who unsubscribed from all email (Privacy Policy, section 8). An
- * account with no confirmed address goes through the same timeline without
- * the emails; it is recorded as such (inactivityNotice.emailed).
+ * to someone who unsubscribed from all email (Privacy Policy, section 8). A
+ * notice counts only once it was handed to the mail service: a failed send is
+ * rolled back and tried again the next day, and no account is erased in a run
+ * in which a notice failed. An account with no confirmed address (it cannot be
+ * signed in to) goes through the timeline without the emails, as the policy
+ * says (inactivityNotice.emailed false).
  *
  * Off until an admin turns it on (SuperAdmin → Settings), and it does nothing
  * while email is not configured: nobody is deleted without being told.
@@ -38,7 +47,7 @@ const JournalEntry = require('../models/JournalEntry');
 const SiteConfig = require('../models/SiteConfig');
 const { PLANS, PLAN_NAMES } = require('../config/plans');
 const { updateSiteConfig } = require('../utils/siteConfig');
-const { activeDay } = require('./lastActive');
+const { activeDay, getTrackingSince } = require('./lastActive');
 // Read as a module, so whether email is configured is looked up at each run.
 const mailgun = require('./mailgun');
 const { eraseAccount } = require('./userDeletionJob');
@@ -53,10 +62,20 @@ const DAY = 24 * 60 * 60 * 1000;
 const STAFF_ROLES = ['admin', 'somm', 'moderator'];
 const PAID_PLANS = PLAN_NAMES.filter((p) => PLANS[p].price > 0);
 const IN_CELLAR = ['active', 'ordered'];
-// Bounded work per run; the next day's run picks up the rest.
-const MAX_ACCOUNTS_PER_RUN = 500;
+// Bounded work per run, per kind of step. Each query selects only accounts
+// with a step due today, so the rest is reached on later days.
+const MAX_PER_STEP = 500;
+// Accounts in the 12-month band are read in a wider window and narrowed in
+// bulk to the empty ones before anything else is done with them.
+const EMPTY_BAND_WINDOW = 5000;
 const MAX_DELETIONS_PER_RUN = 50;
 const EMAIL_TIMEOUT_MS = 10_000;
+// A claim older than this was left by an earlier run that did not finish
+// (runs are daily, a send takes seconds): take it over. A claim to send a
+// notice is retried within the hour; one to erase, at the next day's run.
+const STALE_SEND_CLAIM_MS = 60 * 60 * 1000;
+const STALE_ERASE_CLAIM_MS = 12 * 60 * 60 * 1000;
+const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 /** `date` plus `months` calendar months (UTC). */
 function addMonths(date, months) {
@@ -87,11 +106,19 @@ async function setEnabled(enabled, updatedBy) {
   }
   const value = { enabled, since: enabled ? new Date() : current.since };
   await updateSiteConfig(CONFIG_KEY, value, updatedBy);
+  previewCache = null;
   return value;
 }
 
-/** The day the account was last used; its creation day when never recorded. */
-const lastUsed = (user) => (user.lastActiveAt ? new Date(user.lastActiveAt) : activeDay(user.createdAt));
+/**
+ * The day from which the account counts as unused: its last recorded day of
+ * use (its creation day when none was recorded), but never earlier than the
+ * day this install started recording use.
+ */
+function unusedFrom(user, trackedSince) {
+  const recorded = user.lastActiveAt ? new Date(user.lastActiveAt) : activeDay(user.createdAt);
+  return trackedSince ? later(recorded, new Date(trackedSince)) : recorded;
+}
 
 /**
  * Whether a stored timeline still applies: started, and the account not used
@@ -114,11 +141,12 @@ function isPaying(user, now) {
 
 /**
  * What the job does with one account today. Pure: `facts` is what factsFor
- * found ({ hasContent, sharedCellarInUse }). Returns
- *   { action: 'first' | 'final' | 'delete' | 'wait', months, due, deleteAfter }
+ * found ({ hasContent, sharedCellarInUse }); `trackedSince` the day this
+ * install started recording use (getTrackingSince). Returns
+ *   { action: 'first' | 'final' | 'delete' | 'wait', months, due, deleteAfter, unusedFrom }
  * or { action: 'skip:<reason>' }.
  */
-function decide(user, facts, now) {
+function decide(user, facts, now, trackedSince = null) {
   if (user.isDemo) return { action: 'skip:demo' };
   if ((user.roles || []).some((r) => STAFF_ROLES.includes(r))) return { action: 'skip:staff' };
   if (typeof user.username === 'string' && user.username.startsWith('__')) return { action: 'skip:system' };
@@ -127,22 +155,27 @@ function decide(user, facts, now) {
   if (facts.sharedCellarInUse) return { action: 'skip:shared-cellar' };
 
   const months = facts.hasContent ? MONTHS_WITH_CONTENT : MONTHS_EMPTY;
-  const due = addMonths(lastUsed(user), months);
+  const from = unusedFrom(user, trackedSince);
+  const due = addMonths(from, months);
+  const base = { months, due, unusedFrom: from };
   // A timeline only counts while the account is still as unused as when it
   // started; used since, it is over (the job also clears it, clearReturned).
   const notice = onTimeline(user) ? user.inactivityNotice : {};
 
   if (!notice.firstSentAt) {
     if (now.getTime() < due.getTime() - FIRST_NOTICE_DAYS * DAY) return { action: 'skip:active' };
-    return { action: 'first', months, due, deleteAfter: later(due, new Date(now.getTime() + FIRST_NOTICE_DAYS * DAY)) };
+    return { action: 'first', ...base, deleteAfter: later(due, new Date(now.getTime() + FIRST_NOTICE_DAYS * DAY)) };
   }
   const deleteAfter = new Date(notice.deleteAfter);
+  // The stored date already lies on or after `due`; checked again so that no
+  // later step can come before the account has been unused for the period.
+  if (now.getTime() < due.getTime() - FINAL_NOTICE_DAYS * DAY) return { action: 'wait', ...base, deleteAfter };
   if (!notice.finalSentAt) {
-    if (now.getTime() < deleteAfter.getTime() - FINAL_NOTICE_DAYS * DAY) return { action: 'wait', months, due, deleteAfter };
-    return { action: 'final', months, due, deleteAfter: later(deleteAfter, new Date(now.getTime() + FINAL_NOTICE_DAYS * DAY)) };
+    if (now.getTime() < deleteAfter.getTime() - FINAL_NOTICE_DAYS * DAY) return { action: 'wait', ...base, deleteAfter };
+    return { action: 'final', ...base, deleteAfter: later(deleteAfter, new Date(now.getTime() + FINAL_NOTICE_DAYS * DAY)) };
   }
-  if (now.getTime() < deleteAfter.getTime()) return { action: 'wait', months, due, deleteAfter };
-  return { action: 'delete', months, due, deleteAfter };
+  if (now.getTime() < deleteAfter.getTime() || now.getTime() < due.getTime()) return { action: 'wait', ...base, deleteAfter };
+  return { action: 'delete', ...base, deleteAfter };
 }
 
 /**
@@ -170,24 +203,74 @@ async function factsFor(user, now) {
 
 const ACCOUNT_FIELDS = '_id username displayName email emailVerified roles isDemo deletionScheduledFor plan planExpiresAt stripeSubscriptionId stripeCustomerId createdAt lastActiveAt inactivityNotice';
 
+// Accounts that can never be inactive are left out of the queries that START
+// a timeline (the owner of a shared cellar in use needs a lookup, so decide()
+// handles it). The query for timelines already running deliberately has no
+// such filter: an account that became exempt while on one (a supporter grant,
+// a staff role) must still be read, so its timeline is ended, not frozen until
+// the exemption lapses and then resumed with year-old notices.
+const base = (now) => ({
+  isDemo: { $ne: true },
+  deletionScheduledFor: null,
+  roles: { $nin: STAFF_ROLES },
+  username: { $not: /^__/ },
+  stripeSubscriptionId: null,
+  $nor: [{ plan: { $in: PAID_PLANS }, $or: [{ planExpiresAt: null }, { planExpiresAt: { $gt: now } }] }],
+});
+
+/** Unused (by lastActiveAt, or creation when none) on or before `cutoff`. */
+const unusedBy = (cutoff) => ({
+  $or: [{ lastActiveAt: { $lte: cutoff } }, { lastActiveAt: null, createdAt: { $lte: cutoff } }],
+});
+
 /**
- * Accounts that could be due for something today: unused for at least the
- * shorter period minus the first-notice lead, or already on a timeline.
- * Accounts that can never be inactive are left out of the query itself.
+ * The three kinds of account with a step that may be due today, each its own
+ * bounded query, so none of them can keep another out:
+ *   - on a timeline whose next notice or erasure is due;
+ *   - not on one, and unused long enough for a first notice under 24 months;
+ *   - not on one, unused long enough under 12 months, and empty (narrowed in
+ *     bulk from a wider window, so accounts with content waiting for their 24
+ *     months never fill the step).
+ * No first notice is possible before the tracking start plus the period less
+ * the notice lead, so those two queries are skipped until then.
  */
-function candidateQuery(now) {
-  const earliest = new Date(addMonths(now, -MONTHS_EMPTY).getTime() + FIRST_NOTICE_DAYS * DAY);
-  return {
-    isDemo: { $ne: true },
-    deletionScheduledFor: null,
-    roles: { $nin: STAFF_ROLES },
-    username: { $not: /^__/ },
+async function candidates(now, trackedSince) {
+  const seen = new Map();
+  const add = (rows) => { for (const r of rows) if (!seen.has(String(r._id))) seen.set(String(r._id), r); };
+
+  add(await User.find({
+    'inactivityNotice.firstSentAt': { $ne: null },
     $or: [
-      { lastActiveAt: { $lte: earliest } },
-      { lastActiveAt: null, createdAt: { $lte: earliest } },
-      { 'inactivityNotice.firstSentAt': { $ne: null } },
+      { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': { $lte: new Date(now.getTime() + FINAL_NOTICE_DAYS * DAY) } },
+      { 'inactivityNotice.finalSentAt': { $ne: null }, 'inactivityNotice.deleteAfter': { $lte: now } },
     ],
-  };
+  }).select(ACCOUNT_FIELDS).sort({ 'inactivityNotice.deleteAfter': 1 }).limit(MAX_PER_STEP).lean());
+
+  const lead = FIRST_NOTICE_DAYS * DAY;
+  const cutoff24 = new Date(addMonths(now, -MONTHS_WITH_CONTENT).getTime() + lead);
+  const cutoff12 = new Date(addMonths(now, -MONTHS_EMPTY).getTime() + lead);
+  const tracked = trackedSince ? new Date(trackedSince).getTime() : 0;
+  const notOnTimeline = { 'inactivityNotice.firstSentAt': null };
+
+  if (tracked <= cutoff24.getTime()) {
+    add(await User.find({ ...base(now), ...notOnTimeline, ...unusedBy(cutoff24) })
+      .select(ACCOUNT_FIELDS).sort({ lastActiveAt: 1, createdAt: 1 }).limit(MAX_PER_STEP).lean());
+  }
+  if (tracked <= cutoff12.getTime()) {
+    const band = await User.find({ ...base(now), ...notOnTimeline, ...unusedBy(cutoff12) })
+      .select('_id').sort({ lastActiveAt: 1, createdAt: 1 }).limit(EMPTY_BAND_WINDOW).lean();
+    const ids = band.map((u) => u._id).filter((id) => !seen.has(String(id)));
+    if (ids.length) {
+      const holders = new Set((await Promise.all([
+        Bottle.distinct('user', { user: { $in: ids } }),
+        WishlistItem.distinct('user', { user: { $in: ids } }),
+        JournalEntry.distinct('user', { user: { $in: ids } }),
+      ])).flat().map(String));
+      const empty = ids.filter((id) => !holders.has(String(id))).slice(0, MAX_PER_STEP);
+      if (empty.length) add(await User.find({ _id: { $in: empty } }).select(ACCOUNT_FIELDS).lean());
+    }
+  }
+  return [...seen.values()];
 }
 
 /**
@@ -196,100 +279,156 @@ function candidateQuery(now) {
  * account first seen since then counts as used too).
  */
 async function clearReturned() {
+  // Any stored state, not only a started timeline: a claim left by a run that
+  // stopped before its first notice went out is cleared the same way.
   const r = await User.updateMany(
-    { 'inactivityNotice.firstSentAt': { $ne: null }, $expr: { $gt: ['$lastActiveAt', '$inactivityNotice.unusedSince'] } },
+    { inactivityNotice: { $exists: true }, $expr: { $gt: ['$lastActiveAt', '$inactivityNotice.unusedSince'] } },
     { $unset: { inactivityNotice: '' } },
   );
   return r?.modifiedCount || 0;
 }
 
-const withTimeout = (p, ms) => Promise.race([
-  p,
-  new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms).unref?.()),
-]);
+function withTimeout(p, ms) {
+  let timer;
+  return Promise.race([
+    p,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 /**
- * Send one notice. The stamp is claimed first, guarded on the account still
- * being unused (lastActiveAt unchanged since the read): a sign-in a moment
- * ago wins. A send that fails after the claim is not retried — the deletion
- * date it announced stands, and the final notice still follows.
+ * Send one notice, in two steps, so a notice counts only once the mail service
+ * accepted it. First a claim (sendingAt / finalSendingAt), guarded on the
+ * account still being unused (lastActiveAt unchanged since the read): a
+ * sign-in a moment ago wins, and two processes never send the same notice.
+ * Then the email; only after it was accepted are firstSentAt / finalSentAt and
+ * the date written. A failed send releases the claim, so the notice is tried
+ * again the next day and its date counts from then. A claim left behind by a
+ * run that stopped half-way (a deploy, a lost connection) is taken over after
+ * an hour, so the notice is sent, not skipped. A send that timed out may still
+ * have arrived; a second copy is the lesser harm.
+ * Returns 'sent' | 'lost' (someone else has it, or the account was used)
+ * | 'failed'.
  */
 async function sendNotice(user, d, now) {
   const final = d.action === 'final';
   const deliverable = !!(user.email && user.emailVerified);
   const unusedSince = user.lastActiveAt ? new Date(user.lastActiveAt) : null;
-  // Claimed only while lastActiveAt is what was read: used a moment ago, no notice.
+  const stale = new Date(now.getTime() - STALE_SEND_CLAIM_MS);
   const guard = { _id: user._id, lastActiveAt: unusedSince };
-  const update = final
-    ? { $set: { 'inactivityNotice.finalSentAt': now, 'inactivityNotice.deleteAfter': d.deleteAfter } }
-    : { $set: { inactivityNotice: { firstSentAt: now, finalSentAt: null, deleteAfter: d.deleteAfter, emailed: deliverable, unusedSince } } };
-  // A first notice may replace a timeline that has ended (used since); null
-  // matches a missing stamp as well.
-  const filter = final
-    ? { ...guard, 'inactivityNotice.firstSentAt': { $ne: null }, 'inactivityNotice.finalSentAt': null }
-    : (user.inactivityNotice?.firstSentAt
+  const claimField = final ? 'inactivityNotice.finalSendingAt' : 'inactivityNotice.sendingAt';
+  const free = { $or: [{ [claimField]: null }, { [claimField]: { $lte: stale } }] };
+  let filter;
+  let update;
+  if (final) {
+    // Tied to the timeline this decision was made on: a timeline restarted
+    // meanwhile (the rule turned off and on) is not this one.
+    filter = { ...guard, ...free, 'inactivityNotice.firstSentAt': user.inactivityNotice.firstSentAt, 'inactivityNotice.finalSentAt': null };
+    update = { $set: { 'inactivityNotice.finalSendingAt': now } };
+  } else {
+    // A first notice may replace a timeline that has ended (used since); null
+    // matches a missing stamp as well.
+    filter = user.inactivityNotice?.firstSentAt
       ? { ...guard, 'inactivityNotice.firstSentAt': user.inactivityNotice.firstSentAt }
-      : { ...guard, 'inactivityNotice.firstSentAt': null });
+      : { ...guard, ...free, 'inactivityNotice.firstSentAt': null };
+    update = { $set: { inactivityNotice: {
+      firstSentAt: null, finalSentAt: null, deleteAfter: d.deleteAfter, emailed: false, unusedSince,
+      sendingAt: now, finalSendingAt: null, erasingAt: null,
+    } } };
+  }
   const claimed = await User.findOneAndUpdate(filter, update).select('_id');
-  if (!claimed) return false;
+  if (!claimed) return 'lost';
 
-  let emailed = false;
   if (deliverable) {
     try {
       const bottles = await Bottle.countDocuments({ user: user._id, status: { $in: IN_CELLAR } });
       await withTimeout(mailgun.sendInactivityNoticeEmail(user.email, user.displayName || user.username || 'there', {
-        final, deleteAfter: d.deleteAfter, lastActiveAt: lastUsed(user), months: d.months, bottles,
+        final, deleteAfter: d.deleteAfter, lastActiveAt: d.unusedFrom, months: d.months, bottles,
       }), EMAIL_TIMEOUT_MS);
-      emailed = true;
     } catch (err) {
-      console.error(`[inactiveAccounts] ${d.action} notice FAILED for user ${user._id} — stamp is set, will NOT retry:`, err.message);
+      console.error(`[inactiveAccounts] ${d.action} notice FAILED for user ${user._id} — not counted, tried again tomorrow:`, err.message);
+      // Release the claim (a claim this fails to release goes stale in an hour).
+      await User.updateOne({ _id: user._id, [claimField]: now }, final
+        ? { $set: { 'inactivityNotice.finalSendingAt': null } }
+        : { $unset: { inactivityNotice: '' } })
+        .catch((e) => console.error(`[inactiveAccounts] releasing the ${d.action} claim for user ${user._id} failed:`, e.message));
+      return 'failed';
     }
   }
-  if (!final && !emailed && deliverable) {
-    User.updateOne({ _id: user._id }, { $set: { 'inactivityNotice.emailed': false } }).catch(() => {});
-  }
+  // Accepted (or nobody to email): now the notice counts. The date only ever
+  // moves later ($max). If the claim is no longer ours (taken over, or the
+  // rule turned on again meanwhile), nothing is counted here.
+  const done = await User.updateOne({ _id: user._id, [claimField]: now }, final
+    ? { $set: { 'inactivityNotice.finalSentAt': now, 'inactivityNotice.finalSendingAt': null }, $max: { 'inactivityNotice.deleteAfter': d.deleteAfter } }
+    : { $set: { 'inactivityNotice.firstSentAt': now, 'inactivityNotice.emailed': deliverable, 'inactivityNotice.sendingAt': null } });
+  if (done?.matchedCount === 0) return 'lost';
   logAudit(null, 'user.inactivity_notice', { type: 'user', id: user._id }, {
-    notice: d.action, deleteAfter: d.deleteAfter, months: d.months, emailed,
+    notice: d.action, deleteAfter: d.deleteAfter, months: d.months, emailed: deliverable,
   });
-  return true;
+  return 'sent';
 }
 
 /**
- * Erase one account whose date has come. Everything is read and decided again
- * from a fresh copy first, so an account used, upgraded or shared since the
- * run started is left alone.
+ * Erase one account whose date has come. It is read and decided again from a
+ * fresh copy first, so an account used, upgraded or shared since the run
+ * started is left alone; then claimed (guarded on that same copy), so two
+ * processes running the job at once erase it once.
  */
-async function deleteOne(userId, now) {
+async function deleteOne(userId, now, trackedSince) {
   const fresh = await User.findById(userId).select(ACCOUNT_FIELDS).lean();
   if (!fresh) return false;
-  const d = decide(fresh, await factsFor(fresh, now), now);
+  const d = decide(fresh, await factsFor(fresh, now), now, trackedSince);
   if (d.action !== 'delete') return false;
-  await eraseAccount(fresh);
+  const claimed = await User.findOneAndUpdate(
+    {
+      _id: fresh._id,
+      lastActiveAt: fresh.lastActiveAt ?? null,
+      'inactivityNotice.finalSentAt': { $ne: null },
+      $or: [
+        { 'inactivityNotice.erasingAt': null },
+        { 'inactivityNotice.erasingAt': { $lte: new Date(now.getTime() - STALE_ERASE_CLAIM_MS) } },
+      ],
+    },
+    { $set: { 'inactivityNotice.erasingAt': now } },
+  ).select('_id');
+  if (!claimed) return false;
+  try {
+    await eraseAccount(fresh);
+  } catch (err) {
+    // Let the next run retry it rather than wait out the stale-claim window.
+    await User.updateOne({ _id: fresh._id, 'inactivityNotice.erasingAt': now }, { $set: { 'inactivityNotice.erasingAt': null } })
+      .catch(() => {});
+    throw err;
+  }
   logAudit(null, 'user.inactivity_deleted', { type: 'user', id: fresh._id }, {
-    months: d.months, lastActiveAt: lastUsed(fresh), deleteAfter: d.deleteAfter,
+    months: d.months, lastActiveAt: d.unusedFrom, deleteAfter: d.deleteAfter,
   });
   return true;
 }
 
-/**
- * Today's decisions without acting on them (SuperAdmin shows these before the
- * rule is turned on, and the job uses the same walk).
- */
-async function plan({ now = new Date() } = {}) {
-  const users = await User.find(candidateQuery(now)).select(ACCOUNT_FIELDS)
-    .sort({ lastActiveAt: 1 }).limit(MAX_ACCOUNTS_PER_RUN).lean();
+/** Today's decisions without acting on them; the job and the admin preview share it. */
+async function plan({ now = new Date(), trackedSince } = {}) {
+  const since = trackedSince || await getTrackingSince(now);
   const decisions = [];
-  for (const user of users) {
-    decisions.push({ user, decision: decide(user, await factsFor(user, now), now) });
+  for (const user of await candidates(now, since)) {
+    decisions.push({ user, decision: decide(user, await factsFor(user, now), now, since) });
   }
-  return decisions;
+  return { trackedSince: since, decisions };
 }
 
-/** Counts by action, for the admin panel. */
-async function preview({ now = new Date() } = {}) {
+// The admin panel reads the preview on every load; it walks up to a few
+// hundred accounts with several queries each, so it is kept for ten minutes.
+let previewCache = null;
+
+/** Counts by action, for the admin panel, plus the tracking start. */
+async function preview({ now = new Date(), fresh = false } = {}) {
+  if (!fresh && previewCache && now.getTime() - previewCache.at < PREVIEW_TTL_MS) return previewCache.value;
+  const { trackedSince, decisions } = await plan({ now });
   const counts = {};
-  for (const { decision } of await plan({ now })) counts[decision.action] = (counts[decision.action] || 0) + 1;
-  return counts;
+  for (const { decision } of decisions) counts[decision.action] = (counts[decision.action] || 0) + 1;
+  const value = { counts, trackedSince };
+  previewCache = { at: now.getTime(), value };
+  return value;
 }
 
 /** The daily job. Never throws past the scheduler's own catch. */
@@ -299,37 +438,56 @@ async function runInactiveAccounts({ now = new Date() } = {}) {
   if (!enabled) return { skipped: 'off' };
 
   const result = { cleared: await clearReturned(), first: 0, final: 0, deleted: 0, failed: 0 };
-  for (const { user, decision } of await plan({ now })) {
+  const { trackedSince, decisions } = await plan({ now });
+  const due = [];
+  for (const { user, decision } of decisions) {
     try {
       // Exempt now (paying, a shared cellar in use, …) while on a timeline: the
       // timeline ends, so an old notice can never lead to a deletion later.
       if (decision.action.startsWith('skip:') && user.inactivityNotice?.firstSentAt) {
         await User.updateOne({ _id: user._id }, { $unset: { inactivityNotice: '' } });
         result.cleared += 1;
-        continue;
-      }
-      if (decision.action === 'first' || decision.action === 'final') {
-        if (await sendNotice(user, decision, now)) result[decision.action] += 1;
-      } else if (decision.action === 'delete' && result.deleted < MAX_DELETIONS_PER_RUN) {
-        if (await deleteOne(user._id, now)) result.deleted += 1;
+      } else if (decision.action === 'first' || decision.action === 'final') {
+        const r = await sendNotice(user, decision, now);
+        if (r === 'sent') result[decision.action] += 1;
+        else if (r === 'failed') result.failed += 1;
+      } else if (decision.action === 'delete') {
+        due.push(user._id);
       }
     } catch (err) {
       result.failed += 1;
       console.error(`[inactiveAccounts] ${decision.action} failed for user ${user._id}:`, err.message);
     }
   }
+  // Erasures last, and none in a run in which a notice could not be sent:
+  // whatever stopped that email may have stopped the earlier ones too.
+  if (result.failed === 0) {
+    for (const id of due.slice(0, MAX_DELETIONS_PER_RUN)) {
+      try {
+        if (await deleteOne(id, now, trackedSince)) result.deleted += 1;
+      } catch (err) {
+        result.failed += 1;
+        console.error(`[inactiveAccounts] erase failed for user ${id}:`, err.message);
+      }
+    }
+  } else if (due.length) {
+    result.deletionsHeld = due.length;
+  }
+  if (result.first || result.final || result.deleted) previewCache = null;
   return result;
 }
 
 module.exports = {
   runInactiveAccounts,
   preview,
+  plan,
   decide,
   factsFor,
-  candidateQuery,
+  candidates,
   getSettings,
   setEnabled,
   addMonths,
+  unusedFrom,
   CONFIG_KEY,
   MONTHS_WITH_CONTENT,
   MONTHS_EMPTY,

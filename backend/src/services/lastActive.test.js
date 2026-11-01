@@ -4,9 +4,11 @@
  * the standalone write can never fail the request that triggered it.
  */
 jest.mock('../models/User', () => ({ updateOne: jest.fn() }));
+jest.mock('../models/SiteConfig', () => ({ updateOne: jest.fn(), findOne: jest.fn() }));
 
 const User = require('../models/User');
-const { activeDay, markActive, touchLastActive } = require('./lastActive');
+const SiteConfig = require('../models/SiteConfig');
+const { activeDay, markActive, touchLastActive, ensureTrackingSince, getTrackingSince, TRACKING_KEY } = require('./lastActive');
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -57,5 +59,31 @@ describe('touchLastActive (a standalone write)', () => {
     await expect(touchLastActive('u1')).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledTimes(2);
     warn.mockRestore();
+  });
+});
+
+// The day this install started recording use: the inactive-account rule never
+// counts an account as unused from earlier.
+describe('the tracking start', () => {
+  test('boot records today once and never moves it ($setOnInsert on an upsert)', async () => {
+    SiteConfig.updateOne.mockResolvedValue({});
+    await ensureTrackingSince(new Date('2026-11-01T09:30:00Z'));
+    expect(SiteConfig.updateOne).toHaveBeenCalledWith(
+      { key: TRACKING_KEY },
+      { $setOnInsert: { key: TRACKING_KEY, value: { since: new Date('2026-11-01T00:00:00Z') }, updatedAt: new Date('2026-11-01T09:30:00Z') } },
+      { upsert: true },
+    );
+  });
+
+  test('reads the recorded day', async () => {
+    SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ value: { since: '2026-11-01T00:00:00.000Z' } }) });
+    expect(await getTrackingSince(new Date('2027-05-05T10:00:00Z'))).toEqual(new Date('2026-11-01T00:00:00Z'));
+  });
+
+  test('none recorded (or unreadable): today, the most cautious answer', async () => {
+    SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
+    expect(await getTrackingSince(new Date('2027-05-05T10:00:00Z'))).toEqual(new Date('2027-05-05T00:00:00Z'));
+    SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ value: { since: 'garbage' } }) });
+    expect(await getTrackingSince(new Date('2027-05-05T10:00:00Z'))).toEqual(new Date('2027-05-05T00:00:00Z'));
   });
 });

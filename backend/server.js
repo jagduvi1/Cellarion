@@ -86,6 +86,15 @@ connectDB().then(async () => {
   // A config that cannot be read keeps its code defaults; the boot goes on.
   await loadRuntimeConfig();
 
+  // The day this install started recording when accounts are used: set once,
+  // the first time a version with User.lastActiveAt boots (services/lastActive).
+  // The inactive-account rule never counts an account as unused from earlier.
+  try {
+    await require('./src/services/lastActive').ensureTrackingSince();
+  } catch (err) {
+    console.error('[boot] Could not record the last-active tracking start:', err.message);
+  }
+
   // Migration: drop old non-partial cellar name index so Mongoose can create the
   // updated partial one (user_1_name_1 with partialFilterExpression: {deletedAt: null}).
   // Only drop when the existing index actually lacks the partial filter — the new
