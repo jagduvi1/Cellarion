@@ -12,6 +12,7 @@
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../services/bottleSearch', () => ({ searchBottles: jest.fn(), bottleFacets: jest.fn() }));
+jest.mock('../services/openBottleList', () => ({ listOpenBottles: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/rackOps', () => ({ createCellar: jest.fn() }));
 jest.mock('../services/notifications', () => ({ createNotification: jest.fn() }));
@@ -42,6 +43,7 @@ const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const BottleImage = require('../models/BottleImage');
 const bottleSearch = require('../services/bottleSearch');
+const { listOpenBottles } = require('../services/openBottleList');
 const cellarsRouter = require('./cellars');
 
 const USER_ID = '64b000000000000000000001';
@@ -150,6 +152,7 @@ beforeEach(() => {
   const imageChain = { sort: () => imageChain, lean: async () => [] };
   BottleImage.find.mockReturnValue(imageChain);
   bottleSearch.bottleFacets.mockResolvedValue(PLAIN_FACETS);
+  listOpenBottles.mockResolvedValue([]);
 });
 
 const idsOf = (items) => items.map((b) => String(b._id));
@@ -443,5 +446,41 @@ describe('GET /api/cellars/:id?group=1&sort=-quantity — counted in the databas
     }
     expect(orders[0]).toEqual(orders[1]);
     expect(orders[0]).toEqual([`${W1}::2015::1500ml`, `${W1}::2015::750ml`]);
+  });
+});
+
+// "Open now" above the list: the first page of either list names the open
+// bottles of the cellars in view (whatever the filters); later pages do not
+// ask again, and a failed lookup shows no strip instead of failing the list.
+describe('openBottles for the "Open now" strip', () => {
+  const OPEN = { _id: B3, cellar: CELLAR_2, vintage: '2019', openedAt: new Date('2026-10-30T19:00:00Z'), preservationMethod: 'vacuum', pours: [] };
+
+  test('a cellar\'s first page carries its open bottles; a later page does not ask', async () => {
+    listOpenBottles.mockResolvedValue([{ ...OPEN, cellar: CELLAR_ID }]);
+    const first = await request(`/api/cellars/${CELLAR_ID}`);
+    expect(listOpenBottles).toHaveBeenCalledWith([CELLAR_ID]);
+    expect(first.body.openBottles.map((b) => b._id)).toEqual([B3]);
+
+    listOpenBottles.mockClear();
+    const later = await request(`/api/cellars/${CELLAR_ID}?skip=30`);
+    expect(later.status).toBe(200);
+    expect(listOpenBottles).not.toHaveBeenCalled();
+    expect(later.body.openBottles).toBeUndefined();
+  });
+
+  test('"all my cellars" names each open bottle\'s cellar', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B1]));
+    listOpenBottles.mockResolvedValue([OPEN]);
+    const { body } = await request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID},${CELLAR_2}&search=margaux`);
+    expect(listOpenBottles).toHaveBeenCalledWith([CELLAR_ID, CELLAR_2]);
+    expect(body.openBottles).toEqual([expect.objectContaining({ _id: B3, cellarName: 'Home' })]);
+  });
+
+  test('a failed lookup leaves the strip empty, never the list', async () => {
+    listOpenBottles.mockRejectedValue(new Error('down'));
+    const { status, body } = await request(`/api/cellars/${CELLAR_ID}`);
+    expect(status).toBe(200);
+    expect(body.openBottles).toEqual([]);
+    expect(idsOf(body.bottles.items)).toEqual([B3]);
   });
 });
