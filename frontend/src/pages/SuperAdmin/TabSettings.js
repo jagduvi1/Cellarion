@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import InactiveAccountsPanel from './InactiveAccountsPanel';
 import { adminGetRateLimits, adminSaveRateLimits, adminGetContactEmail, adminSaveContactEmail, adminGetNewMemberEmails, adminSaveNewMemberEmails } from '../../api/admin';
 
 const INPUT_STYLE = {
@@ -695,6 +696,7 @@ export default function TabSettings() {
     <>
       <ContactEmailPanel apiFetch={apiFetch} />
       <NewMemberEmailsPanel apiFetch={apiFetch} />
+      <InactiveAccountsPanel apiFetch={apiFetch} />
       <PerIpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <McpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <RegistryLimitsPanel apiFetch={apiFetch} {...rateLimits} />

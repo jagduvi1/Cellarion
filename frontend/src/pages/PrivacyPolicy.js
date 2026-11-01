@@ -21,7 +21,7 @@ function PrivacyPolicy() {
       </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: 23 October 2026 — Version 2026-10-23.2</p>
+        <p className="privacy-updated">Last updated: 1 November 2026 — Version 2026-11-01</p>
 
         <p>
           Cellarion ("we", "us", or "our") operates the Cellarion wine cellar management
@@ -43,12 +43,13 @@ function PrivacyPolicy() {
         <ul>
           <li><strong>Contract performance (Art. 6(1)(b) GDPR):</strong> processing your account data, cellar data, and preferences is necessary to provide the Cellarion service you signed up for.</li>
           <li><strong>Consent (Art. 6(1)(a) GDPR):</strong> we process your data for optional features (email notifications you turn on yourself, such as forum replies and mentions, label and receipt scanning via AI, connecting an external AI assistant) only with your explicit consent, which you can withdraw at any time.</li>
-          <li><strong>Legitimate interest (Art. 6(1)(f) GDPR):</strong> we maintain activity logs and security measures to protect the service and its users; we email members who own a wine a curator's question about it, so the shared wine registry stays accurate; and we email you about your own cellar (drink-window alerts, and one note two days after you join), so the cellar you set up stays useful to you (see section 4; you can object at any time, see section 8).</li>
+          <li><strong>Legitimate interest (Art. 6(1)(f) GDPR):</strong> we maintain activity logs and security measures to protect the service and its users; we email members who own a wine a curator's question about it, so the shared wine registry stays accurate; and we email you about your own cellar (drink-window alerts, and one note two days after you join), so the cellar you set up stays useful to you (see section 4; you can object at any time, see section 8); and we email you before we delete an account nobody has used for a long time, so it is never deleted without warning (see section 7).</li>
         </ul>
 
         <h2>3. Data we collect</h2>
         <ul>
           <li><strong>Account information:</strong> email address, username, and password (stored as a bcrypt hash — we never store your plain-text password).</li>
+          <li><strong>When you last used Cellarion:</strong> the date (a day, no time) you last signed in, used the app, or had an API token or a connected AI assistant act for you. It is kept only to find accounts nobody uses any more (see section 7), is part of your data export, and is deleted with your account. While an unused account is on its way to deletion, when we emailed you about it and the date we gave are kept with it too.</li>
           <li><strong>Profile information:</strong> optional display name, bio, and profile visibility preference.</li>
           <li><strong>Cellar data:</strong> bottles, cellars, racks, tasting notes, ratings, purchase information, and wine images you add to your account.</li>
           <li><strong>Community / forum data:</strong> discussions and replies you post, reactions you add to other users' replies, threads you subscribe to ("watch"), and read-state markers tracking which threads you've opened (used to drive the unread indicator).</li>
@@ -92,7 +93,7 @@ function PrivacyPolicy() {
             <tr>
               <td>Mailgun</td>
               <td>Transactional email delivery</td>
-              <td>Email address, username, bottle names (in digest emails), and the wine and the curator's question (in emails asking about a wine you own)</td>
+              <td>Email address, username, bottle names (in digest emails), the wine and the curator's question (in emails asking about a wine you own), the name of your API token and the parts of the API it used (in notices about API changes), and the date your account was last used and how many bottles it holds (in notices before an unused account is deleted)</td>
               <td>US/EU</td>
             </tr>
             <tr>
@@ -185,7 +186,7 @@ function PrivacyPolicy() {
 
         <h2>7. Data retention</h2>
         <ul>
-          <li><strong>Account data:</strong> retained for as long as your account is active.</li>
+          <li><strong>Account data:</strong> retained for as long as your account is active, which means used: signing in, using the app, or an API token or connected AI assistant acting for you all count. An account nobody has used for 24 months is deleted with everything in it, the same way as when you delete it yourself; for an account that never held a bottle, a wishlist entry or a journal entry, that is 12 months. We email you 30 days and again 7 days before, with the date, and signing in once before then keeps the account. Not deleted for this reason: an account with an active supporter subscription, and the account of someone whose shared cellar another member still uses.</li>
           <li><strong>Activity logs:</strong> automatically deleted after 90 days.</li>
           <li><strong>AI-connector action log:</strong> automatically deleted after 90 days. The connection itself (token metadata) remains until you revoke it or delete your account.</li>
           <li><strong>Deleted cellars/racks:</strong> soft-deleted and permanently removed after 30 days.</li>
@@ -205,7 +206,7 @@ function PrivacyPolicy() {
           <li><strong>Right to erasure (Art. 17):</strong> you can delete your account and all associated personal data from Settings. Deletion takes effect after a 7-day cooling-off period, and removes your data from the live service at once; encrypted backup copies then age out within six months (see Data retention). Forum posts are anonymised rather than hard-deleted (your authorship is severed) so other users' conversations stay intact; contact support if you need specific posts fully removed.</li>
           <li><strong>Right to data portability (Art. 20):</strong> you can export all your data as JSON from Settings at any time.</li>
           <li><strong>Right to restrict processing (Art. 18):</strong> you can disable all notifications and set your profile to private to restrict how your data is used.</li>
-          <li><strong>Right to object (Art. 21):</strong> you can opt out of all email and push notifications in Settings, or use the one-click unsubscribe link in any email. Emailed answers to your support requests, emailed questions about a wine you own, and drink-window emails also carry a link that stops only those emails.</li>
+          <li><strong>Right to object (Art. 21):</strong> you can opt out of all email and push notifications in Settings, or use the one-click unsubscribe link in any email. Emailed answers to your support requests, emailed questions about a wine you own, and drink-window emails also carry a link that stops only those emails. A few emails are about your account itself and are sent even after you unsubscribe: the ones you ask for (confirming your email address, resetting your password), a security alert when your account is locked after failed sign-ins, and the two notices before an unused account is deleted (see Data retention).</li>
           <li><strong>Right to withdraw consent (Art. 7):</strong> you can withdraw consent for optional data processing at any time by disabling the relevant features, revoking a connected AI assistant in Settings, or deleting your account.</li>
         </ul>
         <p>

@@ -31,6 +31,19 @@ async function deleteStripeCustomer(customerId) {
   }
 }
 
+/**
+ * Erase one account for good: every user-linked record (the registry purge),
+ * the Stripe customer, then the account row itself — in that order, so the
+ * row only goes once the purge succeeded. Shared by this job and the
+ * inactive-account job (services/inactiveAccounts). Throws on a purge failure.
+ * @param {{ _id, email?, stripeCustomerId? }} user
+ */
+async function eraseAccount(user) {
+  await purgeUserData(user._id, user.email);
+  await deleteStripeCustomer(user.stripeCustomerId);
+  await User.deleteOne({ _id: user._id });
+}
+
 async function runUserDeletionJob() {
   const now = new Date();
 
@@ -44,9 +57,7 @@ async function runUserDeletionJob() {
 
   for (const user of usersToDelete) {
     try {
-      await purgeUserData(user._id, user.email);
-      await deleteStripeCustomer(user.stripeCustomerId);
-      await User.deleteOne({ _id: user._id });
+      await eraseAccount(user);
       console.log(`[user-deletion] Deleted user ${user._id}`);
     } catch (err) {
       console.error(`[user-deletion] Failed to delete user ${user._id}:`, err);
@@ -56,5 +67,5 @@ async function runUserDeletionJob() {
   console.log(`[user-deletion] Completed ${usersToDelete.length} deletion(s)`);
 }
 
-// Re-exported for backward compatibility with existing importers.
-module.exports = { runUserDeletionJob, purgeUserData };
+// purgeUserData re-exported for backward compatibility with existing importers.
+module.exports = { runUserDeletionJob, eraseAccount, purgeUserData };

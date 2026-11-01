@@ -1089,4 +1089,75 @@ async function sendAiCapAlertEmail(toEmail, alert) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, sendOwnerInquiryEmail, sendNewMemberCellarEmail, sendNewMemberEmptyEmail, sendApiDeprecationEmail, EMAIL_VERIFICATION_ENABLED };
+// "1 December 2028" — the deletion date as the notices print it (UTC, so the
+// date in the email is the date the job uses).
+const longDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/**
+ * A notice before an unused account is deleted (services/inactiveAccounts):
+ * the first 30 days before the date, the final one 7 days before. A message
+ * about the account itself, so it is sent even to someone who unsubscribed
+ * from all email (Privacy Policy, section 8), and it carries no unsubscribe
+ * link that could not stop it. Signing in once keeps the account.
+ *
+ * @param {string} toEmail
+ * @param {string} recipientName  display/username (greeting)
+ * @param {object} notice  { final, deleteAfter, lastActiveAt, months, bottles }
+ */
+async function sendInactivityNoticeEmail(toEmail, recipientName, notice) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const signInUrl = `${frontendUrl}/login`;
+  const when = longDate(notice.deleteAfter);
+  const since = longDate(notice.lastActiveAt);
+  const holds = notice.bottles > 0 ? ` It still holds ${bottlesWord(notice.bottles)}.` : '';
+  const subject = notice.final
+    ? `Last notice: your Cellarion account will be deleted on ${when}`
+    : `Your Cellarion account will be deleted on ${when}`;
+  const lead = notice.final ? 'This is the last notice about your Cellarion account.' : null;
+  const unused = `You have not used your Cellarion account since ${since}.${holds}`;
+  const rule = `Cellarion deletes accounts that have not been used for ${notice.months} months, so nobody's data is kept longer than it is needed. Your account and everything in it will be deleted on ${when}.`;
+  const keep = 'To keep it, sign in once before then. That is all it takes.';
+  const copy = 'Want a copy first? After signing in, Settings has a download of your cellar and of all your data.';
+  const nothing = 'If you no longer need the account, you do not have to do anything.';
+  const footer = 'This is a notice about your account itself, so it is sent even if you unsubscribed from Cellarion emails. It is sent twice: 30 days and 7 days before the date.';
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    'h:Reply-To': supportReplyTo(),
+    subject,
+    text: [
+      `Hello ${recipientName},`,
+      '',
+      ...(lead ? [lead, ''] : []),
+      unused,
+      rule,
+      '',
+      keep,
+      `Sign in: ${signInUrl}`,
+      '',
+      copy,
+      nothing,
+      '',
+      footer,
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
+        <p>Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        ${lead ? `<p><strong>${escapeHtml(lead)}</strong></p>` : ''}
+        <p>${escapeHtml(unused)}</p>
+        <p>${escapeHtml(rule)}</p>
+        <p>${escapeHtml(keep)}</p>
+        <p style="margin:1.5rem 0;">
+          <a href="${signInUrl}" style="background:#7B9E88;color:#0d0d0d;${NEW_MEMBER_BUTTON}">Sign in</a>
+        </p>
+        <p style="color:#555;">${escapeHtml(copy)} ${escapeHtml(nothing)}</p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">${escapeHtml(footer)}</p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, sendOwnerInquiryEmail, sendNewMemberCellarEmail, sendNewMemberEmptyEmail, sendApiDeprecationEmail, sendInactivityNoticeEmail, EMAIL_VERIFICATION_ENABLED };

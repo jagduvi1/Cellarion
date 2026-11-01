@@ -50,6 +50,17 @@ describe('toJSON', () => {
   it('lastActiveAt defaults to null (not seen since the field existed)', () => {
     expect(new User({ username: 'd', email: 'd@cellarion.app', password: 'x' }).lastActiveAt).toBeNull();
   });
+
+  it('keeps the inactive-account timeline out of what the client receives, and stores unusedSince', () => {
+    const unusedSince = new Date('2026-11-01T00:00:00Z');
+    const user = new User({
+      username: 'e', email: 'e@cellarion.app', password: 'x',
+      inactivityNotice: { firstSentAt: new Date('2028-10-01T09:13:00Z'), deleteAfter: new Date('2028-11-01T00:00:00Z'), unusedSince },
+    });
+    expect(user.inactivityNotice.unusedSince).toEqual(unusedSince);
+    expect(user.toJSON().inactivityNotice).toBeUndefined();
+    expect(new User({ username: 'f', email: 'f@cellarion.app', password: 'x' }).inactivityNotice).toBeUndefined();
+  });
 });
 
 describe('BCRYPT_COST (L-1)', () => {

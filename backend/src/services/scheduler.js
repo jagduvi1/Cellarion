@@ -22,6 +22,7 @@ const embeddingJob = require('./embeddingJob');
 const registryBridge = require('./registryBridge');
 const { runReceiptRetentionSweep } = require('./receiptArchive');
 const { runDeprecationReminders } = require('./apiDeprecationNotices');
+const { runInactiveAccounts } = require('./inactiveAccounts');
 
 /**
  * Start all scheduled cron jobs.
@@ -303,6 +304,20 @@ function startScheduler() {
     }
   });
 
+  // Inactive accounts: daily at 09:13 UTC, so a notice arrives in the European
+  // morning. Off until an admin turns it on, and idle while email is not
+  // configured (services/inactiveAccounts).
+  cron.schedule('13 9 * * *', async () => {
+    try {
+      const r = await runInactiveAccounts();
+      if (r?.first || r?.final || r?.deleted || r?.cleared || r?.failed) {
+        console.log('[scheduler] Inactive accounts:', JSON.stringify(r));
+      }
+    } catch (err) {
+      console.error('[scheduler] Inactive accounts failed:', err);
+    }
+  });
+
   // Private-draft expiry: hourly, because the 24-hour warning before an empty
   // draft is deleted cannot be honoured by a daily pass (draft design 2026-09-12).
   cron.schedule('23 * * * *', async () => {
@@ -316,7 +331,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC, api-deprecation-reminders daily 08:11 UTC)');
+  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC, api-deprecation-reminders daily 08:11 UTC, inactive-accounts daily 09:13 UTC (off until turned on))');
 }
 
 /**

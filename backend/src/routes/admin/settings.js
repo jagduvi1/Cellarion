@@ -305,4 +305,68 @@ router.patch('/new-member-emails', async (req, res) => {
   }
 });
 
+// GET /api/admin/settings/inactive-accounts — the switch for deleting unused
+// accounts (services/inactiveAccounts), the rule it applies, what it would do
+// today (so the admin sees the effect before turning it on), and what it did
+// in the last 30 days.
+router.get('/inactive-accounts', async (req, res) => {
+  try {
+    const ia = require('../../services/inactiveAccounts');
+    const { EMAIL_VERIFICATION_ENABLED } = require('../../services/mailgun');
+    const User = require('../../models/User');
+    const AuditLog = require('../../models/AuditLog');
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [settings, today, firstNotices, finalNotices, deleted] = await Promise.all([
+      ia.getSettings(),
+      ia.preview(),
+      User.countDocuments({ 'inactivityNotice.firstSentAt': { $gte: since30 } }),
+      User.countDocuments({ 'inactivityNotice.finalSentAt': { $gte: since30 } }),
+      AuditLog.countDocuments({ action: 'user.inactivity_deleted', timestamp: { $gte: since30 } }),
+    ]);
+    res.json({
+      ...settings,
+      mailConfigured: EMAIL_VERIFICATION_ENABLED,
+      rule: {
+        monthsWithContent: ia.MONTHS_WITH_CONTENT,
+        monthsEmpty: ia.MONTHS_EMPTY,
+        firstNoticeDays: ia.FIRST_NOTICE_DAYS,
+        finalNoticeDays: ia.FINAL_NOTICE_DAYS,
+      },
+      today: {
+        first: today.first || 0,
+        final: today.final || 0,
+        delete: today.delete || 0,
+        waiting: today.wait || 0,
+        exempt: Object.entries(today)
+          .filter(([k]) => k.startsWith('skip:') && k !== 'skip:active')
+          .reduce((n, [, v]) => n + v, 0),
+      },
+      // Accounts still on a timeline that started in the window (a timeline
+      // ends when the account is used again, so these are lower bounds).
+      last30Days: { firstNotices, finalNotices, deleted },
+    });
+  } catch (err) {
+    console.error('Admin get inactive-accounts error:', err);
+    res.status(500).json({ error: 'Failed to load the inactive-account setting' });
+  }
+});
+
+// PATCH /api/admin/settings/inactive-accounts — body { enabled }. Turning it
+// on restarts every timeline: nobody is deleted without a fresh 30-day notice.
+router.patch('/inactive-accounts', async (req, res) => {
+  try {
+    const { enabled } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be true or false' });
+    }
+    const { setEnabled } = require('../../services/inactiveAccounts');
+    const settings = await setEnabled(enabled, req.user.id);
+    logAudit(req, 'admin.settings.inactive_accounts.update', {}, { enabled });
+    res.json(settings);
+  } catch (err) {
+    console.error('Admin update inactive-accounts error:', err);
+    res.status(500).json({ error: 'Failed to update the inactive-account setting' });
+  }
+});
+
 module.exports = router;

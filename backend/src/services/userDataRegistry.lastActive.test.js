@@ -20,4 +20,16 @@ test('the account export carries the last active day', async () => {
 test('an account not seen since the field existed exports null, not undefined', async () => {
   const frag = await accountEntry.exportFragment({ user: { username: 'anna' } });
   expect(frag.account).toHaveProperty('lastActiveAt', null);
+  expect(frag.account).toHaveProperty('inactivityNotice', null);
+});
+
+test('while an unused account is on its way to deletion, the notices and the date are in the export', async () => {
+  const inactivityNotice = {
+    firstSentAt: new Date('2028-10-01T09:13:00Z'), finalSentAt: null, deleteAfter: new Date('2028-11-01T00:00:00Z'),
+    emailed: true, unusedSince: new Date('2026-11-01T00:00:00Z'),
+  };
+  const frag = await accountEntry.exportFragment({ user: { username: 'anna', inactivityNotice } });
+  expect(frag.account.inactivityNotice).toEqual({
+    firstSentAt: inactivityNotice.firstSentAt, finalSentAt: null, deleteAfter: inactivityNotice.deleteAfter,
+  });
 });

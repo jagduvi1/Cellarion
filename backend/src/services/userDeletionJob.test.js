@@ -23,7 +23,7 @@ const User = require('../models/User');
 const { purgeUserData } = require('./userDataRegistry');
 const stripeFactory = require('stripe');
 const stripeDel = stripeFactory.mockCustomersDel;
-const { runUserDeletionJob } = require('./userDeletionJob');
+const { runUserDeletionJob, eraseAccount } = require('./userDeletionJob');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -147,5 +147,22 @@ describe('runUserDeletionJob', () => {
     expect(User.deleteOne).toHaveBeenCalledTimes(1);
     expect(User.deleteOne).toHaveBeenCalledWith({ _id: 'u2' });
     expect(errorSpy).toHaveBeenCalled();
+  });
+});
+
+// The same erase steps the inactive-account job uses (services/inactiveAccounts).
+describe('eraseAccount', () => {
+  test('purges, deletes the Stripe customer, then the account row; a purge failure keeps the row', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test';
+    await eraseAccount({ _id: 'u9', email: 'z@x.com', stripeCustomerId: 'cus_9' });
+    expect(purgeUserData).toHaveBeenCalledWith('u9', 'z@x.com');
+    expect(stripeDel).toHaveBeenCalledWith('cus_9');
+    expect(User.deleteOne).toHaveBeenCalledWith({ _id: 'u9' });
+    expect(purgeUserData.mock.invocationCallOrder[0]).toBeLessThan(User.deleteOne.mock.invocationCallOrder[0]);
+
+    jest.clearAllMocks();
+    purgeUserData.mockRejectedValueOnce(new Error('purge failed'));
+    await expect(eraseAccount({ _id: 'u9', email: 'z@x.com' })).rejects.toThrow('purge failed');
+    expect(User.deleteOne).not.toHaveBeenCalled();
   });
 });
