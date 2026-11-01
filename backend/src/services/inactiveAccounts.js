@@ -203,8 +203,12 @@ async function factsFor(user, now) {
 
 const ACCOUNT_FIELDS = '_id username displayName email emailVerified roles isDemo deletionScheduledFor plan planExpiresAt stripeSubscriptionId stripeCustomerId createdAt lastActiveAt inactivityNotice';
 
-// Accounts that can never be inactive are left out of every query (the
-// owner of a shared cellar in use needs a lookup, so decide() handles it).
+// Accounts that can never be inactive are left out of the queries that START
+// a timeline (the owner of a shared cellar in use needs a lookup, so decide()
+// handles it). The query for timelines already running deliberately has no
+// such filter: an account that became exempt while on one (a supporter grant,
+// a staff role) must still be read, so its timeline is ended, not frozen until
+// the exemption lapses and then resumed with year-old notices.
 const base = (now) => ({
   isDemo: { $ne: true },
   deletionScheduledFor: null,
@@ -235,7 +239,6 @@ async function candidates(now, trackedSince) {
   const add = (rows) => { for (const r of rows) if (!seen.has(String(r._id))) seen.set(String(r._id), r); };
 
   add(await User.find({
-    ...base(now),
     'inactivityNotice.firstSentAt': { $ne: null },
     $or: [
       { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': { $lte: new Date(now.getTime() + FINAL_NOTICE_DAYS * DAY) } },
@@ -276,8 +279,10 @@ async function candidates(now, trackedSince) {
  * account first seen since then counts as used too).
  */
 async function clearReturned() {
+  // Any stored state, not only a started timeline: a claim left by a run that
+  // stopped before its first notice went out is cleared the same way.
   const r = await User.updateMany(
-    { 'inactivityNotice.firstSentAt': { $ne: null }, $expr: { $gt: ['$lastActiveAt', '$inactivityNotice.unusedSince'] } },
+    { inactivityNotice: { $exists: true }, $expr: { $gt: ['$lastActiveAt', '$inactivityNotice.unusedSince'] } },
     { $unset: { inactivityNotice: '' } },
   );
   return r?.modifiedCount || 0;
@@ -316,7 +321,9 @@ async function sendNotice(user, d, now) {
   let filter;
   let update;
   if (final) {
-    filter = { ...guard, ...free, 'inactivityNotice.firstSentAt': { $ne: null }, 'inactivityNotice.finalSentAt': null };
+    // Tied to the timeline this decision was made on: a timeline restarted
+    // meanwhile (the rule turned off and on) is not this one.
+    filter = { ...guard, ...free, 'inactivityNotice.firstSentAt': user.inactivityNotice.firstSentAt, 'inactivityNotice.finalSentAt': null };
     update = { $set: { 'inactivityNotice.finalSendingAt': now } };
   } else {
     // A first notice may replace a timeline that has ended (used since); null
@@ -348,10 +355,13 @@ async function sendNotice(user, d, now) {
       return 'failed';
     }
   }
-  // Accepted (or nobody to email): now the notice counts.
-  await User.updateOne({ _id: user._id, [claimField]: now }, final
-    ? { $set: { 'inactivityNotice.finalSentAt': now, 'inactivityNotice.deleteAfter': d.deleteAfter, 'inactivityNotice.finalSendingAt': null } }
+  // Accepted (or nobody to email): now the notice counts. The date only ever
+  // moves later ($max). If the claim is no longer ours (taken over, or the
+  // rule turned on again meanwhile), nothing is counted here.
+  const done = await User.updateOne({ _id: user._id, [claimField]: now }, final
+    ? { $set: { 'inactivityNotice.finalSentAt': now, 'inactivityNotice.finalSendingAt': null }, $max: { 'inactivityNotice.deleteAfter': d.deleteAfter } }
     : { $set: { 'inactivityNotice.firstSentAt': now, 'inactivityNotice.emailed': deliverable, 'inactivityNotice.sendingAt': null } });
+  if (done?.matchedCount === 0) return 'lost';
   logAudit(null, 'user.inactivity_notice', { type: 'user', id: user._id }, {
     notice: d.action, deleteAfter: d.deleteAfter, months: d.months, emailed: deliverable,
   });

@@ -235,7 +235,8 @@ describe('runInactiveAccounts', () => {
     plan([]);
     await ia.runInactiveAccounts({ now: NOW });
     const [query, update] = User.updateMany.mock.calls[0];
-    expect(query).toEqual({ 'inactivityNotice.firstSentAt': { $ne: null }, $expr: { $gt: ['$lastActiveAt', '$inactivityNotice.unusedSince'] } });
+    // Any stored state, so a claim left before a first notice went out is cleared too.
+    expect(query).toEqual({ inactivityNotice: { $exists: true }, $expr: { $gt: ['$lastActiveAt', '$inactivityNotice.unusedSince'] } });
     expect(update).toEqual({ $unset: { inactivityNotice: '' } });
   });
 
@@ -365,8 +366,10 @@ describe('runInactiveAccounts', () => {
     // Counted, with its (possibly later) date, only after the send.
     expect(User.updateOne).toHaveBeenCalledWith(
       { _id: 'u1', 'inactivityNotice.finalSendingAt': NOW },
-      { $set: { 'inactivityNotice.finalSentAt': NOW, 'inactivityNotice.deleteAfter': daysFrom(NOW, 7), 'inactivityNotice.finalSendingAt': null } },
+      { $set: { 'inactivityNotice.finalSentAt': NOW, 'inactivityNotice.finalSendingAt': null }, $max: { 'inactivityNotice.deleteAfter': daysFrom(NOW, 7) } },
     );
+    // The claim names the timeline it was decided on.
+    expect(filter['inactivityNotice.firstSentAt']).toEqual(day('2028-10-01'));
   });
 
   const due = account({
@@ -462,18 +465,29 @@ describe('candidates: only accounts with a step due today', () => {
     expect(Bottle.distinct).toHaveBeenCalledWith('user', { user: { $in: ['full', 'empty'] } });
   });
 
-  test('timelines are read by their next step: the final notice or the deletion date', async () => {
+  test('timelines are read by their next step, exempt or not, so an exempt one is ended rather than frozen', async () => {
     User.find.mockReturnValue(chain([]));
     await ia.candidates(NOW, daysFrom(NOW, -100));
     const q = User.find.mock.calls[0][0];
-    expect(q.$or).toEqual([
-      { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': { $lte: daysFrom(NOW, 7) } },
-      { 'inactivityNotice.finalSentAt': { $ne: null }, 'inactivityNotice.deleteAfter': { $lte: NOW } },
-    ]);
-    expect(q).toMatchObject({ isDemo: { $ne: true }, deletionScheduledFor: null, roles: { $nin: ['admin', 'somm', 'moderator'] }, stripeSubscriptionId: null });
-    expect(q.username.$not.test('__deleted__')).toBe(true);
-    // Paying supporters are left out of the query itself, so they cannot fill a step's window.
-    expect(q.$nor).toEqual([{ plan: { $in: ['supporter', 'patron', 'benefactor'] }, $or: [{ planExpiresAt: null }, { planExpiresAt: { $gt: NOW } }] }]);
+    // The whole query: no exemption filter, so a supporter granted a plan
+    // mid-timeline is read, decided exempt, and has the timeline cleared.
+    expect(q).toEqual({
+      'inactivityNotice.firstSentAt': { $ne: null },
+      $or: [
+        { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': { $lte: daysFrom(NOW, 7) } },
+        { 'inactivityNotice.finalSentAt': { $ne: null }, 'inactivityNotice.deleteAfter': { $lte: NOW } },
+      ],
+    });
+  });
+
+  test('the queries that start a timeline leave out accounts that can never be deleted, paying ones included', async () => {
+    User.find.mockReturnValue(chain([]));
+    await ia.candidates(NOW, day('2026-01-01'));
+    const first = User.find.mock.calls[1][0];
+    expect(first).toMatchObject({ isDemo: { $ne: true }, deletionScheduledFor: null, roles: { $nin: ['admin', 'somm', 'moderator'] }, stripeSubscriptionId: null, 'inactivityNotice.firstSentAt': null });
+    expect(first.username.$not.test('__deleted__')).toBe(true);
+    expect(first.$nor).toEqual([{ plan: { $in: ['supporter', 'patron', 'benefactor'] }, $or: [{ planExpiresAt: null }, { planExpiresAt: { $gt: NOW } }] }]);
+    expect(User.find.mock.calls[2][0]).toMatchObject({ stripeSubscriptionId: null, 'inactivityNotice.firstSentAt': null });
   });
 });
 
@@ -521,4 +535,12 @@ describe('the switch and the preview', () => {
     await ia.preview({ now: daysFrom(NOW, 5 / (24 * 60)) });
     expect(User.find.mock.calls.length).toBe(calls);
   });
+});
+
+test('a success write that matched nothing (the claim was taken over) counts and audits nothing', async () => {
+  User.find.mockReturnValue(chain([account({ lastActiveAt: day('2026-11-20') })]));
+  User.updateOne.mockResolvedValue({ matchedCount: 0 });
+  const r = await ia.runInactiveAccounts({ now: NOW });
+  expect(r.first).toBe(0);
+  expect(logAudit).not.toHaveBeenCalledWith(null, 'user.inactivity_notice', expect.anything(), expect.anything());
 });
