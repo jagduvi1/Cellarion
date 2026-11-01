@@ -514,6 +514,20 @@ export const adminSaveNewMemberEmails = (apiFetch, enabled) =>
     body: JSON.stringify({ enabled }),
   });
 
+// ── Settings (inactive accounts) ──────────────────────────────────────────────
+// Deleting accounts nobody uses (backend services/inactiveAccounts). GET →
+// { enabled, since, mailConfigured, rule, today: { first, final, delete,
+// waiting, exempt }, last30Days }; PATCH { enabled } → { enabled, since }.
+export const adminGetInactiveAccounts = (apiFetch) =>
+  apiFetch('/api/admin/settings/inactive-accounts');
+
+export const adminSaveInactiveAccounts = (apiFetch, enabled) =>
+  apiFetch('/api/admin/settings/inactive-accounts', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ enabled }),
+  });
+
 // ── Registry Bridge (keys, readers, admin revocation) ────────────────────────
 export const adminGetBridgeKeys = (apiFetch, days = 7) =>
   apiFetch(`/api/admin/bridge/keys?days=${days}`);

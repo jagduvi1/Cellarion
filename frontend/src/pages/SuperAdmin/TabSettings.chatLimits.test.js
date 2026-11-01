@@ -31,6 +31,9 @@ beforeEach(() => {
     if (url === '/api/admin/settings/new-member-emails') {
       return reply({ enabled: false, since: null, mailConfigured: true, sentLast30Days: { cellar: 0, empty: 0 } });
     }
+    if (url === '/api/admin/settings/inactive-accounts') {
+      return reply({ enabled: false, since: null, mailConfigured: true, today: {}, last30Days: {} });
+    }
     return reply({});
   });
 });

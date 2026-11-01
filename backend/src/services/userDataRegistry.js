@@ -192,6 +192,16 @@ const REGISTRY = [
           // The last day the account was used (a date, no time): what the
           // inactive-account rule reads. null until first seen after it existed.
           lastActiveAt: u.lastActiveAt || null,
+          // The notices before deletion of an unused account, while a timeline
+          // runs (services/inactiveAccounts): when each went out and the date
+          // they announced — processing history, like the email stamps above.
+          inactivityNotice: u.inactivityNotice?.firstSentAt
+            ? {
+              firstSentAt: u.inactivityNotice.firstSentAt,
+              finalSentAt: u.inactivityNotice.finalSentAt || null,
+              deleteAfter: u.inactivityNotice.deleteAfter || null,
+            }
+            : null,
           // How the account found Cellarion, recorded at signup (referrer
           // domain, campaign tags, landing page) — null when never recorded.
           signupSource: u.signupSource || null,

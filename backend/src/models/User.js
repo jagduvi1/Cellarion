@@ -288,6 +288,23 @@ const userSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  // The inactive-account timeline (services/inactiveAccounts), present only
+  // while one is running: when each of the two notices went out, whether the
+  // first reached an inbox, the deletion date they announced, and the
+  // lastActiveAt the timeline is based on (unusedSince). Over as soon as the
+  // account is used again (lastActiveAt moves past unusedSince), and cleared
+  // when an admin turns the rule on (every timeline restarts with 30 days).
+  // Never sent to the client (toJSON); part of the export; goes with the row.
+  inactivityNotice: {
+    type: new mongoose.Schema({
+      firstSentAt: { type: Date, default: null },
+      finalSentAt: { type: Date, default: null },
+      deleteAfter: { type: Date, default: null },
+      emailed: { type: Boolean, default: false },
+      unusedSince: { type: Date, default: null },
+    }, { _id: false }),
+    default: undefined
+  },
   // LEGACY single-session fields. Read once by /refresh to adopt a
   // pre-sessions cookie into `sessions` (so the rollout signs nobody out),
   // then nulled. Drop the three fields and their index once no row carries a
@@ -334,6 +351,10 @@ const userSchema = new mongoose.Schema({
   // email as such, not the categories that existed that day (audit
   // 2026-09-27 M7). Cleared when they turn any email back on in Settings
   // (services/accountOps): from then on the per-category switches decide.
+  // The exceptions are messages about the account itself, which the Privacy
+  // Policy (section 8) names: email verification and password reset (the
+  // person asked for them), the account-lockout alert (security), and the two
+  // notices before an unused account is deleted (services/inactiveAccounts).
   emailOptOutAt: {
     type: Date,
     default: null
@@ -686,6 +707,7 @@ userSchema.methods.toJSON = function() {
   delete obj.signupSource;
   // Retention bookkeeping, same reasoning (the export carries it).
   delete obj.lastActiveAt;
+  delete obj.inactivityNotice;
   // Data minimisation (I-1): internal lockout bookkeeping and the raw Stripe
   // subscription id are never needed client-side. The frontend only needs to
   // know WHETHER a subscription exists — expose that as a derived boolean.
