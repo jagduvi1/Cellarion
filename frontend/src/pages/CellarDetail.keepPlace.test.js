@@ -20,13 +20,14 @@ const bottle = (n) => ({ _id: `b${n}`, status: 'active', vintage: '2019', cellar
 const group = (n) => ({ key: `w${n}|2019`, count: 1, bottles: [bottle(n)] });
 
 let loaded = 30;
+let openNow;
 const api = vi.fn(async (url) => {
   if (url.startsWith('/api/cellars/c1?') || url.startsWith('/api/cellars/multi/bottles?')) {
     const q = new URLSearchParams(url.split('?')[1]);
     const limit = Number(q.get('limit'));
     const skip = Number(q.get('skip') || 0);
     const items = Array.from({ length: Math.min(limit, 100 - skip) }, (_, i) => group(skip + i + 1));
-    return ok({ cellar: CELLAR, bottles: { items, total: 100 }, facets: {}, baseFacets: {}, facetMeta: {} });
+    return ok({ cellar: CELLAR, bottles: { items, total: 100 }, facets: {}, baseFacets: {}, facetMeta: {}, ...(skip === 0 && openNow ? { openBottles: openNow } : {}) });
   }
   if (url === '/api/cellars') return ok({ cellars: [CELLAR, OTHER] });
   if (url.startsWith('/api/racks')) return ok({ racks: [] });
@@ -47,6 +48,7 @@ const memoryStorage = () => {
 beforeEach(() => {
   api.mockClear();
   loaded = 30;
+  openNow = undefined;
   vi.stubGlobal('sessionStorage', memoryStorage());
   vi.stubGlobal('localStorage', memoryStorage());
   vi.stubGlobal('scrollTo', () => {}); // jsdom has none; the restored place scrolls
@@ -170,4 +172,21 @@ test('an entry opens its vintage page with the list it was opened from, for the 
   );
   fireEvent.click(await screen.findByText('Wine 1'));
   expect((await screen.findByTestId('where')).textContent).toBe('/cellars/c1/vintages/w1/2019|{"cellarList":"/cellars/c1"}');
+});
+
+test('"Open now" shows the open bottles the first page names, and nothing without them', async () => {
+  const { screen } = await import('@testing-library/react');
+  openNow = [{
+    _id: 'b7', cellar: 'c1', vintage: '2016', bottleSize: '750ml', preservationMethod: 'vacuum',
+    openedAt: new Date().toISOString(), pours: [], wineDefinition: { _id: 'w7', name: 'Barolo' },
+  }];
+  const first = renderCellar();
+  expect(await screen.findByRole('link', { name: /Barolo 2016/ })).toHaveAttribute('href', '/cellars/c1/bottles/b7');
+  expect(screen.getByRole('heading', { name: /openNow\.title/ })).toBeInTheDocument();
+  first.unmount();
+
+  openNow = undefined;
+  renderCellar();
+  await screen.findByText('Wine 1');
+  expect(screen.queryByRole('heading', { name: /openNow\.title/ })).toBeNull();
 });

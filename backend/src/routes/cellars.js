@@ -13,6 +13,7 @@ const WineRequest = require('../models/WineRequest');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { createCellar } = require('../services/rackOps');
+const { listOpenBottles } = require('../services/openBottleList');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
 const { transferCellarOwnership } = require('../services/cellarTransfer');
@@ -694,6 +695,22 @@ router.post('/', async (req, res) => {
 
 // GET /api/cellars/multi/bottles?cellars=id1,id2,...&search=&type=&...
 // Active bottles across the selected cellars (flat list, no grouping/racks).
+/**
+ * The open bottles for the "Open now" strip (services/openBottleList), each
+ * named with its cellar when several are in view. Auxiliary like the
+ * on-order summary: a failed lookup shows no strip, never a failed list.
+ */
+async function openNowFor(cellarIds, cellarsById = null) {
+  try {
+    const rows = await listOpenBottles(cellarIds);
+    if (!cellarsById) return rows;
+    return rows.map((b) => ({ ...b, cellarName: cellarsById.get(String(b.cellar))?.name || null }));
+  } catch (err) {
+    console.warn('Open-now lookup failed (non-fatal):', err.message);
+    return [];
+  }
+}
+
 router.get('/multi/bottles', async (req, res) => {
   try {
     const requested = String(req.query.cellars || '')
@@ -736,6 +753,8 @@ router.get('/multi/bottles', async (req, res) => {
     const { facets, baseFacets, facetMeta } = skip === 0
       ? await facetsAcrossCellars({ cellarIds, statusFilter: 'active', found })
       : { facets: null, baseFacets: null, facetMeta: null };
+    // "Open now" above the list: first page only, each named with its cellar.
+    const openBottles = skip === 0 ? await openNowFor(cellarIds, accessibleMap) : undefined;
 
     // Match the single-cellar route's per-bottle enrichment (default/pending
     // images), then tag each bottle with the cellar it lives in + maturity.
@@ -763,6 +782,7 @@ router.get('/multi/bottles', async (req, res) => {
       }),
       bottles: { count: items.length, total, limit, skip, grouped, items, ...(grouped ? { bottleTotal } : {}) },
       facets, baseFacets, facetMeta,
+      ...(openBottles ? { openBottles } : {}),
     });
   } catch (error) {
     console.error('Multi-cellar bottles error:', error);
@@ -1677,9 +1697,13 @@ router.get('/:id', async (req, res) => {
       console.warn('On-order summary failed (non-fatal):', err.message);
     }
 
+    // "Open now" above the list (first page only).
+    const openBottles = skip === 0 ? await openNowFor([cellar._id]) : undefined;
+
     res.json({
       cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
       onOrder: { count: onOrderCount, nextExpected },
+      ...(openBottles ? { openBottles } : {}),
       bottles: {
         total: totalCount,
         count: responseItems.length,
