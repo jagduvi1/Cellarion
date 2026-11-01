@@ -24,11 +24,14 @@ jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // What a marked token leads to is services/apiDeprecationNotices.test.js.
 jest.mock('../services/apiDeprecationNotices', () => ({ markTokenDeprecatedUse: jest.fn(() => Promise.resolve()) }));
+// The write itself is services/lastActive.test.js.
+jest.mock('../services/lastActive', () => ({ touchLastActive: jest.fn(() => Promise.resolve()) }));
 
 const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
 const { markTokenDeprecatedUse } = require('../services/apiDeprecationNotices');
+const { touchLastActive } = require('../services/lastActive');
 const {
   isApiTokenCredential,
   authenticateApiToken,
@@ -574,6 +577,19 @@ describe('authenticateApiToken', () => {
       expect(polls).toBeGreaterThan(20);
       expect(ApiToken.updateOne).toHaveBeenCalledTimes(polls);
       expect(logAudit).toHaveBeenCalledTimes(1);
+      // ...and the owner's active day once, with the day's first use.
+      expect(touchLastActive).toHaveBeenCalledTimes(1);
+    });
+
+    // An integration at work is the member using Cellarion (User.lastActiveAt).
+    test('the first use of the day also records the owner\'s active day; other uses that day do not', async () => {
+      await use(new Date('2026-09-25T23:30:00Z'));
+      expect(touchLastActive).toHaveBeenCalledWith(userId, new Date('2026-09-26T10:00:00Z'));
+
+      touchLastActive.mockClear();
+      await use(new Date('2026-09-26T07:59:00Z'));
+      await use(new Date('2026-09-26T09:30:00Z'));
+      expect(touchLastActive).not.toHaveBeenCalled();
     });
   });
 });

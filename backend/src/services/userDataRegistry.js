@@ -189,6 +189,9 @@ const REGISTRY = [
           emailOptOutAt: u.emailOptOutAt || null,
           gdprConsent: u.gdprConsent,
           createdAt: u.createdAt,
+          // The last day the account was used (a date, no time): what the
+          // inactive-account rule reads. null until first seen after it existed.
+          lastActiveAt: u.lastActiveAt || null,
           // How the account found Cellarion, recorded at signup (referrer
           // domain, campaign tags, landing page) — null when never recorded.
           signupSource: u.signupSource || null,

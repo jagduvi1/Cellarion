@@ -273,6 +273,21 @@ const userSchema = new mongoose.Schema({
     })],
     default: []
   },
+  // The last DAY this account was used: a sign-in, the app renewing its
+  // session (every ~15 minutes of use), or an API token or AI connector at
+  // work. It is what makes "kept for as long as your account is active"
+  // (Privacy Policy, Data retention) checkable: sessions expire after 30 days
+  // and the activity log after 90, so neither can tell a dormant account from
+  // a quiet one. A day and nothing finer (data minimisation): UTC midnight of
+  // that day. Only ever moves forward. Written by services/lastActive; never
+  // sent to the client (toJSON below), included in the GDPR export, removed
+  // with the account row. null = not seen since the field existed — the
+  // backfill script fills it from the evidence that remains.
+  lastActiveAt: {
+    type: Date,
+    default: null,
+    index: true
+  },
   // LEGACY single-session fields. Read once by /refresh to adopt a
   // pre-sessions cookie into `sessions` (so the rollout signs nobody out),
   // then nulled. Drop the three fields and their index once no row carries a
@@ -669,6 +684,8 @@ userSchema.methods.toJSON = function() {
   delete obj.stripeCustomerId;
   // Admin-stats bookkeeping; the app never needs it (data minimisation).
   delete obj.signupSource;
+  // Retention bookkeeping, same reasoning (the export carries it).
+  delete obj.lastActiveAt;
   // Data minimisation (I-1): internal lockout bookkeeping and the raw Stripe
   // subscription id are never needed client-side. The frontend only needs to
   // know WHETHER a subscription exists — expose that as a derived boolean.

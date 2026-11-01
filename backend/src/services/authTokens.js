@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const { markActive } = require('./lastActive');
 
 // Central place for issuing the access/refresh token pair and handling the
 // refresh cookie. Shared by the password login flow (routes/auth.js) and the
@@ -213,6 +214,7 @@ const issueTokens = async (user, res, { rememberMe, session, client, expiresAt }
     session.rotatedAt = new Date(now);
     session.hash = hash;
     session.lastUsedAt = new Date(now);
+    markActive(user, now);
     // Backfill legacy sessions (null) so every session eventually gets a cap;
     // never EXTEND an existing one — an attacker who keeps rotating a stolen
     // token is still cut off at the original deadline.
@@ -240,7 +242,10 @@ const issueTokens = async (user, res, { rememberMe, session, client, expiresAt }
 };
 
 // Start a device session on a user doc: drop expired entries, evict the
-// least-recently-used one at the cap, append the new one.
+// least-recently-used one at the cap, append the new one. Also records the
+// day as active: here rather than in issueTokens, because saveWithNewSession
+// replays only this function onto a fresh copy after a version conflict, and
+// any change made to the doc before it would make the save non-replayable.
 const addSession = (user, entry, now) => {
   pruneSessions(user, now);
   const list = sessionsOf(user);
@@ -252,6 +257,7 @@ const addSession = (user, entry, now) => {
     list.splice(oldest, 1);
   }
   list.push(entry);
+  markActive(user, now);
 };
 
 const NEW_SESSION_ATTEMPTS = 5;
