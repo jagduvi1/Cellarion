@@ -12,9 +12,13 @@ export default function InactiveAccountsPanel({ apiFetch }) {
 
   useEffect(() => {
     adminGetInactiveAccounts(apiFetch)
-      .then(r => r.json())
-      .then(setState)
-      .catch(() => setMsg({ ok: false, text: 'Failed to load' }));
+      .then(async (r) => {
+        const d = await r.json();
+        // An error body is not a state: no switch is shown for it.
+        if (!r.ok) throw new Error(d?.error || 'Failed to load');
+        setState(d);
+      })
+      .catch((err) => setMsg({ ok: false, text: err?.message || 'Failed to load' }));
   }, [apiFetch]);
 
   const toggle = async () => {
@@ -57,7 +61,8 @@ export default function InactiveAccountsPanel({ apiFetch }) {
             held a bottle, a wishlist entry or a journal entry) get an email {rule.firstNoticeDays} days and
             again {rule.finalNoticeDays} days before they are deleted. Signing in once keeps the account. Never
             deleted: paying supporters, staff, demo accounts, and the owner of a shared cellar a member still
-            uses. Runs daily at 09:13 UTC. Turning it on restarts every timeline.
+            uses. A notice that fails to send is retried the next day, and nothing is deleted on a day a notice
+            failed. Runs daily at 09:13 UTC. Turning it on restarts every timeline.
           </div>
         )}
         {state && (
@@ -68,6 +73,15 @@ export default function InactiveAccountsPanel({ apiFetch }) {
                 ? `On since ${new Date(state.since).toLocaleString()}`
                 : 'Off'}</span>
             </div>
+            {state.trackedSince && (
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Use recorded since</span>
+                <span>
+                  {new Date(state.trackedSince).toLocaleDateString()}: nobody counts as unused from earlier, so no
+                  account can be deleted before {new Date(state.earliestDeletion).toLocaleDateString()}
+                </span>
+              </div>
+            )}
             <div className="sa-kv-row">
               <span className="sa-kv-key">What it would do today</span>
               <span>

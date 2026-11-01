@@ -20,6 +20,7 @@ jest.mock('../../services/inactiveAccounts', () => ({
   getSettings: jest.fn(),
   setEnabled: jest.fn(),
   preview: jest.fn(),
+  addMonths: (d, m) => { const x = new Date(d); x.setUTCMonth(x.getUTCMonth() + m); return x; },
   MONTHS_WITH_CONTENT: 24,
   MONTHS_EMPTY: 12,
   FIRST_NOTICE_DAYS: 30,
@@ -55,11 +56,16 @@ const call = (method, body, roles = ['admin']) => fetch(`${baseUrl}/api/admin/se
   ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 });
 
-test('GET shows the switch, the rule, what it would do today and the last 30 days', async () => {
+test('GET shows the switch, the rule, the tracking start, what it would do today and the last 30 days', async () => {
   getSettings.mockResolvedValue({ enabled: false, since: null });
-  preview.mockResolvedValue({ first: 3, final: 1, wait: 2, 'skip:active': 40, 'skip:paying': 2, 'skip:staff': 1 });
-  User.countDocuments.mockImplementation(async (q) => (q['inactivityNotice.firstSentAt'] ? 5 : 2));
-  AuditLog.countDocuments.mockResolvedValue(1);
+  preview.mockResolvedValue({
+    counts: { first: 3, final: 1, wait: 2, 'skip:active': 40, 'skip:paying': 2, 'skip:staff': 1 },
+    trackedSince: new Date('2026-11-01T00:00:00Z'),
+  });
+  AuditLog.countDocuments.mockImplementation(async (q) => {
+    if (q.action === 'user.inactivity_deleted') return 1;
+    return q['detail.notice'] === 'first' ? 5 : 2;
+  });
 
   const res = await call('GET');
 
@@ -69,11 +75,16 @@ test('GET shows the switch, the rule, what it would do today and the last 30 day
     since: null,
     mailConfigured: false,
     rule: { monthsWithContent: 24, monthsEmpty: 12, firstNoticeDays: 30, finalNoticeDays: 7 },
+    // Nobody counts as unused from before recording started: the earliest deletion is a year on.
+    trackedSince: '2026-11-01T00:00:00.000Z',
+    earliestDeletion: '2027-11-01T00:00:00.000Z',
     // Exempt counts the reasons an account can never be deleted, not the active ones.
     today: { first: 3, final: 1, delete: 0, waiting: 2, exempt: 3 },
     last30Days: { firstNotices: 5, finalNotices: 2, deleted: 1 },
   });
-  expect(AuditLog.countDocuments.mock.calls[0][0].action).toBe('user.inactivity_deleted');
+  // What the job did comes from its own audit rows.
+  expect(AuditLog.countDocuments.mock.calls.map((c) => c[0].action).sort())
+    .toEqual(['user.inactivity_deleted', 'user.inactivity_notice', 'user.inactivity_notice']);
 });
 
 test('PATCH turns it on and audits the change', async () => {

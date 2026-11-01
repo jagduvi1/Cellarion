@@ -144,3 +144,21 @@ test('"/" with a modifier held is left alone', async () => {
   fireEvent.keyDown(document.body, { key: '/', ctrlKey: true });
   expect(screen.getByRole('searchbox')).not.toHaveFocus();
 });
+
+test('"/" while a dialog is open is left alone (the dialog keeps the keyboard)', async () => {
+  renderAt('/bottles');
+  const dialog = document.createElement('div');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  const button = document.createElement('button');
+  dialog.appendChild(button);
+  document.body.appendChild(dialog);
+  try {
+    button.focus();
+    fireEvent.keyDown(button, { key: '/' });
+    expect(screen.getByRole('searchbox')).not.toHaveFocus();
+    expect(button).toHaveFocus();
+  } finally {
+    dialog.remove();
+  }
+});

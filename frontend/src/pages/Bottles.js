@@ -134,6 +134,8 @@ function Bottles() {
     const onKey = (e) => {
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+      // An open dialog (the policy prompt, a modal) keeps the keyboard.
+      if (document.querySelector('[aria-modal="true"]')) return;
       e.preventDefault();
       searchInput.current?.focus();
     };

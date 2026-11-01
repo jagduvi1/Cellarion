@@ -7,10 +7,14 @@
  *     already being deleted, a paying supporter, the owner of a shared cellar
  *     a member still uses)
  *   - which period applies (24 months, 12 for an account that never held anything)
+ *   - that nobody counts as unused from before this install started recording
+ *     use (history before it is mostly gone, and absence is not proof)
  *   - the timeline: a first notice 30 days before, a final one 7 days before,
  *     and never less notice than that however late the job runs
+ *   - that a notice which fails to send is undone and retried, and that no
+ *     account is erased in a run in which a notice failed
  *   - that using the account ends the timeline, even on the day of a notice
- *   - that a deletion is decided again from a fresh read
+ *   - that a deletion is decided again from a fresh read and claimed once
  *   - that nothing runs while the rule is off or email is not configured
  */
 jest.mock('../models/User', () => ({
@@ -18,10 +22,10 @@ jest.mock('../models/User', () => ({
   updateOne: jest.fn(), updateMany: jest.fn(), exists: jest.fn(),
 }));
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ exists: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/WishlistItem', () => ({ exists: jest.fn() }));
-jest.mock('../models/JournalEntry', () => ({ exists: jest.fn() }));
-jest.mock('../models/SiteConfig', () => ({ findOne: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ exists: jest.fn(), countDocuments: jest.fn(), distinct: jest.fn() }));
+jest.mock('../models/WishlistItem', () => ({ exists: jest.fn(), distinct: jest.fn() }));
+jest.mock('../models/JournalEntry', () => ({ exists: jest.fn(), distinct: jest.fn() }));
+jest.mock('../models/SiteConfig', () => ({ findOne: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../utils/siteConfig', () => ({ updateSiteConfig: jest.fn() }));
 jest.mock('./mailgun', () => ({ sendInactivityNoticeEmail: jest.fn(), EMAIL_VERIFICATION_ENABLED: true }));
 jest.mock('./userDeletionJob', () => ({ eraseAccount: jest.fn() }));
@@ -56,17 +60,27 @@ const chain = (value) => {
   return q;
 };
 
+// SiteConfig holds both the switch and the tracking start; answer by key.
+let settings;
+let tracking;
 beforeEach(() => {
   jest.clearAllMocks();
-  SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ value: { enabled: true, since: '2028-10-01T00:00:00Z' } }) });
+  settings = { enabled: true, since: '2028-10-01T00:00:00Z' };
+  tracking = { since: '2026-01-01T00:00:00Z' }; // long enough ago not to matter, unless a test says so
+  SiteConfig.findOne.mockImplementation(({ key }) => ({
+    lean: () => Promise.resolve(key === 'inactiveAccounts' ? { value: settings } : { value: tracking }),
+  }));
   User.updateMany.mockResolvedValue({ modifiedCount: 0 });
   User.updateOne.mockResolvedValue({});
   User.findOneAndUpdate.mockReturnValue({ select: () => Promise.resolve({ _id: 'u1' }) });
   User.exists.mockResolvedValue(null);
   Bottle.exists.mockResolvedValue({ _id: 'b1' });
   Bottle.countDocuments.mockResolvedValue(12);
+  Bottle.distinct.mockResolvedValue([]);
   WishlistItem.exists.mockResolvedValue(null);
+  WishlistItem.distinct.mockResolvedValue([]);
   JournalEntry.exists.mockResolvedValue(null);
+  JournalEntry.distinct.mockResolvedValue([]);
   Cellar.find.mockReturnValue(chain([]));
   sendInactivityNoticeEmail.mockResolvedValue(undefined);
   eraseAccount.mockResolvedValue(undefined);
@@ -100,10 +114,9 @@ describe('decide: who can never be deleted', () => {
 describe('decide: the period and the timeline', () => {
   test('with content: 24 months; the first notice comes 30 days before, not sooner', () => {
     const lastActiveAt = day('2026-11-01'); // due 2028-11-01
-    const justBefore = daysFrom(addMonthsUtc(lastActiveAt, 24), -31);
-    expect(ia.decide(account({ lastActiveAt }), facts(), justBefore).action).toBe('skip:active');
-    const at = daysFrom(addMonthsUtc(lastActiveAt, 24), -30);
-    const d = ia.decide(account({ lastActiveAt }), facts(), at);
+    const due = ia.addMonths(lastActiveAt, 24);
+    expect(ia.decide(account({ lastActiveAt }), facts(), daysFrom(due, -31)).action).toBe('skip:active');
+    const d = ia.decide(account({ lastActiveAt }), facts(), daysFrom(due, -30));
     expect(d).toMatchObject({ action: 'first', months: 24 });
     expect(d.deleteAfter).toEqual(day('2028-11-01'));
   });
@@ -160,13 +173,37 @@ describe('decide: the period and the timeline', () => {
   });
 });
 
-function addMonthsUtc(d, m) { return ia.addMonths(d, m); }
+describe('decide: nobody counts as unused from before use was recorded', () => {
+  // Recording started on 2026-11-01. An account created in 2024 whose last
+  // trace (creation, or a backfilled date) is old must not be "unused since 2024".
+  const trackedSince = day('2026-11-01');
+
+  test('an old account with no later trace is counted from the tracking start', () => {
+    const user = account({ lastActiveAt: null, createdAt: new Date('2024-01-10T12:00:00Z') });
+    expect(ia.decide(user, facts(), day('2028-09-30'), trackedSince).action).toBe('skip:active');
+    const d = ia.decide(user, facts(), day('2028-10-02'), trackedSince);
+    expect(d).toMatchObject({ action: 'first', due: day('2028-11-01') });
+    expect(d.unusedFrom).toEqual(trackedSince);
+  });
+
+  test('a backfilled date from before the tracking start is floored the same way', () => {
+    const user = account({ lastActiveAt: day('2025-03-01') });
+    expect(ia.decide(user, facts({ hasContent: false }), day('2027-09-30'), trackedSince).action).toBe('skip:active');
+    expect(ia.decide(user, facts({ hasContent: false }), day('2027-10-02'), trackedSince).action).toBe('first');
+  });
+
+  test('a day of use recorded after the tracking start counts as it is', () => {
+    const d = ia.decide(account({ lastActiveAt: day('2027-01-15') }), facts(), day('2029-01-01'), trackedSince);
+    expect(d.unusedFrom).toEqual(day('2027-01-15'));
+    expect(d.due).toEqual(day('2029-01-15'));
+  });
+});
 
 describe('runInactiveAccounts', () => {
   const plan = (users) => User.find.mockReturnValue(chain(users));
 
   test('does nothing while the rule is off', async () => {
-    SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ value: { enabled: false } }) });
+    settings = { enabled: false };
     expect(await ia.runInactiveAccounts({ now: NOW })).toEqual({ skipped: 'off' });
     expect(User.find).not.toHaveBeenCalled();
   });
@@ -199,13 +236,59 @@ describe('runInactiveAccounts', () => {
     const [filter, update] = User.findOneAndUpdate.mock.calls[0];
     expect(filter).toEqual({ _id: 'u1', lastActiveAt: day('2026-11-20'), 'inactivityNotice.firstSentAt': null });
     expect(update.$set.inactivityNotice).toEqual({
-      firstSentAt: NOW, finalSentAt: null, deleteAfter: daysFrom(NOW, 30), emailed: true, unusedSince: day('2026-11-20'),
+      firstSentAt: NOW, finalSentAt: null, deleteAfter: daysFrom(NOW, 30), emailed: true, unusedSince: day('2026-11-20'), erasingAt: null,
     });
     expect(sendInactivityNoticeEmail).toHaveBeenCalledWith('anna@example.com', 'anna', {
       final: false, deleteAfter: daysFrom(NOW, 30), lastActiveAt: day('2026-11-20'), months: 24, bottles: 12,
     });
     expect(logAudit).toHaveBeenCalledWith(null, 'user.inactivity_notice', { type: 'user', id: 'u1' },
       expect.objectContaining({ notice: 'first', emailed: true, months: 24 }));
+  });
+
+  test('a first notice that fails to send is undone (so it is sent again tomorrow), not audited as sent', async () => {
+    plan([account({ lastActiveAt: day('2026-11-20') })]);
+    sendInactivityNoticeEmail.mockRejectedValue(new Error('mailgun 401'));
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const r = await ia.runInactiveAccounts({ now: NOW });
+
+    expect(r).toMatchObject({ first: 0, failed: 1 });
+    expect(User.updateOne).toHaveBeenCalledWith({ _id: 'u1', 'inactivityNotice.firstSentAt': NOW }, { $unset: { inactivityNotice: '' } });
+    expect(logAudit).not.toHaveBeenCalledWith(null, 'user.inactivity_notice', expect.anything(), expect.anything());
+    errors.mockRestore();
+  });
+
+  test('a final notice that fails to send restores the stamp and the date it had', async () => {
+    plan([account({
+      lastActiveAt: day('2026-09-01'),
+      inactivityNotice: { firstSentAt: day('2028-10-01'), finalSentAt: null, deleteAfter: day('2028-11-05'), unusedSince: day('2026-09-01') },
+    })]);
+    sendInactivityNoticeEmail.mockRejectedValue(new Error('timed out'));
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await ia.runInactiveAccounts({ now: NOW });
+
+    expect(User.updateOne).toHaveBeenCalledWith(
+      { _id: 'u1', 'inactivityNotice.finalSentAt': NOW },
+      { $set: { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': day('2028-11-05') } },
+    );
+    errors.mockRestore();
+  });
+
+  test('no account is erased in a run in which a notice failed', async () => {
+    const dueUser = account({
+      _id: 'u2', lastActiveAt: day('2026-09-01'),
+      inactivityNotice: { firstSentAt: day('2028-09-20'), finalSentAt: day('2028-10-14'), deleteAfter: day('2028-10-21'), unusedSince: day('2026-09-01') },
+    });
+    plan([account({ lastActiveAt: day('2026-11-20') }), dueUser]);
+    sendInactivityNoticeEmail.mockRejectedValue(new Error('mailgun down'));
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const r = await ia.runInactiveAccounts({ now: NOW });
+
+    expect(r).toMatchObject({ deleted: 0, deletionsHeld: 1 });
+    expect(eraseAccount).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   test('a lost claim (used a moment ago) sends nothing', async () => {
@@ -225,11 +308,10 @@ describe('runInactiveAccounts', () => {
   });
 
   test('a final notice stamps finalSentAt and the (possibly later) date', async () => {
-    const user = account({
+    plan([account({
       lastActiveAt: day('2026-09-01'),
       inactivityNotice: { firstSentAt: day('2028-10-01'), finalSentAt: null, deleteAfter: day('2028-11-05'), unusedSince: day('2026-09-01') },
-    });
-    plan([user]);
+    })]);
 
     const r = await ia.runInactiveAccounts({ now: NOW });
 
@@ -245,7 +327,7 @@ describe('runInactiveAccounts', () => {
     inactivityNotice: { firstSentAt: day('2028-09-20'), finalSentAt: day('2028-10-14'), deleteAfter: day('2028-10-21'), unusedSince: day('2026-09-01') },
   });
 
-  test('on the date, the account is decided again from a fresh read, erased, then audited', async () => {
+  test('on the date: decided again from a fresh read, claimed, erased, then audited', async () => {
     plan([due]);
     User.findById.mockReturnValue(chain(due));
 
@@ -253,9 +335,32 @@ describe('runInactiveAccounts', () => {
 
     expect(r.deleted).toBe(1);
     expect(User.findById).toHaveBeenCalledWith('u1');
+    const [claimFilter, claim] = User.findOneAndUpdate.mock.calls[0];
+    expect(claimFilter).toMatchObject({ _id: 'u1', lastActiveAt: day('2026-09-01'), 'inactivityNotice.finalSentAt': { $ne: null } });
+    expect(claim).toEqual({ $set: { 'inactivityNotice.erasingAt': NOW } });
     expect(eraseAccount).toHaveBeenCalledWith(due);
     expect(logAudit).toHaveBeenCalledWith(null, 'user.inactivity_deleted', { type: 'user', id: 'u1' }, expect.objectContaining({ months: 24 }));
     expect(eraseAccount.mock.invocationCallOrder[0]).toBeLessThan(logAudit.mock.invocationCallOrder[0]);
+  });
+
+  test('another process holding the erase claim: this one erases nothing', async () => {
+    plan([due]);
+    User.findById.mockReturnValue(chain(due));
+    User.findOneAndUpdate.mockReturnValue({ select: () => Promise.resolve(null) });
+    const r = await ia.runInactiveAccounts({ now: NOW });
+    expect(r.deleted).toBe(0);
+    expect(eraseAccount).not.toHaveBeenCalled();
+  });
+
+  test('an erase that fails releases its claim for the next run', async () => {
+    plan([due]);
+    User.findById.mockReturnValue(chain(due));
+    eraseAccount.mockRejectedValue(new Error('purge failed'));
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await ia.runInactiveAccounts({ now: NOW });
+    expect(r).toMatchObject({ deleted: 0, failed: 1 });
+    expect(User.updateOne).toHaveBeenCalledWith({ _id: 'u1', 'inactivityNotice.erasingAt': NOW }, { $set: { 'inactivityNotice.erasingAt': null } });
+    errors.mockRestore();
   });
 
   test('used between the run\'s read and the deletion: nothing is erased', async () => {
@@ -286,6 +391,43 @@ describe('runInactiveAccounts', () => {
   });
 });
 
+describe('candidates: only accounts with a step due today', () => {
+  test('before the tracking start plus the period, only timelines are read', async () => {
+    User.find.mockReturnValue(chain([]));
+    await ia.candidates(NOW, daysFrom(NOW, -100));
+    expect(User.find).toHaveBeenCalledTimes(1);
+    expect(User.find.mock.calls[0][0]['inactivityNotice.firstSentAt']).toEqual({ $ne: null });
+  });
+
+  test('the 12-month band keeps only accounts that never held anything, narrowed in bulk', async () => {
+    const band = [{ _id: 'full' }, { _id: 'empty' }];
+    User.find
+      .mockReturnValueOnce(chain([]))                    // timelines due
+      .mockReturnValueOnce(chain([]))                    // 24-month first notices
+      .mockReturnValueOnce(chain(band))                  // the 12-month band (ids)
+      .mockReturnValueOnce(chain([account({ _id: 'empty' })]));
+    Bottle.distinct.mockResolvedValue(['full']);
+
+    const rows = await ia.candidates(NOW, day('2026-01-01'));
+
+    expect(rows.map((r) => r._id)).toEqual(['empty']);
+    expect(User.find.mock.calls[3][0]).toEqual({ _id: { $in: ['empty'] } });
+    expect(Bottle.distinct).toHaveBeenCalledWith('user', { user: { $in: ['full', 'empty'] } });
+  });
+
+  test('timelines are read by their next step: the final notice or the deletion date', async () => {
+    User.find.mockReturnValue(chain([]));
+    await ia.candidates(NOW, daysFrom(NOW, -100));
+    const q = User.find.mock.calls[0][0];
+    expect(q.$or).toEqual([
+      { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': { $lte: daysFrom(NOW, 7) } },
+      { 'inactivityNotice.finalSentAt': { $ne: null }, 'inactivityNotice.deleteAfter': { $lte: NOW } },
+    ]);
+    expect(q).toMatchObject({ isDemo: { $ne: true }, deletionScheduledFor: null, roles: { $nin: ['admin', 'somm', 'moderator'] } });
+    expect(q.username.$not.test('__deleted__')).toBe(true);
+  });
+});
+
 describe('factsFor', () => {
   test('content is a bottle, a wishlist entry or a journal entry', async () => {
     Bottle.exists.mockResolvedValue(null);
@@ -306,9 +448,9 @@ describe('factsFor', () => {
   });
 });
 
-describe('the switch', () => {
+describe('the switch and the preview', () => {
   test('turning it on restarts every timeline', async () => {
-    SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ value: { enabled: false } }) });
+    settings = { enabled: false };
     const r = await ia.setEnabled(true, 'admin1');
     expect(User.updateMany).toHaveBeenCalledWith({ inactivityNotice: { $exists: true } }, { $unset: { inactivityNotice: '' } });
     expect(r.enabled).toBe(true);
@@ -320,11 +462,14 @@ describe('the switch', () => {
     expect(User.updateMany).not.toHaveBeenCalled();
     expect(updateSiteConfig).toHaveBeenCalledWith('inactiveAccounts', expect.objectContaining({ enabled: false }), 'admin1');
   });
-});
 
-test('the candidate query leaves out accounts that can never be deleted', () => {
-  const q = ia.candidateQuery(NOW);
-  expect(q).toMatchObject({ isDemo: { $ne: true }, deletionScheduledFor: null, roles: { $nin: ['admin', 'somm', 'moderator'] } });
-  expect(q.username.$not.test('__deleted__')).toBe(true);
-  expect(q.username.$not.test('anna')).toBe(false);
+  test('the preview counts today\'s decisions, reports the tracking start, and is kept for ten minutes', async () => {
+    User.find.mockReturnValue(chain([account({ lastActiveAt: day('2026-11-20') })]));
+    const p = await ia.preview({ now: NOW, fresh: true });
+    expect(p.counts).toEqual({ first: 1 });
+    expect(p.trackedSince).toEqual(new Date('2026-01-01T00:00:00Z'));
+    const calls = User.find.mock.calls.length;
+    await ia.preview({ now: daysFrom(NOW, 5 / (24 * 60)) });
+    expect(User.find.mock.calls.length).toBe(calls);
+  });
 });

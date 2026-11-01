@@ -7,6 +7,7 @@ const reply = (body, ok = true) => Promise.resolve({ ok, json: () => Promise.res
 
 const OFF = {
   enabled: false, since: null, mailConfigured: true,
+  trackedSince: '2026-11-01T00:00:00.000Z', earliestDeletion: '2027-11-01T00:00:00.000Z',
   rule: { monthsWithContent: 24, monthsEmpty: 12, firstNoticeDays: 30, finalNoticeDays: 7 },
   today: { first: 3, final: 1, delete: 0, waiting: 2, exempt: 5 },
   last30Days: { firstNotices: 0, finalNotices: 0, deleted: 0 },
@@ -49,4 +50,19 @@ test('a refused change says why and keeps the state', async () => {
 
   expect(await screen.findByText('enabled must be true or false')).toBeInTheDocument();
   expect(screen.getByText('Off')).toBeInTheDocument();
+});
+
+test('shows from when use is recorded and the earliest possible deletion', async () => {
+  const apiFetch = vi.fn().mockReturnValueOnce(reply(OFF));
+  render(<InactiveAccountsPanel apiFetch={apiFetch} />);
+  expect(await screen.findByText('Use recorded since')).toBeInTheDocument();
+  expect(screen.getByText(/account can be deleted before/))
+    .toHaveTextContent(new Date('2027-11-01T00:00:00.000Z').toLocaleDateString());
+});
+
+test('a failed load shows the error and no switch', async () => {
+  const apiFetch = vi.fn().mockReturnValueOnce(reply({ error: 'Admin access required' }, false));
+  render(<InactiveAccountsPanel apiFetch={apiFetch} />);
+  expect(await screen.findByText('Admin access required')).toBeInTheDocument();
+  expect(screen.queryByText('Turn on')).not.toBeInTheDocument();
 });
