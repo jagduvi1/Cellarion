@@ -13,7 +13,8 @@ export default function InactiveAccountsPanel({ apiFetch }) {
   useEffect(() => {
     adminGetInactiveAccounts(apiFetch)
       .then(async (r) => {
-        const d = await r.json();
+        // An error page (a proxy's 502) is not JSON: say it failed, not why it would not parse.
+        const d = await r.json().catch(() => ({}));
         // An error body is not a state: no switch is shown for it.
         if (!r.ok) throw new Error(d?.error || 'Failed to load');
         setState(d);
@@ -86,7 +87,7 @@ export default function InactiveAccountsPanel({ apiFetch }) {
               <span className="sa-kv-key">What it would do today</span>
               <span>
                 {today.first ?? 0} first notices · {today.final ?? 0} final notices · {today.delete ?? 0} deletions
-                {' '}({today.waiting ?? 0} waiting for their date, {today.exempt ?? 0} exempt)
+                {' '}({today.exempt ?? 0} exempt · {state.onTimeline ?? 0} accounts on a timeline in all)
               </span>
             </div>
             <div className="sa-kv-row">

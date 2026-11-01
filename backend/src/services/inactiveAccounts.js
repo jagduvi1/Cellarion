@@ -70,8 +70,11 @@ const MAX_PER_STEP = 500;
 const EMPTY_BAND_WINDOW = 5000;
 const MAX_DELETIONS_PER_RUN = 50;
 const EMAIL_TIMEOUT_MS = 10_000;
-// A claim on an erasure older than this was left by a crashed run: retake it.
-const STALE_ERASE_CLAIM_MS = DAY;
+// A claim older than this was left by an earlier run that did not finish
+// (runs are daily, a send takes seconds): take it over. A claim to send a
+// notice is retried within the hour; one to erase, at the next day's run.
+const STALE_SEND_CLAIM_MS = 60 * 60 * 1000;
+const STALE_ERASE_CLAIM_MS = 12 * 60 * 60 * 1000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 /** `date` plus `months` calendar months (UTC). */
@@ -164,11 +167,14 @@ function decide(user, facts, now, trackedSince = null) {
     return { action: 'first', ...base, deleteAfter: later(due, new Date(now.getTime() + FIRST_NOTICE_DAYS * DAY)) };
   }
   const deleteAfter = new Date(notice.deleteAfter);
+  // The stored date already lies on or after `due`; checked again so that no
+  // later step can come before the account has been unused for the period.
+  if (now.getTime() < due.getTime() - FINAL_NOTICE_DAYS * DAY) return { action: 'wait', ...base, deleteAfter };
   if (!notice.finalSentAt) {
     if (now.getTime() < deleteAfter.getTime() - FINAL_NOTICE_DAYS * DAY) return { action: 'wait', ...base, deleteAfter };
     return { action: 'final', ...base, deleteAfter: later(deleteAfter, new Date(now.getTime() + FINAL_NOTICE_DAYS * DAY)) };
   }
-  if (now.getTime() < deleteAfter.getTime()) return { action: 'wait', ...base, deleteAfter };
+  if (now.getTime() < deleteAfter.getTime() || now.getTime() < due.getTime()) return { action: 'wait', ...base, deleteAfter };
   return { action: 'delete', ...base, deleteAfter };
 }
 
@@ -197,13 +203,16 @@ async function factsFor(user, now) {
 
 const ACCOUNT_FIELDS = '_id username displayName email emailVerified roles isDemo deletionScheduledFor plan planExpiresAt stripeSubscriptionId stripeCustomerId createdAt lastActiveAt inactivityNotice';
 
-// Accounts that can never be inactive are left out of every query.
-const BASE = {
+// Accounts that can never be inactive are left out of every query (the
+// owner of a shared cellar in use needs a lookup, so decide() handles it).
+const base = (now) => ({
   isDemo: { $ne: true },
   deletionScheduledFor: null,
   roles: { $nin: STAFF_ROLES },
   username: { $not: /^__/ },
-};
+  stripeSubscriptionId: null,
+  $nor: [{ plan: { $in: PAID_PLANS }, $or: [{ planExpiresAt: null }, { planExpiresAt: { $gt: now } }] }],
+});
 
 /** Unused (by lastActiveAt, or creation when none) on or before `cutoff`. */
 const unusedBy = (cutoff) => ({
@@ -226,7 +235,7 @@ async function candidates(now, trackedSince) {
   const add = (rows) => { for (const r of rows) if (!seen.has(String(r._id))) seen.set(String(r._id), r); };
 
   add(await User.find({
-    ...BASE,
+    ...base(now),
     'inactivityNotice.firstSentAt': { $ne: null },
     $or: [
       { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': { $lte: new Date(now.getTime() + FINAL_NOTICE_DAYS * DAY) } },
@@ -241,11 +250,11 @@ async function candidates(now, trackedSince) {
   const notOnTimeline = { 'inactivityNotice.firstSentAt': null };
 
   if (tracked <= cutoff24.getTime()) {
-    add(await User.find({ ...BASE, ...notOnTimeline, ...unusedBy(cutoff24) })
+    add(await User.find({ ...base(now), ...notOnTimeline, ...unusedBy(cutoff24) })
       .select(ACCOUNT_FIELDS).sort({ lastActiveAt: 1, createdAt: 1 }).limit(MAX_PER_STEP).lean());
   }
   if (tracked <= cutoff12.getTime()) {
-    const band = await User.find({ ...BASE, ...notOnTimeline, ...unusedBy(cutoff12) })
+    const band = await User.find({ ...base(now), ...notOnTimeline, ...unusedBy(cutoff12) })
       .select('_id').sort({ lastActiveAt: 1, createdAt: 1 }).limit(EMPTY_BAND_WINDOW).lean();
     const ids = band.map((u) => u._id).filter((id) => !seen.has(String(id)));
     if (ids.length) {
@@ -283,31 +292,43 @@ function withTimeout(p, ms) {
 }
 
 /**
- * Send one notice. The stamp is claimed first, guarded on the account still
- * being unused (lastActiveAt unchanged since the read): a sign-in a moment
- * ago wins. If the email then fails, the claim is undone, so the notice is
- * sent again the next day and its date counts from then; a send that timed
- * out may still have arrived, and a second copy is the lesser harm.
- * Returns 'sent' | 'lost' (someone else claimed it, or the account was used)
+ * Send one notice, in two steps, so a notice counts only once the mail service
+ * accepted it. First a claim (sendingAt / finalSendingAt), guarded on the
+ * account still being unused (lastActiveAt unchanged since the read): a
+ * sign-in a moment ago wins, and two processes never send the same notice.
+ * Then the email; only after it was accepted are firstSentAt / finalSentAt and
+ * the date written. A failed send releases the claim, so the notice is tried
+ * again the next day and its date counts from then. A claim left behind by a
+ * run that stopped half-way (a deploy, a lost connection) is taken over after
+ * an hour, so the notice is sent, not skipped. A send that timed out may still
+ * have arrived; a second copy is the lesser harm.
+ * Returns 'sent' | 'lost' (someone else has it, or the account was used)
  * | 'failed'.
  */
 async function sendNotice(user, d, now) {
   const final = d.action === 'final';
   const deliverable = !!(user.email && user.emailVerified);
   const unusedSince = user.lastActiveAt ? new Date(user.lastActiveAt) : null;
-  const prevDeleteAfter = user.inactivityNotice?.deleteAfter || null;
-  // Claimed only while lastActiveAt is what was read: used a moment ago, no notice.
+  const stale = new Date(now.getTime() - STALE_SEND_CLAIM_MS);
   const guard = { _id: user._id, lastActiveAt: unusedSince };
-  const update = final
-    ? { $set: { 'inactivityNotice.finalSentAt': now, 'inactivityNotice.deleteAfter': d.deleteAfter } }
-    : { $set: { inactivityNotice: { firstSentAt: now, finalSentAt: null, deleteAfter: d.deleteAfter, emailed: deliverable, unusedSince, erasingAt: null } } };
-  // A first notice may replace a timeline that has ended (used since); null
-  // matches a missing stamp as well.
-  const filter = final
-    ? { ...guard, 'inactivityNotice.firstSentAt': { $ne: null }, 'inactivityNotice.finalSentAt': null }
-    : (user.inactivityNotice?.firstSentAt
+  const claimField = final ? 'inactivityNotice.finalSendingAt' : 'inactivityNotice.sendingAt';
+  const free = { $or: [{ [claimField]: null }, { [claimField]: { $lte: stale } }] };
+  let filter;
+  let update;
+  if (final) {
+    filter = { ...guard, ...free, 'inactivityNotice.firstSentAt': { $ne: null }, 'inactivityNotice.finalSentAt': null };
+    update = { $set: { 'inactivityNotice.finalSendingAt': now } };
+  } else {
+    // A first notice may replace a timeline that has ended (used since); null
+    // matches a missing stamp as well.
+    filter = user.inactivityNotice?.firstSentAt
       ? { ...guard, 'inactivityNotice.firstSentAt': user.inactivityNotice.firstSentAt }
-      : { ...guard, 'inactivityNotice.firstSentAt': null });
+      : { ...guard, ...free, 'inactivityNotice.firstSentAt': null };
+    update = { $set: { inactivityNotice: {
+      firstSentAt: null, finalSentAt: null, deleteAfter: d.deleteAfter, emailed: false, unusedSince,
+      sendingAt: now, finalSendingAt: null, erasingAt: null,
+    } } };
+  }
   const claimed = await User.findOneAndUpdate(filter, update).select('_id');
   if (!claimed) return 'lost';
 
@@ -318,15 +339,19 @@ async function sendNotice(user, d, now) {
         final, deleteAfter: d.deleteAfter, lastActiveAt: d.unusedFrom, months: d.months, bottles,
       }), EMAIL_TIMEOUT_MS);
     } catch (err) {
-      console.error(`[inactiveAccounts] ${d.action} notice FAILED for user ${user._id} — claim undone, tried again tomorrow:`, err.message);
-      await (final
-        ? User.updateOne({ _id: user._id, 'inactivityNotice.finalSentAt': now },
-          { $set: { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': prevDeleteAfter } })
-        : User.updateOne({ _id: user._id, 'inactivityNotice.firstSentAt': now }, { $unset: { inactivityNotice: '' } })
-      ).catch((e) => console.error(`[inactiveAccounts] undoing the ${d.action} claim for user ${user._id} failed:`, e.message));
+      console.error(`[inactiveAccounts] ${d.action} notice FAILED for user ${user._id} — not counted, tried again tomorrow:`, err.message);
+      // Release the claim (a claim this fails to release goes stale in an hour).
+      await User.updateOne({ _id: user._id, [claimField]: now }, final
+        ? { $set: { 'inactivityNotice.finalSendingAt': null } }
+        : { $unset: { inactivityNotice: '' } })
+        .catch((e) => console.error(`[inactiveAccounts] releasing the ${d.action} claim for user ${user._id} failed:`, e.message));
       return 'failed';
     }
   }
+  // Accepted (or nobody to email): now the notice counts.
+  await User.updateOne({ _id: user._id, [claimField]: now }, final
+    ? { $set: { 'inactivityNotice.finalSentAt': now, 'inactivityNotice.deleteAfter': d.deleteAfter, 'inactivityNotice.finalSendingAt': null } }
+    : { $set: { 'inactivityNotice.firstSentAt': now, 'inactivityNotice.emailed': deliverable, 'inactivityNotice.sendingAt': null } });
   logAudit(null, 'user.inactivity_notice', { type: 'user', id: user._id }, {
     notice: d.action, deleteAfter: d.deleteAfter, months: d.months, emailed: deliverable,
   });

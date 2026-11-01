@@ -9,7 +9,8 @@ const OFF = {
   enabled: false, since: null, mailConfigured: true,
   trackedSince: '2026-11-01T00:00:00.000Z', earliestDeletion: '2027-11-01T00:00:00.000Z',
   rule: { monthsWithContent: 24, monthsEmpty: 12, firstNoticeDays: 30, finalNoticeDays: 7 },
-  today: { first: 3, final: 1, delete: 0, waiting: 2, exempt: 5 },
+  today: { first: 3, final: 1, delete: 0, exempt: 5 },
+  onTimeline: 4,
   last30Days: { firstNotices: 0, finalNotices: 0, deleted: 0 },
 };
 
@@ -22,7 +23,7 @@ test('shows the rule and what it would do today, then turns it on', async () => 
   expect(await screen.findByText('Off')).toBeInTheDocument();
   expect(screen.getByText(/nobody has used for 24 months \(12 months when they never/)).toBeInTheDocument();
   expect(screen.getByText(/3 first notices · 1 final notices · 0 deletions/)).toBeInTheDocument();
-  expect(screen.getByText(/2 waiting for their date, 5 exempt/)).toBeInTheDocument();
+  expect(screen.getByText(/5 exempt · 4 accounts on a timeline in all/)).toBeInTheDocument();
 
   fireEvent.click(screen.getByText('Turn on'));
 
@@ -65,4 +66,10 @@ test('a failed load shows the error and no switch', async () => {
   render(<InactiveAccountsPanel apiFetch={apiFetch} />);
   expect(await screen.findByText('Admin access required')).toBeInTheDocument();
   expect(screen.queryByText('Turn on')).not.toBeInTheDocument();
+});
+
+test('an error page that is not JSON reads as a failed load, not a parser error', async () => {
+  const apiFetch = vi.fn().mockReturnValueOnce(Promise.resolve({ ok: false, json: () => Promise.reject(new SyntaxError('Unexpected token <')) }));
+  render(<InactiveAccountsPanel apiFetch={apiFetch} />);
+  expect(await screen.findByText('Failed to load')).toBeInTheDocument();
 });

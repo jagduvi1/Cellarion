@@ -62,6 +62,7 @@ test('GET shows the switch, the rule, the tracking start, what it would do today
     counts: { first: 3, final: 1, wait: 2, 'skip:active': 40, 'skip:paying': 2, 'skip:staff': 1 },
     trackedSince: new Date('2026-11-01T00:00:00Z'),
   });
+  User.countDocuments.mockResolvedValue(6);
   AuditLog.countDocuments.mockImplementation(async (q) => {
     if (q.action === 'user.inactivity_deleted') return 1;
     return q['detail.notice'] === 'first' ? 5 : 2;
@@ -79,7 +80,8 @@ test('GET shows the switch, the rule, the tracking start, what it would do today
     trackedSince: '2026-11-01T00:00:00.000Z',
     earliestDeletion: '2027-11-01T00:00:00.000Z',
     // Exempt counts the reasons an account can never be deleted, not the active ones.
-    today: { first: 3, final: 1, delete: 0, waiting: 2, exempt: 3 },
+    today: { first: 3, final: 1, delete: 0, exempt: 3 },
+    onTimeline: 6,
     last30Days: { firstNotices: 5, finalNotices: 2, deleted: 1 },
   });
   // What the job did comes from its own audit rows.

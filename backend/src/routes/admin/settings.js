@@ -318,9 +318,12 @@ router.get('/inactive-accounts', async (req, res) => {
     // What the job did is read from its own audit rows (the stamps on accounts
     // disappear when a timeline ends, so they would undercount).
     const audited = (action, detail = {}) => AuditLog.countDocuments({ action, timestamp: { $gte: since30 }, ...detail });
-    const [settings, preview, firstNotices, finalNotices, deleted] = await Promise.all([
+    const User = require('../../models/User');
+    const [settings, preview, onTimeline, firstNotices, finalNotices, deleted] = await Promise.all([
       ia.getSettings(),
       ia.preview(),
+      // Accounts on a timeline right now, whether or not a step is due today.
+      User.countDocuments({ 'inactivityNotice.firstSentAt': { $ne: null } }),
       audited('user.inactivity_notice', { 'detail.notice': 'first' }),
       audited('user.inactivity_notice', { 'detail.notice': 'final' }),
       audited('user.inactivity_deleted'),
@@ -343,11 +346,11 @@ router.get('/inactive-accounts', async (req, res) => {
         first: today.first || 0,
         final: today.final || 0,
         delete: today.delete || 0,
-        waiting: today.wait || 0,
         exempt: Object.entries(today)
           .filter(([k]) => k.startsWith('skip:') && k !== 'skip:active')
           .reduce((n, [, v]) => n + v, 0),
       },
+      onTimeline,
       last30Days: { firstNotices, finalNotices, deleted },
     });
   } catch (err) {

@@ -289,11 +289,11 @@ const userSchema = new mongoose.Schema({
     index: true
   },
   // The inactive-account timeline (services/inactiveAccounts), present only
-  // while one is running: when each of the two notices went out (a stamp
-  // exists only for a notice that was sent, or for an account with no
+  // while one is running: when each of the two notices went out (written only
+  // once the mail service accepted it, or at once for an account with no
   // confirmed address — emailed false), the deletion date they announced, the
-  // lastActiveAt the timeline is based on (unusedSince), and the claim of a
-  // run erasing it (erasingAt). Over as soon as the account is used again
+  // lastActiveAt the timeline is based on (unusedSince), and the claims of a
+  // run sending a notice (sendingAt, finalSendingAt) or erasing (erasingAt). Over as soon as the account is used again
   // (lastActiveAt moves past unusedSince), and cleared when an admin turns the
   // rule on (every timeline restarts with 30 days).
   // Never sent to the client (toJSON); part of the export; goes with the row.
@@ -304,6 +304,8 @@ const userSchema = new mongoose.Schema({
       deleteAfter: { type: Date, default: null },
       emailed: { type: Boolean, default: false },
       unusedSince: { type: Date, default: null },
+      sendingAt: { type: Date, default: null },
+      finalSendingAt: { type: Date, default: null },
       erasingAt: { type: Date, default: null },
     }, { _id: false }),
     default: undefined

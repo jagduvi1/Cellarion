@@ -173,6 +173,18 @@ describe('decide: the period and the timeline', () => {
   });
 });
 
+describe('decide: the floor holds for every step', () => {
+  test('a stored date earlier than the period (the tracking start moved): no final notice, no erasure, until due', () => {
+    const user = account({
+      lastActiveAt: null, createdAt: new Date('2024-01-10T12:00:00Z'),
+      inactivityNotice: { firstSentAt: day('2027-01-01'), finalSentAt: day('2027-01-24'), deleteAfter: day('2027-01-31'), unusedSince: null },
+    });
+    // Recording started 2026-11-01, so this account is due 2028-11-01 at the earliest.
+    expect(ia.decide(user, facts(), day('2027-02-01'), day('2026-11-01')).action).toBe('wait');
+    expect(ia.decide(user, facts(), day('2028-11-01'), day('2026-11-01')).action).toBe('delete');
+  });
+});
+
 describe('decide: nobody counts as unused from before use was recorded', () => {
   // Recording started on 2026-11-01. An account created in 2024 whose last
   // trace (creation, or a backfilled date) is old must not be "unused since 2024".
@@ -227,17 +239,28 @@ describe('runInactiveAccounts', () => {
     expect(update).toEqual({ $unset: { inactivityNotice: '' } });
   });
 
-  test('a first notice: claimed while the account is still unused, then emailed and audited', async () => {
+  test('a first notice: claimed while the account is still unused, emailed, and only then counted', async () => {
     plan([account({ lastActiveAt: day('2026-11-20') })]); // due 2028-11-20, 19 days away
 
     const r = await ia.runInactiveAccounts({ now: NOW });
 
     expect(r.first).toBe(1);
     const [filter, update] = User.findOneAndUpdate.mock.calls[0];
-    expect(filter).toEqual({ _id: 'u1', lastActiveAt: day('2026-11-20'), 'inactivityNotice.firstSentAt': null });
-    expect(update.$set.inactivityNotice).toEqual({
-      firstSentAt: NOW, finalSentAt: null, deleteAfter: daysFrom(NOW, 30), emailed: true, unusedSince: day('2026-11-20'), erasingAt: null,
+    // Free to claim: no claim yet, or one left by a run that stopped more than an hour ago.
+    expect(filter).toEqual({
+      _id: 'u1', lastActiveAt: day('2026-11-20'), 'inactivityNotice.firstSentAt': null,
+      $or: [{ 'inactivityNotice.sendingAt': null }, { 'inactivityNotice.sendingAt': { $lte: new Date(NOW.getTime() - 60 * 60 * 1000) } }],
     });
+    // The claim is not the notice: firstSentAt stays null until the mail service accepted it.
+    expect(update.$set.inactivityNotice).toEqual({
+      firstSentAt: null, finalSentAt: null, deleteAfter: daysFrom(NOW, 30), emailed: false, unusedSince: day('2026-11-20'),
+      sendingAt: NOW, finalSendingAt: null, erasingAt: null,
+    });
+    expect(User.updateOne).toHaveBeenCalledWith(
+      { _id: 'u1', 'inactivityNotice.sendingAt': NOW },
+      { $set: { 'inactivityNotice.firstSentAt': NOW, 'inactivityNotice.emailed': true, 'inactivityNotice.sendingAt': null } },
+    );
+    expect(sendInactivityNoticeEmail.mock.invocationCallOrder[0]).toBeLessThan(User.updateOne.mock.invocationCallOrder[0]);
     expect(sendInactivityNoticeEmail).toHaveBeenCalledWith('anna@example.com', 'anna', {
       final: false, deleteAfter: daysFrom(NOW, 30), lastActiveAt: day('2026-11-20'), months: 24, bottles: 12,
     });
@@ -245,7 +268,7 @@ describe('runInactiveAccounts', () => {
       expect.objectContaining({ notice: 'first', emailed: true, months: 24 }));
   });
 
-  test('a first notice that fails to send is undone (so it is sent again tomorrow), not audited as sent', async () => {
+  test('a first notice that fails to send never counts: the claim is released, tried again tomorrow', async () => {
     plan([account({ lastActiveAt: day('2026-11-20') })]);
     sendInactivityNoticeEmail.mockRejectedValue(new Error('mailgun 401'));
     const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -253,12 +276,26 @@ describe('runInactiveAccounts', () => {
     const r = await ia.runInactiveAccounts({ now: NOW });
 
     expect(r).toMatchObject({ first: 0, failed: 1 });
-    expect(User.updateOne).toHaveBeenCalledWith({ _id: 'u1', 'inactivityNotice.firstSentAt': NOW }, { $unset: { inactivityNotice: '' } });
+    expect(User.updateOne).toHaveBeenCalledWith({ _id: 'u1', 'inactivityNotice.sendingAt': NOW }, { $unset: { inactivityNotice: '' } });
+    expect(User.updateOne).toHaveBeenCalledTimes(1);
     expect(logAudit).not.toHaveBeenCalledWith(null, 'user.inactivity_notice', expect.anything(), expect.anything());
     errors.mockRestore();
   });
 
-  test('a final notice that fails to send restores the stamp and the date it had', async () => {
+  test('a run that stops between the claim and the send leaves no notice: firstSentAt is never written', async () => {
+    plan([account({ lastActiveAt: day('2026-11-20') })]);
+    let finishSend;
+    sendInactivityNoticeEmail.mockImplementation(() => new Promise((resolve) => { finishSend = resolve; }));
+    const run = ia.runInactiveAccounts({ now: NOW });
+    for (let i = 0; i < 20 && !finishSend; i += 1) await new Promise((r) => setImmediate(r));
+    // Mid-send (a deploy would stop the process here): only the claim exists.
+    expect(User.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    expect(User.updateOne).not.toHaveBeenCalled();
+    finishSend();
+    await run;
+  });
+
+  test('a final notice that fails to send releases its claim and leaves the date as it was', async () => {
     plan([account({
       lastActiveAt: day('2026-09-01'),
       inactivityNotice: { firstSentAt: day('2028-10-01'), finalSentAt: null, deleteAfter: day('2028-11-05'), unusedSince: day('2026-09-01') },
@@ -268,10 +305,12 @@ describe('runInactiveAccounts', () => {
 
     await ia.runInactiveAccounts({ now: NOW });
 
+    expect(User.findOneAndUpdate.mock.calls[0][1]).toEqual({ $set: { 'inactivityNotice.finalSendingAt': NOW } });
     expect(User.updateOne).toHaveBeenCalledWith(
-      { _id: 'u1', 'inactivityNotice.finalSentAt': NOW },
-      { $set: { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': day('2028-11-05') } },
+      { _id: 'u1', 'inactivityNotice.finalSendingAt': NOW },
+      { $set: { 'inactivityNotice.finalSendingAt': null } },
     );
+    expect(User.updateOne).toHaveBeenCalledTimes(1);
     errors.mockRestore();
   });
 
@@ -302,7 +341,10 @@ describe('runInactiveAccounts', () => {
   test('an unconfirmed address: the same timeline, recorded as not emailed', async () => {
     plan([account({ lastActiveAt: day('2026-11-20'), emailVerified: false })]);
     await ia.runInactiveAccounts({ now: NOW });
-    expect(User.findOneAndUpdate.mock.calls[0][1].$set.inactivityNotice.emailed).toBe(false);
+    expect(User.updateOne).toHaveBeenCalledWith(
+      { _id: 'u1', 'inactivityNotice.sendingAt': NOW },
+      { $set: { 'inactivityNotice.firstSentAt': NOW, 'inactivityNotice.emailed': false, 'inactivityNotice.sendingAt': null } },
+    );
     expect(sendInactivityNoticeEmail).not.toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(null, 'user.inactivity_notice', expect.anything(), expect.objectContaining({ emailed: false }));
   });
@@ -318,8 +360,13 @@ describe('runInactiveAccounts', () => {
     expect(r.final).toBe(1);
     const [filter, update] = User.findOneAndUpdate.mock.calls[0];
     expect(filter).toMatchObject({ _id: 'u1', lastActiveAt: day('2026-09-01'), 'inactivityNotice.finalSentAt': null });
-    expect(update).toEqual({ $set: { 'inactivityNotice.finalSentAt': NOW, 'inactivityNotice.deleteAfter': daysFrom(NOW, 7) } });
+    expect(update).toEqual({ $set: { 'inactivityNotice.finalSendingAt': NOW } });
     expect(sendInactivityNoticeEmail.mock.calls[0][2].final).toBe(true);
+    // Counted, with its (possibly later) date, only after the send.
+    expect(User.updateOne).toHaveBeenCalledWith(
+      { _id: 'u1', 'inactivityNotice.finalSendingAt': NOW },
+      { $set: { 'inactivityNotice.finalSentAt': NOW, 'inactivityNotice.deleteAfter': daysFrom(NOW, 7), 'inactivityNotice.finalSendingAt': null } },
+    );
   });
 
   const due = account({
@@ -423,8 +470,10 @@ describe('candidates: only accounts with a step due today', () => {
       { 'inactivityNotice.finalSentAt': null, 'inactivityNotice.deleteAfter': { $lte: daysFrom(NOW, 7) } },
       { 'inactivityNotice.finalSentAt': { $ne: null }, 'inactivityNotice.deleteAfter': { $lte: NOW } },
     ]);
-    expect(q).toMatchObject({ isDemo: { $ne: true }, deletionScheduledFor: null, roles: { $nin: ['admin', 'somm', 'moderator'] } });
+    expect(q).toMatchObject({ isDemo: { $ne: true }, deletionScheduledFor: null, roles: { $nin: ['admin', 'somm', 'moderator'] }, stripeSubscriptionId: null });
     expect(q.username.$not.test('__deleted__')).toBe(true);
+    // Paying supporters are left out of the query itself, so they cannot fill a step's window.
+    expect(q.$nor).toEqual([{ plan: { $in: ['supporter', 'patron', 'benefactor'] }, $or: [{ planExpiresAt: null }, { planExpiresAt: { $gt: NOW } }] }]);
   });
 });
 
