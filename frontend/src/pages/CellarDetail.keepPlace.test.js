@@ -152,3 +152,22 @@ test('a kept scope that loses a cellar meanwhile still comes back with as many b
   const last = listCalls().filter((u) => u.startsWith('/api/cellars/multi/bottles?')).pop();
   expect(new URLSearchParams(last.split('?')[1]).get('limit')).toBe('60');
 });
+
+test('an entry opens its vintage page with the list it was opened from, for the way back and after Drink', async () => {
+  const { fireEvent, screen } = await import('@testing-library/react');
+  const { useLocation } = await import('react-router-dom');
+  function Where() {
+    const loc = useLocation();
+    return <div data-testid="where">{loc.pathname}|{JSON.stringify(loc.state)}</div>;
+  }
+  render(
+    <MemoryRouter initialEntries={['/cellars/c1']}>
+      <Routes>
+        <Route path="/cellars/:id" element={<CellarDetail />} />
+        <Route path="/cellars/:id/vintages/:wineId/:vintage" element={<Where />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByText('Wine 1'));
+  expect((await screen.findByTestId('where')).textContent).toBe('/cellars/c1/vintages/w1/2019|{"cellarList":"/cellars/c1"}');
+});

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import BottleUndoNotice, { bottleNoticeName } from '../components/BottleUndoNotice';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,7 @@ import CollapsibleBlock, { CollapseToggle } from '../components/CollapsibleBlock
 import { useCollapsedBlocks } from '../utils/collapsedBlocks';
 import Modal from '../components/Modal';
 import CellarPageHeader from '../components/CellarPageHeader';
+import { cellarListFrom } from '../utils/useBackHere';
 import MaturityPhaseTable from '../components/bottle/MaturityPhaseTable';
 import MaturityTimeline from '../components/bottle/MaturityTimeline';
 import DrinkWindowEditor from '../components/bottle/DrinkWindowEditor';
@@ -125,6 +126,12 @@ function CellarVintage() {
 
   const vintage = safeDecode(vintageParam || 'NV');
   const pagePath = `/cellars/${id}/vintages/${wineId}/${encodeURIComponent(vintage)}`;
+  // Opened from the cellar list (this cellar's, or another's with "all my
+  // cellars" chosen): back leads to that list as it was left, and the bottles
+  // opened from here hand it on, so Drink, Delete or Move there lands on it too.
+  const location = useLocation();
+  const cellarList = cellarListFrom(location.state);
+  const listIsThisCellar = !cellarList || /^\/cellars\/([^/?#]+)/.exec(cellarList)?.[1] === id;
 
   // Whether a long list is unfolded, remembered for this page in this tab:
   // back from one of its bottles, the list is as the user left it.
@@ -491,8 +498,8 @@ function CellarVintage() {
         </div>
       )}
       <CellarPageHeader
-        backTo={`/cellars/${id}`}
-        backLabel={t('history.backTo', { cellarName: cellar?.name || '…' })}
+        backTo={cellarList || `/cellars/${id}`}
+        backLabel={listIsThisCellar ? t('history.backTo', { cellarName: cellar?.name || '…' }) : t('bottleDetail.backToCellar', 'Back to cellar')}
         title={title}
         loading={loading}
         userColor={cellar?.userColor}
@@ -813,7 +820,7 @@ function CellarVintage() {
                       {!bottlesFolded && (
                         <ul id="cvb-bottle-list" className="cvb-bottle-list">
                           {bottles.map((b) => (
-                            <BottleRow key={b._id} bottle={b} cellarId={id} fromPath={pagePath} showNote={notes.kind === 'differs'} />
+                            <BottleRow key={b._id} bottle={b} cellarId={id} fromPath={pagePath} cellarList={cellarList} showNote={notes.kind === 'differs'} />
                           ))}
                         </ul>
                       )}
@@ -957,7 +964,7 @@ function CellarVintage() {
  * bought, open or spoken for, and its own note when the bottles do not share
  * one. The row opens the bottle's own page, which leads back here.
  */
-function BottleRow({ bottle, cellarId, fromPath, showNote }) {
+function BottleRow({ bottle, cellarId, fromPath, cellarList, showNote }) {
   const { t, i18n } = useTranslation();
   const slot = slotLabel(bottle.rackInfo, t);
   const facts = [
@@ -972,7 +979,7 @@ function BottleRow({ bottle, cellarId, fromPath, showNote }) {
 
   return (
     <li>
-      <Link to={`/cellars/${cellarId}/bottles/${bottle._id}`} state={{ fromVintage: fromPath }} className="cvb-bottle">
+      <Link to={`/cellars/${cellarId}/bottles/${bottle._id}`} state={cellarList ? { fromVintage: fromPath, cellarList } : { fromVintage: fromPath }} className="cvb-bottle">
         <span className="cvb-bottle-main">
           <span className="cvb-bottle-slot"><span aria-hidden="true">📍</span> {slot}</span>
           {facts.length > 0 && <span className="cvb-bottle-facts">{facts.join(' · ')}</span>}
