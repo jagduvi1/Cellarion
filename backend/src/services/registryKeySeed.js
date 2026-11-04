@@ -1,15 +1,18 @@
 /**
- * The standard wine-record fields a new install starts with: ABV and Closure,
- * defined exactly as cellarion.app accepted them (name, type, unit, options,
- * translated names). Without them a fresh server's wine record had no ABV row
- * at all until its admin proposed the field and accepted it (discussion #1778).
+ * The standard wine-record fields every install has: ABV and Closure, defined
+ * exactly as cellarion.app accepted them (name, type, unit, options, translated
+ * names). Without them a fresh server's wine record had no ABV row at all until
+ * its admin proposed the field and accepted it (discussion #1778).
  *
- * Seeded only on a registry with no fields at all — a fresh install, or the
- * first boot of this version on one that never had any — the classification
- * seed's rule. A registry that has fields keeps exactly what its admin chose:
- * nothing is added beside a field of the same meaning, and a field the admin
- * rejected is never brought back. A server on the Registry Bridge finds the
- * seeded field under the same name when the first wine carrying it arrives.
+ * Seeded BY NAME: each standard field the registry lacks is created, whether
+ * the registry is empty (a fresh install) or already has fields of its own (an
+ * install whose admin accepted a field before this version shipped). A name
+ * the registry already knows is left exactly as its admin decided — accepted,
+ * still proposed, or rejected: the seed never adds a second field beside one
+ * of the same name and never brings back one the admin turned down. (An admin
+ * who wants a standard definition after all proposes and accepts it.) A server
+ * on the Registry Bridge finds the seeded field under the same name when the
+ * first wine carrying it arrives.
  *
  * A seeded field has no proposer (proposedBy null): nobody proposed it.
  */
@@ -31,11 +34,13 @@ const STANDARD_KEYS = [
   },
 ];
 
-/** Create the standard fields on a registry that has none. Idempotent. */
+/** Create each standard field the registry has no row for. Idempotent. */
 async function ensureStandardKeys(now = new Date()) {
-  if (await RegistryDataKey.estimatedDocumentCount() > 0) return { seeded: false, created: 0 };
   let created = 0;
   for (const def of STANDARD_KEYS) {
+    // Any row of that name, whatever its status, is the admin's decision (or
+    // one waiting for them): the standard definition never overrides it.
+    if (await RegistryDataKey.exists({ nameKey: def.name.toLowerCase() })) continue;
     try {
       await RegistryDataKey.create({
         ...def, rationale: RATIONALE, status: 'accepted', proposedBy: null, decidedBy: null, decidedAt: now,

@@ -204,8 +204,10 @@ connectDB().then(async () => {
     console.error('[seed] classification taxonomy failed (will retry next boot):', err.message);
   }
 
-  // The standard wine-record fields (ABV, Closure) on a registry that has no
-  // fields at all: a fresh install starts with them. Idempotent.
+  // The standard wine-record fields (ABV, Closure), each one the registry has
+  // no row for yet — a fresh install, or an install whose admin had added
+  // fields of their own before this shipped. A name the admin already decided
+  // about is never touched. Idempotent.
   try {
     const keys = await require('./src/services/registryKeySeed').ensureStandardKeys();
     if (keys.seeded) console.log(`[seed] standard registry fields: ${keys.created}`);
