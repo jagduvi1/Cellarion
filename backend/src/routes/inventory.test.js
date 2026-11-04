@@ -124,7 +124,10 @@ const BOTTLES = [
     createdAt: new Date('2025-01-02T10:00:00Z'), openedAt: null, location: 'Basement, box 3', drinkFrom: 2024, drinkTo: 2040,
     defaultImage: null, ...HEAVY,
   },
-  { _id: B(2), cellar: C_OWN, wineDefinition: W1, vintage: '2016', status: 'drank', createdAt: new Date(), ...HEAVY },
+  {
+    _id: B(2), cellar: C_OWN, wineDefinition: W1, vintage: '2016', status: 'drank', createdAt: new Date(), ...HEAVY,
+    consumedAt: new Date('2026-10-30T19:00:00Z'), consumedReason: 'drank', consumedRating: 18, consumedRatingScale: '20',
+  },
   { _id: B(3), cellar: C_OWN, wineDefinition: W2, vintage: '2020', status: 'ordered', createdAt: new Date() },
   // A legacy row with no status still counts as in the cellar.
   { _id: B(4), cellar: C_SHARED, wineDefinition: W2, vintage: '2018', createdAt: new Date('2025-03-01T00:00:00Z') },
@@ -300,7 +303,7 @@ beforeEach(() => {
   })));
 });
 
-const get = (auth, headers = {}) => fetch(`${base}/api/inventory`, {
+const get = (auth, headers = {}, query = '') => fetch(`${base}/api/inventory${query}`, {
   headers: { ...(auth ? { Authorization: `Bearer ${auth}` } : {}), ...headers },
 });
 
@@ -340,9 +343,9 @@ describe('a read token gets the inventory', () => {
     const body = await (await get(READ)).json();
     const b1 = body.bottles.find((b) => b.id === B(1));
     expect(b1).toEqual({
-      id: B(1), wine: W1, pending: null, cellar: C_OWN, vintage: '2015', size: '750ml', price: 450, currency: 'SEK',
+      id: B(1), wine: W1, pending: null, cellar: C_OWN, status: 'active', vintage: '2015', size: '750ml', price: 450, currency: 'SEK',
       rating: 4, ratingScale: '5', notes: 'Decant 2h', purchaseDate: '2024-05-01', purchaseLocation: 'Systembolaget',
-      addedAt: '2025-01-02T10:00:00.000Z', opened: false,
+      addedAt: '2025-01-02T10:00:00.000Z', opened: false, consumed: null,
       maturity: 'peak',
       window: { drinkFrom: 2024, peakFrom: null, peakUntil: null, drinkTo: 2040 },
       location: { rack: id('r1'), rackName: 'Fridge', position: 14, shelf: 2, row: 2, col: 2 },
@@ -412,6 +415,37 @@ describe('a read token gets the inventory', () => {
     expect(wineLoads).not.toMatch(/description|producerNote|producerSuspect|heldReason|source|verifiedBy|scanImage/);
   });
 
+  test('include=consumed adds the bottles that left, in the same shape; on order stays out', async () => {
+    const body = await (await get(READ, {}, '?include=consumed')).json();
+    expect(body.bottles.map((b) => b.id).sort()).toEqual([B(1), B(2), B(4), B(7)].sort());
+    const b2 = body.bottles.find((b) => b.id === B(2));
+    expect(b2).toMatchObject({
+      id: B(2), wine: W1, cellar: C_OWN, status: 'drank', vintage: '2016', maturity: null, location: null,
+      consumed: { at: '2026-10-30T19:00:00.000Z', rating: 18, ratingScale: '20', note: 'SECRET-CONSUMED' },
+    });
+    // The bottles still in the cellar are exactly as without the parameter.
+    const plain = await (await get(READ)).json();
+    const still = (inv) => inv.bottles.filter((b) => b.status === 'active').map((b) => ({ ...b }));
+    expect(still(body)).toEqual(plain.bottles);
+    // Only this build loads the consumption record, and still nothing heavy.
+    const bottleLoads = loads.filter(([c]) => c === 'bottles').map(([, s]) => s);
+    expect(bottleLoads.some((s) => s.includes('consumedNote'))).toBe(true);
+    for (const s of bottleLoads) for (const heavy of ['cellarHistory', 'pours', 'barcode', 'purchaseUrl']) expect(s).not.toContain(heavy);
+  });
+
+  test('include: a list, repeated or with spaces, works; an unknown value is a 400 that reads nothing', async () => {
+    expect((await get(READ, {}, '?include=consumed,%20consumed')).status).toBe(200);
+    expect((await get(READ, {}, '?include=consumed&include=consumed')).status).toBe(200);
+    jest.clearAllMocks();
+    ApiToken.findOne.mockImplementation(async (q) => TOKENS[q.tokenHash] || null);
+    User.findById.mockImplementation((uid) => ({ select: async () => USERS.find((u) => u._id === String(uid)) || null }));
+    const res = await get(READ, {}, '?include=ordered');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown include value "ordered". Supported: consumed.' });
+    expect(Cellar.find).not.toHaveBeenCalled();
+    expect(Bottle.find).not.toHaveBeenCalled();
+  });
+
   test('a token with read AND consume works the same', async () => {
     expect((await get(READ_CONSUME)).status).toBe(200);
   });
@@ -449,6 +483,16 @@ describe('conditional requests', () => {
     const res = await get(READ, { 'If-None-Match': tag });
     expect(res.status).toBe(200);
     expect(res.headers.get('etag')).not.toBe(tag);
+  });
+
+  test('each include set has its own tag: the default copy\'s tag never answers 304 for include=consumed', async () => {
+    const plainTag = (await get(READ)).headers.get('etag');
+    const res = await get(READ, { 'If-None-Match': plainTag }, '?include=consumed');
+    expect(res.status).toBe(200);
+    const allTag = res.headers.get('etag');
+    expect(allTag).not.toBe(plainTag);
+    expect((await get(READ, { 'If-None-Match': allTag }, '?include=consumed')).status).toBe(304);
+    expect((await get(READ, { 'If-None-Match': allTag })).status).toBe(200);
   });
 
   test('an offline-snapshot tag never matches (its own tag space)', async () => {

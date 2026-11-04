@@ -180,6 +180,18 @@ describeWithMongo('public API contract', () => {
     await expectContract('getInventory', 304, { token: 'read', headers: { 'If-None-Match': first.headers.etag } });
     await expectContract('getInventory', 401, { token: 'revoked' });
     await expectContract('getInventory', 403, { token: 'consume' });
+
+    // include=consumed: the drunk bottle joins in the same shape; on order stays out; its own tag.
+    const all = await expectContract('getInventory', 200, { token: 'read', query: '?include=consumed' });
+    expect(all.headers.etag).not.toBe(first.headers.etag);
+    const allIds = all.body.bottles.map((x) => x.id);
+    expect(allIds).toEqual(expect.arrayContaining([...ids, b('drunk')]));
+    expect(allIds).not.toContain(b('ordered'));
+    expect(all.body.bottles.find((x) => x.id === b('drunk'))).toMatchObject({
+      status: 'drank', maturity: null, location: null, consumed: { at: expect.any(String) },
+    });
+    expect(first.body.bottles.every((x) => x.status === 'active' && x.consumed === null)).toBe(true);
+    await expectContract('getInventory', 400, { token: 'read', query: '?include=everything' });
   });
 
   test('inventory: the per-user limiter answers a documented 429', async () => {

@@ -8,12 +8,13 @@
  * only — nothing here spends AI money. Home Assistant polls it with the ETag
  * of the copy it holds, so an unchanged poll is one small query and a 304;
  * the per-user limiter below stops a runaway loop from turning the full build
- * into load (304s count too).
+ * into load (304s count too). `?include=consumed` adds the bottles that left
+ * the cellars; each include set has its own ETag space.
  */
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
-const { buildInventory, inventoryTag } = require('../services/integrationInventory');
+const { buildInventory, inventoryTag, parseInclude } = require('../services/integrationInventory');
 const { attachBottleImageUrls } = require('./cellars');
 
 const router = express.Router();
@@ -33,12 +34,14 @@ router.get('/', requireAuth, inventoryLimiter, async (req, res) => {
   try {
     // Personal data: never stored by a proxy or an HTTP cache.
     res.setHeader('Cache-Control', 'no-store');
+    const { include, error } = parseInclude(req.query.include);
+    if (error) return res.status(400).json({ error });
     // Read the tag BEFORE building: a change landing mid-build moves it on,
     // so the next poll rebuilds instead of keeping a copy that misses it.
-    const tag = await inventoryTag(req.user.id);
+    const tag = await inventoryTag(req.user.id, Date.now(), { include });
     res.setHeader('ETag', tag);
     if (req.get('If-None-Match') === tag) return res.status(304).end();
-    const inventory = await buildInventory(req.user.id, { attachBottleImageUrls });
+    const inventory = await buildInventory(req.user.id, { attachBottleImageUrls, include });
     res.json(inventory);
   } catch (err) {
     console.error('Inventory error:', err);

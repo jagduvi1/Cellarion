@@ -153,7 +153,7 @@ const schemas = {
   // Inventory
   Inventory: {
     type: 'object',
-    description: 'Every bottle still in the caller\'s cellars and in the cellars shared with them. Drunk, gifted, sold and on-order bottles are left out. Each wine appears once in `wines`; bottles reference it by id.',
+    description: 'Every bottle still in the caller\'s cellars and in the cellars shared with them. Drunk, gifted and sold bottles are left out unless asked for with `include=consumed`; on-order bottles are always left out. Each wine appears once in `wines`; bottles reference it by id.',
     required: ['schema', 'generatedAt', 'cellars', 'racks', 'wines', 'bottles'],
     properties: {
       schema: { type: 'integer', const: 1, description: 'The shape version of this document. It changes only with a breaking change, announced as described under Stability.' },
@@ -210,8 +210,8 @@ const schemas = {
   },
   InventoryBottle: {
     type: 'object',
-    required: ['id', 'wine', 'pending', 'cellar', 'vintage', 'size', 'price', 'currency', 'rating', 'ratingScale', 'notes',
-      'purchaseDate', 'purchaseLocation', 'addedAt', 'opened', 'maturity', 'window', 'location', 'place', 'image', 'personal'],
+    required: ['id', 'wine', 'pending', 'cellar', 'status', 'vintage', 'size', 'price', 'currency', 'rating', 'ratingScale', 'notes',
+      'purchaseDate', 'purchaseLocation', 'addedAt', 'opened', 'consumed', 'maturity', 'window', 'location', 'place', 'image', 'personal'],
     properties: {
       id: OBJECT_ID,
       wine: { ...NULL_ID, description: 'A key of `wines`, or null while the bottle waits on a wine request.' },
@@ -221,6 +221,11 @@ const schemas = {
         properties: { name: { type: ['string', 'null'] }, producer: { type: ['string', 'null'] } },
       },
       cellar: OBJECT_ID,
+      status: {
+        type: 'string',
+        enum: ['active', 'drank', 'gifted', 'sold', 'other'],
+        description: '`active` while the bottle is in the cellar; otherwise how it left (only with `include=consumed`).',
+      },
       vintage: { type: ['string', 'null'], examples: ['2015', 'NV'] },
       size: { type: ['string', 'null'], examples: ['750ml', '1500ml'] },
       price: { type: ['number', 'null'] },
@@ -232,12 +237,27 @@ const schemas = {
       purchaseLocation: { type: ['string', 'null'] },
       addedAt: { type: ['string', 'null'], format: 'date-time' },
       opened: { type: 'boolean', description: 'True while the bottle is open (some glasses poured).' },
-      maturity: MATURITY,
+      consumed: {
+        oneOf: [{ type: 'null' }, ref('InventoryConsumption')],
+        description: 'When and how the bottle was finished, or null while it is in the cellar.',
+      },
+      maturity: { ...MATURITY, description: 'Where the bottle is in its drink window today, or null when it has no window or has left the cellar.' },
       window: ref('DrinkWindow'),
       location: { oneOf: [{ type: 'null' }, ref('RackLocation')], description: 'The rack slot holding the bottle, or null when it is in no rack.' },
       place: { type: ['string', 'null'], description: 'The bottle\'s free-text location ("Basement, box 3").' },
       image: { type: ['string', 'null'], description: 'The bottle card\'s picture as a thumbnail path on this server, or null.' },
       personal: { type: 'array', items: ref('PersonalEntry') },
+    },
+  },
+  InventoryConsumption: {
+    type: 'object',
+    description: 'A bottle that left the cellar. How it left is the bottle\'s `status`.',
+    required: ['at', 'rating', 'ratingScale', 'note'],
+    properties: {
+      at: { type: ['string', 'null'], format: 'date-time', description: 'When it was drunk, given away or sold (the user may set an earlier day).' },
+      rating: { type: ['number', 'null'], description: 'The rating given when it was finished. The bottle\'s own `rating` is the one given before.' },
+      ratingScale: { ...nullable(RATING_SCALE), enum: ['5', '20', '100', null], description: 'Set only beside a rating.' },
+      note: { type: ['string', 'null'], description: 'The note written when it was finished.' },
     },
   },
   DrinkWindow: {
@@ -644,10 +664,10 @@ const examples = {
       },
     },
     bottles: [{
-      id: ID.bottle, wine: ID.wine, pending: null, cellar: ID.cellar,
+      id: ID.bottle, wine: ID.wine, pending: null, cellar: ID.cellar, status: 'active',
       vintage: '2015', size: '750ml', price: 350, currency: 'SEK', rating: 92, ratingScale: '100',
       notes: 'For a birthday', purchaseDate: '2024-05-01', purchaseLocation: 'Wine shop',
-      addedAt: '2025-01-02T10:00:00.000Z', opened: false, maturity: 'peak',
+      addedAt: '2025-01-02T10:00:00.000Z', opened: false, consumed: null, maturity: 'peak',
       window: { drinkFrom: 2022, peakFrom: 2025, peakUntil: 2032, drinkTo: 2038 },
       location: { rack: ID.rack, rackName: 'Wine fridge', position: 5, shelf: 2, row: 1, col: 2 },
       place: null, image: THUMB,
@@ -669,9 +689,19 @@ const paths = {
         'Send the `ETag` of the copy you hold as `If-None-Match`. When nothing changed you get `304` with no body. The tag moves when any of the data changes, and at least every 30 minutes.',
         '',
         'Limited to 60 requests per user per 10 minutes, 304s included. Poll every few minutes, or refetch when the event stream says something changed.',
+        '',
+        'Add `include=consumed` to get the drunk, gifted and sold bottles too, in the same shape: their `status` says how they left and `consumed` holds when, the rating and the note. Without it the answer is unchanged. Each `include` has its own `ETag`.',
       ].join('\n'),
       security: scope('read'),
-      parameters: [{ $ref: '#/components/parameters/IfNoneMatch' }],
+      parameters: [
+        { $ref: '#/components/parameters/IfNoneMatch' },
+        {
+          name: 'include',
+          in: 'query',
+          schema: { type: 'string', enum: ['consumed'] },
+          description: '`consumed` = also the bottles that left the cellar (drunk, gifted, sold, other). Any other value answers `400`.',
+        },
+      ],
       responses: {
         200: ok('The inventory.', ref('Inventory'), examples.inventory, {
           ETag: { $ref: '#/components/headers/ETag' },
@@ -681,7 +711,7 @@ const paths = {
           description: 'Nothing changed since that ETag. No body.',
           headers: { ETag: { $ref: '#/components/headers/ETag' }, ...rateLimitHeaders },
         },
-        ...errors(401, 403, 429),
+        ...errors(400, 401, 403, 429),
       },
     },
   },
