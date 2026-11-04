@@ -11,8 +11,10 @@
  * or still a bare name, so every caller keeps working.
  */
 const { styleOf, statedStyle, sweetnessStated, conflictingStyleTerms } = require('./styleTerms');
+const ops = require('../services/sweetnessOps');
 
 const term = (name, scale = 'still') => ({ name, scale, band: 'dry', regulated: true });
+afterEach(() => ops.primeSweetnessCache(null));
 
 describe('styleOf', () => {
   test('a bare name reads as statedStyle always did, with no field term', () => {
@@ -37,9 +39,23 @@ describe('styleOf', () => {
     expect([...styleOf({ name: 'Sekt', labelSweetness: term('Mild', 'sparkling') }).sweetness]).toEqual(['mild']);
   });
 
-  test('an unpopulated ref is not a statement: the name decides', () => {
+  test('an unpopulated ref the term table cannot name is not a statement: the name decides', () => {
     expect(styleOf({ name: 'Riesling Spätlese', labelSweetness: { _id: 'x' } }).sweetness.size).toBe(0);
     expect(styleOf({ name: 'Riesling Spätlese trocken', labelSweetness: { _id: 'x' } }).sweetness.has('trocken')).toBe(true);
+    expect(styleOf({ name: 'Riesling Spätlese', labelSweetness: 'a'.repeat(24) }).sweetness.size).toBe(0);
+  });
+
+  test('an unpopulated ref IS a statement when the term table\'s in-memory copy is warm (the belt for a caller that forgot the populate)', () => {
+    const id = 'a'.repeat(24);
+    ops.primeSweetnessCache([{ _id: id, name: 'trocken', scale: 'still', band: 'dry', synonyms: [] }]);
+    const s = styleOf({ name: 'Riesling Spätlese', labelSweetness: id });
+    expect(s.term).toBe('trocken');
+    expect(sweetnessStated({ name: 'Riesling Spätlese', labelSweetness: { toString: () => id } })).toBe(true);
+  });
+
+  test('a bare string is never the word — only a populated row or an id the table knows', () => {
+    expect(styleOf({ name: 'Riesling Spätlese', labelSweetness: 'trocken' }).term).toBeNull();
+    expect(sweetnessStated({ name: 'Riesling Spätlese', labelSweetness: 'Brut Nature' })).toBe(false);
   });
 
   test('the ripeness tier comes from the classification rows beside the name', () => {

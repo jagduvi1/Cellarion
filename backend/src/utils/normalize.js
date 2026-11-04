@@ -467,6 +467,14 @@ const sweetnessKeySegment = (term) => {
   const k = normalizeSweetnessTerm(term);
   return k ? `${SWEETNESS_KEY_MARK}${k}` : '';
 };
+// The key without its suffix. The WineDefinition hook owns the suffix: every
+// writer builds the bare key, the hook strips whatever segment is there and
+// re-appends the one the wine's term says (models/WineDefinition pre-validate).
+const stripSweetnessKeySegment = (key) => {
+  const s = String(key == null ? '' : key);
+  const at = s.indexOf(SWEETNESS_KEY_MARK);
+  return at === -1 ? s : s.slice(0, at);
+};
 
 /**
  * The name as the label reads it: the name, then the term — unless the name
@@ -1268,6 +1276,7 @@ module.exports = {
   SWEETNESS_KEY_MARK,
   normalizeSweetnessTerm,
   sweetnessKeySegment,
+  stripSweetnessKeySegment,
   appendSweetnessTerm,
   MAX_STAR_GRADE,
   sanitizeTaxonomyName,

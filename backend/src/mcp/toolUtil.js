@@ -99,20 +99,19 @@ function accessibleCellars(userId) {
  * `classification` (the joined string) stays beside it for older clients.
  */
 const { classificationsOut } = require('../services/classificationOps');
-const { labelSweetnessOut, wineDisplayName } = require('../services/sweetnessOps');
+const { labelSweetnessOut, labelSweetnessFields, wineDisplayName } = require('../services/sweetnessOps');
 
 function wineSummary(wd) {
   if (!wd) return null;
   return {
     wine_id: wd._id,
     name: wd.name,
-    // The name as the label reads it — name + the label sweetness term — for
-    // any text the model shows a person; the structured term rides beside it.
-    display_name: wineDisplayName(wd),
-    // { name, band, scale, regulated } or null: the sweetness the LABEL states
-    // (never the tasting profile's estimate). Null also when the read did not
-    // carry the term, as classificationsOut answers [] (services/sweetnessOps).
-    label_sweetness: labelSweetnessOut(wd),
+    // label_sweetness ({ name, band, scale, regulated } or null — the sweetness
+    // the LABEL states, never the tasting profile's estimate) and display_name
+    // (the name as the label reads it), BOTH only when the read loaded the
+    // field: a read that did not carries neither key, so a missing key means
+    // "not on this surface", never "no term" (services/sweetnessOps).
+    ...labelSweetnessFields(wd),
     producer: wd.producer || null,
     type: wd.type || null,
     // 'other' = a drink that is not wine (cider, beer, spirits), kept in the
@@ -216,6 +215,7 @@ const FIELD_DESCRIPTIONS = {
 module.exports = {
   classificationsOut,
   labelSweetnessOut,
+  labelSweetnessFields,
   wineDisplayName,
   FIELD_DESCRIPTIONS,
   ok,

@@ -2,11 +2,11 @@
  * Label sweetness — the term table and its readers (GitHub discussion #1754).
  *
  * Part 1 (this file today): the curated term rows (models/SweetnessTerm), an
- * in-memory copy the pickers, the MCP tool and the identity keys read, the
- * resolver from a printed word to a row, the output shapes every wine read
- * uses, and the boot seed. The WRITE rule — reading a term off a name, moving
- * the word out of the name, refusing an unknown word — follows in part 2; no
- * write path sets a term yet except the admin taxonomy screen.
+ * in-memory copy the pickers, the MCP tool, the style guard and the identity
+ * keys read, the resolver from a printed word to a row, the output shapes
+ * every wine read uses, and the boot seed. The WRITE rule — reading a term off
+ * a name, moving the word out of the name, refusing an unknown word — follows
+ * in part 2; no write path sets a term yet except the admin taxonomy screen.
  *
  * Same cache shape as services/classificationOps (60 s TTL, invalidated by the
  * admin routes, pinned in tests, EMPTY without a database connection so unit
@@ -19,17 +19,19 @@ const { normalizeSweetnessTerm, appendSweetnessTerm } = require('../utils/normal
 const { SCALES, BANDS } = SweetnessTerm;
 
 /**
- * The scale a wine's terms live on, from its type. Fortified wines (Fino,
- * Medium, Cream, the Port styles) are a scale of their own and carry no term
- * for now; a drink that is not wine has none either. A wine with no type is
- * answered null too: the caller searches both scales and demands one hit.
+ * The scale a wine's terms live on, from its type:
+ *   'sparkling' | 'still'  — the scale;
+ *   false                  — NO scale applies: a fortified wine (Fino, Medium,
+ *                            Cream, the Port styles are a scale of their own and
+ *                            carry no term for now) or a drink that is not wine;
+ *   null                   — unknown: a wine with no type. The caller searches
+ *                            both scales and demands one hit.
  */
 function scaleForType(type, { nonWine = false } = {}) {
-  if (nonWine) return null;
+  if (nonWine) return false;
+  if (type === 'fortified') return false;
   if (!type) return null;
-  if (type === 'sparkling') return 'sparkling';
-  if (type === 'fortified') return null;
-  return 'still';
+  return type === 'sparkling' ? 'sparkling' : 'still';
 }
 
 const TERMS_TTL_MS = 60 * 1000;
@@ -73,14 +75,32 @@ function invalidateSweetnessCache() { cache = null; }
 function primeSweetnessCache(rows) { cache = rows ? indexTerms(rows, { pinned: true }) : null; }
 
 /**
+ * A term row by id from the in-memory copy, synchronously, WHEN the copy is
+ * warm — null otherwise (never a read). For the readers that meet an
+ * unpopulated ref and may not do I/O: the style guard, a summary built from a
+ * row a caller loaded without the populate. A belt, not the braces: every
+ * surface still populates the term where it reads a wine.
+ */
+function cachedTerm(id) {
+  if (!cache || id == null) return null;
+  return cache.byId.get(String(id)) || null;
+}
+function cachedTermName(id) {
+  const row = cachedTerm(id);
+  return row ? row.name : null;
+}
+
+/**
  * Pick the row for a word among the rows that spell it (sync, on a loaded
- * table). `scale` decides between "trocken" the still word and "trocken" the
- * Sekt word; without one, the word must exist on exactly one scale. A row of
+ * table). `scale` decides between "trocken" the still word and "Trocken" the
+ * Sekt word; `false` means no scale applies (fortified) and nothing resolves;
+ * null (unknown type) demands the word exist on exactly one scale. A row of
  * the wine's country wins over a country-less one when both exist.
  */
 function pickTerm(rows, { scale = null, countryId = null } = {}) {
+  if (scale === false) return null;
   if (!rows || !rows.length) return null;
-  let list = scale ? rows.filter((r) => r.scale === scale) : rows;
+  const list = scale ? rows.filter((r) => r.scale === scale) : rows;
   if (!scale) {
     const scales = new Set(list.map((r) => r.scale));
     if (scales.size !== 1) return null;
@@ -95,6 +115,7 @@ function pickTerm(rows, { scale = null, countryId = null } = {}) {
 
 /** Resolve a printed word (or an accepted spelling) to its term row, or null. */
 async function resolveTerm(text, { scale = null, countryId = null } = {}) {
+  if (scale === false) return null;
   const key = normalizeSweetnessTerm(text);
   if (!key) return null;
   const terms = await loadTerms();
@@ -103,6 +124,7 @@ async function resolveTerm(text, { scale = null, countryId = null } = {}) {
 
 /** The same, on a table the caller already loaded (the migration, a picker). */
 function resolveLoaded(terms, text, opts = {}) {
+  if (opts.scale === false) return null;
   const key = normalizeSweetnessTerm(text);
   if (!key) return null;
   return pickTerm(terms.byKey.get(key), opts);
@@ -111,28 +133,47 @@ function resolveLoaded(terms, text, opts = {}) {
 /**
  * A term row as every wine read sends it: { name, band, scale, regulated }.
  * The same shape on REST, MCP and the Bridge, keyed on `name` like the
- * classification rows ({ name, kind }) beside it.
+ * classification rows ({ name, kind }) beside it; the row's country stays in
+ * the vocabulary listing (list_sweetness_terms), not on the wine.
  */
 function termOut(row) {
-  if (!row || typeof row !== 'object' || !row.name) return null;
+  if (!row || typeof row !== 'object' || typeof row.name !== 'string' || !row.name) return null;
   return { name: row.name, band: row.band, scale: row.scale, regulated: row.regulated !== false };
 }
 
+const ID_RX = /^[0-9a-f]{24}$/i;
 /**
- * A wine's label sweetness for the API, when its term was populated; null
- * when the wine has none. An id-only ref (an unpopulated read) answers null
- * too, as classificationsOut answers [] — the surface did not carry it.
+ * The term row a wine carries, as the read left it: the populated row, or —
+ * for an unpopulated ref — the in-memory copy's row when it is warm. Never a
+ * bare string as a word: a string here is an id or nothing. Returns
+ * `undefined` when the read did not load the field at all, null when the wine
+ * has none, and the row otherwise; `unresolved` when an id could not be read.
  */
-function labelSweetnessOut(wd) {
-  return termOut(wd && wd.labelSweetness);
+function termRowOf(wd) {
+  if (!wd || wd.labelSweetness === undefined) return undefined;
+  const t = wd.labelSweetness;
+  if (t === null) return null;
+  if (typeof t === 'object' && typeof t.name === 'string' && t.name) return t;
+  const id = typeof t === 'string' ? t : (t && typeof t.toString === 'function' ? t.toString() : '');
+  // Anything that is neither a row nor an id (a bare word, say) is nothing the
+  // record can vouch for: unresolved, never "no term".
+  if (!ID_RX.test(id)) return 'unresolved';
+  return cachedTerm(id) || 'unresolved';
 }
 
-/** The populated term's name, or null — the form the display name and the identity keys read. */
+/**
+ * A wine's label sweetness for a serializer that always loads the field
+ * (REST, the Bridge): { name, band, scale, regulated } or null.
+ */
+function labelSweetnessOut(wd) {
+  const row = termRowOf(wd);
+  return row && row !== 'unresolved' ? termOut(row) : null;
+}
+
+/** The term's name, or null — the form the display name and the identity keys read. */
 function termNameOf(wd) {
-  const t = wd && wd.labelSweetness;
-  if (!t) return null;
-  if (typeof t === 'string') return t;
-  return typeof t === 'object' && typeof t.name === 'string' ? t.name : null;
+  const row = termRowOf(wd);
+  return row && row !== 'unresolved' ? row.name : null;
 }
 
 /**
@@ -140,30 +181,63 @@ function termNameOf(wd) {
  * already carries the word (a wine marked sweetnessInName, "Brut Premier").
  * Every TEXT surface (MCP summaries, exports, the Bridge to an older server,
  * search documents) shows this; structured readers get `labelSweetness`.
+ * The stored casing is kept: still-wine words are lowercase, sparkling
+ * designations capitalised (data/sweetness-terms.json).
  */
 function wineDisplayName(wd) {
   if (!wd) return '';
   return appendSweetnessTerm(wd.name, termNameOf(wd));
 }
 
-/** Upsert the seed rows from data/sweetness-terms.json; returns { created, updated }. */
+/**
+ * The MCP fields for a wine, emitted HONESTLY or not at all (the grapes rule
+ * in mcp/tools/somm.js): a read that loaded the field says
+ * { label_sweetness: row | null, display_name }; a read that did not load it —
+ * or holds a ref the in-memory copy cannot name — says nothing, so a missing
+ * key means "not carried on this surface", never "no term". Thousands of rows
+ * predate the field; a lean read of one of those omits the key, and omitting
+ * the answer is the only honest thing to do with that.
+ */
+function labelSweetnessFields(wd) {
+  const row = termRowOf(wd);
+  if (row === undefined || row === 'unresolved') return {};
+  return { label_sweetness: termOut(row), display_name: appendSweetnessTerm(wd.name, row ? row.name : null) };
+}
+
+/**
+ * Seed the rows from data/sweetness-terms.json; returns { created, updated }.
+ * A row that exists (same word, same scale) is brought up to date and keeps
+ * its country and any synonyms an admin added; a missing one is inserted with
+ * an upsert, so two replicas seeding at once write it once.
+ */
 async function seedSweetnessTerms({ seed = require('../data/sweetness-terms.json') } = {}) {
   let created = 0; let updated = 0;
   for (const s of seed) {
     const normalizedName = normalizeSweetnessTerm(s.name);
-    const existing = await SweetnessTerm.findOne({ normalizedName, scale: s.scale });
+    const synonyms = s.synonyms || [];
     const fields = {
-      name: s.name, scale: s.scale, band: s.band, system: s.system || null, country: null,
-      regulated: s.regulated !== false, synonyms: s.synonyms || [], description: s.description || '', reviewedAt: new Date(),
+      name: s.name, scale: s.scale, band: s.band, system: s.system || null,
+      regulated: s.regulated !== false, synonyms, description: s.description || '',
     };
+    const existing = await SweetnessTerm.findOne({ normalizedName, scale: s.scale });
     if (existing) {
-      const merged = [...new Set([...(existing.synonyms || []), ...fields.synonyms])];
-      Object.assign(existing, { ...fields, country: existing.country, synonyms: merged, reviewedAt: existing.reviewedAt || fields.reviewedAt });
+      const merged = [...new Set([...(existing.synonyms || []), ...synonyms])];
+      Object.assign(existing, { ...fields, synonyms: merged, reviewedAt: existing.reviewedAt || new Date() });
       await existing.save(); updated += 1;
-    } else {
-      await SweetnessTerm.create({ ...fields, normalizedName, createdByUser: false });
-      created += 1;
+      continue;
     }
+    const r = await SweetnessTerm.updateOne(
+      { normalizedName, scale: s.scale },
+      {
+        $setOnInsert: {
+          ...fields, normalizedName, country: null,
+          normalizedSynonyms: synonyms.map(normalizeSweetnessTerm).filter(Boolean),
+          createdByUser: false, reviewedAt: new Date(), createdAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+    if (r && r.upsertedCount) created += 1;
   }
   invalidateSweetnessCache();
   return { created, updated };
@@ -184,8 +258,8 @@ async function ensureSweetnessSeed() {
 
 module.exports = {
   SCALES, BANDS, scaleForType,
-  loadTerms, invalidateSweetnessCache, primeSweetnessCache,
+  loadTerms, invalidateSweetnessCache, primeSweetnessCache, cachedTerm, cachedTermName,
   resolveTerm, resolveLoaded, pickTerm,
-  termOut, labelSweetnessOut, termNameOf, wineDisplayName,
+  termOut, termRowOf, labelSweetnessOut, labelSweetnessFields, termNameOf, wineDisplayName,
   seedSweetnessTerms, ensureSweetnessSeed,
 };

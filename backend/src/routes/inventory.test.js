@@ -90,7 +90,7 @@ const COUNTRIES = [{ _id: id('f1'), name: 'Italy', description: 'Long country te
 const REGIONS = [{ _id: id('f2'), name: 'Piedmont', description: 'Long region text' }];
 const GRAPES = [{ _id: id('f3'), name: 'Nebbiolo', description: 'Long grape text', regionalNames: [] }];
 // A label sweetness term (the fixture is a fixture: a Barolo label prints none).
-const TERMS = [{ _id: id('f4'), name: 'Secco', scale: 'still', band: 'dry', regulated: true, description: 'Long term text' }];
+const TERMS = [{ _id: id('f4'), name: 'secco', scale: 'still', band: 'dry', regulated: true, description: 'Long term text' }];
 const W1 = id('d1');
 const W2 = id('d2');
 const W3 = id('d3');
@@ -359,8 +359,8 @@ describe('a read token gets the inventory', () => {
       personal: [{ key: 'Closure', type: 'enum', unit: null, value: 'cork', level: 'bottle', by: 'maria' }],
     });
     expect(body.wines[W1]).toEqual({
-      name: 'Barolo', displayName: 'Barolo Secco', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
-      appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'Secco', band: 'dry', scale: 'still', regulated: true }, grapes: ['Nebbiolo'],
+      name: 'Barolo', displayName: 'Barolo secco', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
+      appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'secco', band: 'dry', scale: 'still', regulated: true }, grapes: ['Nebbiolo'],
       image: '/api/uploads/thumbs/processed/w1img.webp.webp',
       profile: { body: 'full', acidity: 'high', sweetness: 'dry', tannin: 'high', flavors: ['tar', 'rose'], foodPairings: ['truffle'] },
     });

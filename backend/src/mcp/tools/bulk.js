@@ -237,7 +237,8 @@ registerTool({
       try {
         let wineDoc;
         if (p.status === 'ready') {
-          wineDoc = await WineDefinition.findById(p.wine_id);
+          // The term populated, so the summary can state it (or its absence).
+          wineDoc = await WineDefinition.findById(p.wine_id).populate({ path: 'labelSweetness', select: 'name band scale regulated' });
           if (!wineDoc) { failures.push({ index: i, error: 'wine disappeared' }); continue; }
         } else {
           // Soft-zone stays live at apply time UNLESS the user explicitly

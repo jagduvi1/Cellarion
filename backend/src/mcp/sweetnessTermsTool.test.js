@@ -18,8 +18,8 @@ const chain = (rows) => ({ select: () => chain(rows), lean: async () => rows });
 
 const DE = 'd'.repeat(24);
 const ROWS = [
-  { _id: '1', name: 'Trocken', scale: 'still', band: 'dry', system: 'EU 2019/33 Annex III A (de)', country: null, synonyms: [] },
-  { _id: '2', name: 'Feinherb', scale: 'still', band: 'off-dry', system: 'Customary (de)', regulated: false, country: DE, synonyms: [] },
+  { _id: '1', name: 'trocken', scale: 'still', band: 'dry', system: 'EU 2019/33 Annex III A (de)', country: null, synonyms: [] },
+  { _id: '2', name: 'feinherb', scale: 'still', band: 'off-dry', system: 'Customary (de)', regulated: false, country: DE, synonyms: [] },
   { _id: '3', name: 'Trocken', scale: 'sparkling', band: 'sec', system: 'EU 2019/33 Annex III B (de)', country: null, synonyms: [] },
   { _id: '4', name: 'Brut Nature', scale: 'sparkling', band: 'brut-nature', system: 'EU 2019/33 Annex III B', country: null, synonyms: ['Brut Zéro'] },
 ];
@@ -40,9 +40,9 @@ test('read scope, read-only, registered', () => {
 
 test('lists every term by scale then band, with its country name, the regulated flag and spellings', async () => {
   const body = parse(await tool().handler({}));
-  expect(body.data.terms.map((r) => `${r.scale}:${r.name}`)).toEqual(['sparkling:Brut Nature', 'sparkling:Trocken', 'still:Trocken', 'still:Feinherb']);
+  expect(body.data.terms.map((r) => `${r.scale}:${r.name}`)).toEqual(['sparkling:Brut Nature', 'sparkling:Trocken', 'still:trocken', 'still:feinherb']);
   expect(body.data.terms[0]).toEqual({ name: 'Brut Nature', scale: 'sparkling', band: 'brut-nature', regulated: true, system: 'EU 2019/33 Annex III B', country: null, synonyms: ['Brut Zéro'] });
-  expect(body.data.terms[3]).toMatchObject({ name: 'Feinherb', regulated: false, country: 'Germany' });
+  expect(body.data.terms[3]).toMatchObject({ name: 'feinherb', regulated: false, country: 'Germany' });
   expect(body.data.scales).toEqual(['still', 'sparkling']);
   expect(body.data.bands.sparkling).toEqual(['brut-nature', 'extra-brut', 'brut', 'extra-dry', 'sec', 'demi-sec', 'doux']);
 });
@@ -55,7 +55,7 @@ test('the scale filter keeps the word of that scale only', async () => {
 test('a country keeps its own terms and the country-less ones; an unknown country is not_found', async () => {
   Country.findOne.mockReturnValue(chain({ _id: DE, name: 'Germany' }));
   const body = parse(await tool().handler({ country: 'germany', scale: 'still' }));
-  expect(body.data.terms.map((r) => r.name)).toEqual(['Trocken', 'Feinherb']);
+  expect(body.data.terms.map((r) => r.name)).toEqual(['trocken', 'feinherb']);
 
   Country.findOne.mockReturnValue(chain(null));
   const res = await tool().handler({ country: 'Atlantis' });

@@ -51,7 +51,10 @@ registerTool({
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
     // Same visibility rule as adding a bottle: someone else's pending or
     // private draft wine is reported exactly like a missing id.
-    const wineDoc = await findVisibleWine(args.wine_id, { userId: ctx.user.id, roles: ctx.user.roles });
+    // The term populated, so the summary of the new wine can state it (or its absence).
+    const wineDoc = await findVisibleWine(args.wine_id, {
+      userId: ctx.user.id, roles: ctx.user.roles, populate: [{ path: 'labelSweetness', select: 'name band scale regulated' }],
+    });
     if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
 
     const warnings = [];

@@ -3,14 +3,17 @@
  * #1754), the client side of protocol v2.
  *
  * WHY THIS TEST EXISTS:
- * The registry sends the term by WORD and scale, never by id — ids differ per
- * server — so the copy resolves it against THIS install's term table. Only
- * when the registry says something (the key is present): an older registry
- * sends none, and that must not clear a term held here. A word this table
- * lacks is never minted from the wire: it stays in the name, where every
- * reader still finds it, and the row is marked for a curator. The dedup key
- * carries the resolved term, so a later local add finds the copy. Same mocks
- * as registryBridge.test.
+ * The registry sends the term by WORD (and the scale that disambiguates it),
+ * never by id — ids differ per server — so the copy resolves it against THIS
+ * install's term table. Only when the registry says something (the key is
+ * present): an older registry sends none, and that must not clear a term
+ * held here. A word this table lacks is never minted from the wire: it stays
+ * in the name, where every reader still finds it, the row is marked for a
+ * curator — once, at the first arrival — and the dedup key is built from the
+ * name as STORED, so a later plain add cannot exact-match the sweet wine at
+ * the one stage where no guard runs. A copy typed before the Bridge carried
+ * terms (the word in its name, no term) is found and linked, not twinned.
+ * Same mocks as registryBridge.test.
  */
 jest.mock('../models/WineDefinition', () => {
   const M = jest.fn(function (doc) {
@@ -60,6 +63,7 @@ const registryWine = (over = {}) => ({
   ...over,
 });
 const lookup = (doc) => ({ populate: jest.fn().mockResolvedValue(doc), then: (res, rej) => Promise.resolve(doc).then(res, rej) });
+const key = (name, sweetness = null) => generateWineKey(name, 'Weingut Keller', 'Rheinhessen', { sweetness });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -72,7 +76,7 @@ beforeEach(() => {
   SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
   // This install's term table: the German word on both scales.
   ops.primeSweetnessCache([
-    { _id: 'sw-trocken', name: 'Trocken', scale: 'still', band: 'dry', country: null, synonyms: [] },
+    { _id: 'sw-trocken', name: 'trocken', scale: 'still', band: 'dry', country: null, synonyms: [] },
     { _id: 'sw-trocken-sekt', name: 'Trocken', scale: 'sparkling', band: 'sec', country: null, synonyms: [] },
   ]);
 });
@@ -80,40 +84,90 @@ afterEach(() => ops.primeSweetnessCache(null));
 
 const adopted = () => WineDefinition.mock.calls[0][0];
 
-test('a registry that says nothing about sweetness (no key) sets nothing and keys the copy as before', async () => {
-  client.fetchWine.mockResolvedValue(registryWine());
-  await bridge.adoptWine(RID, USER);
-  expect(adopted()).not.toHaveProperty('labelSweetness');
-  expect(adopted()).not.toHaveProperty('sweetnessReview');
-  expect(adopted().normalizedKey).toBe(generateWineKey('Riesling Spätlese', 'Weingut Keller', 'Rheinhessen'));
+describe('adoptWine', () => {
+  test('a registry that says nothing about sweetness (no key) sets nothing and keys the copy as before', async () => {
+    client.fetchWine.mockResolvedValue(registryWine());
+    await bridge.adoptWine(RID, USER);
+    expect(adopted()).not.toHaveProperty('labelSweetness');
+    expect(adopted()).not.toHaveProperty('sweetnessReview');
+    expect(adopted().normalizedKey).toBe(key('Riesling Spätlese'));
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: key('Riesling Spätlese') });
+  });
+
+  test('a term the registry sends resolves by word and scale to THIS table\'s row; the key carries the word; the pre-Bridge copy with the word in its name is probed too', async () => {
+    client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: { name: 'trocken', scale: 'still', band: 'dry', regulated: true } }));
+    await bridge.adoptWine(RID, USER);
+    expect(adopted()).toMatchObject({ name: 'Riesling Spätlese', labelSweetness: 'sw-trocken' });
+    expect(adopted().normalizedKey).toBe(key('Riesling Spätlese', 'trocken'));
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: { $in: [key('Riesling Spätlese', 'trocken'), key('Riesling Spätlese trocken')] } });
+  });
+
+  test('a local copy typed before the Bridge carried terms — the word in its name, no term — is linked, not twinned', async () => {
+    const local = { _id: 'old1', name: 'Riesling Spätlese trocken', registrySyncedAt: null, save: jest.fn().mockResolvedValue(undefined), populate: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findOne
+      .mockReturnValueOnce(lookup(null))   // by registryId: not held yet
+      .mockReturnValueOnce(lookup(local)); // by the probed keys
+    client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: { name: 'trocken', scale: 'still', band: 'dry' } }));
+    const r = await bridge.adoptWine(RID, USER);
+    expect(r.created).toBe(true);
+    expect(r.wine).toBe(local);
+    expect(local.registryId).toBe(RID);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('the same word on a Sekt resolves on the sparkling scale (the type decides when the registry sends only the word)', async () => {
+    client.fetchWine.mockResolvedValue(registryWine({ type: 'sparkling', labelSweetness: 'Trocken' }));
+    await bridge.adoptWine(RID, USER);
+    expect(adopted().labelSweetness).toBe('sw-trocken-sekt');
+  });
+
+  test('a word this table lacks is never minted: it stays in the name, the row is marked for a curator, and the key is built from the STORED name', async () => {
+    client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: { name: 'halbsüß', scale: 'still', band: 'medium-sweet' } }));
+    await bridge.adoptWine(RID, USER);
+    expect(adopted()).toMatchObject({ name: 'Riesling Spätlese halbsüß', labelSweetness: null });
+    expect(adopted().sweetnessReview).toMatchObject({ reason: 'unknown_term', detail: expect.stringContaining('halbsüß') });
+    expect(adopted().normalizedKey).toBe(key('Riesling Spätlese halbsüß'));
+    // A later plain "Riesling Spätlese" therefore misses at the exact-key stage.
+    expect(adopted().normalizedKey).not.toBe(key('Riesling Spätlese'));
+  });
+
+  test('an explicit null is a statement: the copy records none', async () => {
+    client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: null }));
+    await bridge.adoptWine(RID, USER);
+    expect(adopted()).toHaveProperty('labelSweetness', null);
+    expect(adopted()).not.toHaveProperty('sweetnessReview');
+  });
 });
 
-test('a term the registry sends resolves by word and scale to THIS table\'s row; the key carries the word', async () => {
-  client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: { name: 'Trocken', scale: 'still', band: 'dry', regulated: true } }));
-  await bridge.adoptWine(RID, USER);
-  expect(adopted()).toMatchObject({ name: 'Riesling Spätlese', labelSweetness: 'sw-trocken' });
-  const key = generateWineKey('Riesling Spätlese', 'Weingut Keller', 'Rheinhessen', { sweetness: 'Trocken' });
-  expect(adopted().normalizedKey).toBe(key);
-  expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: key });
-});
+describe('refreshHeld — the hourly sync of a copy', () => {
+  const held = () => WineDefinition.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([{ _id: 'l1', registryId: RID, registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'), createdBy: USER }]) }) });
 
-test('the same word on a Sekt resolves on the sparkling scale (the type decides when the registry sends only the word)', async () => {
-  client.fetchWine.mockResolvedValue(registryWine({ type: 'sparkling', labelSweetness: 'Trocken' }));
-  await bridge.adoptWine(RID, USER);
-  expect(adopted().labelSweetness).toBe('sw-trocken-sekt');
-});
+  test('a refresh that meets the same unknown word keeps the marker it set — since is the FIRST arrival — and keys from the stored name', async () => {
+    held();
+    client.changes.mockResolvedValue({ changed: [{ id: RID, updatedAt: 'x' }], removed: [], checked: 1, failed: false });
+    client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: { name: 'halbsüß', scale: 'still', band: 'medium-sweet' } }));
+    const since = new Date('2026-08-01');
+    const local = {
+      _id: 'l1', name: 'Riesling Spätlese halbsüß', createdBy: USER, registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'),
+      sweetnessReview: { reason: 'unknown_term', detail: 'The registry states "halbsüß", a sweetness term this server\'s table does not have', since },
+      aiProfile: { source: 'ai' }, save: jest.fn().mockResolvedValue(undefined),
+    };
+    WineDefinition.findById.mockResolvedValue(local);
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    expect(local.sweetnessReview.since).toBe(since);
+    expect(local.name).toBe('Riesling Spätlese halbsüß');
+    expect(local.normalizedKey).toBe(key('Riesling Spätlese halbsüß'));
+    expect(local.save).toHaveBeenCalled();
+  });
 
-test('a word this table lacks is never minted: it stays in the name, the row is marked for a curator, the key carries no suffix', async () => {
-  client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: { name: 'Halbsüß', scale: 'still', band: 'medium-sweet' } }));
-  await bridge.adoptWine(RID, USER);
-  expect(adopted()).toMatchObject({ name: 'Riesling Spätlese Halbsüß', labelSweetness: null });
-  expect(adopted().sweetnessReview).toMatchObject({ reason: 'unknown_term', detail: expect.stringContaining('Halbsüß') });
-  expect(adopted().normalizedKey).toBe(generateWineKey('Riesling Spätlese', 'Weingut Keller', 'Rheinhessen'));
-});
-
-test('an explicit null is a statement: the copy records none', async () => {
-  client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: null }));
-  await bridge.adoptWine(RID, USER);
-  expect(adopted()).toHaveProperty('labelSweetness', null);
-  expect(adopted()).not.toHaveProperty('sweetnessReview');
+  test('a refresh that brings a term the table knows sets it and the key', async () => {
+    held();
+    client.changes.mockResolvedValue({ changed: [{ id: RID, updatedAt: 'x' }], removed: [], checked: 1, failed: false });
+    client.fetchWine.mockResolvedValue(registryWine({ labelSweetness: { name: 'trocken', scale: 'still', band: 'dry' } }));
+    const local = { _id: 'l1', name: 'Riesling Spätlese', createdBy: USER, registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'), aiProfile: { source: 'ai' }, save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(local);
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    expect(local.labelSweetness).toBe('sw-trocken');
+    expect(local.normalizedKey).toBe(key('Riesling Spätlese', 'trocken'));
+  });
 });

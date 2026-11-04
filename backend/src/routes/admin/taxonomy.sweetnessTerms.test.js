@@ -120,6 +120,19 @@ test('PUT: the word and the scale of a term wines carry are frozen; its band, sy
   expect((await call('PUT', `/sweetness-terms/${ID}`, { band: 'brut' })).status).toBe(400);
 });
 
+test('PUT changing only the scale of an unreferenced row is a 400 that asks for a band of the new scale, never a 500', async () => {
+  WineDefinition.countDocuments.mockResolvedValue(0);
+  const doc = row();
+  SweetnessTerm.findById.mockResolvedValue(doc);
+  const res = await call('PUT', `/sweetness-terms/${ID}`, { scale: 'sparkling' });
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/band of that scale.*brut-nature/);
+  expect(doc.save).not.toHaveBeenCalled();
+  // With the band, the move is fine.
+  expect((await call('PUT', `/sweetness-terms/${ID}`, { scale: 'sparkling', band: 'sec' })).status).toBe(200);
+  expect(doc).toMatchObject({ scale: 'sparkling', band: 'sec' });
+});
+
 test('DELETE refuses while a wine carries the term, deletes and audits otherwise', async () => {
   SweetnessTerm.findById.mockResolvedValue(row());
   WineDefinition.countDocuments.mockResolvedValue(3);

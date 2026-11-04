@@ -687,8 +687,8 @@ const examples = {
     racks: [{ id: ID.rack, cellar: ID.cellar, name: 'Wine fridge' }],
     wines: {
       [ID.wine]: {
-        name: 'Château Exemple', producer: 'Château Exemple', type: 'red', colour: null,
-        country: 'France', region: 'Pauillac', appellation: 'Pauillac', classification: null,
+        name: 'Château Exemple', displayName: 'Château Exemple', producer: 'Château Exemple', type: 'red', colour: null,
+        country: 'France', region: 'Pauillac', appellation: 'Pauillac', classification: null, labelSweetness: null,
         grapes: ['Cabernet Sauvignon', 'Merlot'], image: THUMB,
         profile: { body: 'full', acidity: 'medium', sweetness: 'dry', tannin: 'high', flavors: ['blackcurrant', 'cedar'], foodPairings: ['lamb'] },
       },

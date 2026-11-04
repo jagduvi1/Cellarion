@@ -74,15 +74,18 @@ const chain = (result) => {
   return c;
 };
 const ID = 'a'.repeat(24);
-const TROCKEN = { name: 'Trocken', band: 'dry', scale: 'still', regulated: true };
+const TROCKEN = { name: 'trocken', band: 'dry', scale: 'still', regulated: true };
 const wine = (over = {}) => ({
   _id: ID, name: 'Riesling Kabinett', producer: 'Weingut Keller', slug: 'weingut-keller-riesling-kabinett-trocken', type: 'white', appellation: 'Rheinhessen',
   region: { name: 'Rheinhessen' }, country: { name: 'Germany' }, grapes: [{ name: 'Riesling' }],
   image: null, imageCredit: null, labelSweetness: TROCKEN, ...over,
 });
 
-test('GET /me: v1 without the header, v2 with it, and the versions the server accepts', async () => {
-  expect(await (await call('/api/bridge/v1/me')).json()).toMatchObject({ protocol: 'v1', accepts: ['v1', 'v2'] });
+test('GET /me: a v1 peer gets exactly the reply it always got; a v2 peer also learns what the server accepts', async () => {
+  const v1 = await (await call('/api/bridge/v1/me')).json();
+  expect(v1).toMatchObject({ protocol: 'v1' });
+  expect(v1).not.toHaveProperty('accepts');
+  expect(Object.keys(v1).sort()).toEqual(['burstPerMinute', 'key', 'protocol', 'quotas', 'terms', 'usage']);
   expect(await (await call('/api/bridge/v1/me', V2)).json()).toMatchObject({ protocol: 'v2', accepts: ['v1', 'v2'] });
   expect(await (await call('/api/bridge/v1/me', { 'x-cellarion-bridge-protocol': '7' })).json()).toMatchObject({ protocol: 'v2' });
   expect(await (await call('/api/bridge/v1/me', { 'x-cellarion-bridge-protocol': 'x' })).json()).toMatchObject({ protocol: 'v1' });
@@ -92,7 +95,7 @@ test('search on v1: a wine with a term is sent under the name as the label reads
   WineDefinition.find.mockReturnValue(chain([wine()]));
   const body = await (await call('/api/bridge/v1/search?q=kabinett')).json();
   expect(body.wines[0]).toEqual({
-    id: ID, slug: 'weingut-keller-riesling-kabinett-trocken', producer: 'Weingut Keller', name: 'Riesling Kabinett Trocken', type: 'white', colour: null,
+    id: ID, slug: 'weingut-keller-riesling-kabinett-trocken', producer: 'Weingut Keller', name: 'Riesling Kabinett trocken', type: 'white', colour: null,
     appellation: 'Rheinhessen', classification: null, classifications: [], region: 'Rheinhessen', country: 'Germany', grapes: ['Riesling'], image: null, imageCredit: null,
   });
   expect(body.wines[0]).not.toHaveProperty('labelSweetness');
@@ -101,7 +104,7 @@ test('search on v1: a wine with a term is sent under the name as the label reads
 test('search on v2: the bare name and the term as its own field by word and scale; null when the wine has none', async () => {
   WineDefinition.find.mockReturnValue(chain([wine(), wine({ _id: 'b'.repeat(24), name: 'Salmos', labelSweetness: null })]));
   const body = await (await call('/api/bridge/v1/search?q=kabinett', V2)).json();
-  expect(body.wines[0]).toMatchObject({ name: 'Riesling Kabinett', labelSweetness: { name: 'Trocken', band: 'dry', scale: 'still', regulated: true } });
+  expect(body.wines[0]).toMatchObject({ name: 'Riesling Kabinett', labelSweetness: { name: 'trocken', band: 'dry', scale: 'still', regulated: true } });
   expect(body.wines[0].labelSweetness).not.toHaveProperty('_id');
   expect(body.wines[1]).toMatchObject({ name: 'Salmos', labelSweetness: null });
 });

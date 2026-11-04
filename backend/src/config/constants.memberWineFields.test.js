@@ -9,6 +9,11 @@ test('the list names the contributor fields', () => {
   expect(MEMBER_WINE_HIDDEN_FIELDS).toEqual(expect.arrayContaining(['createdBy', 'contribution', 'createdVia']));
 });
 
+test('the list names the label-sweetness curation marks — the term itself stays readable', () => {
+  expect(MEMBER_WINE_HIDDEN_FIELDS).toEqual(expect.arrayContaining(['sweetnessReview', 'sweetnessInName']));
+  expect(MEMBER_WINE_HIDDEN_FIELDS).not.toContain('labelSweetness');
+});
+
 test('WINE_LIST_SELECT excludes every member-hidden field', () => {
   const fields = WINE_LIST_SELECT.split(/\s+/);
   for (const f of MEMBER_WINE_HIDDEN_FIELDS) expect(fields).toContain(`-${f}`);

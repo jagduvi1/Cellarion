@@ -409,9 +409,12 @@ router.get('/duplicate-clusters', async (req, res) => {
     // merge candidate against a wine (#844's stated contract, which this pool
     // was missed out of — code audit 2026-07-27, H3).
     const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
-      .select('name producer appellation image type colour country region')
+      // labelSweetness rides along, populated: the style guard below reads a
+      // row's recorded term, not only its name (utils/styleTerms.styleOf).
+      .select('name producer appellation image type colour country region labelSweetness')
       .populate('country', 'name')
       .populate('region', 'name')
+      .populate('labelSweetness', 'name band scale regulated')
       .lean();
 
     // Group by normalised producer KEY: wine stop words + corporate suffixes

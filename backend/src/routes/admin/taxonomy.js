@@ -1505,9 +1505,9 @@ router.put('/sweetness-terms/:id', async (req, res) => {
     const wordChanges = req.body.name !== undefined && normalizeSweetnessTerm(fields.name) !== doc.normalizedName;
     const scaleChanges = req.body.scale !== undefined && fields.scale !== doc.scale;
     if (wordChanges || scaleChanges) {
-      const wineCount = await WineDefinition.countDocuments({ labelSweetness: doc._id });
+      const wineCount = await WineDefinition.countDocuments({ labelSweetness: { $eq: doc._id } });
       if (wineCount > 0) {
-        return res.status(400).json({ error: `${wineCount} wine(s) carry this term: its word and scale are part of their identity and cannot change. Add the right term as a new row and move the wines to it.` });
+        return res.status(400).json({ error: `${wineCount} wine(s) carry this term: its word is part of their identity keys and its scale decides their band, so neither can change. Add the right term as a new row and move the wines to it.` });
       }
     }
     if (req.body.name !== undefined) {
@@ -1518,6 +1518,11 @@ router.put('/sweetness-terms/:id', async (req, res) => {
     if (req.body.scale !== undefined) {
       const badScale = scaleError(fields.scale);
       if (badScale) return res.status(400).json({ error: badScale });
+      // A band belongs to a scale: a scale change must bring a band of the
+      // new scale in the same request, or the old band would fail validation.
+      if (req.body.band === undefined && !(SweetnessTerm.BANDS[fields.scale] || []).includes(doc.band)) {
+        return res.status(400).json({ error: `Changing the scale to ${fields.scale} needs a band of that scale in the same request: ${(SweetnessTerm.BANDS[fields.scale] || []).join(', ')}` });
+      }
       doc.scale = fields.scale;
     }
     if (req.body.band !== undefined) {
@@ -1550,7 +1555,7 @@ router.delete('/sweetness-terms/:id', async (req, res) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const doc = await SweetnessTerm.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Sweetness term not found' });
-    const wineCount = await WineDefinition.countDocuments({ labelSweetness: req.params.id });
+    const wineCount = await WineDefinition.countDocuments({ labelSweetness: { $eq: req.params.id } });
     if (wineCount > 0) {
       return res.status(400).json({ error: `Cannot delete sweetness term. ${wineCount} wine(s) carry it.` });
     }

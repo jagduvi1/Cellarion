@@ -244,13 +244,20 @@ const subset = (a, b) => [...a].every((x) => b.has(x));
 // ways, "Brut" vs "Demi-Sec" is two wines.
 const disagree = (a, b) => a.size > 0 && b.size > 0 && !subset(a, b) && !subset(b, a);
 
-// The label sweetness term on a wine-like object, when it was populated or
-// given as the printed word; an id-only ref answers null (not carried here).
+const ID_RX = /^[0-9a-f]{24}$/i;
+// The label sweetness term on a wine-like object: the populated row's word,
+// or — for an unpopulated ref — the word the term table's in-memory copy
+// knows (services/sweetnessOps, when it is warm; a belt for a caller that
+// forgot the populate). Never a bare string as the word: a string here is an
+// id or nothing, so no caller can smuggle a word in past the term table.
 const fieldTerm = (w) => {
   const t = w && w.labelSweetness;
   if (!t) return null;
-  if (typeof t === 'string') return t.trim() || null;
-  return typeof t === 'object' && typeof t.name === 'string' && t.name.trim() ? t.name.trim() : null;
+  if (typeof t === 'object' && typeof t.name === 'string' && t.name.trim()) return t.name.trim();
+  const id = typeof t === 'string' ? t : (typeof t.toString === 'function' ? t.toString() : '');
+  if (!ID_RX.test(id)) return null;
+  // Lazy: sweetnessOps loads the model; this util must stay requirable alone.
+  return require('../services/sweetnessOps').cachedTermName(id);
 };
 
 /**

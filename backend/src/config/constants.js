@@ -47,6 +47,9 @@ const MEMBER_WINE_HIDDEN_FIELDS = [
   'scanImage', 'scanImageBack', 'scanFieldConflicts', 'normalizedKey', 'canonicalKey',
   'verifiedChecks', 'identityProvenance', 'productNumber', 'previousSlugs', 'canary',
   'createdBy', 'contribution', 'createdVia',
+  // The label-sweetness curation marks: a curator's "the word is the name"
+  // flag and the review marker. Curation internals, like verifiedChecks.
+  'sweetnessReview', 'sweetnessInName',
 ];
 const excludeFields = (fields) => fields.map((f) => `-${f}`).join(' ');
 const MEMBER_WINE_EXCLUDE = excludeFields(MEMBER_WINE_HIDDEN_FIELDS);

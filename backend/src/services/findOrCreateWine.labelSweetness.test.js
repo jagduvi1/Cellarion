@@ -4,12 +4,16 @@
  * WHY THIS TEST EXISTS:
  * After the migration the plain "Riesling Spätlese" and the registry's
  * "Riesling Spätlese" that RECORDS trocken are name-identical: the sibling
- * prefix finds the recorded one, and the fuzzy scorer rates them 1.0. Neither
- * stage may link them without a word to the member — the two may be two wines,
- * and only the member knows. An empty value is a wildcard for the migration
- * and the merge queue, not for an add: one-sided → the soft zone asks. Where
- * both sides state the same term the link is as silent as ever; where both
- * state and differ it is refused as before. Same mocks as findOrCreateWine.test.
+ * prefix finds the recorded one, the fuzzy scorer rates them 1.0, and the
+ * label-variant stage sees them as one label. No stage may link them without
+ * a word to the member — the two may be two wines, and only the member knows.
+ * An empty value is a wildcard for the migration and the merge queue, not for
+ * an add: one-sided → the member is ASKED (the soft zone), also when search is
+ * down and the sibling stage was the only one to see the row — dropped there,
+ * the add used to create a twin. A caller that already confirmed the create
+ * goes on to create; a match-only caller gets no match. Where both sides state
+ * the same term the link is as silent as ever; where both state and differ it
+ * is refused as before. Same mocks as findOrCreateWine.test.
  */
 jest.mock('../models/WineDefinition', () => {
   const ctor = jest.fn();
@@ -53,9 +57,9 @@ const { findOrCreateWine } = require('./findOrCreateWine');
 
 const USER_ID = 'user-1';
 const QUERY = { name: 'Riesling Spätlese', producer: 'Weingut Keller', country: 'Germany', region: 'Rheinhessen', appellation: 'Rheinhessen', type: 'white', grapes: ['Riesling'] };
-const TROCKEN = { name: 'Trocken', band: 'dry', scale: 'still', regulated: true };
-const HALBTROCKEN = { name: 'Halbtrocken', band: 'off-dry', scale: 'still', regulated: true };
-const recorded = (labelSweetness, over = {}) => ({ _id: 'wine-recorded', name: 'Riesling Spätlese', producer: 'Weingut Keller', country: { name: 'Germany' }, labelSweetness, ...over });
+const TROCKEN = { name: 'trocken', band: 'dry', scale: 'still', regulated: true };
+const HALBTROCKEN = { name: 'halbtrocken', band: 'off-dry', scale: 'still', regulated: true };
+const recorded = (labelSweetness, over = {}) => ({ _id: 'wine-recorded', name: 'Riesling Spätlese', producer: 'Weingut Keller', country: { name: 'Germany' }, grapes: [], labelSweetness, ...over });
 
 const findOneChain = (doc) => ({ populate: jest.fn().mockResolvedValue(doc) });
 const taxonomyChain = (rows) => {
@@ -84,10 +88,11 @@ function primeCandidates(ranked) {
   scoreAllMatches.mockReturnValue(ranked);
 }
 
-let warnSpy;
+let warnSpy; let logSpy;
 beforeEach(() => {
   jest.clearAllMocks();
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
   Grape.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }) });
   WineDefinition.mockImplementation(function (doc) {
     Object.assign(this, doc);
@@ -115,25 +120,50 @@ beforeEach(() => {
   Appellation.exists.mockResolvedValue(null);
   Grape.findOne.mockImplementation(async (q) => ({ _id: `grape-${q.$or ? q.$or[0].normalizedName : q.normalizedName}` }));
 });
-afterEach(() => warnSpy.mockRestore());
+afterEach(() => { warnSpy.mockRestore(); logSpy.mockRestore(); });
 
-describe('one side states a term, the other none — never a silent link', () => {
-  test('a unique canonical sibling that RECORDS trocken is not linked to the plain Spätlese (falls through to create)', async () => {
+const asked = (result, wine) => {
+  expect(result.wine).toBeNull();
+  expect(result.created).toBeUndefined();
+  expect(result.candidates).toEqual([{ wine, score: 1 }]);
+};
+
+describe('one side states a term, the other none — the member is asked, with search down', () => {
+  test('a unique canonical sibling that RECORDS trocken: the plain Spätlese is not linked and not created — asked', async () => {
     const sibling = recorded(TROCKEN);
     primeFind({ canonicalSiblings: [sibling] });
-    const result = await findOrCreateWine(QUERY, USER_ID);
+    asked(await findOrCreateWine(QUERY, USER_ID), sibling);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('a unique canonical-identity hit that records a term: asked', async () => {
+    const hit = recorded(TROCKEN);
+    primeFind({ canonicalHits: [hit] });
+    asked(await findOrCreateWine(QUERY, USER_ID), hit);
+  });
+
+  test('a unique raw-key sibling that records a term: asked', async () => {
+    const sibling = recorded(TROCKEN);
+    primeFind({ siblings: [sibling] });
+    asked(await findOrCreateWine(QUERY, USER_ID), sibling);
+  });
+
+  test('the member confirmed the create: the add goes on to create its own row', async () => {
+    const sibling = recorded(TROCKEN);
+    primeFind({ canonicalSiblings: [sibling] });
+    const result = await findOrCreateWine(QUERY, USER_ID, { confirmCreate: true });
     expect(result.created).toBe(true);
     expect(result.wine).not.toBe(sibling);
   });
 
-  test('a unique raw-key sibling that records a term is not linked either', async () => {
-    const sibling = recorded(TROCKEN);
-    primeFind({ siblings: [sibling] });
-    const result = await findOrCreateWine(QUERY, USER_ID);
-    expect(result.created).toBe(true);
+  test('a match-only caller gets no match, never the recorded twin', async () => {
+    primeFind({ canonicalSiblings: [recorded(TROCKEN)] });
+    expect(await findOrCreateWine(QUERY, USER_ID, { matchOnly: true })).toEqual({ wine: null, noMatch: true });
   });
+});
 
-  test('a 1.0 fuzzy hit that records a term the add does not state falls to the soft zone, so the member is asked', async () => {
+describe('one-sided with search up', () => {
+  test('a 1.0 fuzzy hit that records a term the add does not state falls to the soft zone', async () => {
     const candidate = recorded(TROCKEN);
     primeCandidates([{ wine: candidate, score: 1 }]);
     const result = await findOrCreateWine(QUERY, USER_ID);
@@ -148,6 +178,26 @@ describe('one side states a term, the other none — never a silent link', () =>
     const result = await findOrCreateWine({ ...QUERY, name: 'Riesling Spätlese trocken' }, USER_ID);
     expect(result.wine).toBeNull();
     expect(result.candidates[0].wine).toBe(candidate);
+  });
+});
+
+describe('the label-variant stage, the last link before a create', () => {
+  // The sibling is in the producer-scoped pool the stage scans; the earlier
+  // stages see nothing, so this stage is the only one that meets the row.
+  test('a confirmed create does not link to a same-producer row that records a term the add does not state', async () => {
+    const sibling = recorded(TROCKEN);
+    primeFind({ producerRows: [sibling] });
+    const result = await findOrCreateWine(QUERY, USER_ID, { confirmCreate: true });
+    expect(result.created).toBe(true);
+    expect(result.labelVariantOf).toBeUndefined();
+    expect(result.wine).not.toBe(sibling);
+  });
+
+  test('…and still links the same label when neither side states a sweetness', async () => {
+    const sibling = recorded(null);
+    primeFind({ producerRows: [sibling] });
+    const result = await findOrCreateWine(QUERY, USER_ID, { confirmCreate: true });
+    expect(result).toMatchObject({ wine: sibling, created: false, labelVariantOf: sibling.name });
   });
 });
 
@@ -168,7 +218,7 @@ describe('both sides state', () => {
   });
 
   test('neither side states anything: a unique sibling still links (nothing changed for the ordinary wine)', async () => {
-    const sibling = recorded(null, { name: 'Riesling Spätlese' });
+    const sibling = recorded(null);
     primeFind({ canonicalSiblings: [sibling] });
     expect(await findOrCreateWine(QUERY, USER_ID)).toEqual({ wine: sibling, created: false });
   });

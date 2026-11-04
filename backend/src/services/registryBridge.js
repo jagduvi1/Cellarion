@@ -377,8 +377,20 @@ async function adoptWine(registryId, userId) {
 
   const now = new Date();
   const tax = await resolveTaxonomy(w, userId);
-  const normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '', { sweetness: sweetnessKeyWord(tax) });
-  let wine = await WineDefinition.findOne({ normalizedKey });
+  // The identity as it will be STORED — a word this table lacks rides in the
+  // name — so the key is built from the stored name, never the bare wire name
+  // (a later plain add exact-matches at stage one, where no guard runs).
+  const fields = identityFields(w, tax);
+  const normalizedKey = generateWineKey(fields.name, w.producer || '', w.appellation || '', { sweetness: sweetnessKeyWord(tax) });
+  // A copy made before the Bridge carried terms — or typed by hand — may hold
+  // the word IN ITS NAME with no term. Probe that key too: the row is linked,
+  // not twinned.
+  const probe = [normalizedKey];
+  if (tax.sweetness && tax.sweetness.word) {
+    const shown = generateWineKey(appendSweetnessTerm(w.name, tax.sweetness.word), w.producer || '', w.appellation || '');
+    if (shown !== normalizedKey) probe.push(shown);
+  }
+  let wine = await WineDefinition.findOne(probe.length > 1 ? { normalizedKey: { $in: probe } } : { normalizedKey });
   // Captured before the assignment below: rows a previous adoption wrote carry
   // the OLD stamp, and comparing them against the new one would read them as
   // local edits and freeze them (audit 2026-09-08).
@@ -393,7 +405,7 @@ async function adoptWine(registryId, userId) {
     await wine.save();
   } else {
     wine = new WineDefinition({
-      ...identityFields(w, tax),
+      ...fields,
       normalizedKey,
       createdBy: userId,
       createdVia: 'bridge',
@@ -460,10 +472,15 @@ async function applyRegistryUpdate(local, w) {
     // Never trade a picture for nothing: a wine the registry has no image for
     // must not blank one this install already shows.
     if (!fields.image && wine.image) { delete fields.image; delete fields.imageCredit; }
+    // The review marker's age is when the word FIRST arrived: a refresh that
+    // meets the same unknown word keeps the marker it set, not a fresh stamp.
+    const prevReview = wine.sweetnessReview;
     Object.assign(wine, fields);
+    if (fields.sweetnessReview && prevReview && prevReview.reason === fields.sweetnessReview.reason) wine.sweetnessReview = prevReview;
     // Same as adopt: a colour the registry states is stored as stated.
     if (Object.prototype.hasOwnProperty.call(fields, 'colour')) stateColour(wine, fields.colour);
-    wine.normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '', { sweetness: sweetnessKeyWord(tax) });
+    // From the STORED name (an unknown word rides in it), as adoptWine keys.
+    wine.normalizedKey = generateWineKey(fields.name, w.producer || '', w.appellation || '', { sweetness: sweetnessKeyWord(tax) });
     await assignClassification(wine, classificationInput(w));
   } else if (!wine.image && remoteImage(w.image)) {
     wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null;

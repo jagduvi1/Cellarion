@@ -534,6 +534,14 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     Boolean(candidate && sweetnessStated(queryStyle) !== sweetnessStated(candidate));
   const linksSilently = (candidate) =>
     !conflictsCountry(candidate) && !conflictsStyle(candidate) && !sweetnessOneSided(candidate);
+  // A sole hit refused ONLY for a one-sided sweetness is not dropped: it is
+  // carried to the soft zone so the member is asked (score 1 — the identity is
+  // the same, only the term differs). Dropped, it left the add to create a twin
+  // whenever search was down and the fuzzy stage never saw the row.
+  const askAbout = [];
+  const consider = (candidate) => {
+    if (candidate && !conflictsCountry(candidate) && !conflictsStyle(candidate) && sweetnessOneSided(candidate)) askAbout.push(candidate);
+  };
 
   // Pending-identity ISOLATION. A pending row is invisible to everyone but its
   // creator and curation, and that has to hold in the RESOLVER too — otherwise
@@ -603,6 +611,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   if (canonicalHits.length === 1 && linksSilently(canonicalHits[0])) {
     return { wine: canonicalHits[0], created: false };
   }
+  if (canonicalHits.length === 1) consider(canonicalHits[0]);
 
   // 1b. Sibling match: same producer + same canonical name, ANY appellation.
   // Import files and AI output often carry a different appellation granularity
@@ -637,6 +646,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     if (canonicalSiblings.length === 1 && linksSilently(canonicalSiblings[0])) {
       return { wine: canonicalSiblings[0], created: false };
     }
+    if (canonicalSiblings.length === 1) consider(canonicalSiblings[0]);
     if (canonicalSiblings.length === 0) {
       // The name part is keyed like every stored key (normalizeWineName):
       // normalizeString drops a star grade, so "Auslese***" would probe the
@@ -650,7 +660,16 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       if (siblings.length === 1 && linksSilently(siblings[0])) {
         return { wine: siblings[0], created: false };
       }
+      if (siblings.length === 1) consider(siblings[0]);
     }
+  }
+
+  // The same identity, with a sweetness stated on one side only: ask. A
+  // match-only caller gets no match (it never links what a member has not
+  // confirmed); a caller that already confirmed the create goes on to create.
+  if (askAbout.length) {
+    if (matchOnly) return { wine: null, noMatch: true };
+    if (!confirmCreate) return { wine: null, candidates: askAbout.map((wine) => ({ wine, score: 1 })) };
   }
 
   // 2. Fuzzy similarity search
@@ -994,7 +1013,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
           .filter(Boolean))];
         const query = { name: trimmedName, appellation: trimmedAppellation, grapes: queryGrapeIds };
         for (const cand of siblings) {
-          if (conflictsCountry(cand)) continue;
+          // The sweetness rules that gate every other link gate this one: a
+          // row that records a term the add does not state (or the reverse)
+          // is not a variant of the same label — it may be the next wine in
+          // the range, and this stage runs where nobody is asked.
+          if (conflictsCountry(cand) || conflictsStyle(cand) || sweetnessOneSided(cand)) continue;
           const verdict = isLabelVariant(query, cand, gTokens);
           if (verdict.match) {
             console.log(`[findOrCreateWine] label variant: "${trimmedName}" → existing "${cand.name}" (${verdict.reason})`);

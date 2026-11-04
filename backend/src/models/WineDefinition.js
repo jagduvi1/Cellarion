@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification } = require('../utils/normalize');
+const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification, sweetnessKeySegment, stripSweetnessKeySegment } = require('../utils/normalize');
 require('./Classification'); // registers the model the classifications ref and the save hook use
 require('./SweetnessTerm'); // the same for labelSweetness (the key/slug hook reads the term's word)
 const { computeCanonicalKey } = require('../utils/wineIdentity');
@@ -822,6 +822,19 @@ wineDefinitionSchema.pre('validate', function(next) {
   }
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation') || this.isModified('labelSweetness')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation, { sweetness: this.$locals.sweetnessName || null });
+  }
+  // normalizedKey carries the same term suffix, and THIS hook owns it. Some
+  // twenty-five writers build the bare producer:name:appellation key (every
+  // admin edit, proposal approval, import, draft publish …) and none of them
+  // knows the term; re-deriving the suffix here on every save-based write is
+  // what keeps the key from being recomputed bare over a termed wine — an
+  // E11000 against its twin, or a key that disagrees with canonicalKey.
+  // Stripped when the term is gone, appended when one is set; a wine without a
+  // term keeps its key byte-identical. Atomic writes skip this hook, as they
+  // skip canonicalKey; a script that rewrites keys sets both itself.
+  if (typeof this.normalizedKey === 'string' && this.normalizedKey) {
+    const owned = `${stripSweetnessKeySegment(this.normalizedKey)}${sweetnessKeySegment(this.$locals.sweetnessName)}`;
+    if (owned !== this.normalizedKey) this.normalizedKey = owned;
   }
   // A sweetness question is settled by a write to any of the fields it is
   // about; a stale marker would send a curator to a row somebody already fixed.

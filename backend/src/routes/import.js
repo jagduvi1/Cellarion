@@ -21,6 +21,10 @@ const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { scoreWineMatchVariants, stripProducerPrefix, stripAppellationPrefix, stripProducerBrackets, importQueryVariants } = require('../services/wineMatching');
 const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
+// Every registry candidate the import compares against is populated the same
+// way — the label sweetness term included, so the style guard reads a
+// candidate's record and not only its name (utils/styleTerms.styleOf).
+const WINE_READ_POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }];
 const { statedColourConflict } = require('../utils/wineColour');
 const { wineVisibilityFilter, findVisibleWine } = require('../services/wineVisibility');
 // Audit 2026-09 D13-12: parse-time warnings are bounded before they are stored.
@@ -496,7 +500,7 @@ async function findExactRegistryWine(item) {
   // indexed findOnes make it deterministic.
   const rawKey = generateWineKey(item.wineName, item.producer, item.appellation);
   const rawHit = await WineDefinition.findOne({ normalizedKey: rawKey })
-    .populate(['country', 'region', 'grapes']);
+    .populate(WINE_READ_POPULATE);
   if (rawHit) return rawHit;
 
   const stripped = stripProducerPrefix(item.wineName, item.producer);
@@ -504,7 +508,7 @@ async function findExactRegistryWine(item) {
   const strippedKey = generateWineKey(stripped, item.producer, item.appellation);
   if (strippedKey === rawKey) return null; // same key — nothing new to try
   return WineDefinition.findOne({ normalizedKey: strippedKey })
-    .populate(['country', 'region', 'grapes']);
+    .populate(WINE_READ_POPULATE);
 }
 
 // Longest producer prefix tried against the registry, in tokens. Real
@@ -597,7 +601,7 @@ async function findWineMatches(item, viewer = {}) {
           // Pending rows are not in the Meili index at all; the clause is here so
           // the gate holds if that ever changes (all three strategies, one rule).
           const wines = await WineDefinition.find({ _id: { $in: ids }, ...visible })
-            .populate(['country', 'region', 'grapes'])
+            .populate(WINE_READ_POPULATE)
             .lean();
 
           for (const wine of wines) {
@@ -623,7 +627,7 @@ async function findWineMatches(item, viewer = {}) {
           { $text: { $search: searchTerms }, ...visible },
           { score: { $meta: 'textScore' } }
         )
-          .populate(['country', 'region', 'grapes'])
+          .populate(WINE_READ_POPULATE)
           .sort({ score: { $meta: 'textScore' } })
           .limit(10)
           .lean();
@@ -665,7 +669,7 @@ async function findWineMatches(item, viewer = {}) {
     const directMatches = await WineDefinition.find(
       visible.$or ? { $and: [keyMatch, visible] } : { ...keyMatch, ...visible }
     )
-      .populate(['country', 'region', 'grapes'])
+      .populate(WINE_READ_POPULATE)
       .limit(20)
       .lean();
 
@@ -2463,3 +2467,6 @@ module.exports.computeIdentityProvenance = computeIdentityProvenance;
 // decides what enters the shared registry, and the two must agree about a
 // Prädikat in the appellation column (somm ticket 6a966386).
 module.exports.fileCompleteIdentity = fileCompleteIdentity;
+// The candidate finder, for the style-guard test (the guard must read a
+// candidate's recorded label sweetness, which only a populated load carries).
+module.exports.findWineMatches = findWineMatches;

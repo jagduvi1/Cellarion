@@ -82,10 +82,11 @@ async function request(path, { method = 'GET', body, timeoutMs = TIMEOUT_MS } = 
       headers: {
         Authorization: `Bearer ${c.key}`,
         Accept: 'application/json',
-        // Protocol v2: the registry sends the bare name and the label sweetness
-        // term as its own field (routes/bridgeV1 bridgeProtocol). A registry
-        // from before the header ignores it and answers as it always did.
-        'X-Cellarion-Bridge-Protocol': '2',
+        // Protocol v2 (`X-Cellarion-Bridge-Protocol: 2`: the bare name and the
+        // label sweetness term as its own field, routes/bridgeV1 bridgeProtocol)
+        // is NOT requested yet. Until this install can show a term beside a
+        // name, a bare name would lose the word; on v1 the registry sends the
+        // name as the label reads it, which every screen here shows as it is.
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(c.instanceHost ? { 'X-Cellarion-Instance': c.instanceHost } : {}),
       },

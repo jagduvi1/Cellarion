@@ -32,7 +32,7 @@ const { claimKey, findGrapeClaim } = require('../../services/grapeClaims');
 const { otherProducerSpellings, displaySpelling } = require('../../services/producerSpelling');
 const { classifyProposal } = require('../../services/proposalDirectApply');
 const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
-const { ok, fail, objectId, pageParams, FIELD_DESCRIPTIONS } = require('../toolUtil');
+const { ok, fail, objectId, pageParams, FIELD_DESCRIPTIONS, labelSweetnessFields } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
   PROFILE_ENUMS,
@@ -82,17 +82,11 @@ function requireSomm(ctx) {
 }
 
 // The label sweetness term, emitted honestly or not at all (the grapes rule
-// below): a populated row → { name, band, scale, regulated }; a selected null
-// → null, the wine states none; an unpopulated id or an unselected field →
-// the key is omitted. The curator setting a drink window reads it here —
-// once the word has left the names, this is where "trocken" is stated.
-const labelSweetnessLite = (wd) => {
-  const t = wd.labelSweetness;
-  if (t === undefined) return {};
-  if (t === null) return { label_sweetness: null };
-  return t && typeof t === 'object' && t.name ? { label_sweetness: labelSweetnessOut(wd) } : {};
-};
-
+// below, services/sweetnessOps.labelSweetnessFields): a loaded field → the
+// term ({ name, band, scale, regulated } or null) and the display name; an
+// unselected field or an id nothing can name → neither key. The curator
+// setting a drink window reads it here — once the word has left the names,
+// this is where "trocken" is stated.
 const wineLite = (wd) => (wd ? {
   wine_id: wd._id,
   name: wd.name,
@@ -101,7 +95,7 @@ const wineLite = (wd) => (wd ? {
   country: wd.country?.name || null,
   region: wd.region?.name || null,
   appellation: wd.appellation || null,
-  ...(labelSweetnessLite(wd)),
+  ...(labelSweetnessFields(wd)),
   // Somm ticket 6a887619 (2026-08-21): every OTHER identity field showed here
   // but grapes did not, so grapes written at wine creation became visible only
   // on a later get_wine — and read as "populated by an unidentified path

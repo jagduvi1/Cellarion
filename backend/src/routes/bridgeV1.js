@@ -224,10 +224,11 @@ router.get('/me', async (req, res) => {
       quotas: capsNow(),
       burstPerMinute: burstPerMinute(),
       usage,
-      // The protocol THIS reply speaks (negotiated by header, see bridgeProtocol)
-      // and every version the server accepts, so a client can tell.
+      // The protocol THIS reply speaks (negotiated by header, see bridgeProtocol).
+      // A v1 peer gets exactly the reply it always got; a v2 peer also learns
+      // every version the server accepts.
       protocol: `v${bridgeProtocol(req)}`,
-      accepts: ['v1', `v${PROTOCOL}`],
+      ...(bridgeProtocol(req) >= 2 ? { accepts: ['v1', `v${PROTOCOL}`] } : {}),
     });
   } catch (error) {
     console.error('Bridge /me error:', error);
