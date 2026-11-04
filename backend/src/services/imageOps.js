@@ -140,7 +140,7 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
   try { contentHash = hashImageBytes(stored); } catch { /* non-fatal */ }
 
   const originalUrl = `/api/uploads/originals/${filename}`;
-  const image = new BottleImage({
+  let image = new BottleImage({
     bottle: bottle ? bottle._id : null,
     wineDefinition: wineDefinitionId || null,
     // A photo is of one bottle, so it is of that bottle's vintage.
@@ -163,6 +163,12 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
     } : {}),
   });
   await image.save();
+  // A keep-background photo is ready as uploaded: on a server that does not
+  // review photos it is published now (others, once background removal ends),
+  // and the caller is answered with the photo as published.
+  if (keep && !publish && await require('./trustedContributions').approvePhotoIfTrusted(image._id, req)) {
+    image = (await BottleImage.findById(image._id)) || image;
+  }
 
   // One attach row for both surfaces, and only for a photo put on a bottle:
   // the admin flows that publish a registry picture write their own row, and

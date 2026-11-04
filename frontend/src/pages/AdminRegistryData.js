@@ -6,6 +6,7 @@ import {
   getRegistryKeys, setRegistryKeyTranslations,
 } from '../api/registryData';
 import { LANGUAGE_OPTIONS, baseCode } from '../config/locales';
+import ContributionReviewSwitch from '../components/ContributionReviewSwitch';
 import './AdminRegistryData.css';
 
 // The languages a key can carry a display name in: every language the app
@@ -133,6 +134,8 @@ function AdminRegistryData() {
         Users propose public data fields and suggest values; nothing reaches the shared record without a decision
         here. Accepting a key makes it available on <strong>every</strong> wine — one field, one meaning, one type.
       </p>
+
+      <ContributionReviewSwitch />
 
       {error && <div className="alert alert-error">{error}</div>}
       {loading && <p>Loading…</p>}

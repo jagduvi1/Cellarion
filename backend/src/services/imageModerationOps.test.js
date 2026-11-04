@@ -33,6 +33,7 @@ const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
 const { createNotification } = require('./notifications');
 const { unlinkImageFiles } = require('./imageProcessor');
+const { incrementCred } = require('../utils/cellarCred');
 const ops = require('./imageModerationOps');
 
 const IMAGE_ID = '64b0000000000000000000e1';
@@ -107,6 +108,31 @@ describe('approveImage — which photo becomes the wine\'s picture', () => {
     const detail = logAudit.mock.calls[0][3];
     expect(detail).not.toHaveProperty('via');
     expect(detail).not.toHaveProperty('official');
+  });
+
+  test('published as uploaded (a server that does not review): no notification, no cred, the member in the audit row', async () => {
+    const image = makeImage();
+    BottleImage.findById.mockResolvedValue(image);
+    bottleOfWine();
+    WineDefinition.findById.mockResolvedValue(wineWithPicture(null));
+    const req = { user: { id: UPLOADER, roles: ['user'] } };
+
+    const r = await ops.approveImage({ imageId: IMAGE_ID, actorId: UPLOADER, visibility: 'public', official: 'auto', notify: false, via: 'unreviewed', req });
+
+    expect(r.ok).toBe(true);
+    expect(image.status).toBe('approved');
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(incrementCred).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(req, 'admin.image.approve', { type: 'image', id: IMAGE_ID },
+      expect.objectContaining({ via: 'unreviewed' }));
+  });
+
+  test("an admin's approval still earns the uploader cred", async () => {
+    BottleImage.findById.mockResolvedValue(makeImage());
+    bottleOfWine();
+    WineDefinition.findById.mockResolvedValue(wineWithPicture(OTHER));
+    await ops.approveImage({ imageId: IMAGE_ID, actorId: ACTOR, visibility: 'public', official: 'auto' });
+    expect(incrementCred).toHaveBeenCalledWith(UPLOADER, 'image_approved');
   });
 
   test('official:true on a wine that already has a picture is refused and NOTHING is written', async () => {

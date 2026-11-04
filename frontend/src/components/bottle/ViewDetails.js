@@ -25,10 +25,12 @@ import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 import { markNotWine } from '../../api/wines';
 import { formatVintage } from '../../utils/vintage';
+import { useContributionReviewed } from '../../utils/contributionReview';
 
 function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, onWineChanged, onBottleChange, draftNotice = null, recordFold = null }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
+  const reviewed = useContributionReviewed();
   const anchorYear = bottleAnchorYear(bottle);
   const maturityStatus = getMaturityStatus(vintageProfile, anchorYear);
   // The user's OWN drink window (drinkFrom/drinkTo) — takes precedence over
@@ -116,6 +118,8 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
       // Not for a drink that is not wine: it has no grapes to record.
       promptMissingGrapes={canEdit && wine?.nonWine !== true}
       suggestSignal={suggestFixSignal}
+      // A fix applied at once (a server that does not review) re-reads the wine.
+      onWineChanged={onWineChanged}
     />
   );
 
@@ -211,7 +215,9 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
           storageKey={`cellarion_contrib_photo_${wine?._id}`}
           icon="📷"
           title={t('bottleDetail.contributePhotoTitle', 'Help the community')}
-          message={t('bottleDetail.contributePhotoMsg', 'This wine has no photo yet. Adding one helps other collectors recognise it \u2014 it will be reviewed before going public.')}
+          message={reviewed
+            ? t('bottleDetail.contributePhotoMsg', 'This wine has no photo yet. Adding one helps other collectors recognise it \u2014 it will be reviewed before going public.')
+            : t('bottleDetail.contributePhotoMsgUnreviewed', 'This wine has no photo yet. Adding one helps everyone on this server recognise it.')}
           actionLabel={t('bottleDetail.contributePhotoAction', 'Add a photo')}
           onAction={onEdit}
         />

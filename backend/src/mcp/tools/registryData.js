@@ -112,11 +112,18 @@ registerTool({
     );
     if (!result.ok) return svcFail(result);
     const slot = result.value.vintage ? `for vintage ${result.value.vintage}` : 'for all vintages';
-    const envelope = envelopeOf(`Suggested ${result.value.key.name} = ${JSON.stringify(result.value.value)} ${slot} (admin will review)`, {
-      value_id: result.value._id,
-      vintage: result.value.vintage,
-      status: 'suggested',
-    });
+    const envelope = result.applied
+      // A server that does not review contributions published it as suggested.
+      ? envelopeOf(`Published ${result.value.key.name} = ${JSON.stringify(result.value.value)} ${slot} (this server does not review contributions)`, {
+        value_id: result.value._id,
+        vintage: result.value.vintage,
+        status: 'published',
+      })
+      : envelopeOf(`Suggested ${result.value.key.name} = ${JSON.stringify(result.value.value)} ${slot} (admin will review)`, {
+        value_id: result.value._id,
+        vintage: result.value.vintage,
+        status: 'suggested',
+      });
     await logAction(ctx, {
       tool: 'suggest_wine_public_value', action: 'suggest_value',
       detail: { wineId: String(args.wine_id), keyId: String(args.key_id), valueId: String(result.value._id), vintage: result.value.vintage || null },
@@ -154,10 +161,16 @@ registerTool({
       { via: 'mcp', req: ctx.req }
     );
     if (!result.ok) return svcFail(result);
-    const envelope = envelopeOf(`Proposed public key "${result.key.name}" (${result.key.type}) — admin will review`, {
-      key_id: result.key._id,
-      status: 'proposed',
-    });
+    const envelope = result.applied
+      // A server that does not review contributions accepted it as proposed.
+      ? envelopeOf(`Added public key "${result.key.name}" (${result.key.type}) — this server does not review contributions`, {
+        key_id: result.key._id,
+        status: 'accepted',
+      })
+      : envelopeOf(`Proposed public key "${result.key.name}" (${result.key.type}) — admin will review`, {
+        key_id: result.key._id,
+        status: 'proposed',
+      });
     await logAction(ctx, {
       tool: 'propose_registry_key', action: 'propose_key',
       detail: { keyId: String(result.key._id), name: result.key.name },

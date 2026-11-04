@@ -51,3 +51,19 @@ test('a feature switched off is left out entirely', async () => {
   const { body } = await get('/api/site/features');
   expect(body.features.find((f) => f.key === 'pickLists')).toBeUndefined();
 });
+
+// GET /api/site/review — whether this server reviews contributions, so the
+// app promises "a curator reviews it" only where one does (discussion #1778).
+describe('GET /api/site/review', () => {
+  const contributionReview = require('../config/contributionReview');
+  afterEach(() => contributionReview.set({ enabled: true }));
+
+  test('reviewed by default; false once the admin turned review off; cached like the rest', async () => {
+    const on = await get('/api/site/review');
+    expect(on.status).toBe(200);
+    expect(on.headers['cache-control']).toBe('public, max-age=60');
+    expect(on.body).toEqual({ reviewed: true });
+    contributionReview.set({ enabled: false });
+    expect((await get('/api/site/review')).body).toEqual({ reviewed: false });
+  });
+});

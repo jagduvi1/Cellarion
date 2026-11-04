@@ -87,6 +87,19 @@ test('keepBackground: no bg-removal hand-off, the original is the kept image and
   expect(res.image.save).toHaveBeenCalledTimes(1);
 });
 
+// Discussion #1778: on a server that does not review photos a kept photo is
+// published at upload, and the caller (web or MCP) must be told so — not
+// answered with the row as it was before it was published.
+test('keepBackground on a server that does not review: the answer is the photo as published, the member named', async () => {
+  const trusted = require('./trustedContributions');
+  const spy = jest.spyOn(trusted, 'approvePhotoIfTrusted').mockResolvedValueOnce(true);
+  BottleImage.findById = jest.fn().mockResolvedValue({ _id: 'img-new', status: 'approved', visibility: 'public' });
+  const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b1' }, keepBackground: true }, REQ);
+  expect(spy).toHaveBeenCalledWith('img-new', REQ);
+  expect(res.image).toMatchObject({ status: 'approved', visibility: 'public' });
+  spy.mockRestore();
+});
+
 test('keepBackground: the kept photo is stored like every kept photo — the WebP of the clean bytes', async () => {
   const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b1' }, keepBackground: true }, REQ);
   expect(encodeKeptPhoto).toHaveBeenCalledWith(Buffer.from('CLEAN-BYTES'));

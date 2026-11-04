@@ -91,7 +91,19 @@ registerTool({
     const pf = result.proposal.proposedFields;
     const allFields = Object.keys(pf && typeof pf.toObject === 'function' ? pf.toObject() : pf || {});
     const label = `${result.wine.producer || '?'} — ${result.wine.name}`;
-    const envelope = result.amended
+    const envelope = result.applied
+      // A server that does not review contributions applied it as filed.
+      ? envelopeOf(
+        `Applied to ${label}: ${allFields.join(', ')} (this server does not review contributions)`,
+        {
+          proposal_id: result.proposal._id,
+          status: 'approved',
+          amended: !!result.amended,
+          fields: allFields,
+          note: 'Applied at once: this server\'s admin turned review of contributions off. get_wine shows the corrected record.',
+        }
+      )
+      : result.amended
       ? envelopeOf(
         `Your pending suggestion for ${label} was amended with ${result.amendedFields.join(', ')} — it now covers ${allFields.join(', ')} (admin will review)`,
         {

@@ -512,3 +512,80 @@ describe('admin decisions', () => {
     expect(vChain.limit).toHaveBeenCalledWith(ops.REVIEW_QUEUE_LIMIT);
   });
 });
+
+// A server whose admin turned review of contributions off (discussion #1778):
+// a value is published and a field accepted as made, through the same
+// decide code an admin runs, decided by the contributor, nobody notified,
+// no daily limit. A relay from another server (via 'bridge') always waits.
+describe('a server that does not review contributions', () => {
+  const contributionReview = require('../config/contributionReview');
+  beforeEach(() => contributionReview.set({ enabled: false }));
+  afterEach(() => contributionReview.set({ enabled: true }));
+
+  const VALUE = { wineId: WINE, keyId: KEY, value: '13,5' };
+  const suggestedRow = () => ({
+    _id: oid('9'), wineDefinition: WINE, key: acceptedKey, value: 13.5, vintage: null,
+    status: 'suggested', suggestedBy: ME, save: jest.fn().mockResolvedValue(undefined),
+  });
+  const valueRows = (row) => (q) => (q && q.status === 'suggested'
+    ? { populate: jest.fn().mockResolvedValue(row) }
+    : Promise.resolve(null));
+
+  test('a value is published as suggested: decided by the suggester, no notification, no limit', async () => {
+    const row = suggestedRow();
+    RegistryDataKey.findOne.mockResolvedValue(acceptedKey);
+    RegistryDataValue.findOne.mockImplementation(valueRows(row));
+    RegistryDataValue.create.mockResolvedValue({ _id: oid('9'), value: 13.5, status: 'suggested' });
+    RegistryDataValue.updateOne.mockResolvedValue({ modifiedCount: 0 });
+
+    const res = await ops.suggestValue(ME, VALUE, { via: 'web' });
+
+    expect(res).toMatchObject({ ok: true, applied: true, value: { status: 'published', value: 13.5 } });
+    expect(checkContributionGate).toHaveBeenCalledWith(ME, { budget: false });
+    expect(row.status).toBe('published');
+    expect(row.decidedBy).toBe(ME);
+    expect(awardValue).toHaveBeenCalledWith(row);
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('a field is accepted as proposed, decided by its proposer, without a notification', async () => {
+    RegistryDataKey.findOne.mockResolvedValue(null);
+    RegistryDataKey.create.mockResolvedValue({ ...acceptedKey, status: 'proposed' });
+    RegistryDataKey.findOneAndUpdate.mockResolvedValue({ ...acceptedKey, status: 'accepted' });
+
+    const res = await ops.proposeKey(ME, { name: 'ABV', type: 'decimal', unit: '%', rationale: 'Alcohol strength matters to every drinker.' });
+
+    expect(res).toMatchObject({ ok: true, applied: true, key: { status: 'accepted' } });
+    expect(checkContributionGate).toHaveBeenCalledWith(ME, { budget: false });
+    expect(RegistryDataKey.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: { $eq: KEY }, status: 'proposed' },
+      expect.objectContaining({ $set: expect.objectContaining({ status: 'accepted', decidedBy: ME }) }),
+      { new: true }
+    );
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('a value relayed from another server over the bridge waits, limit included', async () => {
+    RegistryDataKey.findOne.mockResolvedValue(acceptedKey);
+    RegistryDataValue.findOne.mockResolvedValue(null);
+    RegistryDataValue.create.mockResolvedValue({ _id: oid('9'), value: 13.5, status: 'suggested' });
+
+    const res = await ops.suggestValue(ME, VALUE, { via: 'bridge' });
+
+    expect(res).toMatchObject({ ok: true, value: { status: 'suggested' } });
+    expect(res.applied).toBeUndefined();
+    expect(checkContributionGate).toHaveBeenCalledWith(ME, { budget: true });
+    expect(RegistryDataValue.updateOne).not.toHaveBeenCalled();
+  });
+
+  test('with review on (the default) nothing changes: suggested, limit applies', async () => {
+    contributionReview.set({ enabled: true });
+    RegistryDataKey.findOne.mockResolvedValue(acceptedKey);
+    RegistryDataValue.findOne.mockResolvedValue(null);
+    RegistryDataValue.create.mockResolvedValue({ _id: oid('9'), value: 13.5, status: 'suggested' });
+
+    const res = await ops.suggestValue(ME, VALUE, { via: 'web' });
+    expect(res.value.status).toBe('suggested');
+    expect(checkContributionGate).toHaveBeenCalledWith(ME, { budget: true });
+  });
+});
