@@ -1,5 +1,5 @@
 .wishlist-page {
-  max-width: 900px;
+  max-width: var(--page-width-default);
   margin: 0 auto;
 }
 

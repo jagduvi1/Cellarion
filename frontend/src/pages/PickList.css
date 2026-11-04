@@ -4,7 +4,7 @@
 
 .pick-lists-page,
 .pick-list-page {
-  max-width: 760px;
+  max-width: var(--page-width-default);
   margin: 0 auto;
 }
 
