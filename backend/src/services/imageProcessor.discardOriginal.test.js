@@ -41,12 +41,15 @@ jest.mock('./thumbnails', () => ({
 }));
 jest.mock('../models/WineDefinition', () => ({ findByIdAndUpdate: jest.fn().mockResolvedValue(null) }));
 jest.mock('./search', () => ({ indexWine: jest.fn() }));
+// A server that does not review photos publishes one where it settles.
+jest.mock('./trustedContributions', () => ({ approvePhotoIfTrusted: jest.fn().mockResolvedValue(false) }));
 
 const crypto = require('crypto');
 const fs = require('fs');
 const BottleImage = require('../models/BottleImage');
 const { prepareRembgInput, encodeKeptPhoto } = require('./photoFormat');
 const { warmThumbFor } = require('./thumbnails');
+const { approvePhotoIfTrusted } = require('./trustedContributions');
 const { processImage, discardOriginal, unlinkImageFiles, whenProcessingIdle } = require('./imageProcessor');
 
 const ORIG = '/api/uploads/originals/abc.jpg';
@@ -96,6 +99,8 @@ describe('processImage', () => {
 
     expect(doc.status).toBe('processed');
     expect(doc.processedUrl).toBe(PROC);
+    // Ready: handed to the unreviewed-server publish (a no-op where review is on).
+    expect(approvePhotoIfTrusted).toHaveBeenCalledWith('img1');
     // Never half-written into the public folder: temp name, then renamed.
     const [tmpPath, bytes] = fs.promises.writeFile.mock.calls[0];
     expect(tmpPath).toMatch(/^\/app\/uploads\/processed\/abc\.webp\..+\.tmp$/);
@@ -189,6 +194,7 @@ describe('processImage', () => {
     expect(fs.promises.unlink).not.toHaveBeenCalled();
     expect(BottleImage.updateOne).not.toHaveBeenCalled();
     error.mockRestore();
+    expect(approvePhotoIfTrusted).not.toHaveBeenCalled();
   });
 
   test('a keepBackground row is settled from its original and nothing is deleted', async () => {
@@ -201,6 +207,7 @@ describe('processImage', () => {
     expect(doc.processedUrl).toBe(ORIG);
     expect(doc.originalUrl).toBe(ORIG);
     expect(fs.promises.unlink).not.toHaveBeenCalled();
+    expect(approvePhotoIfTrusted).toHaveBeenCalledWith('img1');
   });
 });
 

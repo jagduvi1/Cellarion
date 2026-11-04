@@ -17,6 +17,7 @@ const { originFrom } = require('../utils/contributionOrigin');
 const { findVisibleWine } = require('./wineVisibility');
 const { validateValue, validateKeyDefinition } = require('../utils/personalDataTypes');
 const { checkContributionGate } = require('./contributionGate');
+const { appliesDirectly } = require('./trustedContributions');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId, parseAndValidateVintage } = require('../utils/validation');
 const { localizedName, sanitizeTranslations } = require('../utils/localizedName');
@@ -127,7 +128,8 @@ async function proposeKey(userId, { name, type, unit, enumOptions, rationale }, 
     return fail('conflict', `"${def.name}" is already a first-class field of the wine record.`);
   }
 
-  const gate = await checkContributionGate(userId);
+  // No daily limit where nobody reviews (services/trustedContributions).
+  const gate = await checkContributionGate(userId, { budget: !appliesDirectly(via) });
   if (!gate.ok) return gate;
 
   const existing = await RegistryDataKey.findOne({
@@ -153,6 +155,11 @@ async function proposeKey(userId, { name, type, unit, enumOptions, rationale }, 
   logAudit(req || null, 'registry_data.key_propose',
     { type: 'registry_key', id: key._id },
     { name: key.name, keyType: key.type, ...(via ? { via } : {}) });
+  // A server that does not review accepts it as proposed, decided by its proposer.
+  if (appliesDirectly(via)) {
+    const decided = await decideKey(userId, key._id, 'accept', null, { req, notify: false });
+    if (decided.ok) return { ok: true, key: decided.key, applied: true };
+  }
   return { ok: true, key: serializeKey(key) };
 }
 
@@ -219,7 +226,8 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
   }
   const cleanReason = stripHtml(typeof reason === 'string' ? reason : '').trim().slice(0, 1000);
 
-  const gate = await checkContributionGate(userId);
+  // No daily limit where nobody reviews (services/trustedContributions).
+  const gate = await checkContributionGate(userId, { budget: !appliesDirectly(via) });
   if (!gate.ok) return gate;
 
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
@@ -272,6 +280,17 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
   logAudit(req || null, 'registry_data.value_suggest',
     { type: 'wine', id: wine._id },
     { key: key.name, valueId: row._id, vintage: slot.value, ...(via ? { via } : {}) });
+  // A server that does not review publishes it as suggested, decided by its suggester.
+  if (appliesDirectly(via)) {
+    const decided = await decideValue(userId, row._id, 'publish', null, { req, notify: false });
+    if (decided.ok) {
+      return {
+        ok: true,
+        applied: true,
+        value: { _id: row._id, key: serializeKey(key), value: row.value, vintage: slot.value, status: 'published' },
+      };
+    }
+  }
   return {
     ok: true,
     value: { _id: row._id, key: serializeKey(key), value: row.value, vintage: slot.value, status: row.status },
@@ -421,7 +440,7 @@ function notifyDecision(userId, type, title, message, reason) {
   });
 }
 
-async function decideKey(adminId, keyId, decision, rejectReason, { req } = {}) {
+async function decideKey(adminId, keyId, decision, rejectReason, { req, notify = true } = {}) {
   if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
   if (!['accept', 'reject'].includes(decision)) return fail('invalid', "decision must be 'accept' or 'reject'");
   const key = await RegistryDataKey.findOneAndUpdate(
@@ -445,8 +464,9 @@ async function decideKey(adminId, keyId, decision, rejectReason, { req } = {}) {
   // curator took the trouble to write — was reachable only through a GDPR
   // data export, so a contributor got silence either way. Fire-and-forget,
   // like every other notify call: a notification failure must never undo a
-  // recorded decision.
-  notifyDecision(
+  // recorded decision. notify:false = accepted as proposed on a server that
+  // does not review (services/trustedContributions).
+  if (notify) notifyDecision(
     key.proposedBy,
     'registry_key_decided',
     decision === 'accept' ? 'Registry key accepted' : 'Registry key not accepted',
@@ -465,7 +485,7 @@ async function decideKey(adminId, keyId, decision, rejectReason, { req } = {}) {
  * the reviewer's call when the evidence is clearly a producer spec sheet and
  * the suggester just left the (safer) vintage default selected.
  */
-async function decideValue(adminId, valueId, decision, rejectReason, { req, asWineDefault = false } = {}) {
+async function decideValue(adminId, valueId, decision, rejectReason, { req, asWineDefault = false, notify = true } = {}) {
   if (!isValidId(String(valueId))) return fail('invalid', 'Invalid value id');
   if (!['publish', 'reject'].includes(decision)) return fail('invalid', "decision must be 'publish' or 'reject'");
 
@@ -522,7 +542,7 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req, asWi
   const where = targetVintage
     ? `on the ${targetVintage} vintage`
     : (widened ? `on the wine for every vintage (a curator judged your ${suggestedFor} figure to be the producer's general spec)` : 'on the wine');
-  notifyDecision(
+  if (notify) notifyDecision(
     row.suggestedBy,
     'registry_value_decided',
     'Suggested value published',

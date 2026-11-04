@@ -45,6 +45,7 @@ const { isValidId } = require('../utils/validation');
 const { WINE_COLOURS, isStyleType } = require('../utils/wineColour');
 
 const { TIER_DAILY, checkContributionGate } = require('./contributionGate');
+const { appliesDirectly, applyCorrectionIfTrusted } = require('./trustedContributions');
 
 const FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
 // Structural fields a user may also correct (support ticket 2026-09-06: the
@@ -85,7 +86,17 @@ const fail = (code, message) => ({ ok: false, code, message });
  * Create a field_correction proposal from a regular user.
  * fields = { producer?, name?, appellation?, region?, country?, classification? }
  */
-async function createFieldCorrection(userId, { wineId, fields, reason, evidenceUrl }, { via, req } = {}) {
+/**
+ * File a member's field correction — and, on a server that does not review
+ * contributions, apply it at once (services/trustedContributions). The
+ * answer then carries `applied: true` and the corrected wine.
+ */
+async function createFieldCorrection(userId, input, opts = {}) {
+  const result = await fileFieldCorrection(userId, input, opts);
+  return applyCorrectionIfTrusted(result, userId, opts);
+}
+
+async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl }, { via, req } = {}) {
   const origin = originFrom(req, via);
   const cleanReason = stripHtml(typeof reason === 'string' ? reason : '').trim();
   if (cleanReason.length < REASON_MIN) {
@@ -191,7 +202,8 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
   let amending = isOwn(existing, userId);
 
   // Ban + the ONE daily budget shared across all suggestion families.
-  const gate = await checkContributionGate(userId, { budget: !amending });
+  // No daily limit where nobody reviews (services/trustedContributions).
+  const gate = await checkContributionGate(userId, { budget: !amending && !appliesDirectly(via) });
   if (!gate.ok) return gate;
   const { user } = gate;
   // Visibility, not ownership: anyone who can SEE the wine may suggest a fix
@@ -276,7 +288,7 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
       }
       // The row was decided while this filing was composed — it is a fresh
       // filing now, and a fresh filing is budgeted.
-      const fresh = await checkContributionGate(userId);
+      const fresh = await checkContributionGate(userId, { budget: !appliesDirectly(via) });
       if (!fresh.ok) return fresh;
       existing = null;
       amending = false;

@@ -163,6 +163,9 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
     } : {}),
   });
   await image.save();
+  // A keep-background photo is ready as uploaded: on a server that does not
+  // review photos it is published now (others, once background removal ends).
+  if (keep && !publish) await require('./trustedContributions').approvePhotoIfTrusted(image._id);
 
   // One attach row for both surfaces, and only for a photo put on a bottle:
   // the admin flows that publish a registry picture write their own row, and

@@ -168,6 +168,7 @@ async function runProcessImage(imageId) {
     image.processedUrl = image.originalUrl;
     image.status = settledStatus;
     await image.save();
+    await require('./trustedContributions').approvePhotoIfTrusted(imageId);
     return;
   }
 
@@ -251,6 +252,9 @@ async function runProcessImage(imageId) {
     // reads a file instead of queueing a render. Best-effort: a miss here is
     // rendered on first request as before.
     await warmThumbFor(image.processedUrl);
+
+    // A server that does not review photos publishes it now it is ready.
+    await require('./trustedContributions').approvePhotoIfTrusted(imageId);
 
     console.log(`Image ${imageId} processed successfully`);
   } catch (error) {

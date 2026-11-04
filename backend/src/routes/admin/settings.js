@@ -287,6 +287,63 @@ router.get('/new-member-emails', async (req, res) => {
   }
 });
 
+// ── Review of contributions (config/contributionReview) ────────────────────
+// Who may switch it: the install's highest authority. Where a super admin is
+// configured (cellarion.app) only they may — turning review off there would
+// publish every member's contribution to a shared registry. On a server
+// without one (most self-hosted installs) any admin may.
+const { requireSuperAdmin, checkIsSuperAdmin } = require('../../middleware/superAdmin');
+const superAdminConfigured = () => !!(process.env.SUPER_ADMIN_EMAIL || '').trim();
+const requireReviewSwitcher = (req, res, next) => (superAdminConfigured() ? requireSuperAdmin(req, res, next) : next());
+
+// GET /api/admin/settings/contribution-review — { enabled, updatedAt,
+// canChange, waiting: { photos, values, fields, corrections } }: the switch,
+// whether this admin may change it, and what is still in the queues (turning
+// review off decides nothing already waiting).
+router.get('/contribution-review', async (req, res) => {
+  try {
+    const contributionReview = require('../../config/contributionReview');
+    const BottleImage = require('../../models/BottleImage');
+    const RegistryDataValue = require('../../models/RegistryDataValue');
+    const RegistryDataKey = require('../../models/RegistryDataKey');
+    const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
+    const User = require('../../models/User');
+    let canChange = true;
+    if (superAdminConfigured()) {
+      const me = await User.findById(req.user.id).select('email').lean();
+      canChange = !!me && checkIsSuperAdmin(req, me.email);
+    }
+    const [photos, values, fields, corrections] = await Promise.all([
+      BottleImage.countDocuments({ status: 'processed', kind: { $ne: 'label-scan' } }),
+      RegistryDataValue.countDocuments({ status: 'suggested' }),
+      RegistryDataKey.countDocuments({ status: 'proposed' }),
+      WineCorrectionProposal.countDocuments({ status: 'pending' }),
+    ]);
+    res.json({ ...contributionReview.get(), canChange, waiting: { photos, values, fields, corrections } });
+  } catch (err) {
+    console.error('Admin get contribution-review error:', err);
+    res.status(500).json({ error: 'Failed to load the review setting' });
+  }
+});
+
+// PATCH /api/admin/settings/contribution-review — body { enabled }.
+router.patch('/contribution-review', requireReviewSwitcher, async (req, res) => {
+  try {
+    const { enabled } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be true or false' });
+    }
+    const contributionReview = require('../../config/contributionReview');
+    const doc = await updateSiteConfig('contributionReview', { enabled }, req.user.id);
+    contributionReview.set({ enabled, updatedAt: doc?.updatedAt ? new Date(doc.updatedAt).toISOString() : new Date().toISOString() });
+    logAudit(req, 'admin.settings.contribution_review.update', {}, { enabled });
+    res.json(contributionReview.get());
+  } catch (err) {
+    console.error('Admin update contribution-review error:', err);
+    res.status(500).json({ error: 'Failed to update the review setting' });
+  }
+});
+
 // PATCH /api/admin/settings/new-member-emails — body { enabled }. Turning it
 // on starts from now: accounts created before that never get one.
 router.patch('/new-member-emails', async (req, res) => {

@@ -7,6 +7,7 @@ import GrapePicker from '../GrapePicker';
 import ContributePrompt from './ContributePrompt';
 import { createWineProposal, getMyWineProposals } from '../../api/wineProposals';
 import { getWinePublicData, suggestWineValue, proposeRegistryKey } from '../../api/registryData';
+import { useContributionReviewed } from '../../utils/contributionReview';
 import useTaxonomyNames from '../../hooks/useTaxonomyNames';
 import useGrapeNames from '../../hooks/useGrapeNames';
 import useClassifications from '../../hooks/useClassifications';
@@ -62,7 +63,7 @@ const sameGrapes = (a, b) => {
   return x.length === y.length && x.every((v, i) => v === y[i]);
 };
 
-function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingGrapes = false, suggestSignal = 0 }) {
+function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingGrapes = false, suggestSignal = 0, onWineChanged }) {
   const { t, i18n } = useTranslation();
   // The reader's language rides along on the fetch, and a key comes back
   // with a displayName in it when a translation exists. `name` stays the
@@ -95,6 +96,9 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [sentField, setSentField] = useState(null);
+  // The last suggestion went live at once (a server that does not review).
+  const [sentApplied, setSentApplied] = useState(false);
+  const reviewed = useContributionReviewed();
   // Most users never file a fix — the per-row actions stay hidden behind ONE
   // section-level toggle so the record reads clean (Johan, 2026-08-17).
   const [suggestMode, setSuggestMode] = useState(false);
@@ -352,7 +356,15 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
         ...(evidenceUrl.trim() ? { evidenceUrl: evidenceUrl.trim() } : {}),
       });
       const body = await res.json().catch(() => ({}));
-      if (res.ok) {
+      if (res.ok && body.applied) {
+        // A server that does not review applied it already: nothing is
+        // pending — re-read the wine so the record shows the change.
+        setSentApplied(true);
+        setSentField(modal.field);
+        setModal(null);
+        if (onWineChanged) onWineChanged();
+      } else if (res.ok) {
+        setSentApplied(false);
         // `newGrapes` qualifies the list; it is not a field of the record.
         const sent = { ...fields };
         delete sent.newGrapes;
@@ -445,7 +457,10 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setKeyModal(false);
+        setSentApplied(!!body.applied);
         setSentField('newKey');
+        // Accepted at once on a server that does not review: the field is there now.
+        if (body.applied) await loadPublicData();
       } else {
         setError(body.error || t('common.networkError', 'Network error. Please try again.'));
       }
@@ -535,11 +550,15 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
         <p className="wr-intro wr-intro--suggest">
           {blockedByOther
             ? t('wineRecord.blockedByOther', 'Another member’s suggestion for this wine is waiting for a curator. You can suggest a fix as soon as it has been decided.')
-            : t('wineRecord.intro', 'Spot something wrong or missing? Tap Fix or Add next to it — a curator reviews every suggestion before it goes live.')}
+            : reviewed
+              ? t('wineRecord.intro', 'Spot something wrong or missing? Tap Fix or Add next to it — a curator reviews every suggestion before it goes live.')
+              : t('wineRecord.introUnreviewed', 'Spot something wrong or missing? Tap Fix or Add next to it — your change goes live at once.')}
         </p>
       ) : (
         <p className="wr-intro">
-          {t('wineRecord.introShort', 'The shared registry’s record of this wine, curator-reviewed.')}
+          {reviewed
+            ? t('wineRecord.introShort', 'The shared registry’s record of this wine, curator-reviewed.')
+            : t('wineRecord.introShortUnreviewed', 'The shared registry’s record of this wine.')}
         </p>
       )}
 
@@ -666,7 +685,9 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
 
       {sentField && (
         <p role="status" className="wr-thanks">
-          {t('wineRecord.thanks', 'Thank you — your suggestion is in the review queue. We’ll notify you when a curator has decided.')}
+          {sentApplied
+            ? t('wineRecord.thanksApplied', 'Thank you — your change is live.')
+            : t('wineRecord.thanks', 'Thank you — your suggestion is in the review queue. We’ll notify you when a curator has decided.')}
         </p>
       )}
 

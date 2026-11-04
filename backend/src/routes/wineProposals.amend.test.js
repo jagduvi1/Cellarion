@@ -57,6 +57,7 @@ test('a fresh filing answers 201 with amended: false', async () => {
   const body = await res.json();
   expect(body).toEqual({
     amended: false,
+    applied: false,
     proposal: { _id: oid('9'), proposedFields: { name: 'Château Martinat' }, status: 'pending', createdAt: '2026-09-11T19:14:12.715Z' },
   });
   expect(ops.createFieldCorrection).toHaveBeenCalledWith(

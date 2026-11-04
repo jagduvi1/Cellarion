@@ -60,7 +60,7 @@ async function linkWineViaBottle(image) {
  *   false   — never. A back label is published in the gallery but must not
  *             become the picture just because it was approved first.
  */
-async function approveImage({ imageId, actorId, visibility = 'public', official = 'auto', replaceMain = false, req, via }) {
+async function approveImage({ imageId, actorId, visibility = 'public', official = 'auto', replaceMain = false, req, via, notify = true }) {
   if (!isValidId(imageId)) return fail('invalid_input', 'Invalid ID');
   const image = await BottleImage.findById(imageId);
   if (!image) return fail('not_found', 'Image not found');
@@ -149,13 +149,17 @@ async function approveImage({ imageId, actorId, visibility = 'public', official 
   const wineLabel = approvedWine
     ? `"${approvedWine.name}" by ${approvedWine.producer}`
     : 'a wine';
-  createNotification(
-    image.uploadedBy,
-    'image_approved',
-    'Image approved',
-    `Your image for ${wineLabel} has been approved.`,
-    null
-  );
+  // notify:false = applied as uploaded on a server that does not review
+  // photos (services/trustedContributions): nobody decided anything to tell.
+  if (notify) {
+    createNotification(
+      image.uploadedBy,
+      'image_approved',
+      'Image approved',
+      `Your image for ${wineLabel} has been approved.`,
+      null
+    );
+  }
 
   logAudit(req, 'admin.image.approve',
     { type: 'image', id: image._id },

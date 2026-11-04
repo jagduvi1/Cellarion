@@ -43,6 +43,7 @@ import './CellarDetail.css';
 import './BottleDetail.css';
 import './CellarVintage.css';
 import { formatVintage } from '../utils/vintage';
+import { useContributionReviewed } from '../utils/contributionReview';
 
 const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
 const AddToPickListModal = lazy(() => import('../components/AddToPickListModal'));
@@ -80,6 +81,7 @@ const safeDecode = (s) => {
  */
 function CellarVintage() {
   const { t, i18n } = useTranslation();
+  const reviewed = useContributionReviewed();
   const { id, wineId, vintage: vintageParam } = useParams();
   const { apiFetch, user } = useAuth();
   // Blocks the member folded away, remembered on the account (beta feedback
@@ -945,7 +947,9 @@ function CellarVintage() {
               onUploadComplete={refreshPhotos}
               onProcessingComplete={refreshPhotos}
             />
-            <p className="cvb-photo-hint">{t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}</p>
+            <p className="cvb-photo-hint">{reviewed
+            ? t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')
+            : t('bottleDetail.imageNoticeUnreviewed', 'Photos are added to the wine registry as soon as you upload them, where everyone on this server can see them.')}</p>
             <div className="modal-actions">
               <button type="button" className="btn btn-primary" onClick={closePhoto}>{t('common.done', 'Done')}</button>
             </div>

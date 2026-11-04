@@ -10,6 +10,7 @@ import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import './PersonalDataCard.css';
 import { formatVintage } from '../../utils/vintage';
 import { matchKeyByName, normaliseKeyName } from '../../utils/registryKeyName';
+import { useContributionReviewed } from '../../utils/contributionReview';
 
 /**
  * Personal typed key/value data on this bottle and its wine (issue #986).
@@ -96,7 +97,9 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
   const [promoteReason, setPromoteReason] = useState('');
   const [promoteBusy, setPromoteBusy] = useState(false);
   const [promoteError, setPromoteError] = useState(null);
-  const [promoteDone, setPromoteDone] = useState(null); // 'value' | 'key'
+  const [promoteDone, setPromoteDone] = useState(null); // 'value' | 'key' | 'live'
+  // A server that does not review: an offer goes live as it is made.
+  const reviewed = useContributionReviewed();
   const [promoteScope, setPromoteScope] = useState('vintage'); // 'vintage' | 'wine'
   // The wine record's public fields (the accepted vocabulary, translations
   // included, with this vintage's values): a figure typed here under a public
@@ -390,7 +393,8 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
           ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
         });
         if (res.ok) {
-          setPromoteDone('value');
+          const done = await res.json().catch(() => ({}));
+          setPromoteDone(done.applied ? 'live' : 'value');
           setPromote(null);
           loadPublic({ force: true });
         } else {
@@ -411,12 +415,12 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
         ...(promote.vintage ? { vintage: promote.vintage } : {}),
         ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
       });
+      const body = await res.json().catch(() => ({}));
       if (res.ok) {
-        setPromoteDone('value');
+        setPromoteDone(body.applied ? 'live' : 'value');
         setPromote(null);
         return;
       }
-      const body = await res.json().catch(() => ({}));
       if (res.status === 404) {
         const kres = await proposeRegistryKey(apiFetch, {
           name: promote.key.name,
@@ -426,7 +430,20 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
           rationale: promoteReason.trim(),
         });
         const kbody = await kres.json().catch(() => ({}));
-        if (kres.ok) {
+        if (kres.ok && kbody.applied && kbody.key?._id) {
+          // Accepted at once (a server that does not review): the value
+          // follows now instead of after a curator's decision.
+          const vres = await suggestWineValue(apiFetch, wineId, {
+            keyId: kbody.key._id,
+            value: promote.value,
+            ...(promote.vintage ? { vintage: promote.vintage } : {}),
+            ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
+          });
+          const vbody = await vres.json().catch(() => ({}));
+          setPromoteDone(vres.ok && vbody.applied ? 'live' : 'key');
+          setPromote(null);
+          loadPublic({ force: true });
+        } else if (kres.ok) {
           setPromoteDone('key');
           setPromote(null);
         } else {
@@ -475,7 +492,9 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
       <button
         type="button"
         className={share ? 'btn btn-small btn-primary' : 'btn btn-small'}
-        title={t('personalData.promoteTitle', 'Offer this to the shared registry — a curator reviews it first')}
+        title={reviewed
+          ? t('personalData.promoteTitle', 'Offer this to the shared registry — a curator reviews it first')
+          : t('personalData.promoteTitleUnreviewed', 'Add this to the shared wine record')}
         onClick={() => openPromote(entry)}
       >
         {share
@@ -574,7 +593,9 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
 
       {promoteDone && (
         <p role="status" style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', fontWeight: 600 }}>
-          {promoteDone === 'value'
+          {promoteDone === 'live'
+            ? t('personalData.promotedLive', 'Added to the wine record — everyone on this server sees it now.')
+            : promoteDone === 'value'
             ? t('personalData.promotedValue', 'Thank you — your value is in the registry review queue.')
             : t('personalData.promotedKey', 'Thank you — the field itself was proposed first; once a curator accepts it, values can follow.')}
         </p>
@@ -598,7 +619,9 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
               </p>
             ) : (
               <p style={{ margin: '0 0 0.6rem', fontSize: '0.85rem' }}>
-                {t('personalData.promoteIntro', 'Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.', { key: promote.key.name, value: String(promote.value) })}
+                {reviewed
+                  ? t('personalData.promoteIntro', 'Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.', { key: promote.key.name, value: String(promote.value) })
+                  : t('personalData.promoteIntroUnreviewed', 'Add “{{key}}: {{value}}” to the shared wine record, where everyone on this server sees it. If the field doesn’t exist yet, it is added too.', { key: promote.key.name, value: String(promote.value) })}
                 {' '}
                 {promote.vintage
                   ? t('personalData.promoteScopeVintage', 'It will apply to the {{year}} vintage only.', { year: formatVintage(promote.vintage, t) })
