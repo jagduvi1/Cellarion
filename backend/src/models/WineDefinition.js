@@ -754,8 +754,10 @@ wineDefinitionSchema.pre('validate', async function() {
   let t = this.labelSweetness;
   // A PARTIAL load (a script's select list without the field) reads the ref
   // as undefined, and the keys below would lose their suffix on save. Read
-  // it: one small query, only for a saved row loaded without the field.
-  if (!this.isNew && !this.isSelected('labelSweetness')) {
+  // it: one small query, only for a saved row loaded without the field — and
+  // not when the caller SET the field on that doc: isSelected stays false
+  // after an in-memory set, and the value just set is the one to key on.
+  if (!this.isNew && !this.isSelected('labelSweetness') && !this.isModified('labelSweetness')) {
     const row = await this.constructor.findById(this._id).select('labelSweetness').lean();
     t = row ? row.labelSweetness : null;
   }

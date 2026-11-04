@@ -146,6 +146,29 @@ describe('a PARTIAL load — a script\'s select list without the field', () => {
     await doc.validate();
     expect(read).not.toHaveBeenCalled();
   });
+
+  test('a term SET in memory on a partial load wins: the stored field is not read, the set word keys', async () => {
+    const doc = partial();
+    const read = jest.spyOn(WineDefinition, 'findById');
+    termNamed('halbtrocken');
+    doc.labelSweetness = oid(); // what a writer that loaded a projection and then set the term does
+    await doc.validate();
+    expect(read).not.toHaveBeenCalled();
+    expect(doc.normalizedKey).toBe(generateWineKey('Riesling Kabinett', 'Weingut Keller', 'Rheinhessen', { sweetness: 'halbtrocken' }));
+    expect(doc.canonicalKey).toBe(computeCanonicalKey('Riesling Kabinett', 'Weingut Keller', 'Rheinhessen', { sweetness: 'halbtrocken' }));
+  });
+
+  test('a term CLEARED in memory on a partial load wins too: bare keys, no read', async () => {
+    const doc = partial();
+    const read = jest.spyOn(WineDefinition, 'findById');
+    const term = jest.spyOn(SweetnessTerm, 'findById');
+    doc.labelSweetness = null;
+    await doc.validate();
+    expect(read).not.toHaveBeenCalled();
+    expect(term).not.toHaveBeenCalled();
+    expect(doc.normalizedKey).toBe(BARE);
+    expect(doc.canonicalKey).toBe(computeCanonicalKey('Riesling Kabinett', 'Weingut Keller', 'Rheinhessen'));
+  });
 });
 
 describe('the slug stays where the word moved', () => {

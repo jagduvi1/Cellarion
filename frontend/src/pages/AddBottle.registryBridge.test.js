@@ -111,4 +111,17 @@ describe('AddBottle — shared-registry results (Registry Bridge)', () => {
     expect(screen.getByText('addBottle.registryResults')).toBeInTheDocument();
     expect(screen.queryByText('addBottle.changeWine')).toBeNull();
   });
+
+  // A 409 `conflict` is the one failure with a sentence worth showing: a local
+  // row already holds this registry wine under another identity, and only the
+  // server knows which. The generic line would hide the one useful fact.
+  test('a 409 conflict shows the server\'s sentence instead of the generic line', async () => {
+    searchWines.mockResolvedValue(jsonRes({ wines: [], registryWines: [REGISTRY_ROW] }));
+    adoptRegistryWine.mockResolvedValue(jsonRes({ error: 'Another local wine already holds this registry wine', code: 'conflict' }, false, 409));
+    await search();
+    await act(async () => { fireEvent.click(await screen.findByText('Salmos')); });
+    expect(await screen.findByText('Another local wine already holds this registry wine')).toBeInTheDocument();
+    expect(screen.queryByText('addBottle.registryAdoptFailed')).toBeNull();
+    expect(screen.queryByText('addBottle.changeWine')).toBeNull();
+  });
 });

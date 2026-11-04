@@ -85,7 +85,7 @@ async function planItem(item, userId, roles) {
     // add_bottle: own pending row yes, a stranger's no. planItem is the
     // preview AND the plan the commit executes, so gating here gates both.
     const wine = await findVisibleWine(item.wine_id, {
-      userId, roles, populate: ['country', 'region', 'grapes'],
+      userId, roles, populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }],
     });
     if (!wine) return { status: 'invalid', error: `no registry wine ${item.wine_id}` };
     return { status: 'ready', wine_id: String(wine._id), wine: wineSummary(wine, { termLoaded: true }) };

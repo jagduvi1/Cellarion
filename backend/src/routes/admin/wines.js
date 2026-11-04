@@ -1849,8 +1849,12 @@ router.post('/:id/strip-producer', async (req, res) => {
     const nameTwins = await WineDefinition.find({
       _id: { $ne: wine._id },
       name: new RegExp(`^${escapeRegex(stripped)}$`, 'i'),
-    }).select('name producer').limit(10).lean();
-    const conflict = nameTwins.find(t => producerKey && normalizeProducerKey(t.producer) === producerKey);
+    }).select('name producer labelSweetness').limit(10).lean();
+    // Same producer AND the same label sweetness term (term-or-none, by row):
+    // a termed wine and its untermed twin — or two different terms — are two
+    // wines, not a pair the admin should merge. No wildcard here.
+    const sameTerm = (t) => String(t.labelSweetness || '') === String(wine.labelSweetness || '');
+    const conflict = nameTwins.find(t => producerKey && normalizeProducerKey(t.producer) === producerKey && sameTerm(t));
     if (conflict) {
       return res.status(409).json({
         error: `"${conflict.name}" by ${conflict.producer} already exists — merge these via the duplicates tool instead.`,

@@ -393,7 +393,7 @@ describe('buildInventory — what is loaded', () => {
       { path: 'country', select: 'name' },
       { path: 'region', select: 'name' },
       { path: 'grapes', select: 'name regionalNames' },
-      { path: 'labelSweetness', select: 'name band scale regulated' },
+      { path: 'labelSweetness', select: 'name band scale regulated -_id' },
     ]);
   });
 

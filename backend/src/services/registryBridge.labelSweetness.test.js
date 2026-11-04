@@ -137,6 +137,41 @@ describe('adoptWine', () => {
     expect(WineDefinition).not.toHaveBeenCalled();
   });
 
+  // The race: two adoptions mint the same key at once, the second save fails
+  // E11000 and takes the row the first wrote. That row is taken ONLY under the
+  // probe's own rule — never one linked to another registry wine.
+  const raceInto = (existing) => {
+    WineDefinition.mockImplementationOnce(function (doc) {
+      Object.assign(this, doc);
+      this._id = 'new1';
+      this.save = jest.fn().mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 }));
+      this.populate = jest.fn().mockResolvedValue(this);
+    });
+    WineDefinition.findOne
+      .mockReturnValueOnce(lookup(null))      // by registryId: not held
+      .mockReturnValueOnce(lookup(null))      // the key: nothing yet
+      .mockReturnValueOnce(lookup(existing)); // after E11000: the row the other writer minted
+  };
+
+  test('a row minted concurrently under the same key but linked to a DIFFERENT registry wine is never re-pointed: conflict', async () => {
+    const other = { _id: 'x1', name: 'Riesling Spätlese', registryId: 'c'.repeat(24), save: jest.fn(), populate: jest.fn() };
+    raceInto(other);
+    client.fetchWine.mockResolvedValue(registryWine());
+    expect(await bridge.adoptWine(RID, USER)).toEqual({ ok: false, code: 'conflict' });
+    expect(other.save).not.toHaveBeenCalled();
+    expect(other.registryId).toBe('c'.repeat(24));
+  });
+
+  test('the same race onto an UNLINKED row links that row', async () => {
+    const unlinked = { _id: 'x2', name: 'Riesling Spätlese', registryId: null, save: jest.fn().mockResolvedValue(undefined), populate: jest.fn().mockResolvedValue(undefined) };
+    raceInto(unlinked);
+    client.fetchWine.mockResolvedValue(registryWine());
+    const r = await bridge.adoptWine(RID, USER);
+    expect(r.wine).toBe(unlinked);
+    expect(unlinked.registryId).toBe(RID);
+    expect(unlinked.save).toHaveBeenCalledTimes(1);
+  });
+
   test('the same word on a Sekt resolves on the sparkling scale (the type decides when the registry sends only the word)', async () => {
     client.fetchWine.mockResolvedValue(registryWine({ type: 'sparkling', labelSweetness: 'Trocken' }));
     await bridge.adoptWine(RID, USER);

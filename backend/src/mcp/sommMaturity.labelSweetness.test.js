@@ -45,7 +45,7 @@ jest.mock('../models/Grape', () => {
   ctor.find = jest.fn();
   return ctor;
 });
-// list_held_profiles flags rows with an open owner inquiry (somm 6a872b98).
+// list_held_profiles flags rows with an open owner inquiry; none open here.
 // Default: none open — individual tests override to assert the flag.
 jest.mock('../models/WineOwnerInquiry', () => ({
   find: jest.fn(() => ({ select: () => ({ lean: () => Promise.resolve([]) }) })),

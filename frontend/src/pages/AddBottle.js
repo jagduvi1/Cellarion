@@ -825,11 +825,15 @@ function AddBottle() {
     try {
       const res = await adoptRegistryWine(apiFetch, item.registryId);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.wine) throw new Error(data.error || 'adopt failed');
+      if (!res.ok || !data.wine) throw Object.assign(new Error(data.error || 'adopt failed'), { code: data.code });
       setRegistryWines(prev => prev.filter(r => r.registryId !== item.registryId));
       handleSelectWine(data.wine);
-    } catch {
-      setAiSearchError(t('addBottle.registryAdoptFailed', 'The shared registry could not be reached. Try again in a minute, or add the wine by hand.'));
+    } catch (err) {
+      // A conflict is not "try again": a wine with this identity here is already
+      // linked to another registry wine, and the server says what to do.
+      setAiSearchError(err?.code === 'conflict' && err.message
+        ? err.message
+        : t('addBottle.registryAdoptFailed', 'The shared registry could not be reached. Try again in a minute, or add the wine by hand.'));
     } finally {
       setAdoptingId(null);
     }

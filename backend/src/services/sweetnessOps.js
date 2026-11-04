@@ -177,6 +177,23 @@ function termNameOf(wd) {
 }
 
 /**
+ * The same, for a caller that may do I/O and holds an unpopulated ref: the
+ * populated row's or the warm copy's name at once, else one load of the term
+ * table. For the key a writer builds beside the hook (a reserved key in a
+ * rename plan, a clash check) — never a bare key over a termed wine.
+ */
+async function termNameForWine(wd) {
+  const row = termRowOf(wd);
+  if (row && row !== 'unresolved') return row.name;
+  if (row !== 'unresolved') return null;
+  const t = wd.labelSweetness;
+  const id = typeof t === 'string' ? t : (t && typeof t.toString === 'function' ? t.toString() : '');
+  if (!ID_RX.test(id)) return null;
+  const terms = await loadTerms();
+  return terms.byId.get(id)?.name || null;
+}
+
+/**
  * The name as the label reads: the name, then the term — unless the name
  * already carries the word (a wine marked sweetnessInName, "Brut Premier").
  * Every TEXT surface (MCP summaries, exports, the Bridge to an older server,
@@ -269,6 +286,6 @@ module.exports = {
   SCALES, BANDS, scaleForType,
   loadTerms, invalidateSweetnessCache, primeSweetnessCache, cachedTerm, cachedTermName,
   resolveTerm, resolveLoaded, pickTerm,
-  termOut, termRowOf, labelSweetnessOut, labelSweetnessFields, termNameOf, wineDisplayName,
+  termOut, termRowOf, labelSweetnessOut, labelSweetnessFields, termNameOf, termNameForWine, wineDisplayName,
   seedSweetnessTerms, ensureSweetnessSeed,
 };

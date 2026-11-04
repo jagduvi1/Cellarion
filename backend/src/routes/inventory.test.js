@@ -212,6 +212,8 @@ function project(doc, select, coll) {
   loads.push([coll, select]);
   const out = { _id: doc._id };
   for (const p of select.split(/\s+/).filter(Boolean)) {
+    // The one exclusion Mongo allows beside an inclusion list: leaving the id out.
+    if (p === '-_id') { delete out._id; continue; }
     if (p.startsWith('-')) throw new Error(`the stand-in supports inclusion projections only (${coll}: ${p})`);
     pick(doc, p.split('.'), out);
   }

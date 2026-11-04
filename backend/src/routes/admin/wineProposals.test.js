@@ -803,6 +803,32 @@ describe('producer spelling splits', () => {
     expect((await res.json()).appliedNote).toMatch(/1 other wine renamed to "Château Lagrézette"/);
   });
 
+  // The corrected wine's own key is reserved so no sibling is renamed onto it.
+  // A termed wine's key carries its term's word (the hook appends it at the
+  // save): a bare reserved key would reserve a key nobody holds.
+  test('the reserved key of a TERMED wine carries its term', async () => {
+    const { primeSweetnessCache } = require('../../services/sweetnessOps');
+    const SW = 'e'.repeat(24);
+    primeSweetnessCache([{ _id: SW, name: 'trocken', scale: 'still', band: 'dry', country: null, synonyms: [] }]);
+    try {
+      claim(proposal());
+      const wine = { ...wineDoc(), labelSweetness: SW };
+      WineDefinition.findById.mockResolvedValue(wine);
+      otherProducerSpellings.mockResolvedValue(OTHERS);
+      planProducerRename.mockResolvedValue({ wines: [], clashes: [], tooMany: 0 });
+
+      const res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll', renameSpellings: ['Chateau Lagrezette'] });
+      expect(res.status).toBe(200);
+      expect(planProducerRename).toHaveBeenCalledWith(['Chateau Lagrezette'], 'Château Lagrézette', 'c1', {
+        excludeWineId: W1,
+        reservedKeys: [generateWineKey('Le Pigeonnier', 'Château Lagrézette', 'Cahors', { sweetness: 'trocken' })],
+      });
+      expect(planProducerRename.mock.calls[0][3].reservedKeys[0]).not.toBe(generateWineKey('Le Pigeonnier', 'Château Lagrézette', 'Cahors'));
+    } finally {
+      primeSweetnessCache(null);
+    }
+  });
+
   test('a rename has to name its spellings — and only listed ones', async () => {
     let res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll' });
     expect(res.status).toBe(400);

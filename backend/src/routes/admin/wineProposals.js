@@ -49,6 +49,7 @@ const { WINE_TYPES, resolveGrapeIdsStrict } = require('../../services/wineProfil
 const { WINE_COLOURS, isStyleType } = require('../../utils/wineColour');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { otherProducerSpellings, planProducerRename, displaySpelling } = require('../../services/producerSpelling');
+const { termNameForWine } = require('../../services/sweetnessOps');
 const { performWineMerge } = require('./wines');
 const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName, resolveGrapeName, normalizeClassification } = require('../../utils/normalize');
 const { assignClassification } = require('../../services/classificationOps');
@@ -540,7 +541,10 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
               }
               renamePlan = await planProducerRename(producerSpelling.spellings, proposed, wine.country, {
                 excludeWineId: wine._id,
-                reservedKeys: [generateWineKey(wine.name, proposed, wine.appellation)],
+                // The corrected wine's own new key, term included: the plan's
+                // keys carry the term too, so a termed sibling clash is seen
+                // and an untermed twin is not a false one.
+                reservedKeys: [generateWineKey(wine.name, proposed, wine.appellation, { sweetness: await termNameForWine(wine) })],
               });
               if (renamePlan.tooMany) {
                 await revertClaim();

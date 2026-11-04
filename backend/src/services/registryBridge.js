@@ -360,7 +360,9 @@ function indexLocally(wineId) {
 
 /**
  * Copy a registry wine into this install. Returns { ok, wine, created } or
- * { ok: false, code } with code ∈ disabled | invalid | not_found | unavailable.
+ * { ok: false, code } with code ∈ disabled | invalid | not_found | unavailable
+ * | conflict (a local row with this identity is already linked to a
+ * DIFFERENT registry wine — never re-pointed; a person merges or corrects).
  * A local wine typed before the bridge existed, with the same dedup key, is
  * LINKED rather than duplicated: blanks are filled, a locally curated
  * profile is kept.
@@ -428,9 +430,11 @@ async function adoptWine(registryId, userId) {
       await wine.save();
     } catch (err) {
       if (err && err.code === 11000) {
-        // Minted concurrently under the same key: take that row instead.
+        // Minted concurrently under the same key: take that row instead —
+        // unless it is linked to ANOTHER registry wine, the same rule as above.
         wine = await WineDefinition.findOne({ normalizedKey });
         if (!wine) throw err;
+        if (wine.registryId && String(wine.registryId) !== String(w.id)) return { ok: false, code: 'conflict' };
         if (!wine.registryId) { wine.registryId = String(w.id); wine.registrySyncedAt = now; await wine.save(); }
       } else {
         throw err;

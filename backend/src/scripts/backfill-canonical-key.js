@@ -14,20 +14,27 @@
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
+const { loadTerms } = require('../services/sweetnessOps');
 
 (async () => {
   const apply = process.argv.includes('--apply');
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
 
   const wines = await WineDefinition.find({})
-    .select('name producer appellation canonicalKey')
+    .select('name producer appellation canonicalKey labelSweetness')
     .lean();
+  // A termed wine's key carries the term's word (utils/normalize
+  // SWEETNESS_KEY_MARK), as the save hook builds it: without it every termed
+  // wine would disagree with its own normalizedKey, and a termed wine and its
+  // untermed twin would read as one collision set.
+  const terms = await loadTerms();
+  const sweetnessOf = (w) => (w.labelSweetness ? (terms.byId.get(String(w.labelSweetness))?.name || null) : null);
 
   const groups = new Map();
   const ops = [];
   let unchanged = 0;
   for (const w of wines) {
-    const key = computeCanonicalKey(w.name, w.producer, w.appellation);
+    const key = computeCanonicalKey(w.name, w.producer, w.appellation, { sweetness: sweetnessOf(w) });
     let group = groups.get(key);
     if (!group) { group = []; groups.set(key, group); }
     group.push(w);

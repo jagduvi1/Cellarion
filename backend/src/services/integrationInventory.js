@@ -79,7 +79,7 @@ const INVENTORY_WINE_POPULATE = [
       { path: 'region', select: 'name' },
       // regionalNames: the display name on this wine's label (utils/grapeDisplay).
       { path: 'grapes', select: 'name regionalNames' },
-      { path: 'labelSweetness', select: 'name band scale regulated' },
+      { path: 'labelSweetness', select: 'name band scale regulated -_id' },
     ],
   },
   { path: 'pendingWineRequest', select: 'wineName producer' },
