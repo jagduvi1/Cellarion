@@ -35,6 +35,37 @@ router.post('/keys/:id/decide', async (req, res, next) => {
 });
 
 /**
+ * PATCH /api/admin/registry-data/keys/:id  { type?, unit?, enumOptions? }
+ * Redefine a live key. Its values are stored in the new form, or — when one
+ * does not fit — nothing changes and the 409 names the values to correct.
+ */
+router.patch('/keys/:id', async (req, res, next) => {
+  try {
+    const { type, unit, enumOptions } = req.body || {};
+    const result = await ops.updateKey(req.user.id, req.params.id, { type, unit, enumOptions }, { req });
+    if (!result.ok) return sendFail(res, result);
+    res.json({ key: result.key, converted: result.converted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/admin/registry-data/keys/:id[?removeValues=true]
+ * Take an accepted key out of the vocabulary. A key that holds values is a
+ * 409 saying how many, unless removeValues=true takes them off with it.
+ */
+router.delete('/keys/:id', async (req, res, next) => {
+  try {
+    const result = await ops.removeKey(req.user.id, req.params.id, { removeValues: req.query.removeValues === 'true', req });
+    if (!result.ok) return sendFail(res, result);
+    res.json({ key: result.key, removed: result.removed });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/admin/registry-data/values/:id/decide
  *   { decision: publish|reject, rejectReason?, asWineDefault? }
  * asWineDefault publishes a vintage-specific suggestion as the wine-wide
