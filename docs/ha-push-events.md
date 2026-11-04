@@ -359,7 +359,13 @@ first, like §1.
 - **`include=consumed`** (2026-11-04): also the
   bottles that left those cellars (drunk, gifted, sold, other), in the same
   shape, so a client keeps its archive and its stock in one document and
-  filters on `status`. On-order bottles stay out. Without the parameter the
+  filters on `status`. On-order bottles stay out. The bottles that left come
+  **newest finished first, at most `CONSUMED_LIMIT` (10,000 — the app's own
+  history cap)**, after the stock; the answer then also carries
+  `consumedTotal` (how many left in all) and `consumedTruncated` (true when it
+  holds fewer). Clients read the flag, never the number, which may change; a
+  cursor for the older ones can be added later without breaking anyone.
+  Without the parameter the
   answer is unchanged: every bottle carries `status: "active"` and
   `consumed: null`. A comma list and repeated parameters are accepted; an
   unknown value is a `400`, never silently the default document. Each

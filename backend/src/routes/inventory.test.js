@@ -40,7 +40,7 @@ jest.mock('../models/ApiToken', () => {
 });
 jest.mock('../models/User', () => ({ findById: jest.fn(), find: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/Rack', () => ({ find: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
@@ -242,13 +242,15 @@ function fakeFind(coll, docs) {
   return (query = {}) => {
     const rows = docs.filter((d) => matches(d, query));
     let select = null;
+    let limit = Infinity;
     const pops = [];
     const q = {
       select: (s) => { select = s; return q; },
       populate: (spec, s2) => { pops.push([spec, s2]); return q; },
       sort: () => q,
+      limit: (n) => { limit = n; return q; },
       lean: async () => {
-        let out = rows.map((r) => project(structuredClone(r), select, coll));
+        let out = rows.slice(0, limit).map((r) => project(structuredClone(r), select, coll));
         for (const [spec, s2] of pops) out = populate(out, spec, s2);
         return out;
       },
@@ -291,6 +293,7 @@ beforeEach(() => {
   User.find.mockImplementation(fakeFind('users', USERS));
   Cellar.find.mockImplementation(fakeFind('cellars', CELLARS));
   Bottle.find.mockImplementation(fakeFind('bottles', BOTTLES));
+  Bottle.countDocuments.mockImplementation(async (query) => BOTTLES.filter((d) => matches(d, query)).length);
   Rack.find.mockImplementation(fakeFind('racks', RACKS));
   WineDefinition.find.mockImplementation(fakeFind('wines', WINES));
   WineVintageProfile.find.mockImplementation(fakeFind('profiles', PROFILES));
@@ -418,6 +421,9 @@ describe('a read token gets the inventory', () => {
   test('include=consumed adds the bottles that left, in the same shape; on order stays out', async () => {
     const body = await (await get(READ, {}, '?include=consumed')).json();
     expect(body.bottles.map((b) => b.id).sort()).toEqual([B(1), B(2), B(4), B(7)].sort());
+    // How many left in all, and that this answer holds them all; only with the parameter.
+    expect(Object.keys(body)).toEqual(['schema', 'generatedAt', 'cellars', 'racks', 'wines', 'bottles', 'consumedTotal', 'consumedTruncated']);
+    expect(body).toMatchObject({ consumedTotal: 1, consumedTruncated: false });
     const b2 = body.bottles.find((b) => b.id === B(2));
     expect(b2).toMatchObject({
       id: B(2), wine: W1, cellar: C_OWN, status: 'drank', vintage: '2016', maturity: null, location: null,

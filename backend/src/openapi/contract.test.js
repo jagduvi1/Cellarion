@@ -191,6 +191,9 @@ describeWithMongo('public API contract', () => {
       status: 'drank', maturity: null, location: null, consumed: { at: expect.any(String) },
     });
     expect(first.body.bottles.every((x) => x.status === 'active' && x.consumed === null)).toBe(true);
+    expect(first.body).not.toHaveProperty('consumedTotal');
+    const leftCount = all.body.bottles.filter((x) => x.status !== 'active').length;
+    expect(all.body).toMatchObject({ consumedTotal: leftCount, consumedTruncated: false });
     await expectContract('getInventory', 400, { token: 'read', query: '?include=everything' });
   });
 

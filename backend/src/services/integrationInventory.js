@@ -35,7 +35,7 @@ const { classifyMaturity, buildProfileMap, resolveEffectiveWindow } = require('.
 const { decorateGrapes } = require('../utils/grapeDisplay');
 const { slotLocation } = require('../utils/rackGeometry');
 const { thumbPath } = require('../utils/thumbPath');
-const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const { snapshotTag } = require('./offlineSnapshot');
 const { listForBottles } = require('./personalData');
 
@@ -47,6 +47,12 @@ const PROFILE_LIST_MAX = 12;
 // What ?include= may name. Each value adds bottles; none changes a field of a
 // bottle that is still in the cellar.
 const INCLUDE_VALUES = ['consumed'];
+// The most bottles that left which one answer carries, newest first — the
+// same cap as the app's own history list (routes/cellars). A stock is bounded
+// by a cellar, a drinking history is not. The answer says how many there are
+// and whether some were left out (consumedTotal / consumedTruncated); the
+// number may change, so clients read the flag, never this constant.
+const CONSUMED_LIMIT = 10000;
 
 // What each query loads — and therefore all it CAN return.
 const CELLAR_SELECT = 'name user members.user members.role';
@@ -201,9 +207,11 @@ function windowOf(b, profileMap) {
  *  profiles  Map wine id → aiProfile (the descriptors read)
  *  personal  Map bottle id → personal entries (personalData.listForBottles)
  *  profileMap  the reviewed drink-window profiles (maturityUtils.buildProfileMap)
+ *  consumedSummary  { total, truncated } for include=consumed, else null
  */
 function assembleInventory({
   userId, cellars, racks, bottles, profiles = new Map(), personal = new Map(), profileMap = new Map(), now = new Date(),
+  consumedSummary = null,
 }) {
   const cellarIds = new Set(cellars.map((c) => String(c._id)));
 
@@ -275,6 +283,8 @@ function assembleInventory({
     racks: outRacks,
     wines,
     bottles: outBottles,
+    // Only with include=consumed: how many bottles left, and whether this answer holds them all.
+    ...(consumedSummary ? { consumedTotal: consumedSummary.total, consumedTruncated: consumedSummary.truncated } : {}),
   };
 }
 
@@ -301,16 +311,35 @@ async function buildInventory(userId, { attachBottleImageUrls, include = [] }) {
     .sort({ createdAt: -1 })
     .lean();
   const ids = cellars.map((c) => c._id);
-  if (ids.length === 0) return assembleInventory({ userId, cellars, racks: [], bottles: [] });
+  const noneLeft = withConsumed ? { total: 0, truncated: false } : null;
+  if (ids.length === 0) return assembleInventory({ userId, cellars, racks: [], bottles: [], consumedSummary: noneLeft });
 
-  const [bottles, racks] = await Promise.all([
-    Bottle.find({ cellar: { $in: ids }, status: { $nin: withConsumed ? [ORDERED_STATUS] : NOT_IN_CELLAR_STATUSES } })
-      .select(withConsumed ? `${BOTTLE_SELECT} ${CONSUMED_SELECT}` : BOTTLE_SELECT)
+  // The bottles that left: their own query, newest finished first, capped —
+  // plus their count, so the answer can say when it holds fewer than all.
+  const consumedFilter = { cellar: { $in: ids }, status: { $in: CONSUMED_STATUSES } };
+  const [stock, racks, left, leftTotal] = await Promise.all([
+    Bottle.find({ cellar: { $in: ids }, status: { $nin: NOT_IN_CELLAR_STATUSES } })
+      .select(BOTTLE_SELECT)
       .populate(INVENTORY_WINE_POPULATE)
       .sort({ createdAt: -1 })
       .lean(),
     Rack.find({ cellar: { $in: ids }, deletedAt: null }).select(RACK_SELECT).sort({ createdAt: 1 }).lean(),
+    withConsumed
+      ? Bottle.find(consumedFilter)
+        .select(`${BOTTLE_SELECT} ${CONSUMED_SELECT}`)
+        .populate(INVENTORY_WINE_POPULATE)
+        .sort({ consumedAt: -1, _id: -1 })
+        .limit(CONSUMED_LIMIT)
+        .lean()
+      : [],
+    withConsumed ? Bottle.countDocuments(consumedFilter) : 0,
   ]);
+  const bottles = left.length ? [...stock, ...left] : stock;
+  // Truncated only when the cap was reached: a bottle finished between the
+  // two queries must not flag a complete answer as cut short.
+  const consumedSummary = withConsumed
+    ? { total: Math.max(leftTotal, left.length), truncated: left.length >= CONSUMED_LIMIT && leftTotal > left.length }
+    : null;
 
   const wineIds = [...new Set(bottles.map((b) => idOf(b.wineDefinition)).filter(Boolean))];
   const [profiles, profileMap, personal, withImages] = await Promise.all([
@@ -320,7 +349,7 @@ async function buildInventory(userId, { attachBottleImageUrls, include = [] }) {
     attachBottleImageUrls(bottles, userId),
   ]);
 
-  return assembleInventory({ userId, cellars, racks, bottles: withImages, profiles, personal, profileMap });
+  return assembleInventory({ userId, cellars, racks, bottles: withImages, profiles, personal, profileMap, consumedSummary });
 }
 
 module.exports = {
@@ -332,6 +361,7 @@ module.exports = {
   INVENTORY_SCHEMA,
   INVENTORY_TAG_SALT,
   INCLUDE_VALUES,
+  CONSUMED_LIMIT,
   INVENTORY_WINE_POPULATE,
   BOTTLE_SELECT,
   CONSUMED_SELECT,
