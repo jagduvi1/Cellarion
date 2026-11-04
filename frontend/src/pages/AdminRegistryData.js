@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import {
   getRegistryDataQueues, decideRegistryKey, decideRegistryValue,
-  getRegistryKeys, setRegistryKeyTranslations,
+  getRegistryKeys, setRegistryKeyTranslations, updateRegistryKey, removeRegistryKey,
 } from '../api/registryData';
 import { LANGUAGE_OPTIONS, baseCode } from '../config/locales';
 import ContributionReviewSwitch from '../components/ContributionReviewSwitch';
@@ -15,6 +15,78 @@ import './AdminRegistryData.css';
 const TRANSLATABLE = LANGUAGE_OPTIONS
   .map((l) => ({ code: baseCode(l.code), label: l.label }))
   .filter((l, i, all) => l.code !== 'en' && all.findIndex((o) => o.code === l.code) === i);
+
+const KEY_TYPES = ['text', 'integer', 'decimal', 'boolean', 'date', 'enum'];
+const NUMERIC = ['integer', 'decimal'];
+
+/**
+ * Redefine one key: its type, its unit (numbers) or its allowed values (a
+ * list). The name stays — it is the identifier. The server reads every value
+ * the key holds again under the new definition and refuses, naming them,
+ * when one would not fit (discussion #1778: ABV made as text had no way back).
+ */
+function KeyDefinitionEditor({ k, onSaved, onCancel }) {
+  const { apiFetch } = useAuth();
+  const [type, setType] = useState(k.type);
+  const [unit, setUnit] = useState(k.unit || '');
+  const [options, setOptions] = useState((k.enumOptions || []).join('\n'));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await updateRegistryKey(apiFetch, k._id, {
+        type,
+        ...(NUMERIC.includes(type) ? { unit: unit.trim() } : {}),
+        ...(type === 'enum' ? { enumOptions: options.split('\n').map((o) => o.trim()).filter(Boolean) } : {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return setError(data.error || 'Saving the field failed');
+      onSaved(data.key, data.converted || 0);
+    } catch {
+      setError('Network error.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="ard-definition" onSubmit={save}>
+      <label>
+        Type
+        <select value={type} onChange={(e) => setType(e.target.value)} aria-label={`Type of ${k.name}`}>
+          {KEY_TYPES.map((ty) => <option key={ty} value={ty}>{ty}</option>)}
+        </select>
+      </label>
+      {NUMERIC.includes(type) && (
+        <label>
+          Unit
+          <input type="text" maxLength={20} value={unit} placeholder="none"
+            aria-label={`Unit of ${k.name}`} onChange={(e) => setUnit(e.target.value)} />
+        </label>
+      )}
+      {type === 'enum' && (
+        <label>
+          Allowed values, one per line
+          <textarea rows={4} value={options} aria-label={`Allowed values of ${k.name}`}
+            onChange={(e) => setOptions(e.target.value)} />
+        </label>
+      )}
+      <p className="ard-intro">
+        Values already on wines are converted to the new type. If one does not fit, nothing changes and you are
+        told which to correct first.
+      </p>
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+      <div className="ard-actions">
+        <button type="submit" className="btn btn-small btn-primary" disabled={busy}>Save field</button>
+        <button type="button" className="btn btn-small" disabled={busy} onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
 
 /**
  * Review the public data vocabulary (#985 Slice B): user-proposed KEYS join
@@ -30,6 +102,8 @@ function AdminRegistryData() {
   const [vocab, setVocab] = useState([]);
   const [drafts, setDrafts] = useState({});   // keyId → { lang: text }
   const [saved, setSaved] = useState(null);   // keyId just saved, for the tick
+  const [editing, setEditing] = useState(null); // keyId whose definition is open
+  const [redefined, setRedefined] = useState(null); // { id, converted } after a save
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -91,6 +165,52 @@ function AdminRegistryData() {
 
   useEffect(() => { load(); }, [load]);
 
+  // A redefined key replaces itself in whichever list it sits in.
+  const keyRedefined = (key, converted) => {
+    const merge = (list) => list.map((x) => (x._id === key._id ? { ...x, ...key } : x));
+    setKeys(merge);
+    setVocab(merge);
+    setEditing(null);
+    setRedefined({ id: key._id, converted });
+  };
+
+  // Take an accepted key out of the vocabulary. A key that holds values is
+  // refused with how many; removing it anyway takes them off the wines too.
+  const removeKey = async (k) => {
+    if (!window.confirm(`Remove "${k.name}" from the vocabulary? Its name becomes free for a new field.`)) return;
+    setBusy(k._id);
+    setError(null);
+    try {
+      let res = await removeRegistryKey(apiFetch, k._id);
+      let data = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        if (!window.confirm(`${data.error}\n\nRemove the field and its values?`)) return;
+        res = await removeRegistryKey(apiFetch, k._id, { removeValues: true });
+        data = await res.json().catch(() => ({}));
+      }
+      if (!res.ok) return setError(data.error || 'Removing the field failed');
+      setVocab((prev) => prev.filter((x) => x._id !== k._id));
+    } catch {
+      setError('Network error.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // The definition line under a key's name, or the editor in its place.
+  const definition = (k) => (editing === k._id
+    ? <KeyDefinitionEditor k={k} onSaved={keyRedefined} onCancel={() => setEditing(null)} />
+    : (
+      <>
+        <span className="ard-type">{typeLabel(k)}</span>
+        {redefined?.id === k._id && (
+          <span className="ard-saved">
+            Field saved{redefined.converted ? ` — ${redefined.converted} value${redefined.converted === 1 ? '' : 's'} converted` : ''}
+          </span>
+        )}
+      </>
+    ));
+
   // opts.asWineDefault: publish a vintage-slotted suggestion as the wine-wide
   // default instead — the reviewer's call when the evidence is plainly the
   // producer's general spec and the suggester left the (safer) vintage
@@ -146,7 +266,7 @@ function AdminRegistryData() {
         <div key={k._id} className="ard-card">
           <div className="ard-card-main">
             <span className="ard-name">{k.name}</span>
-            <span className="ard-type">{typeLabel(k)}</span>
+            {definition(k)}
             <p className="ard-rationale">{k.rationale}</p>
             <span className="ard-meta">
               proposed by {k.proposedBy?.displayName || k.proposedBy?.username || 'unknown'}
@@ -158,6 +278,10 @@ function AdminRegistryData() {
               onClick={() => decide('key', k._id, 'accept')}>Accept</button>
             <button type="button" className="btn btn-small btn-danger" disabled={busy === k._id}
               onClick={() => decide('key', k._id, 'reject')}>Reject</button>
+            {editing !== k._id && (
+              <button type="button" className="btn btn-small" disabled={busy === k._id}
+                onClick={() => setEditing(k._id)}>Change type</button>
+            )}
           </div>
         </div>
       ))}
@@ -228,14 +352,15 @@ function AdminRegistryData() {
       <p className="ard-intro">
         Display names in each language. The English name stays the key itself — it is what suggestions, the AI
         connector and analytics use — and a translation only changes what a reader sees. Leave a box empty to
-        show the English name in that language.
+        show the English name in that language. A field made with the wrong type can be changed, and one that
+        should not exist removed.
       </p>
       {!loading && vocab.length === 0 && <p className="ard-empty">No accepted keys yet.</p>}
       {vocab.map((k) => (
         <div key={k._id} className="ard-card">
           <div className="ard-card-main">
             <span className="ard-name">{k.name}</span>
-            <span className="ard-type">{typeLabel(k)}</span>
+            {definition(k)}
             <div className="ard-translations">
               {TRANSLATABLE.map((l) => (
                 <label key={l.code}>
@@ -256,6 +381,12 @@ function AdminRegistryData() {
             <button type="button" className="btn btn-small btn-primary" disabled={busy === k._id || !drafts[k._id]}
               onClick={() => saveTranslations(k)}>Save names</button>
             {saved === k._id && <span className="ard-saved">Saved</span>}
+            {editing !== k._id && (
+              <button type="button" className="btn btn-small" disabled={busy === k._id}
+                onClick={() => setEditing(k._id)}>Change type</button>
+            )}
+            <button type="button" className="btn btn-small btn-danger" disabled={busy === k._id}
+              onClick={() => removeKey(k)}>Remove field</button>
           </div>
         </div>
       ))}

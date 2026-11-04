@@ -43,7 +43,7 @@ describe('admin registry-data router shape', () => {
   test('drift canary + admin gating', () => {
     const routes = shape(adminRegistryDataRouter);
     expect(routes.map((r) => `${r.methods.join(',')} ${r.path}`).sort()).toEqual([
-      'GET /', 'POST /keys/:id/decide', 'POST /values/:id/decide', 'PUT /keys/:id/translations',
+      'DELETE /keys/:id', 'GET /', 'PATCH /keys/:id', 'POST /keys/:id/decide', 'POST /values/:id/decide', 'PUT /keys/:id/translations',
     ]);
     // requireAuth + requireRole('admin') ride as router-level use() layers.
     const useLayers = adminRegistryDataRouter.stack.filter((l) => !l.route).map((l) => l.handle);
@@ -77,6 +77,8 @@ describe('unauthenticated / non-admin rejection paths', () => {
     ['POST', '/api/registry-data/wine/aaaaaaaaaaaaaaaaaaaaaaaa'],
     ['GET', '/api/admin/registry-data'],
     ['POST', '/api/admin/registry-data/keys/aaaaaaaaaaaaaaaaaaaaaaaa/decide'],
+    ['PATCH', '/api/admin/registry-data/keys/aaaaaaaaaaaaaaaaaaaaaaaa'],
+    ['DELETE', '/api/admin/registry-data/keys/aaaaaaaaaaaaaaaaaaaaaaaa'],
   ])('%s %s → 401 without a token', async (method, path) => {
     const res = await fetch(base + path, { method });
     expect(res.status).toBe(401);
@@ -89,5 +91,14 @@ describe('unauthenticated / non-admin rejection paths', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status).toBe(403);
+  });
+
+  test('a plain user token can neither redefine nor remove a key', async () => {
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign({ id: 'a'.repeat(24), roles: ['user'] }, process.env.JWT_SECRET);
+    const url = `${base}/api/admin/registry-data/keys/${'c'.repeat(24)}`;
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    expect((await fetch(url, { method: 'PATCH', headers, body: JSON.stringify({ type: 'decimal' }) })).status).toBe(403);
+    expect((await fetch(`${url}?removeValues=true`, { method: 'DELETE', headers })).status).toBe(403);
   });
 });
