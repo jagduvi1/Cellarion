@@ -55,11 +55,15 @@ export default function PickLists() {
 
   return (
     <div className="pick-lists-page">
-      <h1>{t('pickLists.title', 'Pick lists')}</h1>
+      <div className="page-header">
+        <div>
+          <h1>{t('pickLists.title', 'Pick lists')}</h1>
+          <p className="page-subtitle">
+            {t('pickLists.intro', 'A pick list is the bottles you are about to fetch — for a dinner, a tasting, or what to drink next — with the cellar, rack and slot of each, in the order you walk past them. To add bottles, tap Select in your cellar, pick them and choose Pick list, or use ⋮ on a bottle\'s page.')}
+          </p>
+        </div>
+      </div>
       <BetaBadge feature="pickLists" note={t('pickLists.betaNote', 'Pick lists are in early access.')} />
-      <p className="pick-lists-intro">
-        {t('pickLists.intro', 'A pick list is the bottles you are about to fetch — for a dinner, a tasting, or what to drink next — with the cellar, rack and slot of each, in the order you walk past them. To add bottles, tap Select in your cellar, pick them and choose Pick list, or use ⋮ on a bottle\'s page.')}
-      </p>
 
       {error && <p className="error-message" role="alert">{error}</p>}
 

@@ -1,10 +1,26 @@
-.cellar-chat {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 2rem 1rem 1rem;
+/* The chat fills exactly the room the Layout leaves under the navbar, so the
+   message box stays in view whatever the navbar's height (it gains a row of
+   links between 769px and 1200px) and above the phone's bottom tab bar, which
+   .main-content's bottom padding already makes room for. */
+.layout:has(.cellar-chat) {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.main-content:has(.cellar-chat) {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 80px);
+  min-height: 0;
+}
+
+.cellar-chat {
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── Header ── */
@@ -18,10 +34,6 @@
 }
 
 .cellar-chat__title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--color-text);
-  font-family: var(--font-heading);
   margin: 0;
 }
 
@@ -538,10 +550,6 @@ a.cellar-chat__wine-card:hover {
 }
 
 @media (max-width: 600px) {
-  .cellar-chat {
-    height: calc(100vh - 60px);
-    padding: 1rem 0.75rem 0.5rem;
-  }
   .cellar-chat__bubble {
     max-width: 95%;
   }

@@ -1,18 +1,6 @@
 .restock-page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
-}
-
-.restock-page h1 {
-  margin: 0 0 0.25rem;
-  color: var(--color-text);
-}
-
-.restock-subtitle {
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
-  margin: 0 0 1.5rem;
 }
 
 .restock-loading,
@@ -289,10 +277,6 @@
 }
 
 @media (max-width: 768px) {
-  .restock-page {
-    padding: 1rem;
-  }
-
   .restock-pace__stats {
     display: grid;
     grid-template-columns: 1fr 1fr;

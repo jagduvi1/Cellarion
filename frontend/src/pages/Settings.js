@@ -377,7 +377,7 @@ function Settings() {
 
   return (
     <div className="settings-page">
-      <div className="settings-header">
+      <div className="page-header">
         <h1>{t('settings.title')}</h1>
       </div>
 

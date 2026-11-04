@@ -3,28 +3,6 @@
   margin: 0 auto;
 }
 
-/* ── Header ── */
-.wishlist-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-
-.wishlist-header h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-}
-
-.wishlist-subtitle {
-  margin: 0.15rem 0 0;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-}
-
 /* ── Filters bar ── */
 .wishlist-filters {
   display: flex;
@@ -301,16 +279,6 @@
 
 /* ── Mobile ── */
 @media (max-width: 768px) {
-  .wishlist-header {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .wishlist-header .btn {
-    width: 100%;
-    justify-content: center;
-  }
-
   .wishlist-controls {
     flex-direction: column;
   }
