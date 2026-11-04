@@ -11,6 +11,11 @@
  * other users beyond what the cellar views already show — the username on a
  * personal-data entry, as on the bottle page.
  *
+ * `include=consumed` widens the bottles to the ones that left those cellars
+ * (drunk, gifted, sold, other) in the same shape, so a client keeps one
+ * archive beside its stock (support ticket 2026-11-03). On-order bottles stay
+ * out either way. The consumption record is loaded only when asked for.
+ *
  * DATABASE READS ONLY. Nothing here, or reachable from here, may spend AI
  * money (Johan, 2026-10-21): no AI provider, no embedding, no label scan, no
  * semantic search, no enrichment, no Meilisearch. The tasting profile is the
@@ -30,7 +35,7 @@ const { classifyMaturity, buildProfileMap, resolveEffectiveWindow } = require('.
 const { decorateGrapes } = require('../utils/grapeDisplay');
 const { slotLocation } = require('../utils/rackGeometry');
 const { thumbPath } = require('../utils/thumbPath');
-const { NOT_IN_CELLAR_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../config/constants');
 const { snapshotTag } = require('./offlineSnapshot');
 const { listForBottles } = require('./personalData');
 
@@ -39,12 +44,15 @@ const INVENTORY_SCHEMA = 1;
 // snapshot tag, so neither document is ever answered 304 for the other.
 const INVENTORY_TAG_SALT = 'inventory:1';
 const PROFILE_LIST_MAX = 12;
+// What ?include= may name. Each value adds bottles; none changes a field of a
+// bottle that is still in the cellar.
+const INCLUDE_VALUES = ['consumed'];
 
 // What each query loads — and therefore all it CAN return.
 const CELLAR_SELECT = 'name user members.user members.role';
 const RACK_SELECT = 'cellar name type rows cols typeConfig isModular modules.type slots.position slots.bottle';
 const BOTTLE_SELECT = [
-  'cellar', 'wineDefinition', 'pendingWineRequest', 'vintage', 'bottleSize',
+  'cellar', 'wineDefinition', 'pendingWineRequest', 'status', 'vintage', 'bottleSize',
   'price', 'currency', 'rating', 'ratingScale', 'notes', 'purchaseDate', 'purchaseLocation',
   'createdAt', 'openedAt', 'location',
   // maturity + window (maturityUtils): the bottle's own window
@@ -52,6 +60,9 @@ const BOTTLE_SELECT = [
   // the card image (routes/cellars attachBottleImageUrls)
   'defaultImage',
 ].join(' ');
+// The consumption record, added to the load only for include=consumed: the
+// default build never reads a drinking note.
+const CONSUMED_SELECT = 'consumedAt consumedNote consumedRating consumedRatingScale';
 const INVENTORY_WINE_POPULATE = [
   {
     path: 'wineDefinition',
@@ -81,9 +92,30 @@ const iso = (d) => {
   return Number.isNaN(t.getTime()) ? null : t.toISOString();
 };
 
-/** The inventory's validator: the offline snapshot's, in its own tag space. */
-function inventoryTag(userId, now = Date.now()) {
-  return snapshotTag(userId, now, { salt: INVENTORY_TAG_SALT });
+/**
+ * ?include= → { include: [known values] }, or { error } naming the first value
+ * it does not know (a typo must not silently answer the default document).
+ * Accepts a comma-separated list and repeated parameters.
+ */
+function parseInclude(raw) {
+  const parts = [].concat(raw ?? [])
+    .flatMap((v) => (typeof v === 'string' ? v.split(',') : ['?']))
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const unknown = parts.find((v) => !INCLUDE_VALUES.includes(v));
+  if (unknown !== undefined) {
+    return { error: `Unknown include value "${unknown.slice(0, 40)}". Supported: ${INCLUDE_VALUES.join(', ')}.` };
+  }
+  return { include: [...new Set(parts)].sort() };
+}
+
+/**
+ * The inventory's validator: the offline snapshot's, in its own tag space —
+ * one per include set, since each answers a different document.
+ */
+function inventoryTag(userId, now = Date.now(), { include = [] } = {}) {
+  const salt = include.length ? `${INVENTORY_TAG_SALT}:${include.join(',')}` : INVENTORY_TAG_SALT;
+  return snapshotTag(userId, now, { salt });
 }
 
 /** A stored aiProfile → the contract's descriptors, or null (none, or held). */
@@ -137,6 +169,17 @@ function bottleImageOf(b) {
   const usableRegistry = typeof registry === 'string' && !registry.startsWith('data:') ? registry : null;
   const src = b.defaultImageUrl || b.pendingImageUrl || b.vintageImageUrl || usableRegistry || b.otherVintageImageUrl || null;
   return thumbPath(src);
+}
+
+/** How a bottle that left the cellar was finished; the reason is its status. */
+function consumedOf(b) {
+  const rating = num(b.consumedRating);
+  return {
+    at: iso(b.consumedAt),
+    rating,
+    ratingScale: rating !== null ? text(b.consumedRatingScale) : null,
+    note: text(b.consumedNote),
+  };
 }
 
 function windowOf(b, profileMap) {
@@ -194,11 +237,14 @@ function assembleInventory({
     const id = String(b._id);
     const rating = num(b.rating);
     const purchased = iso(b.purchaseDate); // a picked day is stored as its UTC midnight
+    // Only include=consumed loads bottles that left; a legacy row without a status is in the cellar.
+    const left = CONSUMED_STATUSES.includes(b.status);
     outBottles.push({
       id,
       wine: wineId,
       pending: req ? { name: text(req.wineName), producer: text(req.producer) } : null,
       cellar,
+      status: left ? b.status : 'active',
       vintage: text(b.vintage),
       size: text(b.bottleSize),
       price: num(b.price),
@@ -211,7 +257,9 @@ function assembleInventory({
       purchaseLocation: text(b.purchaseLocation),
       addedAt: iso(b.createdAt),
       opened: !!b.openedAt,
-      maturity: classifyMaturity(b, profileMap) || null,
+      consumed: left ? consumedOf(b) : null,
+      // Today's place in the window means nothing for a bottle already finished.
+      maturity: left ? null : classifyMaturity(b, profileMap) || null,
       window: windowOf(b, profileMap),
       location: placeOf.get(id) || null,
       place: text(b.location),
@@ -240,9 +288,11 @@ async function loadProfiles(wineIds) {
 /**
  * Load and assemble one user's inventory. `attachBottleImageUrls` is the
  * cellar list's own image resolver (routes/cellars), passed in to avoid a
- * route→service require cycle, as the offline snapshot does.
+ * route→service require cycle, as the offline snapshot does. `include` is
+ * parseInclude's list.
  */
-async function buildInventory(userId, { attachBottleImageUrls }) {
+async function buildInventory(userId, { attachBottleImageUrls, include = [] }) {
+  const withConsumed = include.includes('consumed');
   const cellars = await Cellar.find({
     $or: [{ user: userId }, { 'members.user': userId }],
     deletedAt: null,
@@ -254,8 +304,8 @@ async function buildInventory(userId, { attachBottleImageUrls }) {
   if (ids.length === 0) return assembleInventory({ userId, cellars, racks: [], bottles: [] });
 
   const [bottles, racks] = await Promise.all([
-    Bottle.find({ cellar: { $in: ids }, status: { $nin: NOT_IN_CELLAR_STATUSES } })
-      .select(BOTTLE_SELECT)
+    Bottle.find({ cellar: { $in: ids }, status: { $nin: withConsumed ? [ORDERED_STATUS] : NOT_IN_CELLAR_STATUSES } })
+      .select(withConsumed ? `${BOTTLE_SELECT} ${CONSUMED_SELECT}` : BOTTLE_SELECT)
       .populate(INVENTORY_WINE_POPULATE)
       .sort({ createdAt: -1 })
       .lean(),
@@ -277,11 +327,14 @@ module.exports = {
   buildInventory,
   assembleInventory,
   inventoryTag,
+  parseInclude,
   profileOf,
   INVENTORY_SCHEMA,
   INVENTORY_TAG_SALT,
+  INCLUDE_VALUES,
   INVENTORY_WINE_POPULATE,
   BOTTLE_SELECT,
+  CONSUMED_SELECT,
   RACK_SELECT,
   CELLAR_SELECT,
   PROFILE_SELECT,

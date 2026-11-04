@@ -320,7 +320,7 @@ conditional request.
 ## Endpoint contract
 
 ```
-GET /api/inventory
+GET /api/inventory[?include=consumed]
 Authorization: Bearer cel_…        (read scope; a normal session works too)
 If-None-Match: <the ETag of the copy the client holds>   (optional)
 ```
@@ -329,6 +329,7 @@ If-None-Match: <the ETag of the copy the client holds>   (optional)
 |--------|---------|
 | 200 | the inventory (a JSON **object**), with `ETag` and `Cache-Control: no-store` |
 | 304 | nothing the inventory holds has changed since that ETag — no body, nothing built |
+| 400 | an `include` value the server does not know (today only `consumed`) |
 | 401 | invalid / revoked token (existing re-login / reauth logic) |
 | 403 | token without the `read` scope — or an **old server** (the allowlist is default-deny) |
 | 404 | an **old server** without the route |
@@ -355,6 +356,16 @@ first, like §1.
   gifted, sold, other and on-order bottles are left out). Nothing about
   other users beyond what the cellar views already show: the username on a
   personal-data entry, as on the bottle page.
+- **`include=consumed`** (2026-11-04): also the
+  bottles that left those cellars (drunk, gifted, sold, other), in the same
+  shape, so a client keeps its archive and its stock in one document and
+  filters on `status`. On-order bottles stay out. Without the parameter the
+  answer is unchanged: every bottle carries `status: "active"` and
+  `consumed: null`. A comma list and repeated parameters are accepted; an
+  unknown value is a `400`, never silently the default document. Each
+  include set has its **own ETag** (salt `inventory:1:consumed`), so a tag
+  held for one never answers `304` for the other. The consumption record is
+  loaded only for this build.
 - **No AI, ever.** The route is database reads only: no AI provider, no
   embedding, no label scan, no semantic search, no enrichment, no
   Meilisearch. The tasting profile is the one already stored; a wine without
@@ -394,13 +405,15 @@ first, like §1.
       "wine": "<wineId>",             // null while the bottle waits on a wine request
       "pending": null,                // { "name", "producer" } of that request when wine is null
       "cellar": "6aa4…",
+      "status": "active",             // active | drank | gifted | sold | other (the last four only with include=consumed)
       "vintage": "2015", "size": "750ml",
       "price": 350, "currency": "SEK",
       "rating": 92, "ratingScale": "100",   // ratingScale only beside a rating, else null
       "notes": "…", "purchaseDate": "2024-05-01", "purchaseLocation": "Systembolaget",
       "addedAt": "2025-01-02T10:00:00.000Z",
       "opened": false,
-      "maturity": "peak",             // not-ready | early | peak | late | declining, or null
+      "consumed": null,               // a bottle that left: { "at", "rating", "ratingScale", "note" } — see below
+      "maturity": "peak",             // not-ready | early | peak | late | declining, or null (always null once it left)
       "window": { "drinkFrom": 2024, "peakFrom": 2027, "peakUntil": 2032, "drinkTo": 2038 },  // each int or null
       "location": {                   // null when the bottle is in no rack
         "rack": "6ab0…", "rackName": "Left cabinet", "position": 14,
@@ -427,6 +440,8 @@ Where each field comes from (`services/integrationInventory.js`):
 | `image` (bottle) | the cellar list's resolver (`attachBottleImageUrls`), in the card's order: chosen default → the user's own photo of this bottle or vintage → the vintage's official photo → the registry image → the user's photo of another vintage |
 | `image` (both) | thumbnail paths only: `/api/uploads/(processed\|originals)/<name>.<png\|jpg\|jpeg\|webp>` on this instance → `/api/uploads/thumbs/<dir>/<name>.<ext>.webp` (`utils/thumbPath.js`). An external link, an inline `data:` image or another host's upload → `null`, so a client never fetches a URL someone stored. The uploads mount is public: fetch the path without credentials |
 | `personal` | `personalData.listForBottles` — exactly the bottle page's rules: bottle-level entries by anyone; wine-level entries by current members of the bottle's cellar, vintage-scoped ones only on bottles of that vintage |
+| `status` | the bottle's status; a legacy row without one, and every bottle still in the cellar, is `active` |
+| `consumed` | only for a bottle that left (`include=consumed`): `at` = `consumedAt` (the user may backdate it), `rating` / `ratingScale` = `consumedRating` / `consumedRatingScale` (the rating given when it was finished — `rating` on the bottle is the one given before; the scale only beside a rating), `note` = `consumedNote`. How it left is `status` |
 
 Loaded lean: every query names its fields, so the heavy bottle fields
 (cellar history, pours, barcode, purchase URL …), slot RFID tags and the

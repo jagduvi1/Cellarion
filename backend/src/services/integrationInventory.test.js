@@ -28,8 +28,8 @@ const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const { listForBottles } = require('./personalData');
 const {
-  assembleInventory, buildInventory, profileOf, inventoryTag,
-  BOTTLE_SELECT, RACK_SELECT, CELLAR_SELECT, PROFILE_SELECT, INVENTORY_WINE_POPULATE, INVENTORY_SCHEMA,
+  assembleInventory, buildInventory, profileOf, inventoryTag, parseInclude,
+  BOTTLE_SELECT, CONSUMED_SELECT, RACK_SELECT, CELLAR_SELECT, PROFILE_SELECT, INVENTORY_WINE_POPULATE, INVENTORY_SCHEMA,
 } = require('./integrationInventory');
 
 const ME = 'u1';
@@ -92,6 +92,7 @@ describe('assembleInventory — the contract', () => {
       wine: 'w1',
       pending: null,
       cellar: 'c1',
+      status: 'active',
       vintage: '2015',
       size: '750ml',
       price: 350,
@@ -103,6 +104,7 @@ describe('assembleInventory — the contract', () => {
       purchaseLocation: 'Systembolaget',
       addedAt: '2025-01-02T10:00:00.000Z',
       opened: false,
+      consumed: null,
       maturity: 'early',
       window: { drinkFrom: NOW_YEAR - 1, peakFrom: NOW_YEAR + 2, peakUntil: NOW_YEAR + 6, drinkTo: NOW_YEAR + 10 },
       location: { rack: 'r1', rackName: 'Left cabinet', position: 14, shelf: 2, row: 2, col: 2 },
@@ -157,6 +159,29 @@ describe('assembleInventory — the contract', () => {
     });
     expect(JSON.stringify(b)).not.toMatch(/undefined/);
     expect(Object.values(b).some((v) => v === undefined)).toBe(false);
+  });
+
+  test('a bottle that left (include=consumed): its status, how it was finished, no maturity, the same shape', () => {
+    const [b] = inv({
+      racks: [],
+      bottles: [bottle({
+        status: 'gifted', consumedAt: new Date('2026-10-30T19:00:00Z'), consumedRating: 4.5, consumedRatingScale: '5',
+        consumedNote: '  To my sister  ', consumedReason: 'gifted',
+      })],
+    }).bottles;
+    expect(b).toMatchObject({
+      status: 'gifted', maturity: null, location: null,
+      consumed: { at: '2026-10-30T19:00:00.000Z', rating: 4.5, ratingScale: '5', note: 'To my sister' },
+      // The window is kept: it says whether it was opened in time.
+      window: { drinkFrom: NOW_YEAR - 1, peakFrom: NOW_YEAR + 2, peakUntil: NOW_YEAR + 6, drinkTo: NOW_YEAR + 10 },
+    });
+    expect(Object.keys(b)).toEqual(Object.keys(inv().bottles[0]));
+    // Nothing recorded → nulls; a scale only beside a rating.
+    const [bare] = inv({ bottles: [bottle({ status: 'drank', consumedRatingScale: '5' })] }).bottles;
+    expect(bare.consumed).toEqual({ at: null, rating: null, ratingScale: null, note: null });
+    // Every status that left; anything else (a legacy row without one) is active.
+    for (const status of ['drank', 'gifted', 'sold', 'other']) expect(inv({ bottles: [bottle({ status })] }).bottles[0].status).toBe(status);
+    expect(inv({ bottles: [bottle({ status: undefined })] }).bottles[0]).toMatchObject({ status: 'active', consumed: null });
   });
 
   test('the window is the curated one when the bottle has none of its own', () => {
@@ -285,6 +310,22 @@ describe('buildInventory — what is loaded', () => {
     expect(s.wines.w1.profile).toEqual({ body: 'full', acidity: null, sweetness: null, tannin: null, flavors: [], foodPairings: [] });
   });
 
+  test('include=consumed: on-order bottles still left out, the consumption record loaded — only then', async () => {
+    const rec = { bottle: {} };
+    Cellar.find.mockReturnValue(chain([OWN]));
+    Bottle.find.mockReturnValue(chain([bottle({ status: 'drank', consumedAt: new Date('2026-10-30T19:00:00Z') })], rec.bottle));
+    Rack.find.mockReturnValue(chain([]));
+    WineDefinition.find.mockReturnValue(chain([]));
+
+    const s = await buildInventory(ME, { attachBottleImageUrls: jest.fn(async (bs) => bs), include: ['consumed'] });
+
+    expect(Bottle.find.mock.calls.at(-1)[0].status).toEqual({ $nin: ['ordered'] });
+    expect(rec.bottle.select).toBe(`${BOTTLE_SELECT} ${CONSUMED_SELECT}`);
+    expect(s.bottles[0]).toMatchObject({ status: 'drank', consumed: { at: '2026-10-30T19:00:00.000Z' } });
+    expect(BOTTLE_SELECT.split(' ')).not.toEqual(expect.arrayContaining(CONSUMED_SELECT.split(' ')));
+    expect(CONSUMED_SELECT.split(' ').sort()).toEqual(['consumedAt', 'consumedNote', 'consumedRating', 'consumedRatingScale']);
+  });
+
   test('projections: inclusion lists that leave the heavy and internal fields out', () => {
     const words = (s) => s.split(/\s+/);
     for (const heavy of ['cellarHistory', 'pours', 'barcode', 'purchaseUrl', 'occasion', 'reservedFor', 'consumedNote', 'user']) {
@@ -329,5 +370,27 @@ describe('inventoryTag', () => {
     expect(inv).toMatch(/^W\/"[A-Za-z0-9_-]{27}"$/);
     expect(inv).not.toBe(await snapshotTag(ME, t));
     expect(inv).toBe(await snapshotTag(ME, t, { salt: 'inventory:1' }));
+    // include=consumed answers another document, so another tag space.
+    const all = await inventoryTag(ME, t, { include: ['consumed'] });
+    expect(all).not.toBe(inv);
+    expect(all).toBe(await snapshotTag(ME, t, { salt: 'inventory:1:consumed' }));
+    expect(await inventoryTag(ME, t, { include: [] })).toBe(inv);
+  });
+});
+
+describe('parseInclude', () => {
+  test('nothing → none; a list, repeats and spaces fold to one sorted set', () => {
+    expect(parseInclude(undefined)).toEqual({ include: [] });
+    expect(parseInclude('')).toEqual({ include: [] });
+    expect(parseInclude('consumed')).toEqual({ include: ['consumed'] });
+    expect(parseInclude(' consumed , consumed')).toEqual({ include: ['consumed'] });
+    expect(parseInclude(['consumed', 'consumed'])).toEqual({ include: ['consumed'] });
+  });
+
+  test('an unknown value is an error naming it (cut short), never ignored', () => {
+    expect(parseInclude('consumed,ordered')).toEqual({ error: 'Unknown include value "ordered". Supported: consumed.' });
+    expect(parseInclude('x'.repeat(100)).error).toBe(`Unknown include value "${'x'.repeat(40)}". Supported: consumed.`);
+    // ?include[a]=b arrives as an object: not a value we know.
+    expect(parseInclude({ a: 'b' }).error).toMatch(/^Unknown include value/);
   });
 });
