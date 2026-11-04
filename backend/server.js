@@ -204,6 +204,15 @@ connectDB().then(async () => {
     console.error('[seed] classification taxonomy failed (will retry next boot):', err.message);
   }
 
+  // The standard wine-record fields (ABV, Closure) on a registry that has no
+  // fields at all: a fresh install starts with them. Idempotent.
+  try {
+    const keys = await require('./src/services/registryKeySeed').ensureStandardKeys();
+    if (keys.seeded) console.log(`[seed] standard registry fields: ${keys.created}`);
+  } catch (err) {
+    console.error('[seed] standard registry fields failed (will retry next boot):', err.message);
+  }
+
   // Purge expired soft-deleted reply texts on startup and every 24h
   const DiscussionReply = require('./src/models/DiscussionReply');
   DiscussionReply.purgeExpiredDeletes().catch(() => {});
