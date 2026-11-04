@@ -22,9 +22,12 @@ export function bottleNoticeName(bottle) {
  *  - kind 'deleted' ("Added by mistake?" / "Cancel order"): the bottle went to
  *    Recently deleted; Undo brings that batch back.
  *
- * `notice` = { kind, name, bottleId, batchId?, reason, at } — handed over in
- * the navigation's router state by BottleDetail, or set by the page itself
- * after a drink from a card (cellar list) or the vintage page. `onUndone`
+ * `notice` = { kind, name, bottleId, batchId?, cellarId?, reason, at } — handed
+ * over in the navigation's router state by BottleDetail, or set by the page
+ * itself after a drink from a card (cellar list) or the vintage page.
+ * `notice.cellarId` is the bottle's own cellar: its Recently deleted holds the
+ * batch, and the list showing the notice may be another cellar's (an "all my
+ * cellars" view the bottle page returned to). Without it, the `cellarId` prop. `onUndone`
  * refreshes the list. `floating` fixes it to the bottom of the screen, for an
  * action taken anywhere down a long page (the top of the page may be far away).
  */
@@ -41,7 +44,7 @@ export default function BottleUndoNotice({ notice, cellarId, onUndone, onDismiss
     setFailure(null);
     try {
       const res = notice.kind === 'deleted'
-        ? await restoreRecentlyDeleted(apiFetch, cellarId, { batchId: notice.batchId })
+        ? await restoreRecentlyDeleted(apiFetch, notice.cellarId || cellarId, { batchId: notice.batchId })
         : await restoreBottle(apiFetch, notice.bottleId);
       const body = await res.json().catch(() => null);
       if (!res.ok) {

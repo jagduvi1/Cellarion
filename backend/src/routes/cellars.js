@@ -513,7 +513,10 @@ async function attachBottleImageUrls(bottles, userId) {
     }
   }
   const imageBottleIds = Object.keys(wineOfBottle).length ? Object.keys(wineOfBottle) : bottleIds.map(String);
-  for (const id of bottleIds.map(String)) if (!imageBottleIds.includes(id)) imageBottleIds.push(id);
+  // A Set, not includes(): the inventory's include=consumed hands over a whole
+  // drinking history, and a scan per bottle grew with the square of it.
+  const listed = new Set(imageBottleIds);
+  for (const id of bottleIds.map(String)) if (!listed.has(id)) { listed.add(id); imageBottleIds.push(id); }
 
   const pendingImages = await BottleImage.find({
     $or: [
