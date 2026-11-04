@@ -226,6 +226,11 @@
   color: #fff;
 }
 
+/* No default star (a gallery that cannot set one): the corner is free. */
+.carousel-action-btn--corner {
+  right: 6px;
+}
+
 /* Touch has no hover: on coarse pointers the control is always available. */
 @media (hover: none) {
   .carousel-action-btn { opacity: 1; }

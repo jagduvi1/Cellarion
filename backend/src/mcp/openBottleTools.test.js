@@ -19,7 +19,7 @@ jest.mock('../models/Cellar', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({
   find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn(),
 }));
-jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn(), exists: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
@@ -46,12 +46,14 @@ jest.mock('../services/bottleOps', () => ({
   openBottle: jest.fn(),
   pourFromBottle: jest.fn(),
   closeBottle: jest.fn(),
+  putBackInSlot: jest.fn(),
 }));
 
 const mongoose = require('mongoose');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const McpActionLog = require('../models/McpActionLog');
+const Rack = require('../models/Rack');
 const bottleOps = require('../services/bottleOps');
 const { logAudit } = require('../services/audit');
 const { allTools, toolsForScopes } = require('./registry');
@@ -410,5 +412,108 @@ describe('undo_last on open/pour/close', () => {
     const res = await tool('undo_last').handler({}, CTX);
     expect(parse(res).error.code).toBe('conflict');
     expect(doc.save).not.toHaveBeenCalled();
+  });
+});
+
+// "Take it out of the rack" (support ticket 2026-10-31): open_bottle and an
+// implicit open in pour_glass free the bottle's slot when asked, and every undo
+// puts it back (or, undoing a close, takes it out again).
+describe('take_out_of_rack', () => {
+  const bottleRef = () => new mongoose.Types.ObjectId(oid('d'));
+  const OUT = { rackId: oid('e'), rackName: 'Left wall', position: 7 };
+
+  test('open_bottle passes it to the shared op, names the slot it left, and ledgers it', async () => {
+    ownBottle();
+    bottleOps.openBottle.mockImplementation(async (bottle, { preservationMethod }) => {
+      bottle.openedAt = new Date();
+      bottle.preservationMethod = preservationMethod;
+      return { bottle, takenOutOf: OUT };
+    });
+    const res = await tool('open_bottle').handler({ bottle_id: oid('d'), preservation_method: 'vacuum', take_out_of_rack: true }, CTX);
+    const body = parse(res);
+    expect(bottleOps.openBottle.mock.calls[0][1]).toMatchObject({ preservationMethod: 'vacuum', takeOutOfRack: true });
+    expect(body.summary).toMatch(/taken out of rack "Left wall", slot 7/);
+    expect(body.data.taken_out_of).toEqual({ rack_id: OUT.rackId, rack_name: 'Left wall', position: 7 });
+    expect(McpActionLog.create.mock.calls[0][0].detail.takenOutOf).toEqual({ rack_id: OUT.rackId, rack_name: 'Left wall', position: 7 });
+  });
+
+  test('without it the bottle keeps its slot (taken_out_of null)', async () => {
+    ownBottle();
+    bottleOps.openBottle.mockImplementation(async (bottle) => {
+      bottle.openedAt = new Date();
+      bottle.preservationMethod = 'coravin';
+      return { bottle, takenOutOf: null };
+    });
+    const body = parse(await tool('open_bottle').handler({ bottle_id: oid('d'), preservation_method: 'coravin' }, CTX));
+    expect(bottleOps.openBottle.mock.calls[0][1].takeOutOfRack).toBeUndefined();
+    expect(body.data.taken_out_of).toBeNull();
+    expect(McpActionLog.create.mock.calls[0][0].detail.takenOutOf).toBeUndefined();
+  });
+
+  test('pour_glass passes it on an implicit open only', async () => {
+    ownBottle();
+    bottleOps.openBottle.mockImplementation(async (bottle) => {
+      bottle.openedAt = new Date();
+      bottle.preservationMethod = 'recorked';
+      return { bottle, takenOutOf: OUT };
+    });
+    bottleOps.pourFromBottle.mockImplementation(async (bottle) => {
+      bottle.pours.push({ at: new Date(), ml: 125 });
+      return { bottle };
+    });
+    const body = parse(await tool('pour_glass').handler({ bottle_id: oid('d'), take_out_of_rack: true }, CTX));
+    expect(bottleOps.openBottle.mock.calls[0][1]).toEqual({ preservationMethod: 'recorked', takeOutOfRack: true });
+    expect(body.data.taken_out_of.position).toBe(7);
+    expect(McpActionLog.create.mock.calls[0][0].detail).toMatchObject({ implicitOpen: true, takenOutOf: { position: 7 } });
+  });
+
+  test('undoing the pour that opened it puts it back into the slot it left', async () => {
+    const openedAt = new Date('2026-07-28T19:00:00Z');
+    const entry = {
+      _id: 'log7', action: 'pour', bottle: bottleRef(), reversed: false,
+      detail: { count: 1, ml: 125, implicitOpen: true, openedAt },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(entry));
+    const doc = ownBottle({
+      openedAt, preservationMethod: 'recorked', pours: [{ at: openedAt, ml: 125 }],
+      openedFromSlot: { rack: oid('e'), position: 7 },
+    });
+    bottleOps.putBackInSlot.mockResolvedValue({ rackId: oid('e'), rackName: 'Left wall', position: 7 });
+    const body = parse(await tool('undo_last').handler({}, CTX));
+    expect(doc.openedAt).toBeNull();
+    expect(doc.openedFromSlot).toBeNull();
+    expect(bottleOps.putBackInSlot).toHaveBeenCalledWith(doc._id, doc.cellar, { rack: oid('e'), position: 7 });
+    expect(body.summary).toMatch(/back in slot 7/);
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.open_undo', expect.anything(), { putBackInRack: true });
+  });
+
+  test('undoing a close that put it back takes it out of that slot again', async () => {
+    const openedAt = new Date('2026-07-28T19:00:00Z');
+    const from = { rack: oid('e'), position: 7 };
+    const entry = {
+      _id: 'log8', action: 'close', bottle: bottleRef(), reversed: false,
+      detail: { pours: 0, putBack: { rack_id: oid('e'), rack_name: 'Left wall', position: 7 } },
+      prev: { openedAt, preservationMethod: 'recorked', pours: [], openBottleNotifiedAt: null, openedFromSlot: from },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(entry));
+    const doc = ownBottle();
+    Rack.exists.mockResolvedValue({ _id: oid('e') });
+    await tool('undo_last').handler({}, CTX);
+    expect(doc.openedFromSlot).toEqual(from);
+    expect(Rack.exists).toHaveBeenCalledWith({ _id: from.rack, slots: { $elemMatch: { bottle: doc._id, position: 7 } } });
+    expect(bottleOps.removeFromRacks).toHaveBeenCalledWith(doc._id);
+  });
+
+  test('undoing a close leaves the bottle where it is once it moved from that slot', async () => {
+    const entry = {
+      _id: 'log9', action: 'close', bottle: bottleRef(), reversed: false,
+      detail: { pours: 0, putBack: { position: 7 } },
+      prev: { openedAt: new Date('2026-07-28T19:00:00Z'), pours: [], openedFromSlot: { rack: oid('e'), position: 7 } },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(entry));
+    ownBottle();
+    Rack.exists.mockResolvedValue(null);
+    await tool('undo_last').handler({}, CTX);
+    expect(bottleOps.removeFromRacks).not.toHaveBeenCalled();
   });
 });

@@ -23,6 +23,7 @@ import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { useFeature } from '../utils/featureFlags';
 import BottleUndoNotice, { bottleNoticeName } from '../components/BottleUndoNotice';
+import OpenNowStrip from '../components/OpenNowStrip';
 import BottleAddedNotice from '../components/BottleAddedNotice';
 import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../utils/cardDetails';
 import { summarizeSelection } from '../utils/bulkSelection';
@@ -134,6 +135,9 @@ function CellarDetail() {
   useEffect(() => { if (bottleNotice) setAddedNotice(null); }, [bottleNotice]); // eslint-disable-line react-hooks/exhaustive-deps
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
+  // The open bottles in view (the first page's answer names them all,
+  // whatever the filters), for the "Open now" strip.
+  const [openBottles, setOpenBottles] = useState([]);
   const [bottlesTotal, setBottlesTotal] = useState(0);
   // Bottles behind the cards: identical bottles share a card, so `bottlesTotal`
   // (cards, for paging) can be 1 where the filter's button means 2 bottles.
@@ -474,6 +478,8 @@ function CellarDetail() {
           // shape/flag mismatch (grouped items rendered as flat, or vice-versa).
           setBottles(data.bottles.items);
           setDataIsMulti(multi);
+          // An answer without the list (an offline copy) shows no strip.
+          setOpenBottles(Array.isArray(data.openBottles) ? data.openBottles : []);
           // Update facets on every fetch so cascading filters work. An
           // answer with none (a rack / storage filter: the search cannot
           // count it) clears them — never the previous request's numbers.
@@ -832,6 +838,7 @@ function CellarDetail() {
       {/* ── Bottles tab — search bar renders immediately for fast LCP ── */}
       {activeTab === 'bottles' && (
         <div className="cellar-tab-content">
+          <OpenNowStrip bottles={openBottles} />
           {(() => {
             // Build list of active filter chips for the active-filters bar
             const activeChips = [];

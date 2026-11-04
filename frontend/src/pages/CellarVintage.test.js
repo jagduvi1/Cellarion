@@ -51,7 +51,22 @@ vi.mock('../components/BarcodeScanModal', () => ({
     </div>
   ),
 }));
-vi.mock('../components/ImageGallery', () => ({ default: ({ bottleId, vintage, vintageScope }) => <div data-testid="gallery">{bottleId}:{vintage}:{vintageScope ? 'all-bottles' : 'one-bottle'}</div> }));
+// `galleryPhotos = 0`: the gallery finds no photos and says so (onEmpty), as the real one does.
+let galleryPhotos = 1;
+vi.mock('../components/ImageGallery', async () => {
+  const { useEffect } = await import('react');
+  return {
+    default: function Gallery({ bottleId, vintage, vintageScope, onEmpty }) {
+      // After its fetch, as the real one: the page has settled by then.
+      useEffect(() => {
+        if (galleryPhotos !== 0) return undefined;
+        const timer = setTimeout(() => onEmpty?.(), 0);
+        return () => clearTimeout(timer);
+      }, [onEmpty]);
+      return <div data-testid="gallery">{bottleId}:{vintage}:{vintageScope ? 'all-bottles' : 'one-bottle'}</div>;
+    },
+  };
+});
 vi.mock('../components/ImageUpload', () => ({ default: ({ bottleId, wineDefinitionId }) => <div data-testid="upload">{bottleId}:{wineDefinitionId}</div> }));
 vi.mock('../components/bottle/WineReviewsCard', () => ({ default: ({ wine, vintage }) => <div data-testid="reviews">{wine._id}:{vintage}</div> }));
 vi.mock('../components/bottle/OwnerInquiryCard', () => ({ default: ({ wineId }) => <div data-testid="inquiry">{wineId}</div> }));
@@ -288,7 +303,8 @@ test('what belongs to the wine and the vintage is here: photos, price, reviews, 
   // This vintage's photos — of every bottle of it in the cellar, through a
   // bottle of it; "Add a photo" uploads through the same bottle.
   expect(screen.getByTestId('gallery')).toHaveTextContent('b1:2015:all-bottles');
-  fireEvent.click(screen.getByText('cellarVintageBeta.addPhotoShort'));
+  fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+  fireEvent.click(screen.getByText('cellarVintageBeta.addPhoto'));
   expect(await screen.findByTestId('upload')).toHaveTextContent('b1:w1');
   // Closing the window reloads the page (the photo may still be cut out).
   const loads = () => api.mock.calls.filter(([u]) => u === '/api/cellars/c1/vintages/w1/2015').length;
@@ -374,6 +390,28 @@ test('a private draft wine: no report, no recommendation, no price tracking (non
   expect(screen.queryByText('cellarVintageBeta.recommend')).toBeNull();
   // Its own photo and barcode are still the owner's to add.
   expect(screen.getByText('barcodeScan.title')).toBeInTheDocument();
+});
+
+test('"Add a photo" sits under the drawn bottle, and in the menu once there is a photo', async () => {
+  // A photo shown: no button under it, the menu has it.
+  const { unmount } = renderPage();
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+  expect(await screen.findByTestId('gallery')).toBeInTheDocument();
+  expect(screen.queryByText('cellarVintageBeta.addPhotoShort')).toBeNull();
+  fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+  expect(screen.getByText('cellarVintageBeta.addPhoto')).toBeInTheDocument();
+  unmount();
+
+  // No photo at all: the drawn bottle, with the button under it.
+  galleryPhotos = 0;
+  try {
+    renderPage();
+    await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+    fireEvent.click(await screen.findByText('cellarVintageBeta.addPhotoShort'));
+    expect(await screen.findByTestId('upload')).toHaveTextContent('b1:w1');
+  } finally {
+    galleryPhotos = 1;
+  }
 });
 
 test('a viewer and a demo account get no photo upload and no barcode', async () => {

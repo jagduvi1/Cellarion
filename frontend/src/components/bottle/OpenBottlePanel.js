@@ -10,8 +10,9 @@ import './OpenBottlePanel.css';
 /**
  * Status card for an opened (Coravin'd / preserved) bottle: remaining volume
  * as a fill bar + glasses, drink-by countdown colored by urgency, and the
- * pour / undo / finish actions. The bottle stays active and racked while
- * open; "Finish bottle" hands over to the normal consume flow.
+ * pour / undo / finish actions. The bottle stays active while open (in its
+ * rack slot unless it was taken out); "Finish bottle" hands over to the
+ * normal consume flow.
  */
 export default function OpenBottlePanel({ bottle, canEdit, onBottleChange, onFinish }) {
   const { t, i18n } = useTranslation();
@@ -37,11 +38,13 @@ export default function OpenBottlePanel({ bottle, canEdit, onBottleChange, onFin
         setError(data.error || t('common.networkError', 'Network error'));
         return;
       }
+      // The whole answer rides along: undoing an open names the rack slot
+      // the bottle went back into (putBack).
       onBottleChange({
         openedAt: data.bottle.openedAt,
         preservationMethod: data.bottle.preservationMethod,
         pours: data.bottle.pours,
-      });
+      }, data);
     } catch {
       setError(t('common.networkError', 'Network error'));
     } finally {

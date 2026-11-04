@@ -78,11 +78,14 @@ function ImageCarousel({ images, size = 'medium', vintage, defaultImageId, onSet
           // older payload shape.
           const mine = currentImage.mine === true || (currentUserId && currentImage.uploadedBy != null && String(currentImage.uploadedBy) === String(currentUserId));
           const canDelete = mine && !currentImage.assignedToWine;
+          // Without the default star it takes the corner, not the star's
+          // place-keeping spot over the status badge.
+          const actionClass = `carousel-action-btn${onSetDefault ? '' : ' carousel-action-btn--corner'}`;
           if (canDelete && onDelete) {
             return (
               <button
                 type="button"
-                className="carousel-action-btn"
+                className={actionClass}
                 onClick={() => onDelete(currentImage)}
                 aria-label="Delete this photo"
                 title="Delete this photo"
@@ -97,7 +100,7 @@ function ImageCarousel({ images, size = 'medium', vintage, defaultImageId, onSet
           return (
             <button
               type="button"
-              className="carousel-action-btn"
+              className={actionClass}
               onClick={() => onReport(currentImage)}
               aria-label="Report this photo"
               title="Report this photo"

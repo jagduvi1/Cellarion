@@ -23,6 +23,7 @@ const { normalizeBarcode } = require('../utils/barcode');
 const { parseExpectedArrival } = require('../utils/onOrder');
 const { logAudit } = require('./audit');
 const Rack = require('../models/Rack');
+const { getMaxPosition } = require('../utils/rackGeometry');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
@@ -103,6 +104,8 @@ async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingSca
   // user put on it. The restore window counts from this (see restoreBottle).
   bottle.consumedLoggedAt = new Date();
   bottle.consumedReason = reason;
+  // Drunk: the slot an opened bottle left is no place to go back to.
+  bottle.openedFromSlot = null;
   if (note) bottle.consumedNote = stripHtml(note);
   if (resolvedRating !== undefined) {
     bottle.consumedRating = resolvedRating;
@@ -188,14 +191,54 @@ const MAX_POURS = 100;
 // weekend") — matches the longest preservation freshness window (coravin).
 const MAX_OPEN_BACKDATE_MS = 90 * 24 * 60 * 60 * 1000;
 
+/** The rack slot a bottle sits in now, or null. */
+async function currentRackSlot(bottleId) {
+  const rack = await Rack.findOne({ 'slots.bottle': bottleId }).select('name slots').lean();
+  const slot = rack && rack.slots.find((s) => String(s.bottle) === String(bottleId));
+  return slot ? { rack: rack._id, rackName: rack.name, position: slot.position } : null;
+}
+
+/**
+ * Put an opened bottle back into the slot it left (bottle.openedFromSlot) —
+ * the undo of "Take it out of the rack". Only while the bottle sits in no
+ * rack (placed anew since: that is where it lives now), the rack still exists
+ * in the bottle's cellar, and the slot is still a free, usable position;
+ * otherwise the bottle stays unplaced. Never displaces another bottle.
+ * Returns { rackId, rackName, position } | null.
+ */
+async function putBackInSlot(bottleId, cellarId, from) {
+  if (!from || !from.rack || !Number.isInteger(from.position)) return null;
+  if (await Rack.exists({ 'slots.bottle': bottleId })) return null;
+  const rack = await Rack.findOne({ _id: from.rack, cellar: cellarId, deletedAt: null });
+  if (!rack) return null;
+  const pos = from.position;
+  if (pos < 1 || pos > getMaxPosition(rack) || (rack.disabledPositions || []).includes(pos)) return null;
+  if (rack.slots.some((s) => s.position === pos)) return null;
+  // The whole list is assigned (a versioned $set, as placeBottleInRack does),
+  // not pushed: a rack changed since it was read fails with a VersionError
+  // instead of taking a second bottle into the same position.
+  rack.slots = [...rack.slots, { position: pos, bottle: bottleId }];
+  try {
+    await rack.save();
+  } catch (err) {
+    // A concurrent writer on the rack, or the bottle placed elsewhere in the
+    // meantime (unique slots.bottle): leave it unplaced rather than fight.
+    if (err.name === 'VersionError' || err.code === 11000) return null;
+    throw err;
+  }
+  return { rackId: rack._id, rackName: rack.name, position: pos };
+}
+
 /**
  * Mark an ACTIVE bottle as opened (Coravin / re-corked / …). The bottle stays
- * active and keeps its rack slot — it is still physically in the cellar.
- * openedAt is optional backdating (≤90 days, never the future); default now.
- * Mirrors POST /api/bottles/:id/open exactly.
- * Returns { error } | { bottle }.
+ * active — it is still in the cellar — and keeps its rack slot unless
+ * takeOutOfRack is true (a recorked bottle on the kitchen counter): then the
+ * slot is freed and remembered in openedFromSlot, so undoing the open can put
+ * it back. openedAt is optional backdating (≤90 days, never the future);
+ * default now. Mirrors POST /api/bottles/:id/open exactly.
+ * Returns { error } | { bottle, takenOutOf: { rackId, rackName, position } | null }.
  */
-async function openBottle(bottle, { preservationMethod, openedAt } = {}, req) {
+async function openBottle(bottle, { preservationMethod, openedAt, takeOutOfRack } = {}, req) {
   if (bottle.status === ORDERED_STATUS) return { error: { ...NOT_ARRIVED_ERROR } };
   if (CONSUMED_STATUSES.includes(bottle.status)) {
     return { error: { status: 400, message: 'Bottle is already consumed' } };
@@ -219,16 +262,24 @@ async function openBottle(bottle, { preservationMethod, openedAt } = {}, req) {
       return { error: { status: 400, message: 'openedAt is too far in the past (max 90 days back)' } };
     }
   }
+  if (takeOutOfRack !== undefined && takeOutOfRack !== null && typeof takeOutOfRack !== 'boolean') {
+    return { error: { status: 400, message: 'takeOutOfRack must be true or false' } };
+  }
+  const slot = takeOutOfRack === true ? await currentRackSlot(bottle._id) : null;
   bottle.openedAt = at;
   bottle.preservationMethod = preservationMethod;
   bottle.pours = [];
   bottle.openBottleNotifiedAt = null; // fresh opening → expiry alert re-arms
+  bottle.openedFromSlot = slot ? { rack: slot.rack, position: slot.position } : null;
   await bottle.save();
+  // Free the slot AFTER the save, as consume does: a failed save must not
+  // leave an unopened bottle already pulled from its rack.
+  if (slot) await removeFromRacks(bottle._id);
   logAudit(req, 'bottle.open',
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-    { preservationMethod }
+    { preservationMethod, ...(slot ? { takenOutOfRack: true } : {}) }
   );
-  return { bottle };
+  return { bottle, takenOutOf: slot ? { rackId: slot.rack, rackName: slot.rackName, position: slot.position } : null };
 }
 
 /**
@@ -305,19 +356,28 @@ async function closeBottle(bottle, req) {
   if (!bottle.openedAt) {
     return { error: { status: 400, message: 'Bottle is not open', code: 'not_open' } };
   }
+  const from = bottle.openedFromSlot
+    ? { rack: bottle.openedFromSlot.rack, position: bottle.openedFromSlot.position }
+    : null;
   const prevOpenState = {
     openedAt: bottle.openedAt,
     preservationMethod: bottle.preservationMethod || null,
     pours: (bottle.pours || []).map((p) => ({ at: p.at, ml: p.ml })),
     openBottleNotifiedAt: bottle.openBottleNotifiedAt || null,
+    openedFromSlot: from,
   };
   bottle.openedAt = null;
   bottle.preservationMethod = undefined;
   bottle.pours = [];
   bottle.openBottleNotifiedAt = null;
+  bottle.openedFromSlot = null;
   await bottle.save();
-  logAudit(req, 'bottle.open_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
-  return { bottle, prevOpenState };
+  // Taken out of its rack when it was opened: back into that slot, if it can.
+  const putBack = from ? await putBackInSlot(bottle._id, bottle.cellar, from) : null;
+  const undone = { type: 'bottle', id: bottle._id, cellarId: bottle.cellar };
+  if (putBack) logAudit(req, 'bottle.open_undo', undone, { putBackInRack: true });
+  else logAudit(req, 'bottle.open_undo', undone);
+  return { bottle, prevOpenState, putBack };
 }
 
 /**
@@ -1250,6 +1310,6 @@ module.exports = {
   markArrived, parseOnOrderFields, NOT_ARRIVED_ERROR, changeBottleWine,
   addBottle, validateBottleCommitFields, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
   snapshotBottleForDelete, restoreDeletedBottle,
-  openBottle, pourFromBottle, closeBottle,
+  openBottle, pourFromBottle, closeBottle, putBackInSlot,
   PRESERVATION_METHODS, DEFAULT_POUR_ML, MAX_POURS,
 };

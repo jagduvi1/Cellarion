@@ -66,3 +66,19 @@ describe('ImageCarousel vintage tag', () => {
     expect(screen.queryByRole('note')).toBeNull(); // no bottle vintage to compare with
   });
 });
+
+// Beta feedback 2026-11-04: on the vintage page (no default star) the report
+// flag kept the star's room free and sat on top of the "Published" pill.
+describe('ImageCarousel report / delete control', () => {
+  const photo = [{ _id: 'a', processedUrl: '/api/uploads/processed/a.png', status: 'approved', mine: true, assignedToWine: true }];
+
+  test('takes the corner when there is no default star', () => {
+    render(<ImageCarousel images={photo} onReport={() => {}} />);
+    expect(screen.getByLabelText('Report this photo')).toHaveClass('carousel-action-btn--corner');
+  });
+
+  test('stays left of the default star when there is one', () => {
+    render(<ImageCarousel images={photo} onReport={() => {}} onSetDefault={() => {}} />);
+    expect(screen.getByLabelText('Report this photo')).not.toHaveClass('carousel-action-btn--corner');
+  });
+});

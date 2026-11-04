@@ -1,5 +1,5 @@
 .cellars-page {
-  max-width: 1200px;
+  max-width: var(--page-width-wide);
   margin: 0 auto;
 }
 
