@@ -49,7 +49,7 @@ const SOFT_ZONE_MIN = 0.85;
 const SOFT_ZONE_TOP_N = 5;
 // labelSweetness rides along so the style guard reads a candidate's recorded
 // term, not only its name (utils/styleTerms.styleOf).
-const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }];
+const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
 
 // ── Pending identity ─────────────────────────────────────────────────────────
 //
@@ -540,7 +540,9 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // whenever search was down and the fuzzy stage never saw the row.
   const askAbout = [];
   const consider = (candidate) => {
-    if (candidate && !conflictsCountry(candidate) && !conflictsStyle(candidate) && sweetnessOneSided(candidate)) askAbout.push(candidate);
+    if (!candidate || conflictsCountry(candidate) || conflictsStyle(candidate) || !sweetnessOneSided(candidate)) return;
+    // Once per row: the canonical and the sibling stage can meet the same one.
+    if (!askAbout.some((w) => String(w._id) === String(candidate._id))) askAbout.push(candidate);
   };
 
   // Pending-identity ISOLATION. A pending row is invisible to everyone but its
@@ -664,12 +666,16 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     }
   }
 
-  // The same identity, with a sweetness stated on one side only: ask. A
-  // match-only caller gets no match (it never links what a member has not
-  // confirmed); a caller that already confirmed the create goes on to create.
+  // The same identity, with a sweetness stated on one side only: ask. The
+  // candidates come first, as at the fuzzy stage below — every match-only
+  // caller (a draft publish, the admin create, a wine-request approval,
+  // resolve_wine, bulk_add) relies on them to show its "similar" step; a
+  // match-only caller that already confirmed the create gets no match (it
+  // never links what a member has not confirmed), and every other confirmed
+  // caller goes on to create.
   if (askAbout.length) {
-    if (matchOnly) return { wine: null, noMatch: true };
     if (!confirmCreate) return { wine: null, candidates: askAbout.map((wine) => ({ wine, score: 1 })) };
+    if (matchOnly) return { wine: null, noMatch: true };
   }
 
   // 2. Fuzzy similarity search

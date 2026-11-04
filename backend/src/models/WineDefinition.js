@@ -751,7 +751,14 @@ wineDefinitionSchema.pre('save', function(next) {
 // the common wine without one costs nothing. Kept in $locals (per-save
 // bookkeeping, never stored); a populated ref needs no read at all.
 wineDefinitionSchema.pre('validate', async function() {
-  const t = this.labelSweetness;
+  let t = this.labelSweetness;
+  // A PARTIAL load (a script's select list without the field) reads the ref
+  // as undefined, and the keys below would lose their suffix on save. Read
+  // it: one small query, only for a saved row loaded without the field.
+  if (!this.isNew && !this.isSelected('labelSweetness')) {
+    const row = await this.constructor.findById(this._id).select('labelSweetness').lean();
+    t = row ? row.labelSweetness : null;
+  }
   if (!t) { this.$locals.sweetnessName = null; return; }
   if (typeof t === 'object' && typeof t.name === 'string') { this.$locals.sweetnessName = t.name; return; }
   const row = await mongoose.model('SweetnessTerm').findById(t).select('name').lean();

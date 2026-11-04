@@ -308,7 +308,7 @@ async function buildBottleDetail(userId, bottleId) {
     data: {
       bottle_id: b._id,
       wine: wd ? {
-        ...wineSummary(wd),
+        ...wineSummary(wd, { termLoaded: true }),
         classification: wd.classification || null,
         classifications: classificationsOut(wd),
         // Skeleton subdocs (0 reviews / never-enriched all-null profile) are

@@ -101,6 +101,53 @@ describe('a wine with a term', () => {
   });
 });
 
+describe('a PARTIAL load — a script\'s select list without the field', () => {
+  // The shape scripts/consolidate-producer-displays.js saves through: a
+  // projection that names the fields it reads. Hydrated with that projection,
+  // the doc does not have labelSweetness selected.
+  const PROJECTION = { name: 1, producer: 1, appellation: 1, normalizedKey: 1, canonicalKey: 1, slug: 1 };
+  const partial = () => {
+    const doc = WineDefinition.hydrate({
+      _id: oid(), name: 'Riesling Kabinett', producer: 'Weingut Keller', appellation: 'Rheinhessen',
+      normalizedKey: TERMED, canonicalKey: computeCanonicalKey('Riesling Kabinett', 'Weingut Keller', 'Rheinhessen', { sweetness: 'trocken' }),
+      slug: 'weingut-keller-riesling-kabinett-trocken',
+    }, PROJECTION);
+    return doc;
+  };
+
+  test('the field is not selected, so the hook reads it before building the keys — the suffix survives the save', async () => {
+    const doc = partial();
+    expect(doc.isSelected('labelSweetness')).toBe(false);
+    const read = jest.spyOn(WineDefinition, 'findById').mockReturnValue({ select: () => ({ lean: async () => ({ labelSweetness: oid() }) }) });
+    termNamed('trocken');
+    doc.producer = 'Klaus Peter Keller'; // what the consolidation writes
+    doc.normalizedKey = generateWineKey('Riesling Kabinett', 'Klaus Peter Keller', 'Rheinhessen'); // bare, as the script builds it
+    await doc.validate();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(doc.normalizedKey).toBe(generateWineKey('Riesling Kabinett', 'Klaus Peter Keller', 'Rheinhessen', { sweetness: 'trocken' }));
+    expect(doc.canonicalKey).toBe(computeCanonicalKey('Riesling Kabinett', 'Klaus Peter Keller', 'Rheinhessen', { sweetness: 'trocken' }));
+  });
+
+  test('a partial load of a wine WITHOUT a term keeps bare keys, one read, no term lookup', async () => {
+    const doc = WineDefinition.hydrate({ _id: oid(), name: 'Barolo', producer: 'Mascarello', appellation: 'Barolo', normalizedKey: generateWineKey('Barolo', 'Mascarello', 'Barolo') }, PROJECTION);
+    jest.spyOn(WineDefinition, 'findById').mockReturnValue({ select: () => ({ lean: async () => ({ labelSweetness: null }) }) });
+    const term = jest.spyOn(SweetnessTerm, 'findById');
+    doc.producer = 'Bartolo Mascarello';
+    await doc.validate();
+    expect(term).not.toHaveBeenCalled();
+    expect(doc.normalizedKey).toBe(generateWineKey('Barolo', 'Mascarello', 'Barolo'));
+    expect(doc.canonicalKey).toBe(computeCanonicalKey('Barolo', 'Bartolo Mascarello', 'Barolo'));
+  });
+
+  test('a full load does not read again', async () => {
+    const read = jest.spyOn(WineDefinition, 'findById');
+    const doc = loaded();
+    doc.producer = 'Klaus Peter Keller';
+    await doc.validate();
+    expect(read).not.toHaveBeenCalled();
+  });
+});
+
 describe('the slug stays where the word moved', () => {
   test('the word leaves the name and enters the term: after validate the slug base is unchanged — no regeneration', async () => {
     termNamed('trocken');

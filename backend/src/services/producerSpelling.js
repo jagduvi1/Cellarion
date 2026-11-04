@@ -62,6 +62,7 @@ const WineDefinition = require('../models/WineDefinition');
 const { escapeRegex } = require('../utils/sanitize');
 const { normalizeString, generateWineKey, isIdentitySentinel } = require('../utils/normalize');
 const { producerSegment } = require('../utils/wineIdentity');
+const { loadTerms } = require('./sweetnessOps');
 
 /** Do two normalized spellings differ only by decoration? (token subset,
  *  either direction — "philipp kuhn" ⊂ "weingut philipp kuhn", and the
@@ -224,11 +225,14 @@ async function otherProducerSpellings(spelling, countryId, { excludeWineId = nul
  * own canonicalKey, the slug with its previousSlugs and the verifiedChecks
  * invalidation — the scripts/consolidate-producer-displays.js write path).
  *
- * normalizedKey is UNIQUE and not hook-maintained, so every new key is
- * checked first: against the rest of the registry, against the other wines
- * in the plan, and against `reservedKeys` (the corrected wine's own new key).
- * Any clash means two wines would become one — that is a merge, not a
- * rename, so the plan reports it and the caller writes nothing.
+ * normalizedKey is UNIQUE, and the hook maintains only its label-sweetness
+ * suffix (models/WineDefinition pre-validate), so every new key is built in
+ * full — the term included, or the check would compare a termed wine against
+ * its untermed twin — and checked first: against the rest of the registry,
+ * against the other wines in the plan, and against `reservedKeys` (the
+ * corrected wine's own new key). Any clash means two wines would become one —
+ * that is a merge, not a rename, so the plan reports it and the caller writes
+ * nothing.
  *
  * @returns {Promise<{wines: Array<{doc, from: string, newKey: string}>,
  *   clashes: Array<{wineId: string, name: string, from: string}>, tooMany: number}>}
@@ -245,8 +249,13 @@ async function planProducerRename(fromSpellings, to, countryId, { excludeWineId 
     .filter((d) => from.has(displaySpelling(d.producer)));
   if (docs.length > max) return { ...empty, tooMany: docs.length };
 
+  // The term's WORD from the table's in-memory copy (warm whenever the
+  // registry runs; empty without a connection, where the keys are bare as
+  // the docs are): no populate on the bucket query, no extra read per wine.
+  const terms = await loadTerms();
+  const sweetnessOf = (doc) => (doc.labelSweetness ? (terms.byId.get(String(doc.labelSweetness._id || doc.labelSweetness))?.name || null) : null);
   const wines = docs.map((doc) => ({
-    doc, from: displaySpelling(doc.producer), newKey: generateWineKey(doc.name, target, doc.appellation),
+    doc, from: displaySpelling(doc.producer), newKey: generateWineKey(doc.name, target, doc.appellation, { sweetness: sweetnessOf(doc) }),
   }));
   const taken = new Set(reservedKeys.filter(Boolean));
   const clashes = [];

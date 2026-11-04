@@ -412,10 +412,14 @@ async function publishDraft(wine, { userId = null, req = null, confirmCreate = f
   try {
     await wine.save();
   } catch (err) {
+    // The key the save tried to write — the hook may have added the label
+    // sweetness suffix to the bare publishedKey — so the holder lookup below
+    // meets the row that actually collided, not an untermed twin.
+    const collidedKey = wine.normalizedKey;
     // Whatever failed, the in-memory document is a draft again.
     Object.assign(wine, before);
     if (err?.code === 11000) {
-      const holder = await WineDefinition.findOne({ normalizedKey: publishedKey, _id: { $ne: wine._id } })
+      const holder = await WineDefinition.findOne({ normalizedKey: collidedKey || publishedKey, _id: { $ne: wine._id } })
         .populate(POPULATE).lean();
       return {
         ok: false, code: 'duplicate',

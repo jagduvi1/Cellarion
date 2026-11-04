@@ -10,12 +10,13 @@ const { decorateGrapes } = require('../utils/grapeDisplay');
 // can see whether it is connected and adopt a registry wine into it; the
 // key itself lives in the server's .env and never reaches the browser.
 
-const ADOPT_STATUS = { disabled: 404, invalid: 400, not_found: 404, unavailable: 503 };
+const ADOPT_STATUS = { disabled: 404, invalid: 400, not_found: 404, unavailable: 503, conflict: 409 };
 const ADOPT_MESSAGE = {
   disabled: 'This install is not connected to the shared registry.',
   invalid: 'Invalid registry wine id.',
   not_found: 'That wine is no longer in the shared registry.',
   unavailable: 'The shared registry could not be reached right now — try again in a minute, or add the wine by hand.',
+  conflict: 'A wine with this identity here is already linked to a different registry wine — an admin can merge or correct it.',
 };
 
 // GET /api/bridge/status — connection state, quota use, held copies.

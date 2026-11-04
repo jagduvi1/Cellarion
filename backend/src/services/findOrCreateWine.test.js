@@ -72,7 +72,7 @@ const {
 const USER_ID = 'user-1';
 // Mirrors the service's POPULATE: the label sweetness term rides along so the
 // style guard reads a candidate's record, not only its name.
-const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }];
+const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
 
 const INPUT = {
   name: 'Clos des Papes',

@@ -414,7 +414,7 @@ router.get('/duplicate-clusters', async (req, res) => {
       .select('name producer appellation image type colour country region labelSweetness')
       .populate('country', 'name')
       .populate('region', 'name')
-      .populate('labelSweetness', 'name band scale regulated')
+      .populate('labelSweetness', 'name band scale regulated -_id')
       .lean();
 
     // Group by normalised producer KEY: wine stop words + corporate suffixes

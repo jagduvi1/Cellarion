@@ -382,15 +382,17 @@ async function adoptWine(registryId, userId) {
   // (a later plain add exact-matches at stage one, where no guard runs).
   const fields = identityFields(w, tax);
   const normalizedKey = generateWineKey(fields.name, w.producer || '', w.appellation || '', { sweetness: sweetnessKeyWord(tax) });
-  // A copy made before the Bridge carried terms — or typed by hand — may hold
-  // the word IN ITS NAME with no term. Probe that key too: the row is linked,
-  // not twinned.
-  const probe = [normalizedKey];
-  if (tax.sweetness && tax.sweetness.word) {
+  // The exact key first. Then — a copy made before the Bridge carried terms,
+  // or typed by hand, may hold the word IN ITS NAME with no term — the
+  // display-name key, so that row is linked, not twinned.
+  let wine = await WineDefinition.findOne({ normalizedKey });
+  if (!wine && tax.sweetness && tax.sweetness.word) {
     const shown = generateWineKey(appendSweetnessTerm(w.name, tax.sweetness.word), w.producer || '', w.appellation || '');
-    if (shown !== normalizedKey) probe.push(shown);
+    if (shown !== normalizedKey) wine = await WineDefinition.findOne({ normalizedKey: shown });
   }
-  let wine = await WineDefinition.findOne(probe.length > 1 ? { normalizedKey: { $in: probe } } : { normalizedKey });
+  // A row already linked to a DIFFERENT registry wine is never re-pointed:
+  // two registry identities on one local row is a merge question for a person.
+  if (wine && wine.registryId && String(wine.registryId) !== String(w.id)) return { ok: false, code: 'conflict' };
   // Captured before the assignment below: rows a previous adoption wrote carry
   // the OLD stamp, and comparing them against the new one would read them as
   // local edits and freeze them (audit 2026-09-08).
@@ -472,11 +474,14 @@ async function applyRegistryUpdate(local, w) {
     // Never trade a picture for nothing: a wine the registry has no image for
     // must not blank one this install already shows.
     if (!fields.image && wine.image) { delete fields.image; delete fields.imageCredit; }
-    // The review marker's age is when the word FIRST arrived: a refresh that
-    // meets the same unknown word keeps the marker it set, not a fresh stamp.
+    // The review marker's age is when the question FIRST arose: a refresh that
+    // meets the same kind of question keeps `since` and refreshes the detail
+    // (a different unknown word is still one unresolved word).
     const prevReview = wine.sweetnessReview;
     Object.assign(wine, fields);
-    if (fields.sweetnessReview && prevReview && prevReview.reason === fields.sweetnessReview.reason) wine.sweetnessReview = prevReview;
+    if (fields.sweetnessReview && prevReview && prevReview.reason === fields.sweetnessReview.reason && prevReview.since) {
+      wine.sweetnessReview = { ...fields.sweetnessReview, since: prevReview.since };
+    }
     // Same as adopt: a colour the registry states is stored as stated.
     if (Object.prototype.hasOwnProperty.call(fields, 'colour')) stateColour(wine, fields.colour);
     // From the STORED name (an unknown word rides in it), as adoptWine keys.

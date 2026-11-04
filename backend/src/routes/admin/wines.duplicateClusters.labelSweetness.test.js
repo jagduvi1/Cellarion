@@ -90,7 +90,7 @@ test('the scan loads and populates the term', async () => {
   pool([]);
   expect((await get()).status).toBe(200);
   expect(chain.select.mock.calls[0][0].split(/\s+/)).toContain('labelSweetness');
-  expect(chain.populate).toHaveBeenCalledWith('labelSweetness', 'name band scale regulated');
+  expect(chain.populate).toHaveBeenCalledWith('labelSweetness', 'name band scale regulated -_id');
 });
 
 test('the trocken and the halbtrocken of one vineyard, populated, are NOT one cluster', async () => {

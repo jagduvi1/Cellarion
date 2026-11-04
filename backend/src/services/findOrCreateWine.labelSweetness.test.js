@@ -156,9 +156,25 @@ describe('one side states a term, the other none — the member is asked, with s
     expect(result.wine).not.toBe(sibling);
   });
 
-  test('a match-only caller gets no match, never the recorded twin', async () => {
+  test('a match-only caller is ASKED too — the draft publish, the admin create, resolve_wine and bulk_add all show their "similar" step from the candidates', async () => {
+    const sibling = recorded(TROCKEN);
+    primeFind({ canonicalSiblings: [sibling] });
+    // The draft publish's exact probe (services/wineDraftOps.publishDraft).
+    asked(await findOrCreateWine(QUERY, USER_ID, { matchOnly: true, allowPending: true, excludeId: 'draft-1', confirmCreate: false, skipSiblingMatch: false }), sibling);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('a match-only caller that already confirmed the create gets no match, never the recorded twin', async () => {
     primeFind({ canonicalSiblings: [recorded(TROCKEN)] });
-    expect(await findOrCreateWine(QUERY, USER_ID, { matchOnly: true })).toEqual({ wine: null, noMatch: true });
+    expect(await findOrCreateWine(QUERY, USER_ID, { matchOnly: true, confirmCreate: true })).toEqual({ wine: null, noMatch: true });
+  });
+
+  test('the same row met by two stages is asked about once', async () => {
+    const twin = recorded(TROCKEN);
+    primeFind({ canonicalHits: [twin], canonicalSiblings: [twin] });
+    const result = await findOrCreateWine(QUERY, USER_ID);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].wine).toBe(twin);
   });
 });
 

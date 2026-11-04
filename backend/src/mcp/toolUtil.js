@@ -101,17 +101,19 @@ function accessibleCellars(userId) {
 const { classificationsOut } = require('../services/classificationOps');
 const { labelSweetnessOut, labelSweetnessFields, wineDisplayName } = require('../services/sweetnessOps');
 
-function wineSummary(wd) {
+function wineSummary(wd, { termLoaded = false } = {}) {
   if (!wd) return null;
   return {
     wine_id: wd._id,
     name: wd.name,
     // label_sweetness ({ name, band, scale, regulated } or null — the sweetness
     // the LABEL states, never the tasting profile's estimate) and display_name
-    // (the name as the label reads it), BOTH only when the read loaded the
-    // field: a read that did not carries neither key, so a missing key means
-    // "not on this surface", never "no term" (services/sweetnessOps).
-    ...labelSweetnessFields(wd),
+    // (the name as the label reads it), BOTH only when the caller's read
+    // selected and populated the field (termLoaded): then a row that predates
+    // the field reads as null, like a row that states none. A read that did
+    // not load it carries neither key, so a missing key means "not on this
+    // surface", never "no term" (services/sweetnessOps.labelSweetnessFields).
+    ...labelSweetnessFields(wd, { loaded: termLoaded }),
     producer: wd.producer || null,
     type: wd.type || null,
     // 'other' = a drink that is not wine (cider, beer, spirits), kept in the

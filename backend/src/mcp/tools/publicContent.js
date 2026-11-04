@@ -35,7 +35,7 @@ registerTool({
     // labelSweetness rides along: a curator reading windows wants to know a
     // "Spätlese" is the trocken one, and the name no longer says so.
     const wine = await WineDefinition.findById(args.wine_id).select('name producer type pendingIdentity labelSweetness')
-      .populate('labelSweetness', 'name band scale regulated').lean();
+      .populate('labelSweetness', 'name band scale regulated -_id').lean();
     // A pendingIdentity row is not registry content yet (and has no reviewed
     // maturity rows anyway, since it never enters the somm queue). Same
     // not_found a missing id gets.

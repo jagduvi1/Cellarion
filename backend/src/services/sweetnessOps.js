@@ -191,17 +191,26 @@ function wineDisplayName(wd) {
 
 /**
  * The MCP fields for a wine, emitted HONESTLY or not at all (the grapes rule
- * in mcp/tools/somm.js): a read that loaded the field says
- * { label_sweetness: row | null, display_name }; a read that did not load it —
- * or holds a ref the in-memory copy cannot name — says nothing, so a missing
- * key means "not carried on this surface", never "no term". Thousands of rows
- * predate the field; a lean read of one of those omits the key, and omitting
- * the answer is the only honest thing to do with that.
+ * in mcp/tools/somm.js), decided by the caller's PROJECTION, not by what the
+ * stored row happens to hold:
+ *
+ *   loaded: true  — the caller selected (and populated) the field. A row that
+ *                   predates the field has no key at all (a lean read applies
+ *                   no defaults; thousands of rows are like that), and it means
+ *                   the same as null: the wine states no term. So:
+ *                   { label_sweetness: row | null, display_name }.
+ *   loaded: false — the caller did not load the field: neither key, so a
+ *                   missing key means "not carried on this surface".
+ *
+ * A ref the in-memory copy cannot name says nothing either way.
  */
-function labelSweetnessFields(wd) {
+function labelSweetnessFields(wd, { loaded = false } = {}) {
+  if (!wd) return {};
   const row = termRowOf(wd);
-  if (row === undefined || row === 'unresolved') return {};
-  return { label_sweetness: termOut(row), display_name: appendSweetnessTerm(wd.name, row ? row.name : null) };
+  if (row === 'unresolved') return {};
+  if (row === undefined && !loaded) return {};
+  const term = row || null;
+  return { label_sweetness: termOut(term), display_name: appendSweetnessTerm(wd.name, term ? term.name : null) };
 }
 
 /**

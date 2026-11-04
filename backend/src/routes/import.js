@@ -24,7 +24,7 @@ const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = re
 // Every registry candidate the import compares against is populated the same
 // way — the label sweetness term included, so the style guard reads a
 // candidate's record and not only its name (utils/styleTerms.styleOf).
-const WINE_READ_POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }];
+const WINE_READ_POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
 const { statedColourConflict } = require('../utils/wineColour');
 const { wineVisibilityFilter, findVisibleWine } = require('../services/wineVisibility');
 // Audit 2026-09 D13-12: parse-time warnings are bounded before they are stored.

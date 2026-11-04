@@ -87,7 +87,7 @@ function requireSomm(ctx) {
 // unselected field or an id nothing can name → neither key. The curator
 // setting a drink window reads it here — once the word has left the names,
 // this is where "trocken" is stated.
-const wineLite = (wd) => (wd ? {
+const wineLite = (wd, { termLoaded = false } = {}) => (wd ? {
   wine_id: wd._id,
   name: wd.name,
   producer: wd.producer || null,
@@ -95,7 +95,7 @@ const wineLite = (wd) => (wd ? {
   country: wd.country?.name || null,
   region: wd.region?.name || null,
   appellation: wd.appellation || null,
-  ...(labelSweetnessFields(wd)),
+  ...(labelSweetnessFields(wd, { loaded: termLoaded })),
   // Somm ticket 6a887619 (2026-08-21): every OTHER identity field showed here
   // but grapes did not, so grapes written at wine creation became visible only
   // on a later get_wine — and read as "populated by an unidentified path
@@ -337,12 +337,12 @@ registerTool({
         // grapes populated to NAMES, not just selected as ids: the queue row
         // is where the curator decides whether a wine needs work, and grapes
         // invisible here is what ticket 6a887619 mistook for a phantom writer.
-        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance labelSweetness', populate: ['country', 'region', { path: 'grapes', select: 'name' }, { path: 'labelSweetness', select: 'name band scale regulated' }] })
+        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance labelSweetness', populate: ['country', 'region', { path: 'grapes', select: 'name' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }] })
         .lean(),
     ]);
     const data = profiles.map((p) => ({
       profile_id: p._id,
-      wine: wineLite(p.wineDefinition),
+      wine: wineLite(p.wineDefinition, { termLoaded: true }),
       vintage: p.vintage,
       status: p.status,
       relative_nv: !!p.relative,
