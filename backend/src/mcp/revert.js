@@ -928,7 +928,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
   // guards compare against what THIS action recorded, so an undo never
   // clobbers open-state the user changed by hand in between.
   if (['open', 'pour', 'close'].includes(row.action)) {
-    const { closeBottle } = require('../services/bottleOps');
+    const { closeBottle, putBackInSlot, removeFromRacks } = require('../services/bottleOps');
     const { logAudit } = require('../services/audit');
     const access = await resolveBottleAccess(ctx.user.id, row.bottle, 'editor');
     if (!access) return fail('conflict', 'The bottle from that action is no longer accessible; nothing was changed.');
@@ -964,7 +964,11 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         await unclaim(row._id); // nothing changed → let the undo be retried
         return fail('conflict', `Cannot undo that open: ${result.error.message}`);
       }
-      const envelope = { summary: `Undid open — ${bottleLabel(bottle)} is unopened again`, data: { undone: 'open_bottle', bottle_id: bottle._id, open: false } };
+      const back = result.putBack;
+      const envelope = {
+        summary: `Undid open — ${bottleLabel(bottle)} is unopened again${back ? `, back in slot ${back.position}` : ''}`,
+        data: { undone: 'open_bottle', bottle_id: bottle._id, open: false, put_back: back ? { rack_id: back.rackId, rack_name: back.rackName || null, position: back.position } : null },
+      };
       await logAction(ctx, { tool: 'undo_last', action: 'close', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
       return ok(envelope.summary, envelope.data);
     }
@@ -983,6 +987,10 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
       if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
       let closedToo = false;
+      let back = null;
+      const from = bottle.openedFromSlot
+        ? { rack: bottle.openedFromSlot.rack, position: bottle.openedFromSlot.position }
+        : null;
       try {
         bottle.pours.splice(bottle.pours.length - count, count);
         // The pour that implicitly OPENED the bottle undoes the open too — but
@@ -993,6 +1001,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
           bottle.openedAt = null;
           bottle.preservationMethod = undefined;
           bottle.openBottleNotifiedAt = null;
+          bottle.openedFromSlot = null;
           closedToo = true;
         }
         await bottle.save();
@@ -1001,9 +1010,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         if (err?.name === 'VersionError') return fail('conflict', 'The bottle changed mid-undo — retry.');
         throw err;
       }
-      logAudit(ctx.req, closedToo ? 'bottle.open_undo' : 'bottle.pour_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
+      // The implicit open took it out of its rack: back into that slot, as
+      // closeBottle does, while the slot is free.
+      if (closedToo && from) back = await putBackInSlot(bottle._id, bottle.cellar, from);
+      const undone = { type: 'bottle', id: bottle._id, cellarId: bottle.cellar };
+      if (back) logAudit(ctx.req, 'bottle.open_undo', undone, { putBackInRack: true });
+      else logAudit(ctx.req, closedToo ? 'bottle.open_undo' : 'bottle.pour_undo', undone);
       const envelope = {
-        summary: `Undid pour — ${count > 1 ? `${count} glasses` : 'a glass'} removed from ${bottleLabel(bottle)}${closedToo ? ' (and its implicit open cleared)' : ''}`,
+        summary: `Undid pour — ${count > 1 ? `${count} glasses` : 'a glass'} removed from ${bottleLabel(bottle)}${closedToo ? ' (and its implicit open cleared)' : ''}${back ? `, back in slot ${back.position}` : ''}`,
         data: { undone: 'pour_glass', bottle_id: bottle._id, pours_removed: count, open: !closedToo },
       };
       await logAction(ctx, { tool: 'undo_last', action: 'pour', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
@@ -1025,11 +1039,24 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       bottle.preservationMethod = prev.preservationMethod || undefined;
       bottle.pours = (prev.pours || []).map((p) => ({ at: p.at, ml: p.ml }));
       bottle.openBottleNotifiedAt = prev.openBottleNotifiedAt ? new Date(prev.openBottleNotifiedAt) : null;
+      bottle.openedFromSlot = prev.openedFromSlot
+        ? { rack: prev.openedFromSlot.rack, position: prev.openedFromSlot.position }
+        : null;
       await bottle.save();
     } catch (err) {
       await unclaim(row._id); // nothing persisted → let the undo be retried
       if (err?.name === 'VersionError') return fail('conflict', 'The bottle changed mid-undo — retry.');
       throw err;
+    }
+    // The close put it back in its slot: out again, as it was while open —
+    // only while it still sits in exactly that slot (moved since: leave it).
+    const putBack = row.detail?.putBack;
+    if (putBack && prev.openedFromSlot) {
+      const stillThere = await Rack.exists({
+        _id: prev.openedFromSlot.rack,
+        slots: { $elemMatch: { bottle: bottle._id, position: prev.openedFromSlot.position } },
+      });
+      if (stillThere) await removeFromRacks(bottle._id);
     }
     logAudit(ctx.req, 'bottle.open', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { preservationMethod: bottle.preservationMethod, via: 'undo' });
     const envelope = {

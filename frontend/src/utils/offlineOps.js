@@ -167,6 +167,8 @@ export function applyOp(snapshot, op) {
       break;
     case 'open':
       if (bi >= 0) s.bottles[bi] = { ...s.bottles[bi], openedAt: op.body.openedAt, preservationMethod: op.body.preservationMethod, pours: [] };
+      // "Take it out of the rack": the server frees the slot, so the device does too.
+      if (op.body.takeOutOfRack === true) unrack(op.bottleId);
       break;
     case 'pour':
       if (bi >= 0) {

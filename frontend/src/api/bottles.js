@@ -50,11 +50,13 @@ export const consumeBottle = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
-export const openBottle = (apiFetch, id, preservationMethod) =>
+// takeOutOfRack: the bottle leaves its rack slot (on the counter, not back in
+// the rack); the answer's takenOutOf names the slot it left.
+export const openBottle = (apiFetch, id, preservationMethod, { takeOutOfRack } = {}) =>
   apiFetch(`/api/bottles/${id}/open`, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ preservationMethod }),
+    body: JSON.stringify(typeof takeOutOfRack === 'boolean' ? { preservationMethod, takeOutOfRack } : { preservationMethod }),
   });
 
 export const undoOpenBottle = (apiFetch, id) =>

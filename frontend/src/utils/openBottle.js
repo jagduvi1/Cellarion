@@ -22,6 +22,15 @@ export function methodMeta(id) {
   return PRESERVATION_METHODS.find(m => m.id === id) || null;
 }
 
+/**
+ * Whether "Take it out of the rack" starts ticked for a method: a Coravin'd
+ * bottle goes straight back into its slot; a recorked, stoppered or pumped
+ * one usually stands in the kitchen until it is finished.
+ */
+export function takeOutByDefault(id) {
+  return id !== 'coravin';
+}
+
 /** Bottle volume in ml from the canonical '<ml>ml' size code (750 fallback). */
 export function bottleSizeMl(bottle) {
   const m = /^(\d+)ml$/.exec(bottle?.bottleSize || '');

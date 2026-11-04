@@ -1,0 +1,22 @@
+/* "Take it out of the rack" under the method list in the open dialogs. */
+.bd-open-takeout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: -0.25rem 0 1rem;
+  cursor: pointer;
+}
+
+.bd-open-takeout input {
+  margin-top: 0.2rem;
+}
+
+.bd-open-takeout span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.bd-open-takeout small {
+  color: var(--color-text-muted);
+}

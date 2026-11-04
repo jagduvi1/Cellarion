@@ -8,7 +8,8 @@
 // The ops are the SAME implementation the REST routes run (services/bottleOps
 // openBottle/pourFromBottle/closeBottle), so validation, freshness bookkeeping
 // and audit cannot drift between surfaces. An open bottle stays ACTIVE and
-// KEEPS its rack slot — it is still physically in the cellar.
+// KEEPS its rack slot — it is still physically in the cellar — unless
+// take_out_of_rack frees it (the bottle is on the counter, not in the rack).
 //
 // Idempotency: open_bottle and close_bottle are idempotent BY STATE (a repeat
 // open of an already-open bottle reports the existing state instead of acting;
@@ -27,6 +28,13 @@ const { logAction, replay } = require('../actionLedger');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 
 const bottleLabel = (b) => `bottle ${b._id} (vintage ${b.vintage})`;
+const slotLabel = (s) => `${s.rackName ? `rack "${s.rackName}"` : 'its rack'}, slot ${s.position}`;
+const slotData = (s) => (s ? { rack_id: s.rackId, rack_name: s.rackName || null, position: s.position } : null);
+
+const TAKE_OUT_OF_RACK = z.boolean().optional()
+  .describe('true when the opened bottle no longer sits in its rack (recorked on the counter, in the fridge door): ' +
+    'its slot is freed, and undo_last / close_bottle put it back while that slot is still free. Default false: the ' +
+    'bottle keeps its slot (a Coravin bottle goes straight back). Ask the user if unclear.');
 
 /**
  * Consumed bottles KEEP openedAt/preservationMethod/pours as drinking history
@@ -71,7 +79,8 @@ registerTool({
   description:
     'Marks an ACTIVE bottle as opened without consuming it — for a bottle the user opened, drank part of and is ' +
     'preserving (re-corked, vacuum, Coravin, inert gas, sparkling stopper). The bottle stays in the cellar and KEEPS ' +
-    'its rack slot; what_should_i_open_tonight will rank it first ("finish those first") and the response includes the ' +
+    'its rack slot unless take_out_of_rack is true (then the slot is freed); what_should_i_open_tonight will rank it ' +
+    'first ("finish those first") and the response includes the ' +
     'drink-by deadline for the chosen preservation method. Ask the user HOW they preserved it if unclear — the method ' +
     'sets the freshness window. opened_at backdates the opening ("opened it yesterday"). Calling it on an already-open ' +
     'bottle just reports the existing open state. To log the bottle as finished, use consume_bottle; to record glasses ' +
@@ -84,6 +93,7 @@ registerTool({
       .describe('How the open bottle is kept: coravin (90d), inert-gas (7d), vacuum (4d), sparkling-stopper (2d), recorked (2d)'),
     opened_at: z.string().max(40).optional()
       .describe('When it was opened, ISO date/datetime (defaults to now; max 90 days back, never the future)'),
+    take_out_of_rack: TAKE_OUT_OF_RACK,
   },
   handler: async (args, ctx) => {
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');
@@ -108,22 +118,30 @@ registerTool({
     const result = await openBottle(bottle, {
       preservationMethod: args.preservation_method || 'recorked',
       openedAt: args.opened_at,
+      takeOutOfRack: args.take_out_of_rack,
     }, ctx.req);
     if (result.error) {
       return fail(result.error.code === 'already_open' ? 'conflict' : 'invalid_input', result.error.message);
     }
 
     const state = openState(bottle);
+    const out = result.takenOutOf;
     const envelope = {
-      summary: `Opened ${bottleLabel(bottle)} — ${bottle.preservationMethod}, drink by ${state.drink_by.toISOString().slice(0, 10)}`,
-      data: { bottle_id: bottle._id, ...state, undo: 'undo_last (or close_bottle) reverses this' },
+      summary: `Opened ${bottleLabel(bottle)} — ${bottle.preservationMethod}, drink by ${state.drink_by.toISOString().slice(0, 10)}` +
+        `${out ? ` — taken out of ${slotLabel(out)}` : ''}`,
+      data: {
+        bottle_id: bottle._id,
+        ...state,
+        taken_out_of: slotData(out),
+        undo: `undo_last (or close_bottle) reverses this${out ? ' and puts it back in its slot while that is free' : ''}`,
+      },
     };
     await logAction(ctx, {
       tool: 'open_bottle',
       action: 'open',
       bottle: bottle._id,
       cellar: bottle.cellar,
-      detail: { preservationMethod: bottle.preservationMethod, openedAt: bottle.openedAt },
+      detail: { preservationMethod: bottle.preservationMethod, openedAt: bottle.openedAt, ...(out ? { takenOutOf: slotData(out) } : {}) },
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);
@@ -146,6 +164,8 @@ registerTool({
     ml: z.number().int().min(1).max(6000).optional().describe(`ml per glass (default ${DEFAULT_POUR_ML})`),
     preservation_method: z.enum(PRESERVATION_METHODS).optional()
       .describe('Only used when the bottle is not open yet (implicit open; default recorked)'),
+    take_out_of_rack: TAKE_OUT_OF_RACK.describe('Only used when the bottle is not open yet (implicit open): ' +
+      'true frees its rack slot — the bottle is on the counter, not back in the rack. Default false.'),
     idempotency_key: z.string().max(100).optional().describe('Unique key: a retry with the same key returns the original result'),
   },
   handler: async (args, ctx) => {
@@ -163,10 +183,15 @@ registerTool({
     // Implicit open (issue #835): "I just poured a glass of X" should not
     // require a separate open_bottle round-trip.
     let implicitOpen = false;
+    let takenOutOf = null;
     if (!bottle.openedAt) {
-      const opened = await openBottle(bottle, { preservationMethod: args.preservation_method || 'recorked' }, ctx.req);
+      const opened = await openBottle(bottle, {
+        preservationMethod: args.preservation_method || 'recorked',
+        takeOutOfRack: args.take_out_of_rack,
+      }, ctx.req);
       if (opened.error) return fail('invalid_input', opened.error.message);
       implicitOpen = true;
+      takenOutOf = opened.takenOutOf;
     }
 
     // ONE all-or-nothing service call for the whole batch (single save): the
@@ -191,8 +216,14 @@ registerTool({
     const envelope = {
       summary: `Recorded ${glasses > 1 ? `${glasses} glasses` : 'a glass'} from ${bottleLabel(bottle)}` +
         `${implicitOpen ? ' (bottle marked open)' : ''}` +
+        `${takenOutOf ? ` — taken out of ${slotLabel(takenOutOf)}` : ''}` +
         `${state.remaining_ml != null ? ` — about ${state.remaining_ml} ml left` : ''}`,
-      data: { bottle_id: bottle._id, ...state, undo: 'undo_last reverses this pour' },
+      data: {
+        bottle_id: bottle._id,
+        ...state,
+        ...(implicitOpen ? { taken_out_of: slotData(takenOutOf) } : {}),
+        undo: 'undo_last reverses this pour',
+      },
     };
     await logAction(ctx, {
       tool: 'pour_glass',
@@ -204,6 +235,7 @@ registerTool({
         ml: args.ml || DEFAULT_POUR_ML,
         implicitOpen,
         ...(implicitOpen ? { openedAt: bottle.openedAt } : {}),
+        ...(takenOutOf ? { takenOutOf: slotData(takenOutOf) } : {}),
         poursAfter: state.pours,
       },
       idempotencyKey: args.idempotency_key || null,
@@ -236,7 +268,8 @@ registerTool({
   title: 'Clear a bottle\'s open state (mistake undo)',
   description:
     'Clears a bottle\'s open-bottle state WITHOUT consuming it — for an accidental open_bottle, or a bottle that turned ' +
-    'out untouched. Discards the recorded pours (undo_last brings them back). NOT for a finished bottle — that is ' +
+    'out untouched. Discards the recorded pours (undo_last brings them back). A bottle that was taken out of its rack ' +
+    'when opened goes back into that slot while it is still free. NOT for a finished bottle — that is ' +
     'consume_bottle, which keeps the open-bottle history on the consumption record.',
   scope: 'consume',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -260,16 +293,24 @@ registerTool({
     }
 
     const discarded = result.prevOpenState.pours.length;
+    const back = result.putBack;
     const envelope = {
-      summary: `Closed ${bottleLabel(bottle)} — open state cleared${discarded ? ` (${discarded} recorded pour(s) discarded)` : ''}`,
-      data: { bottle_id: bottle._id, open: false, pours_discarded: discarded, undo: 'undo_last restores the open state and its pours' },
+      summary: `Closed ${bottleLabel(bottle)} — open state cleared${discarded ? ` (${discarded} recorded pour(s) discarded)` : ''}` +
+        `${back ? ` — back in ${slotLabel(back)}` : ''}`,
+      data: {
+        bottle_id: bottle._id,
+        open: false,
+        pours_discarded: discarded,
+        put_back: slotData(back),
+        undo: 'undo_last restores the open state and its pours',
+      },
     };
     await logAction(ctx, {
       tool: 'close_bottle',
       action: 'close',
       bottle: bottle._id,
       cellar: bottle.cellar,
-      detail: { preservationMethod: result.prevOpenState.preservationMethod, pours: discarded },
+      detail: { preservationMethod: result.prevOpenState.preservationMethod, pours: discarded, ...(back ? { putBack: slotData(back) } : {}) },
       prev: result.prevOpenState,
       result: envelope,
     });
