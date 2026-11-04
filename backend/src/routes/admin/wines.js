@@ -471,7 +471,7 @@ router.get('/duplicate-clusters', async (req, res) => {
           // consumer of this guard: it can only drop a proposed merge, never
           // propose one, and it spares the n² manual dismissals a surfaced
           // range would otherwise cost.
-          if (conflictingStyleTerms(a.name, b.name)) continue;
+          if (conflictingStyleTerms(a, b)) continue;
           const score = scoreWineMatch(
             { name: a.name, producer: a.producer, appellation: a.appellation },
             { name: b.name, producer: b.producer, appellation: b.appellation },

@@ -70,7 +70,9 @@ const {
 } = require('./findOrCreateWine');
 
 const USER_ID = 'user-1';
-const POPULATE = ['country', 'region', 'grapes'];
+// Mirrors the service's POPULATE: the label sweetness term rides along so the
+// style guard reads a candidate's record, not only its name.
+const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }];
 
 const INPUT = {
   name: 'Clos des Papes',

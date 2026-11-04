@@ -154,8 +154,8 @@ registerTool({
     // text), so the document load is where a non-wine row stays out of
     // semantic search, as it does out of keyword search (audit 2026-10-14).
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, nonWine: { $ne: true } })
-      .select('name producer slug country region appellation classification grapes type colour communityRating')
-      .populate(['country', 'region', 'grapes'])
+      .select('name producer slug country region appellation classification labelSweetness grapes type colour communityRating')
+      .populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }])
       .lean();
     const byId = new Map(docs.map((d) => [String(d._id), d]));
     const data = ranked

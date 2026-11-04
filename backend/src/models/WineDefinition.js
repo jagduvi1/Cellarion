@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification } = require('../utils/normalize');
 require('./Classification'); // registers the model the classifications ref and the save hook use
+require('./SweetnessTerm'); // the same for labelSweetness (the key/slug hook reads the term's word)
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 const { isStyleType, inferColourFromName } = require('../utils/wineColour');
 
@@ -63,6 +64,42 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Classification'
   }],
+  // The sweetness the LABEL states — trocken, Brut Nature, amabile — as a
+  // curated term row (models/SweetnessTerm, GitHub discussion #1754). An
+  // identity fact: a Spätlese trocken and a Spätlese are two wines, so the
+  // term rides on normalizedKey / canonicalKey / the slug when set
+  // (utils/normalize SWEETNESS_KEY_MARK). Not the tasting profile's
+  // sweetness (aiProfile.sweetness, a taste estimate), which stays as it is.
+  // Null when the label states none; never derived from the ripeness tier.
+  labelSweetness: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'SweetnessTerm',
+    default: null
+  },
+  // A curator's mark: the sweetness word in this NAME is part of the name
+  // ("Brut Premier", a "Sig'Nature") and stays there — the strip rule leaves
+  // it, the display name does not double it, and the style guard reads the
+  // field rather than the word. Also how a word wrongly taken out of a name by
+  // the migration is put back.
+  sweetnessInName: {
+    type: Boolean,
+    default: false
+  },
+  // A row a curator should look at: the sweetness the record states and the
+  // name disagree, a scan/import/Bridge peer sent a word the term table lacks,
+  // a sparkling term on a still wine … `reason` is a code (unknown_term,
+  // term_contradiction, type_mismatch, name_ambiguous, in_classification),
+  // `detail` a short human line. Null when nothing is pending. Cleared by the
+  // pre-validate hook whenever name, labelSweetness, sweetnessInName or type
+  // changes — any of them may settle the question. Never holds a person.
+  sweetnessReview: {
+    type: {
+      reason: { type: String, trim: true, maxlength: 40 },
+      detail: { type: String, trim: true, maxlength: 300 },
+      since: { type: Date },
+    },
+    default: null
+  },
   lwin: {
     lwin7: {
       type: String,
@@ -659,6 +696,11 @@ wineDefinitionSchema.index({ country: 1, name: 1 });
 wineDefinitionSchema.index({ region: 1, name: 1 });
 wineDefinitionSchema.index({ grapes: 1, name: 1 });
 wineDefinitionSchema.index({ classifications: 1 });
+// Label sweetness: "every wine with this term" (the taxonomy counts, a filter),
+// and the curator's review queue — partial, so the ordinary registry pays
+// nothing for a marker almost no row carries.
+wineDefinitionSchema.index({ labelSweetness: 1 });
+wineDefinitionSchema.index({ 'sweetnessReview.reason': 1 }, { partialFilterExpression: { 'sweetnessReview.reason': { $exists: true } } });
 
 // The legacy classification string follows the taxonomy rows: whenever the
 // array changes, the string is rewritten from the rows' names in kind order
@@ -699,6 +741,21 @@ wineDefinitionSchema.index({ nonWine: 1 }, { partialFilterExpression: { nonWine:
 wineDefinitionSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
+});
+
+// The label sweetness term's WORD, for the identity keys and the slug below:
+// both are built from the printed word (utils/normalize sweetnessKeySegment,
+// appendSweetnessTerm), never from the id, so a key comes out the same on every
+// server. Resolved here, in its own async hook that runs before the sync one,
+// because that one must not do I/O. One read, only on a wine that has a term —
+// the common wine without one costs nothing. Kept in $locals (per-save
+// bookkeeping, never stored); a populated ref needs no read at all.
+wineDefinitionSchema.pre('validate', async function() {
+  const t = this.labelSweetness;
+  if (!t) { this.$locals.sweetnessName = null; return; }
+  if (typeof t === 'object' && typeof t.name === 'string') { this.$locals.sweetnessName = t.name; return; }
+  const row = await mongoose.model('SweetnessTerm').findById(t).select('name').lean();
+  this.$locals.sweetnessName = row ? row.name : null;
 });
 
 // Keep canonicalKey in sync with the identity fields, and drop the human-review
@@ -763,8 +820,16 @@ wineDefinitionSchema.pre('validate', function(next) {
     // isModified() is not readable in post('save'), where the stamp must run.
     this.$locals.promotedFromPending = true;
   }
-  if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {
-    this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation);
+  if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation') || this.isModified('labelSweetness')) {
+    this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation, { sweetness: this.$locals.sweetnessName || null });
+  }
+  // A sweetness question is settled by a write to any of the fields it is
+  // about; a stale marker would send a curator to a row somebody already fixed.
+  if (!this.isNew && this.sweetnessReview && (
+    this.isModified('name') || this.isModified('labelSweetness') ||
+    this.isModified('sweetnessInName') || this.isModified('type')
+  ) && !this.isModified('sweetnessReview')) {
+    this.sweetnessReview = null;
   }
   // !isNew: on a create both fields count as "modified" and the defaults are
   // already empty — being explicit keeps a future born-verified admin-create
@@ -945,8 +1010,11 @@ wineDefinitionSchema.statics.findFreeSlug = async function (base) {
 wineDefinitionSchema.statics.shouldRegenerateSlug = function (doc) {
   if (!doc.slug || doc.isNew) return false;
   if (doc.pendingIdentity === true) return false;
-  if (!doc.isModified('name') && !doc.isModified('producer')) return false;
-  const base = generateWineSlug(doc.name, doc.producer);
+  if (!doc.isModified('name') && !doc.isModified('producer') && !doc.isModified('labelSweetness')) return false;
+  // The slug is built from the DISPLAY name — name plus the label sweetness
+  // term (resolved into $locals by the pre-validate hook) — so a word moving
+  // from the name into the field leaves the URL exactly where it was.
+  const base = generateWineSlug(doc.name, doc.producer, doc.$locals.sweetnessName || null);
   if (!base || doc.slug === base) return false;
   if (doc.slug.startsWith(`${base}-`)) {
     // …but only a DISAMBIGUATOR counts as "the same base" — "-2" or the random
@@ -964,7 +1032,7 @@ wineDefinitionSchema.statics.shouldRegenerateSlug = function (doc) {
 wineDefinitionSchema.pre('save', async function(next) {
   if (this.constructor.shouldRegenerateSlug(this)) {
     const outgoing = this.slug;
-    const base = generateWineSlug(this.name, this.producer);
+    const base = generateWineSlug(this.name, this.producer, this.$locals.sweetnessName || null);
     this.slug = await this.constructor.findFreeSlug(base);
     const kept = (this.previousSlugs || []).filter((s) => s !== outgoing && s !== this.slug);
     // Oldest first, newest-kept last, bounded — and the ORIGINAL slug survives
@@ -973,7 +1041,7 @@ wineDefinitionSchema.pre('save', async function(next) {
     return next();
   }
   if (!this.constructor.shouldAssignSlug(this)) return next();
-  const base = generateWineSlug(this.name, this.producer);
+  const base = generateWineSlug(this.name, this.producer, this.$locals.sweetnessName || null);
   if (!base) return next();
   this.slug = await this.constructor.findFreeSlug(base);
   next();

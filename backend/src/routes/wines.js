@@ -259,7 +259,9 @@ async function matchScannedIdentity({ name, producer, appellation }, viewer) {
   // decided by string distance between "Feinherb" and "Trocken". Filtered
   // BEFORE scoring, not after: dropping only the winner would hand the match
   // to the next wine in the same range. See utils/styleTerms.
-  candidates = candidates.filter((c) => !conflictingStyleTerms(name, c.name));
+  // The candidate goes in whole: the guard reads its labelSweetness record
+  // where it has one, its name where it does not (utils/styleTerms.styleOf).
+  candidates = candidates.filter((c) => !conflictingStyleTerms({ name }, c));
 
   // Use the shared scorer so scan-label, find-or-create and import all
   // dedup with one implementation. redistribute:false preserves this
@@ -1016,7 +1018,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
-const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification classifications aiProfile canary';
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification classifications labelSweetness aiProfile canary';
 // The populated places and grapes on the public page carry their public
 // fields only: a bare populate also sent createdBy / reviewedBy, the ids of
 // the members who added or reviewed a region or grape. Descriptions feed the
@@ -1026,6 +1028,7 @@ const PUBLIC_TAXONOMY_POPULATE = [
   { path: 'region', select: 'name slug description country translations' },
   { path: 'grapes', select: 'name slug color description regionalNames translations' },
   { path: 'classifications', select: 'name kind' },
+  { path: 'labelSweetness', select: 'name band scale regulated -_id' },
 ];
 
 // Anti-enumeration limit for the ONE wine endpoint that needs no account.

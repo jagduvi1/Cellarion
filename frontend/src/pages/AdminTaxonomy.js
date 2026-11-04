@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetTaxonomy, adminGetCountries, adminGetGrapes, adminGetRegions,
   adminCreateTaxonomy, adminUpdateTaxonomy, adminDeleteTaxonomy,
-  adminMergeTaxonomy, adminApproveRegion, adminApproveGrape, adminApproveClassification,
+  adminMergeTaxonomy, adminApproveRegion, adminApproveGrape, adminApproveClassification, adminApproveSweetnessTerm,
 } from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
 import ConfirmModal from '../components/ConfirmModal';
@@ -14,6 +14,12 @@ import AppellationUnmatchedModal from '../components/AppellationUnmatchedModal';
 import './AdminTaxonomy.css';
 
 const CLASSIFICATION_KINDS = ['vineyard_rank', 'ripeness', 'ageing', 'other'];
+// Label sweetness: the two scales and each scale's bands (models/SweetnessTerm).
+const SWEETNESS_SCALES = ['still', 'sparkling'];
+const SWEETNESS_BANDS = {
+  still: ['dry', 'off-dry', 'medium-sweet', 'sweet'],
+  sparkling: ['brut-nature', 'extra-brut', 'brut', 'extra-dry', 'sec', 'demi-sec', 'doux'],
+};
 
 function AdminTaxonomy() {
   const { t } = useTranslation();
@@ -48,7 +54,8 @@ function AdminTaxonomy() {
     regions: '/api/admin/taxonomy/regions',
     grapes: '/api/admin/taxonomy/grapes',
     appellations: '/api/admin/taxonomy/appellations',
-    classifications: '/api/admin/taxonomy/classifications'
+    classifications: '/api/admin/taxonomy/classifications',
+    sweetnessTerms: '/api/admin/taxonomy/sweetness-terms'
   };
 
   useEffect(() => {
@@ -290,7 +297,8 @@ function AdminTaxonomy() {
     try {
       const approve = activeTab === 'grapes' ? adminApproveGrape
         : activeTab === 'classifications' ? adminApproveClassification
-          : adminApproveRegion;
+          : activeTab === 'sweetnessTerms' ? adminApproveSweetnessTerm
+            : adminApproveRegion;
       const res = await approve(apiFetch, id);
       const data = await res.json();
       if (res.ok) fetchItems();
@@ -362,6 +370,18 @@ function AdminTaxonomy() {
         synonyms: item.synonyms || [],
         description: item.description || ''
       });
+    } else if (activeTab === 'sweetnessTerms') {
+      setFormData({
+        name: item.name,
+        scale: item.scale || 'still',
+        band: item.band || SWEETNESS_BANDS[item.scale || 'still'][0],
+        system: item.system || '',
+        country: item.country?._id || item.country || '',
+        regulated: item.regulated !== false,
+        synonymsText: (item.synonyms || []).join(', '),
+        synonyms: item.synonyms || [],
+        description: item.description || ''
+      });
     }
   };
 
@@ -423,6 +443,19 @@ function AdminTaxonomy() {
         description: fd.description || ''
       };
     }
+    if (activeTab === 'sweetnessTerms') {
+      const scale = fd.scale || 'still';
+      return {
+        name: fd.name,
+        scale,
+        band: fd.band && SWEETNESS_BANDS[scale].includes(fd.band) ? fd.band : SWEETNESS_BANDS[scale][0],
+        system: fd.system || null,
+        country: fd.country || null,
+        regulated: fd.regulated !== false,
+        synonyms: fd.synonyms || [],
+        description: fd.description || ''
+      };
+    }
     return fd;
   };
 
@@ -431,7 +464,8 @@ function AdminTaxonomy() {
     regions: t('admin.taxonomy.addRegion'),
     grapes: t('admin.taxonomy.addGrape'),
     appellations: t('admin.taxonomy.addAppellation'),
-    classifications: t('admin.taxonomy.addClassification')
+    classifications: t('admin.taxonomy.addClassification'),
+    sweetnessTerms: t('admin.taxonomy.addSweetnessTerm')
   }[activeTab] || '';
 
   const renderCountryForm = () => (
@@ -868,12 +902,101 @@ function AdminTaxonomy() {
     </div>
   );
 
+  // The band list follows the chosen scale: a still wine has four bands, a
+  // sparkling wine the seven dosage bands, and "sec" is no band of a still wine.
+  const renderSweetnessTermForm = () => {
+    const scale = formData.scale || 'still';
+    return (
+      <div className="form-row-2">
+        <div className="form-group">
+          <label>{t('admin.taxonomy.sweetnessTermNameLabel')}</label>
+          <input
+            type="text"
+            value={formData.name || ''}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label>{t('admin.taxonomy.scaleLabel')}</label>
+          <select
+            value={scale}
+            onChange={(e) => setFormData({ ...formData, scale: e.target.value, band: SWEETNESS_BANDS[e.target.value][0] })}
+          >
+            {SWEETNESS_SCALES.map((s) => <option key={s} value={s}>{t(`admin.taxonomy.scale.${s}`)}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>{t('admin.taxonomy.bandLabel')}</label>
+          <select
+            value={SWEETNESS_BANDS[scale].includes(formData.band) ? formData.band : SWEETNESS_BANDS[scale][0]}
+            onChange={(e) => setFormData({ ...formData, band: e.target.value })}
+          >
+            {SWEETNESS_BANDS[scale].map((b) => <option key={b} value={b}>{t(`admin.taxonomy.band.${b}`)}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>{t('admin.taxonomy.systemLabel')}</label>
+          <input
+            type="text"
+            value={formData.system || ''}
+            onChange={(e) => setFormData({ ...formData, system: e.target.value })}
+            placeholder={t('admin.taxonomy.sweetnessSystemPlaceholder')}
+            maxLength={80}
+          />
+        </div>
+        <div className="form-group">
+          <label>{t('admin.taxonomy.sweetnessCountryLabel')}</label>
+          <select
+            value={formData.country || ''}
+            onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+          >
+            <option value="">{t('admin.taxonomy.anyCountry')}</option>
+            {allCountries.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>{t('admin.taxonomy.synonymsLabel')}</label>
+          <input
+            type="text"
+            value={formData.synonymsText || ''}
+            onChange={(e) => setFormData({
+              ...formData,
+              synonymsText: e.target.value,
+              synonyms: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+            })}
+            placeholder={t('admin.taxonomy.sweetnessSynonymsPlaceholder')}
+          />
+        </div>
+        <div className="form-group">
+          <label>
+            <input
+              type="checkbox"
+              checked={formData.regulated !== false}
+              onChange={(e) => setFormData({ ...formData, regulated: e.target.checked })}
+            />
+            {' '}{t('admin.taxonomy.regulatedLabel')}
+          </label>
+        </div>
+        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+          <label>{t('admin.taxonomy.classificationDescriptionLabel')}</label>
+          <textarea
+            rows={3}
+            value={formData.description || ''}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const renderForm = () => {
     if (activeTab === 'countries') return renderCountryForm();
     if (activeTab === 'regions') return renderRegionForm();
     if (activeTab === 'grapes') return renderGrapeForm();
     if (activeTab === 'appellations') return renderAppellationForm();
     if (activeTab === 'classifications') return renderClassificationForm();
+    if (activeTab === 'sweetnessTerms') return renderSweetnessTermForm();
   };
 
   const renderItem = (item) => {
@@ -921,6 +1044,21 @@ function AdminTaxonomy() {
         </span>
       );
     }
+    if (activeTab === 'sweetnessTerms') {
+      const countryId = item.country?._id || item.country;
+      const countryName = item.country?.name || allCountries.find(c => c._id === countryId)?.name;
+      return (
+        <span>
+          {item.name}
+          <span className="taxonomy-badge">{t(`admin.taxonomy.scale.${item.scale}`, item.scale)}</span>
+          <span className="taxonomy-badge">{t(`admin.taxonomy.band.${item.band}`, item.band)}</span>
+          {item.regulated === false && <span className="taxonomy-badge">{t('admin.taxonomy.customary')}</span>}
+          {item.system && <em> — {item.system}</em>}
+          {countryName && <span className="taxonomy-badge">{countryName}</span>}
+          {item.synonyms?.length > 0 && <em className="taxonomy-synonyms"> ({item.synonyms.join(', ')})</em>}
+        </span>
+      );
+    }
   };
 
   const isEditing = !!editItem;
@@ -955,7 +1093,7 @@ function AdminTaxonomy() {
       </div>
 
       <div className="tabs">
-        {['countries', 'regions', 'appellations', 'grapes', 'classifications', 'bottleSizes'].map(tab => (
+        {['countries', 'regions', 'appellations', 'grapes', 'classifications', 'sweetnessTerms', 'bottleSizes'].map(tab => (
           <button
             key={tab}
             className={`tab ${activeTab === tab ? 'active' : ''}`}
@@ -1025,7 +1163,7 @@ function AdminTaxonomy() {
                       <span
                         className="taxonomy-badge taxonomy-badge--pending"
                         title={t(activeTab === 'grapes' ? 'admin.taxonomy.pendingGrapeTitle'
-                          : activeTab === 'classifications' ? 'admin.taxonomy.pendingClassificationTitle'
+                          : activeTab === 'classifications' || activeTab === 'sweetnessTerms' ? 'admin.taxonomy.pendingClassificationTitle'
                             : 'admin.taxonomy.pendingRegionTitle')}
                       >
                         {t('admin.taxonomy.pendingRegion')}

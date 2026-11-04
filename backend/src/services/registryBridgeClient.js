@@ -82,6 +82,10 @@ async function request(path, { method = 'GET', body, timeoutMs = TIMEOUT_MS } = 
       headers: {
         Authorization: `Bearer ${c.key}`,
         Accept: 'application/json',
+        // Protocol v2: the registry sends the bare name and the label sweetness
+        // term as its own field (routes/bridgeV1 bridgeProtocol). A registry
+        // from before the header ignores it and answers as it always did.
+        'X-Cellarion-Bridge-Protocol': '2',
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(c.instanceHost ? { 'X-Cellarion-Instance': c.instanceHost } : {}),
       },

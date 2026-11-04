@@ -32,7 +32,7 @@ const MS_PER_DAY = 86400000;
 const SCAN_EVIDENCE_EXCLUDE = '-scanImage -scanImageBack -scanFieldConflicts';
 
 const WINE_POPULATE = [
-  { path: 'wineDefinition', select: SCAN_EVIDENCE_EXCLUDE, populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }] },
+  { path: 'wineDefinition', select: SCAN_EVIDENCE_EXCLUDE, populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }] },
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
 
@@ -66,7 +66,9 @@ const WINE_POPULATE_LIST = [
   {
     path: 'wineDefinition',
     select: WINE_LIST_SELECT,
-    populate: ['country', 'region', 'grapes']
+    // The label sweetness term as the API shape ({ name, band, scale,
+    // regulated }) — a card shows it beside the name once the word has left it.
+    populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }]
   },
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
@@ -85,6 +87,7 @@ const WINE_POPULATE_CARDS = [
       { path: 'country', select: 'name slug code' },
       { path: 'region', select: 'name slug country' },
       { path: 'grapes', select: 'name slug color' },
+      { path: 'labelSweetness', select: 'name band scale regulated -_id' },
     ],
   },
   { path: 'pendingWineRequest', select: 'wineName producer' },

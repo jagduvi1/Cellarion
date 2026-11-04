@@ -119,6 +119,7 @@ describe('assembleInventory — the contract', () => {
     expect(Object.keys(s.wines)).toEqual(['w1']);
     expect(s.wines.w1).toEqual({
       name: 'Château X',
+      displayName: 'Château X', // no label sweetness term: the name as it is
       producer: 'Château X',
       type: 'red',
       category: 'wine',
@@ -127,6 +128,7 @@ describe('assembleInventory — the contract', () => {
       region: 'Pauillac',
       appellation: 'Pauillac',
       classification: null,
+      labelSweetness: null,
       grapes: ['Cabernet Sauvignon', 'Tinta Pauillac'],
       image: '/api/uploads/thumbs/processed/w1.webp.webp',
       profile: {
@@ -391,6 +393,7 @@ describe('buildInventory — what is loaded', () => {
       { path: 'country', select: 'name' },
       { path: 'region', select: 'name' },
       { path: 'grapes', select: 'name regionalNames' },
+      { path: 'labelSweetness', select: 'name band scale regulated' },
     ]);
   });
 

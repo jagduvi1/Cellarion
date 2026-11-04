@@ -32,7 +32,10 @@ registerTool({
     if (!isValidId(String(args.wine_id || ''))) {
       return fail('invalid_input', 'wine_id must be a 24-hex id from search_registry.');
     }
-    const wine = await WineDefinition.findById(args.wine_id).select('name producer type pendingIdentity').lean();
+    // labelSweetness rides along: a curator reading windows wants to know a
+    // "Spätlese" is the trocken one, and the name no longer says so.
+    const wine = await WineDefinition.findById(args.wine_id).select('name producer type pendingIdentity labelSweetness')
+      .populate('labelSweetness', 'name band scale regulated').lean();
     // A pendingIdentity row is not registry content yet (and has no reviewed
     // maturity rows anyway, since it never enters the somm queue). Same
     // not_found a missing id gets.
@@ -77,9 +80,13 @@ registerTool({
         warnings: ['No sommelier-reviewed window exists for this wine/vintage yet — any guidance you give is your own estimate; say so.'],
       });
     }
+    const { labelSweetnessOut, wineDisplayName } = require('../toolUtil');
     return ok(
-      `${data.length} curated vintage window(s) for ${wine.name}${wine.producer ? ` (${wine.producer})` : ''}`,
-      { wine_id: wine._id, name: wine.name, producer: wine.producer || null, type: wine.type || null, vintages: data }
+      `${data.length} curated vintage window(s) for ${wineDisplayName(wine)}${wine.producer ? ` (${wine.producer})` : ''}`,
+      {
+        wine_id: wine._id, name: wine.name, display_name: wineDisplayName(wine), label_sweetness: labelSweetnessOut(wine),
+        producer: wine.producer || null, type: wine.type || null, vintages: data,
+      }
     );
   },
 });

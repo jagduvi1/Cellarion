@@ -1,5 +1,6 @@
 const express = require('express');
 const { classificationsOut } = require('../services/classificationOps');
+const { labelSweetnessOut, wineDisplayName } = require('../services/sweetnessOps');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
@@ -49,9 +50,21 @@ const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 // that does not exist); a direct fetch still serves one — that is the path a
 // copier walks, and the fetch is what gets reported.
 const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
-const IDENTITY_SELECT = 'name producer slug country region appellation classification classifications grapes type colour image imageCredit';
+const IDENTITY_SELECT = 'name producer slug country region appellation classification classifications labelSweetness sweetnessInName grapes type colour image imageCredit';
 // Every identity read populates the same taxonomy rows.
-const BRIDGE_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }];
+const BRIDGE_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated' }];
+
+// Protocol version, negotiated by request header (`X-Cellarion-Bridge-Protocol`).
+// v1 — no header, every install before label sweetness — gets the name AS THE
+// LABEL READS IT (name + term, services/sweetnessOps.wineDisplayName) and no
+// `labelSweetness` key: byte for byte what it always received, so its own
+// keys and names never move. v2 gets the bare name and the term as its own
+// field, by WORD and scale (never an id: ids differ per server).
+const PROTOCOL = 2;
+const bridgeProtocol = (req) => {
+  const v = parseInt(String(req.get('x-cellarion-bridge-protocol') || '1'), 10);
+  return Number.isInteger(v) && v >= 2 ? 2 : 1;
+};
 // The profile fields that are registry content. Never the hold/suspect
 // bookkeeping, the model name, the input snapshot or the producer note.
 const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'servingTempMin', 'servingTempMax', 'needsAir', 'source', 'generatedAt', 'verifiedAt'];
@@ -114,12 +127,15 @@ function nameOf(ref) {
   return null;
 }
 
-function identity(w) {
+function identity(w, protocol = 1) {
+  const term = labelSweetnessOut(w);
   return {
     id: String(w._id),
     slug: w.slug || null,
     producer: w.producer || null,
-    name: w.name,
+    name: protocol >= 2 ? w.name : wineDisplayName(w),
+    // v2 only, and only the shape: { name, band, scale, regulated } or null.
+    ...(protocol >= 2 ? { labelSweetness: term } : {}),
     type: w.type || null,
     // Additive (v1 clients ignore unknown keys): the colour of a sparkling,
     // dessert or fortified wine, null for the rest.
@@ -208,7 +224,10 @@ router.get('/me', async (req, res) => {
       quotas: capsNow(),
       burstPerMinute: burstPerMinute(),
       usage,
-      protocol: 'v1',
+      // The protocol THIS reply speaks (negotiated by header, see bridgeProtocol)
+      // and every version the server accepts, so a client can tell.
+      protocol: `v${bridgeProtocol(req)}`,
+      accepts: ['v1', `v${PROTOCOL}`],
     });
   } catch (error) {
     console.error('Bridge /me error:', error);
@@ -271,7 +290,8 @@ router.get('/search', validSearch, quota('searches'), async (req, res) => {
     if (wines.length) {
       recordRead({ key: `user:${req.user.id}`, kind: 'user' }, wines.map((w) => w._id)).catch(() => {});
     }
-    res.json({ query: q, count: wines.length, wines: wines.map(identity) });
+    const protocol = bridgeProtocol(req);
+    res.json({ query: q, count: wines.length, wines: wines.map((w) => identity(w, protocol)) });
   } catch (error) {
     console.error('Bridge search error:', error);
     res.status(500).json({ error: 'Search failed' });
@@ -286,7 +306,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
     const wine = await findVisibleWine(req.params.id, {
       userId: null, roles: [], lean: true, noDrafts: true,
       select: `${IDENTITY_SELECT} aiProfile canary lwin communityRating updatedAt`,
-      populate: ['country', 'region', 'grapes'],
+      populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }],
     });
     if (!wine || wine.nonWine) return res.status(404).json({ error: 'Wine not found', code: 'not_found' });
 
@@ -305,7 +325,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
 
     res.json({
       wine: {
-        ...identity(wine),
+        ...identity(wine, bridgeProtocol(req)),
         lwin: wine.lwin || null,
         communityRating: wine.communityRating ?? null,
         updatedAt: wine.updatedAt || null,
@@ -471,8 +491,9 @@ router.get('/requests', async (req, res) => {
     }
     const wineIds = rows.filter((r) => r.status === 'resolved' && r.linkedWineDefinition).map((r) => r.linkedWineDefinition);
     const wines = wineIds.length
-      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').populate('classifications', 'name kind').lean()
+      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').populate('classifications', 'name kind').populate('labelSweetness', 'name band scale regulated').lean()
       : [];
+    const protocol = bridgeProtocol(req);
     const byId = new Map(wines.map((w) => [String(w._id), w]));
     res.json({
       requests: rows.map((r) => {
@@ -483,7 +504,7 @@ router.get('/requests', async (req, res) => {
           resolvedAt: r.resolvedAt || null,
           // The admin's note to the requester — the reason, for a decline.
           notes: r.adminNotes || null,
-          wine: wine ? identity(wine) : null,
+          wine: wine ? identity(wine, protocol) : null,
         };
       }),
     });

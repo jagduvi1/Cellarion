@@ -37,6 +37,7 @@ require('./notify');
 require('./ownerQuestions');
 require('./publicContent');
 require('./classifications');
+require('./sweetnessTerms');
 require('./taxonomy');
 require('./images');
 require('./account');

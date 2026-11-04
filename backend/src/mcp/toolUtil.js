@@ -99,12 +99,20 @@ function accessibleCellars(userId) {
  * `classification` (the joined string) stays beside it for older clients.
  */
 const { classificationsOut } = require('../services/classificationOps');
+const { labelSweetnessOut, wineDisplayName } = require('../services/sweetnessOps');
 
 function wineSummary(wd) {
   if (!wd) return null;
   return {
     wine_id: wd._id,
     name: wd.name,
+    // The name as the label reads it — name + the label sweetness term — for
+    // any text the model shows a person; the structured term rides beside it.
+    display_name: wineDisplayName(wd),
+    // { name, band, scale, regulated } or null: the sweetness the LABEL states
+    // (never the tasting profile's estimate). Null also when the read did not
+    // carry the term, as classificationsOut answers [] (services/sweetnessOps).
+    label_sweetness: labelSweetnessOut(wd),
     producer: wd.producer || null,
     type: wd.type || null,
     // 'other' = a drink that is not wine (cider, beer, spirits), kept in the
@@ -202,10 +210,13 @@ const FIELD_DESCRIPTIONS = {
   region: 'The wine region NAME where THIS wine is grown (e.g. "Piedmont", "Barossa Valley") — never assumed from where the producer is based.',
   appellation: 'The appellation as its register names it, WITHOUT the regulatory mark: "Barolo" not "Barolo DOCG", "Pauillac" not "Pauillac AOC". Premier/Grand Cru stays only where it is part of the legal name ("Chablis Premier Cru", "Saint-Émilion Grand Cru"). Never a quality tier.',
   classification: 'A quality tier granted ON TOP of the appellation, named as the registry\'s classification list has it (list_classifications): Riserva, Gran Reserva, Grand Cru Classé, Cru Bourgeois, Premier Cru in Champagne, a German Prädikat (Kabinett, Spätlese), VDP Grosse Lage … Several tiers comma-separated ("Spätlese, VDP Grosse Lage"). NEVER the regulatory mark (DOCG, DOC, AOC, IGT, AVA) — that follows from the appellation and is dropped on write; a word the list lacks is refused with the known tiers.',
+  labelSweetness: 'The sweetness the LABEL states, as printed — trocken, halbtrocken, feinherb, Brut Nature, Extra Brut, Brut, Extra Dry, amabile, meio seco … — named as list_sweetness_terms has it (a listed spelling is accepted). ONE term. The server knows the scale from the wine\'s type: "trocken" on a Sekt is the sec band, on a still wine the dry band. The printed word only: never derived from a Kabinett/Spätlese tier, never the tasting profile\'s dry/off-dry/sweet estimate, and no term when the label states none. Fortified wines carry none.',
 };
 
 module.exports = {
   classificationsOut,
+  labelSweetnessOut,
+  wineDisplayName,
   FIELD_DESCRIPTIONS,
   ok,
   fail,

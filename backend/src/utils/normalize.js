@@ -444,8 +444,45 @@ const normalizeProducerKey = (producer) => {
 // See the pendingIdentity field note on models/WineDefinition.js.
 const PENDING_KEY_PREFIX = 'pending~';
 const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
-const pendingWineKey = (name, userId, appellation = '') =>
-  `${pendingProducerKey(userId)}:${normalizeWineName(name)}:${normalizeString(appellation)}`;
+const pendingWineKey = (name, userId, appellation = '', { sweetness = null } = {}) =>
+  `${pendingProducerKey(userId)}:${normalizeWineName(name)}:${normalizeString(appellation)}${sweetnessKeySegment(sweetness)}`;
+
+// ── Label sweetness in the identity keys (GitHub discussion #1754) ──────────
+// The term a label prints (trocken, Brut Nature) is identity: a Kabinett
+// trocken and the Kabinett from the same vineyard are two wines. Once the word
+// leaves the name and lives in WineDefinition.labelSweetness, their
+// producer:name:appellation keys would coincide under the UNIQUE index — so the
+// term rides on every key as a suffix, ONLY when the wine has one. A key
+// without a term is byte-identical to what it always was: no stored key moves.
+// The segment is the normalised WORD, never an id — a key must be computable
+// before the row exists and come out the same on every Bridge server. '#' and
+// '=' never survive normalizeString, so the suffixed keys are provably disjoint
+// from any plain key, the same argument the '~' namespaces above rest on.
+const SWEETNESS_KEY_MARK = '#sw=';
+// ß is not decomposable and normalizeString deletes it ("süß" → "su"), so the
+// fold runs first — the pre-fold utils/styleTerms applies to names.
+const normalizeSweetnessTerm = (term) =>
+  normalizeString(String(term == null ? '' : term).toLowerCase().replace(/ß/g, 'ss'));
+const sweetnessKeySegment = (term) => {
+  const k = normalizeSweetnessTerm(term);
+  return k ? `${SWEETNESS_KEY_MARK}${k}` : '';
+};
+
+/**
+ * The name as the label reads it: the name, then the term — unless the name
+ * already carries the word as a whole token (a wine marked sweetnessInName,
+ * "Brut Premier"), so nothing is ever doubled. Every text surface shows this
+ * (services/sweetnessOps.wineDisplayName); the slug is built from it, which
+ * is why a migrated wine's URL does not move when the word leaves its name.
+ */
+const appendSweetnessTerm = (name, term) => {
+  const n = String(name == null ? '' : name).trim();
+  const t = String(term == null ? '' : term).trim();
+  if (!t) return n;
+  if (!n) return t;
+  const carried = ` ${normalizeSweetnessTerm(n)} `.includes(` ${normalizeSweetnessTerm(t)} `);
+  return carried ? n : `${n} ${t}`;
+};
 
 // DRAFT namespace (support ticket 2026-09-12: a wine created privately and
 // published later). Same construction and the same argument as the pending
@@ -457,20 +494,21 @@ const pendingWineKey = (name, userId, appellation = '') =>
 // See the `draft` field note on models/WineDefinition.js.
 const DRAFT_KEY_PREFIX = 'draft~';
 const draftProducerKey = (userId) => `${DRAFT_KEY_PREFIX}${String(userId)}`;
-const draftWineKey = (name, producer, userId, appellation = '') =>
-  `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeWineName(name)}:${normalizeString(appellation)}`;
+const draftWineKey = (name, producer, userId, appellation = '', { sweetness = null } = {}) =>
+  `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeWineName(name)}:${normalizeString(appellation)}${sweetnessKeySegment(sweetness)}`;
 
 /**
  * Generate a normalized key for wine deduplication
- * Combines producer + wine name + appellation
+ * Combines producer + wine name + appellation — plus the label sweetness term
+ * when the wine has one (see SWEETNESS_KEY_MARK above).
  */
-const generateWineKey = (name, producer, appellation = '') => {
+const generateWineKey = (name, producer, appellation = '', { sweetness = null } = {}) => {
   const normalizedName = normalizeWineName(name);
   const normalizedProducer = normalizeString(producer);
   const normalizedAppellation = normalizeString(appellation);
 
   // Combine in a consistent order
-  return `${normalizedProducer}:${normalizedName}:${normalizedAppellation}`;
+  return `${normalizedProducer}:${normalizedName}:${normalizedAppellation}${sweetnessKeySegment(sweetness)}`;
 };
 
 /**
@@ -1206,15 +1244,20 @@ const slugify = (str) => {
  * starts with the producer name, we don't duplicate the producer ("Cloudy Bay
  * Sauvignon Blanc" produced by "Cloudy Bay" → "cloudy-bay-sauvignon-blanc",
  * not "cloudy-bay-cloudy-bay-sauvignon-blanc").
+ *
+ * Built from the DISPLAY name — the name followed by the label sweetness term
+ * when the wine has one (appendSweetnessTerm) — so "Riesling Kabinett" with
+ * the term trocken keeps the URL it had while the word was in its name.
  */
-const generateWineSlug = (name, producer) => {
-  const nName = normalizeString(name);
+const generateWineSlug = (name, producer, sweetness = null) => {
+  const shown = appendSweetnessTerm(name, sweetness);
+  const nName = normalizeString(shown);
   const nProducer = normalizeString(producer);
   if (!nName) return slugify(producer);
   if (!nProducer || nName === nProducer || nName.startsWith(nProducer + ' ')) {
-    return slugify(name);
+    return slugify(shown);
   }
-  return slugify(`${producer} ${name}`);
+  return slugify(`${producer} ${shown}`);
 };
 
 
@@ -1222,6 +1265,10 @@ module.exports = {
   normalizeString,
   spellStarGrades,
   normalizeWineName,
+  SWEETNESS_KEY_MARK,
+  normalizeSweetnessTerm,
+  sweetnessKeySegment,
+  appendSweetnessTerm,
   MAX_STAR_GRADE,
   sanitizeTaxonomyName,
   MAX_TAXONOMY_NAME,

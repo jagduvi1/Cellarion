@@ -81,6 +81,18 @@ function requireSomm(ctx) {
     : fail('forbidden_scope', 'This tool needs the sommelier (or admin) role.');
 }
 
+// The label sweetness term, emitted honestly or not at all (the grapes rule
+// below): a populated row → { name, band, scale, regulated }; a selected null
+// → null, the wine states none; an unpopulated id or an unselected field →
+// the key is omitted. The curator setting a drink window reads it here —
+// once the word has left the names, this is where "trocken" is stated.
+const labelSweetnessLite = (wd) => {
+  const t = wd.labelSweetness;
+  if (t === undefined) return {};
+  if (t === null) return { label_sweetness: null };
+  return t && typeof t === 'object' && t.name ? { label_sweetness: labelSweetnessOut(wd) } : {};
+};
+
 const wineLite = (wd) => (wd ? {
   wine_id: wd._id,
   name: wd.name,
@@ -89,6 +101,7 @@ const wineLite = (wd) => (wd ? {
   country: wd.country?.name || null,
   region: wd.region?.name || null,
   appellation: wd.appellation || null,
+  ...(labelSweetnessLite(wd)),
   // Somm ticket 6a887619 (2026-08-21): every OTHER identity field showed here
   // but grapes did not, so grapes written at wine creation became visible only
   // on a later get_wine — and read as "populated by an unidentified path
@@ -330,7 +343,7 @@ registerTool({
         // grapes populated to NAMES, not just selected as ids: the queue row
         // is where the curator decides whether a wine needs work, and grapes
         // invisible here is what ticket 6a887619 mistook for a phantom writer.
-        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance', populate: ['country', 'region', { path: 'grapes', select: 'name' }] })
+        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance labelSweetness', populate: ['country', 'region', { path: 'grapes', select: 'name' }, { path: 'labelSweetness', select: 'name band scale regulated' }] })
         .lean(),
     ]);
     const data = profiles.map((p) => ({

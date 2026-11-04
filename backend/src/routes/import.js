@@ -693,7 +693,9 @@ async function findWineMatches(item, viewer = {}) {
     .slice(0, 5)
     .map((m) => ({
       ...m,
-      styleConflict: conflictingStyleTerms(item.wineName, m.wine.name),
+      // The registry wine goes in whole, so its recorded label sweetness
+      // counts beside its name (utils/styleTerms.styleOf).
+      styleConflict: conflictingStyleTerms({ name: item.wineName }, m.wine),
       colourConflict: rowColourConflict(item, m.wine),
     }));
 

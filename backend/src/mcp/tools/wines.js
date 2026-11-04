@@ -26,9 +26,9 @@ const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 // Fields safe to expose: never normalizedKey / createdBy / productNumber*.
 // `draft` is selected so get_wine can SAY a row is the caller's private draft
 // (the query below already guarantees only the creator can reach one).
-const SAFE_SELECT = 'name producer slug country region appellation classification classifications grapes type colour communityRating aiProfile lwin image imageCredit draft';
-// Every registry read populates the same taxonomy rows (country, region, grapes, classification tiers).
-const TAXONOMY_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }];
+const SAFE_SELECT = 'name producer slug country region appellation classification classifications labelSweetness grapes type colour communityRating aiProfile lwin image imageCredit draft';
+// Every registry read populates the same taxonomy rows (country, region, grapes, classification tiers, the label sweetness term).
+const TAXONOMY_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated' }];
 
 // Registry reads on this surface are 'public' scope — served to any token and
 // to the anonymous /api/mcp/public surface — so there is no caller identity to

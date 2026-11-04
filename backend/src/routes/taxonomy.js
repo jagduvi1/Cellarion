@@ -15,6 +15,8 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Classification = require('../models/Classification');
 const { loadTaxonomy } = require('../services/classificationOps');
+const SweetnessTerm = require('../models/SweetnessTerm');
+const { loadTerms } = require('../services/sweetnessOps');
 const WineDefinition = require('../models/WineDefinition');
 const { parsePagination } = require('../utils/pagination');
 const { baseLanguage, localizedName } = require('../utils/localizedName');
@@ -433,6 +435,52 @@ router.get('/classifications', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[taxonomy] classifications list error:', err);
     res.status(500).json({ error: 'Failed to fetch classifications' });
+  }
+});
+
+// ── Sweetness terms ─────────────────────────────────────────────────────────
+
+/**
+ * GET /api/taxonomy/sweetness-terms[?scale=still|sparkling] — the label
+ * sweetness terms for the pickers (GitHub discussion #1754): every term with
+ * its scale, band, system, country, the regulated flag and accepted spellings,
+ * plus how many wines carry it. A user-minted row nobody reviewed and no wine
+ * uses is left out, as for classifications. Rows come from the in-memory copy
+ * (services/sweetnessOps), so a row an admin just added is offered at once;
+ * the counts are cached. Signed-in only, like classifications.
+ */
+router.get('/sweetness-terms', requireAuth, async (req, res) => {
+  const cacheable = () => res.set('Cache-Control', 'private, max-age=30');
+  try {
+    const scale = typeof req.query.scale === 'string' && SweetnessTerm.SCALES.includes(req.query.scale) ? req.query.scale : null;
+    const terms = await loadTerms();
+    let counts = getCachedList('sweetness-term-counts');
+    if (!counts) {
+      counts = await countWinesBy('labelSweetness');
+      listCache.set('sweetness-term-counts', { at: Date.now(), body: counts });
+    }
+    const countryIds = [...new Set(terms.rows.map((r) => r.country && String(r.country._id || r.country)).filter(Boolean))];
+    const countries = countryIds.length
+      ? new Map((await Country.find({ _id: { $in: countryIds } }).select('name').lean()).map((c) => [String(c._id), c.name]))
+      : new Map();
+    const out = [];
+    for (const r of terms.rows) {
+      if (scale && r.scale !== scale) continue;
+      const wineCount = counts.get(String(r._id)) || 0;
+      if (r.createdByUser && !r.reviewedAt && wineCount === 0) continue;
+      const countryId = r.country ? String(r.country._id || r.country) : null;
+      out.push({
+        _id: r._id, name: r.name, scale: r.scale, band: r.band, system: r.system || null, regulated: r.regulated !== false,
+        country: countryId ? { _id: countryId, name: countries.get(countryId) || null } : null,
+        synonyms: r.synonyms || [], wineCount,
+      });
+    }
+    out.sort((a, b) => a.scale.localeCompare(b.scale) || a.name.localeCompare(b.name));
+    cacheable();
+    res.json({ terms: out, scales: SweetnessTerm.SCALES, bands: SweetnessTerm.BANDS });
+  } catch (err) {
+    console.error('[taxonomy] sweetness terms list error:', err);
+    res.status(500).json({ error: 'Failed to fetch sweetness terms' });
   }
 });
 

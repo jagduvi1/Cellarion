@@ -34,7 +34,7 @@ const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { isLabelVariant, grapeTokenSet } = require('./labelVariantMatch');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
 const { resolveCanonicalAppellation, candidateKeys } = require('./appellationResolve');
-const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
+const { conflictingStyleTerms, sweetnessStated, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -47,7 +47,9 @@ const { escapeRegex } = require('../utils/sanitize');
 const SIMILARITY_THRESHOLD = 0.95;
 const SOFT_ZONE_MIN = 0.85;
 const SOFT_ZONE_TOP_N = 5;
-const POPULATE = ['country', 'region', 'grapes'];
+// labelSweetness rides along so the style guard reads a candidate's recorded
+// term, not only its name (utils/styleTerms.styleOf).
+const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated' }];
 
 // ── Pending identity ─────────────────────────────────────────────────────────
 //
@@ -515,8 +517,23 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // both names STATE a Prädikat or a sweetness and the two disagree, that is
   // not a spelling variant, it is the next bottle in the range. Never link it
   // silently; fall through and let the soft zone ask.
+  // The candidate is passed WHOLE: the guard reads its labelSweetness record
+  // where it has one and its name where it does not (utils/styleTerms.styleOf),
+  // so it stays sighted once the word has left the names.
+  const queryStyle = { name: trimmedName };
   const conflictsStyle = (candidate) =>
-    Boolean(candidate && conflictingStyleTerms(trimmedName, candidate.name));
+    Boolean(candidate && conflictingStyleTerms(queryStyle, candidate));
+  // One side states a sweetness and the other none — the plain Spätlese
+  // against a registry "Spätlese" that records trocken. Not a contradiction
+  // (an empty value is a wildcard for the migration and the merge queue), but
+  // never a SILENT link either: the two may well be two wines, and the one who
+  // knows is the member. So every stage that would link without asking falls
+  // through to the soft zone instead. The guard may refuse a match, never
+  // cause one.
+  const sweetnessOneSided = (candidate) =>
+    Boolean(candidate && sweetnessStated(queryStyle) !== sweetnessStated(candidate));
+  const linksSilently = (candidate) =>
+    !conflictsCountry(candidate) && !conflictsStyle(candidate) && !sweetnessOneSided(candidate);
 
   // Pending-identity ISOLATION. A pending row is invisible to everyone but its
   // creator and curation, and that has to hold in the RESOLVER too — otherwise
@@ -583,7 +600,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const canonicalHits = (await WineDefinition.find({ canonicalKey, ...isolation })
     .limit(2)
     .populate(POPULATE)).filter((c) => !pendingBlocked(c));
-  if (canonicalHits.length === 1 && !conflictsCountry(canonicalHits[0])) {
+  if (canonicalHits.length === 1 && linksSilently(canonicalHits[0])) {
     return { wine: canonicalHits[0], created: false };
   }
 
@@ -614,7 +631,10 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     })
       .limit(2)
       .populate(POPULATE)).filter((c) => !pendingBlocked(c));
-    if (canonicalSiblings.length === 1 && !conflictsCountry(canonicalSiblings[0])) {
+    // The sibling prefix (producer:name:) matches a row whose key carries a
+    // sweetness suffix too — linksSilently is what keeps "Spätlese" from
+    // landing on the recorded "Spätlese" trocken without a word to the member.
+    if (canonicalSiblings.length === 1 && linksSilently(canonicalSiblings[0])) {
       return { wine: canonicalSiblings[0], created: false };
     }
     if (canonicalSiblings.length === 0) {
@@ -627,7 +647,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       const siblings = (await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`), ...isolation })
         .limit(2)
         .populate(POPULATE)).filter((c) => !pendingBlocked(c));
-      if (siblings.length === 1 && !conflictsCountry(siblings[0])) {
+      if (siblings.length === 1 && linksSilently(siblings[0])) {
         return { wine: siblings[0], created: false };
       }
     }
@@ -683,8 +703,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     // stated style. A conflicting >=0.95 candidate falls through to the soft
     // zone below, so the caller/user still sees it — it just never links
     // silently.
-    const autoHit = ranked.find(r => r.score >= SIMILARITY_THRESHOLD
-      && !conflictsCountry(r.wine) && !conflictsStyle(r.wine));
+    const autoHit = ranked.find(r => r.score >= SIMILARITY_THRESHOLD && linksSilently(r.wine));
     if (autoHit) {
       return { wine: autoHit.wine, created: false };
     }
