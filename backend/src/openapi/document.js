@@ -162,6 +162,11 @@ const schemas = {
       racks: { type: 'array', items: ref('InventoryRack') },
       wines: { type: 'object', additionalProperties: ref('InventoryWine'), description: 'Keyed by wine id.' },
       bottles: { type: 'array', items: ref('InventoryBottle') },
+      consumedTotal: { type: 'integer', minimum: 0, description: 'Only with `include=consumed`: how many bottles have left the cellars in total.' },
+      consumedTruncated: {
+        type: 'boolean',
+        description: 'Only with `include=consumed`: true when the answer holds fewer of those bottles than `consumedTotal`. They come newest finished first, up to a limit (10,000 today). The limit may change: read this flag rather than counting on the number.',
+      },
     },
   },
   InventoryCellar: {
@@ -690,7 +695,7 @@ const paths = {
         '',
         'Limited to 60 requests per user per 10 minutes, 304s included. Poll every few minutes, or refetch when the event stream says something changed.',
         '',
-        'Add `include=consumed` to get the drunk, gifted and sold bottles too, in the same shape: their `status` says how they left and `consumed` holds when, the rating and the note. Without it the answer is unchanged. Each `include` has its own `ETag`.',
+        'Add `include=consumed` to get the drunk, gifted and sold bottles too, in the same shape: their `status` says how they left and `consumed` holds when, the rating and the note. They come newest finished first, up to a limit (10,000 today); `consumedTotal` says how many there are and `consumedTruncated` whether some were left out. Without it the answer is unchanged. Each `include` has its own `ETag`.',
       ].join('\n'),
       security: scope('read'),
       parameters: [
@@ -699,7 +704,7 @@ const paths = {
           name: 'include',
           in: 'query',
           schema: { type: 'string', enum: ['consumed'] },
-          description: '`consumed` = also the bottles that left the cellar (drunk, gifted, sold, other). Any other value answers `400`.',
+          description: '`consumed` = also the bottles that left the cellar (drunk, gifted, sold, other), newest finished first, up to a limit; see `consumedTruncated`. Any other value answers `400`.',
         },
       ],
       responses: {

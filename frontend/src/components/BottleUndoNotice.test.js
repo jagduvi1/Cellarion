@@ -43,6 +43,15 @@ test('a bottle added by mistake comes back out of Recently deleted', async () =>
   await waitFor(() => expect(restoreRecentlyDeleted).toHaveBeenCalledWith(expect.any(Function), 'c1', { batchId: 'batch9' }));
 });
 
+test('shown on another cellar\'s "all my cellars" list, the undo asks the bottle\'s own cellar', async () => {
+  // The bottle lived in c2; the bottle page returned to c1's multi-cellar list.
+  restoreRecentlyDeleted.mockResolvedValue(json(200, { restored: 1 }));
+  render(<BottleUndoNotice notice={{ kind: 'deleted', bottleId: 'b1', batchId: 'batch9', cellarId: 'c2', name: 'Barolo 2016' }} cellarId="c1" onDismiss={() => {}} />);
+  fireEvent.click(screen.getByText('Undo'));
+  await waitFor(() => expect(restoreRecentlyDeleted).toHaveBeenCalledWith(expect.any(Function), 'c2', { batchId: 'batch9' }));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('is back in the cellar'));
+});
+
 test('a refused undo says why and can be tried again', async () => {
   restoreBottle.mockResolvedValue(json(409, { error: 'Restore window has passed' }));
   render(<BottleUndoNotice notice={{ kind: 'consumed', reason: 'gifted', bottleId: 'b1', name: 'Barolo 2016' }} cellarId="c1" onDismiss={() => {}} />);

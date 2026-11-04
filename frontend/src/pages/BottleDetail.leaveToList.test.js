@@ -50,6 +50,7 @@ beforeEach(() => {
   const api = vi.fn(async (url) => {
     if (url === '/api/bottles/b1') return ok({ bottle: BOTTLE, userRole: 'owner' });
     if (url === '/api/bottles/b1/consume') return ok({ bottle: { ...BOTTLE, status: 'drank' } });
+    if (url === '/api/bottles/b1/undo') return ok({ batchId: 'batch9' });
     return ok({});
   });
   auth = { apiFetch: api, user: { id: 'u1', preferences: { ratingScale: '5', currency: 'EUR' } } };
@@ -85,6 +86,18 @@ test('opened from a cellar list: Drink comes back to that list, with the notice'
   expect(path).toBe('/cellars/c2');
   expect(state.returning).toBe(true);
   expect(state.bottleNotice).toMatchObject({ kind: 'consumed', reason: 'drank', bottleId: 'b1' });
+});
+
+test('"Added by mistake?" from another cellar\'s list: the notice names the bottle\'s own cellar for its Undo', async () => {
+  // The batch lands in c1's Recently deleted; the list shown is c2's all-cellars view.
+  renderBottle({ backTo: '/cellars/c2', backFrom: 'cellar' });
+  fireEvent.click((await screen.findAllByRole('button', { name: 'cellarDetail.moreActions' }))[0]);
+  // The desktop header and the phone action bar share one open menu.
+  fireEvent.click((await screen.findAllByRole('menuitem', { name: /bottleDetail\.mistakeLink/ }))[0]);
+  fireEvent.click(await screen.findByText('bottleDetail.mistakeConfirm'));
+  const [path, state] = (await screen.findByTestId('where')).textContent.split('|');
+  expect(path).toBe('/cellars/c2');
+  expect(JSON.parse(state).bottleNotice).toMatchObject({ kind: 'deleted', bottleId: 'b1', batchId: 'batch9', cellarId: 'c1' });
 });
 
 test('opened through the vintage page: Drink comes back to the list that page was opened from', async () => {

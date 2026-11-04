@@ -268,7 +268,9 @@ function BottleDetail() {
       const res = await undoBottle(apiFetch, bottleId);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.batchId) {
-        const bottleNotice = { kind: 'deleted', bottleId, batchId: data.batchId, name: noticeName(), onOrder: isOnOrder(bottle) };
+        // cellarId: the batch is in THIS cellar's Recently deleted, also when the
+        // list it returns to is another cellar's "all my cellars" view.
+        const bottleNotice = { kind: 'deleted', bottleId, batchId: data.batchId, cellarId, name: noticeName(), onOrder: isOnOrder(bottle) };
         // A cancelled order goes back to the list it came from.
         if (isOnOrder(bottle)) navigate(`/cellars/${cellarId}/on-order`, { state: { bottleNotice } });
         else leaveToList(bottleNotice);

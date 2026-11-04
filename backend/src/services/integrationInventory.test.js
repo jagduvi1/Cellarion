@@ -13,7 +13,7 @@
  * heavy bottle fields are never read.
  */
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/Rack', () => ({ find: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
 jest.mock('./personalData', () => ({ listForBottles: jest.fn(async () => new Map()) }));
@@ -28,7 +28,7 @@ const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const { listForBottles } = require('./personalData');
 const {
-  assembleInventory, buildInventory, profileOf, inventoryTag, parseInclude,
+  assembleInventory, buildInventory, profileOf, inventoryTag, parseInclude, CONSUMED_LIMIT,
   BOTTLE_SELECT, CONSUMED_SELECT, RACK_SELECT, CELLAR_SELECT, PROFILE_SELECT, INVENTORY_WINE_POPULATE, INVENTORY_SCHEMA,
 } = require('./integrationInventory');
 
@@ -277,7 +277,8 @@ describe('buildInventory — what is loaded', () => {
     const q = {
       select: (s) => { record.select = s; return q; },
       populate: (p) => { record.populate = p; return q; },
-      sort: () => q,
+      sort: (s) => { record.sort = s; return q; },
+      limit: (n) => { record.limit = n; return q; },
       lean: async () => result,
     };
     return q;
@@ -310,20 +311,66 @@ describe('buildInventory — what is loaded', () => {
     expect(s.wines.w1.profile).toEqual({ body: 'full', acidity: null, sweetness: null, tannin: null, flavors: [], foodPairings: [] });
   });
 
-  test('include=consumed: on-order bottles still left out, the consumption record loaded — only then', async () => {
-    const rec = { bottle: {} };
+  test('include=consumed: the stock as always, then the bottles that left — their own capped query, newest finished first', async () => {
+    const rec = { stock: {}, left: {} };
     Cellar.find.mockReturnValue(chain([OWN]));
-    Bottle.find.mockReturnValue(chain([bottle({ status: 'drank', consumedAt: new Date('2026-10-30T19:00:00Z') })], rec.bottle));
+    Bottle.find
+      .mockReturnValueOnce(chain([bottle()], rec.stock))
+      .mockReturnValueOnce(chain([bottle({ _id: 'b2', status: 'drank', consumedAt: new Date('2026-10-30T19:00:00Z') })], rec.left));
+    Bottle.countDocuments.mockResolvedValue(1);
     Rack.find.mockReturnValue(chain([]));
     WineDefinition.find.mockReturnValue(chain([]));
 
     const s = await buildInventory(ME, { attachBottleImageUrls: jest.fn(async (bs) => bs), include: ['consumed'] });
 
-    expect(Bottle.find.mock.calls.at(-1)[0].status).toEqual({ $nin: ['ordered'] });
-    expect(rec.bottle.select).toBe(`${BOTTLE_SELECT} ${CONSUMED_SELECT}`);
-    expect(s.bottles[0]).toMatchObject({ status: 'drank', consumed: { at: '2026-10-30T19:00:00.000Z' } });
+    const [stockQ, leftQ] = Bottle.find.mock.calls.slice(-2).map((c) => c[0]);
+    expect(stockQ.status.$nin).toEqual(expect.arrayContaining(['drank', 'gifted', 'sold', 'other', 'ordered']));
+    expect(rec.stock.select).toBe(BOTTLE_SELECT);
+    // On-order bottles stay out: the second query names exactly the statuses that left.
+    expect(leftQ).toEqual({ cellar: { $in: ['c1'] }, status: { $in: ['drank', 'gifted', 'sold', 'other'] } });
+    expect(rec.left.select).toBe(`${BOTTLE_SELECT} ${CONSUMED_SELECT}`);
+    expect(rec.left.sort).toEqual({ consumedAt: -1, _id: -1 });
+    expect(rec.left.limit).toBe(CONSUMED_LIMIT);
+    expect(Bottle.countDocuments).toHaveBeenCalledWith(leftQ);
+    expect(s.bottles.map((b) => [b.id, b.status])).toEqual([['b1', 'active'], ['b2', 'drank']]);
+    expect(s.bottles[1].consumed).toMatchObject({ at: '2026-10-30T19:00:00.000Z' });
+    expect(s).toMatchObject({ consumedTotal: 1, consumedTruncated: false });
     expect(BOTTLE_SELECT.split(' ')).not.toEqual(expect.arrayContaining(CONSUMED_SELECT.split(' ')));
     expect(CONSUMED_SELECT.split(' ').sort()).toEqual(['consumedAt', 'consumedNote', 'consumedRating', 'consumedRatingScale']);
+  });
+
+  test('a history past the cap: the newest CONSUMED_LIMIT, flagged as cut short; a bottle finished meanwhile is no cut', async () => {
+    expect(CONSUMED_LIMIT).toBe(10000);
+    const run = async (leftCount, total) => {
+      Cellar.find.mockReturnValue(chain([OWN]));
+      const left = Array.from({ length: leftCount }, (_, i) => ({ _id: `x${i}`, cellar: 'c1', status: 'drank', wineDefinition: null }));
+      Bottle.find.mockReturnValueOnce(chain([])).mockReturnValueOnce(chain(left));
+      Bottle.countDocuments.mockResolvedValue(total);
+      Rack.find.mockReturnValue(chain([]));
+      WineDefinition.find.mockReturnValue(chain([]));
+      return buildInventory(ME, { attachBottleImageUrls: async (bs) => bs, include: ['consumed'] });
+    };
+    const capped = await run(CONSUMED_LIMIT, 12345);
+    expect(capped.bottles).toHaveLength(CONSUMED_LIMIT);
+    expect(capped).toMatchObject({ consumedTotal: 12345, consumedTruncated: true });
+    // The count ran a moment after the list and saw one more: complete all the same.
+    expect(await run(40, 41)).toMatchObject({ consumedTotal: 41, consumedTruncated: false });
+  });
+
+  test('without include, no count and no summary fields; no cellars with include → an honest zero', async () => {
+    Cellar.find.mockReturnValue(chain([OWN]));
+    Bottle.find.mockReturnValue(chain([bottle()]));
+    Bottle.countDocuments.mockClear();
+    Rack.find.mockReturnValue(chain([]));
+    WineDefinition.find.mockReturnValue(chain([]));
+    const s = await buildInventory(ME, { attachBottleImageUrls: async (bs) => bs });
+    expect(Bottle.countDocuments).not.toHaveBeenCalled();
+    expect(s).not.toHaveProperty('consumedTotal');
+    expect(s).not.toHaveProperty('consumedTruncated');
+
+    Cellar.find.mockReturnValue(chain([]));
+    expect(await buildInventory(ME, { attachBottleImageUrls: jest.fn(), include: ['consumed'] }))
+      .toMatchObject({ bottles: [], consumedTotal: 0, consumedTruncated: false });
   });
 
   test('projections: inclusion lists that leave the heavy and internal fields out', () => {
