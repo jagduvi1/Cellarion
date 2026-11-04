@@ -1,19 +1,6 @@
 .journal-page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
-}
-
-.journal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
-}
-
-.journal-header h1 {
-  margin: 0;
-  color: var(--color-text);
 }
 
 /* Filters */
@@ -293,10 +280,6 @@
 }
 
 @media (max-width: 768px) {
-  .journal-page {
-    padding: 1rem;
-  }
-
   .journal-filters {
     flex-direction: column;
   }

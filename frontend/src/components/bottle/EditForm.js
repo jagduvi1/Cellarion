@@ -10,6 +10,7 @@ import { BOTTLE_SIZES, bottleSizeLabel, normalizeBottleSize } from '../../config
 import RatingInput from '../RatingInput';
 import { isOnOrder, toMonthInput } from '../../utils/onOrder';
 import { parseVintageInput, vintageInputProps } from '../../utils/vintage';
+import { useContributionReviewed } from '../../utils/contributionReview';
 
 const ImageUpload = lazy(() => import('../ImageUpload'));
 const ImageGallery = lazy(() => import('../ImageGallery'));
@@ -37,6 +38,7 @@ export function changedLotFields(original, payload) {
 
 function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = [], focus = null }) {
   const { t } = useTranslation();
+  const reviewed = useContributionReviewed();
   const { apiFetch, user } = useAuth();
   const galleryRef = useRef(null);
   // Opened from the page's own drink-window link (focus 'drinkWindow'): the
@@ -392,7 +394,9 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          {t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}
+          {reviewed
+            ? t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')
+            : t('bottleDetail.imageNoticeUnreviewed', 'Photos are added to the wine registry as soon as you upload them, where everyone on this server can see them.')}
         </p>
       </div>
 

@@ -1,7 +1,6 @@
 /* ── Statistics Page ──────────────────────────────────────────────────────── */
 
 .stats-page {
-  padding: 1.5rem 2rem;
   max-width: 1400px;
   margin: 0 auto;
   overflow-x: hidden;
@@ -52,12 +51,7 @@
 }
 
 .stats-title {
-  font-size: 1.7rem;
-  font-weight: 700;
-  font-family: var(--font-heading);
-  color: var(--color-text);
   margin: 0 0 0.3rem;
-  letter-spacing: -0.02em;
 }
 
 .stats-subtitle {
@@ -1054,9 +1048,6 @@
 }
 
 @media (max-width: 900px) {
-  .stats-page {
-    padding: 1rem;
-  }
   .stats-grid {
     grid-template-columns: 1fr;
   }
@@ -1197,9 +1188,6 @@
 }
 
 @media (max-width: 480px) {
-  .stats-page {
-    padding: 0.75rem;
-  }
   .kpi-grid,
   .kpi-grid--secondary {
     grid-template-columns: repeat(2, 1fr);
@@ -1223,10 +1211,6 @@
   .stats-card {
     padding: 0.875rem;
   }
-  .stats-title {
-    font-size: 1.35rem;
-  }
-
   /* Horizontal bar charts: even narrower */
   .hbar-label {
     width: 64px;

@@ -143,6 +143,19 @@ describe('processUser — definition-less personal-window bottles (BUG 4)', () =
     expect(count).toBe(1);
     expect(createNotification).toHaveBeenCalledTimes(1);
   });
+
+  test('links the vintage page of the cellar, not a name search on the cellar list', async () => {
+    // A ?search=<name> link matched other wines with the same name and other
+    // vintages, and did nothing when that cellar page was already open.
+    mockBottles([
+      { _id: 'b3', cellar: 'cellar1', vintage: '2018', drinkFrom: 2020, drinkTo: 2030,
+        wineDefinition: { _id: 'wd1', name: 'Real Wine' } },
+    ]);
+    await processUser({ _id: 'u1' }, false);
+    const [, , , , link, category] = createNotification.mock.calls[0];
+    expect(link).toBe('/cellars/cellar1/vintages/wd1/2018');
+    expect(category).toBe('drinkWindow');
+  });
 });
 
 /**
@@ -198,6 +211,8 @@ describe('processUser — NV bottles with relative profiles (H6)', () => {
     const [, type, , message] = createNotification.mock.calls[0];
     expect(type).toBe('drink_window_peak');
     expect(message).toContain('Grande Cuvée');
+    // NV is the vintage segment the vintage page reads.
+    expect(createNotification.mock.calls[0][4]).toBe('/cellars/cellar1/vintages/wd1/NV');
   });
 
   test('an NV bottle with NO anchor (no purchaseDate/createdAt) stays unclassified — no alert, no marker', async () => {

@@ -34,7 +34,7 @@ router.post('/keys', requireNonDemo, async (req, res, next) => {
     const { name, type, unit, enumOptions, rationale } = req.body || {};
     const result = await ops.proposeKey(req.user.id, { name, type, unit, enumOptions, rationale }, { via: 'web', req });
     if (!result.ok) return sendFail(res, result);
-    res.status(201).json({ key: result.key });
+    res.status(201).json({ key: result.key, applied: !!result.applied });
   } catch (err) {
     next(err);
   }
@@ -77,7 +77,7 @@ router.post('/wine/:id', requireNonDemo, async (req, res, next) => {
     registryBridge.forwardValueFor(req.params.id, {
       keyId, keyName: canonical || keyName, value, reason, evidenceUrl, vintage,
     }).catch(() => {});
-    res.status(201).json({ value: result.value });
+    res.status(201).json({ value: result.value, applied: !!result.applied });
   } catch (err) {
     next(err);
   }

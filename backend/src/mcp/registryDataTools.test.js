@@ -9,6 +9,7 @@
 jest.mock('../services/registryDataOps', () => ({
   dataForWine: jest.fn(), suggestValue: jest.fn(), proposeKey: jest.fn(),
   listReviewQueues: jest.fn(), decideKey: jest.fn(), decideValue: jest.fn(),
+  updateKey: jest.fn(), removeKey: jest.fn(),
 }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
@@ -121,6 +122,47 @@ describe('review_registry_data', () => {
 // ordinary users and was gated to admin, so the project owner was clearing it
 // by hand — the same bottleneck somm-owned wine data exists to remove.
 // ---------------------------------------------------------------------------
+// Discussion #1778: a field made the wrong way (ABV as text) needs a way back,
+// over MCP as on the admin page, for the same roles that decide keys.
+describe('update_registry_key / remove_registry_key', () => {
+  test('gated like review_registry_data; removing is marked destructive', () => {
+    for (const name of ['update_registry_key', 'remove_registry_key']) {
+      expect(tool(name).scope).toBe('write');
+      expect(tool(name).requireRole).toEqual(['somm', 'admin']);
+    }
+    expect(tool('remove_registry_key').annotations.destructiveHint).toBe(true);
+  });
+
+  test('update passes the new definition and says how many values changed form', async () => {
+    ops.updateKey.mockResolvedValue({
+      ok: true, converted: 2, prev: { type: 'text', unit: null, enumOptions: null },
+      key: { _id: KEY, name: 'ABV', type: 'decimal', unit: '%' },
+    });
+    const res = await tool('update_registry_key').handler({ key_id: KEY, type: 'decimal', unit: '%' }, SOMM_CTX);
+    expect(ops.updateKey).toHaveBeenCalledWith(ME, KEY, { type: 'decimal', unit: '%', enumOptions: undefined }, { req: SOMM_CTX.req });
+    const body = parse(res);
+    expect(body.summary).toBe('Key "ABV" is now decimal (%) — 2 value(s) stored in the new form');
+    expect(body.data.previous).toEqual({ type: 'text', unit: null, enumOptions: null });
+  });
+
+  test('a value that does not fit comes back as a conflict carrying the service message', async () => {
+    ops.updateKey.mockResolvedValue({ ok: false, code: 'in_use', message: '1 value of "ABV" does not fit a decimal field: …' });
+    const res = await tool('update_registry_key').handler({ key_id: KEY, type: 'decimal' }, ADMIN_CTX);
+    expect(parse(res).error).toMatchObject({ code: 'conflict', message: expect.stringContaining('does not fit') });
+  });
+
+  test('remove takes values only when asked', async () => {
+    ops.removeKey.mockResolvedValue({ ok: false, code: 'in_use', message: '"ABV" holds 3 published values.' });
+    expect(parse(await tool('remove_registry_key').handler({ key_id: KEY }, ADMIN_CTX)).error.code).toBe('conflict');
+    expect(ops.removeKey).toHaveBeenLastCalledWith(ME, KEY, { removeValues: false, req: ADMIN_CTX.req });
+
+    ops.removeKey.mockResolvedValue({ ok: true, key: { _id: KEY, name: 'ABV', status: 'rejected' }, removed: { published: 3, suggested: 0 } });
+    const res = await tool('remove_registry_key').handler({ key_id: KEY, remove_values: true }, ADMIN_CTX);
+    expect(ops.removeKey).toHaveBeenLastCalledWith(ME, KEY, { removeValues: true, req: ADMIN_CTX.req });
+    expect(parse(res).summary).toBe('Removed "ABV" from the vocabulary with 3 published value(s) and 0 waiting suggestion(s)');
+  });
+});
+
 describe('sommelier access to the review queues', () => {
   const { toolsForScopes } = require('./registry');
 

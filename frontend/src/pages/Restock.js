@@ -182,7 +182,9 @@ export default function Restock() {
   if (!stats || allCategories.length === 0) {
     return (
       <div className="restock-page">
-        <h1>{t('restock.title', 'Smart Restock')}</h1>
+        <div className="page-header">
+          <h1>{t('restock.title', 'Smart Restock')}</h1>
+        </div>
         <div className="restock-empty">
           <p>{t('restock.noData', 'Not enough data yet. Consume some bottles so we can analyze your drinking patterns.')}</p>
           <Link to="/cellars" className="btn btn-primary">{t('restock.goToCellars', 'Go to Cellars')}</Link>
@@ -195,8 +197,12 @@ export default function Restock() {
 
   return (
     <div className="restock-page">
-      <h1>{t('restock.title', 'Smart Restock')}</h1>
-      <p className="restock-subtitle">{t('restock.subtitle', 'Based on your consumption patterns and current inventory.')}</p>
+      <div className="page-header">
+        <div>
+          <h1>{t('restock.title', 'Smart Restock')}</h1>
+          <p className="page-subtitle">{t('restock.subtitle', 'Based on your consumption patterns and current inventory.')}</p>
+        </div>
+      </div>
 
       {/* Pace overview */}
       {paceInfo && paceInfo.avgOutputPerYear > 0 && (

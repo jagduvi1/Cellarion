@@ -120,37 +120,37 @@ function Cellars() {
 
   return (
     <div className="cellars-page">
-      <div className="cellars-header">
-        <div className="cellars-header-top">
+      <div className="page-header">
+        <div>
           <h1>{t('cellars.title')}</h1>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Link
-              to="/import-cellar"
-              className="btn btn-secondary btn-small"
-              title={t('cellars.importTooltip')}
-            >
-              {/* "Import" sent people with a CSV here, to a page that only
-                  restores a Cellarion backup; the explanation was a hover
-                  tooltip, which phones never show. Wine-list import lives in
-                  a cellar (its ⋯ menu, and its empty state). */}
-              {t('cellars.restoreBackup', 'Restore backup')}
-            </Link>
-            <button
-              onClick={() => {
-
-                setShowCreateForm(!showCreateForm);
-              }}
-              className="btn btn-primary btn-small cellars-desktop-create"
-            >
-              {showCreateForm ? t('common.cancel') : `+ ${t('cellars.newCellar')}`}
-            </button>
-          </div>
+          {cellars.length > 0 && (
+            <p className="page-subtitle">
+              {t('cellars.ownedCount', { count: ownedCellars.length })}{cellars.length > ownedCellars.length ? `, ${t('cellars.sharedCount', { count: cellars.length - ownedCellars.length })}` : ''}
+            </p>
+          )}
         </div>
-        {cellars.length > 0 && (
-          <p className="cellars-subtitle">
-            {t('cellars.ownedCount', { count: ownedCellars.length })}{cellars.length > ownedCellars.length ? `, ${t('cellars.sharedCount', { count: cellars.length - ownedCellars.length })}` : ''}
-          </p>
-        )}
+        <div className="header-actions">
+          <Link
+            to="/import-cellar"
+            className="btn btn-secondary btn-small"
+            title={t('cellars.importTooltip')}
+          >
+            {/* "Import" sent people with a CSV here, to a page that only
+                restores a Cellarion backup; the explanation was a hover
+                tooltip, which phones never show. Wine-list import lives in
+                a cellar (its ⋯ menu, and its empty state). */}
+            {t('cellars.restoreBackup', 'Restore backup')}
+          </Link>
+          <button
+            onClick={() => {
+
+              setShowCreateForm(!showCreateForm);
+            }}
+            className="btn btn-primary btn-small cellars-desktop-create"
+          >
+            {showCreateForm ? t('common.cancel') : `+ ${t('cellars.newCellar')}`}
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

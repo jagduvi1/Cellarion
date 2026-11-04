@@ -508,6 +508,18 @@ export const adminSaveContactEmail = (apiFetch, contactEmail) =>
 // The one email a new member gets two days after joining (backend
 // services/newMemberEmails). GET → { enabled, since, mailConfigured,
 // sentLast30Days: { cellar, empty } }; PATCH { enabled } → { enabled, since }.
+// Whether this server reviews contributions before they go live
+// (backend config/contributionReview): { enabled, updatedAt, canChange, waiting }.
+export const adminGetContributionReview = (apiFetch) =>
+  apiFetch('/api/admin/settings/contribution-review');
+
+export const adminSaveContributionReview = (apiFetch, enabled) =>
+  apiFetch('/api/admin/settings/contribution-review', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ enabled }),
+  });
+
 export const adminGetNewMemberEmails = (apiFetch) =>
   apiFetch('/api/admin/settings/new-member-emails');
 

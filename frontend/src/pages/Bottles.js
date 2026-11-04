@@ -234,18 +234,20 @@ function Bottles() {
 
   return (
     <div className="bottles-page">
-      <div className="bottles-header">
-        <div className="bottles-header-text">
+      <div className="page-header">
+        <div>
           <h1>{t('bottles.title', 'All bottles')}</h1>
-          <p className="bottles-subtitle">
+          <p className="page-subtitle">
             {loading
               ? t('bottles.loading', 'Loading…')
               : t('bottles.summary', '{{count}} of {{total}} bottles', { count: data.count, total })}
           </p>
         </div>
-        <Link to="/statistics" className="btn btn-secondary btn-small">
-          {t('bottles.backToStats', '← Back to Statistics')}
-        </Link>
+        <div className="header-actions">
+          <Link to="/statistics" className="btn btn-secondary btn-small">
+            {t('bottles.backToStats', '← Back to Statistics')}
+          </Link>
+        </div>
       </div>
 
       <form className="bottles-search" role="search" onSubmit={submitSearch}>

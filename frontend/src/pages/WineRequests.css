@@ -3,20 +3,6 @@
   margin: 0 auto;
 }
 
-.winerequest-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  gap: 1rem;
-}
-
-.winerequest-header h1 {
-  margin: 0;
-  font-family: var(--font-heading);
-  color: var(--color-text);
-}
-
 .winerequest-fab {
   display: none;
   position: fixed;
@@ -206,7 +192,9 @@
 }
 
 @media (max-width: 768px) {
-  .winerequest-desktop-create { display: none; }
+  /* The FAB takes over; .page-header's own rule would otherwise keep the
+     empty actions box, and its gap, under the title. */
+  .page-header .winerequest-desktop-create { display: none; }
   .winerequest-fab { display: flex; }
 }
 

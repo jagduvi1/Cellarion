@@ -280,7 +280,10 @@ async function processUser(user, isFirstRun) {
   // Create in-app notifications (also triggers push via the notification service)
   for (const alert of uniqueAlerts) {
     const { title, message, type } = buildNotification(alert);
-    const link = `/cellars/${alert.cellarId}?search=${encodeURIComponent(alert.name)}`;
+    // The vintage page of the cellar: its drink window, its bottles and Drink.
+    // A ?search= link on the cellar list matched other wines with the same name
+    // and other vintages, and did nothing when that cellar was already open.
+    const link = `/cellars/${alert.cellarId}/vintages/${alert.wdId}/${encodeURIComponent(alert.vintage || 'NV')}`;
     // Pass the 'drinkWindow' category so the push gate honours the
     // drinkWindow.push preference. Without it, createNotification falls back to
     // the permissive "any push toggle on" path and pushes even when the user

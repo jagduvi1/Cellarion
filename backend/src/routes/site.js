@@ -1,6 +1,7 @@
 const express = require('express');
 const announcementConfig = require('../config/announcement');
 const featureFlags = require('../config/featureFlags');
+const contributionReview = require('../config/contributionReview');
 
 const router = express.Router();
 
@@ -29,6 +30,14 @@ router.get('/features', (req, res) => {
       .filter((f) => f.state !== 'off')
       .map(({ key, state, betaAt, releasedAt, forumPath }) => ({ key, state, betaAt, releasedAt, forumPath })),
   });
+});
+
+// GET /api/site/review — public, read-only: whether this server reviews
+// contributions before they go live (config/contributionReview), so the app
+// says "a curator reviews it" only where one does. Same cost and cache.
+router.get('/review', (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.json({ reviewed: contributionReview.isOn() });
 });
 
 module.exports = router;

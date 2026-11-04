@@ -73,10 +73,13 @@ const registryDataKeySchema = new mongoose.Schema({
     enum: ['proposed', 'accepted', 'rejected'],
     default: 'proposed'
   },
+  // Null on a standard field Cellarion ships (services/registryKeySeed): it
+  // was never proposed by anyone. A proposal always names its proposer.
   proposedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    default: null,
+    required: [function requiredOnProposal() { return this.status === 'proposed'; }, 'A proposal needs its proposer'],
     index: true
   },
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

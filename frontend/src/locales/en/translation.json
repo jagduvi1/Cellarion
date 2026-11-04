@@ -1367,6 +1367,7 @@
     "noGrapes": "No grape varieties listed",
     "contributePhotoTitle": "Help the community",
     "contributePhotoMsg": "This wine has no photo yet. Adding one helps other collectors recognise it — it will be reviewed before going public.",
+    "contributePhotoMsgUnreviewed": "This wine has no photo yet. Adding one helps everyone on this server recognise it.",
     "contributePhotoAction": "Add a photo",
     "contributeGrapesTitle": "Help the community",
     "contributeGrapesMsg": "Grape varieties aren't listed for this wine yet. Suggest them and our team will review.",
@@ -1382,6 +1383,7 @@
     "backToHistory": "Back to history",
     "defaultImageHint": "Click the star to choose which image is shown first.",
     "imageNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.",
+    "imageNoticeUnreviewed": "Photos are added to the wine registry as soon as you upload them, where everyone on this server can see them.",
     "pendingReview": "Pending review",
     "ownerInquiry": {
       "title": "A curator has a question about this wine",
@@ -2730,6 +2732,17 @@
     },
     "audit": {
       "page": "Page {{current}} of {{total}}"
+    },
+    "contributionReview": {
+      "title": "Review of contributions",
+      "on": "On. Photos, wine-record fixes, values and new data fields from members wait here until an admin decides them.",
+      "off": "Off. Photos, wine-record fixes, values and new data fields go live as soon as a member adds them. A fix that needs a choice (a merge, a producer spelled two ways) still waits.",
+      "hint": "Turn it off only on a private server where everyone trusts each other.",
+      "stillWaiting_one": "{{count}} item from before is still waiting to be decided.",
+      "stillWaiting_other": "{{count}} items from before are still waiting to be decided.",
+      "turnOff": "Turn review off",
+      "turnOn": "Turn review on",
+      "superOnly": "Only the super admin can change this on this server."
     }
   },
   "somm": {
@@ -2857,6 +2870,7 @@
   "wineRecord": {
     "title": "Wine record",
     "intro": "Spot something wrong or missing? Tap Fix or Add next to it — a curator reviews every suggestion before it goes live.",
+    "introUnreviewed": "Spot something wrong or missing? Tap Fix or Add next to it — your change goes live at once.",
     "blockedByOther": "Another member’s suggestion for this wine is waiting for a curator. You can suggest a fix as soon as it has been decided.",
     "notRecorded": "not recorded",
     "suggest": "Suggest a fix",
@@ -2869,7 +2883,9 @@
     "pendingTitle": "Your suggestion is awaiting curator review",
     "pendingOtherTitle": "A suggestion for this field is awaiting curator review",
     "introShort": "The shared registry’s record of this wine, curator-reviewed.",
+    "introShortUnreviewed": "The shared registry’s record of this wine.",
     "thanks": "Thank you — your suggestion is in the review queue. We’ll notify you when a curator has decided.",
+    "thanksApplied": "Thank you — your change is live.",
     "modalTitle": "Suggest a fix: {{field}}",
     "current": "Currently recorded",
     "proposed": "Should be",
@@ -2969,11 +2985,14 @@
     "backToList": "Back to the list",
     "promote": "Suggest to registry",
     "promoteTitle": "Offer this to the shared registry — a curator reviews it first",
+    "promoteTitleUnreviewed": "Add this to the shared wine record",
     "promoteModalTitle": "Suggest to the shared registry",
     "promoteIntro": "Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.",
+    "promoteIntroUnreviewed": "Add “{{key}}: {{value}}” to the shared wine record, where everyone on this server sees it. If the field doesn’t exist yet, it is added too.",
     "promoteScopeVintage": "It will apply to the {{year}} vintage only.",
     "promoteScopeWine": "It will apply to every vintage of this wine.",
     "promotedValue": "Thank you — your value is in the registry review queue.",
+    "promotedLive": "Added to the wine record — everyone on this server sees it now.",
     "promotedKey": "Thank you — the field itself was proposed first; once a curator accepts it, values can follow.",
     "publicKeyOffer": "{{key}} is part of the shared wine record — add it there and every owner of this wine sees it. A curator checks it first.",
     "publicKeyRecorded": "The wine record already has {{key}}: {{value}}.",

@@ -7,7 +7,6 @@
 .analytics-dashboard {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -20,7 +19,7 @@
   gap: 10px;
   flex-wrap: wrap;
 }
-.dash-head h1 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.4rem; }
+.dash-head h1 { display: flex; align-items: center; gap: 10px; margin: 0; }
 .dash-head-actions { display: flex; align-items: center; gap: 8px; }
 .dash-save-note { font-size: 0.8rem; color: var(--color-text-secondary); }
 .dash-save-error { color: var(--color-danger); }
@@ -87,8 +86,11 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 6px 10px;
-  font-size: 1.05rem;
-  font-weight: 600;
+  /* The board picker IS the page title: same font and size as every other
+     page's h1. */
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
   max-width: 60vw;
 }
 

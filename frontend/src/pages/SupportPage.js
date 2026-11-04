@@ -98,11 +98,13 @@ function SupportPage() {
 
   return (
     <div className="support-page">
-      <div className="support-header">
+      <div className="page-header">
         <h1>{t('support.title')}</h1>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          {t('support.newTicket')}
-        </button>
+        <div className="header-actions">
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+            {t('support.newTicket')}
+          </button>
+        </div>
       </div>
       {/* Most questions already have an answer in Help: point there first,
           in one quiet line that does not stand in the way of a ticket. */}

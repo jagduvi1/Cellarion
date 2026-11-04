@@ -20,6 +20,7 @@ const { stripHtml } = require('../utils/sanitize');
 const { photoVintage, vintageOfficialOrder } = require('../utils/imageVintage');
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
+const { approvePhotoIfTrusted } = require('../services/trustedContributions');
 
 /**
  * Safely remove an uploaded file, but only if it resides within the expected
@@ -561,6 +562,9 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
     if (linkedIds.length) {
       logAudit(req, 'image.link', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
         { imageIds: linkedIds, via: 'web' });
+      // Uploaded before the bottle existed: on a server that does not review
+      // photos, the ready ones are published now that they have a bottle.
+      for (const id of linkedIds) await approvePhotoIfTrusted(id, req);
     }
 
     res.json({ message: 'Images linked to bottle' });

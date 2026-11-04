@@ -38,6 +38,9 @@ router.post('/', requireNonDemo, async (req, res, next) => {
     // absorbed these fields instead (support ticket 2026-09-12).
     res.status(result.amended ? 200 : 201).json({
       amended: !!result.amended,
+      // true on a server that does not review contributions: already applied
+      // to the wine (services/trustedContributions), nothing is pending.
+      applied: !!result.applied,
       proposal: {
         _id: result.proposal._id,
         proposedFields: result.proposal.proposedFields,

@@ -53,6 +53,22 @@ export const setRegistryKeyTranslations = (apiFetch, keyId, translations) =>
     body: JSON.stringify({ translations }),
   });
 
+// Redefine a live key ({ type?, unit?, enumOptions? }). A 409 names the
+// values that would not fit the new definition.
+export const updateRegistryKey = (apiFetch, keyId, definition) =>
+  apiFetch(`/api/admin/registry-data/keys/${keyId}`, {
+    method: 'PATCH',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(definition),
+  });
+
+// Take an accepted key out of the vocabulary. A key that holds values is a
+// 409 saying how many, unless removeValues takes them off with it.
+export const removeRegistryKey = (apiFetch, keyId, { removeValues = false } = {}) =>
+  apiFetch(`/api/admin/registry-data/keys/${keyId}${removeValues ? '?removeValues=true' : ''}`, {
+    method: 'DELETE',
+  });
+
 // asWineDefault: publish a vintage-specific suggestion as the wine-wide
 // default instead (reviewer judged the evidence to be a producer spec).
 export const decideRegistryValue = (apiFetch, valueId, decision, rejectReason, { asWineDefault = false } = {}) =>

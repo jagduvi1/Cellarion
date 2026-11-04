@@ -5,6 +5,7 @@ import { adminGetImages, adminApproveImage, adminRejectImage, adminUnapproveImag
 import AuthImage from '../components/AuthImage';
 import { API_URL } from '../api/apiConstants';
 import AdminImagesByWine from './AdminImagesByWine';
+import ContributionReviewSwitch from '../components/ContributionReviewSwitch';
 import './AdminImages.css';
 
 function AdminImages() {
@@ -194,6 +195,8 @@ function AdminImages() {
         <h1>{t('admin.images.title')}</h1>
         {view === 'queue' && <span className="image-count">{t('admin.images.image', { count: total })}</span>}
       </div>
+
+      <ContributionReviewSwitch />
 
       <div className="admin-images-tabs">
         <button

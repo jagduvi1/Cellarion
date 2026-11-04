@@ -43,6 +43,7 @@ import './CellarDetail.css';
 import './BottleDetail.css';
 import './CellarVintage.css';
 import { formatVintage } from '../utils/vintage';
+import { useContributionReviewed } from '../utils/contributionReview';
 
 const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
 const AddToPickListModal = lazy(() => import('../components/AddToPickListModal'));
@@ -80,6 +81,7 @@ const safeDecode = (s) => {
  */
 function CellarVintage() {
   const { t, i18n } = useTranslation();
+  const reviewed = useContributionReviewed();
   const { id, wineId, vintage: vintageParam } = useParams();
   const { apiFetch, user } = useAuth();
   // Blocks the member folded away, remembered on the account (beta feedback
@@ -434,11 +436,12 @@ function CellarVintage() {
     await load();
     return { ok: true, stored: fields };
   };
-  // A quiet link after the window's words.
+  // A quiet link after the window's words: a middle dot after the years
+  // ("2025–2045 · Change"), a space after a whole sentence ("Not set yet.").
   // Offered once the sommelier's window has loaded: the editor starts from it.
-  const windowLink = (label, ariaLabel) => canEditVintage && profileLoaded && (
+  const windowLink = (label, { ariaLabel, afterSentence = false } = {}) => canEditVintage && profileLoaded && (
     <span>
-      {' · '}
+      {afterSentence ? ' ' : ' · '}
       <button ref={windowActionRef} type="button" className="cvb-inline-link" aria-label={ariaLabel} onClick={openWindowEditor}>
         {label}
       </button>
@@ -607,6 +610,7 @@ function CellarVintage() {
                       apiFetch={apiFetch}
                       promptMissingGrapes={canEdit}
                       suggestSignal={suggestSignal}
+                      onWineChanged={load}
                     />
                   </section>
                 </CollapsibleBlock>
@@ -682,12 +686,12 @@ function CellarVintage() {
                     ) : windowDiffers ? (
                       <span className="cvb-muted">
                         {t('cellarVintageBeta.windowDiffers', 'Differs between the bottles. Edit vintage sets one for all of them.')}
-                        {windowLink(t('cellarVintageBeta.windowSetForAll', 'Set one window for all'))}
+                        {windowLink(t('cellarVintageBeta.windowSetForAll', 'Set one window for all'), { afterSentence: true })}
                       </span>
                     ) : !(from || to || peakFrom || peakUntil) ? (
                       <span className="cvb-muted">
                         {t('cellarVintageBeta.notSet', 'Not set yet.')}
-                        {windowLink(t('bottleDetail.windowSetOwn', 'Set your own window'))}
+                        {windowLink(t('bottleDetail.windowSetOwn', 'Set your own window'), { afterSentence: true })}
                       </span>
                     ) : timelineOn && ownWindow ? (
                       // The bottle page's own-window timeline, its status on the marker.
@@ -718,7 +722,7 @@ function CellarVintage() {
                             <span className="cellar-vintage-peak">{from || to ? ' · ' : ''}{t('cellarVintage.peak', 'peak {{range}}', { range: `${peakFrom || '…'}–${peakUntil || '…'}` })}</span>
                           )}
                         </span>
-                        {windowLink(t('bottleDetail.windowChange', 'Change'), t('bottleDetail.windowChangeLabel', 'Change your drink window'))}
+                        {windowLink(t('bottleDetail.windowChange', 'Change'), { ariaLabel: t('bottleDetail.windowChangeLabel', 'Change your drink window') })}
                       </span>
                     )}
                   </div>
@@ -944,7 +948,9 @@ function CellarVintage() {
               onUploadComplete={refreshPhotos}
               onProcessingComplete={refreshPhotos}
             />
-            <p className="cvb-photo-hint">{t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}</p>
+            <p className="cvb-photo-hint">{reviewed
+            ? t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')
+            : t('bottleDetail.imageNoticeUnreviewed', 'Photos are added to the wine registry as soon as you upload them, where everyone on this server can see them.')}</p>
             <div className="modal-actions">
               <button type="button" className="btn btn-primary" onClick={closePhoto}>{t('common.done', 'Done')}</button>
             </div>

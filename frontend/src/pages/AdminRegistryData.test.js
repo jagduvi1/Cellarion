@@ -18,10 +18,13 @@ vi.mock('../api/registryData', () => ({
   decideRegistryValue: vi.fn(),
   getRegistryKeys: vi.fn(),
   setRegistryKeyTranslations: vi.fn(),
+  updateRegistryKey: vi.fn(),
+  removeRegistryKey: vi.fn(),
 }));
 
 const {
   getRegistryDataQueues, decideRegistryValue, getRegistryKeys, setRegistryKeyTranslations,
+  updateRegistryKey, removeRegistryKey,
 } = await import('../api/registryData');
 const AdminRegistryData = (await import('./AdminRegistryData')).default;
 
@@ -33,6 +36,111 @@ beforeEach(() => {
   vi.clearAllMocks();
   decideRegistryValue.mockResolvedValue(ok({ value: { _id: 'v1', status: 'published' } }));
   getRegistryKeys.mockResolvedValue(ok({ keys: [] }));
+});
+
+// Discussion #1778: a self-hoster made ABV a text field and had no way to
+// change it or take it away. The vocabulary (and a proposal, before it is
+// accepted) can now be redefined, and an accepted field removed — the server
+// says when values stand in the way, and removing them takes a second yes.
+describe('changing and removing a field', () => {
+  const TEXT_ABV = { _id: 'k1', name: 'ABV', type: 'text', unit: null, enumOptions: null, translations: null };
+  const fail = (status, error) => ({ ok: false, status, json: async () => ({ error }) });
+  afterEach(() => vi.restoreAllMocks());
+
+  test('ABV made as text becomes decimal %: the definition is sent and the card says what changed', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [] }));
+    getRegistryKeys.mockResolvedValue(ok({ keys: [TEXT_ABV] }));
+    updateRegistryKey.mockResolvedValue(ok({ key: { ...TEXT_ABV, type: 'decimal', unit: '%' }, converted: 2 }));
+    render(<AdminRegistryData />);
+    await screen.findByText('Vocabulary (1)');
+    fireEvent.click(screen.getByText('Change type'));
+    fireEvent.change(screen.getByLabelText('Type of ABV'), { target: { value: 'decimal' } });
+    fireEvent.change(screen.getByLabelText('Unit of ABV'), { target: { value: ' % ' } });
+    fireEvent.click(screen.getByText('Save field'));
+
+    await waitFor(() => expect(updateRegistryKey).toHaveBeenCalledWith(apiFetch, 'k1', { type: 'decimal', unit: '%' }));
+    expect(await screen.findByText('Field saved — 2 values converted')).toBeInTheDocument();
+    expect(screen.getByText('decimal (%)')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Type of ABV')).not.toBeInTheDocument();
+  });
+
+  test('a value that does not fit: the server says which, and the editor stays open', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [] }));
+    getRegistryKeys.mockResolvedValue(ok({ keys: [TEXT_ABV] }));
+    updateRegistryKey.mockResolvedValue(fail(409, '1 value of "ABV" does not fit a decimal field: "about 13" on Valli — Bannockburn.'));
+    render(<AdminRegistryData />);
+    await screen.findByText('Vocabulary (1)');
+    fireEvent.click(screen.getByText('Change type'));
+    fireEvent.change(screen.getByLabelText('Type of ABV'), { target: { value: 'decimal' } });
+    fireEvent.click(screen.getByText('Save field'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('"about 13" on Valli — Bannockburn');
+    expect(screen.getByLabelText('Type of ABV')).toBeInTheDocument();
+  });
+
+  test('a list field sends its allowed values, one per line', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [] }));
+    getRegistryKeys.mockResolvedValue(ok({ keys: [{ ...TEXT_ABV, _id: 'k2', name: 'Closure' }] }));
+    updateRegistryKey.mockResolvedValue(ok({ key: { _id: 'k2', name: 'Closure', type: 'enum', enumOptions: ['Cork', 'Screw cap'] }, converted: 0 }));
+    render(<AdminRegistryData />);
+    await screen.findByText('Vocabulary (1)');
+    fireEvent.click(screen.getByText('Change type'));
+    fireEvent.change(screen.getByLabelText('Type of Closure'), { target: { value: 'enum' } });
+    fireEvent.change(screen.getByLabelText('Allowed values of Closure'), { target: { value: 'Cork\n\n Screw cap \n' } });
+    fireEvent.click(screen.getByText('Save field'));
+    await waitFor(() => expect(updateRegistryKey).toHaveBeenCalledWith(apiFetch, 'k2', { type: 'enum', enumOptions: ['Cork', 'Screw cap'] }));
+    expect(await screen.findByText('Field saved')).toBeInTheDocument();
+  });
+
+  test('a proposed field can be put right before it is accepted', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [
+      { ...TEXT_ABV, status: 'proposed', rationale: 'Alcohol strength matters.', proposedBy: { username: 'sebastian' } },
+    ], values: [] }));
+    render(<AdminRegistryData />);
+    await screen.findByText('Proposed keys (1)');
+    expect(screen.getByText('Change type')).toBeInTheDocument();
+    // Removing is for the vocabulary; a proposal is rejected.
+    expect(screen.queryByText('Remove field')).not.toBeInTheDocument();
+  });
+
+  test('removing an empty field asks once and takes the card away', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [] }));
+    getRegistryKeys.mockResolvedValue(ok({ keys: [TEXT_ABV] }));
+    removeRegistryKey.mockResolvedValue(ok({ key: { ...TEXT_ABV, status: 'rejected' }, removed: { published: 0, suggested: 0 } }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<AdminRegistryData />);
+    await screen.findByText('Vocabulary (1)');
+    fireEvent.click(screen.getByText('Remove field'));
+    expect(await screen.findByText('Vocabulary (0)')).toBeInTheDocument();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(removeRegistryKey).toHaveBeenCalledWith(apiFetch, 'k1');
+  });
+
+  test('a field holding values: the server says how many, and only a second yes removes them with it', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [] }));
+    getRegistryKeys.mockResolvedValue(ok({ keys: [TEXT_ABV] }));
+    const HELD = '"ABV" holds 3 published values. Removing the field takes them off the wine records too.';
+    removeRegistryKey
+      .mockResolvedValueOnce(fail(409, HELD))
+      .mockResolvedValueOnce(fail(409, HELD))
+      .mockResolvedValueOnce(ok({ key: { ...TEXT_ABV, status: 'rejected' }, removed: { published: 3, suggested: 0 } }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true).mockReturnValueOnce(false);
+    render(<AdminRegistryData />);
+    await screen.findByText('Vocabulary (1)');
+
+    // Second question declined: nothing removed.
+    fireEvent.click(screen.getByText('Remove field'));
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+    expect(confirm.mock.calls[1][0]).toContain(HELD);
+    expect(removeRegistryKey).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Vocabulary (1)')).toBeInTheDocument();
+
+    // Both answered yes: removed with its values.
+    confirm.mockReturnValue(true);
+    await waitFor(() => expect(screen.getByText('Remove field')).not.toBeDisabled());
+    fireEvent.click(screen.getByText('Remove field'));
+    expect(await screen.findByText('Vocabulary (0)')).toBeInTheDocument();
+    expect(removeRegistryKey).toHaveBeenLastCalledWith(apiFetch, 'k1', { removeValues: true });
+  });
 });
 
 // The vocabulary editor (2026-09-09): every accepted key gets a display name
