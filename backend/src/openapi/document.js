@@ -181,9 +181,10 @@ const schemas = {
   },
   InventoryWine: {
     type: 'object',
-    required: ['name', 'producer', 'type', 'colour', 'country', 'region', 'appellation', 'classification', 'grapes', 'image', 'profile'],
+    required: ['name', 'displayName', 'producer', 'type', 'colour', 'country', 'region', 'appellation', 'classification', 'labelSweetness', 'grapes', 'image', 'profile'],
     properties: {
       name: { type: ['string', 'null'] },
+      displayName: { type: ['string', 'null'], description: 'The name as the label reads it: `name` followed by the label sweetness term when the wine has one ("Riesling Kabinett Trocken"). What to print when one line must carry the whole identity.' },
       producer: { type: ['string', 'null'] },
       type: WINE_TYPE,
       category: { type: 'string', enum: ['wine', 'other'], description: '"other" for a drink that is not wine (cider, beer, spirits), kept in the cellar outside the shared wine registry; its type is then null.' },
@@ -193,6 +194,18 @@ const schemas = {
       appellation: { type: ['string', 'null'] },
       classification: { type: ['string', 'null'] },
       classifications: { type: 'array', items: { type: 'object', required: ['name', 'kind'], properties: { name: { type: 'string' }, kind: { type: 'string', enum: ['vineyard_rank', 'ripeness', 'ageing', 'other'] } } }, description: 'The classification as curated taxonomy rows, each with its kind (vineyard rank, ripeness tier, ageing tier, other); `classification` is the same, joined into one string.' },
+      labelSweetness: {
+        oneOf: [{ type: 'null' }, {
+          type: 'object', required: ['name', 'band', 'scale', 'regulated'],
+          properties: {
+            name: { type: 'string', description: 'The term as the label prints it (trocken, Brut Nature, amabile).' },
+            band: { type: 'string', enum: ['dry', 'off-dry', 'medium-sweet', 'sweet', 'brut-nature', 'extra-brut', 'brut', 'extra-dry', 'sec', 'demi-sec', 'doux'], description: 'The term\'s place on one shared ladder: the four still-wine bands, or the seven sparkling (dosage) bands. Values may be added, never renamed or removed.' },
+            scale: { type: 'string', enum: ['still', 'sparkling'] },
+            regulated: { type: 'boolean', description: 'True for a term with a legal definition (EU 2019/33); false for a customary word such as feinherb.' },
+          },
+        }],
+        description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from `profile.sweetness`, the tasting estimate.',
+      },
       grapes: { type: 'array', items: { type: 'string' }, description: 'Display names, as on the label.' },
       image: { type: ['string', 'null'], description: 'A thumbnail path on this server (see Images), or null.' },
       profile: {
@@ -331,6 +344,18 @@ const schemas = {
       appellation: { type: ['string', 'null'] },
       classification: { type: ['string', 'null'] },
       classifications: { type: 'array', items: { type: 'object', required: ['name', 'kind'], properties: { name: { type: 'string' }, kind: { type: 'string', enum: ['vineyard_rank', 'ripeness', 'ageing', 'other'] } } }, description: 'The classification as curated taxonomy rows, each with its kind (vineyard rank, ripeness tier, ageing tier, other); `classification` is the same, joined into one string.' },
+      labelSweetness: {
+        oneOf: [{ type: 'null' }, {
+          type: 'object', required: ['name', 'band', 'scale', 'regulated'],
+          properties: {
+            name: { type: 'string', description: 'The term as the label prints it (trocken, Brut Nature, amabile).' },
+            band: { type: 'string', enum: ['dry', 'off-dry', 'medium-sweet', 'sweet', 'brut-nature', 'extra-brut', 'brut', 'extra-dry', 'sec', 'demi-sec', 'doux'], description: 'The term\'s place on one shared ladder: the four still-wine bands, or the seven sparkling (dosage) bands. Values may be added, never renamed or removed.' },
+            scale: { type: 'string', enum: ['still', 'sparkling'] },
+            regulated: { type: 'boolean', description: 'True for a term with a legal definition (EU 2019/33); false for a customary word such as feinherb.' },
+          },
+        }],
+        description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from the tasting profile\'s sweetness estimate.',
+      },
       grapes: { type: 'array', items: ref('Grape') },
       image: { type: ['string', 'null'], description: 'The registry image URL, or null.' },
       nonWine: { type: 'boolean', description: 'True for a drink that is not wine (cider, beer, spirits): the Other category, kept in the holder\'s cellar outside the shared wine registry; its type is then null.' },
@@ -662,8 +687,8 @@ const examples = {
     racks: [{ id: ID.rack, cellar: ID.cellar, name: 'Wine fridge' }],
     wines: {
       [ID.wine]: {
-        name: 'Château Exemple', producer: 'Château Exemple', type: 'red', colour: null,
-        country: 'France', region: 'Pauillac', appellation: 'Pauillac', classification: null,
+        name: 'Château Exemple', displayName: 'Château Exemple', producer: 'Château Exemple', type: 'red', colour: null,
+        country: 'France', region: 'Pauillac', appellation: 'Pauillac', classification: null, labelSweetness: null,
         grapes: ['Cabernet Sauvignon', 'Merlot'], image: THUMB,
         profile: { body: 'full', acidity: 'medium', sweetness: 'dry', tannin: 'high', flavors: ['blackcurrant', 'cedar'], foodPairings: ['lamb'] },
       },

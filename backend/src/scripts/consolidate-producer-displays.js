@@ -40,6 +40,7 @@
 
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const { loadTerms } = require('../services/sweetnessOps');
 const Country = require('../models/Country');
 require('../models/Region');
 require('../models/Grape');
@@ -51,7 +52,7 @@ const { logAudit } = require('../services/audit');
 // region, appellation, classification, type, grapes) and the profile whose
 // snapshot follows a spelling change, plus what the planner and the save hooks
 // read. Guarded by consolidate-producer-displays.test.js.
-const WINE_SELECT = 'name producer appellation country region classification type grapes aiProfile normalizedKey canonicalKey slug nonWine createdAt verifiedChecks crossChecksCleared';
+const WINE_SELECT = 'name producer appellation country region classification type grapes aiProfile normalizedKey canonicalKey slug nonWine createdAt verifiedChecks crossChecksCleared labelSweetness';
 
 // Estate-title and decoration vocabularies for the TARGET rule only (bucket
 // membership itself comes from producerSegment — one fold, shared with the
@@ -159,6 +160,12 @@ const hasLegal = (s) => toks(s).some((t) => LEGAL.has(t));
   }
 
   // ---- row-level plan + UNIQUE-key collision pre-check ------------------
+  // A termed wine's keys carry the term's word (utils/normalize
+  // SWEETNESS_KEY_MARK): built here as the save hook builds them, so the clash
+  // check compares like with like. The word comes from the term table's
+  // in-memory copy (one load), not a populate per wine.
+  const terms = await loadTerms();
+  const sweetnessOf = (w) => (w.labelSweetness ? (terms.byId.get(String(w.labelSweetness._id || w.labelSweetness))?.name || null) : null);
   const planned = [];
   for (const g of safe) {
     for (const [sp, e] of g.spellings) {
@@ -167,8 +174,8 @@ const hasLegal = (s) => toks(s).some((t) => LEGAL.has(t));
         if (w.producer === g.target) continue;
         planned.push({
           doc: w, group: g, from: w.producer,
-          newKey: generateWineKey(w.name, g.target, w.appellation),
-          newCanon: computeCanonicalKey(w.name, g.target, w.appellation),
+          newKey: generateWineKey(w.name, g.target, w.appellation, { sweetness: sweetnessOf(w) }),
+          newCanon: computeCanonicalKey(w.name, g.target, w.appellation, { sweetness: sweetnessOf(w) }),
         });
       }
     }

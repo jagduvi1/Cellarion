@@ -409,9 +409,12 @@ router.get('/duplicate-clusters', async (req, res) => {
     // merge candidate against a wine (#844's stated contract, which this pool
     // was missed out of — code audit 2026-07-27, H3).
     const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
-      .select('name producer appellation image type colour country region')
+      // labelSweetness rides along, populated: the style guard below reads a
+      // row's recorded term, not only its name (utils/styleTerms.styleOf).
+      .select('name producer appellation image type colour country region labelSweetness')
       .populate('country', 'name')
       .populate('region', 'name')
+      .populate('labelSweetness', 'name band scale regulated -_id')
       .lean();
 
     // Group by normalised producer KEY: wine stop words + corporate suffixes
@@ -471,7 +474,7 @@ router.get('/duplicate-clusters', async (req, res) => {
           // consumer of this guard: it can only drop a proposed merge, never
           // propose one, and it spares the n² manual dismissals a surfaced
           // range would otherwise cost.
-          if (conflictingStyleTerms(a.name, b.name)) continue;
+          if (conflictingStyleTerms(a, b)) continue;
           const score = scoreWineMatch(
             { name: a.name, producer: a.producer, appellation: a.appellation },
             { name: b.name, producer: b.producer, appellation: b.appellation },
@@ -1846,8 +1849,12 @@ router.post('/:id/strip-producer', async (req, res) => {
     const nameTwins = await WineDefinition.find({
       _id: { $ne: wine._id },
       name: new RegExp(`^${escapeRegex(stripped)}$`, 'i'),
-    }).select('name producer').limit(10).lean();
-    const conflict = nameTwins.find(t => producerKey && normalizeProducerKey(t.producer) === producerKey);
+    }).select('name producer labelSweetness').limit(10).lean();
+    // Same producer AND the same label sweetness term (term-or-none, by row):
+    // a termed wine and its untermed twin — or two different terms — are two
+    // wines, not a pair the admin should merge. No wildcard here.
+    const sameTerm = (t) => String(t.labelSweetness || '') === String(wine.labelSweetness || '');
+    const conflict = nameTwins.find(t => producerKey && normalizeProducerKey(t.producer) === producerKey && sameTerm(t));
     if (conflict) {
       return res.status(409).json({
         error: `"${conflict.name}" by ${conflict.producer} already exists — merge these via the duplicates tool instead.`,

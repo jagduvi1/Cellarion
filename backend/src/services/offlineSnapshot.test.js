@@ -196,6 +196,8 @@ describe('a slim copy', () => {
       { path: 'country', select: 'name slug code' },
       { path: 'region', select: 'name slug country' },
       { path: 'grapes', select: 'name slug color' },
+      // The label sweetness term as the API shape, no id: a card shows it.
+      { path: 'labelSweetness', select: 'name band scale regulated -_id' },
     ]);
     // Everything the cellar list excludes from a wine stays excluded.
     expect(wine.select).toMatch(/-aiProfile/);

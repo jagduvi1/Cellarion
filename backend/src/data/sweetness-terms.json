@@ -1,0 +1,91 @@
+[
+  { "name": "trocken", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
+  { "name": "halbtrocken", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
+  { "name": "feinherb", "scale": "still", "band": "off-dry", "system": "Customary (de)", "regulated": false, "synonyms": [] },
+  { "name": "lieblich", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
+  { "name": "süß", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
+  { "name": "edelsüß", "scale": "still", "band": "sweet", "system": "Customary (de)", "regulated": false, "synonyms": [] },
+
+  { "name": "sec", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (fr, ro)", "synonyms": [] },
+  { "name": "demi-sec", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (fr, ro)", "synonyms": ["demi sec"] },
+  { "name": "moelleux", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (fr)", "synonyms": [] },
+  { "name": "doux", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (fr)", "synonyms": [] },
+  { "name": "liquoreux", "scale": "still", "band": "sweet", "system": "Customary (fr)", "regulated": false, "synonyms": [] },
+
+  { "name": "secco", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (it)", "synonyms": ["asciutto"] },
+  { "name": "abboccato", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (it)", "synonyms": [] },
+  { "name": "amabile", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (it)", "synonyms": [] },
+  { "name": "dolce", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (it)", "synonyms": [] },
+
+  { "name": "seco", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (es, pt)", "synonyms": [] },
+  { "name": "semiseco", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (es)", "synonyms": ["semi seco"] },
+  { "name": "semidulce", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (es)", "synonyms": ["semi dulce"] },
+  { "name": "dulce", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (es, ro)", "synonyms": [] },
+
+  { "name": "meio seco", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (pt)", "synonyms": ["meio-seco"] },
+  { "name": "meio doce", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (pt)", "synonyms": ["meio-doce"] },
+  { "name": "doce", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (pt)", "synonyms": [] },
+
+  { "name": "dry", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (en)", "synonyms": [] },
+  { "name": "medium dry", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (en)", "synonyms": ["medium-dry"] },
+  { "name": "off-dry", "scale": "still", "band": "off-dry", "system": "Customary (en)", "regulated": false, "synonyms": ["off dry"] },
+  { "name": "medium sweet", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (en)", "synonyms": ["medium", "medium-sweet"] },
+  { "name": "sweet", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (en)", "synonyms": [] },
+
+  { "name": "száraz", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (hu)", "synonyms": [] },
+  { "name": "félszáraz", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (hu)", "synonyms": [] },
+  { "name": "félédes", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (hu)", "synonyms": [] },
+  { "name": "édes", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (hu)", "synonyms": [] },
+
+  { "name": "demidulce", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (ro)", "synonyms": [] },
+
+  { "name": "droog", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (nl)", "synonyms": [] },
+  { "name": "halfdroog", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (nl)", "synonyms": [] },
+  { "name": "halfzoet", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (nl)", "synonyms": [] },
+  { "name": "zoet", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (nl)", "synonyms": [] },
+
+  { "name": "torrt", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (sv)", "synonyms": [] },
+  { "name": "halvtorrt", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (sv)", "synonyms": [] },
+  { "name": "halvsött", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (sv)", "synonyms": [] },
+  { "name": "sött", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (sv)", "synonyms": [] },
+
+  { "name": "Brut Nature", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B", "synonyms": ["Brut Natur"] },
+  { "name": "Pas Dosé", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (fr)", "synonyms": [] },
+  { "name": "Dosage Zéro", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (fr, it)", "synonyms": ["Dosaggio Zero"] },
+  { "name": "Naturherb", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
+  { "name": "Bruto Natural", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (pt)", "synonyms": [] },
+
+  { "name": "Extra Brut", "scale": "sparkling", "band": "extra-brut", "system": "EU 2019/33 Annex III B", "synonyms": ["Extra-Brut"] },
+  { "name": "Extra Herb", "scale": "sparkling", "band": "extra-brut", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
+  { "name": "Extra Bruto", "scale": "sparkling", "band": "extra-brut", "system": "EU 2019/33 Annex III B (pt)", "synonyms": [] },
+
+  { "name": "Brut", "scale": "sparkling", "band": "brut", "system": "EU 2019/33 Annex III B", "synonyms": [] },
+  { "name": "Herb", "scale": "sparkling", "band": "brut", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
+  { "name": "Bruto", "scale": "sparkling", "band": "brut", "system": "EU 2019/33 Annex III B (pt)", "synonyms": [] },
+
+  { "name": "Extra Dry", "scale": "sparkling", "band": "extra-dry", "system": "EU 2019/33 Annex III B (en, it)", "synonyms": ["Extra-Dry"] },
+  { "name": "Extra Trocken", "scale": "sparkling", "band": "extra-dry", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
+  { "name": "Extra Sec", "scale": "sparkling", "band": "extra-dry", "system": "EU 2019/33 Annex III B (fr)", "synonyms": ["Extra-Sec"] },
+  { "name": "Extra Seco", "scale": "sparkling", "band": "extra-dry", "system": "EU 2019/33 Annex III B (es, pt)", "synonyms": [] },
+  { "name": "Extra Secco", "scale": "sparkling", "band": "extra-dry", "system": "EU 2019/33 Annex III B (it)", "synonyms": [] },
+
+  { "name": "Sec", "scale": "sparkling", "band": "sec", "system": "EU 2019/33 Annex III B (fr)", "synonyms": [] },
+  { "name": "Trocken", "scale": "sparkling", "band": "sec", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
+  { "name": "Secco", "scale": "sparkling", "band": "sec", "system": "EU 2019/33 Annex III B (it)", "synonyms": ["Asciutto"] },
+  { "name": "Dry", "scale": "sparkling", "band": "sec", "system": "EU 2019/33 Annex III B (en)", "synonyms": [] },
+  { "name": "Seco", "scale": "sparkling", "band": "sec", "system": "EU 2019/33 Annex III B (es, pt)", "synonyms": [] },
+
+  { "name": "Demi-Sec", "scale": "sparkling", "band": "demi-sec", "system": "EU 2019/33 Annex III B (fr, ro)", "synonyms": ["Demi Sec"] },
+  { "name": "Halbtrocken", "scale": "sparkling", "band": "demi-sec", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
+  { "name": "Abboccato", "scale": "sparkling", "band": "demi-sec", "system": "EU 2019/33 Annex III B (it)", "synonyms": [] },
+  { "name": "Medium Dry", "scale": "sparkling", "band": "demi-sec", "system": "EU 2019/33 Annex III B (en)", "synonyms": ["Medium-Dry"] },
+  { "name": "Semiseco", "scale": "sparkling", "band": "demi-sec", "system": "EU 2019/33 Annex III B (es)", "synonyms": ["Semi Seco"] },
+  { "name": "Meio Seco", "scale": "sparkling", "band": "demi-sec", "system": "EU 2019/33 Annex III B (pt)", "synonyms": ["Meio-Seco"] },
+
+  { "name": "Doux", "scale": "sparkling", "band": "doux", "system": "EU 2019/33 Annex III B (fr)", "synonyms": [] },
+  { "name": "Mild", "scale": "sparkling", "band": "doux", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
+  { "name": "Dolce", "scale": "sparkling", "band": "doux", "system": "EU 2019/33 Annex III B (it)", "synonyms": [] },
+  { "name": "Sweet", "scale": "sparkling", "band": "doux", "system": "EU 2019/33 Annex III B (en)", "synonyms": [] },
+  { "name": "Dulce", "scale": "sparkling", "band": "doux", "system": "EU 2019/33 Annex III B (es)", "synonyms": [] },
+  { "name": "Doce", "scale": "sparkling", "band": "doux", "system": "EU 2019/33 Annex III B (pt)", "synonyms": [] }
+]

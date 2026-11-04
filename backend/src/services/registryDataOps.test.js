@@ -67,8 +67,8 @@ describe('proposeKey', () => {
     expect((await ops.proposeKey(ME, { name: 'Closure', type: 'enum', enumOptions: ['cork'], rationale: GOOD.rationale })).code).toBe('invalid');
   });
 
-  test('reserved names cannot shadow first-class fields', async () => {
-    for (const name of ['producer', 'Region', 'FLAVORS']) {
+  test('reserved names cannot shadow first-class fields — the label sweetness term among them', async () => {
+    for (const name of ['producer', 'Region', 'FLAVORS', 'Label Sweetness', 'labelSweetness']) {
       const res = await ops.proposeKey(ME, { ...GOOD, name });
       expect(res).toMatchObject({ ok: false, code: 'conflict' });
     }

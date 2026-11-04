@@ -244,21 +244,92 @@ const subset = (a, b) => [...a].every((x) => b.has(x));
 // ways, "Brut" vs "Demi-Sec" is two wines.
 const disagree = (a, b) => a.size > 0 && b.size > 0 && !subset(a, b) && !subset(b, a);
 
+const ID_RX = /^[0-9a-f]{24}$/i;
+// The label sweetness term on a wine-like object: the populated row's word,
+// or — for an unpopulated ref — the word the term table's in-memory copy
+// knows (services/sweetnessOps, when it is warm; a belt for a caller that
+// forgot the populate). Never a bare string as the word: a string here is an
+// id or nothing, so no caller can smuggle a word in past the term table.
+const fieldTerm = (w) => {
+  const t = w && w.labelSweetness;
+  if (!t) return null;
+  if (typeof t === 'object' && typeof t.name === 'string' && t.name.trim()) return t.name.trim();
+  const id = typeof t === 'string' ? t : (typeof t.toString === 'function' ? t.toString() : '');
+  if (!ID_RX.test(id)) return null;
+  // Lazy: sweetnessOps loads the model; this util must stay requirable alone.
+  return require('../services/sweetnessOps').cachedTermName(id);
+};
+
 /**
- * Do these two wine names declare a DIFFERENT style? A non-null return means
- * they are two wines and must never be linked without the user saying so.
+ * The style a WINE declares — the record first, the name as the fallback.
  *
- * @param {string} nameA
- * @param {string} nameB
+ * Label sweetness moved into a field of its own (WineDefinition.labelSweetness,
+ * GitHub discussion #1754), and the word is leaving the names it used to ride
+ * in. A guard that read only names would then go blind on exactly the wines it
+ * was built for (#1134), so this reads the field where the record carries it
+ * and the name where it does not: a row from before the migration, a name a
+ * scan or an import typed, a Bridge peer on the older protocol. The ripeness
+ * tier likewise: the classification rows of kind `ripeness` count beside any
+ * Prädikat the name states.
+ *
+ * Accepts a plain name string too, so every caller that held a string keeps
+ * working. The sweetness set is the same token set statedStyle builds, so a
+ * field term and a name compare like two names; `term` carries the field's
+ * own word (normalised) for the exact comparison two fields allow.
+ *
+ * @param {string|{name?:string, labelSweetness?:any, classifications?:any[]}} wineLike
+ * @returns {{pradikat: Set<string>, sweetness: Set<string>, grade: Set<string>, term: string|null, termName: string|null}}
+ */
+function styleOf(wineLike) {
+  if (wineLike == null || typeof wineLike === 'string') {
+    return { ...statedStyle(wineLike), term: null, termName: null };
+  }
+  const fromName = statedStyle(wineLike.name);
+  const pradikat = new Set(fromName.pradikat);
+  for (const row of Array.isArray(wineLike.classifications) ? wineLike.classifications : []) {
+    if (row && typeof row === 'object' && row.kind === 'ripeness' && typeof row.name === 'string') {
+      for (const t of statedStyle(row.name).pradikat) pradikat.add(t);
+    }
+  }
+  const termName = fieldTerm(wineLike);
+  if (!termName) return { pradikat, sweetness: fromName.sweetness, grade: fromName.grade, term: null, termName: null };
+  // The field is an explicit statement, so a word the NAME tokenizer would
+  // leave out ("Mild", "Medium Dry" — 'dry' is ambiguous in a name, not here)
+  // still counts: the whole term stands in as one token when nothing else does.
+  const term = normalizeString(termName.toLowerCase().replace(/ß/g, 'ss'));
+  const sweetness = statedStyle(termName).sweetness;
+  if (sweetness.size === 0 && term) sweetness.add(term);
+  return { pradikat, sweetness, grade: fromName.grade, term, termName };
+}
+
+/** Does this wine state a label sweetness at all — in its record or its name? */
+function sweetnessStated(wineLike) {
+  return styleOf(wineLike).sweetness.size > 0;
+}
+
+/**
+ * Do these two wines declare a DIFFERENT style? A non-null return means they
+ * are two wines and must never be linked without the user saying so. Each side
+ * may be a wine-like object (record + name, see styleOf) or a bare name.
+ *
+ * Where BOTH sides carry the field, the terms compare exactly — "Brut Nature"
+ * and "Brut" are two wines, which the token comparison below (built for names,
+ * where "Brut" ⊂ "Brut Rosé" must stay one wine) cannot tell apart. One field
+ * against one name compares as two names do.
+ *
+ * @param {string|object} wineA
+ * @param {string|object} wineB
  * @returns {string|null} human-readable reason, or null when compatible
  */
-function conflictingStyleTerms(nameA, nameB) {
-  const a = statedStyle(nameA);
-  const b = statedStyle(nameB);
+function conflictingStyleTerms(wineA, wineB) {
+  const a = styleOf(wineA);
+  const b = styleOf(wineB);
   if (disagree(a.pradikat, b.pradikat)) {
     return `each name states a different Prädikat (${[...a.pradikat].sort().join(', ')} vs ${[...b.pradikat].sort().join(', ')})`;
   }
-  if (disagree(a.sweetness, b.sweetness)) {
+  if (a.term && b.term) {
+    if (a.term !== b.term) return `each records a different label sweetness (${a.termName} vs ${b.termName})`;
+  } else if (disagree(a.sweetness, b.sweetness)) {
     return `each name states a different sweetness (${[...a.sweetness].sort().join(', ')} vs ${[...b.sweetness].sort().join(', ')})`;
   }
   if (disagree(a.grade, b.grade)) {
@@ -273,6 +344,8 @@ module.exports = {
   PRADIKAT_WORDS,
   NAME_AMBIGUOUS_WORDS,
   statedStyle,
+  styleOf,
+  sweetnessStated,
   conflictingStyleTerms,
   pradikatContradictsName,
   pradikatOnlyValue,

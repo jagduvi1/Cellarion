@@ -22,7 +22,7 @@
  * different-country guard.
  */
 
-const { normalizeString, normalizeWineName, normalizeProducerKey, normalizeAppellation } = require('./normalize');
+const { normalizeString, normalizeWineName, normalizeProducerKey, normalizeAppellation, sweetnessKeySegment } = require('./normalize');
 const { canonicalizeWineName } = require('./producerPrefix');
 
 // An all-stopword producer ("Domaine", "Cantina") has an EMPTY comparison key
@@ -36,12 +36,16 @@ const { canonicalizeWineName } = require('./producerPrefix');
 const producerSegment = (producer) =>
   normalizeProducerKey(producer || '') || normalizeString(producer || '');
 
-function computeCanonicalKey(name, producer, appellation = '') {
+// `sweetness` = the wine's label sweetness term (the printed word), when it has
+// one: it rides on the key as the same suffix generateWineKey adds, so a
+// Kabinett trocken and the Kabinett never share a canonical identity once the
+// word has left the name. Absent, the key is exactly what it always was.
+function computeCanonicalKey(name, producer, appellation = '', { sweetness = null } = {}) {
   const nameKey = normalizeWineName(canonicalizeWineName(name || '', producer || ''));
   const appellationKey = normalizeString(
     normalizeAppellation(typeof appellation === 'string' ? appellation : '') || ''
   );
-  return `${producerSegment(producer)}:${nameKey}:${appellationKey}`;
+  return `${producerSegment(producer)}:${nameKey}:${appellationKey}${sweetnessKeySegment(sweetness)}`;
 }
 
 /**

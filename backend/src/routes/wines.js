@@ -20,6 +20,10 @@ const { markNotWineByMember } = require('../services/nonWineOps');
 const { generateWineKey } = require('../utils/normalize');
 const { findBestMatch } = require('../services/wineMatching');
 const { conflictingStyleTerms } = require('../utils/styleTerms');
+// Every wine read here populates the same taxonomy rows — the label sweetness
+// term among them, as the API shape ({ name, band, scale, regulated }): the
+// style guard reads it off a candidate, and a member read sends it, not an id.
+const WINE_READ_POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { MEMBER_WINE_HIDDEN_FIELDS, MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require('../config/constants');
@@ -221,7 +225,7 @@ async function matchScannedIdentity({ name, producer, appellation }, viewer) {
   // 1. Exact normalizedKey match
   const normalizedKey = generateWineKey(name, producer, appellation);
   const wine = await WineDefinition.findOne({ normalizedKey, ...visible })
-    .populate(['country', 'region', 'grapes']);
+    .populate(WINE_READ_POPULATE);
   if (wine) return { wine, confidence: 1.0 };
 
   // 2. Fuzzy search
@@ -235,7 +239,7 @@ async function matchScannedIdentity({ name, producer, appellation }, viewer) {
         // The index excludes hidden rows when it is built, but a row hidden
         // while the index was down keeps its stale entry: filter here too.
         candidates = await WineDefinition.find({ _id: { $in: ids }, ...visible })
-          .populate(['country', 'region', 'grapes']);
+          .populate(WINE_READ_POPULATE);
       }
     } catch (err) {
       console.warn('Meilisearch unavailable during scan-label match:', err.message);
@@ -245,7 +249,7 @@ async function matchScannedIdentity({ name, producer, appellation }, viewer) {
   if (candidates.length === 0) {
     try {
       candidates = await WineDefinition.find({ $text: { $search: searchQuery }, ...visible })
-        .populate(['country', 'region', 'grapes'])
+        .populate(WINE_READ_POPULATE)
         .limit(20);
     } catch {
       // No text match — no candidates
@@ -259,7 +263,9 @@ async function matchScannedIdentity({ name, producer, appellation }, viewer) {
   // decided by string distance between "Feinherb" and "Trocken". Filtered
   // BEFORE scoring, not after: dropping only the winner would hand the match
   // to the next wine in the same range. See utils/styleTerms.
-  candidates = candidates.filter((c) => !conflictingStyleTerms(name, c.name));
+  // The candidate goes in whole: the guard reads its labelSweetness record
+  // where it has one, its name where it does not (utils/styleTerms.styleOf).
+  candidates = candidates.filter((c) => !conflictingStyleTerms({ name }, c));
 
   // Use the shared scorer so scan-label, find-or-create and import all
   // dedup with one implementation. redistribute:false preserves this
@@ -316,7 +322,7 @@ async function mongoSearch(filter, sort, limit, offset, search) {
   }
 
   const wines = await query
-    .populate(['country', 'region', 'grapes'])
+    .populate(WINE_READ_POPULATE)
     .limit(limit)
     .skip(offset)
     .sort(sortOptions);
@@ -407,7 +413,7 @@ router.get('/', requireAuth, async (req, res) => {
         const ids = await findOwnHiddenWineIds(req.user.id, searchTerm);
         if (ids.length) {
           ownHidden = await WineDefinition.find({ _id: { $in: ids }, nonWine: true })
-            .populate(['country', 'region', 'grapes']);
+            .populate(WINE_READ_POPULATE);
         }
       } catch (err) {
         console.warn('Own hidden-wine lookup failed (search continues without it):', err.message);
@@ -429,7 +435,7 @@ router.get('/', requireAuth, async (req, res) => {
 
         // Fetch full documents from MongoDB, preserving Meilisearch ranking
         const wines = await WineDefinition.find({ _id: { $in: ids } })
-          .populate(['country', 'region', 'grapes']);
+          .populate(WINE_READ_POPULATE);
 
         // Re-order to match Meilisearch relevance ranking
         const idOrder = new Map(ids.map((id, i) => [id, i]));
@@ -1016,7 +1022,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
-const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification classifications aiProfile canary';
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification classifications labelSweetness aiProfile canary';
 // The populated places and grapes on the public page carry their public
 // fields only: a bare populate also sent createdBy / reviewedBy, the ids of
 // the members who added or reviewed a region or grape. Descriptions feed the
@@ -1026,6 +1032,7 @@ const PUBLIC_TAXONOMY_POPULATE = [
   { path: 'region', select: 'name slug description country translations' },
   { path: 'grapes', select: 'name slug color description regionalNames translations' },
   { path: 'classifications', select: 'name kind' },
+  { path: 'labelSweetness', select: 'name band scale regulated -_id' },
 ];
 
 // Anti-enumeration limit for the ONE wine endpoint that needs no account.
@@ -1222,7 +1229,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       : MEMBER_WINE_EXCLUDE_KEEP_CREATOR;
     const wine = await WineDefinition.findById(req.params.id)
       .select(select)
-      .populate(['country', 'region', 'grapes']);
+      .populate(WINE_READ_POPULATE);
 
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });

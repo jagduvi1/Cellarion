@@ -142,7 +142,8 @@ function isLabelVariant(a, b, grapeTokens) {
   // words read exactly like furniture ("trocken" is not a wine's name), and
   // the first person to add them to the strip list would collapse a producer's
   // whole range onto one row with nothing to stop it.
-  const styleConflict = conflictingStyleTerms(a.name, b.name);
+  // Both rows go in whole: a recorded label sweetness counts beside the name.
+  const styleConflict = conflictingStyleTerms(a, b);
   if (styleConflict) {
     return { match: false, reason: `${styleConflict} — a range, not a duplicate` };
   }

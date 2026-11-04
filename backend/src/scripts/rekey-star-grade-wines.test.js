@@ -2,12 +2,18 @@ jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), exists: jest.fn(
 
 const WineDefinition = require('../models/WineDefinition');
 const { keyFor, run } = require('./rekey-star-grade-wines');
-const { normalizeString, normalizeWineName } = require('../utils/normalize');
+const { normalizeString, normalizeWineName, sweetnessKeySegment } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
+const { primeSweetnessCache } = require('../services/sweetnessOps');
 
 const NAME = 'Zeltinger Sonnenuhr Riesling Auslese** Goldkapsel';
 const OLD = 'markus molitor:zeltinger sonnenuhr riesling auslese goldkapsel:mosel';
 const NEW = 'markus molitor:zeltinger sonnenuhr riesling auslese 2star goldkapsel:mosel';
+// A label sweetness term's word rides on every key as a suffix (utils/normalize).
+const SW_ID = 'e'.repeat(24);
+const SUFFIX = sweetnessKeySegment('trocken');
+
+afterEach(() => primeSweetnessCache(null));
 
 describe('rekey-star-grade-wines keyFor', () => {
   const wine = (extra) => ({ name: NAME, producer: 'Markus Molitor', appellation: 'Mosel', ...extra });
@@ -16,6 +22,14 @@ describe('rekey-star-grade-wines keyFor', () => {
     const w = wine({ normalizedKey: OLD });
     expect(keyFor(w, normalizeString)).toBe(OLD);
     expect(keyFor(w, normalizeWineName)).toBe(NEW);
+  });
+
+  it('carries the label sweetness term\'s word as the key suffix, in both forms — and no suffix without a term', () => {
+    const w = wine({ normalizedKey: OLD + SUFFIX });
+    expect(SUFFIX).not.toBe('');
+    expect(keyFor(w, normalizeString, 'trocken')).toBe(OLD + SUFFIX);
+    expect(keyFor(w, normalizeWineName, 'trocken')).toBe(NEW + SUFFIX);
+    expect(keyFor(w, normalizeWineName, null)).toBe(NEW);
   });
 
   it('keeps the pending and draft namespaces', () => {
@@ -60,6 +74,27 @@ describe('rekey-star-grade-wines run', () => {
     expect(r.rekeyed).toHaveLength(0);
     expect(r.canonical).toHaveLength(1);
     expect(WineDefinition.updateOne).toHaveBeenCalledWith({ _id: 'a' }, { $set: { canonicalKey: computeCanonicalKey(NAME, 'Markus Molitor', 'Mosel') } });
+  });
+
+  it('a TERMED wine is re-keyed onto the suffixed keys — read with its term, never written back bare', async () => {
+    primeSweetnessCache([{ _id: SW_ID, name: 'trocken', scale: 'still', band: 'dry', country: null, synonyms: [] }]);
+    WineDefinition.find.mockReturnValue(lean([row('a', { normalizedKey: OLD + SUFFIX, labelSweetness: SW_ID })]));
+    const r = await run({ apply: true });
+    expect(r.rekeyed).toHaveLength(1);
+    expect(r.skipped).toHaveLength(0);
+    expect(WineDefinition.updateOne).toHaveBeenCalledWith({ _id: 'a' }, { $set: {
+      normalizedKey: NEW + SUFFIX, canonicalKey: computeCanonicalKey(NAME, 'Markus Molitor', 'Mosel', { sweetness: 'trocken' }),
+    } });
+  });
+
+  it('a termed wine whose keys are already current is left alone', async () => {
+    primeSweetnessCache([{ _id: SW_ID, name: 'trocken', scale: 'still', band: 'dry', country: null, synonyms: [] }]);
+    const current = computeCanonicalKey(NAME, 'Markus Molitor', 'Mosel', { sweetness: 'trocken' });
+    WineDefinition.find.mockReturnValue(lean([row('a', { normalizedKey: NEW + SUFFIX, canonicalKey: current, labelSweetness: SW_ID })]));
+    const r = await run({ apply: true });
+    expect(r.rekeyed).toHaveLength(0);
+    expect(r.canonical).toHaveLength(0);
+    expect(WineDefinition.updateOne).not.toHaveBeenCalled();
   });
 
   it('never moves a key it did not build, nor onto a taken key — also within one run', async () => {

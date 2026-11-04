@@ -89,13 +89,15 @@ const CELLARS = [
 const COUNTRIES = [{ _id: id('f1'), name: 'Italy', description: 'Long country text' }];
 const REGIONS = [{ _id: id('f2'), name: 'Piedmont', description: 'Long region text' }];
 const GRAPES = [{ _id: id('f3'), name: 'Nebbiolo', description: 'Long grape text', regionalNames: [] }];
+// A label sweetness term (the fixture is a fixture: a Barolo label prints none).
+const TERMS = [{ _id: id('f4'), name: 'secco', scale: 'still', band: 'dry', regulated: true, description: 'Long term text' }];
 const W1 = id('d1');
 const W2 = id('d2');
 const W3 = id('d3');
 const WINES = [
   {
     _id: W1, name: 'Barolo', producer: 'Mascarello', type: 'red', colour: null, country: id('f1'), region: id('f2'),
-    appellation: 'Barolo', classification: 'DOCG', grapes: [id('f3')], image: '/api/uploads/processed/w1img.webp',
+    appellation: 'Barolo', classification: 'DOCG', labelSweetness: id('f4'), grapes: [id('f3')], image: '/api/uploads/processed/w1img.webp',
     aiProfile: {
       body: 'full', tannin: 'high', acidity: 'high', sweetness: 'dry',
       flavors: ['tar', 'rose'], foodPairings: ['truffle'],
@@ -210,6 +212,8 @@ function project(doc, select, coll) {
   loads.push([coll, select]);
   const out = { _id: doc._id };
   for (const p of select.split(/\s+/).filter(Boolean)) {
+    // The one exclusion Mongo allows beside an inclusion list: leaving the id out.
+    if (p === '-_id') { delete out._id; continue; }
     if (p.startsWith('-')) throw new Error(`the stand-in supports inclusion projections only (${coll}: ${p})`);
     pick(doc, p.split('.'), out);
   }
@@ -217,7 +221,7 @@ function project(doc, select, coll) {
 }
 const REFS = {
   wineDefinition: ['wines', WINES], pendingWineRequest: ['wineRequests', REQUESTS], country: ['countries', COUNTRIES],
-  region: ['regions', REGIONS], grapes: ['grapes', GRAPES], key: ['personalDataKeys', KEYS], author: ['users', USERS],
+  region: ['regions', REGIONS], grapes: ['grapes', GRAPES], labelSweetness: ['sweetnessTerms', TERMS], key: ['personalDataKeys', KEYS], author: ['users', USERS],
 };
 function populate(rows, spec, selectArg) {
   const specs = Array.isArray(spec) ? spec : typeof spec === 'string' ? [{ path: spec, select: selectArg }] : [spec];
@@ -357,8 +361,8 @@ describe('a read token gets the inventory', () => {
       personal: [{ key: 'Closure', type: 'enum', unit: null, value: 'cork', level: 'bottle', by: 'maria' }],
     });
     expect(body.wines[W1]).toEqual({
-      name: 'Barolo', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
-      appellation: 'Barolo', classification: 'DOCG', grapes: ['Nebbiolo'],
+      name: 'Barolo', displayName: 'Barolo secco', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
+      appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'secco', band: 'dry', scale: 'still', regulated: true }, grapes: ['Nebbiolo'],
       image: '/api/uploads/thumbs/processed/w1img.webp.webp',
       profile: { body: 'full', acidity: 'high', sweetness: 'dry', tannin: 'high', flavors: ['tar', 'rose'], foodPairings: ['truffle'] },
     });

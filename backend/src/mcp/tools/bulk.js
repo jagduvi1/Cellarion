@@ -85,10 +85,10 @@ async function planItem(item, userId, roles) {
     // add_bottle: own pending row yes, a stranger's no. planItem is the
     // preview AND the plan the commit executes, so gating here gates both.
     const wine = await findVisibleWine(item.wine_id, {
-      userId, roles, populate: ['country', 'region', 'grapes'],
+      userId, roles, populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }],
     });
     if (!wine) return { status: 'invalid', error: `no registry wine ${item.wine_id}` };
-    return { status: 'ready', wine_id: String(wine._id), wine: wineSummary(wine) };
+    return { status: 'ready', wine_id: String(wine._id), wine: wineSummary(wine, { termLoaded: true }) };
   }
 
   if (!item.new_wine.type && item.new_wine.category !== 'other') {
@@ -104,14 +104,14 @@ async function planItem(item, userId, roles) {
   );
   if (res.wine) {
     // Registry already knows it — upgrade the item to the existing wine.
-    return { status: 'ready', wine_id: String(res.wine._id), wine: wineSummary(res.wine), matched_existing: true };
+    return { status: 'ready', wine_id: String(res.wine._id), wine: wineSummary(res.wine, { termLoaded: true }), matched_existing: true };
   }
   if (res.candidates?.length) {
     if (item.confirm_new_wine) return { status: 'will_create', new_wine: item.new_wine, despite_candidates: true };
     return {
       status: 'blocked_similar',
       error: 'similar wines exist — pick a wine_id or set confirm_new_wine on this item',
-      candidates: res.candidates.map((c) => ({ ...wineSummary(c.wine), score: c.score })),
+      candidates: res.candidates.map((c) => ({ ...wineSummary(c.wine, { termLoaded: true }), score: c.score })),
     };
   }
   return { status: 'will_create', new_wine: item.new_wine };
@@ -237,7 +237,8 @@ registerTool({
       try {
         let wineDoc;
         if (p.status === 'ready') {
-          wineDoc = await WineDefinition.findById(p.wine_id);
+          // The term populated, so the summary can state it (or its absence).
+          wineDoc = await WineDefinition.findById(p.wine_id).populate({ path: 'labelSweetness', select: 'name band scale regulated -_id' });
           if (!wineDoc) { failures.push({ index: i, error: 'wine disappeared' }); continue; }
         } else {
           // Soft-zone stays live at apply time UNLESS the user explicitly

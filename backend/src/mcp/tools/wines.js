@@ -26,9 +26,9 @@ const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 // Fields safe to expose: never normalizedKey / createdBy / productNumber*.
 // `draft` is selected so get_wine can SAY a row is the caller's private draft
 // (the query below already guarantees only the creator can reach one).
-const SAFE_SELECT = 'name producer slug country region appellation classification classifications grapes type colour communityRating aiProfile lwin image imageCredit draft';
-// Every registry read populates the same taxonomy rows (country, region, grapes, classification tiers).
-const TAXONOMY_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }];
+const SAFE_SELECT = 'name producer slug country region appellation classification classifications labelSweetness grapes type colour communityRating aiProfile lwin image imageCredit draft';
+// Every registry read populates the same taxonomy rows (country, region, grapes, classification tiers, the label sweetness term).
+const TAXONOMY_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
 
 // Registry reads on this surface are 'public' scope — served to any token and
 // to the anonymous /api/mcp/public surface — so there is no caller identity to
@@ -93,9 +93,9 @@ registerTool({
         .limit(REGISTRY_LIMIT).populate(TAXONOMY_POPULATE).lean();
     }
     const data = [
-      ...ownHidden.map((w) => ({ ...wineSummary(w), only_in_your_cellar: true, note: OWN_HIDDEN_NOTE })),
+      ...ownHidden.map((w) => ({ ...wineSummary(w, { termLoaded: true }), only_in_your_cellar: true, note: OWN_HIDDEN_NOTE })),
       ...wines.map((w) => ({
-        ...wineSummary(w),
+        ...wineSummary(w, { termLoaded: true }),
         classification: w.classification || null,
         classifications: classificationsOut(w),
         community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
@@ -176,7 +176,7 @@ registerTool({
       ? undefined
       : await require('../../services/wineProposalOps').pendingForWine(w._id, ctx.user.id);
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
-      ...wineSummary(w),
+      ...wineSummary(w, { termLoaded: true }),
       classification: w.classification || null,
       classifications: classificationsOut(w),
       lwin7: w.lwin?.lwin7 || null,

@@ -40,6 +40,15 @@ const path = require('path');
 const os = require('os');
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const { loadTerms } = require('../services/sweetnessOps');
+// The label sweetness term's WORD for a wine, or null: the keys this script
+// writes carry it as the model hook would, and updateOne skips that hook.
+async function sweetnessOf(w) {
+  if (!w || !w.labelSweetness) return null;
+  const terms = await loadTerms();
+  return terms.byId.get(String(w.labelSweetness._id || w.labelSweetness))?.name || null;
+}
+
 const Bottle = require('../models/Bottle');
 const searchService = require('../services/search');
 const { initSearch } = require('./lib/scriptSearch');
@@ -99,7 +108,7 @@ async function run() {
 
   const wines = await WineDefinition
     .find(CANDIDATES)
-    .select('name producer appellation normalizedKey')
+    .select('name producer appellation normalizedKey labelSweetness')
     .lean();
 
   const stats = { candidates: 0, changed: 0, collisions: 0, bottlesDated: 0 };
@@ -128,7 +137,11 @@ async function run() {
     const yearMatch = w.name.match(/(19[5-9]\d|20[0-4]\d)/g);
     const year = yearMatch ? parseInt(yearMatch[yearMatch.length - 1], 10) : null;
 
-    const newKey = generateWineKey(stripped, w.producer, w.appellation || '');
+    // The label sweetness term rides on both keys when the wine has one
+    // (utils/normalize SWEETNESS_KEY_MARK); updateOne skips the hook that
+    // would otherwise add it, so this scripted writer carries it itself.
+    const sweetness = await sweetnessOf(w);
+    const newKey = generateWineKey(stripped, w.producer, w.appellation || '', { sweetness });
     const clash = await WineDefinition.findOne({ normalizedKey: newKey, _id: { $ne: w._id } }).select('_id name').lean();
     if (clash) {
       stats.collisions += 1;
@@ -152,7 +165,7 @@ async function run() {
           // name, and findOrCreateWine's canonical lookup would miss this row
           // and mint a twin: the exact duplicate this cleanup exists to
           // prevent (code audit 2026-07-27, M1).
-          canonicalKey: computeCanonicalKey(stripped, w.producer, w.appellation),
+          canonicalKey: computeCanonicalKey(stripped, w.producer, w.appellation, { sweetness }),
           updatedAt: new Date(),
         } }
       );

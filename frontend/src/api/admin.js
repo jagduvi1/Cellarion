@@ -188,6 +188,10 @@ export const adminApproveGrape = (apiFetch, grapeId) =>
 export const adminApproveClassification = (apiFetch, id) =>
   apiFetch(`/api/admin/taxonomy/classifications/${id}/approve`, { method: 'POST' });
 
+/** Record that an admin reviewed a member-added label sweetness term. */
+export const adminApproveSweetnessTerm = (apiFetch, id) =>
+  apiFetch(`/api/admin/taxonomy/sweetness-terms/${id}/approve`, { method: 'POST' });
+
 // Force a full Meilisearch rebuild from the running process — the restore
 // runbook's missing step (a stale index silently disables the dedup net).
 export const adminReindexSearch = (apiFetch) =>

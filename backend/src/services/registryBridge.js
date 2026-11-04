@@ -23,7 +23,8 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
 const client = require('./registryBridgeClient');
-const { generateWineKey } = require('../utils/normalize');
+const { generateWineKey, appendSweetnessTerm } = require('../utils/normalize');
+const { resolveTerm, scaleForType, SCALES } = require('./sweetnessOps');
 const { TYPES: VALUE_TYPES } = require('../utils/personalDataTypes');
 // Loaded on first use, not at require time: the intake routes that forward
 // contributions require this module, and findOrCreateWine / search pull in
@@ -186,8 +187,46 @@ async function resolveTaxonomy(w, userId) {
   if (country && w.appellation) region = await regionForAppellation(w.appellation, country._id);
   if (!region && country && w.region) region = await findOrCreateRegion(w.region, country._id, userId);
   const grapes = Array.isArray(w.grapes) && w.grapes.length ? await findOrCreateGrapes(w.grapes, userId) : [];
-  return { country, region, grapes };
+  return { country, region, grapes, sweetness: await resolveRegistrySweetness(w) };
 }
+
+/**
+ * The registry's label sweetness (protocol v2), resolved against THIS
+ * install's term table by WORD and scale — never by id, ids differ per server.
+ * Only when the registry SAYS something (the key is present): an older
+ * registry sends none, and that must not clear a term held here. `row` is the
+ * local term; `word` without a row is a term this table lacks.
+ */
+async function resolveRegistrySweetness(w) {
+  if (!w || !Object.prototype.hasOwnProperty.call(w, 'labelSweetness')) return null;
+  const sent = w.labelSweetness;
+  const word = sent && typeof sent === 'object' ? (typeof sent.name === 'string' ? sent.name.trim() : null)
+    : (typeof sent === 'string' ? sent.trim() : null);
+  if (!word) return { stated: true, word: null, row: null };
+  const scale = sent && typeof sent === 'object' && SCALES.includes(sent.scale) ? sent.scale : scaleForType(w.type);
+  const row = await resolveTerm(word, { scale });
+  return { stated: true, word, row };
+}
+
+/**
+ * The term fields for a copy, from resolveRegistrySweetness. A word this
+ * server's table lacks is never minted from the wire (terms are curated): it
+ * stays where every reader still finds it — in the name, as the label reads —
+ * and the row is marked for a curator (sweetnessReview unknown_term).
+ */
+function sweetnessFields(w, s) {
+  if (!s || !s.stated) return {};
+  if (!s.word) return { labelSweetness: null };
+  if (s.row) return { labelSweetness: s.row._id };
+  return {
+    labelSweetness: null,
+    name: appendSweetnessTerm(w.name, s.word),
+    sweetnessReview: { reason: 'unknown_term', detail: `The registry states "${s.word}", a sweetness term this server's table does not have`, since: new Date() },
+  };
+}
+
+/** The word the dedup key carries for a copy: the resolved term's, else none (the name keeps an unknown word). */
+const sweetnessKeyWord = (tax) => (tax && tax.sweetness && tax.sweetness.row ? tax.sweetness.row.name : null);
 
 // A picture from the registry is a URL into the hosted site, never bytes: an
 // inline data: image, or anything else that is not an http(s) link, is left
@@ -221,6 +260,8 @@ function identityFields(w, tax) {
     image: remoteImage(w.image),
     imageCredit: remoteImage(w.image) ? (w.imageCredit || null) : null,
     lwin: w.lwin || null,
+    // Last, so an unknown word's name-with-the-word wins over the bare name above.
+    ...sweetnessFields(w, tax.sweetness),
   };
 }
 
@@ -319,7 +360,9 @@ function indexLocally(wineId) {
 
 /**
  * Copy a registry wine into this install. Returns { ok, wine, created } or
- * { ok: false, code } with code ∈ disabled | invalid | not_found | unavailable.
+ * { ok: false, code } with code ∈ disabled | invalid | not_found | unavailable
+ * | conflict (a local row with this identity is already linked to a
+ * DIFFERENT registry wine — never re-pointed; a person merges or corrects).
  * A local wine typed before the bridge existed, with the same dedup key, is
  * LINKED rather than duplicated: blanks are filled, a locally curated
  * profile is kept.
@@ -336,8 +379,22 @@ async function adoptWine(registryId, userId) {
 
   const now = new Date();
   const tax = await resolveTaxonomy(w, userId);
-  const normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
+  // The identity as it will be STORED — a word this table lacks rides in the
+  // name — so the key is built from the stored name, never the bare wire name
+  // (a later plain add exact-matches at stage one, where no guard runs).
+  const fields = identityFields(w, tax);
+  const normalizedKey = generateWineKey(fields.name, w.producer || '', w.appellation || '', { sweetness: sweetnessKeyWord(tax) });
+  // The exact key first. Then — a copy made before the Bridge carried terms,
+  // or typed by hand, may hold the word IN ITS NAME with no term — the
+  // display-name key, so that row is linked, not twinned.
   let wine = await WineDefinition.findOne({ normalizedKey });
+  if (!wine && tax.sweetness && tax.sweetness.word) {
+    const shown = generateWineKey(appendSweetnessTerm(w.name, tax.sweetness.word), w.producer || '', w.appellation || '');
+    if (shown !== normalizedKey) wine = await WineDefinition.findOne({ normalizedKey: shown });
+  }
+  // A row already linked to a DIFFERENT registry wine is never re-pointed:
+  // two registry identities on one local row is a merge question for a person.
+  if (wine && wine.registryId && String(wine.registryId) !== String(w.id)) return { ok: false, code: 'conflict' };
   // Captured before the assignment below: rows a previous adoption wrote carry
   // the OLD stamp, and comparing them against the new one would read them as
   // local edits and freeze them (audit 2026-09-08).
@@ -352,7 +409,7 @@ async function adoptWine(registryId, userId) {
     await wine.save();
   } else {
     wine = new WineDefinition({
-      ...identityFields(w, tax),
+      ...fields,
       normalizedKey,
       createdBy: userId,
       createdVia: 'bridge',
@@ -373,9 +430,11 @@ async function adoptWine(registryId, userId) {
       await wine.save();
     } catch (err) {
       if (err && err.code === 11000) {
-        // Minted concurrently under the same key: take that row instead.
+        // Minted concurrently under the same key: take that row instead —
+        // unless it is linked to ANOTHER registry wine, the same rule as above.
         wine = await WineDefinition.findOne({ normalizedKey });
         if (!wine) throw err;
+        if (wine.registryId && String(wine.registryId) !== String(w.id)) return { ok: false, code: 'conflict' };
         if (!wine.registryId) { wine.registryId = String(w.id); wine.registrySyncedAt = now; await wine.save(); }
       } else {
         throw err;
@@ -419,10 +478,18 @@ async function applyRegistryUpdate(local, w) {
     // Never trade a picture for nothing: a wine the registry has no image for
     // must not blank one this install already shows.
     if (!fields.image && wine.image) { delete fields.image; delete fields.imageCredit; }
+    // The review marker's age is when the question FIRST arose: a refresh that
+    // meets the same kind of question keeps `since` and refreshes the detail
+    // (a different unknown word is still one unresolved word).
+    const prevReview = wine.sweetnessReview;
     Object.assign(wine, fields);
+    if (fields.sweetnessReview && prevReview && prevReview.reason === fields.sweetnessReview.reason && prevReview.since) {
+      wine.sweetnessReview = { ...fields.sweetnessReview, since: prevReview.since };
+    }
     // Same as adopt: a colour the registry states is stored as stated.
     if (Object.prototype.hasOwnProperty.call(fields, 'colour')) stateColour(wine, fields.colour);
-    wine.normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
+    // From the STORED name (an unknown word rides in it), as adoptWine keys.
+    wine.normalizedKey = generateWineKey(fields.name, w.producer || '', w.appellation || '', { sweetness: sweetnessKeyWord(tax) });
     await assignClassification(wine, classificationInput(w));
   } else if (!wine.image && remoteImage(w.image)) {
     wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null;

@@ -74,6 +74,12 @@ const STATIC_FIELDS = [
   // grouping needs an $unwind stage — a later slice, honestly flagged out.
   dim({ key: 'wine.grapes', label: 'Grapes', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.grapes', taxonomyModel: 'Grape', sortable: false, groupable: false }),
   dim({ key: 'wine.classifications', label: 'Classification', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.classifications', taxonomyModel: 'Classification', sortable: false, groupable: false }),
+  // The sweetness the LABEL states (models/SweetnessTerm), a single ref — so
+  // unlike grapes and classifications it groups: "how many dry Rieslings".
+  // Filters and groups resolve to the term's NAME ("Trocken"); the band behind
+  // it needs a $lookup of the row's `band`, which the engine's taxonomy path
+  // does not do — a later slice, honestly flagged out.
+  dim({ key: 'wine.labelSweetness', label: 'Label sweetness', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.labelSweetness', taxonomyModel: 'SweetnessTerm', taxonomyCollection: 'sweetnessterms' }),
 
   // Inventory
   dim({ key: 'bottle.vintage', label: 'Vintage', domain: 'inventory', type: 'text', source: 'bottle', path: 'vintage' }),

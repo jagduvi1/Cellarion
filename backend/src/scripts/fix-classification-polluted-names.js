@@ -28,6 +28,15 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const { loadTerms } = require('../services/sweetnessOps');
+// The label sweetness term's WORD for a wine, or null: the keys this script
+// writes carry it as the model hook would, and updateOne skips that hook.
+async function sweetnessOf(w) {
+  if (!w || !w.labelSweetness) return null;
+  const terms = await loadTerms();
+  return terms.byId.get(String(w.labelSweetness._id || w.labelSweetness))?.name || null;
+}
+
 const { unpolluteEstateName } = require('../services/findOrCreateWine');
 const { generateWineKey } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
@@ -58,14 +67,14 @@ const CANDIDATES = {
 //   the old strings; they no longer vouch for the new ones.
 // - updatedAt: the Registry Bridge change check reads it, so adopted copies
 //   receive the rename.
-function buildFixUpdate(w, out, newKey) {
+function buildFixUpdate(w, out, newKey, sweetness = null) {
   return {
     $set: {
       name: out.name,
       appellation: out.appellation || null,
       classification: out.classification || null,
       normalizedKey: newKey,
-      canonicalKey: computeCanonicalKey(out.name, w.producer, out.appellation),
+      canonicalKey: computeCanonicalKey(out.name, w.producer, out.appellation, { sweetness }),
       verifiedAt: null,
       crossChecksClearedAt: null,
       updatedAt: new Date(),
@@ -81,7 +90,7 @@ async function run() {
 
   const wines = await WineDefinition
     .find(CANDIDATES)
-    .select('name producer appellation classification normalizedKey canonicalKey verifiedChecks verifiedAt crossChecksCleared crossChecksClearedAt')
+    .select('name producer appellation classification normalizedKey canonicalKey verifiedChecks verifiedAt crossChecksCleared crossChecksClearedAt labelSweetness')
     .lean();
 
   const stats = { scanned: 0, changed: 0, collisions: 0, byShape: {} };
@@ -95,7 +104,8 @@ async function run() {
     });
     if (!out.changed) continue;
 
-    const newKey = generateWineKey(out.name, w.producer, out.appellation || '');
+    const sweetness = await sweetnessOf(w); // updateOne skips the hook that adds a termed wine's key suffix
+    const newKey = generateWineKey(out.name, w.producer, out.appellation || '', { sweetness });
     const clash = await WineDefinition.findOne({ normalizedKey: newKey, _id: { $ne: w._id } }).select('_id name').lean();
     if (clash) {
       stats.collisions += 1;
@@ -115,7 +125,7 @@ async function run() {
         verifiedChecks: w.verifiedChecks ?? null, verifiedAt: w.verifiedAt ?? null,
         crossChecksCleared: w.crossChecksCleared ?? null, crossChecksClearedAt: w.crossChecksClearedAt ?? null,
       });
-      await WineDefinition.updateOne({ _id: w._id }, buildFixUpdate(w, out, newKey));
+      await WineDefinition.updateOne({ _id: w._id }, buildFixUpdate(w, out, newKey, sweetness));
       if (searchOk) await searchService.indexWine(w._id);
     }
   }

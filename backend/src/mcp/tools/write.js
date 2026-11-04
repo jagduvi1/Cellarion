@@ -83,13 +83,13 @@ registerTool({
     // registry keeps referencing the canonical Grape doc.
     if (result.wine) {
       return ok(`Matched existing registry wine: ${result.wine.name}`, {
-        matched: { ...wineSummary(decorateGrapes(result.wine)) },
+        matched: { ...wineSummary(decorateGrapes(result.wine), { termLoaded: true }) },
         guidance: 'Use this wine_id in add_bottle. Do not create a new wine.',
       });
     }
     if (result.candidates?.length) {
       return ok(`${result.candidates.length} close candidate(s) — none certain`, {
-        candidates: result.candidates.map((c) => ({ ...wineSummary(decorateGrapes(c.wine)), score: c.score })),
+        candidates: result.candidates.map((c) => ({ ...wineSummary(decorateGrapes(c.wine), { termLoaded: true }), score: c.score })),
         guidance: 'If one of these IS the wine, use its wine_id in add_bottle. Only if none match, call add_bottle with new_wine and confirm_new_wine:true.',
       });
     }
@@ -177,7 +177,8 @@ registerTool({
       // unreadable label works), a stranger gets the same not_found a missing
       // id gets — security audit M-4.
       wineDoc = await findVisibleWine(args.wine_id, {
-        userId: ctx.user.id, roles: ctx.user.roles, populate: ['country', 'region', 'grapes'],
+        userId: ctx.user.id, roles: ctx.user.roles,
+        populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }],
       });
       if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
     } else {
@@ -276,7 +277,7 @@ registerTool({
       summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${bottle.status === ORDERED_STATUS ? ' — on order, not in the cellar until it arrives (mark_arrived)' : ''}${wineDraft ? (wineCreated ? ' (private draft wine — only you can see it; publish_wine when the record is complete)' : ' (on your private draft wine)') : wineCreated ? (pendingIdentity ? ' (registry wine filed for sommelier completion — no producer)' : ' (new registry wine created)') : ''}`,
       data: {
         bottle_id: bottle._id,
-        wine: { ...wineSummary(wineDoc) },
+        wine: { ...wineSummary(wineDoc, { termLoaded: true }) },
         wine_created: wineCreated,
         ...(notWine ? { not_wine: notWine, note: notWine.status === 'applied' ? 'The record was already in the registry as wine; on your word it is now in the Other category.' : notWine.status === 'filed' ? `The record was already in the registry as wine and ${notWine.holders} members hold it, so a curator will decide on the Other category; the bottle is saved.` : 'A curator proposal to move this record to Other is already waiting; the bottle is saved.' } : {}),
         // Say it plainly: the bottle is saved and usable, but the wine is not

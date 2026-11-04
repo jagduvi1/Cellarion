@@ -31,6 +31,15 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const { loadTerms } = require('../services/sweetnessOps');
+// The label sweetness term's WORD for a wine, or null: the keys this script
+// writes carry it as the model hook would, and updateOne skips that hook.
+async function sweetnessOf(w) {
+  if (!w || !w.labelSweetness) return null;
+  const terms = await loadTerms();
+  return terms.byId.get(String(w.labelSweetness._id || w.labelSweetness))?.name || null;
+}
+
 const { normalizeAppellation, generateWineKey } = require('../utils/normalize');
 const searchService = require('../services/search');
 const { initSearch } = require('./lib/scriptSearch');
@@ -57,7 +66,7 @@ async function run() {
 
   const wines = await WineDefinition
     .find(CANDIDATES)
-    .select('name producer appellation normalizedKey')
+    .select('name producer appellation normalizedKey labelSweetness')
     .lean();
 
   const stats = { scanned: 0, changed: 0, same: 0, collisions: 0 };
@@ -69,7 +78,8 @@ async function run() {
     const canonical = normalizeAppellation(w.appellation);
     if (canonical === w.appellation) { stats.same += 1; continue; }
 
-    const newKey = generateWineKey(w.name, w.producer, canonical || '');
+    // updateOne skips the hook that adds a termed wine's key suffix: carried here.
+    const newKey = generateWineKey(w.name, w.producer, canonical || '', { sweetness: await sweetnessOf(w) });
     // A different wine already occupying the canonical key = a real duplicate.
     const clash = await WineDefinition.findOne({ normalizedKey: newKey, _id: { $ne: w._id } }).select('_id').lean();
     if (clash) {

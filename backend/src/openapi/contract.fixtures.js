@@ -13,6 +13,7 @@ const User = require('../models/User');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
+const SweetnessTerm = require('../models/SweetnessTerm');
 const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WineRequest = require('../models/WineRequest');
@@ -67,10 +68,13 @@ async function seedContractData() {
       description: 'Never sent to integrations.',
     },
   });
+  // One wine carries a label sweetness term, so the documented shape is
+  // exercised on every wine read (the red stays without one: the null case).
+  const trocken = await SweetnessTerm.create({ name: 'trocken', scale: 'still', band: 'dry', system: 'EU 2019/33 Annex III A (de)', reviewedAt: new Date() });
   const white = await WineDefinition.create({
     name: 'Exemple Blanc', producer: 'Domaine Exemple', type: 'white',
-    country: france._id, grapes: [sauvignon._id],
-    normalizedKey: 'exemple blanc|domaine exemple|', createdBy: alice._id,
+    country: france._id, grapes: [sauvignon._id], labelSweetness: trocken._id,
+    normalizedKey: 'exemple blanc|domaine exemple|#sw=trocken', createdBy: alice._id,
   });
 
   // A reviewed drink window for the red 2015 (the bottle has none of its own).

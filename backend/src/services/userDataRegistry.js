@@ -92,6 +92,7 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Classification = require('../models/Classification');
+const SweetnessTerm = require('../models/SweetnessTerm');
 const Appellation = require('../models/Appellation');
 const AppellationReviewSkip = require('../models/AppellationReviewSkip');
 const ProfileAuditSample = require('../models/ProfileAuditSample');
@@ -1338,6 +1339,15 @@ const REGISTRY = [
     ]),
     exportFragment: null,
     note: 'shared taxonomy; createdBy and reviewedBy reassigned to [deleted] on erasure (the row and its review stand)',
+  },
+  {
+    model: SweetnessTerm, category: 'creator-ref', userFields: ['createdBy', 'reviewedBy'],
+    purge: (ctx) => Promise.all([
+      SweetnessTerm.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+      SweetnessTerm.updateMany({ reviewedBy: ctx.userId }, { $set: { reviewedBy: ctx.deletedUserId } }),
+    ]),
+    exportFragment: null,
+    note: 'shared taxonomy (label sweetness terms); createdBy and reviewedBy reassigned to [deleted] on erasure (the row and its review stand)',
   },
   {
     model: Appellation, category: 'creator-ref', userFields: ['createdBy'],

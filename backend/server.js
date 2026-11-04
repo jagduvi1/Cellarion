@@ -215,6 +215,15 @@ connectDB().then(async () => {
     console.error('[seed] standard registry fields failed (will retry next boot):', err.message);
   }
 
+  // The label sweetness terms (src/data/sweetness-terms.json) on a registry
+  // that has none yet — the same rule as the classification seed above.
+  try {
+    const terms = await require('./src/services/sweetnessOps').ensureSweetnessSeed();
+    if (terms.seeded) console.log(`[seed] sweetness terms: ${terms.created} rows`);
+  } catch (err) {
+    console.error('[seed] sweetness terms failed (will retry next boot):', err.message);
+  }
+
   // Purge expired soft-deleted reply texts on startup and every 24h
   const DiscussionReply = require('./src/models/DiscussionReply');
   DiscussionReply.purgeExpiredDeletes().catch(() => {});

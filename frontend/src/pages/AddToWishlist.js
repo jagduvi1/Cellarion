@@ -505,11 +505,14 @@ function AddToWishlist() {
     try {
       const res = await adoptRegistryWine(apiFetch, item.registryId);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.wine) throw new Error(data.error || 'adopt failed');
+      if (!res.ok || !data.wine) throw Object.assign(new Error(data.error || 'adopt failed'), { code: data.code });
       setRegistryWines(prev => prev.filter(r => r.registryId !== item.registryId));
       handleSelectWine(data.wine);
-    } catch {
-      setAiSearchError(t('addToWishlist.registryAdoptFailed', 'The shared registry could not be reached. Try again in a minute, or add the wine by hand.'));
+    } catch (err) {
+      // A conflict is not "try again" (see AddBottle.js): the server's message says what to do.
+      setAiSearchError(err?.code === 'conflict' && err.message
+        ? err.message
+        : t('addToWishlist.registryAdoptFailed', 'The shared registry could not be reached. Try again in a minute, or add the wine by hand.'));
     } finally {
       setAdoptingId(null);
     }

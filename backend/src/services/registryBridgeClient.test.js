@@ -52,6 +52,9 @@ describe('request', () => {
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe('https://cellarion.app/api/bridge/v1/me');
     expect(opts.headers).toMatchObject({ Authorization: `Bearer ${KEY}`, 'X-Cellarion-Instance': 'cellar.example.org' });
+    // Protocol v2 is not requested yet: this install cannot show a label
+    // sweetness term beside a name, so it must keep receiving v1's display name.
+    expect(opts.headers).not.toHaveProperty('X-Cellarion-Bridge-Protocol');
     expect(opts.signal).toBeDefined();
   });
 

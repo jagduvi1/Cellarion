@@ -32,6 +32,9 @@ const RESERVED_NAMES = [
   'producer', 'name', 'appellation', 'region', 'country', 'classification',
   'type', 'grapes', 'vintage', 'body', 'tannin', 'acidity', 'sweetness',
   'flavors', 'flavours', 'description', 'rating', 'price',
+  // The label sweetness term is a first-class field of the wine record
+  // (WineDefinition.labelSweetness): no data field may shadow it.
+  'label sweetness', 'labelsweetness',
 ];
 
 const fail = (code, message) => ({ ok: false, code, message });
