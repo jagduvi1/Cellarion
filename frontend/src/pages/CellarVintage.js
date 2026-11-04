@@ -327,6 +327,8 @@ function CellarVintage() {
   const heroOwn = first?.defaultImageUrl || first?.pendingImageUrl || null;
   const heroRegistry = first?.vintageImageUrl || wine?.image || null;
   const heroSrc = heroOwn || heroRegistry || first?.otherVintageImageUrl || null;
+  // A photo in the wine card (the gallery, else the hero), not the drawn bottle.
+  const showsPhoto = (!!photoBottleId && !galleryEmpty) || (!!heroSrc && heroSrc !== failedHero);
   const heroCredit = heroOwn || !heroRegistry ? null : (first?.vintageImageUrl ? first?.vintageImageCredit : wine?.imageCredit);
 
   const handleDrunk = (bottle, reason) => {
@@ -582,7 +584,10 @@ function CellarVintage() {
                         <BottlePlaceholder wine={wine} vintage={vintage} title={title} />
                       </div>
                     )}
-                    {canPhoto && (
+                    {/* With a photo shown, "Add a photo" is in the ⋮ menu: the
+                        button under it only took room from the wine (beta
+                        feedback 2026-11-04). With none, it is the way in. */}
+                    {canPhoto && !showsPhoto && (
                       <button type="button" className="btn btn-secondary btn-small cvb-add-photo" onClick={() => setPhotoOpen(true)}>
                         <span aria-hidden="true">🖼️</span> {t('cellarVintageBeta.addPhotoShort', 'Add a photo')}
                       </button>
