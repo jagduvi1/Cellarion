@@ -545,11 +545,13 @@ describe('the vintage\'s own drink window', () => {
   };
 
   describe('classic', () => {
-    test('"Not set yet. · Set your own window" opens Edit vintage at its window', async () => {
+    test('"Not set yet. Set your own window" opens Edit vintage at its window', async () => {
       page.bottles = page.bottles.map((b) => ({ ...b, ...noWindow }));
       renderPage();
       await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
-      expect(windowBlock()).toHaveTextContent('cellarVintageBeta.notSet · bottleDetail.windowSetOwn');
+      // A space after the sentence, not a middle dot (". ·").
+      expect(windowBlock()).toHaveTextContent('cellarVintageBeta.notSet bottleDetail.windowSetOwn');
+      expect(windowBlock()).not.toHaveTextContent('·');
       fireEvent.click(within(windowBlock()).getByRole('button', { name: 'bottleDetail.windowSetOwn' }));
       expect(await screen.findByText('edit-stub:b1,b2,b3|focus:drinkWindow')).toBeInTheDocument();
     });
@@ -558,6 +560,8 @@ describe('the vintage\'s own drink window', () => {
       const { unmount } = renderPage();
       await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
       expect(within(windowBlock()).getByText('2025–2045')).toBeInTheDocument();
+      // After the years the link keeps its middle dot.
+      expect(windowBlock()).toHaveTextContent('2025–2045 · bottleDetail.windowChange');
       fireEvent.click(within(windowBlock()).getByRole('button', { name: 'bottleDetail.windowChangeLabel' }));
       expect(await screen.findByText('edit-stub:b1,b2,b3|focus:drinkWindow')).toBeInTheDocument();
       unmount();
@@ -565,7 +569,8 @@ describe('the vintage\'s own drink window', () => {
       page.bottles[1] = { ...page.bottles[1], drinkFrom: 2027 };
       renderPage();
       await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
-      expect(windowBlock()).toHaveTextContent('cellarVintageBeta.windowDiffers');
+      expect(windowBlock()).toHaveTextContent('cellarVintageBeta.windowDiffers cellarVintageBeta.windowSetForAll');
+      expect(windowBlock()).not.toHaveTextContent('·');
       fireEvent.click(within(windowBlock()).getByRole('button', { name: 'cellarVintageBeta.windowSetForAll' }));
       expect(await screen.findByText('edit-stub:b1,b2,b3|focus:drinkWindow')).toBeInTheDocument();
     });

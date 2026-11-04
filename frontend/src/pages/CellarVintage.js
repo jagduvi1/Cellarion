@@ -434,11 +434,12 @@ function CellarVintage() {
     await load();
     return { ok: true, stored: fields };
   };
-  // A quiet link after the window's words.
+  // A quiet link after the window's words: a middle dot after the years
+  // ("2025–2045 · Change"), a space after a whole sentence ("Not set yet.").
   // Offered once the sommelier's window has loaded: the editor starts from it.
-  const windowLink = (label, ariaLabel) => canEditVintage && profileLoaded && (
+  const windowLink = (label, { ariaLabel, afterSentence = false } = {}) => canEditVintage && profileLoaded && (
     <span>
-      {' · '}
+      {afterSentence ? ' ' : ' · '}
       <button ref={windowActionRef} type="button" className="cvb-inline-link" aria-label={ariaLabel} onClick={openWindowEditor}>
         {label}
       </button>
@@ -682,12 +683,12 @@ function CellarVintage() {
                     ) : windowDiffers ? (
                       <span className="cvb-muted">
                         {t('cellarVintageBeta.windowDiffers', 'Differs between the bottles. Edit vintage sets one for all of them.')}
-                        {windowLink(t('cellarVintageBeta.windowSetForAll', 'Set one window for all'))}
+                        {windowLink(t('cellarVintageBeta.windowSetForAll', 'Set one window for all'), { afterSentence: true })}
                       </span>
                     ) : !(from || to || peakFrom || peakUntil) ? (
                       <span className="cvb-muted">
                         {t('cellarVintageBeta.notSet', 'Not set yet.')}
-                        {windowLink(t('bottleDetail.windowSetOwn', 'Set your own window'))}
+                        {windowLink(t('bottleDetail.windowSetOwn', 'Set your own window'), { afterSentence: true })}
                       </span>
                     ) : timelineOn && ownWindow ? (
                       // The bottle page's own-window timeline, its status on the marker.
@@ -718,7 +719,7 @@ function CellarVintage() {
                             <span className="cellar-vintage-peak">{from || to ? ' · ' : ''}{t('cellarVintage.peak', 'peak {{range}}', { range: `${peakFrom || '…'}–${peakUntil || '…'}` })}</span>
                           )}
                         </span>
-                        {windowLink(t('bottleDetail.windowChange', 'Change'), t('bottleDetail.windowChangeLabel', 'Change your drink window'))}
+                        {windowLink(t('bottleDetail.windowChange', 'Change'), { ariaLabel: t('bottleDetail.windowChangeLabel', 'Change your drink window') })}
                       </span>
                     )}
                   </div>
