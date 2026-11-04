@@ -54,7 +54,16 @@ describe('approvePhotoIfTrusted', () => {
     expect(await approvePhotoIfTrusted('i1')).toBe(true);
     expect(approveImage).toHaveBeenCalledWith({
       imageId: 'i1', actorId: 'u1', visibility: 'public', official: 'auto', notify: false, via: 'unreviewed',
+      // No request at the end of background removal: the uploader is named in the audit row.
+      req: { user: { id: 'u1', roles: ['user'] } },
     });
+  });
+
+  test("the member's own request names them in the audit row when there is one", async () => {
+    BottleImage.findById.mockReturnValue(lean(PHOTO));
+    const req = { user: { id: 'u1', roles: ['user', 'admin'] }, ip: '10.0.0.1' };
+    expect(await approvePhotoIfTrusted('i1', req)).toBe(true);
+    expect(approveImage).toHaveBeenCalledWith(expect.objectContaining({ req }));
   });
 
   test('left alone: review on, a label scan, a photo not processed yet, a photo on no bottle or wine', async () => {
@@ -88,7 +97,7 @@ describe('applyCorrectionIfTrusted', () => {
 
     const out = await applyCorrectionIfTrusted(filed, 'u1', { via: 'web' });
 
-    expect(approveProposal).toHaveBeenCalledWith('p1', { user: { id: 'u1' } });
+    expect(approveProposal).toHaveBeenCalledWith('p1', { user: { id: 'u1', roles: ['user'] } });
     expect(out).toMatchObject({ ok: true, applied: true, appliedNote: 'Applied: name', proposal: { status: 'approved' }, wine: { name: 'New' } });
   });
 

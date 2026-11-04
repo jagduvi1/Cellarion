@@ -539,5 +539,28 @@ describe('steering public facts toward the wine record', () => {
         expect.any(Function), 'w1', { keyName: 'Lot', value: 'L123', reason: 'Printed on the back label.' }
       ));
     });
+
+    // Discussion #1778: on a server that does not review, the new field is
+    // accepted as proposed, so the value follows at once and both are live.
+    test('a server that does not review: the new field is accepted, the value filed under it at once, and both are live', async () => {
+      getPersonalData.mockResolvedValue(ok({
+        bottleEntries: [entry({ key: { _id: 'k2', name: 'Lot', type: 'text', unit: null, enumOptions: null }, value: 'L123' })],
+        wineEntries: [],
+      }));
+      getWinePublicData.mockResolvedValue(ok({ fields: [publicField()] }));
+      suggestWineValue
+        .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ error: 'No such key in the accepted vocabulary' }) })
+        .mockResolvedValueOnce(ok({ applied: true, value: { _id: 'v9', status: 'published' } }));
+      proposeRegistryKey.mockResolvedValue(ok({ applied: true, key: { _id: 'k9', name: 'Lot', status: 'accepted' } }));
+      renderWine();
+      fireEvent.click(await screen.findByText('Suggest to registry'));
+      fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'Printed on the back label.' } });
+      fireEvent.click(screen.getByText('Send suggestion'));
+
+      expect(await screen.findByText('Added to the wine record — everyone on this server sees it now.')).toBeInTheDocument();
+      expect(suggestWineValue).toHaveBeenLastCalledWith(
+        expect.any(Function), 'w1', { keyId: 'k9', value: 'L123', reason: 'Printed on the back label.' }
+      );
+    });
   });
 });

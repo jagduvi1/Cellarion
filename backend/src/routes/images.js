@@ -564,7 +564,7 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
         { imageIds: linkedIds, via: 'web' });
       // Uploaded before the bottle existed: on a server that does not review
       // photos, the ready ones are published now that they have a bottle.
-      for (const id of linkedIds) await approvePhotoIfTrusted(id);
+      for (const id of linkedIds) await approvePhotoIfTrusted(id, req);
     }
 
     res.json({ message: 'Images linked to bottle' });

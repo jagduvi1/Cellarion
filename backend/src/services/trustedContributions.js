@@ -25,9 +25,11 @@ function appliesDirectly(via) {
  * wine, when this server does not review photos. Called where a photo
  * settles: the upload of a keep-background photo, the end of background
  * removal, and the link of a photo uploaded before its bottle existed.
+ * `req` (the member's request, when there is one) names them in the audit
+ * row; the background hooks have none, so the uploader is named instead.
  * Never throws; returns whether it published.
  */
-async function approvePhotoIfTrusted(imageId) {
+async function approvePhotoIfTrusted(imageId, req) {
   if (!appliesDirectly()) return false;
   try {
     const BottleImage = require('../models/BottleImage');
@@ -35,8 +37,9 @@ async function approvePhotoIfTrusted(imageId) {
     if (!image || image.kind === 'label-scan' || image.status !== 'processed') return false;
     if (!image.bottle && !image.wineDefinition) return false; // linked later; published then
     const { approveImage } = require('./imageModerationOps');
+    const asReq = req && req.user ? req : { user: { id: String(image.uploadedBy), roles: ['user'] } };
     const out = await approveImage({
-      imageId, actorId: image.uploadedBy, visibility: 'public', official: 'auto', notify: false, via: 'unreviewed',
+      imageId, actorId: image.uploadedBy, visibility: 'public', official: 'auto', notify: false, via: 'unreviewed', req: asReq,
     });
     return !!out.ok;
   } catch (err) {
@@ -57,7 +60,7 @@ async function applyCorrectionIfTrusted(result, userId, { via, req } = {}) {
   try {
     // Lazy: the admin route tree requires much of the app back.
     const { approveProposal } = require('../routes/admin/wineProposals');
-    const asReq = req && req.user ? req : { user: { id: String(userId) } };
+    const asReq = req && req.user ? req : { user: { id: String(userId), roles: ['user'] } };
     const outcome = await approveProposal(result.proposal._id, asReq);
     if (outcome.status !== 200) return result;
     const WineCorrectionProposal = require('../models/WineCorrectionProposal');

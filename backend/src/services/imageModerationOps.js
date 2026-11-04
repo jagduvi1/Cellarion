@@ -117,7 +117,9 @@ async function approveImage({ imageId, actorId, visibility = 'public', official 
     processImage(image._id).catch((err) => console.error('Post-approval processing error:', err.message));
   }
 
-  incrementCred(image.uploadedBy, 'image_approved').catch(() => {});
+  // Cred is for a photo someone approved; one published as uploaded
+  // (services/trustedContributions) was not.
+  if (via !== 'unreviewed') incrementCred(image.uploadedBy, 'image_approved').catch(() => {});
 
   // Resolve the wine for the notification label regardless of visibility —
   // private approvals should still name the wine (the reject path does).

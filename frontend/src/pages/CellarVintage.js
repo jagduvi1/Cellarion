@@ -610,6 +610,7 @@ function CellarVintage() {
                       apiFetch={apiFetch}
                       promptMissingGrapes={canEdit}
                       suggestSignal={suggestSignal}
+                      onWineChanged={load}
                     />
                   </section>
                 </CollapsibleBlock>
