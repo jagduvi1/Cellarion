@@ -45,6 +45,10 @@
   right: 0;
   z-index: 41;
   min-width: 190px;
+  /* As wide as the longest item, so it does not wrap inside the narrow
+     button it hangs from, but never wider than the screen. */
+  width: max-content;
+  max-width: calc(100vw - 2rem);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -73,9 +77,18 @@
   font-size: 0.9rem;
   font-family: var(--font-body);
   text-align: left;
+  text-decoration: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background var(--transition-fast);
+}
+
+/* The icon in a fixed column: emoji and text symbols such as ⚑ differ in
+   width, and the labels should start at the same place. */
+.bd-overflow-item > span[aria-hidden="true"]:first-child {
+  flex: none;
+  width: 1.25rem;
+  text-align: center;
 }
 
 .bd-overflow-item:hover {
