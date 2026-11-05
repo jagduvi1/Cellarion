@@ -2307,13 +2307,19 @@ function ImportBottles() {
                                  t('importBottles.review.whyNoMatch')}
                               </summary>
                               <p>
-                                {r.aiDebug.aiExplanation ||
-                                 (r.aiDebug.aiStatus === 'failed'
-                                   ? t('importBottles.review.lookupFailedDesc')
-                                   : r.aiDebug.aiStatus === 'create_failed'
-                                   ? t('importBottles.review.createFailedDesc')
-                                   : t('importBottles.review.couldNotIdentifyDesc'))}
+                                {r.aiDebug.aiStatus === 'failed'
+                                  ? t('importBottles.review.lookupFailedDesc')
+                                  : r.aiDebug.aiStatus === 'create_failed'
+                                  ? t('importBottles.review.createFailedDesc')
+                                  : t('importBottles.review.couldNotIdentifyDesc')}
                               </p>
+                              {/* The AI's own wording, or the server's message when saving
+                                  failed: not translated, so it comes after the sentence that is. */}
+                              {r.aiDebug.aiExplanation && (
+                                <p className="ai-info-explanation">
+                                  {t('importBottles.review.explanation', { text: r.aiDebug.aiExplanation })}
+                                </p>
+                              )}
                             </details>
                           )}
                         </>

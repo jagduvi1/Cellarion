@@ -1254,6 +1254,15 @@
   color: var(--color-accent);
 }
 
+/* The untranslated detail under the translated sentence: plain text, no box. */
+.ai-info-details p.ai-info-explanation {
+  margin-top: 0.25rem;
+  padding: 0 0.6rem;
+  background: none;
+  border-left: none;
+  color: var(--color-text-muted);
+}
+
 .ai-debug-details {
   margin-top: 0.4rem;
   font-size: 0.7rem;
