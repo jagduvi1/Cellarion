@@ -3059,7 +3059,6 @@
     "anonymous": "Anonym",
     "ban": "Utesteng",
     "banUserTitle": "Utesteng brukeren",
-    "confirmBan": "Utestenge {{name}} fra diskusjonene ({{duration}})?",
     "banDuration": {
       "10m": "10 minutter",
       "1h": "1 time",

@@ -2124,7 +2124,6 @@
     "anonymous": "Anonyme",
     "ban": "Bannir",
     "banUserTitle": "Bannir l'utilisateur",
-    "confirmBan": "Bannir {{name}} des discussions pour {{duration}} ?",
     "banDuration": {
       "10m": "10 minutes",
       "1h": "1 heure",

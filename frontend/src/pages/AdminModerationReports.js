@@ -409,10 +409,7 @@ function AdminModerationReports() {
       {confirmBan && selected && selectedTarget.author?._id && (
         <ConfirmModal
           title={t('discussions.banUserTitle')}
-          message={t('discussions.confirmBan', {
-            name: selectedAuthorName,
-            duration: t(`discussions.banDuration.${banDuration}`)
-          })}
+          message={t(`discussions.confirmBanFor.${banDuration}`, { name: selectedAuthorName })}
           confirmLabel={t('moderationReports.banAuthor')}
           confirmClass="btn btn-warning btn-small"
           onConfirm={handleBan}

@@ -2704,7 +2704,6 @@
     "anonymous": "Anonym",
     "ban": "Stäng av",
     "banUserTitle": "Stäng av användare",
-    "confirmBan": "Stäng av {{name}} från diskussioner i {{duration}}?",
     "banDuration": {
       "10m": "10 minuter",
       "1h": "1 timme",
