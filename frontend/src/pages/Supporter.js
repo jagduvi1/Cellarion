@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { PLANS, PAID_PLAN_NAMES } from '../config/plans';
+import { PLANS, PAID_PLAN_NAMES, planName } from '../config/plans';
 import { createCheckout, createPortal, getAvailability } from '../api/stripe';
 import { track } from '../utils/track';
 import './Plans.css';
@@ -56,7 +56,7 @@ function TierCard({ tier, yearly, available, loading, onCheckout, t }) {
 
   return (
     <div className="tier-card">
-      <h3 className="tier-card-name">{plan.label}</h3>
+      <h3 className="tier-card-name">{planName(tier, t)}</h3>
 
       <p className="tier-card-price">
         <span className="tier-card-amount">{amount}</span>

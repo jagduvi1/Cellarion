@@ -7,7 +7,7 @@ import { updateProfile } from '../api/profiles';
 import { changePassword } from '../api/auth';
 import { CURRENCIES } from '../config/currencies';
 import { findLanguage } from '../config/locales';
-import { PLANS } from '../config/plans';
+import { planName, planDescription } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
 import { downloadBlobObject } from '../utils/downloadBlob';
@@ -364,7 +364,7 @@ function Settings() {
 
   const planKey = user?.plan || 'free';
   const planExpiresAt = user?.planExpiresAt || null;
-  const planLabel = PLANS[planKey]?.label || planKey;
+  const planLabel = planName(planKey, t);
   const planExpired = planExpiresAt && Date.now() > new Date(planExpiresAt).getTime();
 
   function formatExpiry(expiresAt) {
@@ -534,7 +534,7 @@ function Settings() {
         <h2 className="settings-section-title">{t('settings.plan.title')}</h2>
         <div className="settings-plan-row">
           <span className={`settings-plan-badge settings-plan-badge--${planKey}`}>{planLabel}</span>
-          <span className="settings-plan-desc">{PLANS[planKey]?.description}</span>
+          <span className="settings-plan-desc">{planDescription(planKey, t)}</span>
         </div>
         <p className="settings-hint">
           {planExpired

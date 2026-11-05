@@ -58,7 +58,7 @@ describe('Supporter page — tiers', () => {
   test('shows each tier label', async () => {
     render(<Supporter />);
     for (const tier of PAID_PLAN_NAMES) {
-      expect(screen.getByText(PLANS[tier].label)).toBeInTheDocument();
+      expect(screen.getByText(`cellarCred.plan_${tier}`)).toBeInTheDocument();
     }
   });
 
@@ -83,7 +83,7 @@ describe('Supporter page — tiers', () => {
   test('renders the tiers cheapest-first, so the middle amount is in the middle', async () => {
     const { container } = render(<Supporter />);
     const names = [...container.querySelectorAll('.tier-card-name')].map((n) => n.textContent);
-    expect(names).toEqual(PAID_PLAN_NAMES.map((p) => PLANS[p].label));
+    expect(names).toEqual(PAID_PLAN_NAMES.map((p) => `cellarCred.plan_${p}`));
   });
 });
 
