@@ -8,7 +8,7 @@ import { stashPostLoginRedirect, takePostLoginRedirect, isSafeInternalPath } fro
 import { stashSignupSourceForSso } from '../utils/signupSource';
 // Checked before submitting, so a newcomer learns the rules in their own
 // language, not from an English server refusal afterwards.
-import { USERNAME_RULE, PASSWORD_POLICY } from '../utils/accountRules';
+import { USERNAME_RULE, PASSWORD_POLICY, EMAIL_RULE } from '../utils/accountRules';
 import './Login.css';
 import AuthLogo from '../components/AuthLogo';
 
@@ -97,6 +97,10 @@ function Login() {
     if (mode === 'register') {
       if (!USERNAME_RULE.test(username)) {
         setError(t('auth.usernameRuleError', 'Usernames are 3–30 characters and may use letters, numbers, dots, underscores and hyphens — no spaces.'));
+        return;
+      }
+      if (!EMAIL_RULE.test(email)) {
+        setError(t('auth.emailRuleError', 'Enter a whole email address, such as anna@example.com.'));
         return;
       }
       if (!PASSWORD_POLICY.test(formData.password)) {

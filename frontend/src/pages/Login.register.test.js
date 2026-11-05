@@ -81,6 +81,15 @@ test('a username with a space is explained before anything is sent', async () =>
   expect(registerMock).not.toHaveBeenCalled();
 });
 
+test('an email the server would refuse is explained before anything is sent', async () => {
+  routerLocation.search = '?mode=register';
+  render(<Login />);
+  fillRegister({ email: 'anna@example' });
+  submit();
+  expect(await screen.findByRole('alert')).toHaveTextContent(/whole email address/);
+  expect(registerMock).not.toHaveBeenCalled();
+});
+
 test('registers with the trailing keyboard space trimmed', async () => {
   routerLocation.search = '?mode=register';
   render(<Login />);

@@ -4,7 +4,11 @@ import { AuthProvider, useAuth, REFRESH_WAIT_MAX_MS } from './AuthContext';
 // A reload in the middle of a refresh must not sign the user out: the request
 // is keepalive (its rotated cookie still lands after the page is gone), and a
 // page that starts right after such a reload waits briefly for that cookie.
-vi.mock('../i18n', () => ({ default: { changeLanguage: vi.fn() }, hasLanguagePreview: () => false }));
+// `t` answers the inline English, as a failed sign-in words its message with it.
+vi.mock('../i18n', () => ({
+  default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
+  hasLanguagePreview: () => false,
+}));
 
 function memoryStorage() {
   const m = new Map();

@@ -7,8 +7,12 @@ import { AuthProvider, useAuth } from './AuthContext';
 vi.mock('../i18n', () => ({
   default: {
     changeLanguage: vi.fn(),
-    // Knows one code; everything else answers with the inline English.
-    t: (key, fallback) => (key === 'errors.codes.invalid_credentials' ? 'Feil brukernavn eller passord.' : fallback),
+    // Knows two keys; everything else answers with the inline English (or the
+    // default, when called with options).
+    t: (key, fallback) => ({
+      'errors.codes.invalid_credentials': 'Feil brukernavn eller passord.',
+      'auth.verificationFailed': 'Bekreftelsen mislyktes.',
+    })[key] ?? (typeof fallback === 'string' ? fallback : fallback?.defaultValue),
   },
   hasLanguagePreview: () => false,
 }));
@@ -76,4 +80,35 @@ test('a dropped connection says so, instead of "Failed to fetch"', async () => {
   await act(async () => { result = await ctx.verifyEmail('tok'); });
   expect(result.success).toBe(false);
   expect(result.error).toMatch(/could not be reached/);
+});
+
+test('an unconfirmed account keeps its code and email, which the resend button needs', async () => {
+  await renderAuth({
+    '/api/auth/login': () => Promise.resolve(json(403, {
+      error: 'Please verify your email address before logging in.', code: 'EMAIL_NOT_VERIFIED', email: 'anna@example.com',
+    })),
+  });
+  let result;
+  await act(async () => { result = await ctx.login('anna', 'pw'); });
+  expect(result).toMatchObject({ success: false, code: 'EMAIL_NOT_VERIFIED', email: 'anna@example.com' });
+  expect(result.error).toBe('Please verify your email address before logging in.');
+});
+
+test('a rate limit and a server outage read as such', async () => {
+  const routes = { '/api/auth/login': () => Promise.resolve(json(429, { error: 'Too many attempts, please try again later' })) };
+  await renderAuth(routes);
+  let result;
+  await act(async () => { result = await ctx.login('anna', 'pw'); });
+  expect(result.error).toMatch(/Too many requests in a short time/);
+
+  routes['/api/auth/login'] = () => Promise.resolve(json(500, { error: 'Login failed' }));
+  await act(async () => { result = await ctx.login('anna', 'pw'); });
+  expect(result.error).toMatch(/could not answer just now/);
+});
+
+test('an email check refused without a reason says the check failed', async () => {
+  await renderAuth({ '/api/auth/verify-email': () => Promise.resolve(json(400, {})) });
+  let result;
+  await act(async () => { result = await ctx.verifyEmail('tok'); });
+  expect(result).toMatchObject({ success: false, error: 'Bekreftelsen mislyktes.' });
 });

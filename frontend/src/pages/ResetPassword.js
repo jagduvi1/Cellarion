@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AuthLogo from '../components/AuthLogo';
 import { messageForResponse } from '../utils/friendlyError';
+import { PASSWORD_POLICY } from '../utils/accountRules';
 import './Login.css';
 
 function ResetPassword() {
@@ -32,6 +33,11 @@ function ResetPassword() {
     e.preventDefault();
     if (password !== confirm) {
       setErrorMessage(t('auth.passwordsNoMatch'));
+      return;
+    }
+    // The server's refusal of a weak password is English; say it here first.
+    if (!PASSWORD_POLICY.test(password)) {
+      setErrorMessage(t('auth.passwordRuleError'));
       return;
     }
     setStatus('submitting');

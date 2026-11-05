@@ -5,7 +5,11 @@ import { AuthProvider, useAuth } from './AuthContext';
 // save echoes the user without it, and replacing the signed-in user with that
 // echo hid the SuperAdmin link until the next reload. The cellar page now
 // saves the sort on every pick, so this would happen all the time.
-vi.mock('../i18n', () => ({ default: { changeLanguage: vi.fn() }, hasLanguagePreview: () => false }));
+// `t` answers the inline English, as a failed sign-in words its message with it.
+vi.mock('../i18n', () => ({
+  default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
+  hasLanguagePreview: () => false,
+}));
 
 const SERVER_USER = {
   _id: 'u1', id: 'u1', username: 'anna', email: 'anna@example.com', roles: ['user', 'admin'], plan: 'free',

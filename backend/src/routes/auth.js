@@ -11,6 +11,7 @@ const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
 const { revokeOAuthConnectionsForUser } = require('../services/mcpOAuth');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
+const { errorBody } = require('../config/errorCodes');
 const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { isAccountLocked, isAccountLockedNow, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
@@ -120,7 +121,7 @@ router.post('/register', authLimiter, async (req, res) => {
     // fails with a 400 instead of throwing on .toLowerCase() (same guard as login)
     if (typeof username !== 'string' || typeof email !== 'string' || typeof password !== 'string'
         || !username || !email || !password) {
-      return res.status(400).json({ error: 'Username, email, and password are required', code: 'registration_fields_required' });
+      return res.status(400).json(errorBody('registration_fields_required'));
     }
 
     // Constrain the username: 3–30 chars, and only letters/numbers/._- . This
@@ -131,11 +132,11 @@ router.post('/register', authLimiter, async (req, res) => {
     // (utils/deletedUser.js) gets the same answer, so nothing says it is special.
     const uname = typeof username === 'string' ? username.trim() : '';
     if (uname.length < 3 || uname.length > 30 || !/^[a-z0-9_.-]+$/i.test(uname) || isReservedUsername(uname)) {
-      return res.status(400).json({ error: 'Username must be 3–30 characters and use only letters, numbers, dots, underscores, or hyphens.', code: 'username_invalid' });
+      return res.status(400).json(errorBody('username_invalid'));
     }
 
     if (!consentPrivacyPolicy || !consentDataProcessing) {
-      return res.status(400).json({ error: 'You must accept the privacy policy and consent to data processing to register', code: 'consent_required' });
+      return res.status(400).json(errorBody('consent_required'));
     }
 
     // Check if user already exists (use generic message to prevent account enumeration).
@@ -148,7 +149,7 @@ router.post('/register', authLimiter, async (req, res) => {
     if (existingUser) {
       // The code lets the app say what to try next in the user's language; it
       // is the same for a taken username and a taken email (no enumeration).
-      return res.status(400).json({ error: 'Registration failed. Please check your details and try again.', code: 'REGISTRATION_REJECTED' });
+      return res.status(400).json(errorBody('REGISTRATION_REJECTED'));
     }
 
     // Create new user
@@ -224,7 +225,7 @@ router.post('/register', authLimiter, async (req, res) => {
     // Two registrations racing for one username/email: the loser collides on
     // the unique index. Same answer as the pre-check, not a 500.
     if (error.code === 11000) {
-      return res.status(400).json({ error: 'Registration failed. Please check your details and try again.', code: 'REGISTRATION_REJECTED' });
+      return res.status(400).json(errorBody('REGISTRATION_REJECTED'));
     }
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -276,7 +277,7 @@ router.post('/login', authLimiter, async (req, res) => {
     // 500 (and a NoSQL operator would otherwise reach the query). Coercing to
     // string both fixes the crash and neutralises operator injection.
     if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
-      return res.status(400).json({ error: 'Username and password are required', code: 'credentials_required' });
+      return res.status(400).json(errorBody('credentials_required'));
     }
 
     // Find user by username or email. Trimmed: a phone keyboard adds a space
@@ -305,7 +306,7 @@ router.post('/login', authLimiter, async (req, res) => {
         { type: 'user', id: user._id },
         { username: user.username }
       );
-      return res.status(401).json({ error: 'Invalid credentials', code: 'invalid_credentials' });
+      return res.status(401).json(errorBody('invalid_credentials'));
     }
 
     if (!user) {
@@ -318,7 +319,7 @@ router.post('/login', authLimiter, async (req, res) => {
         identifierType: typed.includes('@') ? 'email' : 'username',
         identifierHash: crypto.createHash('sha256').update(typed).digest('hex').slice(0, 16),
       });
-      return res.status(401).json({ error: 'Invalid credentials', code: 'invalid_credentials' });
+      return res.status(401).json(errorBody('invalid_credentials'));
     }
 
     if (!isMatch) {
@@ -346,7 +347,7 @@ router.post('/login', authLimiter, async (req, res) => {
         { type: 'user', id: user._id },
         { username: user.username }
       );
-      return res.status(401).json({ error: 'Invalid credentials', code: 'invalid_credentials' });
+      return res.status(401).json(errorBody('invalid_credentials'));
     }
 
     // Block login until email is verified (only when verification is enabled)
@@ -355,11 +356,7 @@ router.post('/login', authLimiter, async (req, res) => {
         { type: 'user', id: user._id },
         { username: user.username }
       );
-      return res.status(403).json({
-        error: 'Please verify your email address before logging in.',
-        code: 'EMAIL_NOT_VERIFIED',
-        email: user.email
-      });
+      return res.status(403).json(errorBody('EMAIL_NOT_VERIFIED', { email: user.email }));
     }
 
     // Successful login: clear any failed-attempt counter the user had built up.
@@ -425,7 +422,7 @@ router.post('/verify-email', async (req, res) => {
     // A system account (the "[deleted]" sentinel) is never verified or signed
     // in through a link, whatever token its row may hold.
     if (!user || isReservedUsername(user.username) || !user.validateEmailVerificationToken(token)) {
-      return res.status(400).json({ error: 'Invalid or expired verification token', code: 'verification_token_invalid' });
+      return res.status(400).json(errorBody('verification_token_invalid'));
     }
 
     user.emailVerified = true;
@@ -850,7 +847,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     const user = await User.findOne({ passwordResetTokenHash: tokenHash });
 
     if (!user || isReservedUsername(user.username) || !user.validatePasswordResetToken(token)) {
-      return res.status(400).json({ error: 'Invalid or expired reset token', code: 'reset_token_invalid' });
+      return res.status(400).json(errorBody('reset_token_invalid'));
     }
 
     user.password = password;

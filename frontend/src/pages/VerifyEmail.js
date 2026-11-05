@@ -48,7 +48,7 @@ function VerifyEmail() {
         setTimeout(() => navigate('/login', { replace: true, state: { verified: true } }), 1500);
       } else {
         setStatus('error');
-        setErrorMessage(result.error || t('auth.verificationFailed'));
+        setErrorMessage(result.error);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
