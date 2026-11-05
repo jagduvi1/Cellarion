@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AuthLogo from '../components/AuthLogo';
+import { messageForResponse } from '../utils/friendlyError';
 import './Login.css';
 
 function ResetPassword() {
@@ -47,7 +48,7 @@ function ResetPassword() {
         setTimeout(() => navigate('/login', { replace: true }), 2000);
       } else {
         setStatus('error');
-        setErrorMessage(data.error || t('auth.resetFailed'));
+        setErrorMessage(messageForResponse(res, data, t('auth.resetFailed'), t));
       }
     } catch {
       setStatus('error');

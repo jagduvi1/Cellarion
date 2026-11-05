@@ -15,9 +15,13 @@
 //   httpError(res, body, fallback)              — throw this for a non-OK
 //                                                 Response, so the catch block's
 //                                                 friendlyError knows the status
+//   messageForCode(body, t)                     — the translation of a coded
+//                                                 error, or null (the others
+//                                                 all try it first)
 //
 // A 4xx with its own explanation (a validation refusal, "Bottle not found")
-// keeps the server's words — those name the actual problem.
+// keeps the server's words — those name the actual problem — unless it also
+// carries a `code` that has a translation (messageForCode below).
 
 // The messages browsers put on a fetch that never reached the server.
 const NETWORK_FAILURE = /failed to fetch|load failed|networkerror|network request failed|network error/i;
@@ -35,7 +39,37 @@ export function retryAfterSeconds(res) {
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
+// i18next options, which a field of the error body must not be passed as.
+const I18N_OPTIONS = new Set([
+  'lng', 'lngs', 'fallbackLng', 'ns', 'context', 'defaultValue', 'replace', 'returnObjects',
+  'returnDetails', 'joinArrays', 'postProcess', 'interpolation', 'keyPrefix', 'ordinal',
+]);
+
+/**
+ * The person's-language sentence for a coded server error, or null.
+ *
+ * The server answers `{ error, code }`: `error` is English and stays (API
+ * clients read it), `code` is a stable snake_case reason. When
+ * `errors.codes.<code>` exists, that sentence replaces the English one, filled
+ * from the body's other fields (`{{max}}` reads `max`). A code without a key
+ * keeps the server's words, so codes can be added on the server first. Give a
+ * code a key only when it means the same thing everywhere it is sent.
+ */
+export function messageForCode(body, t) {
+  const code = body && body.code;
+  if (typeof code !== 'string' || !/^\w+$/.test(code)) return null;
+  const values = {};
+  for (const [name, value] of Object.entries(body)) {
+    if (!I18N_OPTIONS.has(name) && (typeof value === 'string' || typeof value === 'number')) values[name] = value;
+  }
+  const key = `errors.codes.${code}`;
+  const message = t(key, '', values);
+  return message && message !== key ? message : null;
+}
+
 export function messageForStatus(status, { body, retryAfter, fallback } = {}, t) {
+  const coded = messageForCode(body, t);
+  if (coded) return coded;
   const own = body && (body.error || body.message);
   const hasOwn = typeof own === 'string' && own !== '';
   if (status === 429) {
