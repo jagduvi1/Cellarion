@@ -4,7 +4,11 @@ import { AuthProvider, useAuth, refreshOutcome, START_RETRY_DELAYS_MS } from './
 // A refresh the server couldn't serve — a deploy restarting it (502/503), a
 // hiccup, a rate limit (429) — is not a dead session. Only 401 ends it
 // (scaling audit 2026-09-25).
-vi.mock('../i18n', () => ({ default: { changeLanguage: vi.fn() }, hasLanguagePreview: () => false }));
+// `t` answers the inline English, as a failed sign-in words its message with it.
+vi.mock('../i18n', () => ({
+  default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
+  hasLanguagePreview: () => false,
+}));
 
 const SERVER_USER = {
   _id: 'u1', id: 'u1', username: 'anna', email: 'anna@example.com', roles: ['user'], plan: 'free',

@@ -3,7 +3,11 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { setOfflineModePreference } from '../utils/offlineMode';
 
 // Offline start (#1355): a refresh that gets NO answer is not a dead session.
-vi.mock('../i18n', () => ({ default: { changeLanguage: vi.fn() }, hasLanguagePreview: () => false }));
+// `t` answers the inline English, as a failed sign-in words its message with it.
+vi.mock('../i18n', () => ({
+  default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
+  hasLanguagePreview: () => false,
+}));
 
 const SERVER_USER = {
   _id: 'u1', id: 'u1', username: 'anna', email: 'anna@example.com', roles: ['user'], plan: 'free',

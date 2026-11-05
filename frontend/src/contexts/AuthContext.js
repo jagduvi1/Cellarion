@@ -633,7 +633,7 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ token })
       });
       const data = await response.json();
-      if (!response.ok) throw httpError(response, data);
+      if (!response.ok) throw httpError(response, data, i18n.t('auth.verificationFailed'));
       if (data.token && data.user) {
         sessionPersistentRef.current = data.persistent === true;
         applySession(data.token, data.user);

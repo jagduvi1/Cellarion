@@ -2,8 +2,11 @@ import i18next from 'i18next';
 import { friendlyError, responseError, httpError, messageForStatus, messageForCode } from './friendlyError';
 
 // t returns the inline English (with {{minutes}} filled in) so the assertions
-// read as what a person sees.
-const t = (key, fallback, opts) => String(fallback).replace('{{minutes}}', opts?.minutes);
+// read as what a person sees. Called the options way (a coded-error lookup),
+// it knows no key and answers the given default.
+const t = (key, fallback, opts) => (typeof fallback === 'object'
+  ? fallback.defaultValue ?? key
+  : String(fallback).replace('{{minutes}}', opts?.minutes));
 
 const response = (status, body, headers = {}) => ({
   ok: status < 400,
@@ -80,11 +83,12 @@ test("httpError's own message is for logs: a 4xx without a reason is never \"Req
 });
 
 describe('coded errors', () => {
-  // A t that knows two codes and otherwise behaves like the one above.
-  const coded = (key, fallback, opts) => ({
-    'errors.codes.invalid_credentials': 'Feil brukernavn eller passord.',
-    'errors.codes.key_cap': `Du kan ha ${opts?.max} nøkler.`,
-  })[key] ?? t(key, fallback, opts);
+  // A t that knows a few codes, called the way messageForCode calls it.
+  const translations = {
+    'errors.codes.invalid_credentials': () => 'Feil brukernavn eller passord.',
+    'errors.codes.key_cap': ({ replace }) => `Du kan ha ${replace.max} nøkler.`,
+  };
+  const coded = (key, opts) => translations[key]?.(opts) ?? opts?.defaultValue ?? key;
 
   test("a code with a translation is said in the person's language, filled from the body", () => {
     const err = httpError(response(401, null), { error: 'Invalid credentials', code: 'invalid_credentials' });
@@ -104,29 +108,64 @@ describe('coded errors', () => {
       .toBe('Feil brukernavn eller passord.');
   });
 
-  test('a t that answers with the key (a test stub, a missing key) counts as no translation', () => {
-    const identity = (key) => key;
-    expect(messageForCode({ error: 'Invalid credentials', code: 'invalid_credentials' }, identity)).toBeNull();
+  test('a t that answers with the key, or with something not a string, counts as no translation', () => {
+    const body = { error: 'Invalid credentials', code: 'invalid_credentials' };
+    expect(messageForCode(body, (key) => key)).toBeNull();
+    expect(messageForCode(body, (key, opts) => opts)).toBeNull();
   });
 
-  test('only plain codes are looked up, and body fields never become i18next options', () => {
+  test('body fields go into replace only; a count also picks the plural form', () => {
     const seen = [];
-    const spy = (key, fallback, opts) => { seen.push([key, opts]); return ''; };
-    expect(messageForCode({ code: 'a.b' }, spy)).toBeNull();
-    expect(messageForCode({ code: 'x', lng: 'de', max: 2, nested: { a: 1 } }, spy)).toBeNull();
-    expect(seen).toEqual([['errors.codes.x', { code: 'x', max: 2 }]]);
+    const spy = (key, opts) => { seen.push([key, opts]); return ''; };
+    messageForCode({ code: 'x', lng: 'de', max: 2, nested: { a: 1 } }, spy);
+    messageForCode({ code: 'y', count: 3 }, spy);
+    expect(seen).toEqual([
+      ['errors.codes.x', { defaultValue: '', replace: { code: 'x', lng: 'de', max: 2 } }],
+      ['errors.codes.y', { defaultValue: '', replace: { code: 'y', count: 3 }, count: 3 }],
+    ]);
   });
 
-  test('with real i18next: a missing key is null, a language without the key falls back to English', async () => {
-    const i18n = i18next.createInstance();
-    await i18n.init({
-      lng: 'nb',
-      fallbackLng: 'en',
-      resources: { en: { translation: { errors: { codes: { key_cap: 'At most {{max}} keys.' } } } }, nb: { translation: {} } },
-      interpolation: { escapeValue: false },
+  test('only codes that start with a letter and hold no dot are looked up', () => {
+    const spy = vi.fn(() => 'never');
+    expect(messageForCode({ code: 'a.b' }, spy)).toBeNull();
+    expect(messageForCode({ code: '__proto__' }, spy)).toBeNull();
+    expect(messageForCode({ code: '1abc' }, spy)).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  describe('with real i18next', () => {
+    let realT;
+    beforeAll(async () => {
+      const i18n = i18next.createInstance();
+      await i18n.init({
+        lng: 'nb',
+        fallbackLng: 'en',
+        resources: {
+          en: { translation: { errors: { codes: {
+            key_cap: 'At most {{max}} keys.',
+            seats_left_one: 'One seat left.',
+            seats_left_other: '{{count}} seats left.',
+          } } } },
+          nb: { translation: {} },
+        },
+        interpolation: { escapeValue: false },
+      });
+      realT = i18n.t.bind(i18n);
     });
-    const realT = i18n.t.bind(i18n);
-    expect(messageForCode({ code: 'key_cap', max: 3 }, realT)).toBe('At most 3 keys.');
-    expect(messageForCode({ code: 'not_translated' }, realT)).toBeNull();
+
+    test('fills the sentence, falls back to English, and is null for a missing key', () => {
+      expect(messageForCode({ code: 'key_cap', max: 3 }, realT)).toBe('At most 3 keys.');
+      expect(messageForCode({ code: 'not_translated' }, realT)).toBeNull();
+    });
+
+    test('a count picks the plural form', () => {
+      expect(messageForCode({ code: 'seats_left', count: 1 }, realT)).toBe('One seat left.');
+      expect(messageForCode({ code: 'seats_left', count: 4 }, realT)).toBe('4 seats left.');
+    });
+
+    test('a body field named like an i18next option changes nothing', () => {
+      expect(messageForCode({ code: 'key_cap', max: 3, keySeparator: '|', lng: 'en' }, realT)).toBe('At most 3 keys.');
+      expect(messageForCode({ code: 'nope', count: 1, defaultValue_one: 'Injected' }, realT)).toBeNull();
+    });
   });
 });

@@ -7,7 +7,11 @@ import i18n from '../i18n';
 // marks a new account (localeDefaultsPending); its first sign-in keeps the
 // language on screen and saves it, with the device's currency, exactly once.
 vi.mock('../i18n', () => ({
-  default: { changeLanguage: vi.fn(), resolvedLanguage: 'sv', language: 'sv-SE' },
+  default: {
+    changeLanguage: vi.fn(), resolvedLanguage: 'sv', language: 'sv-SE',
+    // Answers the inline English, as a failed sign-in words its message with it.
+    t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key),
+  },
   hasLanguagePreview: () => false,
 }));
 vi.mock('../utils/localeDefaults', () => ({ guessCurrency: () => 'SEK', guessTemperatureUnit: () => 'C' }));
