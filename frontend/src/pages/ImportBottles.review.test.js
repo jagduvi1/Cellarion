@@ -10,6 +10,10 @@
  *   any other review edit.
  * - "Import more" must not carry the last import's comment and occasion onto
  *   the next file's bottles.
+ * - Leaving the page mid-match must stop the loop: it used to keep sending
+ *   batches (and spending AI look-ups) for a screen that was gone.
+ * - A matched, saved review is easy to take for a finished import, so the
+ *   review says the bottles are not in the cellar until Import is pressed.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -163,4 +167,42 @@ it('Import more starts the next file with an empty comment and occasion', async 
   chooseReceipt(container);
   expect((await screen.findByPlaceholderText('importBottles.wholeImport.commentPlaceholder')).value).toBe('');
   expect(screen.getByPlaceholderText('importBottles.wholeImport.occasionPlaceholder').value).toBe('');
+});
+
+it('leaving the page mid-match sends no further batch', async () => {
+  // 60 bottles = three validate batches; the page is left while the second
+  // one is still on its way.
+  scanReceipt.mockResolvedValue(jsonRes(receiptOf([
+    { wineName: 'Chablis', producer: 'William Fèvre', vintage: '2022', quantity: 60, price: 189, currency: 'SEK' },
+  ])));
+  let finishSecond;
+  validateImport
+    .mockImplementationOnce((_af, { items }) => Promise.resolve(validated(items)))
+    .mockImplementationOnce((_af, { items }) => new Promise((resolve) => { finishSecond = () => resolve(validated(items)); }))
+    .mockImplementation((_af, { items }) => Promise.resolve(validated(items)));
+
+  const { container, unmount } = render(<ImportBottles />);
+  chooseReceipt(container);
+  fireEvent.click(await screen.findByText('importBottles.validate.matchButton:60'));
+  await waitFor(() => expect(validateImport).toHaveBeenCalledTimes(2));
+
+  unmount();
+  finishSecond();
+  // Give a loop that ran on the time to send its third batch.
+  await new Promise((r) => setTimeout(r, 50));
+  expect(validateImport).toHaveBeenCalledTimes(2);
+});
+
+it('the review says nothing is in the cellar until Import is pressed', async () => {
+  scanReceipt.mockResolvedValue(jsonRes(receiptOf([
+    { wineName: 'Chablis', producer: 'William Fèvre', vintage: '2022', quantity: 2 },
+  ])));
+  validateImport.mockImplementation((_af, { items }) => Promise.resolve(validated(items)));
+
+  const { container } = render(<ImportBottles />);
+  chooseReceipt(container);
+  fireEvent.click(await screen.findByText('importBottles.validate.matchButton:2'));
+
+  await screen.findByText('importBottles.review.importButton:2');
+  expect(screen.getByText('importBottles.review.notImportedYet')).toBeTruthy();
 });

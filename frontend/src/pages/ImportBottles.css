@@ -882,13 +882,34 @@
 
 /* ── Review Footer ───────────────────────────────────────────────────────── */
 
+/* The Import button stays in view while a long review list scrolls; at the
+   bottom of hundreds of rows it was easy never to reach. */
 .review-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--color-bg);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 1rem;
   padding: 1rem 0;
   border-top: 1px solid var(--color-border);
+}
+
+/* The layout's main area clips sideways overflow with overflow-x: hidden,
+   which makes it a scroll container: the sticky footer would then stick to
+   <main> (which never scrolls) instead of the window. clip cuts the overflow
+   the same way without being a scroll container (as on /developers). */
+.main-content:has(.import-review) {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.review-not-imported {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin: -0.75rem 0 1.25rem;
 }
 
 .review-warning {
@@ -1177,6 +1198,8 @@
   .review-footer {
     flex-direction: column;
     align-items: stretch;
+    /* Above the bottom tab bar, not under it. */
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
   }
 
   .done-stats {

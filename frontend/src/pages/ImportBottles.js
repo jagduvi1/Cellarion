@@ -58,6 +58,9 @@ const MAX_IMPORT_ROWS = 2000;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// Thrown by validateBatch once the page its match loop ran for is gone.
+class MatchAbandoned extends Error {}
+
 const FORMAT_LABEL_KEYS = {
   cellarion: 'importBottles.formats.cellarion',
   vivino: 'importBottles.formats.vivino',
@@ -193,6 +196,11 @@ function ImportBottles() {
   // while it waited (handleAiSearch).
   const selectionsRef = useRef(selections);
   useEffect(() => { selectionsRef.current = selections; }, [selections]);
+  // Bumped when the page is left or switches to another cellar. A match loop
+  // started before that stops at its next batch, instead of spending AI
+  // look-ups (and the AI rate limit) on results no screen will show.
+  const runGenRef = useRef(0);
+  useEffect(() => () => { runGenRef.current += 1; }, [cellarId]);
   const [searchModal, setSearchModal] = useState(null); // { index } or null
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -677,9 +685,12 @@ function ImportBottles() {
   // non-retryable error — so a 1000+ bottle import waits through brief AI rate
   // limits and continues instead of failing mid-way. Shared by the initial
   // validate and the AI-budget retry so both get the same backoff.
-  const validateBatch = useCallback(async (batchItems) => {
+  // `abandoned` is the calling loop's check: once it says yes, no further
+  // attempt is sent and MatchAbandoned is thrown instead.
+  const validateBatch = useCallback(async (batchItems, abandoned = () => false) => {
     const MAX_RETRIES = 5;
     for (let attempt = 0; ; attempt++) {
+      if (abandoned()) throw new MatchAbandoned();
       let res;
       try {
         res = await validateImport(apiFetch, { cellarId, items: batchItems });
@@ -729,12 +740,15 @@ function ImportBottles() {
     if (!resuming) track('import-started', { format: detectedFormat || 'unknown', rows: total });
     setValidationProgress({ done: startOffset, total });
 
+    const gen = runGenRef.current;
+    const abandoned = () => runGenRef.current !== gen;
     try {
       for (let offset = startOffset; offset < total; offset += VALIDATE_BATCH_SIZE) {
         // Re-index each batch so indices match their position in parsedItems
         const batch = preparedItems.slice(offset, offset + VALIDATE_BATCH_SIZE);
 
-        const data = await validateBatch(batch);
+        const data = await validateBatch(batch, abandoned);
+        if (abandoned()) return;
 
         // Shift batch-local indices back to global indices
         const shifted = data.results.map(r => ({ ...r, index: r.index + offset }));
@@ -765,6 +779,7 @@ function ImportBottles() {
       setValidationResume(null);
       setStep('review');
     } catch (err) {
+      if (err instanceof MatchAbandoned) return;
       const msg = err.message || t('importBottles.errors.validationNetwork');
       // Partial progress is committed — say so next to the error instead of
       // letting the user assume everything was lost.
@@ -819,10 +834,13 @@ function ImportBottles() {
     // can't discard batches that already succeeded, and (c) reuse
     // validateBatch's capped backoff so a 429/5xx waits instead of aborting.
     let workingResults = results;
+    const gen = runGenRef.current;
+    const abandoned = () => runGenRef.current !== gen;
     try {
       for (let offset = 0; offset < rows.length; offset += VALIDATE_BATCH_SIZE) {
         const batchRows = rows.slice(offset, offset + VALIDATE_BATCH_SIZE);
-        const data = await validateBatch(batchRows.map(r => r.item));
+        const data = await validateBatch(batchRows.map(r => r.item), abandoned);
+        if (abandoned()) return;
 
         // Map batch-local indices back to the rows' original global indices
         const batchUpdates = new Map();
@@ -840,6 +858,7 @@ function ImportBottles() {
         setRetryAiProgress({ done: Math.min(offset + VALIDATE_BATCH_SIZE, rows.length), total: rows.length });
       }
     } catch (err) {
+      if (err instanceof MatchAbandoned) return;
       setError(err.message || t('importBottles.errors.validationNetwork'));
     } finally {
       // The budget was (partially) spent even on a mid-loop failure — refresh.
@@ -2032,6 +2051,10 @@ function ImportBottles() {
             </div>
           )}
         </div>
+        {/* A matched, saved list is easy to take for a finished import. */}
+        <p className="review-not-imported">
+          {t('importBottles.review.notImportedYet', 'Nothing is in your cellar yet. Check the list, then press Import at the bottom to add the bottles.')}
+        </p>
 
         {/* Parse-time warnings (CT truncation / pending bottles on order) + encoding info */}
         {renderImportWarnings()}

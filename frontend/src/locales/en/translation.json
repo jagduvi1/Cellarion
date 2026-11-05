@@ -5285,10 +5285,11 @@
     "review": {
       "matched": "Matched",
       "fuzzy": "Fuzzy",
-      "autoAdded": "Auto Added",
+      "autoAdded": "AI Matched",
       "newWines": "New Wines",
       "noMatch": "No Match",
       "ready": "Ready",
+      "notImportedYet": "Nothing is in your cellar yet. Check the list, then press Import at the bottom to add the bottles.",
       "imported": "Imported",
       "priceWarnings": "Price warnings",
       "priceWarningBanner_one": "⚠️ {{count}} bottle has unusual prices.",
