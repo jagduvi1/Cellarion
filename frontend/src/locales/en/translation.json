@@ -5326,6 +5326,7 @@
       "lookupFailedDesc": "The lookup encountered a temporary issue. Request the wine to be added manually.",
       "createFailedDesc": "We identified this wine but encountered an error saving it. Try requesting it manually.",
       "couldNotIdentifyDesc": "Could not identify this wine. Request it to be added to the registry.",
+      "explanation": "Details: {{text}}",
       "ratingTag": "Rating: {{rating}}",
       "hide": "Hide",
       "change": "Change",
