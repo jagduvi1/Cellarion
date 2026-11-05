@@ -120,6 +120,29 @@ jobs:
         working-directory: cellarion-mcp
         run: npm test
 
+  mcp-registry:
+    # The MCP server announces backend/package.json's version in its
+    # handshake; the registry entries must announce the same one, or every
+    # directory reading the registry shows a stale listing. Publishing them
+    # stays a manual step after the deploy (mcp-registry/README.md) — this
+    # only keeps the release bump from forgetting the two files.
+    name: MCP registry entries match the app version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compare versions
+        run: |
+          node -e '
+            const app = require("./backend/package.json").version;
+            let bad = 0;
+            for (const f of ["mcp-registry/cellarion/server.json", "mcp-registry/wine-registry/server.json"]) {
+              const v = require("./" + f).version;
+              if (v !== app) { console.log(`::error file=${f}::version ${v}, backend/package.json is ${app}`); bad = 1; }
+            }
+            process.exit(bad);
+          '
+
   images:
     name: Docker build (${{ matrix.context }})
     runs-on: ubuntu-latest

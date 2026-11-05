@@ -104,6 +104,10 @@ matching `server.json`'s `name`. So:
 2. Then publish `cellarion/server.json`, with its `packages[0].version` set to
    that npm version.
 
+Until a new `cellarion-mcp` version is on npm, `packages[0].version` keeps
+naming the one that is (0.1.1 today), so the entry can still be published at
+each app release.
+
 Publishing it before the npm release fails with
 `NPM package 'cellarion-mcp' is missing required 'mcpName' field`.
 
@@ -117,8 +121,14 @@ be published immediately.
 - **Versions are immutable.** A published version cannot be edited; publish a new
   one. A listing can be withdrawn with `mcp-publisher status --status deleted`,
   but metadata is never permanently erased — so pick the name deliberately.
-- **`version` tracks the app version.** Bump both `server.json` files on releases
-  that change the tool surface, and re-publish.
+- **`version` is the app version.** The server announces `backend/package.json`'s
+  version in its handshake, and directories compare it with the listing — a
+  listing that lags looks abandoned (both sat at 1.82.4 from July to November
+  2026). So the release bump sets both `server.json` `version` fields to the new
+  app version (CI's *MCP registry entries* job fails until they match), and once
+  the release is deployed both entries are published again (see Publishing).
+  `packages[0].version` is separate: it is the `cellarion-mcp` npm version and
+  moves only when that package is published.
 - Both files validate against the pinned `2025-12-11` schema. Re-validate after
   any edit: `mcp-publisher validate`.
 - `description` is capped at **100 characters** by the schema. The npm
