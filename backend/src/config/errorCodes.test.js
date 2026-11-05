@@ -6,12 +6,14 @@ const path = require('path');
 const { ERROR_CODES, errorBody } = require('./errorCodes');
 
 const SRC = path.join(__dirname, '..');
+// The registry's own header shows errorBody() in an example; that is not a route sending it.
+const REGISTRY = path.join(__dirname, 'errorCodes.js');
 
 function sourceFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : sourceFiles(full);
-    return entry.name.endsWith('.js') && !entry.name.endsWith('.test.js') ? [full] : [];
+    return entry.name.endsWith('.js') && !entry.name.endsWith('.test.js') && full !== REGISTRY ? [full] : [];
   });
 }
 
