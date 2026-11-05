@@ -112,7 +112,7 @@ export default function RecentlyDeletedModal({ cellarId, onClose }) {
             <header className="trash-batch-head">
               <div>
                 <strong>{t('trash.batchHeading', { date: when(b.deletedAt), count: b.rows.length })}</strong>
-                <span className="trash-batch-left">{t('trash.daysLeft', { count: left })}</span>
+                <span className="trash-batch-left">{left === 0 ? t('trash.lastDay') : t('trash.daysLeft', { count: left })}</span>
               </div>
               {b.rows.length > 1 && (
                 <button

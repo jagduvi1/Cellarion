@@ -362,7 +362,7 @@ function WineRequests() {
               )}
               {request.status === 'resolved' && request.linkedWineDefinition && (
                 <div className="resolution">
-                  <strong>{t('wineRequests.linkedTo')}</strong> {request.linkedWineDefinition.name} by {request.linkedWineDefinition.producer}
+                  <strong>{t('wineRequests.linkedTo')}</strong> {t('wineRequests.linkedWine', { wine: request.linkedWineDefinition.name, producer: request.linkedWineDefinition.producer })}
                 </div>
               )}
               {request.adminNotes && (

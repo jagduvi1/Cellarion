@@ -735,7 +735,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
 
                   {matchedKey && (
                     <p className="pd-key-note">
-                      {t('personalData.existingKey', 'Existing key — type: {{type}}', { type: matchedKey.type })}
+                      {t('personalData.existingKey', 'Existing key — type: {{type}}', { type: t(`personalData.type_${matchedKey.type}`, matchedKey.type) })}
                       {matchedKey.unit ? ` (${matchedKey.unit})` : ''}
                     </p>
                   )}

@@ -1288,11 +1288,12 @@ function ImportBottles() {
     return (
       <div className="rack-config-automap">
         <div className="rack-config-automap-pattern">
-          {t(CT_PATTERN_LABEL_KEYS[auto.pattern] || 'importBottles.rackAutoMap.patternGeneric')}
-          {' — '}
-          {auto.rows && auto.cols
-            ? t('importBottles.rackAutoMap.detectedDims', { rows: auto.rows, cols: auto.cols, count: auto.binCount })
-            : t('importBottles.rackAutoMap.detectedSeq', { count: auto.binCount })}
+          {t('importBottles.rackAutoMap.patternWithDetail', {
+            pattern: t(CT_PATTERN_LABEL_KEYS[auto.pattern] || 'importBottles.rackAutoMap.patternGeneric'),
+            detail: auto.rows && auto.cols
+              ? t('importBottles.rackAutoMap.detectedDims', { rows: auto.rows, cols: auto.cols, count: auto.binCount })
+              : t('importBottles.rackAutoMap.detectedSeq', { count: auto.binCount }),
+          })}
         </div>
         <div className="rack-config-automap-counts">
           {t('importBottles.rackAutoMap.placed', { count: auto.placedCount })}
@@ -1653,7 +1654,7 @@ function ImportBottles() {
                       <strong>
                         {existing.isModular
                           ? t('importBottles.rack.modularLayout', { count: (existing.modules || []).length })
-                          : `${existing.type} ${existing.rows}×${existing.cols}${existing.typeConfig?.bottlesPerCell > 1 ? t('importBottles.rack.perCellShort', { n: existing.typeConfig.bottlesPerCell }) : ''}`}
+                          : `${t(`racks.type_${existing.type}`, existing.type)} ${existing.rows}×${existing.cols}${existing.typeConfig?.bottlesPerCell > 1 ? t('importBottles.rack.perCellShort', { n: existing.typeConfig.bottlesPerCell }) : ''}`}
                       </strong>
                       {existingCapacity !== null && <>{t('importBottles.rack.slotsSuffix', { count: existingCapacity })}</>}.
                       {' '}{t('importBottles.rack.reshapeNote')}
@@ -1667,7 +1668,7 @@ function ImportBottles() {
                       <div className="rack-config-warn rack-config-existing-warn">
                         <Trans
                           i18nKey="importBottles.rack.oenoTypeWarning"
-                          values={{ type: existing.type }}
+                          values={{ type: t(`racks.type_${existing.type}`, existing.type) }}
                           components={{ 1: <strong />, 3: <code /> }}
                         />
                       </div>

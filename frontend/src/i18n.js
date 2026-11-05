@@ -17,6 +17,12 @@ const loaderFor = (code) => LOADERS[`./locales/${code}/translation.json`];
 
 const baseOf = (lng) => String(lng || '').split(/[-_]/)[0];
 
+// Tags that should reach another language's directory when they have none of
+// their own. Many Norwegian browsers and phones send the macrolanguage `no`
+// rather than `nb`, and Nynorsk users read Bokmål far more easily than
+// English. Only a fallback: a `nn` (or `no`) directory, once one exists, wins.
+const LANGUAGE_ALIASES = { no: 'nb', nn: 'nb' };
+
 /**
  * The locale directory that should answer for a language tag.
  *
@@ -31,11 +37,13 @@ const baseOf = (lng) => String(lng || '').split(/[-_]/)[0];
 export const resolveLocaleCode = (lng, codes = Object.keys(LOADERS).map((p) => p.split('/')[2])) => {
   const tag = String(lng || '');
   if (!tag) return undefined;
-  return (
+  const found =
     codes.find((code) => code === tag) ||
     codes.find((code) => code === baseOf(tag)) ||
-    codes.find((code) => baseOf(code) === baseOf(tag))
-  );
+    codes.find((code) => baseOf(code) === baseOf(tag));
+  if (found) return found;
+  const alias = LANGUAGE_ALIASES[baseOf(tag).toLowerCase()];
+  return alias ? resolveLocaleCode(alias, codes) : undefined;
 };
 
 /**

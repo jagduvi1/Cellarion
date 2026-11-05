@@ -1812,24 +1812,6 @@
       "unmapped_one": "{{count}} Land ohne ISO-Code ausgeblendet",
       "unmapped_other": "{{count}} Länder ohne ISO-Code ausgeblendet"
     },
-    "premiumGate": {
-      "desc": "Tiefe Einblicke in deine gesamte Weinsammlung – Typen, Herkunft, Jahrgänge, Wert, Reifeprofile, Konsumhistorie und mehr. Das umfassendste Wein-Analyse-Dashboard, das verfügbar ist.",
-      "feat1": "Aufschlüsselung nach Weintyp und Herkunft",
-      "feat2": "Jahrgangsverteilung nach Jahr",
-      "feat3": "Sammlungswert-Analyse",
-      "feat4": "Reifeprognose",
-      "feat5": "Keller-Gesundheitscore",
-      "feat6": "Bedauern-Index – Flaschen über ihrem Höhepunkt",
-      "feat7": "Dringskala – diese Flaschen jetzt trinken",
-      "feat8": "Genuss pro Ausgabe — das beste Preis-Leistungs-Verhältnis",
-      "upgradeBtn": "Upgrade auf Premium",
-      "notSure": "Noch unsicher?",
-      "startTrial": "Starte eine kostenlose 30-Tage-Testversion"
-    },
-    "upgrade": {
-      "unlockWith": "Freischalten mit {{plan}}",
-      "upgradeTo": "Upgrade auf {{plan}}"
-    },
     "sections": {
       "wineTypes": "Weintypen",
       "maturityStatus": "Reifezustand",
