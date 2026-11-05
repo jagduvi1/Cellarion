@@ -99,7 +99,8 @@ function Login() {
         setError(t('auth.usernameRuleError', 'Usernames are 3–30 characters and may use letters, numbers, dots, underscores and hyphens — no spaces.'));
         return;
       }
-      if (!EMAIL_RULE.test(email)) {
+      // The server lowercases the address before it checks it; check the same thing.
+      if (!EMAIL_RULE.test(email.toLowerCase())) {
         setError(t('auth.emailRuleError', 'Enter a whole email address, such as anna@example.com.'));
         return;
       }
