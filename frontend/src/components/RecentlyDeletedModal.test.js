@@ -47,6 +47,16 @@ describe('RecentlyDeletedModal', () => {
     expect(screen.getAllByRole('button', { name: /^trash\.restoreAll/ })).toHaveLength(1);
   });
 
+  test('the last day reads as a sentence of its own, not "0 days left"', async () => {
+    // A plural _zero form is dropped by Weblate for languages without one, so
+    // the last day has its own key (#1798, item 8).
+    getRecentlyDeleted.mockResolvedValue(listResponse([{ ...row('t1', 'batchA', 'Barolo'), purgeAt: inDays(-0.01) }]));
+    render(<RecentlyDeletedModal cellarId="c1" onClose={() => {}} />);
+
+    expect(await screen.findByText('trash.lastDay')).toBeTruthy();
+    expect(screen.queryByText(/trash\.daysLeft/)).toBeNull();
+  });
+
   test('Restore all brings a batch back, reloads, and tells the page on close', async () => {
     getRecentlyDeleted
       .mockResolvedValueOnce(listResponse([row('t1', 'batchA', 'Barolo'), row('t2', 'batchA', 'Barolo')]))

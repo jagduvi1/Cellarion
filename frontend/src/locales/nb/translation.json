@@ -2071,24 +2071,6 @@
       "unmapped_one": "{{count}} land uten ISO-kode er skjult",
       "unmapped_other": "{{count}} land uten ISO-kode er skjult"
     },
-    "premiumGate": {
-      "desc": "Grundig innsikt i hele vinsamlingen din: vintyper, opprinnelse, årganger, verdi, modenhetsprofiler, drikkehistorikk og mer. Den mest omfattende vinstatistikken som finnes.",
-      "feat1": "Fordeling på vintype og opprinnelse",
-      "feat2": "Fordeling på årganger",
-      "feat3": "Analyse av verdien på samlingen",
-      "feat4": "Modenhetsprognose",
-      "feat5": "Kjellerhelse",
-      "feat6": "Angerindeks: flasker som har passert toppen",
-      "feat7": "Hva som haster: drikk disse nå",
-      "feat8": "Glede per krone: mest for pengene",
-      "upgradeBtn": "Oppgrader til Premium",
-      "notSure": "Usikker?",
-      "startTrial": "Prøv gratis i 30 dager"
-    },
-    "upgrade": {
-      "unlockWith": "Lås opp med {{plan}}",
-      "upgradeTo": "Oppgrader til {{plan}}"
-    },
     "sections": {
       "wineTypes": "Vintyper",
       "maturityStatus": "Modenhetsstatus",

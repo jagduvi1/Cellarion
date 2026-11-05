@@ -108,10 +108,10 @@ function formatDetail(action, detail, t) {
     return t('cellarAudit.bulkDoneDetail', { done: detail.done ?? 0, requested: detail.requested ?? 0, what });
   }
   if (action === 'cellar.share.add') {
-    return t('cellarAudit.sharedAs', { user: detail.sharedWith, role: detail.role });
+    return t('cellarAudit.sharedAs', { user: detail.sharedWith, role: t(`roles.${detail.role}`, detail.role) });
   }
   if (action === 'cellar.share.update') {
-    return t('cellarAudit.roleChanged', { from: detail.from, to: detail.to });
+    return t('cellarAudit.roleChanged', { from: t(`roles.${detail.from}`, detail.from), to: t(`roles.${detail.to}`, detail.to) });
   }
   if (action === 'bottle.update' && detail.changes) {
     const entries = Object.entries(detail.changes);

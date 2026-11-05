@@ -1850,24 +1850,6 @@
       "unmapped_many": "{{count}} pays sans code ISO masqués",
       "unmapped_other": "{{count}} pays sans code ISO masqués"
     },
-    "premiumGate": {
-      "desc": "Une analyse en profondeur de toute ta collection — types, origines, millésimes, valeur, profils de maturité, historique de consommation, et plus encore. Le tableau de bord d'analyse de cave le plus complet qui soit.",
-      "feat1": "Répartition par type et par origine",
-      "feat2": "Distribution des millésimes par année",
-      "feat3": "Analyse de la valeur de la collection",
-      "feat4": "Prévision de maturité",
-      "feat5": "Score de santé de la cave",
-      "feat6": "Indice de regret — bouteilles au-delà de leur apogée",
-      "feat7": "Échelle d'urgence — à boire maintenant",
-      "feat8": "Plaisir rapporté à la dépense — le meilleur rapport",
-      "upgradeBtn": "Passer à Premium",
-      "notSure": "Tu hésites encore ?",
-      "startTrial": "Commencer un essai gratuit de 30 jours"
-    },
-    "upgrade": {
-      "unlockWith": "Débloquer avec {{plan}}",
-      "upgradeTo": "Passer à {{plan}}"
-    },
     "sections": {
       "wineTypes": "Types de vin",
       "maturityStatus": "Statut de maturité",

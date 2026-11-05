@@ -3,6 +3,16 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { updateSommWineProfile } from '../api/somm';
 
+// Two decimals in the app's language ("0,87" in Bokmål), not the "0.87" toFixed
+// gives whatever the language.
+const formatConfidence = (value, locale) => {
+  try {
+    return new Intl.NumberFormat(locale || 'en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+  } catch {
+    return value.toFixed(2);
+  }
+};
+
 // Mirrors PROFILE_ENUMS in backend/src/services/wineProfileOps.js — the
 // validator rejects anything else, so these pickers and that list must agree.
 const ENUMS = {
@@ -33,7 +43,7 @@ const textToList = (text) =>
  * Props: wine (the populated wineDefinition), onSaved(aiProfile).
  */
 function SommWineProfilePanel({ wine, onSaved }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { apiFetch } = useAuth();
 
   const ap = wine?.aiProfile || null;
@@ -120,7 +130,7 @@ function SommWineProfilePanel({ wine, onSaved }) {
           </span>
           {!isCurator && profile.confidence != null && (
             <span className="somm-profile-confidence" title={t('somm.profile.confidenceTitle')}>
-              {t('somm.profile.confidenceLabel')} {profile.confidence.toFixed(2)}
+              {t('somm.profile.confidenceLabel')} {formatConfidence(profile.confidence, i18n.language)}
             </span>
           )}
           <button type="button" className="btn btn-secondary btn-small somm-profile-edit-btn" onClick={() => setEditing(true)}>

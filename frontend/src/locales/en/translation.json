@@ -1828,6 +1828,7 @@
     "loadingRequests": "Loading requests...",
     "noRequests": "You haven't submitted any wine requests yet.",
     "linkedTo": "Linked to:",
+    "linkedWine": "{{wine}} by {{producer}}",
     "adminNotes": "Admin Notes:",
     "submitted": "Submitted {{date}}",
     "grapeSuggestion": "Grape suggestion",
@@ -1930,6 +1931,10 @@
     "bulkArriveDetail": "{{done}} of {{requested}} bottles arrived",
     "bulkRestoreDetail": "{{done}} of {{requested}} bottles moved back"
   },
+  "roles": {
+    "viewer": "Viewer",
+    "editor": "Editor"
+  },
   "bulk": {
     "moveAction": "Move",
     "purchaseAction": "Purchase",
@@ -2031,7 +2036,7 @@
     "loadError": "Couldn't load the deleted bottles.",
     "batchHeading_one": "Deleted {{date}} · {{count}} bottle",
     "batchHeading_other": "Deleted {{date}} · {{count}} bottles",
-    "daysLeft_zero": "Deleted for good within a day",
+    "lastDay": "Deleted for good within a day",
     "daysLeft_one": "{{count}} day left",
     "daysLeft_other": "{{count}} days left",
     "restore": "Restore",
@@ -3094,10 +3099,13 @@
       "noProfile": "No maturity data"
     },
     "days": {
-      "overdue": "{{count}}d overdue",
+      "overdue_one": "{{count}}d overdue",
+      "overdue_other": "{{count}}d overdue",
       "today": "Today",
-      "left": "{{count}}d left",
-      "ago": "{{count}}d ago"
+      "left_one": "{{count}}d left",
+      "left_other": "{{count}}d left",
+      "ago_one": "{{count}}d ago",
+      "ago_other": "{{count}}d ago"
     },
     "donut": {
       "ariaLabel": "Donut chart: {{count}} total bottles",
@@ -3184,24 +3192,6 @@
       "legendUnit": "bottles",
       "unmapped_one": "{{count}} country without ISO code hidden",
       "unmapped_other": "{{count}} countries without ISO code hidden"
-    },
-    "premiumGate": {
-      "desc": "Deep insights into your entire wine collection — types, origins, vintages, value, maturity profiles, consumption history, and more. The most comprehensive wine analytics dashboard available.",
-      "feat1": "Wine type & origin breakdown",
-      "feat2": "Vintage distribution by year",
-      "feat3": "Collection value analysis",
-      "feat4": "Maturity forecast",
-      "feat5": "Cellar health score",
-      "feat6": "Regret Index — bottles past their prime",
-      "feat7": "Urgency ladder — drink these now",
-      "feat8": "Joy Per Dollar — best bang for your buck",
-      "upgradeBtn": "Upgrade to Premium",
-      "notSure": "Not sure yet?",
-      "startTrial": "Start a free 30-day trial"
-    },
-    "upgrade": {
-      "unlockWith": "Unlock with {{plan}}",
-      "upgradeTo": "Upgrade to {{plan}}"
     },
     "sections": {
       "wineTypes": "Wine Types",
@@ -5252,6 +5242,7 @@
       "patternSegments": "Segmented bin codes (12-3-4)",
       "patternSequential": "Numbered bins (147)",
       "patternGeneric": "Bin codes",
+      "patternWithDetail": "{{pattern}} — {{detail}}",
       "detectedDims_one": "{{rows}} rows × {{cols}} columns detected from {{count}} bin code",
       "detectedDims_other": "{{rows}} rows × {{cols}} columns detected from {{count}} bin codes",
       "detectedSeq_one": "sequential slot numbers detected from {{count}} bin code",
