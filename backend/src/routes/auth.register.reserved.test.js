@@ -95,7 +95,7 @@ test.each([
   const res = await register({ username });
 
   expect(res.status).toBe(400);
-  expect(await res.json()).toEqual({ error: USERNAME_RULE_MESSAGE });
+  expect(await res.json()).toEqual({ error: USERNAME_RULE_MESSAGE, code: 'username_invalid' });
   expect(mockCreated).toHaveLength(0);
 });
 

@@ -23,6 +23,7 @@ import { removeStored } from '../utils/safeStorage';
 import { track } from '../utils/track';
 import { guessCurrency, guessTemperatureUnit } from '../utils/localeDefaults';
 import { saveLocaleDefaults } from '../api/auth';
+import { httpError, friendlyError } from '../utils/friendlyError';
 
 const AuthContext = createContext();
 
@@ -94,6 +95,11 @@ async function waitForUnloadedRefresh() {
   if (!Number.isFinite(age) || age < 0 || age >= REFRESH_MARK_TTL_MS) return;
   await new Promise((resolve) => setTimeout(resolve, Math.min(REFRESH_WAIT_MAX_MS, REFRESH_MARK_TTL_MS - age)));
 }
+
+// The sentence a failed sign-in, registration or email check shows: a coded
+// server error in the person's language, a rate limit or a server outage in
+// words they can act on, or else the server's own reason.
+const authFailureMessage = (error) => friendlyError(error, i18n.t.bind(i18n));
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -538,7 +544,7 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
       if (!response.ok) {
-        const err = new Error(data.error || 'Registration failed');
+        const err = httpError(response, data);
         err.code = data.code;
         throw err;
       }
@@ -556,7 +562,7 @@ export const AuthProvider = ({ children }) => {
       // Verification enabled — user must confirm email before logging in
       return { success: true, email: data.email, requiresVerification: true };
     } catch (error) {
-      return { success: false, error: error.message, code: error.code };
+      return { success: false, error: authFailureMessage(error), code: error.code };
     }
   };
 
@@ -571,7 +577,7 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
       if (!response.ok) {
-        const err = new Error(data.error || 'Login failed');
+        const err = httpError(response, data);
         err.code = data.code;
         err.email = data.email;
         throw err;
@@ -581,7 +587,7 @@ export const AuthProvider = ({ children }) => {
       applySession(data.token, data.user);
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message, code: error.code, email: error.email };
+      return { success: false, error: authFailureMessage(error), code: error.code, email: error.email };
     }
   };
 
@@ -627,7 +633,7 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ token })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Verification failed');
+      if (!response.ok) throw httpError(response, data);
       if (data.token && data.user) {
         sessionPersistentRef.current = data.persistent === true;
         applySession(data.token, data.user);
@@ -635,7 +641,7 @@ export const AuthProvider = ({ children }) => {
       }
       return { success: true, signedIn: false };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: authFailureMessage(error) };
     }
   };
 

@@ -826,7 +826,7 @@ describe('POST /api/auth/reset-password', () => {
       body: { token: rawToken, password: 'AnotherSecret123!' },
     });
     expect(replay.status).toBe(400);
-    expect(replay.body).toEqual({ error: 'Invalid or expired reset token' });
+    expect(replay.body).toEqual({ error: 'Invalid or expired reset token', code: 'reset_token_invalid' });
   });
 
   test('expired token (hash still stored, past 1h window) → 400, password untouched', async () => {
@@ -840,7 +840,7 @@ describe('POST /api/auth/reset-password', () => {
     });
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: 'Invalid or expired reset token' });
+    expect(res.body).toEqual({ error: 'Invalid or expired reset token', code: 'reset_token_invalid' });
     expect(user.password).toBe(oldPassword);
     expect(user.save).not.toHaveBeenCalled();
   });
@@ -854,7 +854,7 @@ describe('POST /api/auth/reset-password', () => {
     });
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: 'Invalid or expired reset token' });
+    expect(res.body).toEqual({ error: 'Invalid or expired reset token', code: 'reset_token_invalid' });
   });
 
   test('missing token or password → 400', async () => {
