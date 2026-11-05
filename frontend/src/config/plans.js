@@ -83,3 +83,19 @@ export const PAID_PLAN_NAMES = PLAN_NAMES.filter((p) => PLANS[p].price > 0);
 export function getPlanConfig(plan) {
   return PLANS[plan] || PLANS.free;
 }
+
+/**
+ * The plan's name in the reader's language. `label` stays the English name
+ * (the backend mirror and the help text use it). The keys are the ones the
+ * supporter badge shows, so a tier carries one name everywhere.
+ */
+export function planName(plan, t) {
+  const key = PLANS[plan] ? plan : 'free';
+  return t(`cellarCred.plan_${key}`, PLANS[key].label);
+}
+
+/** The plan's one-line description in the reader's language. */
+export function planDescription(plan, t) {
+  const key = PLANS[plan] ? plan : 'free';
+  return t(`plans.description.${key}`, PLANS[key].description);
+}

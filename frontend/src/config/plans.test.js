@@ -3,8 +3,11 @@ import {
   PLAN_NAMES,
   PAID_PLAN_NAMES,
   getPlanConfig,
+  planName,
+  planDescription,
 } from './plans';
 import backendPlans from '../../../backend/src/config/plans.js';
+import en from '../locales/en/translation.json';
 
 // ---------------------------------------------------------------------------
 // PLAN_NAMES
@@ -134,5 +137,34 @@ describe('getPlanConfig', () => {
       expect(typeof config.description).toBe('string');
       expect(config.description.length).toBeGreaterThan(0);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// planName / planDescription
+// ---------------------------------------------------------------------------
+describe('planName and planDescription', () => {
+  // Returns the key and the English fallback it was handed, so a test can
+  // check both what is looked up and what shows when the key is missing.
+  const t = (key, fallback) => `${key}|${fallback}`;
+
+  it('reads the badge keys, with the English label as fallback', () => {
+    for (const plan of PLAN_NAMES) {
+      expect(planName(plan, t)).toBe(`cellarCred.plan_${plan}|${PLANS[plan].label}`);
+      expect(planDescription(plan, t)).toBe(`plans.description.${plan}|${PLANS[plan].description}`);
+    }
+  });
+
+  it('treats a missing or unknown plan as free', () => {
+    expect(planName(undefined, t)).toBe(`cellarCred.plan_free|${PLANS.free.label}`);
+    expect(planName('nonexistent', t)).toBe(`cellarCred.plan_free|${PLANS.free.label}`);
+    expect(planDescription(null, t)).toBe(`plans.description.free|${PLANS.free.description}`);
+  });
+
+  it('has an English string for every plan, equal to the config', () => {
+    for (const plan of PLAN_NAMES) {
+      expect(en.cellarCred[`plan_${plan}`]).toBe(PLANS[plan].label);
+      expect(en.plans.description[plan]).toBe(PLANS[plan].description);
+    }
   });
 });

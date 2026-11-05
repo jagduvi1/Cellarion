@@ -436,7 +436,7 @@ const sections = [
     summary: 'Blog, supporting Cellarion, support tickets and NFC tags.',
     details: [
       'Blog (/blog): wine articles and guides.',
-      `Support Us (/supporter): every feature is free for everyone, on the free Enthusiast tier too. ${tierLine()}, also available yearly, are voluntary gifts that fund development and unlock nothing extra. A custom or one-time amount can be given through GitHub Sponsors.`,
+      `Support Us (/supporter): every feature is free for everyone. ${tierLine()}, also available yearly, are voluntary gifts that fund development and unlock nothing extra. A custom or one-time amount can be given through GitHub Sponsors.`,
       'Support (/support): look in Help first; if you are still stuck, send a support ticket.',
       'NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly.',
     ],

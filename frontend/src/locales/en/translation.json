@@ -824,7 +824,13 @@
     "pray": "Thanks"
   },
   "plans": {
-    "expired": "Expired"
+    "expired": "Expired",
+    "description": {
+      "free": "Full access to every feature — completely free.",
+      "supporter": "Chip in to help fund development — no extra features, just our thanks.",
+      "patron": "Support Cellarion at a higher level — no extra features, just bigger thanks.",
+      "benefactor": "Cover a meaningful slice of the running costs — still no extra features."
+    }
   },
   "supporter": {
     "title": "Cellarion is free, and open-source. Here's what keeps it running.",
@@ -4039,7 +4045,7 @@
         "title": "Other Features",
         "summary": "Blog, supporting Cellarion, support tickets and NFC tags.",
         "d1": "Blog (/blog): wine articles and guides.",
-        "d2": "Support Us (/supporter): every feature is free for everyone, on the free Enthusiast tier too. Supporter ($2/mo), Patron ($5/mo) and Benefactor ($10/mo), also available yearly, are voluntary gifts that fund development and unlock nothing extra. A custom or one-time amount can be given through GitHub Sponsors.",
+        "d2": "Support Us (/supporter): every feature is free for everyone. Supporter ($2/mo), Patron ($5/mo) and Benefactor ($10/mo), also available yearly, are voluntary gifts that fund development and unlock nothing extra. A custom or one-time amount can be given through GitHub Sponsors.",
         "d3": "Support (/support): look in Help first; if you are still stuck, send a support ticket.",
         "d4": "NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly."
       }
@@ -4285,6 +4291,7 @@
     "community": "Community",
     "allrounder": "All-Rounder",
     "score": "Cellar Cred",
+    "plan_free": "Enthusiast",
     "plan_supporter": "Supporter",
     "plan_patron": "Patron",
     "plan_benefactor": "Benefactor",

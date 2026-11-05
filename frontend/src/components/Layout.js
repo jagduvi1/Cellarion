@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { PLANS } from '../config/plans';
+import { planName } from '../config/plans';
 import NotificationBell from './NotificationBell';
 import useUnreadBlog from '../hooks/useUnreadBlog';
 import InstallPrompt from './InstallPrompt';
@@ -49,7 +49,7 @@ function Layout({ children }) {
 
   const closeMenu = () => setMobileMenuOpen(false);
 
-  const planLabel = user ? (PLANS[user.plan]?.label || user.plan || 'Free') : null;
+  const planLabel = user ? planName(user.plan, t) : null;
   const roles = user?.roles || [];
 
   // Built once and rendered into both the desktop nav and the mobile menu. The
