@@ -107,6 +107,26 @@ describe('translation files', () => {
     expect(broken).toEqual([]);
   });
 
+  // The same scaffolding, one level down. A translation that keeps the bare
+  // key after en turned it into a family gets it rewritten by Weblate into
+  // the first form with every other form EMPTY (statistics.days.*, 11-05),
+  // and a family missing a form its language needs (French _many) gets that
+  // form empty too. Either way the next Weblate PR goes red. Caught here, the
+  // PR that changes en converts the locales itself, as it does for a key it
+  // drops: the old text into every form the language has.
+  test.each(otherLocales)('%s: no bare key where en has a plural family, and every form the language needs', (code, bundle) => {
+    const keys = flatten(bundle);
+    const enFamilies = new Set(enKeys.filter((k) => PLURAL_SUFFIX.test(k)).map(stripPlural));
+    const needed = new Intl.PluralRules(code).resolvedOptions().pluralCategories;
+    const bare = keys.filter((k) => enFamilies.has(k)).map((k) => `${k} (bare key; en has a plural family)`);
+    const families = new Set(keys.filter((k) => PLURAL_SUFFIX.test(k)).map(stripPlural));
+    const incomplete = [...families].flatMap((base) => {
+      const missing = needed.filter((form) => !keys.includes(`${base}_${form}`));
+      return missing.length ? [`${base} (missing: ${missing.map((f) => `_${f}`).join(', ')})`] : [];
+    });
+    expect([...bare, ...incomplete]).toEqual([]);
+  });
+
   // Strings taking {{count}} need the _one/_other family, or i18next serves
   // the bare key for every count ("1 wines copied from the registry").
   test('registry connection counts pick the singular for one wine', async () => {
