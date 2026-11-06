@@ -676,7 +676,7 @@
     "filterModalTitle": "Filtres",
     "wineType": "Type de vin",
     "showBottles_one": "Afficher {{count}} bouteille",
-    "showBottles_many": "",
+    "showBottles_many": "Afficher {{count}} bouteilles",
     "showBottles_other": "Afficher {{count}} bouteilles",
     "clearAllFilters": "Tout effacer",
     "countryLabel": "Pays",
@@ -1750,15 +1750,15 @@
     },
     "days": {
       "overdue_one": "{{count}} j de retard",
-      "overdue_many": "",
-      "overdue_other": "",
+      "overdue_many": "{{count}} j de retard",
+      "overdue_other": "{{count}} j de retard",
       "today": "Aujourd'hui",
-      "left_one": "{{count}} j restants",
-      "left_many": "",
-      "left_other": "",
+      "left_one": "{{count}} j restant",
+      "left_many": "{{count}} j restants",
+      "left_other": "{{count}} j restants",
       "ago_one": "il y a {{count}} j",
-      "ago_many": "",
-      "ago_other": ""
+      "ago_many": "il y a {{count}} j",
+      "ago_other": "il y a {{count}} j"
     },
     "donut": {
       "ariaLabel": "Diagramme en anneau : {{count}} bouteilles au total",

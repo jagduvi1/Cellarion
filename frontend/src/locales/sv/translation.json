@@ -2329,12 +2329,12 @@
     },
     "days": {
       "overdue_one": "{{count}}d försenad",
-      "overdue_other": "",
+      "overdue_other": "{{count}}d försenad",
       "today": "Idag",
       "left_one": "{{count}}d kvar",
-      "left_other": "",
+      "left_other": "{{count}}d kvar",
       "ago_one": "{{count}}d sedan",
-      "ago_other": ""
+      "ago_other": "{{count}}d sedan"
     },
     "donut": {
       "ariaLabel": "Munkdiagram: {{count}} flaskor totalt",
