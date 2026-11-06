@@ -2086,7 +2086,6 @@
     "anonymous": "Anonym",
     "ban": "Sperren",
     "banUserTitle": "Nutzer sperren",
-    "confirmBan": "{{name}} für {{duration}} von Diskussionen sperren?",
     "banDuration": {
       "10m": "10 Minuten",
       "1h": "1 Stunde",

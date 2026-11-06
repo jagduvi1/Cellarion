@@ -3487,7 +3487,13 @@
     "anonymous": "Anonymous",
     "ban": "Ban",
     "banUserTitle": "Ban User",
-    "confirmBan": "Ban {{name}} from discussions for {{duration}}?",
+    "confirmBanFor": {
+      "10m": "Ban {{name}} from discussions for 10 minutes?",
+      "1h": "Ban {{name}} from discussions for 1 hour?",
+      "1d": "Ban {{name}} from discussions for 1 day?",
+      "1w": "Ban {{name}} from discussions for 1 week?",
+      "permanent": "Ban {{name}} from discussions permanently?"
+    },
     "banDuration": {
       "10m": "10 minutes",
       "1h": "1 hour",

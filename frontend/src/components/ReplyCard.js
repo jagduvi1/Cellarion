@@ -271,7 +271,9 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
       {confirmBan && (
         <ConfirmModal
           title={t('discussions.banUserTitle')}
-          message={t('discussions.confirmBan', { name: authorName, duration: confirmBan.label })}
+          // A whole sentence per duration: the preposition depends on it
+          // ("for 1 week", but "permanently"), and differently per language.
+          message={t(`discussions.confirmBanFor.${confirmBan.duration}`, { name: authorName })}
           confirmLabel={t('discussions.ban')}
           confirmClass="btn btn-warning btn-small"
           onConfirm={() => handleBan(confirmBan.duration, confirmBan.label)}
