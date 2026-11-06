@@ -548,7 +548,8 @@ function CellarVintage() {
         <>
           <div className="cvb-grid">
             {/* 1. The wine: who made it, where, the grapes, the description. */}
-            <section className="cvb-col" aria-labelledby="cvb-wine-title">
+            <div className="cvb-col">
+            <section aria-labelledby="cvb-wine-title">
               <div className="cvb-h2-row">
                 <h2 id="cvb-wine-title" className="cvb-h2">{t('cellarVintageBeta.wineTitle', 'The wine')}</h2>
                 <CollapseToggle
@@ -622,6 +623,7 @@ function CellarVintage() {
               )}
               </div>
             </section>
+            </div>
 
             <div className="cvb-col">
               {/* 2. The vintage: the sommelier's window, what you keep for it. */}
