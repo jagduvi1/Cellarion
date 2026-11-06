@@ -55,7 +55,8 @@
     "dashboard": "Analyse",
     "pickLists": "Plukklister",
     "help": "Hjelp",
-    "wineReports": "Feilrapporter"
+    "wineReports": "Feilrapporter",
+    "search": "Søk"
   },
   "registryTerms": {
     "contributionNote": "Når du sender inn, gir du Cellarion lov til å bruke dette i det felles vinregisteret etter vilkårene for registerdata.",
@@ -122,7 +123,17 @@
     "rateLimited": "For mange forespørsler på kort tid. Vent noen minutter og prøv igjen.",
     "rateLimitedFor": "For mange forespørsler på kort tid. Prøv igjen om {{minutes}} min.",
     "rateLimitedSoon": "For mange forespørsler på kort tid. Prøv igjen om noen sekunder.",
-    "generic": "Noe gikk galt. Prøv igjen."
+    "generic": "Noe gikk galt. Prøv igjen.",
+    "codes": {
+      "credentials_required": "Skriv inn brukernavnet eller e-postadressen din og passordet.",
+      "invalid_credentials": "Brukernavnet eller e-postadressen og passordet passer ikke sammen. Sjekk dem og prøv igjen.",
+      "EMAIL_NOT_VERIFIED": "Bekreft e-postadressen din før du logger inn. Lenken står i e-posten vi sendte deg.",
+      "registration_fields_required": "Fyll inn brukernavn, e-postadresse og passord.",
+      "username_invalid": "Brukernavnet må ha 3–30 tegn og kan inneholde bokstaver, tall, punktum, understrek og bindestrek, men ikke mellomrom.",
+      "consent_required": "For å opprette en konto må du godta personvernerklæringen og behandlingen av personopplysningene dine.",
+      "verification_token_invalid": "Bekreftelseslenken er ugyldig eller utløpt. Be om en ny e-post med bekreftelseslenke.",
+      "reset_token_invalid": "Lenken for nytt passord er ugyldig eller utløpt. Be om en ny fra innloggingssiden."
+    }
   },
   "auth": {
     "continueWithGoogle": "Fortsett med Google",
@@ -181,7 +192,8 @@
     "emailExamplePlaceholder": "navn@example.com",
     "newLinkSent": "Vi har sendt en ny bekreftelseslenke. Sjekk innboksen din.",
     "sendFailed": "Kunne ikke sende. Prøv igjen.",
-    "verifiedSignedIn": "E-postadressen er bekreftet, og du er logget inn. Du blir sendt til kjelleren din …"
+    "verifiedSignedIn": "E-postadressen er bekreftet, og du er logget inn. Du blir sendt til kjelleren din …",
+    "emailRuleError": "Skriv inn hele e-postadressen, for eksempel anna@example.com."
   },
   "oauthConsent": {
     "title": "Koble til KI-assistenten din",
@@ -759,7 +771,13 @@
     "pray": "Takk"
   },
   "plans": {
-    "expired": "Utløpt"
+    "expired": "Utløpt",
+    "description": {
+      "free": "Full tilgang til alle funksjoner, helt gratis.",
+      "supporter": "Bidra til å finansiere utviklingen. Ingen ekstra funksjoner, bare takken vår.",
+      "patron": "Støtt Cellarion på et høyere nivå. Ingen ekstra funksjoner, bare en større takk.",
+      "benefactor": "Dekk en merkbar del av driftskostnadene. Fortsatt ingen ekstra funksjoner."
+    }
   },
   "supporter": {
     "title": "Cellarion er gratis og har åpen kildekode. Dette holder det i gang.",
@@ -965,7 +983,8 @@
     "selectedCount_other": "{{count}} flasker valgt",
     "selectAllLoaded": "Velg alle ({{count}})",
     "bulkBarAria": "Handlinger for de valgte flaskene",
-    "deleteWillDelete": "Dette sletter <strong>{{name}}</strong> og alle reolene i den."
+    "deleteWillDelete": "Dette sletter <strong>{{name}}</strong> og alle reolene i den.",
+    "searchAllCellars": "Søk etter «{{query}}» i alle kjellerne"
   },
   "bottles": {
     "title": "Alle flasker",
@@ -1002,7 +1021,14 @@
       "gifted": "Gitt bort",
       "sold": "Solgt",
       "other": "Annet"
-    }
+    },
+    "searchPlaceholder": "Søk etter navn, produsent, region, drue …",
+    "searchLabel": "Søk i alle flaskene dine",
+    "searchButton": "Søk",
+    "scopeLabel": "Hvilke flasker du søker i",
+    "scopeActive": "I kjelleren",
+    "scopeAll": "Alle",
+    "scopeConsumed": "Tatt ut"
   },
   "bottleSizeNames": {
     "split": "Kvartflaske",
@@ -1053,7 +1079,9 @@
     "undoOpenHint": "Fjerner åpnet-statusen og alle glass som er skjenket",
     "partialOption": "Bare et glass. Behold flasken",
     "partialOr": "eller ta den ut av kjelleren:",
-    "partialConfirmBtn": "Åpne og skjenk et glass"
+    "partialConfirmBtn": "Åpne og skjenk et glass",
+    "takeOut": "Fjern den fra reolen",
+    "takeOutHint": "Plassen blir ledig mens flasken står åpen. «Angre» setter den tilbake."
   },
   "timeAgo": {
     "justNow": "akkurat nå",
@@ -1463,7 +1491,30 @@
     "profilePendingTitle": "Denne vinen er ikke bedømt ennå. Profilene lages og gjennomgås etter hvert",
     "maturityTimelineBeta": "Drikkevinduet som tidslinje er i tidlig tilgang.",
     "maturityShowDetails": "Vis detaljer",
-    "maturityHideDetails": "Skjul detaljer"
+    "maturityHideDetails": "Skjul detaljer",
+    "personalPhaseDrink": "Drikkeklar",
+    "windowAdjust": "Juster",
+    "windowAdjustLabel": "Juster drikkevinduet ditt",
+    "windowSetOwn": "Sett eget vindu",
+    "windowSetOwnDrink": "Sett eget drikkevindu",
+    "windowChange": "Endre",
+    "windowChangeLabel": "Endre drikkevinduet ditt",
+    "windowAdjustBeta": "Glidebryteren for eget drikkevindu er i tidlig tilgang.",
+    "windowAdjustHint": "Dra i et håndtak, eller bruk piltastene for å flytte ett år om gangen.",
+    "windowHandleDrinkFrom": "Drikk fra",
+    "windowHandlePeakFrom": "På topp fra",
+    "windowHandlePeakUntil": "På topp til",
+    "windowHandleDrinkTo": "Drikk til",
+    "windowHandleDrinkFromValue": "Drikk fra {{year}}",
+    "windowHandlePeakFromValue": "På topp fra {{year}}",
+    "windowHandlePeakUntilValue": "På topp til {{year}}",
+    "windowHandleDrinkToValue": "Drikk til {{year}}",
+    "windowMarkPeak": "Marker en topp",
+    "windowRemovePeak": "Fjern toppen",
+    "windowRemoveMine": "Fjern eget vindu",
+    "windowSaveFailed": "Kunne ikke lagre drikkevinduet. Prøv igjen.",
+    "contributePhotoMsgUnreviewed": "Denne vinen har ikke noe bilde ennå. Legger du til et, blir den lettere å kjenne igjen for alle på denne serveren.",
+    "imageNoticeUnreviewed": "Bildene legges i vinregisteret med en gang du laster dem opp. Der kan alle på denne serveren se dem."
   },
   "history": {
     "title": "Historikk",
@@ -1889,7 +1940,7 @@
     "backToList": "Tilbake til listen",
     "title": "Egne vindata",
     "add": "+ Legg til",
-    "intro": "Alt som ikke står i vinoppføringen, for eksempel alkoholprosent, lagringshistorikk og korkens tilstand. Alle som deler denne kjelleren, kan se det, men det publiseres aldri i det felles registeret.",
+    "intro": "Notater om flaskene dine, for eksempel lagringshistorikk, hvor du kjøpte dem og korkens tilstand. Alle som deler denne kjelleren, kan se dem, men de publiseres aldri. Fakta om selve vinen, som alkoholprosent, hører hjemme i vinoppføringen, der alle som eier vinen, ser dem.",
     "empty": "Ingenting registrert ennå.",
     "bottleSection": "Denne flasken",
     "wineSection": "Denne vinen (alle flaskene av den)",
@@ -1929,7 +1980,19 @@
     "promoteScopeVintage": "Det gjelder bare årgang {{year}}.",
     "promoteScopeWine": "Det gjelder alle årganger av denne vinen.",
     "promotedValue": "Takk. Forslaget ditt står i køen for gjennomgang i registeret.",
-    "promotedKey": "Takk. Selve feltet ble foreslått først. Når en kurator har godkjent det, kan verdier legges til."
+    "promotedKey": "Takk. Selve feltet ble foreslått først. Når en kurator har godkjent det, kan verdier legges til.",
+    "promoteTitleUnreviewed": "Legg dette til i den felles vinoppføringen",
+    "promoteIntroUnreviewed": "Legg til «{{key}}: {{value}}» i den felles vinoppføringen, der alle på denne serveren ser det. Finnes ikke feltet ennå, blir det også lagt til.",
+    "promotedLive": "Lagt til i vinoppføringen. Alle på denne serveren ser det nå.",
+    "publicKeyOffer": "{{key}} er et felt i den felles vinoppføringen. Legg verdien inn der, så kan alle som eier denne vinen, se den. En kurator sjekker den først.",
+    "publicKeyRecorded": "Vinoppføringen har allerede {{key}}: {{value}}.",
+    "publicKeyPending": "{{key}} er et felt i den felles vinoppføringen, og et forslag til verdi venter allerede på en kurator.",
+    "offerLater": "Gjelder dette alle flasker av denne vinen? Du kan tilby det til det felles registeret etter at du har lagret.",
+    "addToRecord": "Legg til i vinoppføringen",
+    "keepPrivate": "Hold det privat",
+    "share": "Foreslå for vinoppføringen",
+    "shareIntro": "Tilby «{{value}}» til vinoppføringen som {{key}}, der alle som eier denne vinen, ser det. En kurator sjekker det først.",
+    "matchesRecord": "stemmer med vinoppføringen"
   },
   "statistics": {
     "typeLabels": {
@@ -1980,10 +2043,13 @@
       "noProfile": "Ingen modenhetsdata"
     },
     "days": {
-      "overdue": "{{count}} d på overtid",
+      "overdue_one": "{{count}} dag på overtid",
+      "overdue_other": "{{count}} dager på overtid",
       "today": "I dag",
-      "left": "{{count}} d igjen",
-      "ago": "for {{count}} d siden"
+      "left_one": "{{count}} dag igjen",
+      "left_other": "{{count}} dager igjen",
+      "ago_one": "for {{count}} dag siden",
+      "ago_other": "for {{count}} dager siden"
     },
     "donut": {
       "ariaLabel": "Diagram. Flasker totalt: {{count}}",
@@ -2173,7 +2239,8 @@
     "skippedExists_one": "Én flaske var allerede tilbake i kjelleren.",
     "skippedExists_other": "{{count}} flasker var allerede tilbake i kjelleren.",
     "showAll_one": "Vis {{count}}",
-    "showAll_other": "Vis alle {{count}}"
+    "showAll_other": "Vis alle {{count}}",
+    "lastDay": "Slettes for godt innen et døgn"
   },
   "moveBottle": {
     "action": "Flytt til en annen kjeller",
@@ -2682,7 +2749,8 @@
     "removeLink": "Fjern",
     "backImageLabel": "Etiketten på baksiden",
     "backImageHint": "Etiketten på baksiden oppgir ofte produsent, appellasjon og importør.",
-    "backImageNotice": "Etter gjennomgang kan etiketten på baksiden vises blant bildene av vinen i det felles registeret, der alle i Cellarion kan se den."
+    "backImageNotice": "Etter gjennomgang kan etiketten på baksiden vises blant bildene av vinen i det felles registeret, der alle i Cellarion kan se den.",
+    "linkedWine": "{{wine}} fra {{producer}}"
   },
   "cellarScope": {
     "title": "Velg hvilke kjellere som skal vises",
@@ -2725,7 +2793,7 @@
       "imageDefault": "Hovedbilde endret"
     },
     "anonymous": "anonym",
-    "sharedAs": "{{user}} som {{role}}",
+    "sharedAs": "{{user}}, tilgang: {{role}}",
     "roleChanged": "Tilgang endret: {{from}} → {{to}}",
     "bulkMoveDetail": "{{moved}} av {{requested}} flasker flyttet",
     "bulkDoneDetail": "{{done}} av {{requested}} flasker · {{what}}",
@@ -2896,7 +2964,10 @@
       "ripeness": "Modningsgrad",
       "ageing": "Lagringsnivå",
       "other": "Annet (produsentens egen)"
-    }
+    },
+    "introUnreviewed": "Ser du noe som er feil eller mangler? Trykk på «Rett» eller «Legg til» ved siden av. Endringen din publiseres med en gang.",
+    "introShortUnreviewed": "Oppføringen av denne vinen i det felles registeret.",
+    "thanksApplied": "Takk. Endringen din er publisert."
   },
   "priceTracking": {
     "trigger": "Følg markedsprisen",
@@ -3459,7 +3530,11 @@
     "explain_allrounder": "Bidrar jevnt med vindata, bilder, omtaler og diskusjoner.",
     "explain_plan_supporter": "Støtter utviklingen av Cellarion frivillig. Alle funksjoner er gratis for alle, og støttespillerne bidrar bare med litt ekstra.",
     "explain_plan_patron": "Støtter utviklingen av Cellarion frivillig på et høyere nivå. Alle funksjoner er gratis for alle.",
-    "explain_plan_benefactor": "Dekker frivillig en god del av driftskostnadene til Cellarion. Alle funksjoner er gratis for alle."
+    "explain_plan_benefactor": "Dekker frivillig en god del av driftskostnadene til Cellarion. Alle funksjoner er gratis for alle.",
+    "plan_free": "Entusiast",
+    "plan_supporter": "Støttespiller",
+    "plan_patron": "Mesén",
+    "plan_benefactor": "Velgjører"
   },
   "demo": {
     "tryDemo": "Prøv demoen",
@@ -3595,7 +3670,8 @@
     "uploadFailed": "Kunne ikke laste opp",
     "publishFailed": "Kunne ikke publisere",
     "pdfFailed": "Kunne ikke lage forhåndsvisning av PDF-en",
-    "networkError": "Nettverksfeil"
+    "networkError": "Nettverksfeil",
+    "showStock": "Vis hvor mange flasker det er av hver vin"
   },
   "unsubscribed": {
     "title": "Avmeldt",
@@ -4323,7 +4399,8 @@
     "showBottles_one": "Vis flasken",
     "showBottles_other": "Vis alle {{count}} flasker",
     "hideBottles": "Skjul listen",
-    "historyLabel": "Historikk og andre årganger"
+    "historyLabel": "Historikk og andre årganger",
+    "windowSetForAll": "Sett ett drikkevindu for alle"
   },
   "barcodeScan": {
     "title": "Legg til strekkode",
@@ -4765,7 +4842,8 @@
         "summary": "Blogg, støtte til Cellarion, henvendelser til brukerstøtte og NFC-brikker.",
         "d1": "Blogg (/blog): artikler og veiledninger om vin.",
         "d3": "Brukerstøtte (/support): se i «Hjelp» først. Står du fortsatt fast, kan du sende en henvendelse.",
-        "d4": "NFC-brikker: fest NFC-brikker på reolene. Holder du telefonen mot en brikke, åpnes reolen rett på telefonen."
+        "d4": "NFC-brikker: fest NFC-brikker på reolene. Holder du telefonen mot en brikke, åpnes reolen rett på telefonen.",
+        "d2": "«Støtt oss» (/supporter): alle funksjoner er gratis for alle. Støttespiller (2 dollar i måneden), Mesén (5 dollar i måneden) og Velgjører (10 dollar i måneden) kan også betales årlig. Det er frivillige gaver som finansierer utviklingen, og de låser ikke opp noe ekstra. Et valgfritt beløp eller en engangsgave kan du gi gjennom GitHub Sponsors."
       }
     }
   },
@@ -5028,16 +5106,17 @@
       "patternSegments": "Bin-koder i flere deler (12-3-4)",
       "patternSequential": "Nummererte plasser (147)",
       "patternGeneric": "Bin-koder",
-      "detectedDims_one": "rader × kolonner: {{rows}} × {{cols}}, funnet ut fra én Bin-kode",
-      "detectedDims_other": "rader × kolonner: {{rows}} × {{cols}}, funnet ut fra {{count}} Bin-koder",
-      "detectedSeq_one": "fortløpende plassnummer funnet ut fra én Bin-kode",
-      "detectedSeq_other": "fortløpende plassnummer funnet ut fra {{count}} Bin-koder",
+      "detectedDims_one": "Rader × kolonner: {{rows}} × {{cols}}, funnet ut fra én Bin-kode",
+      "detectedDims_other": "Rader × kolonner: {{rows}} × {{cols}}, funnet ut fra {{count}} Bin-koder",
+      "detectedSeq_one": "Fortløpende plassnummer funnet ut fra én Bin-kode",
+      "detectedSeq_other": "Fortløpende plassnummer funnet ut fra {{count}} Bin-koder",
       "placed_one": "Én flaske blir plassert automatisk",
       "placed_other": "{{count}} flasker blir plassert automatisk",
       "unparsed_one": "Én flaske har en Bin-kode vi ikke kunne lese. Den beholder plasseringen som tekst",
       "unparsed_other": "{{count}} flasker har Bin-koder vi ikke kunne lese. De beholder plasseringen som tekst",
       "keptAsText_one": "Én flaske i {{locations}} har ikke et fast mønster i Bin-koden. Den beholder plasseringen som tekst og blir ikke plassert i en reol.",
-      "keptAsText_other": "{{count}} flasker i {{locations}} har ikke et fast mønster i Bin-kodene. De beholder plasseringen som tekst og blir ikke plassert i en reol."
+      "keptAsText_other": "{{count}} flasker i {{locations}} har ikke et fast mønster i Bin-kodene. De beholder plasseringen som tekst og blir ikke plassert i en reol.",
+      "patternWithDetail": "{{pattern}}. {{detail}}"
     },
     "anchor": {
       "question": "Hvor er plass 1 i den fysiske reolen din?",
@@ -5078,7 +5157,7 @@
     "review": {
       "matched": "Treff",
       "fuzzy": "Må sjekkes",
-      "autoAdded": "Lagt til automatisk",
+      "autoAdded": "Treff med KI",
       "newWines": "Nye viner",
       "noMatch": "Ingen treff",
       "ready": "Klare",
@@ -5133,7 +5212,9 @@
       "anchorNote": "Plass 1 er: <1>{{anchor}}</1>. Du kan endre det i steget <3>Last opp</3> om nødvendig.",
       "importing": "Importerer …",
       "importButton_one": "Importer {{count}} flaske",
-      "importButton_other": "Importer {{count}} flasker"
+      "importButton_other": "Importer {{count}} flasker",
+      "notImportedYet": "Ingenting er lagt inn i kjelleren ennå. Sjekk listen, og trykk deretter på «Importer …» nederst for å legge til flaskene.",
+      "explanation": "Detaljer: {{text}}"
     },
     "aiBudget": {
       "title": "Dagsgrensen for KI-søk er nådd.",
@@ -5202,5 +5283,14 @@
       "noneRight": "Passer ingen av disse?",
       "requestThis": "Foreslå denne vinen"
     }
+  },
+  "roles": {
+    "viewer": "Kan se",
+    "editor": "Kan redigere"
+  },
+  "openNow": {
+    "title": "Åpne flasker",
+    "meta": "≈ {{glasses}} glass · drikk innen {{date}}",
+    "unnamed": "Åpen flaske"
   }
 }

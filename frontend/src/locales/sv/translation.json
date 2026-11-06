@@ -2328,10 +2328,13 @@
       "noProfile": "Ingen profil"
     },
     "days": {
-      "overdue": "{{count}}d försenad",
+      "overdue_one": "{{count}}d försenad",
+      "overdue_other": "{{count}}d försenad",
       "today": "Idag",
-      "left": "{{count}}d kvar",
-      "ago": "{{count}}d sedan"
+      "left_one": "{{count}}d kvar",
+      "left_other": "{{count}}d kvar",
+      "ago_one": "{{count}}d sedan",
+      "ago_other": "{{count}}d sedan"
     },
     "donut": {
       "ariaLabel": "Munkdiagram: {{count}} flaskor totalt",
