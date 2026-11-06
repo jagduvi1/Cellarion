@@ -49,7 +49,7 @@ const SWEETNESS_WORDS = new Set([
   'demidulce', 'demisec', 'dulce', 'seco', 'semiseco', 'semidulce',
   'abboccato', 'amabile', 'halbtrocken', 'feinherb', 'trocken', 'lieblich',
   'offdry', 'semisweet', 'moelleux', 'doux', 'brut', 'sec', 'dry', 'sweet',
-  'suss', 'edes',
+  'suss', 'edes', 'fruchtsuss',
 ]);
 
 // Prädikat tiers — the German/Austrian must-weight ladder. Each is a distinct
@@ -97,6 +97,7 @@ const PRADIKAT_ALIASES = new Map([
 // the 'dry'/'sweet' problem over again.
 const SWEETNESS_ALIASES = new Map([
   ['suess', 'suss'],
+  ['fruchtsuess', 'fruchtsuss'],
   // Same file as the Prädikat typo above: it wrote the wine's own name
   // "Riesling Troken". Name side only, like every entry here — SWEETNESS_WORDS
   // itself must not gain it, for the 'Weingut Suess' reason given above.

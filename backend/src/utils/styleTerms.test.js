@@ -40,6 +40,15 @@ describe('statedStyle', () => {
     expect(conflictingStyleTerms('Riesling Spätlese Suess', 'Riesling Spätlese Süß')).toBeNull();
   });
 
+  it('reads fruchtsüß in all three spellings and keeps it apart from trocken', () => {
+    for (const name of ['Riesling Spätlese fruchtsüß', 'Riesling Spätlese Fruchtsüss', 'Riesling Spätlese Fruchtsuess']) {
+      expect([...statedStyle(name).sweetness]).toEqual(['fruchtsuss']);
+    }
+    expect(conflictingStyleTerms('Riesling Spätlese fruchtsüß', 'Riesling Spätlese Trocken'))
+      .toMatch(/different sweetness/);
+    expect(conflictingStyleTerms('Riesling Spätlese Fruchtsuess', 'Riesling Spätlese fruchtsüß')).toBeNull();
+  });
+
   it('keeps the nested tier names apart', () => {
     // 'trockenbeerenauslese' contains 'beerenauslese' contains 'auslese' as
     // substrings — whole-token matching must see three different tiers, and

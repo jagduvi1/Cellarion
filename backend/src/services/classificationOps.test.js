@@ -49,6 +49,7 @@ describe('stripNoise', () => {
   test('removes the words that ride along with a tier and reports an empty value for nothing else', () => {
     expect(ops.stripNoise('Kabinett trocken')).toBe('kabinett');
     expect(ops.stripNoise('Spätlese Trocken')).toBe('spatlese');
+    expect(ops.stripNoise('Spätlese fruchtsüß')).toBe('spatlese');
     expect(ops.stripNoise('Premier Cru Classé 1855')).toBe('premier cru classe');
     expect(ops.stripNoise('Deutscher Qualitätswein')).toBe('');
     expect(ops.stripNoise('trocken')).toBe('');

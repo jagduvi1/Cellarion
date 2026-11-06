@@ -3,6 +3,7 @@
   { "name": "halbtrocken", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
   { "name": "feinherb", "scale": "still", "band": "off-dry", "system": "Customary (de)", "regulated": false, "synonyms": [] },
   { "name": "lieblich", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
+  { "name": "fruchtsüß", "scale": "still", "band": "medium-sweet", "system": "Customary (de)", "regulated": false, "synonyms": [] },
   { "name": "süß", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
   { "name": "edelsüß", "scale": "still", "band": "sweet", "system": "Customary (de)", "regulated": false, "synonyms": [] },
 

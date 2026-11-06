@@ -55,7 +55,7 @@ function splitClassificationString(value) {
 const NOISE = [
   'deutscher prädikatswein', 'deutscher qualitätswein', 'qualitätswein aus österreich', 'qualitätswein aus deutschland',
   'österreichischer qualitätswein', 'prädikatswein', 'qualitätswein', 'qba', 'qmp', 'deutscher', 'österreichischer',
-  'trocken', 'halbtrocken', 'feinherb', 'lieblich', 'süß', 'edelsüß', 'gutsabfüllung', 'erzeugerabfüllung',
+  'trocken', 'halbtrocken', 'feinherb', 'lieblich', 'fruchtsüß', 'süß', 'edelsüß', 'gutsabfüllung', 'erzeugerabfüllung',
   'monopole', 'en 1855', '1855',
 ];
 const NOISE_KEYS = [...new Set(NOISE.map(normalizeString).filter(Boolean))].sort((a, b) => b.length - a.length);

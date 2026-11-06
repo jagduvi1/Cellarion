@@ -180,9 +180,9 @@ describe('the seed', () => {
     const demiSec = seed.find((r) => r.scale === 'still' && r.name === 'demi-sec');
     expect(key(demiSec.name)).toBe(key('demisec'));
     expect(seed.filter((r) => r.scale === 'still' && key(r.name) === 'demisec')).toHaveLength(1);
-    for (const n of ['feinherb', 'off-dry', 'edelsüß', 'liquoreux']) expect(seed.find((r) => r.name === n).regulated).toBe(false);
+    for (const n of ['feinherb', 'fruchtsüß', 'off-dry', 'edelsüß', 'liquoreux']) expect(seed.find((r) => r.name === n).regulated).toBe(false);
     expect(seed.find((r) => r.name === 'Brut Nature').regulated).not.toBe(false);
-    expect(seed).toHaveLength(73);
+    expect(seed).toHaveLength(74);
   });
 
   test('boot seeds a registry with no rows by upsert (two replicas write each row once) and leaves one with rows alone', async () => {
