@@ -1721,10 +1721,13 @@
       "noProfile": "Kein Profil"
     },
     "days": {
-      "overdue": "{{count}} Tage überfällig",
+      "overdue_one": "{{count}} Tage überfällig",
+      "overdue_other": "",
       "today": "Heute",
-      "left": "Noch {{count}} Tage",
-      "ago": "Vor {{count}} Tagen"
+      "left_one": "Noch {{count}} Tage",
+      "left_other": "",
+      "ago_one": "Vor {{count}} Tagen",
+      "ago_other": ""
     },
     "donut": {
       "ariaLabel": "Donut-Diagramm: {{count}} Flaschen insgesamt",

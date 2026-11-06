@@ -1980,10 +1980,13 @@
       "noProfile": "Ingen modenhetsdata"
     },
     "days": {
-      "overdue": "{{count}} d på overtid",
+      "overdue_one": "{{count}} d på overtid",
+      "overdue_other": "",
       "today": "I dag",
-      "left": "{{count}} d igjen",
-      "ago": "for {{count}} d siden"
+      "left_one": "{{count}} d igjen",
+      "left_other": "",
+      "ago_one": "for {{count}} d siden",
+      "ago_other": ""
     },
     "donut": {
       "ariaLabel": "Diagram. Flasker totalt: {{count}}",
