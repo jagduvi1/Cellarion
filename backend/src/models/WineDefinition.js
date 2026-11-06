@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification, sweetnessKeySegment, stripSweetnessKeySegment } = require('../utils/normalize');
+const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification, isProductionMethodOnly, sweetnessKeySegment, stripSweetnessKeySegment } = require('../utils/normalize');
 require('./Classification'); // registers the model the classifications ref and the save hook use
 require('./SweetnessTerm'); // the same for labelSweetness (the key/slug hook reads the term's word)
 const { computeCanonicalKey } = require('../utils/wineIdentity');
@@ -829,6 +829,13 @@ wineDefinitionSchema.pre('validate', function(next) {
     // isModified() is not readable in post('save'), where the stamp must run.
     this.$locals.promotedFromPending = true;
   }
+  // A production METHOD is not an appellation (GitHub discussion #1696): a
+  // value that is nothing but one ("Méthode Traditionnelle", "Metodo
+  // Classico", "Méthode Cap Classique") is dropped on every save-based write,
+  // before the keys below are derived. The key builders read it as no
+  // appellation too, so a lookup lands on the row this stores. Atomic writes
+  // skip this hook: scripts/clear-method-appellations.js is the backfill.
+  if (this.isModified('appellation') && isProductionMethodOnly(this.appellation)) this.appellation = null;
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation') || this.isModified('labelSweetness')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation, { sweetness: this.$locals.sweetnessName || null });
   }

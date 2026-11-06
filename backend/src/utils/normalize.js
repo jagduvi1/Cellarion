@@ -258,6 +258,26 @@ const normalizeAppellation = (appellation) => {
   return result || original;
 };
 
+// A production METHOD is not an appellation (GitHub discussion #1696):
+// "Méthode Traditionnelle", "Metodo Classico", "Méthode Cap Classique" say how
+// the bubbles were made, not where the wine is from — and our own prompts used
+// to put them in the appellation field. Only a value that is NOTHING BUT a
+// method counts. The same words also end real names ("Oltrepò Pavese Metodo
+// Classico" is a DOCG, "Blanquette méthode ancestrale" an AOC), so an edge
+// strip would turn one appellation into another; a value with a place in it
+// is left for a curator. Compared folded, like the tier phrases above.
+const PRODUCTION_METHOD_VALUES = new Set([
+  'methode cap classique', 'cap classique', 'mcc',
+  'methode traditionnelle', 'methode traditionelle', 'methode champenoise', 'methode classique',
+  'metodo classico', 'metodo tradizionale', 'metodo tradicional', 'traditional method',
+  'traditionelle flaschengarung', 'klassische flaschengarung', 'flaschengarung',
+]);
+
+/** True when the value is a production method and nothing else: it is then no appellation. */
+const isProductionMethodOnly = (value) =>
+  typeof value === 'string' &&
+  PRODUCTION_METHOD_VALUES.has(value.trim().split(/\s+/).map(foldTierWord).join(' '));
+
 // Spelled-out marks that reach the CLASSIFICATION field as a value in their
 // own right ("Appellation d'Origine Protégée" filed as the tier of a Rhône
 // wine). Kept off the appellation list on purpose: there "Appellation …
@@ -444,8 +464,12 @@ const normalizeProducerKey = (producer) => {
 // See the pendingIdentity field note on models/WineDefinition.js.
 const PENDING_KEY_PREFIX = 'pending~';
 const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
+// The appellation segment of every identity key: a production method on its
+// own is no appellation, so it keys as none (isProductionMethodOnly above).
+const appellationKeySegment = (appellation) =>
+  (isProductionMethodOnly(appellation) ? '' : normalizeString(appellation));
 const pendingWineKey = (name, userId, appellation = '', { sweetness = null } = {}) =>
-  `${pendingProducerKey(userId)}:${normalizeWineName(name)}:${normalizeString(appellation)}${sweetnessKeySegment(sweetness)}`;
+  `${pendingProducerKey(userId)}:${normalizeWineName(name)}:${appellationKeySegment(appellation)}${sweetnessKeySegment(sweetness)}`;
 
 // ── Label sweetness in the identity keys (GitHub discussion #1754) ──────────
 // The term a label prints (trocken, Brut Nature) is identity: a Kabinett
@@ -503,7 +527,7 @@ const appendSweetnessTerm = (name, term) => {
 const DRAFT_KEY_PREFIX = 'draft~';
 const draftProducerKey = (userId) => `${DRAFT_KEY_PREFIX}${String(userId)}`;
 const draftWineKey = (name, producer, userId, appellation = '', { sweetness = null } = {}) =>
-  `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeWineName(name)}:${normalizeString(appellation)}${sweetnessKeySegment(sweetness)}`;
+  `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeWineName(name)}:${appellationKeySegment(appellation)}${sweetnessKeySegment(sweetness)}`;
 
 /**
  * Generate a normalized key for wine deduplication
@@ -513,7 +537,9 @@ const draftWineKey = (name, producer, userId, appellation = '', { sweetness = nu
 const generateWineKey = (name, producer, appellation = '', { sweetness = null } = {}) => {
   const normalizedName = normalizeWineName(name);
   const normalizedProducer = normalizeString(producer);
-  const normalizedAppellation = normalizeString(appellation);
+  // A method on its own keys as no appellation: the model hook stores it as
+  // null, and a lookup must land on that row.
+  const normalizedAppellation = appellationKeySegment(appellation);
 
   // Combine in a consistent order
   return `${normalizedProducer}:${normalizedName}:${normalizedAppellation}${sweetnessKeySegment(sweetness)}`;
@@ -1296,6 +1322,7 @@ module.exports = {
   foldProducerToken,
   normalizeAppellation,
   normalizeAppellationKey,
+  isProductionMethodOnly,
   normalizeClassification,
   stripTrailingVintage,
   resolveGrapeName,

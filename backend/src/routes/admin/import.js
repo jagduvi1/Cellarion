@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, normalizeAppellationKey, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName, normalizeClassification } = require('../../utils/normalize');
+const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, normalizeAppellationKey, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName, normalizeClassification, isProductionMethodOnly } = require('../../utils/normalize');
 const { loadTaxonomy, resolveLoaded, splitClassificationString, classificationString } = require('../../services/classificationOps');
 const { STYLE_TYPES, isStyleType, inferColourFromName } = require('../../utils/wineColour');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
@@ -90,6 +90,11 @@ function lwinVal(v) {
   return t === '' || t === 'NA' ? null : t;
 }
 
+// The appellation as the model hook would store it, for this bulkWrite path,
+// which never reaches the hook: the regulatory mark goes, and a production
+// method on its own is no appellation (#1696).
+const importAppellation = (raw) => (isProductionMethodOnly(raw) ? null : normalizeAppellation(raw));
+
 /**
  * Map a parsed CSV row to a uniform wine object regardless of input format.
  * Returns null fields for anything missing or not applicable.
@@ -134,7 +139,7 @@ function mapRow(row, format) {
       region: lwinVal(row.REGION),
       // Same tier-strip as the simple format below and findOrCreateWine —
       // LWIN SUB_REGION carries "… DOCG"/"DO …" forms too (audit RC-4).
-      appellation: normalizeAppellation(lwinVal(row.SUB_REGION)),
+      appellation: importAppellation(lwinVal(row.SUB_REGION)),
       type: mapType(row.COLOUR, row.SUB_TYPE, null),
       colour: mapColour(row.COLOUR, mapType(row.COLOUR, row.SUB_TYPE, null), name, producer),
       // A regulatory mark is no tier (same rule as the mint); this path writes
@@ -152,7 +157,7 @@ function mapRow(row, format) {
     name: (row.Wine || '').trim() || null,
     country: (row.Country || '').trim() || null,
     region: (row.Region || '').trim() || null,
-    appellation: normalizeAppellation((row.Appellation || '').trim()) || null,
+    appellation: importAppellation((row.Appellation || '').trim()) || null,
     type: mapType(null, null, row.WineType),
     colour: mapColour(null, mapType(null, null, row.WineType), (row.Wine || '').trim(), (row.Producer || '').trim()),
     classification: normalizeClassification((row.Classification || '').trim()),
