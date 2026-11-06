@@ -31,6 +31,12 @@ Cellarion's interface is community-translated. Thank you for helping!
 
 5. **Don't translate:** product names (Cellarion, CellarTracker, Vivino), technical identifiers, or the demo email addresses.
 
+### Language guides and a worked example
+
+A language can keep its own style guide in [`docs/translation/`](docs/translation/), named after its code, for the next translator to find: the style rules, the rules learned along the way, and the choices that were settled with the alternatives that were turned down. The terms themselves stay in the Weblate glossary, so there is one list to keep up to date. [`nb.md`](docs/translation/nb.md) is the Norwegian Bokmål guide.
+
+Starting a language from scratch? [How Cellarion was translated into Norwegian Bokmål](docs/translation/how-bokmal-was-translated.md) has a checklist for a new language and the workflow behind the Bokmål translation, including how to use an AI assistant for drafts while reading every string yourself.
+
 ## How a new language gets shipped
 
 1. Request the language in Weblate (or open a GitHub discussion) and start translating.
