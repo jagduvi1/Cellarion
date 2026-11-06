@@ -72,6 +72,13 @@ describe('mapRow (lwin) — appellation tier strip', () => {
     expect(mapRow(lwinRow({ SUB_REGION: 'DO Alicante' }), 'lwin').appellation).toBe('Alicante');
     expect(mapRow(lwinRow({ SUB_REGION: 'NA' }), 'lwin').appellation).toBeNull();
   });
+
+  test('a production method on its own is no appellation, in both formats (#1696)', () => {
+    expect(mapRow(lwinRow({ SUB_REGION: 'Méthode Traditionnelle' }), 'lwin').appellation).toBeNull();
+    expect(mapRow({ Producer: 'Pongrácz', Wine: 'Blanc de Blancs', Appellation: 'Méthode Cap Classique', WineType: 'Sparkling' }, 'simple').appellation).toBeNull();
+    // A legal name that ends in the method keeps it.
+    expect(mapRow(lwinRow({ SUB_REGION: 'Oltrepò Pavese Metodo Classico' }), 'lwin').appellation).toBe('Oltrepò Pavese Metodo Classico');
+  });
 });
 
 // mapRow is sync, so it can only TIER-STRIP; the curated-registry resolve

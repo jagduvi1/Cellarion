@@ -22,7 +22,7 @@
  * different-country guard.
  */
 
-const { normalizeString, normalizeWineName, normalizeProducerKey, normalizeAppellation, sweetnessKeySegment } = require('./normalize');
+const { normalizeString, normalizeWineName, normalizeProducerKey, normalizeAppellation, isProductionMethodOnly, sweetnessKeySegment } = require('./normalize');
 const { canonicalizeWineName } = require('./producerPrefix');
 
 // An all-stopword producer ("Domaine", "Cantina") has an EMPTY comparison key
@@ -42,7 +42,10 @@ const producerSegment = (producer) =>
 // word has left the name. Absent, the key is exactly what it always was.
 function computeCanonicalKey(name, producer, appellation = '', { sweetness = null } = {}) {
   const nameKey = normalizeWineName(canonicalizeWineName(name || '', producer || ''));
-  const appellationKey = normalizeString(
+  // A production method on its own ("Méthode Traditionnelle") is no
+  // appellation: it keys as none, the way generateWineKey and the model hook
+  // treat it.
+  const appellationKey = isProductionMethodOnly(appellation) ? '' : normalizeString(
     normalizeAppellation(typeof appellation === 'string' ? appellation : '') || ''
   );
   return `${producerSegment(producer)}:${nameKey}:${appellationKey}${sweetnessKeySegment(sweetness)}`;

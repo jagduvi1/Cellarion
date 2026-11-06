@@ -61,6 +61,15 @@ test('the four prompts retired on 2026-10-26 are registered by hash', () => {
   ]) expect(RETIRED_DEFAULT_PROMPT_HASHES.has(hash)).toBe(true);
 });
 
+test('the two prompts retired on 2026-11-06 are registered by hash', () => {
+  // The defaults that put a production method in the appellation field
+  // (v1.280.3 → v1.295.0), as computed from that source text.
+  for (const hash of [
+    '2a11a9b55c6b10d3b36911e74e2200ae4b5cf507c9733af256cbc5058863864c', // labelScanPrompt
+    'c4a40b51e8c483c745161e843dea667be0b86c707269866107d96e3d8b9a26d8', // importLookupPrompt
+  ]) expect(RETIRED_DEFAULT_PROMPT_HASHES.has(hash)).toBe(true);
+});
+
 test('a prompt equal to the shipped default is left out of what is persisted', () => {
   const stored = aiConfig.stripDefaultPrompts({ ...aiConfig.defaults, labelScanPrompt: 'Read the label.', chatDailyLimit: 7 });
   expect(stored.labelScanPrompt).toBe('Read the label.');
