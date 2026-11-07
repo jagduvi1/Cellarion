@@ -48,7 +48,7 @@ services:
     # Digest-pinned (security audit L-11) to the multi-arch index digest, so
     # amd64 and arm64 hosts both pull. Dependabot's docker-compose ecosystem
     # bumps the tag and digest together.
-    image: getmeili/meilisearch:v1.56.0@sha256:1f578fa865f8251894b3bf38d6668d6209a3f451f8f65ab953e129d4c1db5ef4
+    image: getmeili/meilisearch:v1.56.1@sha256:b7ba431bf6f9b26cc86132798f3640964147a699cf23f026b74c6c05dbb1d60d
     container_name: cellarion-meilisearch
     restart: unless-stopped
     security_opt:
