@@ -1621,7 +1621,9 @@ router.post('/confirm', async (req, res) => {
     // What each confirmed AI proposal resolved to, by row index, for the
     // import archive below: 'created' when findOrCreateWine minted the wine
     // for this row, 'matched' when it found an existing one or the row repeats
-    // a wine this batch already resolved.
+    // a wine this batch already resolved; 'request' when the proposal
+    // landed in the near-match zone and the bottle was filed under a
+    // wine request instead.
     const aiOutcomes = new Map();
     // Wines this batch minted with an incomplete identity (no usable producer,
     // or a geography in the producer column — the classic one-column-off
@@ -1653,6 +1655,9 @@ router.post('/confirm', async (req, res) => {
 
       try {
         let wineDoc = null;
+        // Set when a confirmed AI proposal lands in the near-match zone: the
+        // identity the bottle is filed under as a wine request (see below).
+        let nearMatchRequest = null;
 
         // AI-identified NEW wine, confirmed by the user at review. This is the
         // single place the import flow may write to the shared registry —
@@ -1697,15 +1702,31 @@ router.post('/confirm', async (req, res) => {
               ...(item.nonWineHint === true ? { nonWine: true } : {}),
             });
             // findOrCreateWine can return { wine: null, candidates } — the soft
-            // zone. Unguarded, `wine._id` two lines down threw and took the
-            // whole /confirm batch with it (audit L-7). Skip the row and report
-            // it, which is what every other unresolvable row here does.
+            // zone: similar wines exist, none close enough to be this one.
+            // Unguarded, `wine._id` threw and took the whole /confirm batch
+            // with it (audit L-7). The row used to be skipped as an error,
+            // which LOST the bottle — typically a Syrah cuvée sitting next to
+            // the Grenache one the same file had just minted.
+            // Instead the bottle lands on a pending wine request under the
+            // proposal the member confirmed, and a curator links it to one of
+            // the near matches or creates the wine — the same path a row the
+            // member marked "request" takes. The file's geography wins over
+            // the AI's guess as the curator's hints.
             if (!resolved) {
-              errors.push({ index: i, reason: 'Could not resolve this wine in the registry — very similar wines already exist' });
-              continue;
+              nearMatchRequest = {
+                wineName: ai.name.trim(),
+                producer: (str(ai.producer) || '').trim(),
+                grapes: ai.grapes,
+                hints: pickImportHints({
+                  country: item.country || str(ai.country),
+                  region: item.region || str(ai.region),
+                  appellation: item.appellation || str(ai.appellation),
+                  type: item.type || str(ai.type),
+                }),
+              };
             }
             wine = resolved;
-            aiWineCache.set(aiKey, wine);
+            if (wine) aiWineCache.set(aiKey, wine);
             if (created) {
               outcome = 'created';
               if (wine.pendingIdentity) pendingIdentityCount++;
@@ -1736,12 +1757,16 @@ router.post('/confirm', async (req, res) => {
               }
             }
           }
-          aiOutcomes.set(i, outcome);
-          // Hand the resolved doc straight to the bottle-creation flow below —
-          // item.wineDefinition keeps the wishlist branch working, wineDoc
-          // skips the redundant findById re-fetch.
-          item.wineDefinition = wine._id;
-          wineDoc = wine;
+          if (nearMatchRequest) {
+            aiOutcomes.set(i, 'request');
+          } else {
+            aiOutcomes.set(i, outcome);
+            // Hand the resolved doc straight to the bottle-creation flow below —
+            // item.wineDefinition keeps the wishlist branch working, wineDoc
+            // skips the redundant findById re-fetch.
+            item.wineDefinition = wine._id;
+            wineDoc = wine;
+          }
         }
 
         // Wishlist destination (e.g. a Vivino scan-history import sent to
@@ -1813,15 +1838,22 @@ router.post('/confirm', async (req, res) => {
           drinkTo = undefined;
         }
 
-        if (item.requestWine) {
+        if (item.requestWine || nearMatchRequest) {
           // No match — create a pending WineRequest and bottle without wineDefinition.
+          // A near-match AI proposal (above) arrives here with its own identity.
           // wineName is REQUIRED, not wineName-or-producer: the old fallback
           // filed the PRODUCER as the wine's name, and one broken export did
           // that 131 times in one import — junk requests no curator can
           // resolve, since many distinct cuvées sit behind one producer
           // string. The frontend mapper now skips nameless rows before they
           // get here; this is the API-side mirror for other clients.
-          if (!item.wineName || !String(item.wineName).trim()) {
+          const requestIdentity = nearMatchRequest || {
+            wineName: item.wineName,
+            producer: item.producer,
+            grapes: item.grapes,
+            hints: pickImportHints(item),
+          };
+          if (!requestIdentity.wineName || !String(requestIdentity.wineName).trim()) {
             errors.push({ index: i, reason: 'A wine name is required to request a wine' });
             continue;
           }
@@ -1834,10 +1866,10 @@ router.post('/confirm', async (req, res) => {
           // wine definition gets (imports never write taxonomy on this path).
           const { wineRequest } = await findOrCreatePendingRequest({
             userId: req.user.id,
-            wineName: item.wineName,
-            producer: item.producer,
-            suggestedGrapes: sanitizeGrapeNames(item.grapes),
-            hints: pickImportHints(item),
+            wineName: requestIdentity.wineName,
+            producer: requestIdentity.producer,
+            suggestedGrapes: sanitizeGrapeNames(requestIdentity.grapes),
+            hints: requestIdentity.hints,
             cache: pendingRequestCache,
           });
 
@@ -2163,9 +2195,9 @@ router.post('/confirm', async (req, res) => {
         item.requestWine ? 'request'
           // The import client sends a confirmed AI proposal as `aiWine`
           // (utils/importPayload); the loop above recorded what it resolved
-          // to. One it never resolved (the near-match zone, a missing name, a
-          // bad vintage) has no wineDefinition: the loop fills that in only
-          // on a row it resolved.
+          // to ('request' for the near-match zone). One it never resolved (a
+          // missing name, a bad vintage) has no wineDefinition: the loop fills
+          // that in only on a row it resolved.
           : (aiOutcomes.get(i)
             || (item.wineDefinition ? 'matched' : (item.aiWine ? 'unresolved' : 'other')))
       ));

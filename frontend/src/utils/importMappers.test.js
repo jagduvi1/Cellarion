@@ -1265,3 +1265,28 @@ describe('a row without a vintage is filed as NV but flagged (audit ticket 2026-
     expect(out.warnings).toEqual(expect.arrayContaining([{ code: 'vintage-missing', count: 1 }]));
   });
 });
+
+describe('CellarTracker vintage sentinels in a file no CT fingerprint claims', () => {
+  // A CT "My Cellar" view export can carry just Wine / Vintage / Size, so the
+  // GENERIC mapper reads it. CT writes a non-vintage wine as 1001 and an
+  // unknown year as 9999; the backend refuses both as years, which dropped
+  // every non-vintage bottle of such a file at confirm.
+  const csv = 'Wine,Vintage,Size\n'
+    + 'Champagne Brut Fictif,1001,750ml\n'
+    + 'Some Red,9999,750ml\n'
+    + 'Barolo,2019,750ml\n';
+
+  it('reads 1001 as a stated non-vintage and 9999 as a missing year', () => {
+    const out = parseAndMap(csv);
+    expect(out.format).toBe('generic');
+    expect(out.items.map((i) => i.vintage)).toEqual(['NV', 'NV', '2019']);
+    expect(out.items[0].vintageMissing).toBeUndefined();
+    expect(out.items[1].vintageMissing).toBe(true);
+    expect(out.warnings).toEqual(expect.arrayContaining([{ code: 'vintage-missing', count: 1 }]));
+  });
+
+  it('leaves a real year near them alone', () => {
+    const out = parseAndMap('Wine,Vintage\nOld Madeira,1900\nTypo,1010\n');
+    expect(out.items.map((i) => i.vintage)).toEqual(['1900', '1010']);
+  });
+});
