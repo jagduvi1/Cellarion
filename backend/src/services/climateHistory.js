@@ -173,7 +173,7 @@ function mergeBucketRows(rows, gapMs) {
   let cur = null;
   let curPart = null;
   for (const row of rows) {
-    const part = `${row._id.device} ${row._id.channel} ${row._id.type}`;
+    const part = `${row._id.device}\u0000${row._id.channel}\u0000${row._id.type}`;
     const firstTs = new Date(row.firstTs).getTime();
     const lastTs = new Date(row.lastTs).getTime();
     if (cur && part === curPart && firstTs - cur.lastTs <= gapMs) {

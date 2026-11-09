@@ -59,6 +59,24 @@ The codebase is consistent about a few things, and a contribution that follows t
 - **Significant mutations are audit-logged** through `services/audit.js`.
 - **Dependencies:** reach for a package when the problem is genuinely complex and well served by a mature library; skip it when a few lines of native code or a browser API do the job.
 - **Strings:** add English text to the `en` locale only. Every other language is maintained in Weblate, and a pull request touching non-English `translation.json` files will conflict with its sync.
+- **File size:** a file over 1,500 lines does not grow. CI runs `node scripts/check-file-sizes.mjs` against `scripts/file-size-baseline.json`; a new feature in a baselined file goes into a sibling module instead (a new component, hook, service or route file next to it). The baseline only goes down: after you move code out of a file, run `node scripts/check-file-sizes.mjs --update`. A defect fix that has to add lines to a baselined file raises that entry by hand and says why in the pull request.
+- **Comments:** a comment must be true today, and it explains *why*, not *what*. Keep decisions, invariants, warnings and the links between a REST route and its MCP twin. Prefer a better name or an extracted function over a comment that narrates the code. No provenance: no ticket ids, user handles, user quotes, person names, version or PR numbers, dates or "used to / before". History goes to git. A fixed bug is pinned by a named test, not by a comment. A `TODO` carries a condition someone can check. An exported service function gets one to five lines: what it does, who calls it, what it returns. When you move code, update its comments.
+
+## Moving code out of a long file
+
+The long files are being split one extraction at a time. A move pull request follows this recipe, and a pull request that does more than one of these steps is sent back to be split:
+
+1. One extraction per pull request: a group of components, a hook, a service, or a set of routes.
+2. The moved code keeps its markup, class names, keys, names and order. A `git diff --color-moved` should show green and red blocks that match.
+3. The old file keeps the import paths working: it re-exports what moved, so no `import`, `jest.mock` or `vi.mock` path changes anywhere else.
+4. Existing tests are not edited. If a test has to change, behaviour changed, and that is a different pull request.
+5. The comments on the moved code are updated with it (see "Comments" above). Decision comments move with the decision they explain.
+6. No restyling, no CSS splitting, no `useState` to `useReducer`, no renaming beyond what the move needs.
+7. Run `node scripts/check-file-sizes.mjs --update` and commit the lowered baseline.
+8. Run both test suites and smoke-test the screen or route in Docker.
+9. Say in the pull request what moved from where to where, and tick the "move" box in the template.
+
+A comment-only pull request (no code changes at all) proves it with `node scripts/check-comment-only.mjs origin/main`; add `--test-titles` when test names were reworded.
 
 ## Personal data
 
