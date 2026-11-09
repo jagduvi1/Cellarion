@@ -1,0 +1,20 @@
+{
+  "backend/src/mcp/sommTools.test.js": 2455,
+  "backend/src/mcp/tools/somm.js": 3742,
+  "backend/src/routes/admin/taxonomy.js": 1603,
+  "backend/src/routes/admin/wines.js": 2459,
+  "backend/src/routes/bottles.js": 1898,
+  "backend/src/routes/cellars.js": 2181,
+  "backend/src/routes/import.js": 2472,
+  "backend/src/routes/og.js": 1607,
+  "backend/src/services/enrichmentJob.test.js": 1519,
+  "backend/src/services/findOrCreateWine.test.js": 1575,
+  "backend/src/services/userDataRegistry.js": 1505,
+  "frontend/src/pages/AddBottle.js": 2357,
+  "frontend/src/pages/CellarDetail.js": 1532,
+  "frontend/src/pages/CellarRacks.js": 2466,
+  "frontend/src/pages/CellarRoom.js": 1788,
+  "frontend/src/pages/ImportBottles.js": 2897,
+  "frontend/src/pages/SuperAdmin/TabAI.js": 1532,
+  "frontend/src/utils/importMappers.js": 2714
+}
