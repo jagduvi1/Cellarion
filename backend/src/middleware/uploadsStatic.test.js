@@ -211,3 +211,51 @@ describe('convertedPhotoFallback — a converted photo keeps its old address', (
     expect(res.status).not.toBe(200);
   });
 });
+
+// A Home Assistant install fetches every label photo from ONE address that
+// also carries its API calls; a big cellar must not 429 the integration.
+describe('isPublicUploadRead (the global API limiter exemption)', () => {
+  const { isPublicUploadRead } = require('../middleware/uploadsStatic');
+  const req = (method, originalUrl) => ({ method, originalUrl });
+
+  test.each([
+    ['GET', '/api/uploads/thumbs/processed/a1b2.webp.webp'],
+    ['GET', '/api/uploads/processed/a1b2.webp'],
+    ['HEAD', '/api/uploads/processed/a1b2.webp'],
+    ['GET', '/api/uploads/processed/a1b2.webp?v=2'],
+  ])('%s %s is exempt', (method, url) => {
+    expect(isPublicUploadRead(req(method, url))).toBe(true);
+  });
+
+  test.each([
+    ['POST', '/api/uploads/processed/a1b2.webp'],  // never a write
+    ['GET', '/api/uploadsX/a1b2.webp'],             // a look-alike prefix
+    ['GET', '/api/images/a1b2'],                    // the authenticated image API
+    ['GET', '/api/bottles'],
+  ])('%s %s still counts', (method, url) => {
+    expect(isPublicUploadRead(req(method, url))).toBe(false);
+  });
+
+  test('with a limiter of one, photo reads keep flowing while API calls are limited', async () => {
+    const http = require('http');
+    const express = require('express');
+    const rateLimit = require('express-rate-limit');
+    const app = express();
+    app.use('/api/', rateLimit({ windowMs: 60_000, max: 1, skip: isPublicUploadRead }));
+    app.get('/api/uploads/thumbs/processed/:f', (_req, res) => res.send('img'));
+    app.get('/api/bottles', (_req, res) => res.json({}));
+    const server = http.createServer(app);
+    await new Promise((r) => server.listen(0, r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    try {
+      for (let i = 0; i < 5; i++) {
+        expect((await fetch(`${base}/api/uploads/thumbs/processed/a${i}.webp.webp`)).status).toBe(200);
+      }
+      expect((await fetch(`${base}/api/bottles`)).status).toBe(200);
+      expect((await fetch(`${base}/api/bottles`)).status).toBe(429);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((r) => server.close(r));
+    }
+  });
+});

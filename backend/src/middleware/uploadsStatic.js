@@ -84,7 +84,22 @@ function createConvertedPhotoFallback({ uploadsRoot = '/app/uploads' } = {}) {
 
 const convertedPhotoFallback = createConvertedPhotoFallback();
 
+// A read of this public mount (a photo or its thumbnail) is not an API call
+// and must not spend the per-IP API budget (app.js apiLimiter). One open cellar
+// page loads dozens of thumbnails, and a Home Assistant install fetches every
+// label photo from ONE address that also carries its polls, inventory reads
+// and take-outs, so a large cellar could 429 the whole integration. Nothing
+// here is expensive per request: a file read or a miss, and thumbnail renders
+// are bounded on their own (services/thumbnails: 2 at once, a short queue,
+// then 503, each thumbnail rendered once).
+function isPublicUploadRead(req) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  const p = req.originalUrl.split('?')[0];
+  return p.startsWith('/api/uploads/');
+}
+
 module.exports = {
+  isPublicUploadRead,
   uploadsGuard,
   uploadsCacheHeaders,
   createConvertedPhotoFallback,
