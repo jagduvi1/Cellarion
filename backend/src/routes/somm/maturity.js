@@ -4,8 +4,10 @@ const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const { isValidId } = require('../../utils/validation');
 const { parsePagination } = require('../../utils/pagination');
-const { logAudit } = require('../../services/audit');
-const { bumpWineOwners } = require('../../services/dataVersion');
+// The curation body shared with the MCP somm tools: the write, the reset and
+// the remove, each with its owners' data-version bump and its audit row.
+// This route parses input and words the answers.
+const maturityOps = require('../../services/maturityOps');
 
 const aiConfig = require('../../config/aiConfig');
 const { suggestDrinkWindow } = require('../../services/labelScan');
@@ -15,7 +17,7 @@ const router = express.Router();
 // All routes require authentication
 router.use(requireAuth);
 
-const PHASE_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
+const { PHASE_FIELDS } = maturityOps;
 
 // Parse an optional year field from the request body (returns null if blank/absent)
 function parseYear(val) {
@@ -154,26 +156,21 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
     if (peakFrom  != null && lateFrom   != null && lateFrom   < peakFrom)
       return res.status(400).json({ error: 'Late phase cannot start before peak phase' });
 
-    // Apply — only update fields that were explicitly sent (null = clear the field)
+    // Apply — only the fields explicitly sent change (null = clear the field);
+    // a field not sent keeps its stored value.
+    const next = {};
     for (const field of PHASE_FIELDS) {
-      if (req.body[field] !== undefined) {
-        profile[field] = years[field] ?? undefined;
-      }
+      next[field] = req.body[field] !== undefined ? years[field] : (profile[field] ?? null);
     }
-    if (req.body.sommNotes !== undefined) {
-      // String() coercion: a truthy non-string threw on .trim() → 500.
-      profile.sommNotes = req.body.sommNotes ? String(req.body.sommNotes).trim() : '';
-    }
+    // String() coercion: a truthy non-string threw on .trim() → 500.
+    const sommNotes = req.body.sommNotes !== undefined
+      ? (req.body.sommNotes ? String(req.body.sommNotes).trim() : '')
+      : undefined;
 
-    profile.relative = isNv;
-    profile.status = 'reviewed';
-    profile.setBy  = req.user.id;
-    profile.setAt  = new Date();
-
-    await profile.save();
-    // The owners' maturity statistics change with the window: move their data
-    // version so no read cache keeps the old one (audit 2026-09-27 M6).
-    bumpWineOwners([profile.wineDefinition?._id || profile.wineDefinition]);
+    // Phases, note, reviewed stamp and relative flag written; the owners'
+    // data version moved; audited: the same body as the MCP
+    // set_vintage_maturity (services/maturityOps).
+    await maturityOps.applyWindow(profile, next, { sommNotes, actorId: req.user.id, req });
     await profile.populate([
       {
         path: 'wineDefinition',
@@ -185,13 +182,6 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
       },
       { path: 'setBy', select: 'username' }
     ]);
-
-    // Shared-data mutation visible to every user of this wine+vintage —
-    // audit like the comparable admin mutations do.
-    logAudit(req, 'somm.maturity.review',
-      { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
-      { vintage: profile.vintage, relative: profile.relative }
-    );
 
     res.json({ profile });
   } catch (error) {
@@ -276,23 +266,9 @@ router.delete('/:id/reset', requireSommOrAdmin, async (req, res) => {
       return res.status(409).json({ error: 'This vintage is already pending — there is no window to withdraw.' });
     }
 
-    for (const field of PHASE_FIELDS) {
-      profile[field] = undefined;
-    }
-    profile.sommNotes = '';
-    profile.status    = 'pending';
-    profile.setBy     = null;
-    profile.setAt     = null;
-
-    await profile.save();
-    // Withdrawing the window changes the owners' maturity statistics just as
-    // setting it does: move their data version so no read cache keeps it.
-    bumpWineOwners([profile.wineDefinition]);
-
-    logAudit(req, 'somm.maturity.reset',
-      { type: 'wine', id: profile.wineDefinition },
-      { vintage: profile.vintage }
-    );
+    // Cleared, pending again, stamp dropped, owners bumped, audited: the same
+    // body as the MCP reset_maturity_row (services/maturityOps).
+    await maturityOps.resetWindow(profile, { req });
 
     res.json({ profile });
   } catch (error) {
@@ -329,14 +305,9 @@ router.delete('/:id', requireSommOrAdmin, async (req, res) => {
       return res.status(409).json({ error: 'This vintage is already reviewed — reset it to pending before removing it.' });
     }
 
-    await WineVintageProfile.deleteOne({ _id: profile._id });
-
-    // Shared-data mutation (the pair leaves every curator's queue) — audited
-    // like the review it stands in for.
-    logAudit(req, 'somm.maturity.remove',
-      { type: 'wine', id: profile.wineDefinition },
-      { vintage: profile.vintage }
-    );
+    // Deleted and audited like the review it stands in for: the same body as
+    // the MCP remove_from_maturity_queue (services/maturityOps).
+    await maturityOps.removePendingRow(profile, { req });
 
     res.json({ removed: true });
   } catch (error) {
