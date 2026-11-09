@@ -1,7 +1,7 @@
 const { gradeDescription, extractClaims } = require('./descriptionGrounding');
 
-// The two load-bearing fixtures are one row, both sides of the line: the same
-// Petersons record carried both descriptions two days apart (somm 6a82bfb7).
+// The two load-bearing fixtures are one row, both sides of the line: one
+// record can carry either description, a disclosure or an assertion.
 const PETERSONS_RECORD = { region: null, appellation: null, country: 'Australia', grapes: [] };
 
 const PETERSONS_DISCLOSURE =
@@ -62,8 +62,8 @@ describe('gradeDescription', () => {
   describe('claims and their framing', () => {
     it('a country adjective grounds via the demonym map', () => {
       // "American style" on a United States record, "Canadian climates" on a
-      // Canada record — substring covered Spanish/Spain by spelling luck and
-      // missed these two in the prod dry run.
+      // Canada record — substring matching covers Spanish/Spain only by
+      // spelling luck and misses these two.
       expect(gradeDescription(
         'A red blend crafted in a bold, fruit-forward American style.',
         { country: 'United States' }
@@ -106,12 +106,13 @@ describe('gradeDescription', () => {
     });
   });
 
-  // Every case below is from the somm's full read of the v1.147 worklist
-  // (all 25 rows, not a sample). Items are numbered as in their ticket.
-  describe('the v1.147 extractor audit', () => {
-    // Item 1, their top priority: span-substring grounding let the record's
-    // country swallow the finer place — the row was flagged only on a grape,
-    // and a curator who fixed that claim would believe the row finished.
+  // Every case below is from a full curator read of an extractor worklist.
+  // The item numbers are that read's own, so not every number appears.
+  describe('extractor edge cases', () => {
+    // Item 1, the top priority: span-substring grounding would let the
+    // record's country swallow the finer place — the row would be flagged
+    // only on a grape, and a curator who fixed that claim would believe the
+    // row finished.
     // Under-reporting on a flagged row is false assurance.
     it('the record\'s country must not ground the finer place beside it (Peñalolen)', () => {
       const r = gradeDescription(
@@ -149,8 +150,8 @@ describe('gradeDescription', () => {
 
     // Item 6: "Castilla y León" split at the conjunction and reported a
     // truncated claim; possessives kept their apostrophe-s.
-    // 6a87053b: elision is not a chain break — stopping before d'Avola
-    // captured bare "Nero" out of the record's OWN grape, and the truncated
+    // Elision is not a chain break — stopping before d'Avola would
+    // capture bare "Nero" out of the record's OWN grape, and the truncated
     // "Château Bois" could never match the full stored producer.
     it('elided tokens stay attached, and truncated captures ground inside their name', () => {
       expect(gradeDescription(
@@ -163,7 +164,7 @@ describe('gradeDescription', () => {
       ).grade).toBe('ok');
     });
 
-    // 6a870548: the extraction grammar reports only the variety a preposition
+    // The extraction grammar reports only the variety a preposition
     // introduces; the vocabulary pass reports every ungrounded one.
     it('every ungrounded variety in an enumeration is reported', () => {
       const VOCAB = ['Cabernet Sauvignon', 'Cabernet Franc', 'Petit Verdot', 'Merlot', 'Pinot Noir', 'Chardonnay', 'Tempranillo'];
@@ -218,9 +219,8 @@ describe('extractClaims', () => {
   });
 });
 
-// Somm 6a872807: two false-positive classes from the five post-v1.149
-// assertion rows — all real prod prose.
-describe('style references and habitual hedges (6a872807)', () => {
+// Two false-positive classes, both from real model prose.
+describe('style references and habitual hedges', () => {
   it('a stylistic comparison is not an origin claim (Bordeaux-inspired claret)', () => {
     expect(gradeDescription(
       'A smooth red styled in the Bordeaux-inspired claret tradition, with cassis and cedar.',

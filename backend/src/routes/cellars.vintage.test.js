@@ -1,11 +1,10 @@
 /**
  * GET /api/cellars/:id/vintages/:wineId/:vintage — one wine and vintage in a
- * cellar, the page behind a grouped "n identical bottles" entry (support
- * ticket 2026-10-09).
+ * cellar, the page behind a grouped "n identical bottles" entry.
  *
  * WHY THIS TEST EXISTS:
- * The grouped cellar list had no page for a group; a click only expanded it.
- * This route is a VIEW over data that already exists: the bottles of that
+ * A group in the grouped cellar list has a page of its own, not just an
+ * expand. This route is a VIEW over data that already exists: the bottles of that
  * wine and vintage in THIS cellar (never another cellar's, never a drunk or
  * on-order one in the list), each with its rack slot, what every bottle
  * shares (a note or window identical on all of them, shown once), how many
@@ -251,7 +250,7 @@ describe('GET /api/cellars/:id/vintages/:wineId/:vintage', () => {
     expect(status).toBe(200);
     expect(body.bottles.every((b) => b.rackInfo === null)).toBe(true);
     // Said, so the page never takes them for identical bottles ("Which
-    // bottle?" skipped) — release audit 2026-10-16.
+    // bottle?" skipped).
     expect(body.placesKnown).toBe(false);
   });
 });

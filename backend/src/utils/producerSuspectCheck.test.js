@@ -1,6 +1,6 @@
 const { noteAssertsProducer, noteIsEpistemicOnly } = require('./producerSuspectCheck');
 
-// Every string below is a real producerNote from prod on 2026-08-19.
+// Every string below is a real producerNote from prod.
 describe('noteAssertsProducer', () => {
   describe('DOWNGRADE — the note calls the entity a producer while the flag says it is not', () => {
     const cases = [
@@ -13,7 +13,7 @@ describe('noteAssertsProducer', () => {
       ['Bodega San Pedro de Yacochuya', "San Pedro de Yacochuya is an established Salta winery; 'The Rolland Collection' appears to be a marketing or retailer range."],
       ['Berthier', 'Berthier is a Loire Valley producer/negociant but this specific cuvee is not well documented to me.'],
       // No "X is a" construction at all — the subject itself is the producer
-      // noun. This is the row the somm led the ticket with.
+      // noun.
       ['Champagne Tapray Frédéric', 'This small Champagne grower is not one I can verify in detail, so this profile is based on typical regional and varietal style.'],
     ];
     for (const [producer, note] of cases) {
@@ -71,9 +71,8 @@ describe('noteAssertsProducer', () => {
       expect(noteAssertsProducer('Foo is a Loire Valley producer.', 'Foo')).toBe(true);
     });
 
-    // All three were FALSE DOWNGRADES the prod dry run caught on 2026-08-19,
-    // before anything was written. 46 rows would have moved; 3 of the first 25
-    // shown were wrong.
+    // Each of these shapes is a FALSE DOWNGRADE a dry run against prod notes
+    // catches before anything is written.
     it('a capitalised producer noun is part of a proper NAME, not a claim', () => {
       expect(noteAssertsProducer('Davey Estate appears to be a label or tier rather than a well-documented standalone producer.', 'Shingleback')).toBe(false);
       expect(noteAssertsProducer("Domaine des Granges de Mirabel appears to be a Pays d'Oc entry-level label associated with Chapoutier.", 'M. Chapoutier')).toBe(false);
@@ -88,8 +87,8 @@ describe('noteAssertsProducer', () => {
       expect(noteAssertsProducer('Foo is a bottling name.', 'Foo')).toBe(false);
     });
 
-    // Second prod dry run, 2026-08-19. Both matched "estate" inside a clause
-    // that DENIES one, and both are the identity-blocking family — the producer
+    // Both match "estate" inside a clause that DENIES one, and both are the
+    // identity-blocking family — the producer
     // field holds a place or an appellation, which is the flag's core purpose.
     it('a note saying the FIELD holds a place or appellation never downgrades', () => {
       expect(noteAssertsProducer('The producer field simply repeats the appellation name, so no specific estate can be identified; this profile reflects the Monbazillac appellation style.', 'Monbazillac')).toBe(false);
@@ -114,10 +113,10 @@ describe('noteAssertsProducer', () => {
   });
 });
 
-// Every string below is a real producerNote taken from the prod dry run on
-// 2026-08-20, and each was read against its wine before being written down —
-// the previous round of this rule shipped five false downgrades precisely
-// because its tests were composed from notes rather than measured against them.
+// Every string below is a real producerNote taken from a prod dry run, and
+// each was read against its wine before being written down — tests composed
+// from imagined notes rather than measured against real ones let false
+// downgrades through.
 describe('noteIsEpistemicOnly', () => {
   describe('DOWNGRADE — the note reports only what the model could not verify', () => {
     const cases = [
@@ -132,10 +131,10 @@ describe('noteIsEpistemicOnly', () => {
       expect(noteIsEpistemicOnly(note, producer)).toBe(true);
     });
 
-    // The fixture that matters most: the sommelier argued the rule FROM this
-    // row, and had already cleared it by hand with `confirm` after confirming
-    // it is a real Valtellina winery. The rule reproducing an independent
-    // human verdict is the strongest evidence it is reading the notes right.
+    // The fixture that matters most: the rule is argued FROM this row, which
+    // a curator cleared by hand as a real Valtellina winery. The rule
+    // reproducing an independent human verdict is the strongest evidence it
+    // is reading the notes right.
     it('La Spia — the A-path fixture the rule was argued from', () => {
       expect(noteIsEpistemicOnly(
         'La Spia is not a producer I can confidently place, so this profile is based on the Rosso di Valtellina appellation and Nebbiolo grape rather than a verified house style.',
@@ -158,8 +157,8 @@ describe('noteIsEpistemicOnly', () => {
   });
 
   describe('KEEP — the note names what the field actually is, so the suspicion is real', () => {
-    // Caught in the first dry run: cutting the whole "so this profile is…"
-    // clause swallowed a genuine brand claim that FOLLOWED it.
+    // Cutting the whole "so this profile is…" clause would swallow a
+    // genuine brand claim that FOLLOWS it.
     it('a positive brand claim after the methodology clause still counts', () => {
       expect(noteIsEpistemicOnly(
         'Palladium is not a producer I can confidently place for this wine; this profile is based on the McLaren Vale Shiraz style generally, likely a private-label or retailer brand.',
@@ -167,12 +166,11 @@ describe('noteIsEpistemicOnly', () => {
       )).toBe(false);
     });
 
-    // REVERSED by the somm's full-population audit (6a86dad6). A dry run
-    // taught this row as a keep — "the value is an appellation" — and a guard
-    // was built for it. Château de l'Étoile is a REAL Jura estate whose name
-    // legitimately repeats its AOC (like half of Bordeaux), so the downgrade
-    // was correct and the guard was protecting the error. The guard is gone;
-    // the note (prod's actual prepositional form) downgrades.
+    // Not a keep, although it reads like "the value is an appellation":
+    // Château de l'Étoile is a REAL Jura estate whose name legitimately
+    // repeats its AOC (like half of Bordeaux), so the downgrade is correct
+    // and no guard may block it. The note (prod's actual prepositional form)
+    // downgrades.
     it('Chateau Etoile — a name repeating its appellation is not a place claim', () => {
       expect(noteIsEpistemicOnly(
         "Chateau Etoile is not a producer I can verify in the Jura appellation of L'Etoile; this profile is based on the appellation and grape rather than a verified house style.",
@@ -192,8 +190,8 @@ describe('noteIsEpistemicOnly', () => {
       expect(noteIsEpistemicOnly(note, producer)).toBe(false);
     });
 
-    // The sommelier's own example of the precedence they asked for: a hedged
-    // trade classification is still a claim, so B beats A.
+    // The precedence rule: a hedged trade classification is still a claim,
+    // so B beats A.
     it('"may be a negociant" is a claim even though it is hedged', () => {
       expect(noteIsEpistemicOnly(
         'Jean XXII is not a producer I can confidently place; this may be a negociant or lesser-known bottling.',
@@ -224,10 +222,10 @@ describe('noteIsEpistemicOnly', () => {
   });
 });
 
-// Downgrade blockers from the somm's full-population audit (6a86dad6): every
-// positive case below is a real prod note from one of the 14 rows that should
-// not have moved; every negative case is a real note from the 152 that were
-// correct. Written FROM the audit, not composed.
+// Downgrade blockers from a full-population curator audit: every positive
+// case below is a real prod note from a row that should not move; every
+// negative case is a real note from a row that moves correctly. Written FROM
+// the audit, not composed.
 describe('notePlaceConflict', () => {
   const { notePlaceConflict } = require('./producerSuspectCheck');
 
@@ -335,9 +333,8 @@ describe('producerFieldLooksPlaceholder', () => {
   });
 
   describe('ALLOW — producer == name is also just the Bordeaux convention', () => {
-    // The carve-outs are the somm's own correction to their first proposal
-    // (6a86dad6 part 2C): a bare producer == name guard would have re-flagged
-    // a dozen working châteaux. Prefix or multi-word = a name, not a filler.
+    // The carve-outs matter: a bare producer == name guard would re-flag
+    // working châteaux. Prefix or multi-word = a name, not a filler.
     it('a producer-type prefix makes it a name (Château Rousset)', () => {
       expect(producerFieldLooksPlaceholder('Château Rousset', 'Château Rousset')).toBe(false);
       expect(producerFieldLooksPlaceholder('Weingut Hornstein', 'Weingut Hornstein')).toBe(false);
@@ -354,9 +351,9 @@ describe('producerFieldLooksPlaceholder', () => {
   });
 });
 
-// Third rule (somm 6a872291): every string is a real prod note; the eleven
-// validation targets were hand-confirmed by the somm before the rule existed,
-// so each FIRE below reproduces an independent human verdict.
+// Third rule: every string is a real prod note; the validation targets were
+// hand-confirmed by a curator before the rule existed, so each FIRE below
+// reproduces an independent human verdict.
 describe('noteDoubtsCuveeNotProducer', () => {
   const { noteDoubtsCuveeNotProducer } = require('./producerSuspectCheck');
 
@@ -391,8 +388,8 @@ describe('noteDoubtsCuveeNotProducer', () => {
   });
 
   describe('DECLINE — the producer itself is doubted, or nothing affirms it', () => {
-    // Caught in the first prod dry run: ONE comma-joined sentence doubting
-    // BOTH fields. The comma-conjunction clause split is what bails it.
+    // ONE comma-joined sentence doubting BOTH fields. The
+    // comma-conjunction clause split is what bails it.
     it('a comma-joined producer doubt bails the whole note (Amand Chaperon)', () => {
       expect(noteDoubtsCuveeNotProducer(
         'Cheval de Montenac appears to be a négociant or brand bottling rather than an estate wine, and Amand Chaperon is likely a négociant house name rather than a château.',
@@ -407,7 +404,7 @@ describe('noteDoubtsCuveeNotProducer', () => {
       )).toBe(false);
     });
 
-    // The judgement-heavy shapes the somm listed that a rule must NOT decide:
+    // The judgement-heavy shapes a rule must NOT decide:
     // subject == producer, however wrong the note's geography knowledge is.
     it('producer-subject doubt is a human call (Turckheim, Thomas Allen)', () => {
       expect(noteDoubtsCuveeNotProducer(

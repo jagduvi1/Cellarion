@@ -1,6 +1,6 @@
 /**
- * Photos over MCP (support ticket 2026-09-06): the connector could write a
- * photo but never read one back. Pins the read path — get_bottle → photos,
+ * Photos over MCP: a connector that can write a photo must also be able to
+ * read one back. Pins the read path — get_bottle → photos,
  * has_photo on search_bottles rows, the registry image on get_wine — and the
  * richer attach_bottle_image answer (photos_before, shows_on_bottles, state,
  * the wine_id alternative). The photo-state service itself is unit-tested in
@@ -234,7 +234,7 @@ describe('attach_bottle_image id rules (audit 2026-09-07)', () => {
   });
 });
 
-// get_photo (support ticket 2026-09-07): the pixels behind the URLs, under the
+// get_photo: the pixels behind the URLs, under the
 // photo-list visibility rule. photoBytes is mocked — its own suite pins the
 // downscale; here the TOOL's who-may-see-what and its two-block answer are
 // what is pinned.

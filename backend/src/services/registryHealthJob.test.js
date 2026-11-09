@@ -234,7 +234,7 @@ describe('runRegistryHealthCheck', () => {
   });
 });
 
-describe('the ticket-6a800f39 metrics (v-next)', () => {
+describe('the curation-queue metrics (name subsets, suspect, core-unverified, held)', () => {
   test('nameSubsetPairs counts the admin name-subsets queue via the same function', async () => {
     nameSubsetPairs.mockResolvedValue({ pairs: [], total: 5, scannedCount: 100, skippedBuckets: 0 });
     const m = await computeMetrics();
@@ -273,7 +273,7 @@ describe('the ticket-6a800f39 metrics (v-next)', () => {
     expect(coreCall[0]['aiProfile.source']).toEqual({ $ne: 'curator' });
   });
 
-  test('heldProfiles is its OWN key; lowConfidenceQueue counts PUBLISHED rows only (gate 2026-08-18)', async () => {
+  test('heldProfiles is its OWN key; lowConfidenceQueue counts PUBLISHED rows only', async () => {
     const m = await computeMetrics();
     expect(m).toHaveProperty('heldProfiles');
     expect(METRIC_LABELS.heldProfiles).toBeTruthy();

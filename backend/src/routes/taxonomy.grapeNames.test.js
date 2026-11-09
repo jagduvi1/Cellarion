@@ -1,6 +1,6 @@
 /**
  * GET /api/taxonomy/grape-names — the whole grape vocabulary, for the grape
- * picker on the bottle page's "suggest a fix" form (support ticket 2026-09-17).
+ * picker on the bottle page's "suggest a fix" form.
  *
  * Pins what makes it different from the public /grapes list next to it: rare
  * varieties are IN (a correction has to be able to name them), unreviewed
@@ -96,9 +96,9 @@ test('each entry is name, colour, synonyms and wine count — no ids, no provena
   expect(grapes.find((g) => g.name === 'Souvignier Gris')).toEqual({ name: 'Souvignier Gris', color: 'White', synonyms: [], wineCount: 0 });
 });
 
-// Stamped before the queries ran, a 500 went out cacheable for an hour too —
-// and the picker's "Try again" would have been answered by the browser's cache
-// (pre-deploy audit 2026-09-18).
+// Stamped before the queries run, a 500 would go out cacheable for an hour
+// too — and the picker's "Try again" would be answered by the browser's
+// cache.
 test('a failure carries no cache header, and is not kept in the list cache either', async () => {
   const err = jest.spyOn(console, 'error').mockImplementation(() => {});
   WineDefinition.aggregate.mockRejectedValueOnce(new Error('primary stepped down'));

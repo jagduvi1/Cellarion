@@ -1,6 +1,6 @@
 /**
- * routes/wineDrafts — the REST surface over services/wineDraftOps (support
- * ticket 2026-09-12). The ops are mocked; this pins the transport contract:
+ * routes/wineDrafts — the REST surface over services/wineDraftOps. The ops
+ * are mocked; this pins the transport contract:
  * status codes per result code, the read path for shared-cellar members
  * (read only), demo accounts refused on writes, and the batch shape.
  */

@@ -415,7 +415,7 @@ describe('undo_last on open/pour/close', () => {
   });
 });
 
-// "Take it out of the rack" (support ticket 2026-10-31): open_bottle and an
+// "Take it out of the rack": open_bottle and an
 // implicit open in pour_glass free the bottle's slot when asked, and every undo
 // puts it back (or, undoing a close, takes it out again).
 describe('take_out_of_rack', () => {

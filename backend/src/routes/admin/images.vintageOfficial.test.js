@@ -1,6 +1,6 @@
 /**
  * PUT /api/admin/images/:id/set-vintage-official — "this is THE photo of this
- * wine's <vintage>" (support ticket 2026-10-09).
+ * wine's <vintage>" (photos per vintage).
  *
  * Without a choice a vintage shows the first photo of it approved; this is
  * the override. It promotes any non-rejected photo (approve + publish), takes

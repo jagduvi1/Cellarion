@@ -49,7 +49,7 @@ describe('classifyMaturity', () => {
 
   test('NV vintage with a reviewed absolute-year profile classifies (matches the frontend)', () => {
     // Non-relative NV profile: numbers are absolute years, no anchor needed.
-    // The old backend returned null for every NV bottle (audit 2026-08-03 H6).
+    // An NV bottle must not classify as null (audit H6).
     const bottle = makeBottle('NV');
     const map = makeMap('NV', { status: 'reviewed', earlyFrom: 2020 });
     expect(classifyMaturity(bottle, map)).toBe('early');
@@ -114,7 +114,7 @@ describe('classifyMaturity', () => {
     expect(classifyMaturity(bottle, map)).toBe('declining');
   });
 
-  // Release audit 2026-10-13: a late phase with no end fell through to 'peak'.
+  // A late phase with no end must not fall through to 'peak'.
   test('a late phase with no end stays "late" once it has begun', () => {
     // currentYear=2026, peakFrom=2020, peakUntil=2023, lateFrom=2024, no lateUntil
     const bottle = makeBottle(2018);
@@ -279,10 +279,10 @@ describe('classifyPersonalWindow', () => {
     expect(classifyPersonalWindow({ drinkFrom: 2026, drinkTo: 2026 })).toBe('peak');
   });
 
-  // ── Optional personal peak (ticket 6a94655283: "drinkable ≠ peak") ───────
-  // The reporter's own worked example: a 2024 white Bordeaux, drinkable
-  // 2026–2035, at its best 2028–2031. Without the peak fields the whole
-  // decade classified as one long Peak.
+  // ── Optional personal peak (drinkable ≠ peak) ────────────────────────────
+  // A worked example: a 2024 white Bordeaux, drinkable 2026–2035, at its
+  // best 2028–2031. Without the peak fields the whole decade would classify
+  // as one long Peak.
   describe('with peakFrom/peakUntil — the five-stage personal window', () => {
     const w = { drinkFrom: 2026, drinkTo: 2035, peakFrom: 2028, peakUntil: 2031 };
 
@@ -386,7 +386,7 @@ describe('classifyMaturity — personal window precedence', () => {
   });
 });
 
-// ─── Relative (NV) profiles — audit 2026-08-03 H6 ────────────────────────────
+// ─── Relative (NV) profiles — audit H6 ───────────────────────────────────────
 // Offsets are anchored on the bottle's purchase year (falling back to
 // createdAt), mirroring frontend resolveWindow/bottleAnchorYear. Clock: 2026.
 
@@ -612,11 +612,10 @@ describe('maturityLabel — personal window precedence', () => {
     expect(maturityLabel('declining', profileSaysNow, bottle)).toBe('Declining — past its peak, drink now if at all');
   });
 
-  // Support ticket 2026-09-10: a bottle recorded as drinkTo 2027 with its
-  // peak already behind it read "Late — drink soon, until 2032" —
-  // the PROFILE's lateUntil — because 'late' fell through to the profile
-  // labels. The personal peak pair makes 'early' and 'late' reachable, so
-  // both must quote the bottle's own years.
+  // A bottle recorded as drinkTo 2027 with its peak already behind it must
+  // not read "Late — drink soon, until 2032" — the PROFILE's lateUntil — by
+  // falling through to the profile labels. The personal peak pair makes
+  // 'early' and 'late' reachable, so both must quote the bottle's own years.
   test('late: quotes the personal drinkTo, not the profile lateUntil', () => {
     const bottle = { drinkFrom: 2021, peakFrom: 2022, peakUntil: 2024, drinkTo: 2027 };
     expect(classifyPersonalWindow(bottle)).toBe('late');
@@ -671,7 +670,7 @@ describe('maturityLabel — relative (NV) profiles quote resolved years', () => 
 });
 
 // ─── resolveEffectiveWindow ──────────────────────────────────────────────────
-// The analytics maturity.window* columns (support ticket 2026-09-10): the
+// The analytics maturity.window* columns: the
 // window that governs the status, in calendar years, with its source.
 describe('resolveEffectiveWindow', () => {
   const W = 'a'.repeat(24);

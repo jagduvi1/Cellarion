@@ -1,5 +1,5 @@
 /**
- * Vintage-scoped personal data (user ticket 6a853211): "Every bottle of this
+ * Vintage-scoped personal data: "Every bottle of this
  * vintage" — a wine-level entry narrowed to the bottle's vintage, because
  * values like ABV drift year to year. Pins: the vintage is DERIVED from the
  * bottle (never client text), scope only exists on wine-level entries, and

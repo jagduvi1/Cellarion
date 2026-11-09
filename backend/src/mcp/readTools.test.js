@@ -324,7 +324,7 @@ describe('PII and data minimisation', () => {
     expect(res.content[0].text).not.toContain(STRANGER);
   });
 
-  test('list_journal pairings carry the bottle/wine references and the producer; stored text is only the fallback (ticket 6aa6c200)', async () => {
+  test('list_journal pairings carry the bottle/wine references and the producer; stored text is only the fallback', async () => {
     JournalEntry.countDocuments.mockResolvedValue(1);
     JournalEntry.find.mockReturnValue(chain([{
       _id: oid('e'), date: new Date(), people: [],

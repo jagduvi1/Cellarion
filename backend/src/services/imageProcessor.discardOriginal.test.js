@@ -2,9 +2,9 @@
  * imageProcessor keeps ONLY the processed file once background removal has
  * succeeded.
  *
- * Support ticket 2026-09-03: a user's cellar showed photos "including the
- * background", served from /api/uploads/originals/. Nothing needs the raw
- * frame once rembg has run, so processImage now deletes it (discardOriginal).
+ * A kept original is served from /api/uploads/originals/, background and
+ * all, for as long as it exists. Nothing needs the raw frame once
+ * rembg has run, so processImage deletes it (discardOriginal).
  * Pinned here: the happy path drops the original file AND the pointer; a
  * failed rembg run keeps both (the retry needs its source); a keepBackground
  * row, whose "original" IS the kept file, is never touched; a file another

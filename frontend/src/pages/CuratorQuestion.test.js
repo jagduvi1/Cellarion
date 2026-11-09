@@ -1,5 +1,5 @@
 /**
- * What a curator-question notification opens (support ticket 2026-10-14): on
+ * What a curator-question notification opens: on
  * to a bottle page the member can open now, or the question on its own page
  * when no bottle of the wine is left; a closed question says so.
  */

@@ -1,6 +1,6 @@
 /**
  * findGrapeStyleConflict — the deterministic half of the regional-prior
- * defence (ticket 6a8464ea phase 2). Precision IS the feature: only an
+ * defence. Precision IS the feature: only an
  * opposite extreme on a wine whose grapes ALL assert it may ever fire.
  */
 const { findGrapeStyleConflict, GRAPE_STYLE_TYPICALS } = require('./grapeStyleTypicals');
@@ -8,7 +8,7 @@ const { normalizeString } = require('../utils/normalize');
 
 const check = (grapes, profile) => findGrapeStyleConflict(grapes, profile, normalizeString);
 
-test('the ticket case: a high-acidity Bacchus fires', () => {
+test('a high-acidity Bacchus fires', () => {
   expect(check(['Bacchus'], { acidity: 'high' })).toMatch(/bacchus is defined by low acidity/);
 });
 
@@ -37,13 +37,11 @@ test('tannin axis works the same way — a low-tannin Nebbiolo fires', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The false positive, and the invariant that stops it coming back.
-// Until 2026-08-22 the assertion directly above this block read
-//   check(['Pinot Noir'], { tannin: 'high' })  →  fires
-// which is to say the suite asserted the bug as correct behaviour and then
-// protected it. It fired twice in production, on two correct Pommards.
+// A low-tannin entry for any variety is a false positive waiting to happen:
+// check(['Pinot Noir'], { tannin: 'high' }) must stay silent, because a firm
+// Pommard is correct data, not an error. The invariant below keeps it so.
 // ---------------------------------------------------------------------------
-describe('no variety is defined by LOW tannin (somm ticket 6a896b7e)', () => {
+describe('no variety is defined by LOW tannin', () => {
   test('a high-tannin Pinot Noir is silent — that is Pommard, not an error', () => {
     expect(check(['Pinot Noir'], { tannin: 'high' })).toBeNull();
   });

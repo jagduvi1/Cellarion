@@ -1,7 +1,7 @@
 /**
  * services/vintageImages.findVintageOfficials — one query for a page's
  * (wine, vintage) pairs, published photos only, and the rule from
- * utils/imageVintage.pickVintageOfficials (support ticket 2026-10-09).
+ * utils/imageVintage.pickVintageOfficials.
  */
 jest.mock('../models/BottleImage', () => ({ find: jest.fn() }));
 const BottleImage = require('../models/BottleImage');

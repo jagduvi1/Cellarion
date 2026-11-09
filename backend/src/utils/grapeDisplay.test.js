@@ -1,6 +1,6 @@
 /**
- * Regional grape display resolution (somm ticket: "Tinta Roriz stored as
- * Tempranillo on a Douro Port").
+ * Regional grape display resolution (a Douro Port's Tempranillo shows as
+ * Tinta Roriz).
  *
  * WHY THIS TEST EXISTS:
  * Every read surface (wine/bottle routes, MCP get_wine/resolve_wine, search
@@ -169,12 +169,11 @@ describe('decorateGrapes', () => {
 });
 
 /**
- * The wine's own name outranks any mapping (somm ticket 6a8c8a68, decided
- * 2026-08-27): Australians write "Syrah" on a label as a deliberate
- * cool-climate style signal, so an Australia-wide "Shiraz" entry must never
- * relabel a wine literally named for the canonical variety. The mapping
- * applies when the name says the regional form or names no variety at all —
- * the somm's conservative option (b), generalized to every variety.
+ * The wine's own name outranks any mapping: Australians write "Syrah" on a
+ * label as a deliberate cool-climate style signal, so an Australia-wide
+ * "Shiraz" entry must never relabel a wine literally named for the canonical
+ * variety. The mapping applies when the name says the regional form or names
+ * no variety at all — the conservative rule, applied to every variety.
  */
 describe('resolveGrapeDisplayName – the wine name outranks the mapping', () => {
   const AUSTRALIA = oid('1');

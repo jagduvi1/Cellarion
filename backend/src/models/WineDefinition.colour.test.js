@@ -1,6 +1,6 @@
 /**
- * The pre-validate hook's COLOUR rules (support ticket 2026-09-17, "Colour
- * Sparkling/Rosè"):
+ * The pre-validate hook's COLOUR rules (the colour of a sparkling rosé and
+ * its kin):
  *   - only a sparkling/dessert/fortified wine keeps a colour — any other type
  *     (or none) drops it, so a retype can never leave a contradiction behind;
  *   - a style-typed wine with no colour gets one from a rosé NAME, but only on
@@ -110,7 +110,6 @@ describe('on a later save', () => {
   });
 });
 
-// Audit 2026-09-19.
 describe('a stated colour is never re-inferred in the same save', () => {
   const { stateColour } = require('../utils/wineColour');
 

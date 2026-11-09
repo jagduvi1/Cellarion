@@ -118,9 +118,9 @@ describe('review_registry_data', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sommeliers review public wine data (Johan, 2026-08-23). The queue is fed by
-// ordinary users and was gated to admin, so the project owner was clearing it
-// by hand — the same bottleneck somm-owned wine data exists to remove.
+// Sommeliers review public wine data. The queue is fed by ordinary users;
+// gated to admin alone, the project owner would clear it by hand — the same
+// bottleneck somm-owned wine data exists to remove.
 // ---------------------------------------------------------------------------
 // Discussion #1778: a field made the wrong way (ABV as text) needs a way back,
 // over MCP as on the admin page, for the same roles that decide keys.
@@ -272,7 +272,7 @@ describe('vintage slots over MCP', () => {
   });
 });
 
-describe('idempotency (support ticket 2026-09-12)', () => {
+describe('idempotency', () => {
   const McpActionLog = require('../models/McpActionLog');
   beforeEach(() => { McpActionLog.create.mockReset(); McpActionLog.findOneAndUpdate.mockReset(); });
 

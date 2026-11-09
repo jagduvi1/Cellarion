@@ -73,7 +73,7 @@ describe('consumeBottle', () => {
     expect(checkRestockGap).not.toHaveBeenCalled();
   });
 
-  // Nothing a token can reach may spend AI money (Johan, 2026-10-21): a
+  // Nothing a token can reach may spend AI money: a
   // consume from Home Assistant or a connected AI (an API or OAuth token —
   // req.apiToken) compares stored vectors only and never embeds. A session
   // consume from the web app keeps the full check.
@@ -424,7 +424,7 @@ describe('updateBottleFields (real execution)', () => {
     expect(embedSinglePair).not.toHaveBeenCalled();
   });
 
-  test('a changed vintage moves the bottle\'s photos to that vintage; an unchanged one leaves them alone (ticket 2026-10-09)', async () => {
+  test('a changed vintage moves the bottle\'s photos to that vintage; an unchanged one leaves them alone', async () => {
     const b = liveBottle({ wineDefinition: 'w9' });
     await updateBottleFields(b, { vintage: 2021 }, REQ);
     expect(BottleImage.updateMany).toHaveBeenCalledWith({ bottle: b._id }, { $set: { vintage: '2021', assignedToVintage: false } });
@@ -757,7 +757,7 @@ describe('open-bottle ops (openBottle / pourFromBottle / closeBottle)', () => {
   });
 });
 
-// "Take it out of the rack" when opening (a support ticket, 2026-10-31): a
+// "Take it out of the rack" when opening: a
 // recorked bottle on the kitchen counter is no longer in its slot. The slot is
 // freed and remembered, so undoing the open puts the bottle back while that
 // slot is still free. A Coravin bottle keeps its slot: the caller decides.

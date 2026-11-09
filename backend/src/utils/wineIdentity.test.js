@@ -25,7 +25,7 @@ describe('computeCanonicalKey', () => {
     expect(computeCanonicalKey('X', 'Y', null)).toBe('y:x:');
   });
 
-  test('Saint-spelling producer variants share one canonical identity — the Caronne split (ticket d49fea22)', () => {
+  test('Saint-spelling producer variants share one canonical identity', () => {
     const canonical = computeCanonicalKey('Grand Vin', 'Château Caronne Sainte Gemme', 'Haut-Médoc');
     expect(computeCanonicalKey('Grand Vin', 'Château Caronne Ste Gemme', 'Haut-Médoc')).toBe(canonical);
     expect(computeCanonicalKey('Grand Vin', 'Chateau Caronne Saint Gemme', 'Haut-Médoc')).toBe(canonical);

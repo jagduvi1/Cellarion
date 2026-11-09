@@ -116,7 +116,7 @@ describe('findVisibleWine — the drop-in replacement for findById', () => {
   });
 });
 
-// ─── Private drafts (support ticket 2026-09-12) ──────────────────────────────
+// ─── Private drafts ──────────────────────────────────────────────────────────
 
 describe('canSeeWine — a private draft is creator-only, curators included', () => {
   const draft = { draft: true, pendingIdentity: true, createdBy: ME };

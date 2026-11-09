@@ -21,10 +21,9 @@ function arcCircles(container) {
 }
 
 describe('DonutChart', () => {
-  test('every arc dash + gap sums to the circumference (regression: ticket 6a8b497c)', () => {
-    // 62/19/7/3/1 of 92 — the exact distribution from the report, where the
-    // old `${len} ${C}` gap made the 67% segment render as 42% with a
-    // phantom track-coloured quarter from 12 to 3 o'clock.
+  test('every arc dash + gap sums to the circumference', () => {
+    // 62/19/7/3/1 of 92: a `${len} ${C}` gap would render the 67% segment
+    // as 42% with a phantom track-coloured quarter from 12 to 3 o'clock.
     const { container } = render(
       <DonutChart segments={segs(62, 19, 7, 3, 1)} total={92} />
     );

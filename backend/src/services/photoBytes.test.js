@@ -1,6 +1,6 @@
 /**
  * photoBytes — the one place a stored image reference becomes the bytes of an
- * MCP image block (support ticket 2026-09-07). Pins: an /api/uploads/ path is
+ * MCP image block. Pins: an /api/uploads/ path is
  * read through the traversal-safe resolver and downscaled; an inline data:
  * image is decoded and downscaled without touching the disk; an external URL
  * is "not ours" (null), never fetched; a failing read propagates so the tool

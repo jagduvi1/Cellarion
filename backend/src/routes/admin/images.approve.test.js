@@ -1,14 +1,13 @@
 /**
  * PUT /api/admin/images/:id/approve — what happens to the ORIGINAL file.
  *
- * Approval used to be the only place a retained original was deleted, with
- * an inline unlink that fired whenever both URLs were set. Since the
- * "keep the background" option (ticket 6a97f870) a row can have
- * processedUrl === originalUrl — the original IS the kept file — and that
- * inline unlink deleted it on approval, leaving processedUrl pointing at
- * nothing. Approval now goes through services/imageProcessor.discardOriginal
- * (real here, with fs mocked): a keepBackground row is left alone; a legacy
- * row that still carries a distinct original has it dropped.
+ * With the "keep the background" option a row can have
+ * processedUrl === originalUrl — the original IS the kept file — so an
+ * unlink that fires whenever both URLs are set would delete it on approval,
+ * leaving processedUrl pointing at nothing. Approval goes through
+ * services/imageProcessor.discardOriginal (real here, with fs mocked): a
+ * keepBackground row is left alone; a legacy row that still carries a
+ * distinct original has it dropped.
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -153,8 +152,8 @@ describe('PUT /api/admin/images/:id/approve and the original file', () => {
 /**
  * A photo uploaded on a bottle carries no wine of its own — the bottle does.
  * Publishing it must make it a photo of the wine (every owner of the wine sees
- * it, it can be the wine's picture); until 2026-09-27 the wine reference stayed
- * empty, so a published bottle photo never left its bottle.
+ * it, it can be the wine's picture); with the wine reference left empty, a
+ * published bottle photo would never leave its bottle.
  */
 describe('a published bottle photo belongs to the wine', () => {
   const bottleWithWine = () => Bottle.findById.mockReturnValue({

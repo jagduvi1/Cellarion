@@ -74,9 +74,9 @@ test('happy path: sanitises, writes a sniffed-extension file, saves the row, kic
   expect(encodeKeptPhoto).not.toHaveBeenCalled();
 });
 
-// Support ticket 6a97f870 (2026-09-02): a user's label-only photos came back
-// "systematically cropped" — rembg keeps the figure it finds on the label and
-// cuts the label away. The uploader can now opt out of background removal.
+// Label-only photos come back cropped — rembg keeps the figure it finds on
+// the label and cuts the label away. The uploader can opt out of background
+// removal.
 test('keepBackground: no bg-removal hand-off, the original is the kept image and the row is processed at once', async () => {
   const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b1' }, keepBackground: true }, REQ);
   expect(res.error).toBeUndefined();
@@ -263,7 +263,7 @@ describe('publish at ingest', () => {
   });
 });
 
-// Photos per vintage (support ticket 2026-10-09): a photo is of ONE bottle,
+// Photos per vintage: a photo is of ONE bottle,
 // so the row is filed under that bottle's vintage; a wine-level upload has
 // no bottle and stays wine-wide.
 test('the row carries its bottle\'s vintage; a wine-level upload carries none', async () => {

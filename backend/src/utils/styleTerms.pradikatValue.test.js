@@ -2,13 +2,13 @@ const { pradikatOnlyValue } = require('./styleTerms');
 
 /**
  * Telling a ripeness Prädikat from a place, when it turns up in an appellation
- * column (somm ticket 6a966386, 2026-09-01).
+ * column.
  *
- * The two real rows: a Mosel Riesling whose file said appellation "Auslese",
- * and a Nahe one that said "Trokenbeerenauslese" — the owner's misspelling,
- * carried verbatim, in a file that also wrote the wine's own name as "Riesling
- * Troken". Stored as written those wines have no appellation at all, which is
- * what makes auto-enrichment decline them permanently.
+ * The two shapes: a Mosel Riesling whose file says appellation "Auslese",
+ * and a Nahe one that says "Trokenbeerenauslese" — a misspelling carried
+ * verbatim, in a file that may also misspell the wine's own name ("Riesling
+ * Troken"). Stored as written those wines have no appellation at all, which
+ * is what makes auto-enrichment decline them permanently.
  *
  * The rejections carry the weight here. Moving a value that might name a place
  * would trade one wrong field for another, and unlike the write it replaces,
@@ -17,15 +17,15 @@ const { pradikatOnlyValue } = require('./styleTerms');
 
 describe('values that ARE the Prädikat', () => {
   test.each([
-    ['Auslese', 'the Molitor row'],
-    ['Trokenbeerenauslese', "the Dönnhoff row — the owner's misspelling"],
+    ['Auslese', ''],
+    ['Trokenbeerenauslese', 'a misspelling of the tier'],
     ['Trockenbeerenauslese', 'spelled correctly'],
     ['Spätlese', 'umlaut'],
     ['Spaetlese', 'ue-transliteration of the same tier'],
     ['Kabinett', ''],
     ['Beerenauslese', 'nests inside Trockenbeerenauslese but is its own token'],
     ['Eiswein', ''],
-    ['Ausbruch', 'Austrian ladder — the ticket asked about Austria'],
+    ['Ausbruch', 'Austrian ladder'],
     ['Strohwein', 'Austrian'],
   ])('%s is routed out of the appellation (%s)', (value) => {
     expect(pradikatOnlyValue(value)).toBe(value);
@@ -39,7 +39,7 @@ describe('values that ARE the Prädikat', () => {
 
 describe('values that are, or might be, a place — left alone', () => {
   test.each([
-    ['Nahe', 'the appellation the Dönnhoff record should have had'],
+    ['Nahe', 'a region, not a ripeness tier'],
     ['Mosel', ''],
     ['Bernkasteler Badstube', 'a single vineyard, not a ripeness level'],
     ['Rheingau', ''],
@@ -75,15 +75,15 @@ describe('degenerate input', () => {
 const { pradikatContradictsName } = require('./styleTerms');
 
 /**
- * A Prädikat can be misfiled AND untrue. The second ticket record was both:
- * appellation "Trokenbeerenauslese" on a wine named "Riesling Trocken". Moving
- * it to the classification would have kept the falsehood and changed only which
- * field carried it — and a classification is read as curated fact, so it would
- * have argued for a decades-long dessert window on a dry estate Riesling.
+ * A Prädikat can be misfiled AND untrue: appellation "Trokenbeerenauslese" on
+ * a wine named "Riesling Trocken". Moving it to the classification would keep
+ * the falsehood and change only which field carried it — and a classification
+ * is read as curated fact, so it would argue for a decades-long dessert
+ * window on a dry estate Riesling.
  */
 describe('a Prädikat the wine itself contradicts', () => {
   test.each([
-    ['Trokenbeerenauslese', 'Riesling Trocken', "the ticket's own record"],
+    ['Trokenbeerenauslese', 'Riesling Trocken', 'a dry wine contradicts the tier'],
     ['Trokenbeerenauslese', 'Riesling Troken', "and with the file's spelling of the name too"],
     ['Trockenbeerenauslese', 'Riesling Halbtrocken', 'off-dry is no closer to botrytis sugar'],
     ['Beerenauslese', 'Riesling Feinherb', ''],

@@ -146,7 +146,7 @@ describe('buildSections (custom mode)', () => {
   });
 });
 
-// --- Nested auto grouping (support ticket 2026-09-12) -----------------------
+// --- Nested auto grouping ----------------------------------------------------
 
 describe('buildSections (nested auto grouping)', () => {
   const rioja = {
@@ -258,7 +258,7 @@ describe('nested grouping fallbacks (review 2026-09-12)', () => {
   });
 });
 
-// --- Page layout (support ticket 2026-09-12: blank footer pages, splits) ---
+// --- Page layout (no blank footer pages, no bad splits) ----------------------
 
 const pdfBytes = (doc) => new Promise((resolve, reject) => {
   const chunks = [];
@@ -332,7 +332,7 @@ describe('PDF page layout', () => {
   });
 });
 
-// --- Geography in the list's language (support ticket 2026-09-12) ----------
+// --- Geography in the list's language ----------------------------------------
 
 describe('country and region print in the list language', () => {
   const tuscan = {

@@ -1,12 +1,10 @@
 /**
  * DELETE /api/images/:id and POST /api/images/:id/report.
  *
- * Support ticket 6a865f60 (2026-08-20): "How do I remove a picture — the webcam
- * picked up too much to my taste." They could not, and neither could an admin:
- * a photo was only ever deleted as a SIDE EFFECT of deleting the bottle, the
- * cellar or the whole account, and label scans are excluded from the review
- * queue by design (audit L-6). Honouring that request took a script against the
- * database.
+ * A user can remove a picture they took. Without these verbs a photo would
+ * only ever be deleted as a SIDE EFFECT of deleting the bottle, the cellar or
+ * the whole account, and label scans are excluded from the review queue by
+ * design (audit L-6), so not even an admin could remove one.
  *
  * The line between the two verbs is whether the photo is still ONLY the
  * uploader's. These tests pin that line, because getting it wrong in either

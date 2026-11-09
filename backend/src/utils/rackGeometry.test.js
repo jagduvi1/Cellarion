@@ -96,10 +96,10 @@ describe('rackGeometry', () => {
     it('2 rows, 1 col → 1 + 1 = 2 (odd row min is 1)', () => {
       expect(totalSlots('hex', 2, 1)).toBe(2);
     });
-    // Security audit 2026-09-02 (D14-1): the hex count was a `rows`-iteration
-    // loop and the rack update route ran it on unvalidated input — one
-    // request with rows "1e308" stalled the backend. Closed form now; these
-    // pin it to the loop it replaced across the whole legal range.
+    // Security audit D14-1: a `rows`-iteration loop run on unvalidated input
+    // by the rack update route would let one request with rows "1e308" stall
+    // the backend. The hex count is closed form; these pin it to the
+    // equivalent loop across the whole legal range.
     it('closed form matches the row-by-row count for every legal size', () => {
       const byLoop = (rows, cols) => { let t = 0; for (let r = 0; r < rows; r++) t += (r % 2 === 0) ? cols : Math.max(1, cols - 1); return t; };
       for (let rows = 1; rows <= 20; rows++) {
@@ -326,7 +326,7 @@ describe('cabinet rack geometry', () => {
     expect(getMaxPosition({ type: 'cabinet', rows: 2, cols: 4, typeConfig: { shelfRows: [1, 5] } })).toBe(24);
   });
 
-  // ── Alternating rows (support ticket 2026-09-15: Liebherr GrandCru 5001) ──
+  // ── Alternating rows (e.g. Liebherr GrandCru 5001) ─────────────────────────
   // The rows of a bay are cols / cols−1 wide in turn: 6 in front of 5, then
   // 5 in front of 6. Unlike twoDeep and stagger this changes capacity and
   // the numbering, so it is pinned here row by row.
@@ -382,7 +382,7 @@ describe('cabinet rack geometry', () => {
       expect(cabinetRows(2, 4, { shelfRows: [1, 2] }).map((r) => [r.start, r.width])).toEqual([[0, 4], [4, 4], [8, 4]]);
     });
 
-    // Support ticket 2026-08-31: the 5001's loading diagram is three 6-wide
+    // The 5001's loading diagram is three 6-wide
     // honeycomb shelves between two 4-wide staggered ones — per-shelf width
     // and pattern, one cabinet.
     test('per-shelf width and pattern: the GrandCru 5001 loading diagram is one cabinet of 196', () => {
@@ -408,7 +408,7 @@ describe('cabinet rack geometry', () => {
       expect(totalSlots('cabinet', 2, 6, { shelfRows: [2, 2], shelfCols: [3, 6] })).toBe(6 + 12);
     });
 
-    // Support forum 2026-10-13: a slim fridge lays one bottle across the front
+    // A slim fridge can lay one bottle across the front
     // of each shelf and fills its bottom bin with bottles lying across.
     test('shelfSideways is drawing only on one-row shelves, in a bin and two deep', () => {
       const oneRow = { shelfRows: [1, 1, 1, 2], shelfCols: [5, 5, 6, 4], shelfAlternate: [false, false, false, true], twoDeep: false };
@@ -422,10 +422,10 @@ describe('cabinet rack geometry', () => {
       expect(cabinetShelfSideways(3, { shelfSideways: ['all', 'sideways'] })).toEqual(['all', '', '']);
     });
 
-    // Support forum 2026-10-14: on a stacked shelf of a one-deep fridge the
-    // bottle across the front sits BESIDE the first row's bottles, and the
-    // level above rests on the ones behind it: 1 across + 4, 3 on top. It
-    // used to take one of the row's places and stack 4 on 3.
+    // On a stacked shelf of a one-deep fridge the bottle across the front
+    // sits BESIDE the first row's bottles, and the level above rests on the
+    // ones behind it: 1 across + 4, 3 on top — not one of the row's places
+    // with 4 stacked on 3.
     test('one bottle across a stacked one-deep shelf: the levels above count from the bottles behind it', () => {
       const front = { twoDeep: false, sideways: 'front' };
       expect([1, 2, 3].map((r) => cabinetRowWidth(r, 5, { ...front, alternate: true }))).toEqual([5, 3, 4]);
@@ -457,8 +457,8 @@ describe('cabinet rack geometry', () => {
       expect(cabinetPosition({ shelfIndex: 1, row: 1, slot: 1, cols: 6, ...atelier })).toBe(9);
     });
 
-    // Release audit 2026-10-13: a hand-edited export's non-list value was
-    // stored as a wrong-length list, and every later edit was then refused.
+    // A hand-edited export's non-list value must not be stored as a
+    // wrong-length list, or every later edit would be refused.
     test('fitCabinetTypeConfig: what an import stores is always a valid cabinet config', () => {
       const fitted = fitCabinetTypeConfig(3, 6, {
         shelfRows: [2, 2], shelfSideways: 'front', shelfCols: 'wide', shelfAlternate: [true],

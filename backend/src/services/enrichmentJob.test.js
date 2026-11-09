@@ -13,7 +13,7 @@
 
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ distinct: jest.fn().mockResolvedValue([]) }));
-// The note-vs-record check (6a870531) loads the curated grape vocabulary; an
+// The note-vs-record check loads the curated grape vocabulary; an
 // unmocked model would buffer on the missing test DB for 10s per suite.
 jest.mock('../models/Grape', () => ({
   find: jest.fn(() => ({
@@ -29,7 +29,7 @@ jest.mock('../models/Grape', () => ({
 jest.mock('./labelScan', () => ({ suggestProfile: jest.fn() }));
 jest.mock('./aiProvider', () => ({ isConfigured: jest.fn(() => true), effectiveModels: jest.fn(() => null) }));
 jest.mock('./embeddingJob', () => ({ embedSinglePair: jest.fn().mockResolvedValue(undefined) }));
-// The appellation-geography downgrade (somm 6a8eb2a9) reads the curated
+// The appellation-geography downgrade reads the curated
 // taxonomy; default FALSE so every pre-existing expectation about suspect
 // persistence stays exactly as written. Tests for the rule flip it to true.
 jest.mock('./appellationResolve', () => ({ appellationHasGeography: jest.fn().mockResolvedValue(false) }));
@@ -38,7 +38,7 @@ jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({
   enrichmentModel: 'claude-sonnet-5',
   // Default policy for the per-add hook; individual tests override.
   enrichmentOnAdd: 'always',
-  // The publication gate's calibrated defaults (ticket 6a83e765) — the
+  // The publication gate's calibrated defaults — the
   // end-to-end tests below exercise holds on both sides of them.
   enrichmentHoldConfidenceFloor: 0.4,
   enrichmentHoldUnknownConfidenceBar: 0.55,
@@ -122,12 +122,12 @@ describe('aiProfile.description is persisted as plain text', () => {
 });
 
 /**
- * Sentinel-string coercion (support tickets 2026-07-30 / 2026-08-03).
+ * Sentinel-string coercion.
  *
  * The model sometimes emits the four-character STRING "null" inside a
- * string-typed descriptor instead of the JSON literal — 161 prod profiles
- * carried tannin: "null", which passes every truthiness check and leaks the
- * token into the embedding text. The prompt now forbids it, but the write
+ * string-typed descriptor instead of the JSON literal — tannin: "null"
+ * passes every truthiness check and leaks the token into the embedding
+ * text. The prompt forbids it, but the write
  * point is the guarantee: sentinel strings and out-of-enum values collapse
  * to a real null.
  */
@@ -159,10 +159,10 @@ describe('descriptor sanitization at the write point', () => {
 
   test('valid values case-fold onto the enum', async () => {
     // A grapeless wine for this one, so the case-folding assertion cannot be
-    // perturbed by the 6a8464ea taxonomy cross-check whatever the table holds.
-    // (It was originally grapeless because high tannin on the default Pinot
-    // Noir fixture tripped the conflict hold — that entry was the ticket
-    // 6a896b7e false positive and is gone; the isolation is still worth it.)
+    // perturbed by the taxonomy cross-check whatever the table holds.
+    // (The grape table does not treat firm tannin on Pinot Noir as a
+    // conflict — Pommard is legitimately tannic — but the isolation is still
+    // worth it.)
     WineDefinition.findById.mockReturnValue(chain({
       _id: WINE_ID, name: 'Red Blend', producer: 'Matua', type: 'red',
       country: { name: 'New Zealand' }, region: { name: 'Marlborough' }, grapes: [],
@@ -332,12 +332,13 @@ describe('pendingIdentity rows are never enriched', () => {
 });
 
 /**
- * Producer-suspect profiles are HELD, not published (ticket 6a8162c5).
+ * Producer-suspect profiles are HELD, not published.
  *
- * "Fabelhaft" — a Niepoort brand minted as a producer — got a confident
- * négociant biography from the generator, which FLAGGED producerSuspect:true
- * in the same response… and the flag sat in a passive queue while the fiction
- * served on the bottle page. A suspect profile now stores only the doubt
+ * A brand minted as a producer ("Fabelhaft", a Niepoort label) can get a
+ * confident négociant biography from the generator, which FLAGS
+ * producerSuspect:true in the same response; published, the fiction serves
+ * on the bottle page while the flag sits in a passive queue. A suspect
+ * profile stores only the doubt
  * (confidence/flag/note + heldAt); the null description keeps every read
  * surface naturally silent, and the guards keep the per-add hook and
  * incremental batches from re-spending on a row that is waiting for a human.
@@ -413,14 +414,14 @@ describe('producer-suspect profiles are held, not published', () => {
 });
 
 /**
- * The appellation-geography downgrade (somm 6a8eb2a9): a record whose
+ * The appellation-geography downgrade: a record whose
  * appellation resolves to a curated entry WITH geography has a knowable house
  * behind whatever the producer string is, so a suspect flag there cannot
  * carry an owner-visible caveat — it downgrades to producerUnknown. Fourth
  * branch of the chain: fires only when no note rule spoke, and never past
  * the placeholder/place-conflict blockers.
  */
-describe('appellation-geography suspect downgrade (somm 6a8eb2a9)', () => {
+describe('appellation-geography suspect downgrade', () => {
   const { appellationHasGeography } = require('./appellationResolve');
   // mockResolvedValue survives clearAllMocks (implementations are not calls),
   // so restore the file default after every test — later describes assert
@@ -489,9 +490,9 @@ describe('appellation-geography suspect downgrade (somm 6a8eb2a9)', () => {
 });
 
 /**
- * The record-edit follow-through (parity gap found live 2026-08-16: approving
- * "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached until
- * a manual force re-enrich). The helper regenerates ONLY on a real change,
+ * The record-edit follow-through (without it, approving a producer fix such
+ * as "Fabelhaft" → "Niepoort" leaves the négociant-fiction profile attached
+ * until a manual force re-enrich). The helper regenerates ONLY on a real change,
  * never over curator work, and treats HELD as enriched-and-regenerable —
  * an identity fix is exactly what resolves a hold.
  */
@@ -529,10 +530,9 @@ describe('reenrichAfterRecordEdit — the record-edit follow-through', () => {
   });
 
   test('enrichmentOnAdd "off" silences this hook too — somm-owned data means NO automatic AI writes', async () => {
-    // Johan 2026-08-22, and the deferred half of somm ticket 6a872818: an
-    // approval-triggered regeneration recomputed doubt flags from scratch and
-    // removed queue rows with nobody deciding. Under somm-owned data the somm
-    // rewrites the profile in the same correction session instead.
+    // An approval-triggered regeneration recomputes doubt flags from scratch
+    // and removes queue rows with nobody deciding. Under somm-owned data the
+    // somm rewrites the profile in the same correction session instead.
     const aiConfig = require('../config/aiConfig');
     const base = aiConfig.get();
     aiConfig.get.mockImplementation(() => ({ ...base, enrichmentOnAdd: 'off' }));
@@ -568,11 +568,11 @@ describe('profileInputsSnapshot — the before/after comparison the routes use',
 });
 
 /**
- * Staleness (somm 6a86bb3b). reenrichAfterRecordEdit covers the three curation
+ * Staleness. reenrichAfterRecordEdit covers the three curation
  * surfaces, but a bulk script writing straight to the collection reaches none
- * of them — which is how two Friuli benchmarks ended up flagged over a note
- * about "Giuli Ballarin", the wine those rows used to be. Comparing stored
- * inputs against current ones makes that a property of the data instead.
+ * of them — so a rewritten row can keep a profile (and flags) written about
+ * the wine it used to be. Comparing stored inputs against current ones makes
+ * that a property of the data instead.
  */
 describe('isProfileStale', () => {
   const { profileInputsSnapshot, isProfileStale } = require('./enrichmentJob');
@@ -598,9 +598,9 @@ describe('isProfileStale', () => {
 });
 
 /**
- * WHICH DOUBT WITHHOLDS A PROFILE (flag split 2026-08-17, gate 2026-08-18).
+ * WHICH DOUBT WITHHOLDS A PROFILE.
  *
- * One boolean used to answer two questions, and the hold fired on both:
+ * Two flags answer two different questions, and only one of them holds:
  *   producerSuspect  — the Producer FIELD is wrong (Fabelhaft, a Niepoort
  *                      label sold as a house). The record is not a real
  *                      producer, so the profile is fiction. HOLD.
@@ -608,16 +608,15 @@ describe('isProfileStale', () => {
  *                      Hautes Graves, Thomas Allen). The record is FINE and
  *                      an appellation-level note is honest. PUBLISH.
  *
- * Measured cost of conflating them: ~47% of a 250-wine run withheld, almost
- * all of it the second kind, and the held rows then blocked the sommelier's
- * maturity queue because a held profile shows no tasting note.
+ * Conflating them withholds a large share of a run, almost all of it the
+ * second kind, and the held rows then block the sommelier's maturity queue
+ * because a held profile shows no tasting note.
  *
- * The day after the split, confidence was read by NOBODY: profiles published
- * at 0.2 while a held row sat at 0.3 (ticket 6a83e765). Confidence rejoined
- * as a calibrated FLOOR plus an unknown-producer bar — thresholds passed in
- * from aiConfig, missing thresholds disable the check (degrade open). The
- * function now returns the hold REASON (stored as aiProfile.heldReason) or
- * null to publish.
+ * Confidence must still be read, or a profile at 0.2 publishes while a held
+ * row sits at 0.3. It takes part as a calibrated FLOOR plus an
+ * unknown-producer bar — thresholds passed in from aiConfig, missing
+ * thresholds disable the check (degrade open). The function returns the
+ * hold REASON (stored as aiProfile.heldReason) or null to publish.
  */
 describe('shouldHoldProfile — which doubt withholds the profile', () => {
   const { shouldHoldProfile } = require('./enrichmentJob');
@@ -646,7 +645,7 @@ describe('shouldHoldProfile — which doubt withholds the profile', () => {
     }
   });
 
-  // Gate 2026-08-18 (ticket 6a83e765): the floor is strict-below, so the
+  // The floor is strict-below, so the
   // calibrated boundary value itself publishes.
   test('below the floor holds regardless of flags; at the floor publishes', () => {
     expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.2 }, GATE)).toBe('low_confidence');
@@ -661,7 +660,7 @@ describe('shouldHoldProfile — which doubt withholds the profile', () => {
     expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.5 }, GATE)).toBeNull();
   });
 
-  // Ticket 6a855285: the bar applies only to DATA-INSUFFICIENT identities —
+  // The bar applies only to DATA-INSUFFICIENT identities —
   // "you can know Pommard perfectly well and have never heard of the grower".
   test('a DATA-SUFFICIENT unknown-producer record publishes at the base floor as a labelled estimate', () => {
     expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: 0.45, dataSufficient: true }, GATE)).toBeNull();
@@ -728,8 +727,7 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.heldReason).toBe('producer_suspect');
   });
 
-  // The epistemic downgrade rule and its blockers, end to end (v1.145 rule,
-  // v1.146 blockers from the somm's full-population audit 6a86dad6).
+  // The epistemic downgrade rule and its blockers, end to end.
   test('an epistemic note grounded in the record\'s own region downgrades to producerUnknown, tagged', async () => {
     suggestProfile.mockResolvedValue(withFlags({
       producerSuspect: true, confidence: 0.7,
@@ -774,9 +772,9 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.suspectDowngradedBy).toBeNull();
   });
 
-  // Somm 6a870531 (HIGH): Les Gaudrettes published a Chardonnay profile while
-  // its own producerNote said the cuvée is documented as a Pinot Noir — the
-  // model recorded a record-contradiction in the one field nothing read.
+  // A Chardonnay profile must not publish while its own producerNote says
+  // the cuvée is documented as a Pinot Noir — the model records a
+  // record-contradiction in a field nothing else reads.
   test('a note naming a variety the record does not carry HOLDS the row', async () => {
     // Fixture record carries Pinot Noir; the note asserts Chardonnay.
     suggestProfile.mockResolvedValue(withFlags({
@@ -825,7 +823,7 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(persisted().heldAt).toBeNull();
   });
 
-  // ── Generation gate (6a82bfb7's last open build, 2026-08-20) ──────────────
+  // ── Generation gate ─────────────────────────────────────────────────────────
   // On a record with NO region and NO appellation, an assertion-grade draft
   // gets one corrective retry; a second violation holds. Disclosure prose
   // passes by design.
@@ -902,7 +900,7 @@ describe('the split flags end-to-end through enrichWine', () => {
     });
   });
 
-  // Gate 2026-08-18 (ticket 6a83e765): the two confidence holds, end to end,
+  // The two confidence holds, end to end,
   // with the reason persisted where the release queue reads it.
   test('a below-floor profile is HELD with heldReason low_confidence', async () => {
     suggestProfile.mockResolvedValue(withFlags({ confidence: 0.2 }));
@@ -929,7 +927,7 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.producerUnknown).toBe(true);
   });
 
-  test('the SAME unknown producer at the same confidence PUBLISHES on the data-rich default fixture (6a855285)', async () => {
+  test('the SAME unknown producer at the same confidence PUBLISHES on the data-rich default fixture', async () => {
     // Default fixture: region Marlborough + grapes + type → sufficient.
     suggestProfile.mockResolvedValue(withFlags({ producerUnknown: true, confidence: 0.45 }));
     await enrichWineById(WINE_ID);
@@ -939,10 +937,9 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.producerUnknown).toBe(true); // the doubt stays recorded on the row
   });
 
-  // 6a8464ea phase 2. These used the default Pinot Noir fixture with high
-  // tannin, which stopped being a conflict when the pinot-noir entry came out
-  // of the table (somm ticket 6a896b7e — Pommard is legitimately tannic).
-  // Nebbiolo carries the surviving direction: thick skins put a FLOOR under
+  // The taxonomy cross-check. High tannin on Pinot Noir is not a conflict —
+  // the table has no pinot-noir entry (Pommard is legitimately tannic).
+  // Nebbiolo carries the direction that stands: thick skins put a FLOOR under
   // tannin, so a low-tannin Nebbiolo is the regional-prior hallucination the
   // cross-check exists for. No flag, high confidence — only a factual check
   // can catch it.
@@ -1001,8 +998,8 @@ describe('the split flags end-to-end through enrichWine', () => {
 
 /**
  * releaseHeldProfile — the review override with the stamp INSIDE the success
- * path (audit 2026-08-16: stamping before the AI call hid a still-held row
- * from the queue forever when the call failed).
+ * path (stamping before the AI call would hide a still-held row from the
+ * queue forever when the call failed).
  */
 describe('releaseHeldProfile', () => {
   const { releaseHeldProfile } = require('./enrichmentJob');
@@ -1036,8 +1033,7 @@ describe('releaseHeldProfile', () => {
 /**
  * A hold that replaces a previously PUBLISHED profile must re-embed too —
  * otherwise the old description keeps living in the Qdrant vectors and cellar
- * chat retrieves the wine by the very claims the hold silenced
- * (audit 2026-08-16).
+ * chat retrieves the wine by the very claims the hold silenced.
  */
 describe('the hold path re-embeds', () => {
   const { embedSinglePair } = require('./embeddingJob');
@@ -1063,12 +1059,12 @@ describe('the hold path re-embeds', () => {
 });
 
 /**
- * The prompt must not assert what the record leaves blank (somm ticket
- * 6a82bfb7, 2026-08-17). The field-level fix worked — unverifiable region and
- * grapes are stored NULL rather than guessed — but the generator then wrote
- * "from the Hunter Valley" into the first sentence of a region-null record and
- * "a GSM blend" onto a record with no grapes. Same fabrication, one layer down,
- * and a curator reading the maturity queue takes prose as established fact.
+ * The prompt must not assert what the record leaves blank. Unverifiable
+ * region and grapes are stored NULL rather than guessed, but a generator can
+ * still write "from the Hunter Valley" into the first sentence of a
+ * region-null record or "a GSM blend" onto a record with no grapes. Same
+ * fabrication, one layer down, and a curator reading the maturity queue
+ * takes prose as established fact.
  *
  * The rule lives in the PROMPT (a model writes the prose, not this module), so
  * what is pinned here is that the rule is present and specific — the same
@@ -1097,38 +1093,38 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
 
   test('the two producer doubts are defined apart, and only the wrong-field one is a claim about the record', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerSuspect: true ONLY when the Producer value is not a winery at all/);
-    // Ticket 6a84c8dc (Vignoble Guillaume ×5): the flag fired on
-    // obscure-but-real houses. Suspicion now requires naming the alternative.
+    // The flag must not fire on obscure-but-real houses ("Vignoble X").
+    // Suspicion requires naming the alternative.
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerSuspect requires EVIDENCE, not unfamiliarity/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/"Vignoble X", "Cave de X"/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF/);
-    // The 2026-08-18 defect report: known house + unverified bottling was
-    // being flagged producerUnknown and held. The distinction is now explicit.
+    // A known house + unverified bottling is not producerUnknown and must
+    // not be held. The distinction is explicit.
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/Knowing the house but not this specific bottling or cuvée is NOT producerUnknown/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/honest, publishable estimate, not a reason to withhold/);
-    // Ticket 6a6f94e5's requirement (flag and prose must agree) must survive
-    // the split — pointed at producerUnknown now, which is where it belongs.
+    // Flag and prose must agree — a requirement pointed at producerUnknown,
+    // which is where it belongs.
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented/);
   });
 
-  // Ticket 6a8464ea phase 1: the anti-regional-prior instruction. Ashes &
-  // Diamonds got the blockbuster Napa profile the winery was founded to
-  // reject; Ganevat's ouillé whites were described as oxidative from the
-  // Jura prior. The prompt must name the failure mode directly.
+  // The anti-regional-prior instruction. A producer founded to reject the
+  // blockbuster Napa style must not get that profile; ouillé (topped-up)
+  // Jura whites must not be described as oxidative from the Jura prior.
+  // The prompt must name the failure mode directly.
   test('the prompt forbids substituting the regional flagship style for producer knowledge', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/A region's dominant or most famous style is NOT evidence about this producer/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/two established house styles .*describe what is common to both/);
   });
 
-  // Ticket 6a855285: confidence must score writability, not bottle recognition.
+  // Confidence must score writability, not bottle recognition.
   test('the prompt scores confidence on truth-given-data, not producer recognition', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/NOT whether you recognise this specific bottling/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/never having heard of the grower merits 0\.5-0\.6/);
   });
 
-  // Curator audit 2026-08-19: notes NAMING the actual entity were 6/6 right;
-  // "appears to be a negociant/private-label" category guesses were 0/3 —
-  // and the specific-sounding wording made the wrong ones look evidenced.
+  // Notes NAMING the actual entity hold up; "appears to be a
+  // negociant/private-label" category guesses do not — and the
+  // specific-sounding wording makes the wrong ones look evidenced.
   test('a suspect note must name the entity or say "cannot verify" — never speculate a category', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/never dress a guess as a finding/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/no negociant\/private-label\/generic\/novelty speculation/);
@@ -1137,7 +1133,7 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
 });
 
 /**
- * Web-search rescue (pilot 2026-08-19) — a generation that would HOLD for a
+ * Web-search rescue — a generation that would HOLD for a
  * confidence reason gets ONE search-assisted retry. The gate is the difficulty
  * detector: ordinary wines never reach the retry, so the daily cap is spent
  * only on the rows a search can actually save. What's pinned here:
@@ -1240,9 +1236,8 @@ describe('web-search rescue on confidence holds', () => {
   });
 
   test('taxonomy_conflict never spends a search — the model already believes its hallucination', async () => {
-    // Nebbiolo fixture: LOW tannin is the opposite structural extreme. (The
-    // fixture was a high-tannin Pinot Noir until ticket 6a896b7e established
-    // that firm Pinot is Pommard, not a hallucination.)
+    // Nebbiolo fixture: LOW tannin is the opposite structural extreme. (Not a
+    // high-tannin Pinot Noir: firm Pinot is Pommard, not a hallucination.)
     WineDefinition.findById.mockReturnValue(chain({
       _id: WINE_ID, name: 'Barolo', producer: 'Cà di Bruno', type: 'red',
       country: { name: 'Italy' }, region: { name: 'Piedmont' }, grapes: [{ name: 'Nebbiolo' }],
@@ -1254,12 +1249,12 @@ describe('web-search rescue on confidence holds', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Somm ticket 6a894676. Frogtown Cellars carried a search-assisted profile
-  // at 0.6 with the producer identified. A curator filled in the correct
-  // appellation; the forced re-enrich could not get a search slot (the rescue
-  // is capped per UTC day and a curation session burns the cap in minutes)
-  // and the search-less rerun landed 0.4 with producerUnknown true. Filling
-  // in a CORRECT field made the record worse.
+  // A search-assisted profile at 0.6 with the producer identified; a curator
+  // fills in the correct appellation; the forced re-enrich cannot get a
+  // search slot (the rescue is capped per UTC day and a curation session
+  // burns the cap in minutes) and the search-less rerun lands 0.4 with
+  // producerUnknown true. Filling in a CORRECT field must not make the
+  // record worse.
   // -------------------------------------------------------------------------
   describe('a regen may not trade a better profile for a worse one', () => {
     const searched = (over = {}) => ({
@@ -1370,7 +1365,7 @@ describe('web-search rescue on confidence holds', () => {
 });
 
 /**
- * The reviewed-profile guard (somm report 2026-08-19): an automated
+ * The reviewed-profile guard: an automated
  * regeneration — proposal approval via reenrichAfterRecordEdit, or a full
  * batch — must never NULL a profile a human attested. A would-hold regen on
  * a reviewed published row keeps the old profile and clears only the review
@@ -1446,7 +1441,7 @@ describe('regeneration never destroys a reviewed published profile', () => {
 });
 
 /**
- * The per-add enrichment policy (Johan 2026-08-21).
+ * The per-add enrichment policy.
  *
  * Adding a bottle fires an enrichment per newly-minted wine — ~120 a day, and
  * the steady API spend once batch runs stop. It is also the least reliable

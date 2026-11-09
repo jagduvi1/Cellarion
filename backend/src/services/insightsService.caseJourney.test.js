@@ -1,6 +1,6 @@
 /**
  * buildCaseJourneys — the parts the bottle page's "This wine in your cellar"
- * card depends on (support ticket 2026-09-16), alongside the MCP case_journey
+ * card depends on, alongside the MCP case_journey
  * invariants pinned in mcp/insightTools.test.js.
  *
  * Pins: every consumed event carries the bottle it happened to (the card links

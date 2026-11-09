@@ -142,8 +142,9 @@ describe('resolveGrapeIdsStrict (match-only)', () => {
   test('resolves a synonym to its canonical doc — and REPORTS the substitution', async () => {
     Grape.findOne.mockReturnValue(found({ _id: 'g-syrah', name: 'Syrah' }));
     const r = await resolveGrapeIdsStrict(['Shiraz']);
-    // Ticket 2026-08-11: "Tinta Roriz" silently became Tempranillo — the
-    // resolver must flag every stored-name override so callers can surface it.
+    // A synonym ("Tinta Roriz") must not silently become its canonical name
+    // (Tempranillo) — the resolver flags every stored-name override so
+    // callers can surface it.
     expect(r).toEqual({
       ok: true, ids: ['g-syrah'], names: ['Syrah'],
       substitutions: [{ from: 'Shiraz', to: 'Syrah' }],
@@ -235,9 +236,9 @@ describe('applyProfilePatch', () => {
     expect(wine.aiProfile.source).toBe('curator');
   });
 
-  // Ticket d49ca3af: clearing a bad AI description used to curator-freeze the
-  // wine, locking exactly the worst-sourced rows out of the re-enrichment that
-  // would have fixed them once their real defect (null geography) was repaired.
+  // Clearing a bad AI description must not curator-freeze the wine: that
+  // would lock exactly the worst-sourced rows out of the re-enrichment that
+  // fixes them once their real defect (e.g. null geography) is repaired.
   test('a write that ONLY clears an AI profile resets fields but does NOT verify', () => {
     const wine = fakeWine({ description: 'invented filler', body: 'full', source: 'ai', confidence: 0.3 });
     applyProfilePatch(wine, { description: null, flavors: [] }, 'user-1');
@@ -338,7 +339,7 @@ describe('snapshot / restore (the undo_last contract)', () => {
   });
 });
 
-// Support ticket 2026-09-17 ("Colour Sparkling/Rosè"): the colour of a
+// The colour of a
 // sparkling/dessert/fortified wine is a record field beside type and grapes.
 describe('colour (record field)', () => {
   test('validates against red/white/rosé; null clears it', () => {

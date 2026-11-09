@@ -55,7 +55,7 @@ describe('normalizeString', () => {
     expect(normalizeString('  trimmed  ')).toBe('trimmed');
   });
 
-  test('still strips stars: they mean nothing outside a wine name (release audit 2026-10-13)', () => {
+  test('still strips stars: they mean nothing outside a wine name', () => {
     // A star-only placeholder must stay empty, and a footnote star on a
     // grape / region / country must not make it a different one.
     expect(normalizeString('*')).toBe('');
@@ -172,7 +172,7 @@ describe('normalizeClassification', () => {
     expect(normalizeClassification('   ')).toBeNull();
   });
 
-  test('audit 2026-10-26: bracketed, wrapped and Austrian marks are marks too', () => {
+  test('bracketed, wrapped and Austrian marks are marks too', () => {
     expect(normalizeClassification('Riserva (DOCG)')).toBe('Riserva');
     expect(normalizeClassification('(DOCG)')).toBeNull();
     expect(normalizeClassification('Denominazione di Origine Controllata (DOC)')).toBeNull();
@@ -188,7 +188,7 @@ describe('normalizeClassification', () => {
     expect(normalizeAppellation('Barolo (DOCG)')).toBe('Barolo');
   });
 
-  test('prod 2026-10-26: the apostrophe Italian spelling and the bare French mark', () => {
+  test('the apostrophe Italian spelling and the bare French mark', () => {
     expect(normalizeClassification("Denominazione d'Origine Controllata")).toBeNull();
     expect(normalizeClassification("Denominazione d’Origine Controllata e Garantita")).toBeNull();
     expect(normalizeClassification('Appellation Contrôlée')).toBeNull();
@@ -208,7 +208,7 @@ describe('normalizeClassification', () => {
   });
 });
 
-describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
+describe('normalizeAppellation (tier-suffix proliferation)', () => {
   test('strips the trailing classification tier', () => {
     expect(normalizeAppellation('Barolo DOCG')).toBe('Barolo');
     expect(normalizeAppellation('Barolo')).toBe('Barolo');
@@ -249,11 +249,10 @@ describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
     expect(normalizeAppellation('Swartland WO')).toBe('Swartland');
   });
 
-  // Ticket 6a842d54: "Denominación de Origen Valencia" and "Samos PDO" sat in
-  // the unmatched queue over curated "Valencia"/"Samos" — spelled-out phrases
-  // are invisible to the single-token loops, and the English EU marks were in
-  // neither token set.
-  test('strips spelled-out tier phrases from either end (ticket 6a842d54)', () => {
+  // "Denominación de Origen Valencia" and "Samos PDO" must match curated
+  // "Valencia"/"Samos" — spelled-out phrases are invisible to the
+  // single-token loops, and the English EU marks need a token set too.
+  test('strips spelled-out tier phrases from either end', () => {
     expect(normalizeAppellation('Denominación de Origen Valencia')).toBe('Valencia');
     expect(normalizeAppellation('Denominación de Origen Calificada Rioja')).toBe('Rioja');
     expect(normalizeAppellation('Chianti Denominazione di Origine Controllata e Garantita')).toBe('Chianti');
@@ -266,16 +265,16 @@ describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
     expect(normalizeAppellation('Ribera del Duero')).toBe('Ribera del Duero');
   });
 
-  test('PDO/PGI tier marks strip from both sides (ticket 6a842d54)', () => {
+  test('PDO/PGI tier marks strip from both sides', () => {
     expect(normalizeAppellation('Samos PDO')).toBe('Samos');
     expect(normalizeAppellation('PDO Santorini')).toBe('Santorini');
     expect(normalizeAppellation('Peloponnese PGI')).toBe('Peloponnese');
     expect(normalizeAppellation('Samos P.D.O.')).toBe('Samos'); // dotted form, same fold as the loops
   });
 
-  // Prod 2026-08-18: the phrase strip left the separator behind —
-  // "Vin du Québec - Indication géographique protégée" → "Vin du Québec -",
-  // one hand-fixed row. A bare punctuation token at either end is debris.
+  // The phrase strip must not leave the separator behind —
+  // "Vin du Québec - Indication géographique protégée" → "Vin du Québec -".
+  // A bare punctuation token at either end is debris.
   test('a separator left dangling by a strip is dropped from either end', () => {
     expect(normalizeAppellation('Vin du Québec - Indication géographique protégée')).toBe('Vin du Québec');
     expect(normalizeAppellation('Rioja – DOCa')).toBe('Rioja');
@@ -286,11 +285,11 @@ describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
     expect(normalizeAppellation('-')).toBe('-');
   });
 
-  // Prod 2026-08-13: "Lison Classico D.O.C.G." kept its tier. The LEADING loop
-  // has always folded dots out of the candidate token ("D.O. Valle Central"
-  // above); the trailing loop only trimmed dots off the END, so 'd.o.c.g'
-  // never matched anything in the tier set and the abbreviated forms labels
-  // actually print sailed straight through into the registry.
+  // "Lison Classico D.O.C.G." loses its tier. The LEADING loop folds dots out
+  // of the candidate token ("D.O. Valle Central" above); a trailing loop that
+  // only trimmed dots off the END would never match 'd.o.c.g' in the tier
+  // set, and the abbreviated forms labels actually print would sail straight
+  // through into the registry.
   test('strips a DOTTED trailing tier, the same fold the leading loop uses', () => {
     expect(normalizeAppellation('Lison Classico D.O.C.G.')).toBe('Lison Classico');
     expect(normalizeAppellation('Rioja D.O.Ca.')).toBe('Rioja');
@@ -333,7 +332,7 @@ describe('stripTrailingVintage (registry is vintage-neutral — audit B2)', () =
     expect(stripTrailingVintage('Bourgogne Rouge 2019 2019')).toBe('Bourgogne Rouge');
   });
 
-  test('a long separator run stays linear and still strips (CodeQL polynomial-redos, 2026-09-12)', () => {
+  test('a long separator run stays linear and still strips (CodeQL polynomial-redos)', () => {
     // The separator class is bounded to 8 repetitions; the caller's trim
     // removes what a longer run leaves behind, so the result is unchanged.
     expect(stripTrailingVintage(`Cuvée${' '.repeat(40)}2019`)).toBe('Cuvée');
@@ -596,10 +595,9 @@ describe('resolveCountryName', () => {
     expect(resolveCountryName('America')).toBe('United States');
   });
 
-  // A 48-row import on 2026-08-21 lost HALF its rows here: 24 rejected as
-  // unrecognized countries, every one an ISO code (de ×11, fr ×5, ro ×5, it,
-  // pl, es). The codes below are exactly the ones that file used, plus the
-  // rest of the wine world.
+  // An import file may state the country as an ISO code ("de", "fr", "ro"…);
+  // rejecting those as unrecognized countries loses the row. The codes below
+  // cover the wine world.
   describe('ISO 3166-1 alpha-2 codes', () => {
     test.each([
       ['de', 'Germany'], ['fr', 'France'], ['ro', 'Romania'],
@@ -724,7 +722,7 @@ describe('isRecognizedCountry', () => {
   });
 
   test('false for the prod junk this gate exists to stop', () => {
-    expect(isRecognizedCountry('Espalda')).toBe(false); // misread "España" (ticket 2026-07-26)
+    expect(isRecognizedCountry('Espalda')).toBe(false); // misread "España"
     expect(isRecognizedCountry('Atlantis')).toBe(false);
     expect(isRecognizedCountry('Back label')).toBe(false);
     expect(isRecognizedCountry('Red')).toBe(false);
@@ -795,7 +793,7 @@ describe('isJunkGrapeName', () => {
   });
 });
 
-describe('resolveGrapeName — blend-percentage artifacts (taxonomy audit 2026-07-18)', () => {
+describe('resolveGrapeName — blend-percentage artifacts', () => {
   test('strips a leading percentage and resolves the remainder', () => {
     // "70% Monastrell" existed as a Grape document on prod
     expect(resolveGrapeName('70% Monastrell')).toBe('Mourvèdre');
@@ -835,7 +833,7 @@ describe('resolveGrapeName — Sangiovese Grosso', () => {
   });
 });
 
-describe('resolveGrapeName — spelling variants merged 2026-07-11', () => {
+describe('resolveGrapeName — spelling variants', () => {
   test('maps spelling variants and typos to canonical names', () => {
     expect(resolveGrapeName('Agiorghitiko')).toBe('Agiorgitiko');
     expect(resolveGrapeName('Inzolia')).toBe('Insolia');
@@ -882,7 +880,7 @@ describe('producer house prefixes (the launch-day Barolo duplicate)', () => {
   });
 });
 
-describe('normalizeProducerKey (ticket #2B: dup-cluster bucketing)', () => {
+describe('normalizeProducerKey (dup-cluster bucketing)', () => {
   test('a corporate suffix + a wine stop word collapse to the same key', () => {
     // The exact repro: two registry strings for one producer must bucket together.
     expect(normalizeProducerKey('Kumeu River Wines Limited')).toBe('kumeu river');
@@ -904,8 +902,8 @@ describe('normalizeProducerKey (ticket #2B: dup-cluster bucketing)', () => {
   });
 });
 
-describe('normalizeProducerKey — Saint fold + founding-year strip (tickets d49fea22 / d49dfd38)', () => {
-  test('St / Ste / Saint / Sainte share one bucket token — the Caronne 3-spelling split', () => {
+describe('normalizeProducerKey — Saint fold + founding-year strip', () => {
+  test('St / Ste / Saint / Sainte share one bucket token — three spellings of Caronne', () => {
     const key = normalizeProducerKey('Château Caronne Sainte Gemme');
     expect(key).toBe('caronne saint gemme');
     expect(normalizeProducerKey('Château Caronne Ste Gemme')).toBe(key);
@@ -930,9 +928,9 @@ describe('normalizeProducerKey — Saint fold + founding-year strip (tickets d49
     expect(normalizeProducerKey('1848 Winery')).toBe('1848');
   });
 
-  test('a stop/corp word after the founding year does not hide it (audit 2026-08-10)', () => {
-    // Pre-fix, "X 1846" and "X 1846 Winery" split into different keys — a
-    // regression against the pre-fold bucketing, which unified them.
+  test('a stop/corp word after the founding year does not hide it', () => {
+    // "X 1846" and "X 1846 Winery" must share one key, as they would
+    // without the founding-year fold.
     expect(normalizeProducerKey("Grand Pappy's 1846 Winery")).toBe('grand pappys');
     expect(normalizeProducerKey('Bodega Norton 1895 Ltd')).toBe('norton');
     expect(normalizeProducerKey("Grand Pappy's Est. 1846 Winery")).toBe('grand pappys');
@@ -954,7 +952,7 @@ describe('normalizeProducerKey — Saint fold + founding-year strip (tickets d49
   });
 });
 
-// ─── draftWineKey — the private-draft key namespace (2026-09-12) ─────────────
+// ─── draftWineKey — the private-draft key namespace ──────────────────────────
 
 describe('draftWineKey', () => {
   const { draftWineKey, draftProducerKey, DRAFT_KEY_PREFIX, generateWineKey, pendingWineKey, normalizeString } = require('./normalize');

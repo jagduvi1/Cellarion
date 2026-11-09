@@ -1,10 +1,9 @@
 /**
  * POST /api/bottles/:id/consume — the day the bottle was actually drunk.
  *
- * Support ticket 2026-09-13: "when I remove a bottle that was drunk, the
- * consumed date is set as the current date — how do I set it properly?" The
- * bulk action had taken `consumedAt` since v1.200; the single-bottle route
- * did not forward it, so the modal could not offer a date. This pins the
+ * A bottle drunk earlier is removed with the day it was drunk, not today:
+ * the single-bottle route forwards `consumedAt` just as the bulk action
+ * does, so the modal can offer a date. This pins the
  * pass-through (the validation itself lives in services/bottleOps and is
  * tested there). Harness cloned from bottles.bulk.test.js.
  */

@@ -13,7 +13,7 @@ jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jes
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // get_wine_list reads live stock + wine names through the renderer's wine
-// map (support ticket 2026-09-12); the key shape is pinned here on purpose.
+// map; the key shape is pinned here on purpose.
 jest.mock('../services/wineListData', () => ({
   entryKey: (e) => `${e.wine}|${e.vintage || 'NV'}|${e.bottleSize || '750ml'}`,
   loadWineMap: jest.fn(async () => new Map()),
@@ -129,7 +129,7 @@ describe('list_wine_lists / get_wine_list', () => {
     expect(data.glass_pricing_rule).toEqual({ glasses_per_bottle: 5, markup_percent: 20, rounding: '1' });
   });
 
-  test('get_wine_list renders an auto-mode list with the SAME nested headings as the menu, path-labelled; unresolved entries trail (support ticket 2026-09-12)', async () => {
+  test('get_wine_list renders an auto-mode list with the SAME nested headings as the menu, path-labelled; unresolved entries trail', async () => {
     const { loadWineMap } = require('../services/wineListData');
     const W2 = oid('f');
     const GONE = oid('9');

@@ -1,9 +1,9 @@
 /**
  * ensurePendingVintageProfile — queue-seeding invariants.
  *
- * Pins the NV `relative` derivation (support ticket d49d2b36: the flag is
- * fully determined by the vintage string, and seeding it false shipped every
- * NV wine into the maturity queue self-contradictory), the $setOnInsert
+ * Pins the NV `relative` derivation (the flag is fully determined by the
+ * vintage string; seeding it false would ship every NV wine into the
+ * maturity queue self-contradictory), the $setOnInsert
  * idempotence contract, the Unknown-vintage no-op, the nonWine-quarantine
  * skip (a quarantined cider must not re-enter the somm queue on every
  * re-added bottle), and the non-throwing best-effort behaviour.

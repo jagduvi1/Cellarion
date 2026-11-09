@@ -1,7 +1,7 @@
 import { groupRacks, groupNames } from './rackGroups';
 
-// Support ticket 2026-09-06 / discussion #1228: several basement racks needed
-// a level between the cellar and its racks.
+// Discussion #1228: several racks (in one basement, say) need a level between
+// the cellar and its racks.
 describe('groupRacks', () => {
   test('sections by group in first-seen order, ungrouped racks last, blank groups count as none', () => {
     const racks = [

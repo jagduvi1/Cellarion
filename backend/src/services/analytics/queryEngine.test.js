@@ -214,8 +214,8 @@ describe('filter compilation is a whitelist, not an interpreter', () => {
     expect(post[0]['wd.producer']).toBeDefined();
     expect(needsWine).toBe(true);
   });
-  // Support ticket 2026-09-05: a typed Producer "=" filter was byte-exact, so
-  // "gaja" found nothing and the table looked broken.
+  // A typed Producer "=" filter must not be byte-exact, or "gaja" finds
+  // nothing and the table looks broken.
   test('text "=" is case-insensitive and anchored', async () => {
     const { post } = await compileFilters([{ field: 'wine.producer', op: 'eq', value: 'gaja' }], USER);
     expect(post[0]['wd.producer']).toEqual({ $regex: '^gaja$', $options: 'i' });
@@ -722,7 +722,7 @@ describe('KPI shape — zero dimensions (dashboards R-E)', () => {
 
 });
 
-describe('rack name / group dimensions (support ticket 2026-09-06)', () => {
+describe('rack name / group dimensions', () => {
   const B1 = 'e'.repeat(24);
   const B2 = '1'.repeat(24);
   const racksInScope = () => Rack.find.mockReturnValue(chainLean([

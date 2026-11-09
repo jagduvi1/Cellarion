@@ -54,7 +54,7 @@ describe('WineListMenu', () => {
   });
 });
 
-describe('WineListMenu price symbol spacing (support ticket 2026-09-12)', () => {
+describe('WineListMenu price symbol spacing', () => {
   test('a lettered currency gets a space, a sign does not', () => {
     const { unmount } = render(<WineListMenu layout={{ currencySymbol: 'CHF' }} sections={[{ title: 'R', level: 0, wines: [wine({ price: 16, byGlass: true, glassPrice: 9 })] }]} />);
     expect(screen.getByText('CHF 16 / CHF 9 glass')).toBeInTheDocument();

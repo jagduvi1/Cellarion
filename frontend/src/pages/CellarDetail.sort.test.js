@@ -2,10 +2,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import CellarDetail from './CellarDetail';
 
-// The cellar page opens in the sort the user picked last, on any cellar
-// (support ticket 2026-09-26: the sort went back to newest first on every
-// visit). The choice is saved on the account the moment it is picked; a
-// link's own sort and this tab's per-cellar selection still come first.
+// The cellar page opens in the sort the user picked last, on any cellar,
+// rather than going back to newest first on every visit. The choice is saved
+// on the account the moment it is picked; a link's own sort and this tab's
+// per-cellar selection still come first.
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),

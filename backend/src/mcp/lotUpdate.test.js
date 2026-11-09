@@ -1,7 +1,7 @@
 /**
  * update_bottle apply_to_lot — the drink window / price of ONE call written to
  * every active bottle of the same wine and vintage in the user's own cellars
- * (support ticket 2026-09-06: six identical calls for a case of six).
+ * (one call for a case of six, not six identical calls).
  *
  * Pins: only the lot-level fields travel to the siblings; each sibling runs
  * the shared validation and a refusal is reported, never fatal for the rest;

@@ -1,5 +1,5 @@
 /**
- * Import-time wine requests (support ticket 2026-09-05): a request is reused
+ * Import-time wine requests: a request is reused
  * across imports for the same user + wine + producer, and it carries the
  * file's country / region / appellation / type as hints for the curator.
  */

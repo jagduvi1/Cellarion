@@ -1,6 +1,6 @@
 /**
  * list_wine_drafts / update_wine_draft / publish_wine — the connector's half
- * of private draft wines (support ticket 2026-09-12). The service is mocked:
+ * of private draft wines. The service is mocked:
  * this pins scopes, delegation with the caller's identity, the arg → patch
  * mapping, and the service-code → MCP-code mapping (duplicate/similar →
  * conflict carrying the match/candidates; invalid_identity → invalid_input;

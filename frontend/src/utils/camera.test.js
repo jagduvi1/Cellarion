@@ -1,7 +1,7 @@
 import { openCamera, focusAt, canAutofocus, reportsFocus, isSuperseded } from './camera';
 
-// The phone camera for a label or a barcode (support ticket 2026-10-10: an
-// Android preview never came into focus). Pinned: continuous autofocus is
+// The phone camera for a label or a barcode, whose preview must come into
+// focus on Android phones too. Pinned: continuous autofocus is
 // asked for where offered; a rear lens that cannot focus at all is swapped
 // for one that can, and the outcome — that lens, or "none better" — is
 // remembered so later openings are a single open; a busy camera is retried,

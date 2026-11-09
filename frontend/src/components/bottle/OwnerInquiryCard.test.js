@@ -143,7 +143,7 @@ test('a terminal 409 (already answered / closed) hides the form — no retry tha
   expect(screen.queryByPlaceholderText(/The label says/)).not.toBeInTheDocument();
 });
 
-// Support ticket 2026-10-14: the question page hands the card the question the
+// The question page hands the card the question the
 // notification was about, with its own intro when the member has no bottle left.
 test('a given question is shown as is, with no lookup, and its own intro line', async () => {
   const apiFetch = vi.fn();

@@ -1,5 +1,5 @@
 /**
- * The classification taxonomy routes (support ticket 2026-10-29): list with
+ * The classification taxonomy routes: list with
  * wine counts and the review flag, create with a kind, approve (idempotent,
  * audited), delete refused while a wine references the row.
  */

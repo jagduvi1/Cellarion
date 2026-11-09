@@ -42,7 +42,7 @@ describe('ratingRangeLabel — normalised bounds rendered in the user scale', ()
   });
 });
 
-// A statistics band link's chip names the band (support ticket 2026-10-11).
+// A statistics band link's chip names the band.
 describe('ratingBandName', () => {
   const t = (k) => k;
   it('names a band by its statistics label', () => {
