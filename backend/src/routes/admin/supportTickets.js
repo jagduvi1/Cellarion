@@ -20,11 +20,11 @@ const TICKET_STATUSES = ['open', 'in_progress', 'closed'];
 const REPLY_EMAIL_TIMEOUT_MS = 10000;
 
 /**
- * Email the answer to the ticket's author too (2026-09-26): the in-app bell
- * alone never reached someone who asked and left. Only to a verified address,
+ * Email the answer to the ticket's author too: the in-app bell alone never
+ * reaches someone who asked and left. Only to a verified address,
  * and not when they turned support-reply emails off (a missing setting means
  * on) or objected to all Cellarion email (emailOptOutAt — an unsubscribe made
- * before this category existed covers it too; audit 2026-09-27 M7).
+ * before this category existed covers it too).
  * Best-effort and bounded: a mail outage must never fail or stall the reply
  * itself. Resolves to whether the email went out.
  */

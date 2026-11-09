@@ -12,8 +12,8 @@ const REASON_ICONS = { drank: '\u{1F377}', gifted: '\u{1F381}', sold: '\u{1F4B0}
 
 /**
  * "This wine in your cellar" — what happened to the viewer's OTHER bottles of
- * the wine on screen (support ticket 2026-09-16: "if I drink a bottle, I can't
- * see that information in the other bottles"). Each drunk sibling shows its
+ * the wine on screen, so drinking one bottle is visible from the others.
+ * Each drunk sibling shows its
  * date, rating and note, and links to its own page.
  *
  * Nothing is copied between bottles: the rows are computed on read by
@@ -174,8 +174,8 @@ function VintagePageHistory({ thisLot, otherLots, cellarId, fromPath = null, con
   );
 }
 
-// `vintageHref`: the vintage page for this bottle's wine and vintage (support
-// ticket 2026-10-09). Offered from the card so the page stays reachable from
+// `vintageHref`: the vintage page for this bottle's wine and vintage.
+// Offered from the card so the page stays reachable from
 // a DRUNK bottle too — once the last bottle of a vintage is gone the cellar
 // list has no group to open it from, and this card is where the history of
 // that vintage already lives.

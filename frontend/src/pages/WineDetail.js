@@ -321,8 +321,8 @@ export default function WineDetail() {
         </div>
       )}
 
-      {/* No published profile — same honest pending state as the bottle page
-          (somm ticket 6a83e765): held and never-generated must read alike. */}
+      {/* No published profile — same honest pending state as the bottle page:
+          held and never-generated must read alike. */}
       {!wine.aiProfile?.description && (
         <div className="wd-card bd-ai-profile">
           <div className="bd-ai-profile__header">

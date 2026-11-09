@@ -1,7 +1,7 @@
 /**
  * scan-country-plausibility — audit the Country taxonomy for junk entries
- * (support ticket 2026-07-26: a garbled label scan minted the country
- * "Espalda"). Read-only; changes nothing, has no --apply flag.
+ * (a garbled label scan can mint a country like "Espalda"). Read-only;
+ * changes nothing, has no --apply flag.
  *
  * For every Country document, reports:
  *   - whether the name is a recognized real-world country

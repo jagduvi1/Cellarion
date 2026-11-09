@@ -101,7 +101,7 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
     return { error: { status: 400, message: 'Image format could not be verified' } };
   }
 
-  // keepBackground (ticket 6a97f870): the uploader opted out of background
+  // keepBackground: the uploader opted out of background
   // removal — a label-only photo or a product shot, which rembg would cut up.
   // The original is then the kept image from the start: processedUrl points at
   // it so every consumer that prefers processedUrl (exports, the wine's

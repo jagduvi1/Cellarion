@@ -411,9 +411,9 @@ router.get('/', async (req, res) => {
     }
 
     // The user's own photos (chosen default, own uploads by bottle or wine) —
-    // the same resolution every cellar list uses. Without it this list showed
-    // registry images only, so bottles photographed by their owner rendered
-    // blank (support ticket 2026-09-19). Required lazily: routes/cellars is a
+    // the same resolution every cellar list uses. Without it this list shows
+    // registry images only, so bottles photographed by their owner render
+    // blank. Required lazily: routes/cellars is a
     // router module and this keeps load order out of it. A failed photo
     // lookup degrades to registry images; it never fails the list.
     try {
@@ -572,8 +572,8 @@ router.post('/', requireNonDemo, async (req, res) => {
       : null;
     await bottle.populate(WINE_POPULATE);
 
-    // Custom fields typed in the add form (user ticket 6ab05cca — "adding ABV
-    // when adding bottles"). Same typed key/value data the bottle page writes,
+    // Custom fields typed in the add form (e.g. an ABV entered while adding
+    // the bottle). Same typed key/value data the bottle page writes,
     // through the same service, so the two surfaces cannot drift; the add form
     // is only a second entry point to it.
     //
@@ -789,8 +789,8 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       pendingImgOr.push({ wineDefinition: bottle.wineDefinition });
       // The viewer's other bottles of the same wine: a photo uploaded while a
       // bottle still waited for its wine request carries no wineDefinition,
-      // so only its bottle knows the wine (support ticket 2026-09-07 — same
-      // fix as the cellar list's attachBottleImageUrls).
+      // so only its bottle knows the wine (the same rule as the cellar list's
+      // attachBottleImageUrls).
       try {
         const siblings = await Bottle.find({ user: req.user.id, wineDefinition: bottle.wineDefinition, _id: { $ne: bottle._id } }).select('_id vintage').lean();
         for (const s of siblings) vintageOfSibling.set(String(s._id), photoVintage(s.vintage));
@@ -804,16 +804,16 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       $or: pendingImgOr,
       uploadedBy: req.user.id,
       // Pending OR approved — the uploader's own photo must not vanish from
-      // the hero the moment it is approved (same fix as the cellar list,
-      // support ticket 2026-09-05 / discussion #1227).
+      // the hero the moment it is approved (same rule as the cellar list,
+      // discussion #1227).
       status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
-      // Never a label scan — same fix as the cellar list (routes/cellars.js
-      // attachBottleImageUrls, support ticket 2026-09-03): the scanner's raw
+      // Never a label scan — same rule as the cellar list (routes/cellars.js
+      // attachBottleImageUrls): the scanner's raw
       // frame is private curation evidence, not a bottle photo.
       kind: { $ne: 'label-scan' },
     }).sort({ createdAt: -1 }).limit(OWN_PHOTO_CANDIDATES).lean();
-    // Same order as the cellar list (routes/cellars.js attachBottleImageUrls,
-    // support ticket 2026-10-09), so the card and the page agree: this
+    // Same order as the cellar list (routes/cellars.js attachBottleImageUrls),
+    // so the card and the page agree: this
     // bottle's own photo, else the viewer's photo of the same vintage, else
     // the vintage's official photo, else the wine's registry image (client),
     // and only then the viewer's photo of another vintage.
@@ -866,18 +866,17 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       currentRelease = await getCurrentRelease(wineId, bottle.currency);
     }
 
-    // Where this bottle sits, answered HERE rather than by the client
-    // (2026-08-22, from the rate-limit analysis). BottleDetail used to
-    // download EVERY rack with all slots plus the full 3D layout — two
-    // requests and the two heaviest payloads on the page — and scan them in
-    // the browser for one bottle id. `slots.bottle` carries a unique multikey
-    // index, so the server answers with one indexed findOne and a few dozen
-    // bytes. That per-open cost is what let an ordinary editing session hit
-    // the API rate limit.
+    // Where this bottle sits, answered HERE rather than by the client: for
+    // BottleDetail to download EVERY rack with all slots plus the full 3D
+    // layout — two requests and the two heaviest payloads on the page — and
+    // scan them in the browser for one bottle id costs enough per open to let
+    // an ordinary editing session hit the API rate limit. `slots.bottle`
+    // carries a unique multikey index, so the server answers with one indexed
+    // findOne and a few dozen bytes.
     let rackInfo = null;
     // Whether the cellar has any rack at all: the page offers "Place in a
-    // rack" on an unplaced bottle only where that can lead somewhere
-    // (support ticket 2026-10-26). One indexed existence check, and only
+    // rack" on an unplaced bottle only where that can lead somewhere.
+    // One indexed existence check, and only
     // when the bottle is not racked (a racked bottle proves it).
     let cellarHasRacks = false;
     if (bottle.status === 'active') {
@@ -910,11 +909,10 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
 
     // The other active bottles of this wine and vintage in the viewer's OWN
     // cellars, so the edit form can offer "also apply the drink window and
-    // price to the other N" (support ticket 2026-09-06). Auxiliary: a lookup
+    // price to the other N". Auxiliary: a lookup
     // failure degrades to "no checkbox", never a 500.
     // Only from a bottle in the viewer's OWN cellar: the lot is the viewer's
-    // bottles, which from someone else's cellar would be the wrong lot
-    // (audit 2026-09-07).
+    // bottles, which from someone else's cellar would be the wrong lot.
     let lotSiblingIds = [];
     if (String(cellar.user && (cellar.user._id || cellar.user)) === String(req.user.id)) {
       try {
@@ -934,14 +932,13 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
 
 // The viewer's OWN story with this wine: what happened to their other bottles
 // of it — how many remain, and for each one already drunk the date, rating and
-// note (support ticket 2026-09-16: "if I drink a bottle, I can't see that
-// information in the other bottles"). The data was always stored — a consumed
-// bottle keeps its document — but only the drunk bottle's own page showed it.
+// note. The data is always stored — a consumed bottle keeps its document —
+// but without this only the drunk bottle's own page shows it.
 //
 // NOTHING IS COPIED BETWEEN BOTTLES. This is computed on read from the
-// siblings, so each bottle stays the single truth about itself; the ticket's
-// literal "store it in every bottle" would duplicate data and make a later
-// correction silently wrong on every other copy.
+// siblings, so each bottle stays the single truth about itself; storing it in
+// every bottle would duplicate data and make a later correction silently
+// wrong on every other copy.
 //
 // ?vintages=this (default) is the bottle's own vintage, 'all' every vintage of
 // the wine as its own group, newest first — your note on the 2019 next to the
@@ -1089,9 +1086,8 @@ router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res)
 router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   try {
     // consumedAt: the day the bottle was actually drunk, when that is not
-    // today (support ticket 2026-09-13: "how do I set the consumed date?").
-    // The service validates it (a real date, not in the future); absent →
-    // now, as before. The bulk action has taken the same field since v1.200.
+    // today. The service validates it (a real date, not in the future);
+    // absent → now. The bulk action takes the same field.
     const { reason = 'drank', note, rating, consumedRatingScale, consumedAt, ifActive } = req.body;
     // ifActive (offline queue, #1355): only consume a bottle still in the
     // cellar — one consumed elsewhere meanwhile must not have its record
@@ -1290,10 +1286,9 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
 });
 
 // ── Bulk actions ────────────────────────────────────────────────────────────
-// Support ticket 6a9949e3 (2026-09-03): a delivery of many bottles had been
-// logged in a storage cellar and needed to go home — one at a time was the
-// only way. The cellar view now has a select mode, and these routes are what
-// it calls. Every bulk route applies the SAME per-bottle operation the single
+// A delivery of many bottles logged in one cellar may need to move, be edited
+// or be consumed together. The cellar view has a select mode, and these routes
+// are what it calls. Every bulk route applies the SAME per-bottle operation the single
 // routes use (services/rackOps, services/bottleOps), one bottle at a time, and
 // reports partial success instead of hiding it: each bottle that could not be
 // acted on comes back in `skipped` with a reason, and the rest are done.
@@ -1398,8 +1393,7 @@ router.post('/bulk-move', async (req, res) => {
 });
 
 // POST /api/bottles/bulk-delete - Move MANY bottles to the cellar's "Recently
-// deleted" in ONE request (forum feedback 2026-10-12: an import to redo, a
-// batch added wrong). Nothing is gone for good yet: each bottle keeps its
+// deleted" in ONE request (an import to redo, a batch added wrong). Nothing is gone for good yet: each bottle keeps its
 // snapshot and its own photos for TRASH_DAYS and can be restored, one at a
 // time or the whole batch (services/bottleTrash). Its rack slot is freed now.
 // Editor+ on each bottle's cellar — the single DELETE rule. Any status,
@@ -1469,8 +1463,8 @@ router.post('/bulk-delete', async (req, res) => {
 //       per bottle. `fields` is limited to BULK_UPDATE_FIELDS — the purchase
 //       details a delivery shares (date, shop, price), the reservation
 //       ("spoken for X until 2028"), and the drink window and notes a wine and
-//       vintage share (support ticket 2026-09-06; notes for the vintage page's
-//       "Edit vintage"), and the barcode every bottle of one product carries
+//       vintage share (notes for the vintage page's "Edit vintage"), and the
+//       barcode every bottle of one product carries
 //       (the vintage page's "Add barcode") — everything else stays per bottle.
 //   { action: 'consume', bottleIds, reason, note, consumedAt, includeReserved }
 //       → services/bottleOps.consumeBottle per bottle, one date for all;

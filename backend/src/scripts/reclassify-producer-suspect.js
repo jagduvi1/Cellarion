@@ -1,11 +1,10 @@
 /**
- * reclassify-producer-suspect.js — somm ticket 6a85f961.
+ * reclassify-producer-suspect.js — one-off for the producer flag split.
  *
- * 94.7% of the published-suspect queue was generated BEFORE the 2026-08-17
- * flag split, when "this value is not a producer" and "this is a real winery I
- * cannot place" shared one boolean. Those rows never saw producerUnknown, so
- * real small estates — La Spia, Château Jeandeman, Cave de Sainte-Marie — sit
- * in a judgement queue wearing an owner-visible "cannot be verified" caveat.
+ * Rows generated BEFORE the flag split carry one boolean for both "this value
+ * is not a producer" and "this is a real winery I cannot place". Those rows
+ * never saw producerUnknown, so real small estates sit in a judgement queue
+ * wearing an owner-visible "cannot be verified" caveat.
  *
  * The model already told us which is which, in the note it wrote at the time.
  * So this reads STORED TEXT and costs NOTHING: no AI calls, no re-generation,

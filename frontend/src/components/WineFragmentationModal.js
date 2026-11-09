@@ -8,14 +8,14 @@ const PAGE_SIZE = 50;
 
 /**
  * Admin review queues for SAME-WINE fragmentation the name-keyed duplicate
- * nets cannot see (curator ticket d4a0e96b): a wine split across records whose
+ * nets cannot see: a wine split across records whose
  * name strings genuinely differ never collides on any canonical key.
  *
  * Two modes: "groups" lists records sharing an exact producer + appellation —
  * disjoint vintage sets (the fragments split one wine's vintages between them)
  * sort first, multi-cuvée estates overlap vintages and sink. "pairs" lists
- * near-identical producer spellings inside one appellation (Pierre Charau /
- * Pierre Chanau, Tavel). Review-only, like its siblings: merging goes through
+ * near-identical producer spellings inside one appellation (Pierre Exampleau
+ * / Pierre Exempleau, say). Review-only, like its siblings: merging goes through
  * the golden-record merge in the duplicates scanner; "Not duplicates" on a
  * group records every pair in the shared not-a-duplicate store, silencing it
  * here, in the cluster scan and in canonical collisions. Pairs have no

@@ -5,10 +5,10 @@ const mongoose = require('mongoose');
  * and REJECTED, so it stops resurfacing in the review queue
  * (services/taxonomyReview.listUnmatchedAppellations filters on it).
  *
- * The queue is a live aggregate over wine rows — nothing about a review was
- * persisted, so a string judged "not an appellation" (a quality tier, a
- * fantasy name, a label slogan) reappeared on every visit forever (ticket
- * 6a842d5e; the exact gap PriceTrackingSkip closed for the price queue).
+ * The queue is a live aggregate over wine rows — without a persisted review,
+ * a string judged "not an appellation" (a quality tier, a fantasy name, a
+ * label slogan) would reappear on every visit forever (the same gap
+ * PriceTrackingSkip closes for the price queue).
  *
  * `normalizedKey` is the queue's own group key (normalizeAppellationKey of
  * the tier-stripped string), and the listing judges coverage through the

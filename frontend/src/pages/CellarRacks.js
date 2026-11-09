@@ -761,7 +761,7 @@ function CellarRacks() {
     }
   };
 
-  // Rename / regroup (support ticket 2026-09-06): PUT name + group and adopt
+  // Rename / regroup: PUT name + group and adopt
   // the returned values. An empty group clears it.
   const handleEditRackSave = async (rackId, { name, group, typeConfig }) => {
     try {
@@ -1094,8 +1094,7 @@ function CellarRacks() {
       ) : (
         <>
           {/* Tabs sectioned by the racks' group label ("Basement" holds several
-              racks — support ticket 2026-09-06). A cellar without groups
-              renders one plain strip, exactly as before. */}
+              racks). A cellar without groups renders one plain strip. */}
           {groupRacks(racks).map(section => (
             <div key={section.group ?? '__ungrouped'} className={`rack-tab-group${section.group ? '' : ' rack-tab-group--none'}`}>
               {section.group && <div className="rack-tab-group-label">{section.group}</div>}
@@ -1500,13 +1499,13 @@ const PREVIEW_FILL_MAX = 180;
 // with different layouts. The per-shelf list is always kept the length of the
 // shelves input (fitShelfRows) so a changed shelf count never desyncs it.
 // `alternate` (rows alternate cols / cols−1, the honeycomb of a Liebherr
-// GrandCru shelf — support ticket 2026-09-15) changes capacity and the slot
+// GrandCru shelf) changes capacity and the slot
 // numbering, so unlike two-deep and nesting it is offered here only, never
 // in the edit dialog; and since a narrow row can only nest, it forces nesting.
 // Every shelf can then differ from the cabinet — its rows, its width and its
 // pattern — so a preset is the maker's loading diagram and the owner edits it
-// into their own cabinet (support ticket 2026-08-31: a GrandCru 5001 has
-// 4-wide staggered shelves top and bottom around 6-wide honeycomb ones).
+// into their own cabinet (a GrandCru 5001, for one, has 4-wide staggered
+// shelves top and bottom around 6-wide honeycomb ones).
 function CabinetShapeFields({ newRack, setNewRack }) {
   const { t } = useTranslation();
   const [presetKey, setPresetKey] = useState('custom');

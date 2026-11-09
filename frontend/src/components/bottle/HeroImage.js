@@ -9,7 +9,7 @@ const ImageGallery = lazy(() => import('../ImageGallery'));
 // `vintageImage` / `vintageImageCredit`: the vintage's official photo, shown
 // before the wine's registry image, which may be another year's label.
 // `otherVintageImage`: the viewer's own photo of another vintage, only when
-// the wine has no image at all (support ticket 2026-10-09).
+// the wine has no image at all.
 function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vintageImageCredit, otherVintageImage, isPending, displayName, canEdit, onSetDefault }) {
   const { t } = useTranslation();
   const [galleryEmpty, setGalleryEmpty] = useState(false);

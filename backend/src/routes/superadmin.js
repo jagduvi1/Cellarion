@@ -441,8 +441,8 @@ router.patch('/ai/chat-limit', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/enrichment-gate
-// The two publication-gate thresholds (ticket 6a83e765, calibrated 2026-08-18
-// — floor 0.40 / unknown-bar 0.55). Stored like every other aiConfig key, so
+// The two publication-gate thresholds (defaults: floor 0.40 / unknown-bar
+// 0.55). Stored like every other aiConfig key, so
 // tuning never needs a release; load() clamps junk back to the defaults.
 // ---------------------------------------------------------------------------
 router.patch('/ai/enrichment-gate', async (req, res) => {
@@ -469,7 +469,7 @@ router.patch('/ai/enrichment-gate', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/enrichment-on-add
-// Who pays for a new wine's first profile (Johan 2026-08-21). At ~120 new
+// Who pays for a new wine's first profile. At ~120 new
 // wines a day the per-add hook — not the admin batch runs — is the steady API
 // spend, and it targets the least reliable population: freshly scanned labels
 // with no region, where the generation gate spends two calls and publishes

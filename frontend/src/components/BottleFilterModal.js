@@ -11,9 +11,9 @@ const COLLAPSED_LIMIT = 8;
 
 // Rating bounds live in the filter state as NORMALISED 0–100 strings (the wire
 // format every list endpoint speaks), but the person types in their own scale
-// — 3.8★, 16.5/20, 91pts — at the scale's own precision (support ticket
-// 2026-09-12: ratings are stored to one decimal, the old 2+/3+/4+ dropdown
-// rounded to whole stars). Text is local until blur/Enter so a half-typed
+// — 3.8★, 16.5/20, 91pts — at the scale's own precision (star and 20-point
+// ratings carry one decimal, which a whole-star choice cannot express). Text is
+// local until blur/Enter so a half-typed
 // "3." is never round-tripped through the conversion mid-keystroke.
 function RatingRangeInputs({ minNorm, maxNorm, scale, onChange }) {
   const { t } = useTranslation();
@@ -192,9 +192,8 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
 
   // A pill's count: how many bottles choosing it gives, with the other
   // fields' choices kept. Every pill of the cellar stays listed (allFacets),
-  // so a second country can still be added — a selected field used to show
-  // the whole cellar's counts instead, as if no other filter were on
-  // (support report 2026-10-16).
+  // so a second country can still be added — a selected field must not show
+  // the whole cellar's counts instead, as if no other filter were on.
   // No counts sent at all (a rack / storage filter the search cannot count):
   // no numbers and nothing dimmed.
   const countsFor = (facetKey) => (facets ? facets[facetKey] || {} : null);
@@ -378,7 +377,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
         )}
 
         {/* Stored in — a rack group (a room, a fridge) or one rack; single
-            choice, server-side after search (support ticket 2026-09-06). */}
+            choice, server-side after search. */}
         {Array.isArray(storage) && storage.length > 0 && (() => {
           const groups = [...new Set(storage.map(r => r.group).filter(Boolean))];
           const current = filters.storage || '';
@@ -417,7 +416,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
 
         {/* Maturity — several buckets at once, OR-combined, plus the one
             combination almost every owner asks for: "needs attention" = Late
-            + Declining (support ticket 2026-09-12). Counts come from the
+            + Declining. Counts come from the
             cellar statistics, not the facets (maturity is computed per row,
             so Meilisearch cannot facet it) — they describe the whole cellar,
             not the current filter combination, and a zero still shows so an

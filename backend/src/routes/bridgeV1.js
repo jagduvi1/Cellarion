@@ -352,9 +352,8 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
  * The latest change to what a fetch carries BESIDES the wine record: its
  * reviewed drink windows and its published values. Neither touches the wine's
  * own updatedAt, so a change check on that alone never reported a window a
- * sommelier reviewed after an install copied the wine (support ticket
- * 2026-10-13: the install kept "awaiting staff review" while the hosted wine
- * had its window). A row's setAt / decidedAt counts as well as its updatedAt:
+ * sommelier reviewed after an install copied the wine (the install would keep
+ * "awaiting staff review" while the hosted wine has its window). A row's setAt / decidedAt counts as well as its updatedAt:
  * updates written with $set skip the pre-save hook that stamps updatedAt.
  *
  * A window withdrawn back to pending, or a value taken down, leaves nothing
@@ -525,7 +524,7 @@ router.post('/corrections', quota('contributions'), async (req, res) => {
       logAudit(req, 'bridge.correction.forwarded', { type: 'wineCorrectionProposal', id: out.proposal?._id },
         { key: req.bridge.key.id, instanceHost: req.bridge.key.instanceHost, wine: req.body?.wineId });
       // 200 + amended when the key owner's own pending proposal absorbed the
-      // fields (support ticket 2026-09-12) — the install forwards each of its
+      // fields — the install forwards each of its
       // user's filings, so an amendment there is an amendment here.
       res.status(out.amended ? 200 : 201).json({
         proposal: { id: out.proposal?._id, status: out.proposal?.status || 'pending', applied: !!out.applied, amended: !!out.amended },

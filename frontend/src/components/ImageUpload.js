@@ -19,8 +19,7 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
   const [facingMode, setFacingMode] = useState('environment');
   // "Keep the background": skip background removal for this upload. rembg
   // expects a whole bottle; on a photo of just the label, or a product shot,
-  // it keeps whatever figure it finds on the label and cuts the rest away
-  // (support ticket 6a97f870, 2026-09-02).
+  // it keeps whatever figure it finds on the label and cuts the rest away.
   const [keepBackground, setKeepBackground] = useState(false);
   const videoRef = useRef(null);
   const tapFocus = useTapToFocus(videoRef);

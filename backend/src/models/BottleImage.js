@@ -22,9 +22,9 @@ const bottleImageSchema = new mongoose.Schema({
   // The sanitised (EXIF-stripped) upload as received. TRANSIENT for an
   // ordinary bottle photo: it exists only until background removal succeeds,
   // then services/imageProcessor.discardOriginal deletes the file and nulls
-  // this — the processed image is the only copy Cellarion keeps (support
-  // ticket 2026-09-03: a raw frame shows the kitchen, a hand, a face, and
-  // nothing needs it once rembg has run). It STAYS where it is the only or the
+  // this — the processed image is the only copy Cellarion keeps (a raw
+  // frame shows the kitchen, a hand, a face, and nothing needs it once
+  // rembg has run). It STAYS where it is the only or the
   // intended file: a keepBackground row (processedUrl === originalUrl), a row
   // whose rembg run failed (the retry needs its source), an imported photo
   // that was never cropped, and kind:'label-scan' curation evidence, which has
@@ -65,8 +65,7 @@ const bottleImageSchema = new mongoose.Schema({
   // The uploader asked us NOT to run background removal on this photo. rembg
   // assumes a bottle on a background: on a photo of just the label, or a
   // retailer product shot, it keeps whatever "figure" it finds on the label
-  // and cuts the rest away (support ticket 6a97f870, 2026-09-02 — a user's
-  // label photos came back "systematically cropped"). When true the original
+  // and cuts the rest away, so label photos come back cropped. When true the original
   // IS the kept image (processedUrl = originalUrl): processImage / retry never
   // send it to rembg, and discardOriginal never deletes it.
   keepBackground: {
@@ -82,9 +81,9 @@ const bottleImageSchema = new mongoose.Schema({
   // always visibility:'private', never has a `bottle`, is never assignedToWine,
   // and therefore appears in no gallery and no public listing. The public
   // { status:'approved', visibility:'public' } gates exclude it on their own,
-  // but a lookup keyed on wineDefinition + uploader does NOT (support ticket
-  // 2026-09-03: the cellar view's pending-photo lookup served scan frames as
-  // card images) — every such query must filter `kind: { $ne: 'label-scan' }`
+  // but a lookup keyed on wineDefinition + uploader does NOT (unfiltered, the
+  // cellar view's pending-photo lookup would serve scan frames as card
+  // images) — every such query must filter `kind: { $ne: 'label-scan' }`
   // explicitly. That is what this field is for.
   kind: {
     type: String,
@@ -140,9 +139,9 @@ const bottleImageSchema = new mongoose.Schema({
   // The vintage the photo was taken of — its bottle's vintage at upload, kept
   // in step when that bottle's vintage is edited (utils/imageVintage). null =
   // not tied to a vintage: a wine-level upload, an unknown year, or a label
-  // scan. Lets a 2016 bottle show a 2016 label rather than the 2015 one
-  // (support ticket 2026-10-09). Rows older than the field have no key at
-  // all until the boot-time backfill (services/imageVintageBackfill) sets it.
+  // scan. Lets a 2016 bottle show a 2016 label rather than the 2015 one.
+  // Rows older than the field have no key at all until the boot-time
+  // backfill (services/imageVintageBackfill) sets it.
   vintage: {
     type: String,
     trim: true,
@@ -167,8 +166,8 @@ const bottleImageSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  // Reports raised by users who can SEE this image (support ticket 6a865f60,
-  // 2026-08-20). Two populations need this and only one of them is abuse:
+  // Reports raised by users who can SEE this image. Two populations need this
+  // and only one of them is abuse:
   //   - someone else's photo on a shared wine page: the only lever a viewer has
   //   - the uploader's OWN photo once it has been assigned to a wine, which
   //     makes it registry content they can no longer simply delete
@@ -207,7 +206,7 @@ bottleImageSchema.index({ wineDefinition: 1, assignedToWine: 1 });
 // The same-vintage photo lookups (cellar list, bottle page, gallery order).
 bottleImageSchema.index({ wineDefinition: 1, vintage: 1 });
 // unlinkIfUnreferenced / discardOriginal ask "does any OTHER row point at this
-// file?" — on every processed upload since 2026-09-03 — so the answer must be
+// file?" — on every processed upload — so the answer must be
 // an index seek, not a collection scan. Partial: only rows that carry a URL.
 bottleImageSchema.index({ originalUrl: 1 }, { partialFilterExpression: { originalUrl: { $type: 'string' } } });
 bottleImageSchema.index({ processedUrl: 1 }, { partialFilterExpression: { processedUrl: { $type: 'string' } } });

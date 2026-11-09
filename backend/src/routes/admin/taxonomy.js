@@ -762,8 +762,8 @@ router.post('/regions/:id/approve', async (req, res) => {
 });
 
 // POST /api/admin/taxonomy/grapes/:id/approve — record that a human looked
-// a user-write mint set (somm ticket 6a942a60: bottle-add/import minted
-// "Honey" and "Alvarão" straight into the shared taxonomy). Mirrors the
+// a user-write mint set (bottle-add and import can mint a grape straight
+// into the shared taxonomy). Mirrors the
 // regions verb above: approval is its own verb, not a PUT side effect —
 // editing a grape to fix a typo must not silently count as "a human vouched
 // for this". A near-miss mint gets MERGED from the queue instead (the
@@ -990,7 +990,7 @@ router.get('/appellations/unmatched', async (req, res) => {
 // POST /api/admin/taxonomy/appellations/unmatched/dismiss — reviewed and
 // judged NOT promotable (a quality tier, a fantasy name, a label slogan).
 // Persists a skip so the live aggregate stops resurfacing the string
-// (ticket 6a842d5e — the terminal state the price queue got with declines).
+// (the same terminal state the price queue has with declines).
 // The audit target carries no ObjectId (the subject is a string key, and
 // target.id is typed ObjectId) — key and name ride in the details.
 router.post('/appellations/unmatched/dismiss', async (req, res) => {
@@ -1253,7 +1253,7 @@ router.post('/bottle-sizes/normalize-all', async (req, res) => {
   }
 });
 
-// ── Classifications (models/Classification, support ticket 2026-10-29) ─────
+// ── Classifications (models/Classification) ────────────────────────────────
 // The quality tiers as a curated taxonomy with a kind each, managed here like
 // grapes: list with wine counts and the review flag, create, edit, delete
 // while unreferenced, and the explicit approve verb.

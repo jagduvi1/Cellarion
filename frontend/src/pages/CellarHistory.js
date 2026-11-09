@@ -643,8 +643,8 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false, canEdit 
           )}
         </div>
         <div className="history-bottle-main-right">
-          {/* The vintage page stays reachable after the last bottle is drunk
-              (support ticket 2026-10-09): from here, not only from the cellar
+          {/* The vintage page stays reachable after the last bottle is drunk:
+              from here, not only from the cellar
               list's group, which is gone by then. */}
           {wine?._id && (
             <Link

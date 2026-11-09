@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// A saved analytics view (#987 saved-views slice, Johan 2026-08-19): any
+// A saved analytics view (#987 saved-views slice): any
 // table state — rows or grouped, filters, columns, chart — under a name the
 // user chose, plus the starring that orders the views menu. Two kinds share
 // the collection so one GDPR entry and one routes file cover both:

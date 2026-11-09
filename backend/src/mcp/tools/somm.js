@@ -1,4 +1,4 @@
-// Sommelier MCP tools (plan Phase-2 somm note, per Johan): queue listing +
+// Sommelier MCP tools (plan Phase-2 somm note): queue listing +
 // data entry for the SHARED recommendation data a somm curates. The killer
 // workflow: "anything in my maturity queue?" → set the windows → next.
 //
@@ -96,15 +96,14 @@ const wineLite = (wd, { termLoaded = false } = {}) => (wd ? {
   region: wd.region?.name || null,
   appellation: wd.appellation || null,
   ...(labelSweetnessFields(wd, { loaded: termLoaded })),
-  // Somm ticket 6a887619 (2026-08-21): every OTHER identity field showed here
-  // but grapes did not, so grapes written at wine creation became visible only
-  // on a later get_wine — and read as "populated by an unidentified path
-  // during curation". Four instances were filed before the cause was found.
+  // Grapes show here like every other identity field; without them, grapes
+  // written at wine creation become visible only on a later get_wine — and
+  // read as "populated by an unidentified path during curation".
   //
   // Emitted HONESTLY or not at all. Callers differ in what they select and
   // populate, and an unpopulated ref array must not collapse to `grapes: []` —
-  // that is a claim of "no grapes" on a wine that has them, which is the exact
-  // shape of misreading this ticket came from. So: populated docs → names;
+  // that is a claim of "no grapes" on a wine that has them, which is exactly
+  // that misreading again. So: populated docs → names;
   // a genuinely empty array → []; unpopulated ids or an unselected field →
   // the key is omitted, meaning "not carried on this surface".
   // Output-only change: no reconnect needed.
@@ -119,13 +118,12 @@ const wineLite = (wd, { termLoaded = false } = {}) => (wd ? {
  * the common case is a wine nobody needs warned about, and a key reading
  * `inferred_fields: []` on every row is noise a curator learns to skip.
  *
- * Somm ticket 6a958dbc (2026-08-31): a 205-row import whose file carried
- * appellation on every row and grapes on none produced wines whose grapes had
- * been inferred by the model FROM the appellation — all eight Montlouis wines
- * came out Chenin Blanc, including a pétillant naturel that is mostly Menu
- * Pineau. The values were wrong, mutually consistent and indistinguishable
- * from researched ones, so the curator had to stop work entirely. This is the
- * missing signal: not "this is wrong", but "nobody asserted this".
+ * An import file that carries appellation but no grapes produces wines whose
+ * grapes are inferred by the model FROM the appellation — every Montlouis
+ * comes out Chenin Blanc, even a pétillant naturel that is mostly Menu
+ * Pineau. Such values are wrong, mutually consistent and indistinguishable
+ * from researched ones. This is the signal that tells them apart: not
+ * "this is wrong", but "nobody asserted this".
  */
 const provenanceLite = (provenance) => {
   if (!provenance) return {};
@@ -148,10 +146,10 @@ const grapesLite = (grapes) => {
 // wrote them and how sure the generator was. `confidence` is the model's own
 // self-rating and is not a correctness score — a 0.6 profile inverted the
 // facts about a Vintage Port — so it is labelled, not thresholded.
-// A HELD profile carries the doubt but no prose, which made it look exactly
-// like a wine that was never enriched — the curator could not tell whether a
-// missing tasting note meant "not generated yet" or "generated and withheld
-// from the owner", and said so (somm ticket 6a82bfb7). It reports itself now.
+// A HELD profile carries the doubt but no prose, which would make it look
+// exactly like a wine that was never enriched — the curator could not tell
+// whether a missing tasting note meant "not generated yet" or "generated and
+// withheld from the owner". So it reports itself.
 //
 // producer_unknown rides along on every shape: it is the difference between
 // "this record is wrong" and "this is a small estate the model cannot place",
@@ -159,19 +157,16 @@ const grapesLite = (grapes) => {
 /**
  * Does a stored profile EXIST — by content, not by who wrote it.
  *
- * generatedAt is the AI's stamp: a curator-written profile never has one, so
- * testing generatedAt alone reports every hand-written profile as absent. That
- * is exactly what list_maturity_queue did (somm ticket 6a911643, 2026-08-28):
- * on production 1,769 of 2,113 curator profiles carry no generatedAt, and the
- * queue told curators all of them were blank — with a reason string that
- * instructed them to write one. Following it in good faith overwrote another
- * curator's research and restamped it as their own, and set_wine_profile
- * accepted the write without complaint.
+ * generatedAt is the AI's stamp: a profile a curator wrote from scratch never
+ * has one, so testing generatedAt alone reports it as absent, and a queue that
+ * tested it would call it blank — with a reason string that instructs the
+ * curator to write one. Following it in good faith overwrites another curator's research and
+ * restamps it as their own.
  *
- * list_held_profiles had already got this right ("a published suspect is
- * identified by having CONTENT — generatedAt or a written description"), which
- * is why the somm's workaround of trusting that tool instead worked. The two
- * readers now share this one predicate so they cannot drift apart again. The
+ * list_held_profiles identifies a published suspect the same way ("a
+ * published suspect is identified by having CONTENT — generatedAt or a
+ * written description"). list_maturity_queue and list_held_profiles share
+ * this one predicate so they cannot drift apart. The
  * Mongo-side unprofiled branch in list_held_profiles is the same test written
  * as a query, and is commented to point back here.
  *
@@ -184,11 +179,11 @@ const hasProfileContent = (ap) => !!(ap && (ap.generatedAt || ap.description || 
  * @param {object} wine  the wine, for the absent-profile explanation
  */
 const profileLite = (ap, wine) => {
-  // NO PROFILE. This used to be a silent null meaning "the batch has not
-  // reached it yet". Since the enrichmentOnAdd policy (2026-08-21) it usually
-  // means automatic enrichment DECLINED the record — permanently, for a
-  // record too thin to say anything true — so the curator writing the drink
-  // window is the one who will write the profile. A null could not say that.
+  // NO PROFILE. Not a silent null meaning "the batch has not reached it
+  // yet": under the enrichmentOnAdd policy it usually means automatic
+  // enrichment DECLINED the record — permanently, for a record too thin to
+  // say anything true — so the curator writing the drink window is the one
+  // who will write the profile. A null could not say that.
   if (!hasProfileContent(ap)) {
     const { identityDataSufficient } = require('../../services/enrichmentJob');
     // Degrade to the softer message rather than throwing: this runs inside a
@@ -197,11 +192,11 @@ const profileLite = (ap, wine) => {
     const thin = wine && typeof identityDataSufficient === 'function'
       ? !identityDataSufficient({ ...wine, grapes: wine.grapes || [] })
       : false;
-    // auto_enrich must describe what will ACTUALLY happen. "pending" was
-    // hard-coded, and read as "someone else will write this" — but automatic
-    // enrichment has been switched off in production since 2026-08-22, so
-    // nothing was ever coming. A value that names a future that will not
-    // arrive is worse than no value: it tells the curator to wait.
+    // auto_enrich must describe what will ACTUALLY happen. A hard-coded
+    // "pending" reads as "someone else will write this" — but with automatic
+    // enrichment switched off, nothing is coming. A value that names a future
+    // that will not arrive is worse than no value: it tells the curator to
+    // wait.
     const mode = aiConfig.get().enrichmentOnAdd;
     let autoEnrich;
     let reason;
@@ -233,7 +228,7 @@ const profileLite = (ap, wine) => {
       ai_confidence: ap.confidence ?? null,
       description: null,
       source: ap.source || 'ai',
-      // Pilot 2026-08-19: a search-assisted retry ALSO failed the gate — this
+      // A search-assisted retry ALSO failed the gate — this
       // row's doubt survived a web search, so releasing it needs real curator
       // facts, not another plain regeneration.
       ...(ap.searchUsed === true ? { search_assisted: true } : {}),
@@ -257,9 +252,9 @@ const profileLite = (ap, wine) => {
     producer_unknown: ap.producerUnknown === true,
     producer_note: ap.producerNote || null,
     verified_at: ap.verifiedAt || null,
-    // Pilot 2026-08-19: this profile came from the web-search rescue retry.
-    // Flagged so quality judgements on searched rows can be tallied apart —
-    // the pilot's go/no-go number. Omitted when false to keep payloads lean.
+    // This profile came from the web-search rescue retry. Flagged so quality
+    // judgements on searched rows can be tallied apart. Omitted when false to
+    // keep payloads lean.
     ...(ap.searchUsed === true ? { search_assisted: true } : {}),
   };
 };
@@ -312,7 +307,7 @@ registerTool({
         filter.vintage = /^nv$/i.test(args.vintage.trim()) ? 'NV' : args.vintage.trim();
       }
     } else if (args.unprofiled) {
-      // Windowed-but-unprofiled wines (audit ticket 2026-09-06): with
+      // Windowed-but-unprofiled wines: with
       // automatic enrichment off, a window written onto a wine that has no
       // description leaves the record incomplete for good unless a curator
       // finds it. Wines without profile text are few hundred, so an id list
@@ -320,7 +315,7 @@ registerTool({
       // "No profile" is the queue's own predicate (hasProfileContent): a HELD
       // profile has generatedAt but no description, and a curator profile may
       // carry body/flavors without prose — neither is "nothing describes the
-      // wine" (audit 2026-09-07).
+      // wine".
       const bare = await WineDefinition.find({
         'aiProfile.generatedAt': null, 'aiProfile.description': { $in: [null, ''] }, 'aiProfile.body': null,
       }).select('_id').lean();
@@ -336,7 +331,7 @@ registerTool({
         // an absent profile is "yours to write" or merely "not yet enriched".
         // grapes populated to NAMES, not just selected as ids: the queue row
         // is where the curator decides whether a wine needs work, and grapes
-        // invisible here is what ticket 6a887619 mistook for a phantom writer.
+        // invisible here read as a phantom writer filling them in later.
         .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance labelSweetness', populate: ['country', 'region', { path: 'grapes', select: 'name' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }] })
         .lean(),
     ]);
@@ -350,7 +345,7 @@ registerTool({
       // The generated tasting profile the curator is about to judge the drink
       // window against. Returned so a wrong one can be corrected in the same
       // pass with set_wine_profile, instead of the curator silently working
-      // around it and the bad prose surviving (support ticket 2026-07-28).
+      // around it and the bad prose surviving.
       // `source` tells the model whether a human has already vetted this.
       tasting_profile: profileLite(p.wineDefinition?.aiProfile, p.wineDefinition),
       // Somm-gated tool, so the curator's own note comes back with the row.
@@ -394,10 +389,9 @@ registerTool({
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
     if (denied) return denied;
-    // Two address forms (support ticket d49cc924: reviewed profiles were
-    // unreachable — nothing returns a profile_id once a pair leaves the
-    // pending queue, so a published-but-wrong window could not be corrected
-    // over MCP). profile_id wins when both are sent; wine_id+vintage resolves
+    // Two address forms: nothing returns a profile_id once a pair leaves the
+    // pending queue, so wine_id+vintage is how a published-but-wrong window
+    // is corrected over MCP. profile_id wins when both are sent; wine_id+vintage resolves
     // through the (wineDefinition, vintage) unique index, reviewed or not.
     let profile;
     if (args.profile_id) {
@@ -508,8 +502,8 @@ registerTool({
       result: envelope,
     });
     // A window on a wine nothing describes leaves the record incomplete —
-    // and with automatic enrichment off, nobody but the curator will fill it
-    // (audit ticket 2026-09-06). Say so in the same breath. Best-effort.
+    // and with automatic enrichment off, nobody but the curator will fill it.
+    // Say so in the same breath. Best-effort.
     const warnings = [];
     try {
       const wineId = profile.wineDefinition?._id || profile.wineDefinition;
@@ -776,9 +770,8 @@ registerTool({
       ? 'record fields corrected'
       : curatorNow ? 'now curator-verified' : 'cleared — still eligible for AI enrichment';
     // The write path must SAY when it stores something other than what the
-    // curator sent (ticket 2026-08-11: "Tinta Roriz" silently became
-    // Tempranillo) — surfaced in the summary, the record, AND the note so no
-    // reading depth misses it.
+    // curator sent (e.g. "Tinta Roriz" stored as Tempranillo) — surfaced in
+    // the summary, the record, AND the note so no reading depth misses it.
     const subsLine = grapeSubs.length
       ? ` — stored under canonical variety name${grapeSubs.length > 1 ? 's' : ''}: ${grapeSubs.map((s) => `"${s.from}" as ${s.to}`).join(', ')}`
       : '';
@@ -1342,7 +1335,7 @@ registerTool({
   },
 });
 
-// The weekly spot-check (ticket 6a8464ea phase 3): regional-prior
+// The weekly spot-check: regional-prior
 // hallucinations carry NO flag and mid-high confidence, so no gate sees them
 // — only a human sampling published profiles measures the real error rate,
 // and that rate decides whether heavier defences (two-pass generation,
@@ -1400,8 +1393,8 @@ registerTool({
       },
       ai_confidence: w.aiProfile?.confidence ?? null,
       producer_unknown: w.aiProfile?.producerUnknown === true,
-      // Pilot 2026-08-19: judge search-assisted rows apart — their error rate
-      // vs the un-searched population is the pilot's go/no-go number.
+      // Judge search-assisted rows apart — their error rate is measured
+      // against the un-searched population.
       ...(w.aiProfile?.searchUsed === true ? { search_assisted: true } : {}),
     })));
   },
@@ -1597,25 +1590,24 @@ registerTool({
   },
 });
 
-// ── The held-profile review queue over MCP (somm ticket 2026-08-18) ─────────
-// The publication gate holds profiles; judging those holds lived only in the
-// web admin queue, so ~230 rows of judgement work could not be done over MCP
-// at all. One list + one decision verb, and every decision path leaves the
-// row OUT of the queue by construction — the 57 unstamped rows from the
-// 08-17 bulk release exist precisely because a release path skipped the
-// profileReviewedAt stamp, and this surface must not recreate that bug.
+// ── The held-profile review queue over MCP ──────────────────────────────────
+// The publication gate holds profiles; judging those holds must be possible
+// over MCP, not only in the web admin queue. One list + one decision verb,
+// and every decision path leaves the row OUT of the queue by construction —
+// a release path that skips the profileReviewedAt stamp leaves rows stuck
+// unstamped, and this surface must not create that bug.
 
 const HELD_LIST_CAP = 500;
 // What still needs judging — and the two states answer DIFFERENT questions, so
-// they cannot share a marker (somm ticket 6a85f5e8):
+// they cannot share a marker:
 //
 //   HELD          — "is this generated profile publishable?" profileReviewedAt
 //                   is the right signal: any human write to the profile
 //                   answers it, which is why applyProfilePatch stamps it.
 //   PUBLISHED     — "is the producer field real?" A tasting-profile write does
-//   SUSPECT         NOT answer that, yet it stamped profileReviewedAt and the
-//                   row vanished from this queue undecided. Only an explicit
-//                   uphold/confirm closes it now.
+//   SUSPECT         NOT answer that, yet it stamps profileReviewedAt, so that
+//                   stamp must not take the row out of this queue. Only an
+//                   explicit uphold/confirm closes it.
 const OUTSTANDING_EXPR = {
   $cond: [
     { $ne: ['$aiProfile.heldAt', null] },
@@ -1675,12 +1667,12 @@ registerTool({
     if (denied) return denied;
     // Three states, three $or branches, each gated by the `state` filter.
     // held and published_suspect require generatedAt (a profile must exist to
-    // be held or suspect); unprofiled is the 2026-08-22 intake queue:
-    // automatic AI enrichment is OFF (somm-owned data), so a new wine arrives
-    // with NO profile at all and this list is the only place the somm can see
-    // it. `description: null` keeps the 188 curator rows that predate the
-    // generatedAt stamp out of the unprofiled state — a wine with a written
-    // description is not awaiting a profile.
+    // be held or suspect); unprofiled is the intake queue: when automatic
+    // AI enrichment is OFF (somm-owned data), a new wine arrives with NO
+    // profile at all and this list is the only place the somm can see it.
+    // `description: null` keeps curator rows that predate the generatedAt
+    // stamp out of the unprofiled state — a wine with a written description
+    // is not awaiting a profile.
     const wantState = (s) => args.state === undefined || args.state === s;
     const or = [];
     if (wantState('held')) {
@@ -1688,11 +1680,11 @@ registerTool({
     }
     // An explicit state ask implies the include flag — asking for suspects
     // and getting nothing because a second switch was off would be a trap.
-    // counts_only implies it too (somm ticket 6a8ffaa1): the listing default
+    // counts_only implies it too: the listing default
     // exists to keep suspects out of a curator's held-row PAGING, but a count
-    // has no paging to protect — carrying the default into it reported
-    // published_suspect as a hard 0 (not "uncounted") and under-sized the
-    // backlog by three quarters. A count counts every state.
+    // has no paging to protect — carrying the default into it would report
+    // published_suspect as a hard 0 (not "uncounted") and under-size the
+    // backlog. A count counts every state.
     if (((args.include_published_suspects || args.counts_only) && wantState('published_suspect')) || args.state === 'published_suspect') {
       or.push({ 'aiProfile.heldAt': null, 'aiProfile.generatedAt': { $ne: null }, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
     }
@@ -1796,10 +1788,9 @@ registerTool({
     const counts = await ownerCounts(wanted.map((w) => w._id));
 
     // An OPEN owner inquiry means a previous curator judged that research
-    // could not settle this row and asked the person holding the bottle
-    // (somm 6a872b98: a held profile was released over the top of an inquiry
-    // asking whether that very label reads Hunter Valley or Lodi). Surfacing
-    // it here is the cheap half of the fix — the expensive half would be
+    // could not settle this row and asked the person holding the bottle;
+    // releasing the profile over the top of it throws that question away.
+    // Surfacing it here is the cheap half of the fix — the expensive half would be
     // blocking the verbs, and blocking is wrong: the curator may have new
     // evidence the inquiry was waiting for.
     const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
@@ -1823,8 +1814,8 @@ registerTool({
         // what the curator judges hand-curatability with.
         grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
         country: w.country?.name || null,
-        // Region carries the judgement a country cannot (somm ticket
-        // 6a84c8e8: Hunter Valley vs "Australia") — and note: regeneration
+        // Region carries the judgement a country cannot (Hunter Valley vs
+        // "Australia") — and note: regeneration
         // writes ONLY the aiProfile subdoc, it can never set region or any
         // identity field; those stay behind the proposal gate.
         region: w.region?.name || null,
@@ -1836,11 +1827,11 @@ registerTool({
         ai_confidence: w.aiProfile?.confidence ?? null,
         owner_count: counts.get(String(w._id)) || 0,
         generated_at: w.aiProfile?.generatedAt || null,
-        // Pilot 2026-08-19: a web-search retry already failed on this row —
+        // A web-search retry already failed on this row —
         // releasing it without curator facts would just re-hold.
         ...(w.aiProfile?.searchUsed === true ? { search_assisted: true } : {}),
         // A previous curator already escalated this row to its owner; deciding
-        // over the top of that discards the escalation (somm 6a872b98).
+        // over the top of that discards the escalation.
         ...(openInquiries.has(String(w._id)) ? {
           open_owner_inquiry: {
             inquiry_id: String(openInquiries.get(String(w._id))._id),
@@ -1924,14 +1915,14 @@ registerTool({
       const ap = wine.aiProfile || {};
       const held = !!ap.heldAt;
       const flaggedPublished = !held && ap.producerSuspect === true && !!ap.description;
-      // producerUnknown-only rows are confirmable too (somm 6a86dad6: a
-      // documented 180 ha estate carried the flag with no verb able to clear
-      // it — set_wine_profile writes the profile, not the doubt fields).
+      // producerUnknown-only rows are confirmable too: a documented estate
+      // can carry the flag, and no other verb clears it — set_wine_profile
+      // writes the profile, not the doubt fields.
       const unknownOnly = !held && !flaggedPublished && ap.producerUnknown === true;
-      // …and so are rows a RULE moved out of the suspect queue (somm 6a9eb3ae):
+      // …and so are rows a RULE moved out of the suspect queue:
       // note_doubts_cuvee_not_producer lands a row CLEAN — no flag at all, only
-      // the rule tag — so a curator who then placed the producer had nowhere
-      // to say so, and list_rule_downgrades had no exit.
+      // the rule tag — so confirm is where a curator who then placed the
+      // producer says so, and it is list_rule_downgrades' exit.
       const ruleDowngraded = !held && !flaggedPublished && !unknownOnly && !!ap.suspectDowngradedBy;
       const confirmable = (unknownOnly || ruleDowngraded) && args.decision === 'confirm';
       if (!held && !flaggedPublished && !confirmable) {
@@ -1941,7 +1932,7 @@ registerTool({
 
       if (args.decision === 'release') {
         if (!held) return { wine_id: id, error: 'already_published — use confirm, or set_wine_profile to correct' };
-        // Somm-owned wine data (enrichmentOnAdd 'off', 2026-08-22): the AI
+        // Somm-owned wine data (enrichmentOnAdd 'off'): the AI
         // writes no profile, and a release IS a profile write — a forced
         // regeneration. Refused with the way out rather than performed; the
         // curator's own set_wine_profile replaces the held text and clears the
@@ -1953,7 +1944,7 @@ registerTool({
         const published = await releaseHeldProfile(wine._id, { context });
         if (!published) return { wine_id: id, error: 'generation_failed — row stays queued; retry or set_wine_profile' };
         // releaseHeldProfile stamps profileReviewedAt INSIDE its success path —
-        // the stamp-on-release rule the 57 unstamped rows exist to teach.
+        // the stamp-on-release rule that keeps released rows out of the queue.
         logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
           { name: wine.name, producer: wine.producer, heldRelease: true, decision: 'release', reason, withContext: !!context, via: 'mcp' });
         return { wine_id: wine._id, label, decision: 'release', published: true };
@@ -1963,9 +1954,9 @@ registerTool({
         const now = new Date();
         const set = { profileReviewedAt: now };
         // Confirming a PUBLISHED suspect row means a human adjudicated the
-        // doubt and kept the row — so the owner-visible caveat must go
-        // (somm ticket 6a84c8dc: five documented-domaine rows carried a
-        // false "cannot be verified" disclaimer even after review).
+        // doubt and kept the row — so the owner-visible caveat must go, or a
+        // documented domaine keeps a false "cannot be verified" disclaimer
+        // even after review.
         if (!held) {
           if (flaggedPublished) {
             set['aiProfile.producerSuspect'] = false;
@@ -1977,9 +1968,8 @@ registerTool({
           }
           // confirm also clears producerUnknown when set: the curator is
           // saying "I have placed this producer", which is that flag's exact
-          // negation (somm 6a86dad6 — Haut-Marin). No suspectDecision stamp
-          // on an unknown-only row: that field is the verdict on
-          // producerSuspect, and ONLY that (6a85f5e8).
+          // negation. No suspectDecision stamp on an unknown-only row: that
+          // field is the verdict on producerSuspect, and ONLY that.
           if (ap.producerUnknown === true) set['aiProfile.producerUnknown'] = false;
           // A human placement replaces the rule's residue: the tag is what keeps
           // a row in list_rule_downgrades, and the curator has now done the
@@ -1987,16 +1977,15 @@ registerTool({
           // audit row below.
           if (ap.suspectDowngradedBy) set['aiProfile.suspectDowngradedBy'] = null;
 
-          // …and the NOTE goes with the flag it explains (somm ticket
-          // 6a882f3e). It used to be kept "for curator context", and that was
-          // backwards: once a human has adjudicated the doubt, the model's
-          // account of the doubt has no remaining audience, and where the note
-          // asserted something false it outlived the flag that qualified it.
+          // …and the NOTE goes with the flag it explains. Keeping it "for
+          // curator context" is backwards: once a human has adjudicated the
+          // doubt, the model's account of the doubt has no remaining audience,
+          // and where the note asserts something false it would outlive the
+          // flag that qualified it.
           //
-          // Their worked example: Donnafugata's "Isolano" — the estate's own
-          // Etna Bianco — sat confirmed while its note still read "the true
-          // producing estate is unclear to me". No curator lever existed to
-          // correct that: set_wine_profile does not expose the field and
+          // E.g. an estate's own wine, confirmed, whose note still reads "the
+          // true producing estate is unclear to me". No other curator lever
+          // corrects that: set_wine_profile does not expose the field and
           // `release` is held-rows-only, which is the wrong population.
           //
           // Scoped to a flag actually clearing. A confirm on a HELD row keeps
@@ -2042,17 +2031,16 @@ registerTool({
       }
 
       if (args.decision === 'uphold') {
-        // Somm ticket 6a856e97 (2026-08-19): the flag is CORRECT and the only
-        // queue-clearing verb used to be the one that damaged the data
-        // (confirm clears the flag). Uphold keeps flag + caveat + published
-        // state, stamps reviewed, and the row leaves the queue as honest
+        // The flag is CORRECT, so the row needs a queue-clearing verb that
+        // does not damage the data (confirm clears the flag). Uphold keeps
+        // flag + caveat + published state, stamps reviewed, and the row leaves the queue as honest
         // residue — upheld-count is the true cannot-identify number.
         if (held) return { wine_id: id, error: 'uphold_is_published_only — for a held row whose flag is right, confirm keeps it held' };
         const now = new Date();
         // suspectDecision is what closes the row now; profileReviewedAt rides
         // along because it still means "a human looked" for the other queues.
         // The split exists because a curator profile write also stamps
-        // profileReviewedAt, and that silently closed 23 rows nobody judged.
+        // profileReviewedAt, which would silently close rows nobody judged.
         await WineDefinition.updateOne({ _id: wine._id }, {
           $set: {
             profileReviewedAt: now,
@@ -2173,7 +2161,7 @@ registerTool({
 // ticket the admin re-types.
 const PROPOSAL_KINDS = ['field_correction', 'merge', 'non_wine'];
 // The plain-STRING proposable fields. `type` and `grapes` are proposable too
-// (added 2026-08-19, somm ticket 6a85ad44) but validate differently — an enum
+// but validate differently — an enum
 // and a taxonomy-resolved list — so they are handled apart from this loop.
 const PROPOSAL_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
 const PROPOSAL_ALL_FIELDS = [...PROPOSAL_FIELDS, 'type', 'colour', 'grapes'];
@@ -3348,13 +3336,12 @@ registerTool({
   },
 });
 
-// ── Colour-conflict worklist (somm ticket 6a85f256, 2026-08-19) ────────────
-// v1.141.0 shipped the grape_colour_conflict HOLD, which gates new
-// generations — but the rows already in the registry were found by a
-// retroactive scan and were never held, so `held_reason:"grape_colour_conflict"`
-// returned nothing and the only way to reach them was a list pasted into a
-// support ticket. Work that lives outside the app is work that does not get
-// done, and it is not countable.
+// ── Colour-conflict worklist ──────────────────────────────────────────────
+// The grape_colour_conflict HOLD is decided only when a profile is generated,
+// so a row whose profile is already published is not held by it, and
+// `held_reason:"grape_colour_conflict"` does not reach them, and without this
+// list the only way to work them would be outside the app. Work that lives
+// outside the app is work that does not get done, and it is not countable.
 //
 // These rows deliberately are NOT held: holding would unpublish a profile that
 // is live on a bottle page, and the contradiction is in the RECORD (type vs
@@ -3392,7 +3379,7 @@ registerTool({
     const all = scan.rows.filter((r) => r.hits.some((h) => h.check === RULE));
 
     // A variety with no curated colour is skipped by the rule, not passed by
-    // it (somm 6a9e9a2f): name the colourless ones in use, so a zero reads as
+    // it: name the colourless ones in use, so a zero reads as
     // "zero among the evaluable rows" rather than as a clean registry.
     const unevaluated = await colourlessVarietiesInUse();
     const caveat = unevaluated.count
@@ -3444,11 +3431,11 @@ async function colourlessVarietiesInUse() {
 // just a string somebody typed.
 const REVIEWED_VARIETY_FILTER = { $or: [{ createdByUser: { $ne: true } }, { reviewedAt: { $ne: null } }] };
 
-// Somm ticket 6a869911 (2026-08-20): list_colour_conflicts shipped read-only,
-// so a row only a LABEL can settle was re-researched every session — Palazzo
-// Maffei's "Conte di Valle" is a range spanning a Sauvignon, a Lugana, a
-// Ripasso and an Amarone, so red + Sauvignon Blanc could be a mis-typed white
-// or a clobbered grape list, and no amount of desk research decides which.
+// A row only a LABEL can settle must be settable aside, or it is
+// re-researched every session — when a producer's range uses one name across
+// a Sauvignon, a Lugana, a Ripasso and an Amarone, red + Sauvignon Blanc could
+// be a mis-typed white or a clobbered grape list, and no amount of desk
+// research decides which.
 //
 // This needs no new state. crossChecksCleared already exists, the admin queue
 // already writes it, and list_colour_conflicts already honours it because it
@@ -3533,10 +3520,10 @@ registerTool({
   },
 });
 
-// Somm ticket 6a86baca (2026-08-20). A deterministic rule that moves rows OUT
+// A deterministic rule that moves rows OUT
 // of a queue is invisible by construction: the rows stop appearing anywhere,
 // so a rule that is subtly wrong keeps being right as far as anyone can see.
-// Their condition for accepting the epistemic rule was that the moved rows
+// The condition for accepting the epistemic rule is that the moved rows
 // stay findable as a set — "residue should be a query, not a queue" — which is
 // what aiProfile.suspectDowngradedBy records and this reads back.
 registerTool({
@@ -3569,8 +3556,8 @@ registerTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     // Derived from the rule table itself, so a rule added to the downgrade
-    // logic is filterable here the same day (somm 6a9e9a2f: the record-based
-    // appellation_has_geography rows were counted but unreachable).
+    // logic is filterable here the same day — a hand-kept list would leave
+    // a new rule's rows counted but unreachable.
     rule: z.enum(Object.values(DOWNGRADE_RULES)).optional()
       .describe('Only rows moved by this rule; omit for all'),
     counts_only: z.boolean().optional().describe('Return just the totals, per rule'),
@@ -3621,12 +3608,11 @@ registerTool({
   },
 });
 
-// Somm ticket 6a82bfb7 (design settled 2026-08-20): descriptions asserting
+// Descriptions asserting
 // geography on records whose place fields are deliberately null. The check
-// grades by FRAME, not truth — their correction to my first design, argued
-// from their own Petersons disclosure paragraph, which names eight regions in
-// order to say the region is unknown and must never be flagged as if it had
-// asserted one. This is the published-row AUDIT surface; it deliberately does
+// grades by FRAME, not truth — a disclosure paragraph that names several
+// regions in order to say the region is unknown must never be flagged as if
+// it had asserted one. This is the published-row AUDIT surface; it deliberately does
 // not share strictness with the enrichment-side notePlaceConflict blocker.
 registerTool({
   name: 'list_ungrounded_descriptions',
@@ -3679,13 +3665,11 @@ registerTool({
       .lean();
 
     // The full curated grape list, for labelling each claim place vs variety
-    // (somm v1.147 audit, item 4: a field called "place" holding "Cabernet
-    // Franc" reads as a broken grader to a first reader; the extraction was
-    // correct — varieties were in the original 6a82bfb7 test — the label
-    // wasn't).
+    // (a field called "place" holding "Cabernet Franc" reads as a broken
+    // grader to a first reader, though the extraction is correct).
     // Only varieties a curator has stood behind. A user-minted grape still
     // awaiting review is an unverified string, and one named after a flavour
-    // ("Cherry", minted from a cherry wine — somm 6a9e9a2f) turns every "red
+    // ("Cherry", minted from a cherry wine) turns every "red
     // cherry" in the prose into a false variety claim that buries the real
     // ungrounded-place assertions this audit exists to surface.
     const Grape = require('../../models/Grape');
@@ -3701,8 +3685,8 @@ registerTool({
         producer: w.producer,
         grapes: (w.grapes || []).map((g) => g.name),
         // The vocabulary pass reports EVERY ungrounded variety, not just the
-        // one a preposition introduces (somm 6a870548 — "Cabernet Franc,
-        // Petit Verdot and Merlot" reported one of three).
+        // one a preposition introduces — "Cabernet Franc, Petit Verdot and
+        // Merlot" is three claims, not one.
         varietyVocabulary: grapeVocabulary,
       });
       if (r.grade === 'ok') { okCount++; continue; }

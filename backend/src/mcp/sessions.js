@@ -158,9 +158,9 @@ const IMMEDIATE_REASONS = new Set(['user_dropped', 'token_revoked', 'client_dele
  * A request is being served on this session. Housekeeping (cap eviction,
  * TTL sweep) must not close the transport under it: a client whose
  * response stream dies mid-call is told "session expired" for a write the
- * server has already committed (support ticket 2026-09-12 — a support
- * ticket filed twice would have been the result). Call endRequest in a
- * finally.
+ * server has already committed, and a retry without an idempotency_key files
+ * the same write twice.
+ * Call endRequest in a finally.
  */
 function beginRequest(session) {
   if (!session) return;

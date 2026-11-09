@@ -71,11 +71,9 @@ const safeDecode = (s) => {
  * One wine and vintage in a cellar. The same page whether the cellar holds
  * one bottle of the vintage or forty, reached by tapping any entry in the
  * cellar list, and always in the same order: the wine, the vintage, the
- * bottles — with Drink, Edit vintage and Add in a bar that stays in reach
- * (support ticket 2026-10-09, follow-up).
+ * bottles — with Drink, Edit vintage and Add in a bar that stays in reach.
  *
- * Began in early access; out for everyone since 2026-10-13, and the classic
- * layout and its flag are gone. Its data comes from GET
+ * Its data comes from GET
  * /api/cellars/:id/vintages/…, and every save goes through the routes the
  * other screens use (bulk update, consume, add bottles).
  */

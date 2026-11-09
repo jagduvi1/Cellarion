@@ -595,9 +595,8 @@ async function sendSupporterThankYou(toEmail, username, tier) {
 }
 
 /**
- * Send a user support's answer to their ticket (2026-09-26). Until now the
- * answer only reached the in-app bell, so someone who asked a question and
- * left never saw it. This is a service email about the user's own request,
+ * Send a user support's answer to their ticket. The in-app bell alone never
+ * reaches someone who asked a question and left. This is a service email about the user's own request,
  * sent unless they turned it off (preferences.notifications.supportReply) or
  * unsubscribed; the caller checks both.
  *

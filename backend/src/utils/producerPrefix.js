@@ -2,10 +2,9 @@ const { normalizeString, normalizeProducerKey, foldProducerToken, tokenize } = r
 
 /**
  * Multi-character connectives / prepositions that cannot legitimately END a
- * wine name. "La Viña de" (producer "Madaras") is the launch symptom of
- * leaving one stranded: an exact-string suffix strip lopped the producer off
- * the tail of "La Viña de Madaras" and kept the linking word (support ticket
- * 2026-07-26; 10 such rows on prod).
+ * wine name. "La Viña de" (producer "Madaras") is the symptom of leaving one
+ * stranded: an exact-string suffix strip lops the producer off the tail of
+ * "La Viña de Madaras" and keeps the linking word.
  *
  * Lives HERE (not in nameChecks.js, which consumes it) so the suffix-strip
  * guard below can use it without a circular require — nameChecks requires
@@ -129,8 +128,8 @@ function stripProducerSuffix(name, producer) {
   const remainder = rest.replace(/[\s\-–—]+$/, '').trim();
   if (remainder.length === 0) return null;
   // Never leave a stranded connective at the tail: "La Viña de Madaras" with
-  // producer "Madaras" must NOT strip to "La Viña de" — exactly how prod's 10
-  // dangling-name rows were minted (support ticket 2026-07-26). When the
+  // producer "Madaras" must NOT strip to "La Viña de" — that is how a
+  // dangling-name row gets minted. When the
   // producer token is grammatically part of the name, the full phrase IS the
   // name (same family as "Les Forts de Latour"); keeping it beats writing a
   // broken one. canonicalizeWineName loops this function on every registry

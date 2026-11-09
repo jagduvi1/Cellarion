@@ -419,7 +419,7 @@ function Login() {
           <div className="form-group">
             <label htmlFor={usernameId}>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.usernameLabel')}</label>
             {/* Autocomplete hints let password managers fill and save the
-                right fields (Chrome asks for them; support ticket 2026-10-14). */}
+                right fields (Chrome asks for them). */}
             <input
               id={usernameId}
               type="text"

@@ -63,9 +63,9 @@ const METRIC_LABELS = {
   // once-per-regression bell as every other net.
   nearProducerPairs: 'near-miss producer pairs (possible typo splits)',
   // Short-vs-full name fragments within ONE producer ("Vat 8" beside "Vat 8
-  // Shiraz Cabernet" — ticket 6a800f39: a 226-row import minted such pairs
-  // seconds apart and no detector fired; the same-producer+appellation group
-  // buries them inside the estate's whole range). Counts the admin
+  // Shiraz Cabernet" — an import can mint such pairs that no other detector
+  // fires on; the same-producer+appellation group buries them inside the
+  // estate's whole range). Counts the admin
   // name-subsets fragmentation queue via the same function, so the number and
   // the queue agree.
   nameSubsetPairs: 'short-vs-full name fragment pairs (one producer)',
@@ -81,7 +81,7 @@ const METRIC_LABELS = {
   // diffs this class against its own baseline instead of ringing once for a
   // definition change.
   producerSuspectProfiles: 'producer-suspect profiles awaiting review',
-  // The publication gate's output (2026-08-18, ticket 6a83e765): generated
+  // The publication gate's output: generated
   // but HELD rows awaiting a release decision in the admin queue. Its own
   // key, per the fresh-baseline rule above; lowConfidenceQueue now counts
   // PUBLISHED rows only — holds leaving it can only shrink that number,
@@ -96,7 +96,7 @@ const METRIC_LABELS = {
   pendingWineReports: 'open wine reports',
   pendingWineRequests: 'pending wine requests',
 };
-// Per-rule outstanding cross-field counts (ticket 2026-08-10 Tier-2 item 5).
+// Per-rule outstanding cross-field counts (services/crossFieldScan).
 // Registered per rule, not as one lump sum, so the alert names WHICH kind of
 // misplacement regressed. New keys have no baseline on their first run — the
 // job skips them for one cycle (see the `before` guard below), and the prod

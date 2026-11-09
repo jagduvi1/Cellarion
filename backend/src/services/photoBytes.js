@@ -1,10 +1,9 @@
 // One image reference → the bytes an MCP image content block carries.
 //
 // Two tools hand pixels to a model: the sommelier's get_pending_wine_images
-// (label frames for curation) and get_photo (support ticket 2026-09-07: the
-// connector returned photo URLs no MCP client can open — Claude's fetch
-// refuses URLs that arrive in tool results, and the uploads sit behind the
-// app anyway). Both must downscale the same way, so the rule lives here once:
+// (label frames for curation) and get_photo (photo URLs are no use to an MCP
+// client — Claude's fetch refuses URLs that arrive in tool results, and the
+// uploads sit behind the app anyway). Both must downscale the same way, so the rule lives here once:
 // auto-rotate, fit inside MAX_EDGE, JPEG at a quality a label stays legible
 // at. The caller decides WHICH reference it may show; this only renders it.
 //

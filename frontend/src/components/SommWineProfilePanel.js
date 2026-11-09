@@ -31,14 +31,14 @@ const textToList = (text) =>
  * curator can judge it against the drink window they are setting — and fix it
  * in the same pass.
  *
- * Support ticket 2026-07-28: the generator writes confident prose for wines it
- * only half-knows (a Sandeman Vintage Port came back "built for immediate
- * drinking"). Before this panel a curator who noticed simply worked around it
- * and the wrong prose stayed on the wine for every owner.
+ * The generator writes confident prose for wines it only half-knows (a
+ * Vintage Port described as "built for immediate drinking", say). A curator
+ * who notices must be able to fix it here; otherwise the wrong prose stays on
+ * the wine for every owner.
  *
  * `confidence` is displayed but deliberately NOT used to hide anything: it is
- * the model's self-rating, not a correctness score, and the row that prompted
- * this ticket rated itself 0.6.
+ * the model's self-rating, not a correctness score, and a wrong profile can
+ * still rate itself well above zero.
  *
  * Props: wine (the populated wineDefinition), onSaved(aiProfile).
  */
@@ -78,7 +78,7 @@ function SommWineProfilePanel({ wine, onSaved }) {
     setErr(null);
     try {
       // Empty string means "clear this field", which the API models as null —
-      // the field-level abstention the ticket asked for: a curator can drop
+      // a field-level abstention: a curator can drop
       // prose they don't trust without touching the descriptors that are right.
       const payload = {
         body:         form.body || null,

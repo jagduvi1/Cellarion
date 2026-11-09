@@ -57,6 +57,6 @@ export const transferCellarOwnership = (apiFetch, id, newOwnerId) =>
   });
 
 // One wine and vintage in a cellar: the page behind a grouped "n identical
-// bottles" entry (support ticket 2026-10-09).
+// bottles" entry.
 export const getCellarVintage = (apiFetch, id, wineId, vintage) =>
   apiFetch(`/api/cellars/${id}/vintages/${wineId}/${encodeURIComponent(vintage || 'NV')}`);

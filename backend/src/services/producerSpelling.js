@@ -1,15 +1,13 @@
 /**
- * Canonical producer SPELLING at mint time (registry strategy 2026-07-29, R1;
- * widened 2026-08-14 after the producer-display consolidation).
+ * Canonical producer SPELLING at mint time (registry strategy R1).
  *
  * The producer is a free string, and every dedup mechanism in the registry —
  * normalizedKey, canonicalKey, duplicate clusters, sibling matching — is
  * derived from it. The keys themselves are spelling-proof (normalizeString
  * folds accents/case/punctuation), which is exactly why display splits slip
- * through every net: "Cave de Ribeauvillé" (12 wines) and a hand-typed "Cave
- * de Ribeauville" (1 wine) never collide on any KEY, so nothing ever flagged
- * them, and the registry showed two producers where the world has one
- * (support ticket 2026-07-28, finding 2).
+ * through every net: "Cave de Ribeauvillé" and a hand-typed "Cave de
+ * Ribeauville" never collide on any KEY, so nothing flags them, and the
+ * registry would show two producers where the world has one.
  *
  * The fix is at the source: when a NEW wine is about to be minted, adopt the
  * spelling the registry already uses for this producer. Two stages, both

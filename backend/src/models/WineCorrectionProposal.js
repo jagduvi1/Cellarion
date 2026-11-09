@@ -12,7 +12,7 @@ const { originSchemaFields } = require('../utils/contributionOrigin');
  * ARE direct (set_wine_profile) because a wrong value there is recoverable and
  * undoable. Identity fields drive dedup keys, URLs and every owner's display —
  * and verified experience says curator assertions on producer/name are
- * sometimes confidently wrong (5 overturned by web-verification 2026-08-10) —
+ * sometimes confidently wrong (web verification overturns some of them) —
  * so they stay human-gated, with the curator's research preserved as a
  * structured, appliable diff instead of a prose ticket an admin re-types.
  *
@@ -32,10 +32,9 @@ const proposedFieldsSchema = new mongoose.Schema({
   region:         { type: String, trim: true, maxlength: 200 },
   country:        { type: String, trim: true, maxlength: 200 },
   classification: { type: String, trim: true, maxlength: 200 },
-  // Added 2026-08-19 (somm ticket 6a85ad44). Until now a curator could see a
-  // wine stored red on nothing but white grapes and had no way to propose the
-  // fix — type and grapes were the only identity fields with no route through
-  // this pipeline, so every one came back to an admin by hand.
+  // Type and grapes go through this pipeline like every other identity field,
+  // so a curator who sees a wine stored red on nothing but white grapes can
+  // propose the fix instead of handing it to an admin to do by hand.
   //
   // Validated at BOTH ends rather than here: the MCP tool rejects a bad type or
   // an unknown variety at file time (so the curator learns immediately), and
@@ -43,8 +42,8 @@ const proposedFieldsSchema = new mongoose.Schema({
   // renamed or merged between filing and approval). A plain String here matches
   // how country and region are already carried.
   type:           { type: String, trim: true, maxlength: 20 },
-  // The colour of a sparkling/dessert/fortified wine (utils/wineColour.js,
-  // support ticket 2026-09-17). Validated at filing against the vocabulary and
+  // The colour of a sparkling/dessert/fortified wine (utils/wineColour.js).
+  // Validated at filing against the vocabulary and
   // at approval against the type the wine has BY THEN — a colour means nothing
   // once the wine is red, white or rosé.
   colour:         { type: String, trim: true, maxlength: 20 },
@@ -112,10 +111,9 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
   // 'rejected' is a reviewer's judgement (decidedBy set, rejectReason theirs).
   // 'closed' is lifecycle closure: the wine was merged away or deleted while
   // the proposal was pending, so nothing remained to decide — decidedBy stays
-  // null and rejectReason says what happened. Until 2026-09-28 those rows were
-  // stored as 'rejected' and read as disagreements: 25 of the 27 "rejections"
-  // of the sommelier's proposals in three weeks were merges into records that
-  // already carried the proposed producer (release audit follow-up).
+  // null and rejectReason says what happened. Kept apart from 'rejected' so a
+  // closure is never read as a disagreement: a merge into a record that
+  // already carries the proposed producer is no verdict on the proposal.
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected', 'closed'],
@@ -124,7 +122,7 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
   },
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   decidedAt: { type: Date, default: null },
-  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 was too short for a real explanation (registry backlog 2026-09-06)
+  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 is too short for a real explanation
   // What the approve actually did (fields applied / bottles moved / queue rows
   // cleared) — the reviewer-facing receipt.
   appliedNote: { type: String, trim: true, maxlength: 500 },
@@ -132,8 +130,7 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
   // (services/suggestionCred); null = not awarded — not yet, not earning, or
   // taken back. Written only by conditional updates, so a row earns once.
   credAwardedAt: { type: Date, default: null },
-  // Later filings by the SAME proposer while the row was pending (support
-  // ticket 2026-09-12): each one merged its fields into proposedFields and is
+  // Later filings by the SAME proposer while the row was pending: each one merged its fields into proposedFields and is
   // recorded here with its own reason and evidence, so the original reason
   // and evidenceUrl stay the claim for the original fields and the admin reads
   // the amendments as what they are. Appended atomically ($push); never

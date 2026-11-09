@@ -2,13 +2,12 @@
  * Show a country or region in the reader's language.
  *
  * The registry stores one canonical English name per taxonomy entry, because
- * search, dedup, exports and the wine key are all built on it. A French owner
- * asked for "Rhône Valley" to read "Vallée du Rhône" and had to be told no,
- * since renaming would have changed the region for all 298 wines on it, for
- * every user, in every language (proposal 6a959b9d, 2026-09-01).
+ * search, dedup, exports and the wine key are all built on it. Renaming an
+ * entry for one language ("Rhône Valley" → "Vallée du Rhône") would change it
+ * for every wine on it, for every user, in every language.
  *
- * This is the half he was actually asking for: the same stored entry, rendered
- * in his language. `GET /api/taxonomy/display-names?lang=fr` returns only the
+ * This is the other half: the same stored entry, rendered in the reader's
+ * language. `GET /api/taxonomy/display-names?lang=fr` returns only the
  * entries that HAVE a French name, keyed by id and by canonical name, and this
  * resolves against that map.
  *

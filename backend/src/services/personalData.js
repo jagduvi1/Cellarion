@@ -105,7 +105,7 @@ async function listForBottle(bottle, cellar) {
           wineDefinition: bottle.wineDefinition,
           author: { $in: cellarMemberIds(cellar) },
           // Vintage-scoped wine entries only surface on bottles of that
-          // vintage (user ticket 6a853211 — ABV drifts year to year).
+          // vintage (ABV drifts year to year).
           $or: [{ vintage: null }, { vintage: bottle.vintage || null }],
         })
           .sort({ createdAt: 1 })
@@ -310,9 +310,9 @@ async function resolveKey(userId, { keyId, newKey }) {
 
   // Name first, type second: an EXISTING key is matched on its name alone, so
   // a caller who declared the key once does not have to repeat its type on
-  // every write (chfish ticket 6aa6c90e, 2026-09-13 — the MCP schema promised
-  // "required only when the key is new" and this function made a liar of it
-  // by validating the full definition before looking the name up). A type
+  // every write — the MCP schema promises "required only when the key is
+  // new", so the full definition must never be validated before the name is
+  // looked up. A type
   // that IS supplied still has to agree with the stored one; only a genuinely
   // new key needs the full definition. The name is trimmed here exactly as
   // validateKeyDefinition trims it, so the lookup key matches what create
@@ -378,7 +378,7 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
   if (level === 'wine' && !bottle.wineDefinition) {
     return fail('invalid', 'This bottle has no wine record to attach wine-level data to');
   }
-  // "Every bottle of this vintage" (user ticket 6a853211): a wine-level entry
+  // "Every bottle of this vintage": a wine-level entry
   // narrowed to THE BOTTLE'S vintage — derived server-side, never client text.
   if (vintageScoped && level !== 'wine') {
     return fail('invalid', 'vintage scope only applies to wine-level entries — a bottle-level entry already has its vintage');
@@ -519,11 +519,11 @@ async function ownKey(userId, keyId) {
 }
 
 /**
- * Rename a key and/or change its unit (chfish ticket 6aa6c95e, 2026-09-13).
+ * Rename a key and/or change its unit.
  *
- * A key's name, type and unit are fixed by the very first write — the moment
+ * A key's name, type and unit are set by the very first write — the moment
  * the user knows least about the data they are about to enter — so a typo or
- * a wrong scale used to be permanent. The id never changes, so stored entries
+ * a wrong scale must stay fixable. The id never changes, so stored entries
  * and analytics field ids stay valid. Rules:
  *   - name: any time; must not collide with another of the user's keys
  *     (case-insensitive, the unique {user, nameKey} index is the last word).
@@ -572,8 +572,8 @@ async function updateKey(userId, keyId, { name, unit, enumOptions } = {}) {
     cleanUnit = cleanUnit || null;
   }
 
-  // The allowed values of a list key (user ticket 2026-10-27: a list could
-  // never grow after its creation). The new list replaces the old one under
+  // The allowed values of a list key can change after its creation, so a
+  // list can grow. The new list replaces the old one under
   // the creation rules; a value some entry still holds must stay on it, so
   // no stored value ever falls outside its key's definition.
   let cleanOptions = key.enumOptions ? [...key.enumOptions] : null;

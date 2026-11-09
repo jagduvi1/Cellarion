@@ -41,8 +41,8 @@ const personalDataEntrySchema = new mongoose.Schema({
     required: function () { return this.targetType === 'bottle'; },
     index: true
   },
-  // Optional vintage scope on WINE-level entries (user ticket 6a853211: ABV
-  // drifts year to year). null = every vintage of the wine; a value (matching
+  // Optional vintage scope on WINE-level entries (ABV, for one, drifts year
+  // to year). null = every vintage of the wine; a value (matching
   // Bottle.vintage, incl. 'NV') narrows the entry to bottles of that vintage.
   // Derived server-side from the bottle the entry was created on — never
   // client-supplied free text. Meaningless on bottle-level entries (that

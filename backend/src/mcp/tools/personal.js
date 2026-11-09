@@ -90,7 +90,7 @@ registerTool({
       // A pairing stores a bottle and/or wine REFERENCE; wineName is only the
       // text fallback for the day a referenced bottle is gone. Hand the ids
       // and the producer back so a client can tell which "Sauvignon" this
-      // was and follow the reference (chfish ticket 6aa6c200, 2026-09-13).
+      // was and follow the reference.
       pairings: (e.pairings || []).map((p) => {
         const wineDoc = p.bottle?.wineDefinition || p.wine || null;
         return {

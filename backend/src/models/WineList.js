@@ -127,8 +127,8 @@ const wineListSchema = new mongoose.Schema({
     },
     // Nested headings, outermost first — the classic menu order is
     // ['type', 'country', 'region']. Empty means "just groupBy". At most
-    // three levels (a menu reads naturally at three; support ticket
-    // 2026-09-12), each field at most once.
+    // three levels (a menu reads naturally at three), each field at most
+    // once.
     levels: {
       type: [{ type: String, enum: ['type', 'country', 'region', 'appellation'] }],
       default: [],
@@ -218,7 +218,7 @@ const wineListSchema = new mongoose.Schema({
     hideOutOfStock: { type: Boolean, default: false },
     // Render the shared page and the PDF without any price — a menu handed to
     // a guest at home is there to help them choose, not to bill them. The
-    // figures stay on the entries (support ticket 2026-09-12).
+    // figures stay on the entries.
     hidePrices: { type: Boolean, default: false },
     // Mark an entry whose cellar stock is exactly one bottle ("last bottle").
     // Read live at render time: the web menu follows the cellar, a printed

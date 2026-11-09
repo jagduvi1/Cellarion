@@ -84,8 +84,8 @@ const FUZZY_THRESHOLD = IMPORT_FUZZY_THRESHOLD;
 
 // Below this identification confidence the AI is going on inference, not
 // knowledge ("0.5 = reasonably sure" in the prompt's own scale) — exactly the
-// band that wrote a producer's home region onto wines from elsewhere and split
-// one producer across region granularities (ticket 6a8162c5). Geography the
+// band that writes a producer's home region onto wines from elsewhere and splits
+// one producer across region granularities. Geography the
 // AI proposed under this floor is dropped before it can mint; the curation
 // backfill queue fills it from evidence instead.
 //
@@ -160,9 +160,9 @@ function buildProposedWine(aiData, item) {
 
   // A purely-Prädikat appellation is routed out of the field entirely; only a
   // Prädikat the wine itself does not contradict is rescued into the
-  // classification. See pradikatContradictsName: the second ticket record put
+  // classification. See pradikatContradictsName: a row can put
   // Trockenbeerenauslese on a wine named "Riesling Trocken", and rescuing that
-  // would have kept the falsehood and merely moved which field carried it.
+  // would keep the falsehood and merely move which field carries it.
   const filePradikat = pradikatOnlyValue(clean(item && item.appellation));
   const rescuedPradikat = filePradikat && !pradikatContradictsName(filePradikat, aiData.name)
     ? filePradikat
@@ -172,8 +172,8 @@ function buildProposedWine(aiData, item) {
     name: aiData.name,
     // A file with no producer column gets its producer from the model, and
     // the model — told a name-equals-producer estate wine is fine — sometimes
-    // mirrors an unknown cuvée name back as the producer ("Les Caractères" /
-    // "Les Caractères", boubou17's CSV; audit ticket 2026-09-04). That is a
+    // mirrors an unknown cuvée name back as the producer (name and producer
+    // both "Les Caractères"). That is a
     // missing producer, not a producer: leave it empty so the row mints as a
     // pending identity for a curator, unless the name itself is an estate.
     producer: producerMirroredFromName(aiData, item) ? null : aiData.producer,
@@ -184,26 +184,24 @@ function buildProposedWine(aiData, item) {
     country: clean(aiData.country) || clean(item && item.country),
     region: clean(item && item.region) || fromAi(aiData.region),
     // A file's appellation column sometimes holds the ripeness Prädikat rather
-    // than a place — "Auslese" for a Mosel Riesling, "Trokenbeerenauslese" for
-    // a Nahe one (somm ticket 6a966386). Taken literally the wine ends up with
+    // than a place — "Auslese" for a Mosel Riesling, say. Taken literally the
+    // wine ends up with
     // NO appellation, which is the thin-identity condition that makes
     // auto-enrichment decline it for good: the owner's data-entry habit
-    // silently costs him his tasting notes. So a purely-Prädikat value is not
-    // treated as geography, and the model's place name fills the field instead
-    // — for the Nahe wine that is the same source its region already came from.
+    // silently costs them their tasting notes. So a purely-Prädikat value is not
+    // treated as geography, and the model's place name fills the field instead.
     // pradikatOnlyValue refuses anything that might also name a place.
     appellation: filePradikat
       ? fromAi(aiData.appellation)
       : (clean(item && item.appellation) || fromAi(aiData.appellation)),
     // Same floor as geography: a classification is an assertion of knowledge
-    // (ticket 6a83f014 added the field to the identify prompt), and the file's
+    // (the identify prompt asks for it), and the file's
     // own value outranks it for the same reason.
     //
     // A Prädikat rescued from the appellation column lands HERE, where it was
     // always meant to go, and outranks the model for the same reason any other
     // file value does — the owner read it off the bottle. Only when the file
-    // states no classification of its own, which is the case that produced the
-    // ticket.
+    // states no classification of its own.
     classification: clean(item && item.classification)
       || rescuedPradikat
       || fromAi(aiData.classification),
@@ -227,12 +225,11 @@ function buildProposedWine(aiData, item) {
  * own pipeline, and a claim a client could edit is worth nothing.
  *
  * The rules mirror mergeAiWithFile's precedence exactly — file first for the
- * label-stated fields, model for the rest. Its curator-facing point (somm
- * ticket 6a958dbc, 2026-08-31): a grape the model INFERRED FROM THE
- * APPELLATION must not look identical to one the owner's file stated. That
- * import's file carried appellation on all 205 rows and grapes on none, and
- * all eight of its Montlouis wines were duly assigned Chenin Blanc —
- * including a pétillant naturel that is mostly Menu Pineau.
+ * label-stated fields, model for the rest. Its curator-facing point: a grape
+ * the model INFERRED FROM THE APPELLATION must not look identical to one the
+ * owner's file stated. A file with appellations and no grapes can get each
+ * wine its appellation's signature grape from the model, which an off-type
+ * cuvée does not have.
  *
  * @param {Object} item the file's row
  * @param {Object} ai the identified wine actually being minted
@@ -267,8 +264,8 @@ function computeIdentityProvenance(item, ai) {
 }
 
 /**
- * Complete-row AI bypass (2026-08-29, Johan's call: "the somm is free and we
- * pay for AI"). A row whose FILE already states the identity does not need a
+ * Complete-row AI bypass (the somm is free and we pay for AI). A row whose
+ * FILE already states the identity does not need a
  * model to restate it: findOrCreateWine's ladder does the normalization work
  * deterministically (producer-prefix canon, trailing-vintage strip,
  * estate-name unpollution, appellation resolution), the somm/enrichment
@@ -420,7 +417,7 @@ function fileCompleteIdentity(item, grapeColourOf) {
   if (!type && grapes.length > 0) type = typeFromFileGrapes(grapes, grapeColourOf);
   if (!type) return null;
 
-  // Same Prädikat routing as the AI path (somm ticket 6a966386) — this path
+  // Same Prädikat routing as the AI path — this path
   // has no model to supply the place, so the appellation is simply left empty
   // rather than filled with a ripeness level. Empty is the honest state and
   // costs nothing here: enrichment's identityDataSufficient needs a place
@@ -1010,12 +1007,12 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       }
     }
 
-    // ── Post-AI hygiene (ticket 6a8162c5) — BEFORE any matching, so the
+    // ── Post-AI hygiene — BEFORE any matching, so the
     // cleaned values feed Pass 2, the client preview, and /confirm alike. ──
     //
     // A) One producer, one country per batch. Rows are identified one at a
     //    time, so an obscure producer can come back with a different guessed
-    //    country per row ("Thomas Allen": South Africa on one, Australia on
+    //    country per row (South Africa on one, Australia on
     //    another — both minted, and the different-country guard then keeps
     //    them apart forever). Rows whose FILE stated a country are anchors
     //    and are never overwritten; when the file is silent, every row of a
@@ -1410,7 +1407,7 @@ router.post('/confirm', async (req, res) => {
     }
     const defaultCurrency = defaultCurrencyCheck.value || 'USD';
 
-    // Whole-import comment/occasion (support ticket 2026-07-30): typed once on
+    // Whole-import comment/occasion: typed once on
     // the confirm screen, they land on every BOTTLE this import creates.
     // Fill-blank only — a row that carries its own note from the file keeps it
     // (imports never overwrite file data). Wishlist rows are deliberately
@@ -2493,11 +2490,11 @@ module.exports = router;
 module.exports.buildProposedWine = buildProposedWine;
 module.exports.summariseReasons = summariseReasons;
 // Exported for tests: the provenance rules must be pinnable without standing
-// up a full import (somm ticket 6a958dbc).
+// up a full import.
 module.exports.computeIdentityProvenance = computeIdentityProvenance;
 // Exported for the same reason as buildProposedWine: it is the OTHER rule that
 // decides what enters the shared registry, and the two must agree about a
-// Prädikat in the appellation column (somm ticket 6a966386).
+// Prädikat in the appellation column.
 module.exports.fileCompleteIdentity = fileCompleteIdentity;
 // The candidate finder, for the style-guard test (the guard must read a
 // candidate's recorded label sweetness, which only a populated load carries).

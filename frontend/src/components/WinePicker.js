@@ -85,8 +85,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
   // bottle or wine is gone — the entry renders producer, name and vintage
   // from the references while they exist. So it carries the producer (which
   // "Sauvignon" this was) and never the vintage: the vintage lives on the
-  // bottle reference, and a name that embedded it printed the year twice
-  // (chfish ticket 6aa6c200, 2026-09-13).
+  // bottle reference, and a name that embedded it would print the year twice.
   const fallbackName = (wine) => [wine.producer, wine.name].filter(Boolean).join(' ');
 
   const selectBottle = (bottle) => {

@@ -1,11 +1,11 @@
 /**
  * migrate-suspect-decisions.js — one-off for the suspectDecision split.
  *
- * Until now the published-suspect queue treated `profileReviewedAt` as "this
+ * The published-suspect queue must not read `profileReviewedAt` as "this
  * row has been judged". That field is also stamped by applyProfilePatch on any
  * curator profile write, so writing a tasting profile — or fixing a grape list
- * — silently closed the row without anyone answering the question the queue
- * asks, which is whether the PRODUCER is real (somm ticket 6a85f5e8).
+ * — would silently close the row without anyone answering the question the
+ * queue asks, which is whether the PRODUCER is real.
  *
  * Classifying the existing stamps:
  *

@@ -138,8 +138,7 @@ registerTool({
     // anonymous surface gets the prose-only profile (L3) — the structured
     // dataset stays with signed-in connections.
     const anonymous = !!ctx?.anonymous || !ctx?.user;
-    // A signed-in caller may read their OWN private draft (support ticket
-    // 2026-09-12) — the one exception to the absolute pending exclusion, and
+    // A signed-in caller may read their OWN private draft — the one exception to the absolute pending exclusion, and
     // it is in the QUERY, keyed on the creator, so nobody else's draft can
     // ever match. The anonymous surface keeps the absolute rule.
     const visible = anonymous
@@ -166,9 +165,8 @@ registerTool({
     const gate = await gateMcpRead(ctx, w._id);
     if (!gate.allowed) return fail('rate_limited', CAP_MESSAGE);
     const profile = hasContent(w.aiProfile) ? w.aiProfile : null;
-    // Support ticket 2026-09-12: the one-pending-per-wine rule was only
-    // discoverable by composing a correction and having it refused. Signed-in
-    // callers see the queue state (fields + whether it is theirs; never whose
+    // The one-pending-per-wine rule must be discoverable without composing a
+    // correction and having it refused. Signed-in callers see the queue state (fields + whether it is theirs; never whose
     // otherwise, never the proposed values). Omitted for the anonymous
     // surface — queue state is not public-site content.
     // A draft has no queue state: it is edited directly, never corrected.

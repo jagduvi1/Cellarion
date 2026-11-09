@@ -29,11 +29,11 @@ function DonutChart({ segments, total, onSegmentClick }) {
         style={{ stroke: 'var(--color-border-light, #252525)' }} />
       {total > 0 && validSegs.map((seg, i) => {
         const len       = (seg.value / total) * C;
-        // Dash + gap must sum to the circumference exactly. The gap used to
-        // be C, making the dash cycle C + len — so the part of the first
-        // dash that wraps past the path start (the largest segment's opening
-        // quarter, 12 to 3 o'clock) was never painted, and the bare track
-        // showed through as a phantom dark segment (ticket 6a8b497c).
+        // Dash + gap must sum to the circumference exactly. A gap of C would
+        // make the dash cycle C + len — so the part of the first dash that
+        // wraps past the path start (the largest segment's opening quarter,
+        // 12 to 3 o'clock) would never be painted, and the bare track would
+        // show through as a phantom dark segment.
         const gap       = C - len;
         const dashoffset = C / 4 - cumulative;
         cumulative += len;

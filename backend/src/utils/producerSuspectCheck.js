@@ -2,17 +2,17 @@
  * Does the producer note CONTRADICT the producer_suspect flag it was written
  * alongside?
  *
- * WHY (somm ticket 6a85f961, 2026-08-19). producer_suspect means "this value
- * is not a winery — it is a brand, a range, a retailer, a style term". But the
- * generator kept setting it on records whose own note says the opposite:
+ * WHY. producer_suspect means "this value is not a winery — it is a brand, a
+ * range, a retailer, a style term". But the generator keeps setting it on
+ * records whose own note says the opposite:
  *
  *     "Cave de Sainte-Marie-La-Blanche is a cooperative cellar in Burgundy"
  *     "Château Jeandeman is a small Fronsac estate not well documented"
  *     "This small Champagne grower is not one I can verify in detail"
  *
  * Every one of those describes a real producer the model simply cannot place —
- * which is what producerUnknown is for (introduced 2026-08-17: real winery,
- * publish, no owner-visible caveat). Left as suspect they earn a permanent
+ * which is what producerUnknown is for (real winery, publish, no
+ * owner-visible caveat). Left as suspect they earn a permanent
  * "cannot be verified" disclaimer on a real small estate's wine, and they
  * inflate upheld-count, the number the scaling review reads as "wines the
  * registry genuinely cannot identify".
@@ -85,17 +85,14 @@ const CONTRAST = /\b(rather than|instead of|not an? |but not |could not be|canno
 //    estate can be identified"                                  (Monbazillac)
 //   "Turckheim is also the name of an Alsace village and a well known
 //    cooperative"                                               (Turckheim)
-// A third alternation briefly lived here (2026-08-20, same-day removal): "is
-// an appellation…", added when a dry run surfaced a note calling Chateau
-// Etoile's value an appellation. The sommelier's full-population audit
-// (ticket 6a86dad6) killed it twice over: Château de l'Étoile is a REAL Jura
-// estate whose name legitimately repeats its AOC — so the row the guard was
-// built to protect was a correct downgrade being blocked — and the guard
-// missed the prod note anyway, which uses the prepositional form ("not a
-// producer I can verify in the Jura appellation of L'Etoile"). A name
-// repeating a place is how half of Bordeaux is named; it is not evidence the
-// field holds a place. The alternations below survive because their shapes
-// state it outright ("simply repeats the appellation").
+// An "is an appellation…" alternation does NOT belong here, for two reasons:
+// Château de l'Étoile is a REAL Jura estate whose name legitimately repeats
+// its AOC — such a guard blocks a correct downgrade — and notes use the
+// prepositional form anyway ("not a producer I can verify in the Jura
+// appellation of L'Etoile"), which it would miss. A name repeating a place is
+// how half of Bordeaux is named; it is not evidence the field holds a place.
+// The alternations below are kept because their shapes state it outright
+// ("simply repeats the appellation").
 const FIELD_IS_PLACE = /\b(repeats? the (appellation|region|village|commune)|is also the name of|simply repeats|no specific (estate|producer|winery|house))\b/i;
 
 const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -188,8 +185,8 @@ const OTHER_CATEGORY = /\b(wine style|style rather|grape variet|translates? to|i
  *
  * For THIS rule it is not ambiguous, because the question is different: the
  * test is whether the note makes any claim about the entity at all. "This may
- * be a négociant" is a claim, hedged or not — which is the precedence the
- * sommelier asked for ("B beating A is the knob"), with their own example:
+ * be a négociant" is a claim, hedged or not, and a claim takes precedence
+ * over the epistemic reading:
  *
  *   "Jean XXII is not a producer I can confidently place; this may be a
  *    negociant or lesser-known bottling"     ← epistemic AND a claim → suspect
@@ -200,21 +197,20 @@ const CLASSIFIES_AS_TRADE = /\b(n[ée]gociants?|negociants?|co[-\s]?packer|contr
  * Does the note record only that the model could not place the name — with no
  * assertion about what the producer field actually is?
  *
- * WHY (somm ticket 6a86baca, 2026-08-20). `producer_suspect` asserts a positive
+ * WHY. `producer_suspect` asserts a positive
  * suspicion: this value is a brand, a range, a retailer, a place. An epistemic
  * note asserts no such thing — it says the model could not verify the name,
  * which is what `producerUnknown` means. Both flags describe our knowledge;
  * only one adds a claim the note never made.
  *
- * The somm's own counter-example settled it: La Spia carried a pure epistemic
- * note and turned out to be a real Valtellina winery, confirmed in the same
- * session it was sitting in the suspect queue. Left as suspect, a real estate
- * wears a permanent "cannot be verified" caveat on its wine.
+ * A pure epistemic note can sit on a perfectly real winery the model simply
+ * could not place. Left as suspect, a real estate wears a permanent "cannot be
+ * verified" caveat on its wine.
  *
- * This is the population {@link noteAssertsProducer} deliberately declined to
- * touch on 2026-08-19 ("left ALONE… stays for a human or a search"). That call
- * was wrong for the reason above, and this is its reversal — narrowly, because
- * the guards below still refuse anything making a positive claim.
+ * This is the population {@link noteAssertsProducer} deliberately leaves
+ * alone ("left ALONE… stays for a human or a search"); this rule downgrades
+ * it for the reason above — narrowly, because the guards below still refuse
+ * anything making a positive claim.
  *
  * @param {string} note          aiProfile.producerNote as stored
  * @param {string} producerName  the wine's producer field
@@ -241,19 +237,17 @@ function noteIsEpistemicOnly(note, producerName) {
   return true;
 }
 
-// ── Downgrade blockers (somm audit 6a86dad6, 2026-08-20) ─────────────────────
+// ── Downgrade blockers ───────────────────────────────────────────────────────
 //
-// The full-population audit of the first 166 downgrades found 14 that should
-// not have moved. These two guards encode the two mechanical classes; they
-// BLOCK a downgrade (row stays suspect, caveat stays visible, a human judges)
+// These two guards encode the two mechanical classes of downgrade that must
+// not move a row; they BLOCK a downgrade (row stays suspect, caveat stays visible, a human judges)
 // and never fire one.
 
 /**
  * The note grounds its estimate in a place the record contradicts.
  *
- * Four of the audit's 14 were this shape — the profile describes a different
- * wine's geography, and downgrading published that fabrication with its
- * caveat removed:
+ * In this shape the profile describes a different wine's geography, and
+ * downgrading would publish that fabrication with its caveat removed:
  *
  *   "…estimated from the Champagne appellation and style"   (Côtes de Gascogne)
  *   "…based on general Champagne Demi-Sec style"            (Loire mousseux)
@@ -271,9 +265,9 @@ function noteIsEpistemicOnly(note, producerName) {
  *
  * Direction of failure is deliberate: a false positive here keeps a row
  * suspect for a human — annoying. A false negative publishes fiction with the
- * caveat stripped — the thing the audit caught. When the record carries NO
- * place at all, a note asserting one is grounded in nothing and blocks too
- * (the 6a82bfb7 family).
+ * caveat stripped — the thing this guard exists to stop. When the record
+ * carries NO place at all, a note asserting one is grounded in nothing and
+ * blocks too.
  */
 const PLACE_PHRASE = /\b([A-ZÀ-Þ][\wÀ-ɏ'’-]*(?:\s+[\wÀ-ɏ'’-]+){0,3})\s+(?:appellation|AOC|AOP|DOCG?|region|style)\b/g;
 
@@ -301,17 +295,17 @@ function notePlaceConflict(note, { region, appellation, country } = {}) {
 /**
  * The producer field is a placeholder, not a name that could be verified.
  *
- * Five of the audit's 14: the field literally reads "Domaine unknown", or it
+ * The field literally reads "Domaine unknown", or it
  * simply repeats the wine's own name as a bare word ("Increíble" /
  * "Increíble") — an import artifact, not an entity. producerUnknown means "a
  * real winery name we cannot place"; a placeholder is not a name at all, so
  * the honest flag is suspect and the honest fix is identification.
  *
- * The producer-type-prefix carve-out is the sommelier's own correction to
- * their first proposal (ticket 6a86dad6 part 2C): bare producer == name would
- * over-fire on the Bordeaux convention where the château IS the wine name
- * (La Garricq, Rousset, Haut Barrail…). A prefixed name is a producer-shaped
- * name; and their multi-word examples escape via the single-word requirement.
+ * The producer-type-prefix carve-out exists because bare producer == name
+ * would over-fire on the Bordeaux convention where the château IS the wine
+ * name (La Garricq, Rousset, Haut Barrail…). A prefixed name is a
+ * producer-shaped name; multi-word names escape via the single-word
+ * requirement.
  */
 const UNKNOWN_WORD = /\b(unknown|unbekannt|okänd|inconnue?|sconosciuto|desconocido)\b/i;
 const PRODUCER_PREFIX = /^(ch[âa]teau|domaine|dom\.|quinta|weingut|bodegas?|tenuta|azienda|cascina|clos|mas|castello|villa|cantina|celler|cave|maison|finca|vi[ñn]a)\b/i;
@@ -329,8 +323,8 @@ function producerFieldLooksPlaceholder(producer, wineName) {
 
 /**
  * Rule identifiers stamped on `aiProfile.suspectDowngradedBy` when either rule
- * clears a flag, so the moved rows stay queryable as a set (somm request
- * 6a86baca — "residue should be a query, not a queue"). Never reused for
+ * clears a flag, so the moved rows stay queryable as a set — the residue is
+ * a query, not a queue. Never reused for
  * anything else, and never set by a human decision: a curator verdict goes to
  * suspectDecision, which is a judgement, not a rule application.
  */
@@ -338,7 +332,7 @@ const DOWNGRADE_RULES = {
   ASSERTS_PRODUCER: 'note_asserts_producer',
   EPISTEMIC_ONLY: 'note_epistemic_only',
   CUVEE_NOT_PRODUCER: 'note_doubts_cuvee_not_producer',
-  // Record-based, not note-based (somm 6a8eb2a9): the wine carries an
+  // Record-based, not note-based: the wine carries an
   // appellation that resolves to a curated entry WITH geography, so whatever
   // the producer string is — brand, négociant label, jokey cuvée — a knowable
   // house stands behind it. The suspect claim ("the record is wrong") cannot
@@ -354,17 +348,16 @@ module.exports = {
   notePlaceConflict, producerFieldLooksPlaceholder,
   PRODUCER_CLASS, BRAND_CLASS, CONTRAST,
   // Exported so the A/B split can be MEASURED separately from the combined
-  // predicate — the sommelier asked for a four-way population breakdown
-  // (6a86baca), and deriving it from the folded rule would only ever confirm
-  // the rule's own shape.
+  // predicate — a four-way population breakdown needs them, and deriving it
+  // from the folded rule would only ever confirm the rule's own shape.
   EPISTEMIC, OTHER_CATEGORY, CLASSIFIES_AS_TRADE, FIELD_IS_PLACE, NEGATED_TAIL,
 };
 
 // ── Third rule: the doubt is about the cuvée, not the producer ───────────────
 //
-// Somm ticket 6a872291 (2026-08-20). producer_suspect asserts the producer
-// VALUE is not a winery — but the generator keeps writing notes whose doubt is
-// scoped to the WINE NAME while affirming the producer in the same breath:
+// producer_suspect asserts the producer VALUE is not a winery — but the
+// generator keeps writing notes whose doubt is scoped to the WINE NAME while
+// affirming the producer in the same breath:
 //
 //   "La Libertad appears to be a label or line from Bodega Benegas, not a
 //    separate producer."                       ← affirms Benegas, doubts the cuvée
@@ -372,8 +365,8 @@ module.exports = {
 //    rather than the winery itself; Yacochuya is produced by Bodega
 //    Yacochuya…"                               ← names the actual maker
 //
-// Eleven documented estates carried owner-visible cannot-identify caveats this
-// way. Why the ASSERTS_PRODUCER rule never catches them: the affirmation sits
+// Documented estates would otherwise carry owner-visible cannot-identify
+// caveats this way. Why the ASSERTS_PRODUCER rule never catches them: the affirmation sits
 // AFTER the contrast cut ("rather than…"), and that rule only reads the text
 // before the first contrast — the model's house style leads with the doubt.
 //

@@ -4,10 +4,10 @@
  *
  * WHY. From v1.145 every generation records the identity it was generated
  * from, so a later bulk write that bypasses reenrichAfterRecordEdit is
- * detectable as staleness (somm 6a86bb3b — the 08-11 triage left two Friuli
- * benchmarks carrying a note about "Giuli Ballarin", the wine those rows used
- * to be). Without a backfill that protection only covers rows re-enriched from
- * now on, and the ~6,000 existing profiles stay unguarded indefinitely.
+ * detectable as staleness (a row whose identity was rewritten otherwise keeps
+ * a profile describing the wine it used to be). Without a backfill that
+ * protection only covers rows re-enriched from now on, and the existing
+ * profiles stay unguarded indefinitely.
  *
  * ⚠️ WHAT THIS CANNOT DO. The snapshot is the identity the profile was
  * generated from, and for an existing row that value was never recorded — so

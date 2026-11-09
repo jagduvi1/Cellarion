@@ -165,10 +165,10 @@ registerTool({
   },
 });
 
-// has_photo on every list row, from ONE BottleImage query per page (support
-// ticket 2026-09-06: the connector could not tell whether a photo existed
-// before attaching one). A failing lookup degrades to "no flag" with a
-// warning — a photo nicety never fails the search.
+// has_photo on every list row, from ONE BottleImage query per page, so the
+// connector can tell whether a photo exists before attaching one. A failing
+// lookup degrades to "no flag" with a warning — a photo nicety never fails
+// the search.
 async function withPhotoFlag(userId, docs, warnings) {
   const rows = await withWineDetail(docs, warnings);
   let presence = new Map();
@@ -181,11 +181,11 @@ async function withPhotoFlag(userId, docs, warnings) {
   return rows.map((r) => ({ ...r, has_photo: presence.get(String(r.bottle_id)) === true }));
 }
 
-// Grapes/region/country and the RESOLVED drink window on every list row
-// (support tickets 6aad5481 + 6aad5c67). drink_from/peak_from are the
-// bottle's OWN overrides and read null on nearly every bottle, which an
-// assistant took to mean "no drink window" — while the curated sommelier
-// window was there all along, one drink_window_for call per bottle away.
+// Grapes/region/country and the RESOLVED drink window on every list row.
+// drink_from/peak_from are the bottle's OWN overrides and read null on
+// nearly every bottle, which an assistant can take to mean "no drink
+// window" — while the curated sommelier window is there, one
+// drink_window_for call per bottle away.
 // `maturity` is the window that actually governs the bottle (own when set,
 // else curated) with its verdict, from ONE profile query per page. Active
 // bottles only: a verdict on a drunk bottle means nothing. A failed lookup
@@ -322,8 +322,8 @@ async function buildBottleDetail(userId, bottleId) {
           const advice = servingAdvice(wd, phase);
           return advice ? { ...advice, unit: 'C', phase, advice: servingSentence(advice) } : null;
         })(),
-        // A PRIVATE DRAFT wine (support ticket 2026-09-12): the user's own
-        // record, not shared registry content yet.
+        // A PRIVATE DRAFT wine: the user's own record, not shared registry
+        // content yet.
         ...(wd.draft === true ? {
           draft: true,
           draft_note: 'This wine is the user\'s private draft: edit it with update_wine_draft, publish it with publish_wine. list_wine_drafts shows every draft with its deadline.',

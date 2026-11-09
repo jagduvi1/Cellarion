@@ -9,7 +9,7 @@ import DraftWineEditModal from '../components/DraftWineEditModal';
 import './WineDrafts.css';
 
 /**
- * My private draft wines (support ticket 2026-09-12): every wine the user
+ * My private draft wines: every wine the user
  * created as a draft, with its bottle count and its untouched-clock deadline.
  * Publish one, publish a selection, edit, or delete an empty one. A publish
  * that meets a registry match opens the same "attach instead" dialog the

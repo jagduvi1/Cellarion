@@ -149,7 +149,7 @@ function tokenResponse(rawAccess, rawRefresh, scopes) {
  * connections minted through the consent flow (`oauthClientId` set), NOT the
  * user's own personal API tokens (HA integration, climate devices), which
  * carry a null `oauthClientId` and keep their deliberate PAT semantics
- * (survive password change — Johan's call on the HA-tokens PR).
+ * (survive password change — decided on the HA-tokens PR).
  *
  * Called when a user changes or resets their password (security report
  * 2026-08-27, second analysis): a phished OAuth connection is a third-party

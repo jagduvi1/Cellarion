@@ -51,7 +51,7 @@ const normalizeString = (str) => {
 // Names only. normalizeString serves every field, and a star means nothing in
 // a grape, a region, a country or a producer: there "Riesling*" must still be
 // Riesling, and a bare "*" must still read as empty (a placeholder), so those
-// keep stripping stars (release audit 2026-10-13).
+// keep stripping stars.
 //
 // A run of one to MAX_STAR_GRADE stars ('*' or '\u2605', spaces between them
 // allowed) becomes a word: "Auslese***" \u2192 "Auslese 3star ". A longer run is
@@ -87,7 +87,7 @@ const MAX_TAXONOMY_NAME = 200;
  *
  * Belongs here rather than beside any one caller: creation goes through
  * findOrCreateWine, but the admin taxonomy routes RENAME existing rows, and a
- * guard that only covers create is not a chokepoint (security audit 2026-08-03).
+ * guard that only covers create is not a chokepoint.
  */
 const sanitizeTaxonomyName = (value) => {
   if (typeof value !== 'string') return '';
@@ -115,24 +115,24 @@ const tokenize = (str) => {
 // canonical appellation is the place name with a trailing tier stripped. Only
 // unambiguous 2–4 char tiers — deliberately NOT 'do'/'ao' as TRAILING tokens,
 // which collide with real place-name words ('do' is safe as a LEADING token,
-// below). dop/doq/vqa/wo added per the 2026-07-26 registry audit (RC-4:
-// "Ontario VQA", "Swartland WO", "Priorat DOQ", ~20 "… DOP" rows survived the
-// old set). 'dac' stays out — "Kamptal DAC" is the official appellation form.
-// pdo/pgi added per ticket 6a842d54 ("Samos PDO" sat unmatched over a curated
-// "Samos") — the English EU marks are pure tier text on either side.
+// below). dop/doq/vqa/wo cover forms like "Ontario VQA", "Swartland WO",
+// "Priorat DOQ" and "… DOP". 'dac' stays out — "Kamptal DAC" is the official
+// appellation form.
+// pdo/pgi: "Samos PDO" must match a curated "Samos" — the English EU marks
+// are pure tier text on either side.
 const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq', 'vqa', 'wo', 'pdo', 'pgi']);
 
 // Tier tokens that may open an appellation ("DO Alicante", "DOCa Rioja",
-// "D.O. Valle Central", "IGT Toscana") — the majority of the tier pollution
-// the audit found was PREFIX-form, which the trailing loop can never see.
+// "D.O. Valle Central", "IGT Toscana") — most tier pollution is PREFIX-form,
+// which the trailing loop can never see.
 // Narrower than the trailing set on purpose: "VQA Ontario" and "Wine of
-// Origin Western Cape" are the official forms of real appellations (audit
-// leave-alone list), so 'vqa'/'wo' are trailing-only.
+// Origin Western Cape" are the official forms of real appellations, so
+// 'vqa'/'wo' are trailing-only.
 const APPELLATION_LEADING_TIER_TOKENS = new Set(['do', 'doca', 'docg', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq', 'pdo', 'pgi']);
 
 // Spelled-out tier PHRASES ("Denominación de Origen Valencia", "Chianti
 // Denominazione di Origine Controllata") — multi-token, so the single-token
-// loops below can never see them (ticket 6a842d54). Compared accent- and
+// loops below can never see them. Compared accent- and
 // punctuation-folded (so "Denominació d'Origen" probes as
 // ['denominacio','dorigen']), but only the DECORATION is dropped — the
 // surviving name keeps its typed spelling, exactly like the token loops.
@@ -156,7 +156,7 @@ const APPELLATION_TIER_PHRASES = [
   ['denominazione', 'di', 'origine', 'controllata'],
   ['denominazione', 'di', 'origine', 'protetta'],
   // The apostrophe spelling labels also print ("Denominazione d'Origine
-  // Controllata"): "d'Origine" folds to one token (prod 2026-10-26).
+  // Controllata"): "d'Origine" folds to one token.
   ['denominazione', 'dorigine', 'controllata', 'e', 'garantita'],
   ['denominazione', 'dorigine', 'controllata'],
   ['denominazione', 'dorigine', 'protetta'],
@@ -185,9 +185,9 @@ const foldTierWord = (token) => token
 // phrases first, repeating until stable ("PDO Denominación de Origen X" is
 // unrealistic but costs nothing to handle), then single tokens (the leading
 // set, then the trailing set), then separator debris a strip leaves dangling
-// ("Vin du Québec -", found on prod 2026-08-18). Dots, commas and brackets fold
+// ("Vin du Québec -"). Dots, commas and brackets fold
 // OUT of a token before it probes a set, so the forms labels print — "Lison
-// Classico D.O.C.G.", "Rioja D.O.Ca.", "Barolo (DOCG)" — match (prod 2026-08-13); the
+// Classico D.O.C.G.", "Rioja D.O.Ca.", "Barolo (DOCG)" — match; the
 // split is on whitespace, so folding cannot merge two tokens. `min` is the
 // smallest list the loops may leave behind: 1 for an appellation (an input
 // that IS only tier text survives untouched and the caller falls back to the
@@ -260,8 +260,8 @@ const normalizeAppellation = (appellation) => {
 
 // A production METHOD is not an appellation (GitHub discussion #1696):
 // "Méthode Traditionnelle", "Metodo Classico", "Méthode Cap Classique" say how
-// the bubbles were made, not where the wine is from — and our own prompts used
-// to put them in the appellation field. Only a value that is NOTHING BUT a
+// the bubbles were made, not where the wine is from — yet they turn up in the
+// appellation field. Only a value that is NOTHING BUT a
 // method counts. The same words also end real names ("Oltrepò Pavese Metodo
 // Classico" is a DOCG, "Blanquette méthode ancestrale" an AOC), so an edge
 // strip would turn one appellation into another; a value with a place in it
@@ -345,7 +345,7 @@ const normalizeClassification = (classification) => {
 // The separator run is BOUNDED ({1,8}, not +): an unbounded run before an
 // anchored tail is quadratic on a long run of separators that ends in
 // nothing — every start position rescans the run (CodeQL js/polynomial-redos
-// on the two .replace calls below, 2026-09-12). Real names carry at most a
+// on the two .replace calls below). Real names carry at most a
 // few separator characters before the year (" — (2019)" is four); the
 // caller trims whatever a longer run leaves behind.
 const TRAILING_VINTAGE_RX = /[\s\-–—(]{1,8}(?:19[5-9]\d|20[0-4]\d)\)?$/;
@@ -382,10 +382,9 @@ const PRODUCER_CORP_SUFFIXES = new Set([
 ]);
 
 // Cross-gender and abbreviated Saint forms of one estate name must share a
-// bucket token: "Caronne Sainte Gemme" / "Caronne Ste Gemme" were 3 spellings
-// holding 5 registry records for one Haut-Médoc estate (support ticket
-// d49fea22), invisible to normalization because 'ste' and 'sainte' are simply
-// different tokens. The key is comparison-only and non-unique, so a rare false
+// bucket token: "Caronne Sainte Gemme" / "Caronne Ste Gemme" are one
+// Haut-Médoc estate, yet invisible to normalization as such because 'ste' and
+// 'sainte' are simply different tokens. The key is comparison-only and non-unique, so a rare false
 // fold (a 'Ste' abbreviating Société) lands in the human-reviewed canonical-
 // collisions queue — never an auto-merge.
 const PRODUCER_SAINT_TOKENS = new Set(['st', 'ste', 'saint', 'sainte']);
@@ -398,7 +397,7 @@ const foldProducerToken = (token) => (PRODUCER_SAINT_TOKENS.has(token) ? 'saint'
 
 // A TRAILING year on a producer string is a founding date, never part of the
 // legal producer name — "Grand Pappy's 1846" and "Grand Pappy's" are the same
-// house (support ticket d49dfd38). 1000–2049: founding dates reach centuries
+// house. 1000–2049: founding dates reach centuries
 // further back than TRAILING_VINTAGE_RX's vintage window.
 const PRODUCER_FOUNDING_YEAR_RX = /^(?:1[0-9]{3}|20[0-4][0-9])$/;
 
@@ -429,8 +428,8 @@ const normalizeProducerKey = (producer) => {
   }
   // A stop/corp word can also TRAIL the founding year ("Grand Pappy's 1846
   // Winery", "… 1846 Ltd") and hide it from the literal-tail loop above —
-  // which would split keys the pre-fold code unified ("X 1846" vs "X 1846
-  // Winery"; audit 2026-08-10). Walk back over droppable tail tokens and
+  // which would split keys that must stay one ("X 1846" vs "X 1846
+  // Winery"). Walk back over droppable tail tokens and
   // strip a year found behind them — but only when it is NOT the opening
   // token: a leading year is a brand name ("1848 Winery") whatever follows.
   const droppableTail = (t) => PRODUCER_CORP_SUFFIXES.has(t) || tokenize(t).length === 0;
@@ -516,8 +515,8 @@ const appendSweetnessTerm = (name, term) => {
   return carried ? n : `${n} ${t}`;
 };
 
-// DRAFT namespace (support ticket 2026-09-12: a wine created privately and
-// published later). Same construction and the same argument as the pending
+// DRAFT namespace (a wine created privately and published later). Same
+// construction and the same argument as the pending
 // namespace above — '~' never survives normalizeString, so 'draft~' cannot be
 // produced by a real producer, and the creator id keeps two users' drafts of
 // the same wine apart under the unique index (they collide only at PUBLISH,
@@ -769,8 +768,8 @@ const GRAPE_SYNONYMS = {
   // Muscadet (the wine name used as grape name by mistake)
   'muscadet':             'Melon de Bourgogne',
 
-  // Spelling variants / typos / short forms that existed as duplicate Grape
-  // docs on prod (merged 2026-07-11) — mapped so they can't come back.
+  // Spelling variants / typos / short forms — mapped so they can never become
+  // duplicate Grape docs.
   'agiorghitiko':         'Agiorgitiko',
   'inzolia':              'Insolia',
   'corvina veronese':     'Corvina',
@@ -803,10 +802,10 @@ const resolveGrapeName = (name) => {
   if (!name || !name.trim()) return name;
   // Blend percentages are not part of a variety name — the AI occasionally
   // returns "70% Monastrell" / "Monastrell 70%" verbatim from a back label,
-  // which minted grape documents named "70% Monastrell" on prod. Strip the
+  // which would mint a grape document named "70% Monastrell". Strip the
   // percentage and resolve what remains ("70%" alone → '' → caller drops it).
-  // Whitespace runs are BOUNDED, not `\s*` (CodeQL js/polynomial-redos, alert
-  // #199 open since 2026-07-18). With `\s*` the trailing pattern is retried at
+  // Whitespace runs are BOUNDED, not `\s*` (CodeQL js/polynomial-redos).
+  // With `\s*` the trailing pattern is retried at
   // every index of a long run of spaces, each attempt rescanning the run — a
   // quadratic walk on an attacker-supplied grape name, and grape names arrive
   // from label scan, import files and the AI. A real percentage carries at most
@@ -826,8 +825,8 @@ const resolveGrapeName = (name) => {
  * Same idea as GRAPE_SYNONYMS: the AI importer and label scan receive labels
  * in the user's language ("Tyskland", "Italie") or informal abbreviations
  * ("USA"), and findOrCreateCountry would otherwise mint a duplicate Country
- * document for each spelling — this happened on prod (USA / United States Of
- * America / Tyskland / Italie / New Zeeland were all created as countries).
+ * document for each spelling (USA / United States Of America / Tyskland /
+ * Italie / New Zeeland as separate countries).
  * Covers Swedish, German, French, Spanish, Italian and Dutch names for the
  * wine countries plus common English variants; anything unmapped passes
  * through unchanged and still dedupes by normalizedName.
@@ -997,16 +996,14 @@ const COUNTRY_ALIASES = {
 
   // ── ISO 3166-1 alpha-2 codes ───────────────────────────────────────────
   //
-  // Real files use them. A 48-row import on 2026-08-21 lost HALF its rows to
-  // this — 24 rejected as unrecognized countries, every one a two-letter code
-  // (de ×11, fr ×5, ro ×5, it, pl, es). The user had no way to see why until
-  // the import audit started recording failure reasons that morning.
+  // Real files use them: without these entries a row whose country is a
+  // two-letter code (de, fr, ro, it, pl, es …) is rejected as an
+  // unrecognized country.
   //
   // This is the right place for it rather than the importer: isRecognizedCountry
   // resolves through this map before the mint gate, so one entry fixes the
   // import path, the label scan and the AI lookup together. `us` and `uk`
-  // already lived here, so the two-letter form is not a new idea — it was just
-  // incomplete.
+  // are the same two-letter form.
   //
   // Scoped to the wine world plus its neighbours rather than all 249 codes:
   // every entry here is a country somebody could plausibly type in a wine

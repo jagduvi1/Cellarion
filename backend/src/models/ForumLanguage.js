@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 /**
  * ForumLanguage — which languages the community forum is open in.
  *
- * POLICY (Johan, 2026-08-31): **English is the forum.** The list defaults to
+ * POLICY: **English is the forum.** The list defaults to
  * English everywhere — the thread list, and the language field on a new
  * thread — and a member who wants to write in their own language has to pick
  * it deliberately. Writing another language in the English section is not an

@@ -2,7 +2,7 @@
  * Forum language sections — the shared rules, so every surface that reads or
  * writes a thread's language agrees on them.
  *
- * POLICY (Johan, 2026-08-31): English is the forum. It is the default for the
+ * POLICY: English is the forum. It is the default for the
  * thread list and for a new thread, and a member who wants another language
  * picks it deliberately. See models/ForumLanguage for the lifecycle.
  */

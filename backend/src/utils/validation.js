@@ -48,9 +48,9 @@ const MIN_VINTAGE_YEAR = 1900;
  * a profile so somms can attach drinking notes, Unknown does not.
  *
  * The upper bound is the CURRENT year. A later vintage cannot exist — the
- * grapes have not grown — and the old "+5 for en primeur" allowance let a
- * 2026 Italian frizzante be recorded in August 2026 with a confident AI
- * tasting note (support ticket 2026-08-20). En primeur is a purchase of a
+ * grapes have not grown — and a "+5 for en primeur" allowance would let a
+ * vintage that does not exist yet be recorded with a confident AI tasting
+ * note. En primeur is a purchase of a
  * past harvest (a 2025 Bordeaux bought in 2026), so it still passes.
  *
  * Accepts numbers, strings, and trims whitespace. Rejects anything that

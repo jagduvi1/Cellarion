@@ -11,14 +11,13 @@ import './AddBottleCustomFields.css';
 import { formatVintage } from '../../utils/vintage';
 
 /**
- * Custom fields on the add-bottle form (user ticket 6ab05cca — "Have the
- * option to add abv when adding bottles").
+ * Custom fields on the add-bottle form (e.g. an ABV entered while adding the
+ * bottle).
  *
  * The data itself is nothing new: these are the same typed personal entries
- * the bottle page already writes (#986). What was missing was an entry point
- * at the moment people actually have the number in front of them — the label
- * is in their hand while they are adding the bottle, not a page-visit later.
- * The reporter had 117 bottles and had never found the card at all.
+ * the bottle page already writes (#986). This is an entry point at the moment
+ * people actually have the number in front of them — the label is in their
+ * hand while they are adding the bottle, not a page-visit later.
  *
  * Two suggestion sources feed the chips, in this order:
  *  1. The PUBLIC registry vocabulary (accepted RegistryDataKeys — today: ABV).

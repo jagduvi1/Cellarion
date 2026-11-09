@@ -1,11 +1,11 @@
 /**
  * Same wine, different label form.
  *
- * Somm ticket e9b346ba (2026-08-23). One import file carried the same wine
- * more than once under variant names and nothing collided: `normalizedKey` is
- * exact, and the fuzzy scorer never got close. Measured against the 17 pairs a
- * curator merged by hand that day, EVERY pair scored below 0.85 — the floor of
- * even the "did you mean?" soft zone — spread across 0.58 to 0.85:
+ * The same wine can arrive more than once under variant names without
+ * colliding: `normalizedKey` is exact, and the fuzzy scorer never gets close.
+ * Measured against pairs a curator merged by hand, EVERY pair scored below
+ * 0.85 — the floor of even the "did you mean?" soft zone — spread across 0.58
+ * to 0.85:
  *
  *   Bin 389 / Bin 389 Cabernet Shiraz .................. 0.717
  *   RWT / RWT Shiraz ................................... 0.721

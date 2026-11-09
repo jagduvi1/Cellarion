@@ -1,6 +1,6 @@
 /**
- * One-time backfill of BottleImage.vintage for rows that predate the field
- * (support ticket 2026-10-09). Runs at boot, after the DB connects: a photo
+ * One-time backfill of BottleImage.vintage for rows that predate the field.
+ * Runs at boot, after the DB connects: a photo
  * tied to a bottle takes that bottle's vintage; a wine-level upload or a
  * label scan (no bottle) gets an explicit null. Both end with the key
  * present, so the next boot finds nothing to do — the `$exists: false`

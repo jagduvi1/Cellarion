@@ -13,11 +13,11 @@
  *
  * `include=consumed` widens the bottles to the ones that left those cellars
  * (drunk, gifted, sold, other) in the same shape, so a client keeps one
- * archive beside its stock (support ticket 2026-11-03). On-order bottles stay
+ * archive beside its stock. On-order bottles stay
  * out either way. The consumption record is loaded only when asked for.
  *
  * DATABASE READS ONLY. Nothing here, or reachable from here, may spend AI
- * money (Johan, 2026-10-21): no AI provider, no embedding, no label scan, no
+ * money: no AI provider, no embedding, no label scan, no
  * semantic search, no enrichment, no Meilisearch. The tasting profile is the
  * stored one; when a wine has none, it has none.
  *

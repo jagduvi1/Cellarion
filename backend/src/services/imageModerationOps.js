@@ -102,7 +102,7 @@ async function approveImage({ imageId, actorId, visibility = 'public', official 
   image.reviewedAt = new Date();
   // Approving a REPORTED photo is the answer to that report: clear the
   // needs-a-look flag, but keep the reports themselves so a photo raised
-  // repeatedly still shows its history (ticket 6a865f60).
+  // repeatedly still shows its history.
   image.reportedAt = null;
   // Published: the photo belongs to the wine from here on (linkWineViaBottle).
   // A private approval stays the uploader's own bottle photo.
@@ -370,7 +370,7 @@ async function setImageVisibility({ imageId, actorId, visibility, clearReport = 
 
 /**
  * Answer a report with "the photo is fine as it is": the needs-a-look flag is
- * cleared, the reports themselves stay as history (ticket 6a865f60).
+ * cleared, the reports themselves stay as history.
  */
 async function dismissImageReport({ imageId, actorId, req, via }) {
   if (!isValidId(imageId)) return fail('invalid_input', 'Invalid ID');

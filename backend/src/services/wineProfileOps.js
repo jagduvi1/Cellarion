@@ -1,10 +1,10 @@
 /**
  * Curator edits to a wine's tasting profile (WineDefinition.aiProfile).
  *
- * Why this exists (support ticket 2026-07-28): the AI enrichment generator
- * writes confident prose for wines it only half-knows rather than abstaining —
- * a Sandeman Vintage Port was described as "built for immediate drinking",
- * which inverts the single most important fact about the style. A sommelier
+ * Why this exists: the AI enrichment generator can write confident prose for
+ * wines it only half-knows rather than abstaining — e.g. a Vintage Port
+ * described as "built for immediate drinking", which inverts the single most
+ * important fact about the style. A sommelier
  * working the maturity queue is already researching that wine's drink window,
  * so they are the right person to correct the profile, and correcting it in
  * the same pass is the difference between the fix landing and the curator
@@ -63,10 +63,9 @@ const EDITABLE_FIELDS = [
   ...SERVING_FIELDS,
 ];
 
-// Structural RECORD fields a curator may also correct (support ticket
-// d4a1aef5: a vin jaune arrived typed "fortified" — a serving/storage hazard
-// — and the only field the curator could reach was the prose, which was
-// already right). Both are closed vocabularies and neither is a merge/join
+// Structural RECORD fields a curator may also correct (a vin jaune typed
+// "fortified" is a serving/storage hazard, and the prose alone cannot fix
+// it). Both are closed vocabularies and neither is a merge/join
 // key, which is exactly why they are safe here while producer/name/region/
 // appellation are not. They live on the wine document itself, NOT inside
 // aiProfile, and touching them alone does not claim the tasting profile was
@@ -105,7 +104,7 @@ function normalizeList(raw, { max, maxLen }) {
  * Validate a patch and return the cleaned values.
  *
  * Absent key = leave the field alone. Explicit null = clear it. That
- * distinction is the point: the ticket asks for FIELD-LEVEL abstention, so a
+ * distinction is the point: abstention is FIELD-LEVEL, so a
  * curator must be able to null the prose they don't trust while keeping the
  * structured descriptors that are correct (and that, unlike the prose, feed
  * the embedding text).
@@ -233,8 +232,8 @@ function validateProfilePatch(patch) {
  *          `names` echoes the CANONICAL display names, for response payloads.
  *          `substitutions` lists every input stored under a DIFFERENT name
  *          (synonym or static-map hop, e.g. "Tinta Roriz" → Tempranillo) —
- *          the write path must SAY when it overrides what the curator typed
- *          (somm ticket 2026-08-11), so callers surface these in responses.
+ *          the write path must SAY when it overrides what the curator typed,
+ *          so callers surface these in responses.
  *          Case/diacritic-only differences are not substitutions.
  */
 async function resolveGrapeIdsStrict(names) {
@@ -317,9 +316,9 @@ function snapshotProfile(wine) {
  *   - A write that ONLY CLEARS profile values is a reset signal — "this is
  *     wrong", not "this is verified". On an AI-sourced profile it clears the
  *     fields and touches NO provenance, so the wine stays eligible for
- *     re-enrichment (support ticket d49ca3af: clearing used to curator-freeze
- *     the wine, locking exactly the worst-sourced rows out of the enrichment
- *     that would have fixed them). On an already-curator profile a clear is
+ *     re-enrichment (curator-freezing on a clear would lock exactly the
+ *     worst-sourced rows out of the enrichment that would fix them). On an
+ *     already-curator profile a clear is
  *     someone editing their own curated data and stays curator.
  *   - Record fields (type/grapes) live outside aiProfile and never claim the
  *     tasting profile was verified.

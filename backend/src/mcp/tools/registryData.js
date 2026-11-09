@@ -9,7 +9,7 @@ const { ok, fail, objectId } = require('../toolUtil');
 const { TYPES } = require('../../utils/personalDataTypes');
 // A suggestion or key proposal cannot be withdrawn, so a retry after an
 // ambiguous transport failure must be safe: idempotency_key claims/replays
-// through the ledger (support ticket 2026-09-12).
+// through the ledger.
 const { logAction, replay } = require('../actionLedger');
 // The replayable body stored on the ledger row: what ok() serialises.
 const envelopeOf = (summary, data) => ({ summary, data });
@@ -200,9 +200,9 @@ registerTool({
     'true. When a key is really a product question rather than a wine question, reject it with that as the ' +
     'reason and say so in a support ticket rather than accepting on your own.',
   scope: 'write',
-  // Sommelier + admin (Johan, 2026-08-23). Public wine data IS wine data, and
-  // the admin-only gate made the project owner the bottleneck on a queue fed
-  // by users — the same bottleneck somm-owned data exists to remove.
+  // Sommelier + admin. Public wine data IS wine data, and an admin-only gate
+  // makes the project owner the bottleneck on a queue fed by users — the same
+  // bottleneck somm-owned data exists to remove.
   //
   // Deliberately MORE permissive than the REST twin at
   // /api/admin/registry-data, which stays requireRole('admin'): that route

@@ -64,7 +64,7 @@ function resolveWindowForBottle(profile, bottle) {
  *
  * With only drinkFrom/drinkTo the whole span is 'peak' — the historical
  * three-state behaviour. When the optional peakFrom/peakUntil are set
- * (ticket 6a94655283: "drinkable ≠ peak"), the window classifies in the
+ * ("drinkable ≠ peak"), the window classifies in the
  * same five stages the sommelier profile has always had:
  *
  *   not-ready | early | peak | late | declining
@@ -147,7 +147,7 @@ function classifyMaturity(bottle, profileMap) {
  * Returns null when neither exists, or when a relative profile cannot be
  * anchored — exactly the bottles classifyMaturity leaves unclassified.
  *
- * Analytics needed this (support ticket 2026-09-10): its maturity.* date
+ * Analytics needs this: its maturity.* date
  * columns are the bottle's own values, so a cellar that relies on curated
  * windows reads all-null there while status says "peak". These are the
  * resolved figures behind that status.
@@ -186,8 +186,8 @@ function resolveEffectiveWindow(bottle, profileMap) {
 // "Maturity (Drink Soon→Later)": the stage first — declining, late, peak,
 // early, not ready, then bottles without data — and inside a stage the year
 // that stage ends, so a peak ending this year comes before a peak running
-// another decade (support ticket 2026-10-19: the stage alone left a long peak
-// above one ending now). Then the end of the whole window.
+// another decade (the stage alone would leave a long peak above one ending
+// now). Then the end of the whole window.
 const MATURITY_SORT_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
 const NO_MATURITY_SORT_RANK = 5;
 const STAGE_ENDS = {
@@ -323,10 +323,10 @@ function maturityLabel(status, profile, bottle = null) {
     const to       = Number.isFinite(bottle.drinkTo)   ? bottle.drinkTo   : null;
     const peakFrom = Number.isFinite(bottle.peakFrom)  ? bottle.peakFrom  : null;
     // Every status classifyPersonalWindow can return is handled HERE. The
-    // personal peak pair made 'early' and 'late' reachable, and for a while
-    // those two fell through to the profile labels below — so a bottle the
-    // user had recorded as finished in 2027 read "drink soon, until 2032",
-    // the shared profile's late-phase end (support ticket 2026-09-10).
+    // personal peak pair makes 'early' and 'late' reachable, and neither may
+    // fall through to the profile labels below — a bottle the user recorded
+    // as finished in 2027 would read "drink soon, until 2032", the shared
+    // profile's late-phase end.
     switch (status) {
       case 'not-ready':
         return `Not ready — drinking from ${from ?? '?'}`;
@@ -375,9 +375,9 @@ const MATURITY_FILTER_VALUES = ['declining', 'late', 'peak', 'early', 'not-ready
 /**
  * Parse a `?maturity=` query value into a Set of statuses, or null when the
  * filter is absent. One status or several, comma-separated and OR-combined
- * (support ticket 2026-09-12: "Late and Declining together" is the question
- * owners actually ask, and the web filter is the only surface that can ask
- * it — maturity is computed per row, so analytics cannot filter on it).
+ * ("Late and Declining together" is a question owners actually ask, and the
+ * web filter is the only surface that can ask it — maturity is computed per
+ * row, so analytics cannot filter on it).
  * `none` selects bottles with no maturity data. Unknown tokens are dropped;
  * a value with no valid token yields an EMPTY set, which matches nothing —
  * an explicit wrong filter must not silently widen to "everything".

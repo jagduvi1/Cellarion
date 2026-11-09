@@ -278,7 +278,7 @@ const REGISTRY = [
         BottleImage.deleteMany({ uploadedBy: ctx.userId, ...OWN_PHOTO }),
         BottleImage.updateMany({ uploadedBy: ctx.userId, ...REGISTRY_PHOTO }, { $set: { uploadedBy: ctx.deletedUserId }, $unset: { bottle: '' } }),
         BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
-        // Reports this user filed on OTHER people's photos (ticket 6a865f60).
+        // Reports this user filed on OTHER people's photos.
         // The report is the user's own statement, so it leaves with them — but
         // the photo it concerns belongs to someone else and stays. reportedAt
         // is deliberately NOT cleared here: an admin may still be mid-review,

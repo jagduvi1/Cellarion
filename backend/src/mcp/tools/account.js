@@ -19,7 +19,7 @@ const { logAudit } = require('../../services/audit');
 const featureFlags = require('../../config/featureFlags');
 // The human-queue writes (ticket, reply, wine request) cannot be unsent, so a
 // retry after an ambiguous transport failure must be safe: idempotency_key
-// claims/replays through the ledger (support ticket 2026-09-12).
+// claims/replays through the ledger.
 const { logAction, replay } = require('../actionLedger');
 // The replayable body stored on the ledger row: what ok() serialises.
 const envelopeOf = (summary, data) => ({ summary, data });

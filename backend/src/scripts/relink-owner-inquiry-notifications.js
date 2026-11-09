@@ -1,11 +1,11 @@
 /**
- * One-time relink (support ticket 2026-10-14): point the curator-question
- * notifications written before the fix at the question itself.
+ * One-time relink: point older curator-question notifications at the
+ * question itself.
  *
- * Until then an owner_inquiry / owner_inquiry_resolved notification linked to
- * the recipient's bottle as it was when the question went out
- * (/cellars/<cellar>/bottles/<bottle>). Once that bottle or its cellar was
- * deleted the link led to "bottle not found". New notifications link to
+ * An older owner_inquiry / owner_inquiry_resolved notification links to the
+ * recipient's bottle as it was when the question went out
+ * (/cellars/<cellar>/bottles/<bottle>). Once that bottle or its cellar is
+ * deleted the link leads to "bottle not found". New notifications link to
  * /questions/<inquiryId>, which finds a bottle page the owner can open at click
  * time (services/ownerInquiryOps.inquiryForRecipient). This rewrites the old
  * links the same way.
@@ -15,8 +15,8 @@
  * bottle (the row the notification was written from). A question notification
  * goes to the newest inquiry CREATED at or before it; a curator's-reply
  * notification to the newest one RESOLVED at or before it — a second question
- * about the same wine can be created before the first is resolved
- * (pre-release audit 2026-10-14). Anything that does not match exactly is left
+ * about the same wine can be created before the first is resolved.
+ * Anything that does not match exactly is left
  * alone. Only `link` changes. An --apply run writes one summary audit row.
  *
  *   node src/scripts/relink-owner-inquiry-notifications.js          # dry run: counts only

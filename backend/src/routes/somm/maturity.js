@@ -223,7 +223,7 @@ router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
     }
 
     const wine = profile.wineDefinition;
-    // Cost control (Johan 2026-08-21): the suggestion answers a question the
+    // Cost control: the suggestion answers a question the
     // curator is already researching by hand, and they work on a flat-rate
     // subscription. 503 rather than a silent empty result, with the reason
     // spelled out so the caller knows to research rather than retry.

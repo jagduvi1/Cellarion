@@ -9,13 +9,12 @@
  * already changed with no pre-image; a rerun first moves its writes to
  * scripts/lib/backupLog (one row appended before each write).
  *
- * Somm ticket 6a855285 (2026-08-19): the hold queue's bulk is data-rich wines
- * held only because the generator didn't recognise the BOTTLING, plus rows
- * whose flags misfired on known houses (pre-R7/R8 prompt semantics). Their
- * explicit requirement, honoured here: this must be a MIGRATION, not a pile
+ * The hold queue's bulk is data-rich wines held only because the generator
+ * didn't recognise the BOTTLING, plus rows whose flags misfired on known
+ * houses (pre-R7/R8 prompt semantics). This must be a MIGRATION, not a pile
  * of MCP confirms — review_held_profile stamps profileReviewedAt and claims
- * a curator adjudicated the row, and ~500 unread rows must not put false
- * provenance into the audit trail the September scaling review reads.
+ * a curator adjudicated the row, and unread rows must not put false
+ * provenance into the audit trail the scaling review reads.
  *
  * Two mechanical, conservative actions — nothing claims review:
  *
@@ -31,7 +30,7 @@
  *      shape get ONLY the suspect flag cleared (the owner-visible caveat
  *      was a misfire); producerNote stays. Rows whose note NAMES an
  *      alternative ("X is a range of Y", "X is actually Y") are NEVER
- *      touched — that is the correct-suspect class (their category 2).
+ *      touched — that is the correct-suspect class.
  *
  * Re-enrichment of the (a) rows is NOT triggered here: run the incremental
  * enrichment job afterwards in CAPPED batches with an Anthropic balance

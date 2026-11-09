@@ -342,8 +342,8 @@ router.get('/grapes', async (req, res) => {
 
 /**
  * GET /api/taxonomy/grape-names — the whole grape vocabulary, for the grape
- * picker on the bottle page's "suggest a fix" form (support ticket 2026-09-17:
- * a comma-separated text box is no way to enter varieties).
+ * picker on the bottle page's "suggest a fix" form (a comma-separated text box
+ * is no way to enter varieties).
  *
  * Unlike /grapes above this is NOT gated on MIN_WINES: a correction has to be
  * able to name a rare variety, which is exactly the one no public page exists

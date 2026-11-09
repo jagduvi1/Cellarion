@@ -847,11 +847,11 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     prompt += '\n\nCurator-supplied facts about this wine (authoritative — a human sommelier researched them; trust them over your own recall, describe accordingly, and let them raise your confidence): ' + ctxFacts;
   }
 
-  // Identity-starved records (somm 6a82bfb7, generation gate 2026-08-20): when
+  // Identity-starved records (see the generation gate in enrichmentJob): when
   // the record carries NO region and NO appellation, every geographic claim in
-  // the prose is ungrounded by construction — and the failure mode this class
-  // produced was a curator carrying "from the Hunter Valley" onto a wine whose
-  // fruit nobody verified, into four published drink windows. The directive
+  // the prose is ungrounded by construction — and a curator can carry such a
+  // claim ("from the Hunter Valley") onto a wine whose fruit nobody verified,
+  // into published drink windows. The directive
   // asks for the disclosure shape (name what is unknown) or style-only prose.
   // Advisory, like every prompt line — the write-path grade check in
   // enrichmentJob is the guarantee; this exists to make the retry rare.

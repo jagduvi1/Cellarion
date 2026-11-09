@@ -52,14 +52,14 @@ router.get('/mine', async (req, res) => {
 // The service's transport-neutral refusal codes → HTTP statuses. An inquiry
 // addressed to someone else is reported exactly like one that does not exist,
 // as the MCP tool does: this surface never confirms what other owners were
-// asked (release audit 2026-09-27, L — it answered 403).
+// asked (a 403 would confirm it).
 const RESPOND_STATUS = { invalid_input: 400, not_found: 404, forbidden: 404, conflict: 409 };
 const NOT_FOUND_MESSAGE = 'Inquiry not found';
 
 // GET /api/owner-inquiries/:id — one inquiry addressed to the caller, with a
 // bottle page of the wine they can open now (`link`, or null). What a
-// curator-question notification opens (support ticket 2026-10-14). Declared
-// after /mine, so "mine" never reaches it.
+// curator-question notification opens. Declared after /mine, so "mine" never
+// reaches it.
 router.get('/:id', async (req, res) => {
   try {
     const result = await inquiryForRecipient(req.user.id, req.params.id);

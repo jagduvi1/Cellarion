@@ -69,10 +69,10 @@ router.get('/wine-search', async (req, res) => {
 
     // Active bottles ("your cellar") AND the ones already drunk, as a separate
     // section, newest consumption first. A tasting journal is a record of
-    // wines one has drunk, and the picker used to offer only what was still
-    // in the rack — so every finished single bottle fell back to typed text
-    // with no producer, no vintage and no reference (chfish ticket 6aa6c200,
-    // 2026-09-13). Recently consumed bottles are the likeliest subject.
+    // wines one has drunk; a picker offering only what is still in the rack
+    // would leave every finished single bottle as typed text with no producer,
+    // no vintage and no reference. Recently consumed bottles are the likeliest
+    // subject.
     const [bottles, consumedBottles] = matchedWineIds.length
       ? await Promise.all([
           Bottle.find({ user: req.user.id, status: 'active', wineDefinition: { $in: matchedWineIds } })

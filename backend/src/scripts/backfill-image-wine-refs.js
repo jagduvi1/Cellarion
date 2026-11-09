@@ -4,9 +4,8 @@
  * Bottle photos uploaded while their bottle still waited for a wine request
  * were stored without a wineDefinition, and nothing filled it in when the
  * request was resolved — so the by-wine photo lookups never showed them on
- * the owner's other bottles of the same wine (support ticket 2026-09-07:
- * one of two identical bottles had the photo, the other did not). The
- * resolve route stamps the wine now; this fills the rows created before.
+ * the owner's other bottles of the same wine. The resolve route stamps the
+ * wine now; this fills the rows created before.
  *
  * Sets BottleImage.wineDefinition from the photo's bottle where the row has
  * none and the bottle has a wine. Dry run by default.

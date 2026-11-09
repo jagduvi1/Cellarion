@@ -1,8 +1,7 @@
 /**
  * wineDraftOps — everything a creator can do with a PRIVATE DRAFT wine, in
  * one place for the REST router (routes/wineDrafts.js) and the MCP tools.
- * Support ticket 2026-09-12; the design note lives on
- * models/WineDefinition.draft.
+ * The design note lives on models/WineDefinition.draft.
  *
  * A draft is a pendingIdentity row (invariant) with `draft: true`, keyed into
  * the per-creator 'draft~' namespace. Its creator edits it directly (no

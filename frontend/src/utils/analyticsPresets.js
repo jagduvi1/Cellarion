@@ -1,4 +1,4 @@
-// Pre-built analytics queries (#987, Johan 2026-08-19): the curated starting
+// Pre-built analytics queries (#987): the curated starting
 // points a user picks instead of composing dimensions and measures from
 // scratch. Client-side constants — applying one just sets the table's state,
 // so presets need no storage, no schema and no extra requests. User-SAVED

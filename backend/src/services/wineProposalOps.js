@@ -14,9 +14,9 @@
  * per-contribution-tier daily budget, and the one-pending-per-wine conflict.
  *
  * The one-pending rule is per WINE, not per user (partial unique index on
- * WineCorrectionProposal). Support ticket 2026-09-12: a user who noticed a
- * second gap right after filing was told "already awaiting review" — by their
- * own suggestion. So when the pending row is the caller's OWN, a new filing
+ * WineCorrectionProposal). A user who notices a second gap right after filing
+ * must not be told "already awaiting review" by their own suggestion. So when
+ * the pending row is the caller's OWN, a new filing
  * AMENDS it instead of colliding; only somebody else's pending row is a
  * conflict. An amendment enters nothing new into the queue, so it bypasses
  * the daily budget (not the ban) — capped at AMENDMENTS_MAX per proposal so
@@ -48,16 +48,16 @@ const { TIER_DAILY, checkContributionGate } = require('./contributionGate');
 const { appliesDirectly, applyCorrectionIfTrusted } = require('./trustedContributions');
 
 const FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
-// Structural fields a user may also correct (support ticket 2026-09-06: the
-// sommelier tool had them since 6a85ad44, the user tool did not — a whole
-// class of registry errors, wrong grape lists, was unfixable from a connector).
+// Structural fields a user may also correct, as the sommelier tool can —
+// otherwise a whole class of registry errors, wrong grape lists, would be
+// unfixable from a connector.
 // `type` is validated against the wine-type enum; `grapes` REPLACES the whole
 // variety list and every name must already exist in the taxonomy — resolved
 // at filing so the user learns about a typo now, and again at approval.
-// `colour` (support ticket 2026-09-17) is the colour of a sparkling, dessert or
+// `colour` is the colour of a sparkling, dessert or
 // fortified wine — refused on a wine the suggestion leaves red/white/rosé.
 const EXTRA_FIELDS = ['type', 'colour', 'grapes'];
-// Not a field but a MODIFIER of `grapes` (support ticket 2026-09-17): the names
+// Not a field but a MODIFIER of `grapes`: the names
 // in the grape list the caller asserts are genuinely missing from the taxonomy.
 // It rides inside `fields` so every transport that forwards `fields` verbatim
 // (the REST route, the Registry Bridge) carries it without a protocol change;

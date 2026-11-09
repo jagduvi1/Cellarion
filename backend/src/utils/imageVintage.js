@@ -1,6 +1,6 @@
 /**
- * The vintage a photo belongs to (support ticket 2026-10-09: a photo of the
- * 2015 label showed on the 2016 bottles, with the wrong year printed on it).
+ * The vintage a photo belongs to (a photo of the 2015 label must not show on
+ * the 2016 bottles, with the wrong year printed on it).
  *
  * A photo is taken of ONE bottle, so it is of that bottle's vintage. Stored
  * on BottleImage.vintage in the same canonical form Bottle.vintage uses
@@ -19,9 +19,8 @@ function photoVintage(vintage) {
 const vintageKey = (wine, vintage) => `${wine}::${vintage}`;
 
 /**
- * Which photo a vintage shows — its "vintage official" (Johan, 2026-10-09:
- * "if someone uploads an image of that vintage it should be validated as
- * before and selected as the vintage official"). Among the approved, public
+ * Which photo a vintage shows — its "vintage official": an upload of that
+ * vintage is validated as usual and can become it. Among the approved, public
  * photos of one wine AND vintage: the one an admin chose (assignedToVintage),
  * else the wine's official image when it is of this vintage, else the FIRST
  * one approved — so a later upload never silently replaces it. Derived on

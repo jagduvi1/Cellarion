@@ -7,15 +7,14 @@
  * every new generation from v1.177. This is the one-off backfill for rows
  * flagged before it existed — the same shape as apply-epistemic-downgrade.js.
  *
- * WHY (somm 6a8eb2a9). Five of five hand-checked producer-suspect rows were
- * false positives, and the somm asked for this narrowing to ship FIRST: a
+ * WHY. A producer-suspect flag here is a false positive: a
  * record whose appellation resolves to a curated entry WITH geography — a
  * Châteauneuf, a Coonawarra — has a knowable house behind whatever the
  * producer string is, so the suspect claim cannot carry an owner-visible
  * caveat there. producerUnknown is the honest state (real house, not placed).
  *
  * The predicate is deliberately about the curated ENTRY's geography, not the
- * field being populated — the somm's own counter-examples: "Vin de France"
+ * field being populated — counter-examples: "Vin de France"
  * (curated, nationwide, region null) and "Qualitätswein" (a tier, not
  * curated) both stay flagged.
  *
@@ -26,10 +25,9 @@
  *     placeholder producer has nothing to verify however real the
  *     appellation, and a note describing a different place puts the
  *     appellation itself in doubt;
- *   - rows whose wine carries an OPEN or ANSWERED owner inquiry — the somm
- *     deliberately left Padulone undecided because clearing the flag would
- *     decide over a live escalation on the same evidence (6a8eb2a9
- *     follow-up, 2026-08-27). The inquiry resolves first.
+ *   - rows whose wine carries an OPEN or ANSWERED owner inquiry — clearing
+ *     the flag would decide over a live escalation on the same evidence.
+ *     The inquiry resolves first.
  *
  * DRY BY DEFAULT. Pass --apply to write.
  *

@@ -15,12 +15,12 @@ import { useContributionReviewed } from '../../utils/contributionReview';
 const ImageUpload = lazy(() => import('../ImageUpload'));
 const ImageGallery = lazy(() => import('../ImageGallery'));
 
-// The fields a wine and vintage share (support ticket 2026-09-06). Only what
+// The fields a wine and vintage share. Only what
 // the user CHANGED in this save is copied to the other bottles of the lot —
 // rating, notes, reservation and rack slot never are. The drink window
 // travels as a unit: touching any of its four years copies all four, so the
-// lot ends up with ONE window rather than four uneven ones (audit
-// 2026-09-07). A price carries its currency; a currency alone counts only
+// lot ends up with ONE window rather than four uneven ones. A price carries
+// its currency; a currency alone counts only
 // when a price exists.
 const WINDOW_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil'];
 const norm = (v) => (v === '' || v === null || v === undefined ? null : v);

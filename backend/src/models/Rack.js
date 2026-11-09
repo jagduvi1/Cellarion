@@ -55,8 +55,8 @@ const rackModuleSchema = new mongoose.Schema({
     // first level's front row holds `cols`, its back row (in the gaps between
     // those bottles) one fewer, the level above nests in its grooves so its
     // front row holds one fewer and its back row `cols` again, and so on
-    // (6 / 5 in front of 5 / 6: a Liebherr GrandCru's wooden shelf, support
-    // ticket 2026-09-15). UNLIKE twoDeep and stagger this CHANGES capacity
+    // (6 / 5 in front of 5 / 6: a Liebherr GrandCru's wooden shelf).
+    // UNLIKE twoDeep and stagger this CHANGES capacity
     // and the position numbering (utils/rackGeometry.cabinetRowWidth), so
     // the UI offers it at creation only and the update route's resize guard
     // blocks a shrink past placed bottles. Implies stagger when drawn.
@@ -65,13 +65,13 @@ const rackModuleSchema = new mongoose.Schema({
     // a shelf narrower than the cabinet (1..cols) and a shelf that alternates
     // or not on its own — so one cabinet holds the Liebherr GrandCru 5001's
     // 4-wide staggered top and bottom shelves between its 6-wide honeycomb
-    // ones (support ticket 2026-08-31). A missing entry means the cabinet's
+    // ones. A missing entry means the cabinet's
     // own cols / alternate. Shape, like shelfRows: creation-only in the UI.
     shelfCols: { type: [Number], default: undefined },
     shelfAlternate: { type: [Boolean], default: undefined },
     // (No shelfSideways here: a module is never a cabinet, and nothing
     // validates a module's typeConfig — declared, any strings were stored;
-    // left out, Mongoose drops the key. Release audit 2026-10-13.)
+    // left out, Mongoose drops the key.)
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
     hexFlip: { type: Boolean, default: false },
@@ -92,7 +92,7 @@ const rackSchema = new mongoose.Schema({
   // that a room needs ("Basement" holds several racks; the fridge and the
   // cooler are one each). A label, not a collection: the racks page sections
   // by it, the bottle filter scopes to it, the connector and analytics report
-  // it (support ticket 2026-09-06, discussion #1228). null = ungrouped.
+  // it (discussion #1228). null = ungrouped.
   group:     { type: String, trim: true, maxlength: 40, default: null },
   // Simple rack fields (used when isModular is false)
   type:      { type: String, enum: RACK_TYPES, default: 'grid' },
@@ -129,8 +129,8 @@ const rackSchema = new mongoose.Schema({
     // first level's front row holds `cols`, its back row (in the gaps between
     // those bottles) one fewer, the level above nests in its grooves so its
     // front row holds one fewer and its back row `cols` again, and so on
-    // (6 / 5 in front of 5 / 6: a Liebherr GrandCru's wooden shelf, support
-    // ticket 2026-09-15). UNLIKE twoDeep and stagger this CHANGES capacity
+    // (6 / 5 in front of 5 / 6: a Liebherr GrandCru's wooden shelf).
+    // UNLIKE twoDeep and stagger this CHANGES capacity
     // and the position numbering (utils/rackGeometry.cabinetRowWidth), so
     // the UI offers it at creation only and the update route's resize guard
     // blocks a shrink past placed bottles. Implies stagger when drawn.
@@ -139,7 +139,7 @@ const rackSchema = new mongoose.Schema({
     // a shelf narrower than the cabinet (1..cols) and a shelf that alternates
     // or not on its own — so one cabinet holds the Liebherr GrandCru 5001's
     // 4-wide staggered top and bottom shelves between its 6-wide honeycomb
-    // ones (support ticket 2026-08-31). A missing entry means the cabinet's
+    // ones. A missing entry means the cabinet's
     // own cols / alternate. Shape, like shelfRows: creation-only in the UI.
     shelfCols: { type: [Number], default: undefined },
     shelfAlternate: { type: [Boolean], default: undefined },
@@ -153,8 +153,7 @@ const rackSchema = new mongoose.Schema({
     // first (they rest on the bottles behind the one across: 1 + 4 with 3 on
     // top), which changes capacity and numbering (utils/rackGeometry
     // .cabinetRowWidth). So the update route refuses that one change on a
-    // loaded cabinet; every other switch keeps the bottles in place
-    // (support forum 2026-10-13, 2026-10-14).
+    // loaded cabinet; every other switch keeps the bottles in place.
     shelfSideways: { type: [{ type: String, enum: ['', 'front', 'all'] }], default: undefined },
     // Grid racks only: 1-indexed row numbers with headroom for a top layer
     // of bottles resting in the gaps (cols across + cols-1 on top).

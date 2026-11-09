@@ -10,17 +10,16 @@
  * pre-image; a rerun first moves its writes to scripts/lib/backupLog (one row
  * appended before each write).
  *
- * Ticket 6a83e765, rollout step: the publication gate (enrichmentJob.
- * shouldHoldProfile — confidence floor + unknown-producer bar, calibrated
- * 2026-08-18) only fires at generation time. Profiles PUBLISHED before the
- * gate shipped stay visible, including the 0.2-confidence rows the somm
- * measured. This applies the same gate, with the same aiConfig thresholds,
+ * Rollout step: the publication gate (enrichmentJob.
+ * shouldHoldProfile — confidence floor + unknown-producer bar) only fires at
+ * generation time. Profiles PUBLISHED before the gate shipped stay visible,
+ * low-confidence ones included. This applies the same gate, with the same aiConfig thresholds,
  * to already-published rows in a bounded window.
  *
  * Scope guards — every one deliberate:
  *   - --cutoff (default 2026-08-16): only profiles generated in the recent
  *     import/enrichment window. Older published rows predate the gate and
- *     stay for ordinary curation (Johan's scoped-re-hold decision).
+ *     stay for ordinary curation (the re-hold is scoped on purpose).
  *   - source 'ai' only; curator profiles are never touched.
  *   - profileReviewedAt >= generatedAt rows are skipped: a human already
  *     looked at that profile and chose to publish (the publishSuspect

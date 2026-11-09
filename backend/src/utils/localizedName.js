@@ -1,31 +1,29 @@
 /**
  * Display names for taxonomy in the reader's language.
  *
- * A French owner asked for "Rhône Valley" to read "Vallée du Rhône" (correction
- * proposal 6a959b9d, 2026-09-01, reason: "En Français svp"). His request could
- * not be granted as filed, because a region's `name` is stored once and shared
- * by every wine and every user: renaming it would have changed the region for
- * all 298 wines on it, in every language, and undone the French→English
- * consolidation the taxonomy had just been through.
+ * A region's `name` is stored once and shared by every wine and every user,
+ * so a reader who wants "Rhône Valley" to read "Vallée du Rhône" cannot be
+ * served by renaming it: that would change the region for every wine on it,
+ * in every language, and undo the French→English consolidation of the
+ * taxonomy.
  *
- * But he was right about the gap. The interface ships in five languages while
- * the taxonomy speaks only English — and the asymmetry is already visible in
- * our own code, which ACCEPTS "Allemagne" and "Vallée du Rhône" on import
+ * But the gap is real. The interface ships in several languages while the
+ * taxonomy speaks only English — and the asymmetry is visible in our own
+ * code, which ACCEPTS "Allemagne" and "Vallée du Rhône" on import
  * (utils/normalize's COUNTRY_ALIASES is full of French, German and Swedish
- * spellings) and then hands back "Germany" for ever after. We take his language
- * in and never give it back.
+ * spellings) and then hands back "Germany" for ever after. Without this layer
+ * we take the reader's language in and never give it back.
  *
  * So the canonical name stays English and authoritative — it is what search,
  * dedup, exports and the registry key are built on — and a translation is a
  * DISPLAY concern layered on top.
  *
- * Registry data KEYS (models/RegistryDataKey) use the same layer since
- * 2026-09-09: "ABV" is the identifier, a German reader sees "Alkoholgehalt".
- * The first duplicate proposal — "Alkoholgehalt", as a new integer key —
- * arrived the day after the vocabulary got its first German-speaking
- * contributor. The vocabulary refused it correctly; the reader could not have
- * known, because the only key it held was named in a language he was not
- * reading in.
+ * Registry data KEYS (models/RegistryDataKey) use the same layer: "ABV" is
+ * the identifier, a German reader sees "Alkoholgehalt". Without it a reader
+ * proposes a key the vocabulary already holds ("Alkoholgehalt" as a new
+ * integer key) — the vocabulary refuses the duplicate correctly, but the
+ * reader cannot know, because the existing key is named in a language they
+ * are not reading in.
  *
  * WHAT IS DELIBERATELY NOT TRANSLATED:
  *

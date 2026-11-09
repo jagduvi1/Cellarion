@@ -91,14 +91,14 @@ const grapeSchema = new mongoose.Schema({
   // WHERE THIS DOCUMENT CAME FROM — a permanent fact, never cleared.
   //
   // True when a user write minted this grape (bottle-add / import via
-  // findOrCreateGrapes) rather than a curator. Unreviewed user mints polluted
+  // findOrCreateGrapes) rather than a curator. Unreviewed user mints pollute
   // the shared taxonomy silently ("Honey" via a mead, "Alvarão" for
-  // Alvarinho — somm ticket 6a942a60, 2026-08-30).
+  // Alvarinho).
   //
-  // Renamed from `pendingReview` on 2026-08-31 for the reason spelled out on
-  // models/Region: the old name promised an action for a field that only
-  // recorded an origin. Same two-fact split as Region, and the same split the
-  // wine registry already used — createdVia says where a record came from,
+  // Named for the origin it records, not for an action: a name like
+  // "pending review" would promise a to-do for a field that only records an
+  // origin. Same two-fact split as Region, and the same split the wine
+  // registry uses — createdVia says where a record came from,
   // profileReviewedAt says whether a human has judged it.
   createdByUser: { type: Boolean, default: false, index: true },
   // When an admin actually reviewed this grape, and who. Null means nobody

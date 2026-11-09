@@ -3,8 +3,8 @@ const { normalizeString } = require('../utils/normalize');
 
 /**
  * A classification: a quality tier granted on top of the appellation, as a
- * curated taxonomy row instead of free text (support ticket 2026-10-29,
- * GitHub discussion #1696). Each row says what KIND of tier it is, so a
+ * curated taxonomy row instead of free text (GitHub discussion #1696).
+ * Each row says what KIND of tier it is, so a
  * filter can tell a vineyard rank from a ripeness level from an ageing tier:
  *
  *   vineyard_rank  Grand Cru, Premier Cru, Grand Cru Classé, Cru Bourgeois,

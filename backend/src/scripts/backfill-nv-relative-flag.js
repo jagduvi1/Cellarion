@@ -2,7 +2,7 @@
  * backfill-nv-relative-flag.js
  *
  * One-off companion to the fix that derives WineVintageProfile.relative from
- * the vintage at seed time (support ticket d49d2b36). Before that fix every
+ * the vintage at seed time. Before that fix every
  * NV profile was created with relative:false, so the backlog splits two ways:
  *
  *   SAFE     — NV profiles with relative:false and NO phase values (pending

@@ -199,8 +199,8 @@ registerTool({
           // apply to the deliberate registry-curation tool
           // (admin_add_registry_wine), which never passes this.
           allowPending: true,
-          // PRIVATE DRAFT (support ticket 2026-09-12): the row stays the
-          // user's until publish_wine. Strictly boolean true.
+          // PRIVATE DRAFT: the row stays the user's until publish_wine.
+          // Strictly boolean true.
           draft: args.draft === true,
           // The Other category: born outside the shared wine registry.
           nonWine: args.new_wine.category === 'other',
@@ -435,8 +435,8 @@ registerTool({
     if (result.error) return fail('invalid_input', result.error.message);
 
     // apply_to_lot: the lot-level fields of THIS call go to every other active
-    // bottle of the same wine and vintage in the user's own cellars (support
-    // ticket 2026-09-06 — six identical calls for a case). Each sibling runs
+    // bottle of the same wine and vintage in the user's own cellars, so a case
+    // needs one call, not one per bottle. Each sibling runs
     // the same shared validation; one that refuses (a peak outside ITS own
     // window, say) is reported under skipped, never fatal for the rest.
     // Notes and the purchase travel too, but only here, on an explicit

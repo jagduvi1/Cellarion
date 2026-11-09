@@ -1,7 +1,7 @@
 /**
  * fix-classification-polluted-names.js
  *
- * Ticket 6a83f014: registry wines whose `name` holds an appellation or a
+ * Registry wines whose `name` holds an appellation or a
  * Bordeaux classed-growth phrase instead of the wine's name ("Grand Cru
  * Classé de Graves" — Château Pape Clément; "Margaux" — Château du Tertre).
  * Prevention now lives in findOrCreateWine.unpolluteEstateName (the mint

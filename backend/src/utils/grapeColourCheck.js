@@ -8,11 +8,9 @@
  * "Domaine des Bosquets / Séguret" is stored red with Viognier, Roussanne and
  * Marsanne and carries no colour word at all, so only the grape rule sees it.
  *
- * WHY THIS EXISTS (somm ticket 6a85ad44, 2026-08-19). Two wines were minted by
- * a live import forty minutes AFTER v1.139.0 shipped the prompt rules meant to
- * stop exactly this — a red given "Sauvignon Blanc", a red given "Grenache
- * Blanc". Prompt instructions ask a model not to guess; they cannot make it
- * stop. A deterministic check over curated taxonomy can, and it costs nothing.
+ * WHY THIS EXISTS. Prompt rules alone do not stop an import minting a red
+ * given "Sauvignon Blanc" or a red given "Grenache Blanc": prompt
+ * instructions ask a model not to guess; they cannot make it stop. A deterministic check over curated taxonomy can, and it costs nothing.
  *
  * THE ASYMMETRY IS THE WHOLE DESIGN. The directions are not equally
  * suspicious, and treating them alike would bury the real errors:
@@ -30,21 +28,17 @@
  *       name is silent — "Tokara / Director's Reserve" stored white on four
  *       Bordeaux red varieties says nothing, and is simply wrong.
  *
- *   rosé — NOT JUDGED AT ALL, and the first draft of this file got that wrong.
- *       Run over the live registry it flagged seven rosés from "white" grapes,
- *       and four were real wines: Canaletto's Rosato is ramato Pinot Gris,
- *       Alain Ignace's Muscat de Beaumes-de-Venise Rosé is the pink Muscat
- *       mutation our taxonomy only carries as "Muscat Blanc", and both
- *       Hammeken's Nanit and Charles Frey's Macération are skin-contact ORANGE
- *       wines — which have no `type` of their own, so rosé is the honest
- *       choice a curator has. Two causes, one conclusion: Grape.color is a
- *       Red/White binary that cannot express a pink skin, and rosé is exactly
- *       where that gap lives. Judging it would spend the queue's credibility
- *       on wines that are already correct.
+ *   rosé — NOT JUDGED AT ALL. A rosé from "white" grapes is often a real
+ *       wine: a ramato Pinot Gris, a rosé from the pink Muscat mutation the
+ *       taxonomy only carries as "Muscat Blanc", or a skin-contact ORANGE
+ *       wine — which has no `type` of its own, so rosé is the honest choice a
+ *       curator has. Two causes, one conclusion: Grape.color is a Red/White
+ *       binary that cannot express a pink skin, and rosé is exactly where
+ *       that gap lives. Judging it would spend the queue's credibility on
+ *       wines that are already correct.
  *
- * Measured against the live registry 2026-08-19: 13 rows flagged out of 5,727
- * with grapes (0.23%). Every legitimate blanc de noirs is exempted by its own
- * name; every genuine defect flags.
+ * Every legitimate blanc de noirs is exempted by its own name; every genuine
+ * defect flags.
  *
  * FLAG, NEVER AUTO-FIX. The check knows the two fields disagree; it does not
  * know which one is wrong (Tyrrell's "Old Hut Semillon" is stored white with
@@ -59,7 +53,7 @@ const WHITE_NAME_TERMS = new Set(['blanc', 'blancs', 'blanco', 'bianco', 'branco
 
 // The types this rule will judge. 'sparkling', 'dessert' and 'fortified' say
 // nothing about colour — a Blanc de Noirs Champagne and a white Port are both
-// stored under them. 'rosé' is excluded for the measured reason in the header:
+// stored under them. 'rosé' is excluded for the reason in the header:
 // pink-skinned varieties and orange wines both live there, and Grape.color's
 // Red/White binary cannot tell either of them apart from a defect.
 const COLOUR_TYPES = new Set(['red', 'white']);

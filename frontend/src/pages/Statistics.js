@@ -70,8 +70,8 @@ function Statistics() {
   // Each chart segment hands us a value; we encode it into a URL that lists
   // just those bottles. Bottles you still have open in the cellar view,
   // widened to every cellar you own (?scope=owned) — the same list, filters,
-  // sorting, grouping and photos as a cellar (support ticket 2026-09-19: the
-  // separate drill-down list had none of that). The consumption charts list
+  // sorting, grouping and photos as a cellar, which a separate drill-down
+  // list would not have. The consumption charts list
   // DRUNK bottles, which the cellar view does not show, so they keep /bottles.
   const drillCellarId = stats?.cellarBreakdown?.[0]?.id || null;
   const goWithFilter = useCallback((params) => {
@@ -200,7 +200,7 @@ function Statistics() {
           sub={t('statistics.kpi.grapeVarieties', { count: overview.totalGrapes })} accentColor="#6EC6C6" />
         <KPICard icon={'\u2b50'} label={t('statistics.kpi.avgRating')}
           // Every rating, as the rating card's "All": a drunk bottle with the
-          // rating given when drinking (support ticket 2026-10-11).
+          // rating given when drinking.
           value={(ratingViews?.all?.avg ?? overview.avgRating) != null ? fmtRating(ratingViews?.all?.avg ?? overview.avgRating, targetScale) : '\u2014'}
           accentColor="#D4C87A" />
         <KPICard icon={'\ud83d\udcc5'} label={t('statistics.kpi.avgVintageAge')}

@@ -72,9 +72,9 @@ async function findOrCreateCountry(name, userId) {
   const normalizedName = normalizeString(canonicalName);
   let country = await Country.findOne({ normalizedName });
   if (country) return country;
-  // Mint gate (support ticket 2026-07-26): a garbled label scan produced the
-  // country "Espalda" (a misread "España") and this function happily created
-  // it — any user's add could pollute the shared taxonomy. Only a recognized
+  // Mint gate: a garbled label scan can produce a country like "Espalda" (a
+  // misread "España"), and minting it would let any user's add pollute the
+  // shared taxonomy. Only a recognized
   // real-world country may be minted; everything else is rejected loudly so
   // the caller can correct it, instead of silently growing a junk Country the
   // whole registry then trusts. Existing docs (matched above) are unaffected.
@@ -108,9 +108,8 @@ const MAX_GRAPES = 20;
  * Imports and label scans put appellations in the region column all the time
  * ("Pauillac", "Fleurie", "Prosecco", "Cerasuolo d'Abruzzo"): the exporting
  * app had one geography field, or the model thought at appellation
- * granularity. The 2026-09-08 region review cleared 237 minted regions and
- * 117 of them were appellations; the 09-12 import refilled the queue within
- * a day. Country-scoped, canonical name or synonym, same key fold as the
+ * granularity, so an unchecked region mint fills the taxonomy with
+ * appellations. Country-scoped, canonical name or synonym, same key fold as the
  * appellation resolver. Match-only: this never mints an Appellation.
  */
 async function appellationInRegionColumn(rawName, countryId) {
@@ -146,8 +145,7 @@ async function findOrCreateRegion(rawName, countryId, userId) {
   // appellation belongs to — "Fleurie" lands on Beaujolais, never on a new
   // region called Fleurie. An appellation the taxonomy has not placed yet
   // yields null: the string IS an appellation, so minting a region named
-  // after it would be wrong regardless (Johan, 2026-09-08; see
-  // appellationInRegionColumn). The wine's appellation field is filled by
+  // after it would be wrong regardless (see appellationInRegionColumn). The wine's appellation field is filled by
   // the create path, which knows whether it was empty.
   const appellation = await appellationInRegionColumn(name, countryId);
   if (appellation) {
@@ -156,8 +154,8 @@ async function findOrCreateRegion(rawName, countryId, userId) {
   // Mint gates (registry audit 2026-07-26 RC-8). A comma means the caller
   // packed a hierarchy into one string ("Bordeaux, Haut-Médoc", "Niagara
   // Peninsula, Ontario") — never a region name; and a region that IS a
-  // recognized country name belongs in the country field, not here (prod grew
-  // region "Scotland" under country "England"). A null region is the honest
+  // recognized country name belongs in the country field, not here (a region
+  // "Scotland" under country "England"). A null region is the honest
   // state — the schema allows it, and an admin can add real taxonomy
   // deliberately. (Cost: a US wine can't auto-mint a "Georgia" region — the
   // one state that collides with a country name; an existing doc still
@@ -172,15 +170,15 @@ async function findOrCreateRegion(rawName, countryId, userId) {
 }
 
 /**
- * Registry canon (region-granularity policy, 2026-08-16 / ticket 6a8162c5):
+ * Registry canon (region-granularity policy):
  * when the appellation itself names a region the taxonomy already has —
  * appellation "Hunter Valley" and a Hunter Valley Region doc under the same
  * country — the region field holds THAT region, the most specific
  * granularity, regardless of what the caller supplied ("New South Wales",
  * the producer's home region, or nothing). Import AI and label scans return
- * region at whatever granularity they happened to think in, which is how one
- * import batch minted the same producer's wines under both "Hunter Valley"
- * and "New South Wales" — all with appellation Hunter Valley.
+ * region at whatever granularity they happen to think in, which would mint
+ * the same producer's wines under both "Hunter Valley" and "New South Wales"
+ * — all with appellation Hunter Valley.
  *
  * MATCH-ONLY by design: an appellation string never MINTS a Region.
  * Appellations are unvalidated free text, so only an existing doc (canonical
@@ -257,9 +255,9 @@ async function findOrCreateGrapes(rawNames, userId) {
     if (!grape) {
       // createdByUser records WHERE this came from: a permanent fact, visible to admins,
       // never blocking the user. Same rule as findOrCreateRegion above.
-      // Unflagged mints put "Honey" (a mead) and "Alvarão" (a typo of
-      // Alvarinho the synonym lookup couldn't bridge) into the globally
-      // shared taxonomy (somm ticket 6a942a60); the curator queue is where
+      // Unflagged mints would put "Honey" (a mead) or "Alvarão" (a typo of
+      // Alvarinho the synonym lookup can't bridge) into the globally
+      // shared taxonomy; the curator queue is where
       // a near-miss gets merged instead of silently substituted.
       grape = new Grape({ name: canonicalName, normalizedName, createdBy: userId, createdByUser: true });
       await grape.save();
@@ -287,7 +285,7 @@ async function findOrCreateGrapes(rawNames, userId) {
  * @param {Object} wineData   - { name, producer, country, region, appellation, type, grapes[], classification? }
  *   `classification` (e.g. "Grand Cru Classé en 1855") is stored verbatim on a CREATE and
  *   plays no part in matching or keys — the scan path extracts it so classification lines
- *   stop landing in the name field (ticket 6a8162c5, the Giscours case).
+ *   stop landing in the name field.
  * @param {string} userId     - ObjectId string of the authenticated user (for createdBy)
  * @param {Object} [opts]
  * @param {boolean} [opts.confirmCreate=false] - Skip soft-zone candidate return and create directly
@@ -322,12 +320,12 @@ async function findOrCreateGrapes(rawNames, userId) {
  *   /confirm for a row the file marked as a spirit; flagging after the mint would race
  *   that fire-and-forget index call and could leave the row publicly searchable.
  */
-// ── Estate-name pollution guard (ticket 6a83f014) ───────────────────────────
+// ── Estate-name pollution guard ─────────────────────────────────────────────
 //
-// Four Bordeaux classed growths arrived as name "Grand Cru Classé (de
+// A Bordeaux classed growth can arrive as name "Grand Cru Classé (de
 // Graves)" / "Margaux" with the château in the producer field: the identify
-// prompts' "never repeat the producer in the name" rule left the model
-// nothing else on an estate label to reach for, so it grabbed the
+// prompts' "never repeat the producer in the name" rule leaves the model
+// nothing else on an estate label to reach for, so it grabs the
 // classification or the appellation. Two NARROW, high-precision shapes only:
 //
 //   (a) the ENTIRE name is a Bordeaux classed-growth phrase. No real wine is
@@ -387,8 +385,8 @@ async function unpolluteEstateName({ name, producer, appellation, classification
   };
 }
 
-// `draft`: mint the row as the creator's PRIVATE DRAFT (support ticket
-// 2026-09-12; models/WineDefinition.draft). The resolve stages run as usual —
+// `draft`: mint the row as the creator's PRIVATE DRAFT
+// (models/WineDefinition.draft). The resolve stages run as usual —
 // an already-published wine still wins over minting a draft, and the soft
 // zone still asks "did you mean" — but the producer gates are SKIPPED on the
 // create path (the row is private and freely editable; services/wineDraftOps
@@ -412,15 +410,14 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     : producer.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD);
   // Canonicalize the appellation (strip a trailing DOCG/DOC/AOC/… tier) so
   // "Barolo" and "Barolo DOCG" resolve to / create ONE registry appellation
-  // instead of two (ticket #2C). The tier belongs in classification.
+  // instead of two. The tier belongs in classification.
   // Then adopt the curated spelling when the Appellation taxonomy knows this
   // one (strategy R2) — BEFORE key generation, so a synonym ("Chateauneuf du
   // Pape") produces the same normalizedKey as the canonical form and the
   // exact-match stage collapses them instead of minting a sibling.
-  // A ripeness Prädikat is not a place. The import paths already route a bare
-  // "Kabinett"/"Auslese" out of the appellation (PR #1173); the add-bottle
-  // form did not, and a Weingut Herztal record arrived with appellation
-  // "Kabinett" (audit ticket 2026-09-03). Same rule for every mint: the word
+  // A ripeness Prädikat is not a place: a bare "Kabinett"/"Auslese" typed or
+  // scanned as the appellation must not become one, whichever path mints the
+  // wine (the import paths route it too, PR #1173). Same rule for every mint: the word
   // leaves the appellation, and moves to classification only when the name
   // does not contradict it (a Trockenbeerenauslese on a "Trocken" is dropped).
   let appellationIn = typeof appellation === 'string' ? appellation.trim() : '';
@@ -437,8 +434,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
 
   // 0. Registry canon: the registry is vintage-neutral — a trailing year on
   // the name ("Reserve Cabernet Sauvignon 2023") belongs on the user's
-  // Bottle.vintage, never on the shared wine (audit 2026-07-26: 19 such rows;
-  // no write path stripped it). BEFORE the producer strip, so "Pinot Noir
+  // Bottle.vintage, never on the shared wine. BEFORE the producer strip, so "Pinot Noir
   // Amisfield 2019" sheds the year first and the suffix strip still sees the
   // producer at the tail.
   trimmedName = stripTrailingVintage(trimmedName);
@@ -455,8 +451,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // shape behind most July-2026 prod duplicates).
   trimmedName = canonicalizeWineName(trimmedName, trimmedProducer);
 
-  // Registry canon, name-field twin of the misplaced-producer gate below
-  // (ticket 6a83f014): shift a classification/appellation out of the name
+  // Registry canon, name-field twin of the misplaced-producer gate below:
+  // shift a classification/appellation out of the name
   // BEFORE any matching, so the corrected identity drives dedup keys instead
   // of minting a wine named "Grand Cru Classé". See unpolluteEstateName.
   if (!producerMissing && trimmedProducer) {
@@ -967,21 +963,20 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // from splitting across "Hunter Valley" and "New South Wales" depending on
   // which granularity the AI/import happened to supply per row. Only when the
   // appellation names no known region does the supplied region string count.
-  // ── Label-variant stage (somm ticket e9b346ba, 2026-08-23) ────────────────
+  // ── Label-variant stage ───────────────────────────────────────────────────
   //
-  // Last chance to NOT create a duplicate. One import file carried the same
-  // wine repeatedly under variant names — "Bin 389" and "Bin 389 Cabernet
-  // Shiraz", "Kangarilla" and "Old Vines Grenache Kangarilla" — and nothing
-  // above caught them: normalizedKey is exact, and all 17 pairs a curator
-  // merged by hand that day scored BELOW the 0.85 soft-zone floor, so the
-  // fuzzy stage never even offered them as candidates. See
+  // Last chance to NOT create a duplicate. The same wine often arrives under
+  // variant names — "Bin 389" and "Bin 389 Cabernet Shiraz", "Kangarilla" and
+  // "Old Vines Grenache Kangarilla" — and nothing above catches them:
+  // normalizedKey is exact, and such pairs score BELOW the 0.85 soft-zone
+  // floor, so the fuzzy stage never even offers them as candidates. See
   // services/labelVariantMatch for the measurements and the guard that stops
   // a multi-varietal range collapsing.
   //
   // Producer-scoped so the scan is small, and it only ever LINKS to an
   // existing row — never merges, never deletes. Getting this wrong costs a
   // bottle on a near-identical wine; getting the absence of it wrong is the
-  // duplicate registry this ticket is about.
+  // duplicate registry this stage exists to prevent.
   //
   // DELIBERATELY NOT GATED ON skipSiblingMatch, same as the canonical-key
   // stage above, and for a sharper reason. skipSiblingMatch is set from
@@ -1042,7 +1037,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   if (!regionDoc) regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
   let grapeIds = await findOrCreateGrapes(grapes, userId);
 
-  // Ticket #2A: when no grapes were supplied, infer them from the name
+  // When no grapes were supplied, infer them from the name
   // ("… Pinot Noir" → Pinot Noir) so the wine still counts in the Statistics
   // by-grape breakdown and the grapes= filter. trimmedName already has the
   // producer stripped (step 0). Only tags grapes already in the taxonomy —

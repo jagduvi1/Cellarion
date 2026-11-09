@@ -803,8 +803,8 @@ function ctClean(value) {
 
 /** Vintage: 1001 → 'NV' (CT's non-vintage sentinel), 9999/blank → ''. */
 // A missing vintage is filed as NV — but flagged, so the review can say so and
-// let the importer type the year. Silent NV on 85 vintage-dated bottles in one
-// file was the whole problem (audit ticket 2026-09-05).
+// let the importer type the year. A silent NV would quietly turn a file of
+// vintage-dated bottles into non-vintage ones.
 // "N.V." / "n.v." / "NV." (Oeno writes "N.V.") is a STATED non-vintage, not a
 // missing one — and the backend's vintage gate accepts only the bare "NV".
 //
@@ -1006,13 +1006,13 @@ export function stripProducerPrefix(wineName, producer) {
   return wineName;
 }
 
-// ── Classification-in-name guard (somm ticket 0063bb76) ─────────────────────
+// ── Classification-in-name guard ────────────────────────────────────────────
 //
 // Once the producer prefix is stripped, a Bordeaux "Wine" value like
 // "Château Talbot Grand Cru Classé" leaves just the CLASSIFICATION tier —
-// and that string used to be stored as the wine's NAME. Prod grew 19 such
-// rows (three distinct wines all named "Grand Cru Classé"), six of them
-// duplicating a properly-named record of the same château. A tier is routed
+// and that string must not be stored as the wine's NAME: distinct châteaux
+// would all mint wines named "Grand Cru Classé", duplicating the
+// properly-named record of the same château. A tier is routed
 // to `classification`; the name gets whatever substantive part remains, or
 // falls back to the producer (the grand-vin convention — Château Margaux's
 // wine IS "Château Margaux").
@@ -1394,7 +1394,7 @@ function mapGenericRow(row) {
   const producer = get(['Producer', 'producer', 'Winery', 'winery', 'Maker', 'maker']);
   const region = get(['Region', 'region']);
   const appellation = get(['Appellation', 'appellation', 'Sub-Region', 'SubRegion']);
-  // Same tier-in-name guard as the CT path (somm ticket 0063bb76) — plus an
+  // Same tier-in-name guard as the CT path — plus an
   // explicit Classification column, which some hand-written files carry.
   const { wineName, classification } = splitClassificationFromName(
     get(['Wine', 'wine', 'Wine Name', 'WineName', 'Name', 'name']),
@@ -2628,7 +2628,7 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   let ctRackAutoMap = null;
   if (format === 'cellartracker') {
     // opts.ctBinOrder: 'row-col' (default) | 'col-row' — the user's declaration
-    // of how their bins are typed (support ticket 2026-09-05).
+    // of how their bins are typed.
     const autoMap = applyCtRackAutoMap(items, { binOrder: opts.ctBinOrder });
     if (Object.keys(autoMap.racks).length > 0 || autoMap.textFallback.length > 0) {
       ctRackAutoMap = autoMap;

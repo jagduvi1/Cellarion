@@ -1,15 +1,13 @@
 /**
- * A wine's COLOUR, kept apart from its TYPE (support ticket 2026-09-17,
- * "Colour Sparkling/Rosè").
+ * A wine's COLOUR, kept apart from its TYPE.
  *
  * WineDefinition.type is ONE value, and three of its six values — sparkling,
  * dessert, fortified — are STYLES that say nothing about colour (the
  * colour-contradiction rules in utils/crossFieldChecks.js already refuse to
- * judge them for exactly that reason). A Trento DOC rosé therefore had to be
- * filed either as 'sparkling' — right style, drawn in the sparkling colour on
- * every card and rack — or as 'rosé', which took it out of the Sparkling
- * group, its filters and its drink-window shape. The registry held 79 sparkling
- * rosés the first way and 11 the second.
+ * judge them for exactly that reason). Without a colour, a Trento DOC rosé
+ * must be filed either as 'sparkling' — right style, drawn in the sparkling
+ * colour on every card and rack — or as 'rosé', which takes it out of the
+ * Sparkling group, its filters and its drink-window shape.
  *
  * `WineDefinition.colour` records the colour for those three types only. For
  * red / white / rosé the type IS the colour and the field stays null — the

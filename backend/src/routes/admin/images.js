@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
       }
       filter.status = status;
     }
-    // ?reported=true — photos a user has raised (ticket 6a865f60). These are
+    // ?reported=true — photos a user has raised. These are
     // mostly ALREADY approved, so they never appear under the pending filter an
     // admin normally works; without their own filter a report would sit unseen.
     // The label-scan exclusion above still holds and costs nothing here: a scan
@@ -145,7 +145,7 @@ router.get('/by-wine', async (req, res) => {
     }
 
     // Each image's vintage (its tag, else its bottle's) and whether it is the
-    // photo its vintage shows (support ticket 2026-10-09), so the curator sees
+    // photo its vintage shows, so the curator sees
     // which photo stands for which year and can choose another.
     const bottleVintage = new Map(bottles.map(b => [b._id.toString(), photoVintage(b.vintage)]));
     for (const imgs of imagesByWine.values()) {
@@ -477,7 +477,7 @@ router.put('/:id/set-official', async (req, res) => {
 });
 
 // PUT /api/admin/images/:id/set-vintage-official — "this is THE photo of this
-// wine's <vintage>" (support ticket 2026-10-09). Without a choice a vintage
+// wine's <vintage>". Without a choice a vintage
 // shows the wine's official image when it is of that vintage, else the first
 // photo of it approved (utils/imageVintage.pickVintageOfficials); this is the
 // override. Like set-official it promotes any non-rejected photo — approving

@@ -180,7 +180,7 @@ function totalSlots(type, rows, cols, typeConfig) {
 // (typeConfig.shelfAlternate[i]); cabinetBays resolves every bay's rows,
 // width and pattern, and the walk above simply uses the bay's own width. So a
 // Liebherr GrandCru 5001 is one cabinet: three honeycomb shelves 6 wide
-// between two staggered shelves 4 wide (support ticket 2026-08-31). Mirrored
+// between two staggered shelves 4 wide. Mirrored
 // in frontend/src/utils/rackLayouts.cabinetLayout.
 
 const CABINET_MAX_ROWS_PER_SHELF = 12;
@@ -282,7 +282,7 @@ function cabinetBays(rows, cols, typeConfig) {
  * lies in the gaps between those bottles and holds one fewer, the level
  * above nests in the grooves of the first so its front row holds one fewer
  * and its back row is full width again, and so on: 6 / 5 in front of 5 / 6,
- * the wooden shelf of a Liebherr GrandCru (support ticket 2026-09-15).
+ * the wooden shelf of a Liebherr GrandCru.
  * Without twoDeep the levels simply alternate cols, cols−1, cols, …
  * A single-bottle-wide cabinet has nothing to alternate (never 0 wide).
  *

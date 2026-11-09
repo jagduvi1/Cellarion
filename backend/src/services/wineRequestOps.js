@@ -91,8 +91,8 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
 
     // Photos uploaded while these bottles waited for their wine carry no
     // wineDefinition; stamp it now so the by-wine photo lookups (cellar
-    // list, bottle page) see them on every bottle of the wine (support
-    // ticket 2026-09-07). Best-effort — a failure here must not undo the link.
+    // list, bottle page) see them on every bottle of the wine. Best-effort —
+    // a failure here must not undo the link.
     if (pendingBottleIds.length) {
       BottleImage.updateMany(
         { bottle: { $in: pendingBottleIds }, wineDefinition: null },
