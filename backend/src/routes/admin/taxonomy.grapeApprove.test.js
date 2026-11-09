@@ -1,7 +1,7 @@
 /**
  * POST /api/admin/taxonomy/grapes/:id/approve — the review verb for
  * user-minted grapes (bottle-add and import can mint a grape name into the
- * shared taxonomy; this verb is the review gate for such a row).
+ * shared taxonomy; this verb records that a human reviewed such a row).
  *
  * Pins the three properties the regions verb established: approval is an
  * explicit act (flag flips, audit written), it is idempotent (a second click

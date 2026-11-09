@@ -2,8 +2,8 @@
  * imageProcessor keeps ONLY the processed file once background removal has
  * succeeded.
  *
- * A kept original can be served from /api/uploads/originals/, background
- * and all, in place of the processed photo. Nothing needs the raw frame once
+ * A kept original is served from /api/uploads/originals/, background and
+ * all, for as long as it exists. Nothing needs the raw frame once
  * rembg has run, so processImage deletes it (discardOriginal).
  * Pinned here: the happy path drops the original file AND the pointer; a
  * failed rembg run keeps both (the retry needs its source); a keepBackground

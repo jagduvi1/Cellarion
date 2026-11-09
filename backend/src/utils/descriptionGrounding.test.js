@@ -107,7 +107,7 @@ describe('gradeDescription', () => {
   });
 
   // Every case below is from a full curator read of an extractor worklist.
-  // Items are numbered as in that review.
+  // The item numbers are that read's own, so not every number appears.
   describe('extractor edge cases', () => {
     // Item 1, the top priority: span-substring grounding would let the
     // record's country swallow the finer place — the row would be flagged

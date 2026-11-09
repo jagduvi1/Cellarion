@@ -8,7 +8,8 @@ import { useState } from 'react';
  * POST writes, and a wrong level or a stale type silently files the number
  * in the wrong place — on one bottle instead of the vintage, or under a
  * second key with the same name, which is exactly the fragmentation this
- * feature exists to stop (many users each minting their own "ABV" key).
+ * feature exists to stop (users each minting their own private "ABV" key
+ * beside the shared one).
  */
 
 vi.mock('../../api/personalData', () => ({ getPersonalDataKeys: vi.fn() }));
