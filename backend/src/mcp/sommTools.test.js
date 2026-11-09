@@ -1348,9 +1348,9 @@ describe('the unprofiled intake queue (somm-owned data)', () => {
     expect(or).toHaveLength(3);
     // The intake branch: never generated AND never written — curator rows
     // that predate the generatedAt stamp have a description and stay out.
-    // body is part of the content test — the Mongo branch must
-    // match hasProfileContent field for field.
-    expect(or[2]).toEqual({ 'aiProfile.generatedAt': null, 'aiProfile.description': null, 'aiProfile.body': null });
+    // The Mongo branch must match hasProfileContent field for field, and an
+    // empty description is as absent as a null one (as list_maturity_queue reads it).
+    expect(or[2]).toEqual({ 'aiProfile.generatedAt': null, 'aiProfile.description': { $in: [null, ''] }, 'aiProfile.body': null });
   });
 
   test('state:"unprofiled" narrows the query to the intake branch alone', async () => {
@@ -1359,7 +1359,7 @@ describe('the unprofiled intake queue (somm-owned data)', () => {
     Bottle.aggregate.mockResolvedValue([]);
     await tool('list_held_profiles').handler({ state: 'unprofiled', limit: 30, offset: 0 }, SOMM_CTX);
     const or = WineDefinition.find.mock.calls[0][0].$or;
-    expect(or).toEqual([{ 'aiProfile.generatedAt': null, 'aiProfile.description': null, 'aiProfile.body': null }]);
+    expect(or).toEqual([{ 'aiProfile.generatedAt': null, 'aiProfile.description': { $in: [null, ''] }, 'aiProfile.body': null }]);
   });
 
   test('an explicit state:"published_suspect" implies the include flag — no second switch to forget', async () => {
