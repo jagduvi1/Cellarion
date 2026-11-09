@@ -152,25 +152,9 @@ const grapesLite = (grapes) => {
 // producer_unknown rides along on every shape: it is the difference between
 // "this record is wrong" and "this is a small estate the model cannot place",
 // and a curator judging a drink window should know which they are looking at.
-/**
- * Does a stored profile EXIST — by content, not by who wrote it.
- *
- * generatedAt is the AI's stamp: a profile a curator wrote from scratch never
- * has one, so testing generatedAt alone reports it as absent, and a queue that
- * tested it would call it blank — with a reason string that instructs the
- * curator to write one. Following it in good faith overwrites another curator's research and
- * restamps it as their own.
- *
- * list_held_profiles identifies a published suspect the same way ("a
- * published suspect is identified by having CONTENT — generatedAt or a
- * written description"). list_maturity_queue and list_held_profiles share
- * this one predicate so they cannot drift apart. The
- * Mongo-side unprofiled branch in list_held_profiles is the same test written
- * as a query, and is commented to point back here.
- *
- * @param {object} ap  aiProfile subdoc (lean or hydrated)
- */
-const hasProfileContent = (ap) => !!(ap && (ap.generatedAt || ap.description || ap.body));
+// "Does a stored profile exist" is one predicate for every queue here, with
+// its Mongo twin beside it: utils/profileReview.js.
+const { hasProfileContent, UNPROFILED_QUERY } = require('../../utils/profileReview');
 
 /**
  * @param {object} ap    aiProfile subdoc
@@ -310,13 +294,11 @@ registerTool({
       // description leaves the record incomplete for good unless a curator
       // finds it. Wines without profile text are few hundred, so an id list
       // keeps the page and the total honest.
-      // "No profile" is the queue's own predicate (hasProfileContent): a HELD
-      // profile has generatedAt but no description, and a curator profile may
-      // carry body/flavors without prose — neither is "nothing describes the
-      // wine".
-      const bare = await WineDefinition.find({
-        'aiProfile.generatedAt': null, 'aiProfile.description': { $in: [null, ''] }, 'aiProfile.body': null,
-      }).select('_id').lean();
+      // "No profile" is the one predicate every queue uses (hasProfileContent,
+      // written as a query): a HELD profile has generatedAt but no
+      // description, and a curator profile may carry body/flavors without
+      // prose — neither is "nothing describes the wine".
+      const bare = await WineDefinition.find(UNPROFILED_QUERY).select('_id').lean();
       filter.wineDefinition = { $in: bare.map((w) => w._id) };
     }
     const [total, pending, profiles] = await Promise.all([
@@ -1522,8 +1504,8 @@ registerTool({
       or.push({ 'aiProfile.heldAt': null, 'aiProfile.generatedAt': { $ne: null }, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
     }
     if (wantState('unprofiled')) {
-      // Mongo form of hasProfileContent — keep the three fields in step with it.
-      or.push({ 'aiProfile.generatedAt': null, 'aiProfile.description': null, 'aiProfile.body': null });
+      // The Mongo form of hasProfileContent, shared with list_maturity_queue.
+      or.push(UNPROFILED_QUERY);
     }
     const match = {
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
