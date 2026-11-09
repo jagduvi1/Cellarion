@@ -161,9 +161,9 @@ describe('membership-gated decoration stripping', () => {
 });
 
 /**
- * appellationHasGeography (somm 6a8eb2a9): the producer-suspect narrowing's
+ * appellationHasGeography: the producer-suspect narrowing's
  * predicate. Deliberately about the curated ENTRY's geography, not the field
- * being populated — the somm's counter-examples pin both failure modes:
+ * being populated — two counter-examples pin both failure modes:
  * "Vin de France" (curated, nationwide, region null) and "Qualitätswein"
  * (a tier, not curated) must both return false.
  */

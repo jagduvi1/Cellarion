@@ -1,12 +1,10 @@
 /**
  * GET /api/images/bottle/:bottleId — what the uploader gets back.
  *
- * Support ticket 2026-09-03 ("one of my wines cannot load"): an admin had
- * rejected the only photo on a bottle. Rejecting deletes the files and nulls
- * both URLs, leaving a tombstone row. This route handed that tombstone back to
- * the uploader under the "your own photos, any state" branch, the carousel
- * called .startsWith on the null URL, and the ErrorBoundary took the whole
- * bottle page down — 138 bottles / 47 owners on prod at the time. The
+ * Rejecting a photo deletes the files and nulls both URLs, leaving a
+ * tombstone row. Handed back to the uploader under the "your own photos, any
+ * state" branch, that tombstone would make the carousel call .startsWith on
+ * the null URL and the ErrorBoundary take the whole bottle page down. The
  * uploader branch must exclude rejected rows; the wine-level branch stays
  * approved + public only.
  */
@@ -93,7 +91,7 @@ describe('the uploader branch', () => {
     expect(wineFilter).toEqual({ wineDefinition: WINE, status: 'approved', visibility: 'public' });
   });
 
-  test('a row the server returns keeps its public fields, gains `mine`, and loses reviewer/reporter identities (audit 2026-09 D05-1)', async () => {
+  test('a row the server returns keeps its public fields, gains `mine`, and loses reviewer/reporter identities', async () => {
     const live = { _id: oid('d'), processedUrl: '/api/uploads/processed/live.png', originalUrl: null, status: 'approved' };
     const withIdentities = { ...live, uploadedBy: USER, reviewedBy: oid('e'), reviewedAt: new Date().toISOString(), reports: [{ by: oid('f') }], contentHash: 'h' };
     BottleImage.find
@@ -108,7 +106,7 @@ describe('the uploader branch', () => {
 });
 
 describe('a photo published on another owner\'s bottle of the same wine', () => {
-  test('is listed here too, as not mine — approval links it to the wine (2026-09-27)', async () => {
+  test('is listed here too, as not mine — approval links it to the wine', async () => {
     const theirs = { _id: oid('9'), processedUrl: '/api/uploads/processed/theirs.webp', originalUrl: null, status: 'approved', visibility: 'public', assignedToWine: false };
     BottleImage.find
       .mockReturnValueOnce(makeQuery([]))                                   // nothing on THIS bottle
@@ -122,7 +120,7 @@ describe('a photo published on another owner\'s bottle of the same wine', () => 
 });
 
 /**
- * Photos per vintage (support ticket 2026-10-09): the first wine-level slide
+ * Photos per vintage: the first wine-level slide
  * is the one a bottle without its own photo opens on, and a 2016 bottle
  * should open on a 2016 label when one exists. Within each half the
  * official-first, newest-first order the query returns is kept.
@@ -146,7 +144,7 @@ describe('wine-level photos of the bottle\'s own vintage come first', () => {
   });
 });
 
-describe('the vintage\'s official photo leads the bottle\'s gallery (ticket 2026-10-09)', () => {
+describe('the vintage\'s official photo leads the bottle\'s gallery', () => {
   test('an admin\'s choice of 2016 photo comes first, ahead of an earlier 2016 photo and the wine\'s official image', async () => {
     Bottle.findById.mockResolvedValue({ _id: BOTTLE, cellar: CELLAR, wineDefinition: WINE, vintage: '2016', defaultImage: null });
     const pub = (c, over) => ({ _id: oid(c), processedUrl: `/api/uploads/processed/${c}.webp`, originalUrl: null, status: 'approved', visibility: 'public', uploadedBy: oid('2'), createdAt: '2026-01-01T00:00:00Z', ...over });

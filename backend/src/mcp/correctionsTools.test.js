@@ -38,7 +38,7 @@ const parse = (res) => JSON.parse(res.content[0].text);
 
 beforeEach(() => jest.clearAllMocks());
 
-test('accepts type and grapes alongside the identity fields (support ticket 2026-09-06)', () => {
+test('accepts type and grapes alongside the identity fields', () => {
   const shape = tool().inputSchema.fields.shape;
   expect(Object.keys(shape)).toEqual(expect.arrayContaining(['producer', 'name', 'appellation', 'region', 'country', 'classification', 'type', 'grapes']));
   expect(shape.type.safeParse('white').success).toBe(true);
@@ -97,7 +97,7 @@ test('newGrapes never reaches the service over the connector, and the schema doe
   expect(Object.keys(tool().inputSchema.fields.shape)).not.toContain('newGrapes');
 });
 
-// Support ticket 2026-09-12: filing on one's own pending suggestion amends it.
+// Filing on one's own pending suggestion amends it.
 test('an amended own suggestion is reported as such, with the full field set', async () => {
   ops.createFieldCorrection.mockResolvedValue({
     ok: true,
@@ -140,7 +140,7 @@ test.each([
   expect(parse(res).error.code).toBe(mcpCode);
 });
 
-describe('idempotency (support ticket 2026-09-12)', () => {
+describe('idempotency', () => {
   const McpActionLog = require('../models/McpActionLog');
   beforeEach(() => { McpActionLog.create.mockReset(); McpActionLog.findOneAndUpdate.mockReset(); });
 

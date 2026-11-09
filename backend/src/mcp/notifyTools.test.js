@@ -164,7 +164,7 @@ describe('climate_status', () => {
   });
 
   test('history aggregates ride along per device set, the capsule joins the summary, and warnings pass through', async () => {
-    // Ticket 6a71c6b2: the aggregates (24h/30d/12m min/max/mean + excursions)
+    // The aggregates (24h/30d/12m min/max/mean + excursions)
     // are climate_status's answer to "what temperature has this cellar been
     // stored at" — a separate history tool was deliberately not built.
     const history = {

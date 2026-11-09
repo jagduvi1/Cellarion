@@ -37,16 +37,14 @@ jest.mock('../../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn
 jest.mock('../../services/enrichmentJob', () => ({
   reenrichAfterRecordEdit: jest.fn(),
   // The REAL snapshot — pure and dependency-free, so nothing is gained by
-  // mirroring it, and a hand mirror rots the day the field list changes (it
-  // gained `classification` the very release this mock was written in;
-  // audit 2026-08-16).
+  // mirroring it, and a hand mirror rots the day the field list changes.
   profileInputsSnapshot: jest.requireActual('../../services/enrichmentJob').profileInputsSnapshot,
 }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateRegion: jest.fn() }));
 // Identity by default so the tier-strip assertions below still read the
 // normalizeAppellation output; the curated-registry test overrides it.
 jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
-// The producer-spelling lookups (2026-09-28) are unit-tested in
+// The producer-spelling lookups are unit-tested in
 // services/producerSpelling.test.js; here they are the seam. No split unless a
 // test says so (reset in beforeEach), so every other test approves as before.
 jest.mock('../../services/producerSpelling', () => ({
@@ -178,9 +176,9 @@ describe('GET / (list)', () => {
     expect(pipeline.some(s => s.$sort && s.$sort._pendingFirst === 1)).toBe(true);
   });
 
-  // 2026-09-28: a proposal a merge or a delete closed is 'closed', not
-  // 'rejected'. The decided tab shows all three non-pending states, and the
-  // status filter accepts the new one.
+  // A proposal a merge or a delete closed is 'closed', not 'rejected'. The
+  // decided tab shows all three non-pending states, and the status filter
+  // accepts 'closed'.
   test('the decided view spans approved, rejected and closed; ?status=closed filters to the lifecycle closures', async () => {
     WineCorrectionProposal.aggregate.mockResolvedValue([]);
     WineCorrectionProposal.countDocuments.mockResolvedValue(0);
@@ -192,8 +190,8 @@ describe('GET / (list)', () => {
     expect(WineCorrectionProposal.aggregate.mock.calls[1][0][0]).toEqual({ $match: { status: 'closed' } });
   });
 
-  // Support ticket 2026-09-12: later filings by the same proposer ride along
-  // with their own reason/evidence; the original reason stays the original.
+  // Later filings by the same proposer ride along with their own
+  // reason/evidence; the original reason stays the original.
   test('amendments are projected with their own reason and evidence, fields defaulting to []', async () => {
     WineCorrectionProposal.aggregate.mockResolvedValue([{
       _id: P1, kind: 'field_correction', status: 'pending',
@@ -218,7 +216,7 @@ describe('GET / (list)', () => {
   });
 
   // The web grape picker lets a user deliberately propose a variety the
-  // taxonomy lacks (support ticket 2026-09-17). Approving refuses it until the
+  // taxonomy lacks. Approving refuses it until the
   // variety exists — so the list says which names those are, up front.
   describe('a proposed variety the taxonomy does not have', () => {
     const rowWith = (over) => ({
@@ -267,9 +265,9 @@ describe('GET / (list)', () => {
   });
 });
 
-// Every other submitter-facing queue told its submitter what happened; a
-// decided correction recorded it where only a GDPR export could reach — while
-// the bottle page promised "you'll see the outcome" (2026-09-18).
+// Like every other submitter-facing queue, a decided correction tells its
+// submitter what happened — the bottle page promises "you'll see the
+// outcome", so the decision must not live only where a GDPR export reaches.
 describe('telling the submitter', () => {
   const USER_ID = '64b000000000000000000002';
   const userProposal = (over = {}) => ({
@@ -333,8 +331,8 @@ describe('telling the submitter', () => {
   });
 
   // The decision is claimed and audited BEFORE the label is read. A failed read
-  // used to bubble up as a 500: the admin retried into a 409, and the submitter
-  // never heard (pre-deploy audit 2026-09-18).
+  // must not bubble up as a 500: the admin would retry into a 409, and the
+  // submitter would never hear.
   test('a failed label lookup on reject still answers 200 and still tells the submitter', async () => {
     WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal());
     WineDefinition.findById.mockReturnValue({ select: () => ({ lean: async () => { throw new Error('primary stepped down'); } }) });
@@ -385,18 +383,17 @@ describe('POST /:id/approve', () => {
     expect(wine.save).toHaveBeenCalled();
     expect(searchService.indexWine).toHaveBeenCalledWith(W1);
     // IndexNow parity with the PUT: an approved identity fix changes the
-    // public wine page and must ping crawlers the same way (audit 2026-08-10).
+    // public wine page and must ping crawlers the same way.
     expect(require('../../services/indexNow').submitUrls).toHaveBeenCalledWith(`/wines/${W1}`);
     // The receipt lands on the row.
     const noteSet = WineCorrectionProposal.updateOne.mock.calls.at(-1);
     expect(noteSet[1].$set.appliedNote).toMatch(/Applied/);
   });
 
-  // Parity with the admin PUT (gap found live 2026-08-16: approving
-  // "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached
-  // until a manual force re-enrich): an approved change to a profile-feeding
-  // field hands the wine to the re-enrich follow-through — and ONLY a real
-  // change does.
+  // Parity with the admin PUT (otherwise a producer fix such as "Fabelhaft" →
+  // "Niepoort" keeps the old profile attached until a manual force
+  // re-enrich): an approved change to a profile-feeding field hands the wine
+  // to the re-enrich follow-through — and ONLY a real change does.
   test('field_correction: a real producer change triggers the re-enrich follow-through', async () => {
     claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { producer: 'Niepoort' } });
     const wine = { _id: W1, name: 'Douro Tinto', producer: 'Fabelhaft', appellation: 'Douro', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
@@ -408,11 +405,10 @@ describe('POST /:id/approve', () => {
     expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, true);
   });
 
-  // Type and grapes became proposable on 2026-08-19 (somm ticket 6a85ad44):
-  // until then a curator could SEE a wine stored red on nothing but white
-  // grapes and had no route to propose the fix, so every one came back to an
-  // admin by hand.
-  describe('type and grapes (the fields a curator could not propose before)', () => {
+  // Type and grapes are proposable: a curator who SEES a wine stored red on
+  // nothing but white grapes has a route to propose the fix instead of
+  // handing every one back to an admin.
+  describe('type and grapes (proposable fields)', () => {
     const { resolveGrapeIdsStrict } = require('../../services/wineProfileOps');
 
     test('applies a corrected type', async () => {
@@ -500,10 +496,10 @@ describe('POST /:id/approve', () => {
     expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, false);
   });
 
-  // The "Yecla DO" case (prod, 2026-08-12): approving a proposal used to store
-  // the tier-stripped string directly, so a decoration normalizeAppellation
-  // deliberately cannot strip survived onto the wine. The stored value must
-  // now come from the curated-registry resolver, not from the normalizer.
+  // The "Yecla DO" case: storing the tier-stripped string directly would let
+  // a decoration normalizeAppellation deliberately cannot strip survive onto
+  // the wine. The stored value comes from the curated-registry resolver, not
+  // from the normalizer.
   test('field_correction: the STORED appellation is the resolver\'s canonical spelling', async () => {
     resolveCanonicalAppellation.mockResolvedValueOnce('Yecla');
     claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { appellation: ' Yecla DO ' } });
@@ -548,8 +544,8 @@ describe('POST /:id/approve', () => {
     expect(revert).toBeTruthy();
   });
 
-  // Support ticket 2026-09-17 ("Colour Sparkling/Rosè"): a colour is judged
-  // against the type the wine has once THIS proposal's own type is applied.
+  // A colour is judged against the type the wine has once THIS proposal's own
+  // type is applied.
   test('field_correction: colour applies on a style type — including one the same proposal sets', async () => {
     claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { type: 'sparkling', colour: 'rosé' } });
     const wine = { _id: W1, name: 'Rosé Extra Brut', producer: 'Maso Martis', appellation: 'Trento', type: 'rosé', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
@@ -641,7 +637,7 @@ describe('POST /:id/approve', () => {
     expect(searchService.indexWine).toHaveBeenCalledWith(W1);
     // Earlier flags a restore took back stand again with the quarantine.
     expect(require('../../services/suggestionCred').settleNonWineProposals).toHaveBeenCalledWith(W1, true);
-    // The vectors go with the row (audit 2026-10-14): nothing left for
+    // The vectors go with the row: nothing left for
     // semantic search or the similar-wines graph to find.
     expect(require('../../models/WineEmbedding').deleteMany).toHaveBeenCalledWith({ wineDefinition: W1 });
   });
@@ -658,10 +654,10 @@ describe('POST /:id/approve', () => {
   });
 });
 
-// 2026-09-28: approving producer corrections gave 9 wines in one week a
-// spelling the rest of their producer did not use ("Château Lagrézette" beside
-// "Chateau Lagrezette"), each a split the weekly registry-health check rang
-// for. A producer change into a split now needs the admin's pick.
+// An approved producer correction can give a wine a spelling the rest of its
+// producer does not use ("Château Lagrézette" beside "Chateau Lagrezette"),
+// a split the weekly registry-health check rings for. A producer change into
+// a split needs the admin's pick.
 describe('producer spelling splits', () => {
   const { otherProducerSpellings, planProducerRename } = require('../../services/producerSpelling');
   const { logAudit } = require('../../services/audit');
@@ -686,8 +682,8 @@ describe('producer spelling splits', () => {
     const data = await res.json();
     expect(data).toMatchObject({ code: 'producer_spelling_split', proposed: 'Château Lagrézette', spellings: OTHERS });
     expect(data.error).toMatch(/"Chateau Lagrezette" \(3 wines\)/);
-    // No claim, so no revert that could collide with a re-filed proposal (review
-    // 2026-09-28) — and no region minted for a refused approve.
+    // No claim, so no revert that could collide with a re-filed proposal —
+    // and no region minted for a refused approve.
     expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
     expect(findOrCreateRegion).not.toHaveBeenCalled();
     expect(wine.save).not.toHaveBeenCalled();
@@ -943,7 +939,7 @@ describe('POST /:id/reject', () => {
 });
 
 /**
- * Bulk decisions (ticket 6a8162c5 ask #3 — the middle road): each id runs the
+ * Bulk decisions: each id runs the
  * EXACT single-decision machinery, so what these pin is the batch envelope —
  * per-row outcomes, one row's failure never blocking the rest, dedupe, and
  * the bounds/reason gates deciding NOTHING when they fail.
@@ -1026,8 +1022,8 @@ describe('POST /bulk-approve and /bulk-reject', () => {
 });
 
 /**
- * Bulk follow-through is deferred and per-WINE (audit 2026-08-16): firing per
- * proposal let an early re-enrich race later same-batch applies, and cost one
+ * Bulk follow-through is deferred and per-WINE: firing per
+ * proposal would let an early re-enrich race later same-batch applies, and cost one
  * forced AI call per proposal instead of per wine.
  */
 describe('bulk-approve follow-through', () => {

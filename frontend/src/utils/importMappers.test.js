@@ -682,12 +682,11 @@ describe('parseAndMap', () => {
   });
 
   it('skips PRODUCER-ONLY rows too — a producer is not a wine name', () => {
-    // The 2026-08-28 cal import: a generic CSV whose name column never
-    // mapped produced 148 producer-only rows, and the old AND-gate
-    // (`!wineName && !producer`) let every one through — each then filed a
-    // WineRequest with the PRODUCER as the wine's name ("Hewitson —
-    // Hewitson", ×131). wineName is required, exactly as the master-format
-    // doc at the top of this module has always said.
+    // A generic CSV whose name column never mapped yields producer-only rows.
+    // An AND-gate (`!wineName && !producer`) would let every one through, and
+    // each would file a WineRequest with the PRODUCER as the wine's name
+    // ("Hewitson — Hewitson"). wineName is required, exactly as the
+    // master-format doc at the top of this module says.
     const csv = 'Wine,Producer,Vintage\n,Hewitson,2005\n,Tahbilk,2019\nMargaux,CM,2016';
     const result = parseAndMap(csv);
     expect(result.items).toHaveLength(1);
@@ -1033,7 +1032,7 @@ describe('parseOenoExport', () => {
     expect(result.oenoRackSpecs).toBeDefined();
   });
 
-  // ── The last Oeno exports (2026-09-15 support mail) ─────────────────────
+  // ── The later Oeno export format ──────────────────────────────────────────
   // Every cell quoted, a title block above the cabinet header, "null" for
   // absent values, "N.V." vintages, and Vintec VWM storage shelves whose
   // "layers" are STACKED rows (up to 10 per shelf), not front/back.
@@ -1151,10 +1150,10 @@ describe('wine colour is stated, never guessed', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Classification-in-name guard (somm ticket 0063bb76). Producer-stripping a
-// Bordeaux CT name like "Château Talbot Grand Cru Classé" used to leave the
-// bare TIER as the wine's name — prod grew 19 such rows, three distinct wines
-// all named "Grand Cru Classé", six duplicating a properly-named record.
+// Classification-in-name guard. Producer-stripping a Bordeaux CT name like
+// "Château Talbot Grand Cru Classé" must not leave the bare TIER as the
+// wine's name: distinct wines would all be named "Grand Cru Classé", and
+// some would duplicate a properly-named record.
 // ---------------------------------------------------------------------------
 describe('splitClassificationFromName', () => {
 
@@ -1227,7 +1226,7 @@ describe('classification reaches the mapped item', () => {
   });
 });
 
-describe('stripAppellationPrefixFromName (registry backlog 2026-09-06)', () => {
+describe('stripAppellationPrefixFromName', () => {
   it('drops an appellation that opens the name, keeping the file spelling', () => {
     expect(stripAppellationPrefixFromName('Rioja Prado Enea Gran Reserva', { appellation: 'Rioja' })).toBe('Prado Enea Gran Reserva');
     expect(stripAppellationPrefixFromName('Barolo Bricco Boschis', { appellation: 'Barolo' })).toBe('Bricco Boschis');
@@ -1252,7 +1251,7 @@ describe('stripAppellationPrefixFromName (registry backlog 2026-09-06)', () => {
   });
 });
 
-describe('a row without a vintage is filed as NV but flagged (audit ticket 2026-09-05)', () => {
+describe('a row without a vintage is filed as NV but flagged', () => {
   it('sets vintageMissing on the item and reports one warning with the count', () => {
     const csv = 'Wine name,Producer,Vintage,Country\nPrado Enea Gran Reserva,Muga,,Spain\nBrut Réserve,Pol Roger,NV,France\nBarolo,Vajra,2019,Italy\n';
     const out = parseAndMap(csv);

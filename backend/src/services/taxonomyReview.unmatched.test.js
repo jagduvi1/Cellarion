@@ -65,7 +65,7 @@ test('an uncovered decorated string still lists — the gate is membership, not 
   expect(items[0].wineCount).toBe(3);
 });
 
-// Ticket 6a842d5e: a reviewed-and-rejected string must stop resurfacing.
+// A reviewed-and-rejected string must stop resurfacing.
 test('a dismissed key is filtered out; everything else still lists', async () => {
   Appellation.find.mockReturnValue(lean([]));
   AppellationReviewSkip.find.mockReturnValue(lean([{ normalizedKey: 'qualitatswein' }]));

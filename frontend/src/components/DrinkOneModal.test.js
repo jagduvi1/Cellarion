@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-// "Drink one" from a grouped entry (support ticket 2026-10-09): pick WHICH
+// "Drink one" from a grouped entry: pick WHICH
 // bottle of the group leaves — by rack slot — then the ordinary consume form.
 // One bottle, one request; the others are never touched.
 
@@ -140,7 +140,7 @@ test('an opened bottle is not the same as a sealed one — the picker stays and 
   expect(screen.getByText('drinkOne.opened')).toBeInTheDocument();
 });
 
-// Release audit 2026-10-16: the vintage page offers every size of the wine
+// The vintage page offers every size of the wine
 // and year — a magnum is never "the same" as a 75 cl.
 test('bottles that differ only in size are asked about, with the size on the row', () => {
   const two = [

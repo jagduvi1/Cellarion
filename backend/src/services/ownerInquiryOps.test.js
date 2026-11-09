@@ -91,8 +91,8 @@ describe('buildRecipients', () => {
 
     const pipeline = Bottle.aggregate.mock.calls[0][0];
     expect(pipeline[0].$match.status).toEqual({ $nin: NOT_IN_CELLAR_STATUSES });
-    // Only bottles in a cellar that still exists (support ticket 2026-10-14:
-    // a question linked to a bottle in a deleted cellar led to "not found").
+    // Only bottles in a cellar that still exists (a question linked to a
+    // bottle in a deleted cellar would lead to "not found").
     expect(pipeline[1].$lookup).toMatchObject({ from: 'cellars', localField: 'cellar', foreignField: '_id' });
     expect(pipeline[1].$lookup.pipeline[0]).toEqual({ $match: { deletedAt: null } });
     expect(pipeline[2]).toEqual({ $match: { 'liveCellar.0': { $exists: true } } });
@@ -211,7 +211,7 @@ describe('createOwnerInquiry', () => {
     expect(created.recipients[0].cellar).toBeUndefined();
 
     // One batch call, one item per recipient, linked to the QUESTION, which
-    // finds a bottle they can open when they click (support ticket 2026-10-14).
+    // finds a bottle they can open when they click.
     expect(createNotifications).toHaveBeenCalledTimes(1);
     const items = createNotifications.mock.calls[0][0];
     expect(items).toHaveLength(2);
@@ -330,7 +330,7 @@ describe('resolveOwnerInquiry', () => {
       message: REPLY,
       link: `/questions/${INQUIRY}`,
     });
-    // The link no longer needs the bottles' cellars (support ticket 2026-10-14).
+    // The link does not need the bottles' cellars.
     expect(Bottle.find).not.toHaveBeenCalled();
     // The recipient who ignored the question is owed nothing.
     expect(items.map((i) => i.userId)).not.toContain(oid('7'));
@@ -357,10 +357,9 @@ describe('resolveOwnerInquiry', () => {
     expect(Bottle.find).not.toHaveBeenCalled();
   });
 
-  // Support ticket 2026-10-14: this used to lose the link (a bottle deleted
-  // since the answer had no cellar to link to). The question link needs no
-  // bottle, and finds one the owner can open when they click.
-  test('a bottle deleted since the answer no longer costs the link', async () => {
+  // A bottle deleted since the answer has no cellar to link to. The question
+  // link needs no bottle, and finds one the owner can open when they click.
+  test('a bottle deleted since the answer does not cost the link', async () => {
     mockClaim(claimedDoc([answered[0]]));
 
     await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE, ownerReply: REPLY });
@@ -596,9 +595,9 @@ describe('owner side', () => {
     });
   });
 
-  // Support ticket 2026-10-14: a notification's bottle link went dead once the
-  // bottle's cellar was deleted. The question is now opened by id and finds a
-  // bottle page of the wine the recipient can open at click time.
+  // A notification's bottle link would go dead once the bottle's cellar is
+  // deleted. The question is opened by id and finds a bottle page of the
+  // wine the recipient can open at click time.
   describe('inquiryForRecipient + liveBottleLink', () => {
     const C1 = oid('3');
     const C2 = oid('9');

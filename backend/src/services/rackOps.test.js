@@ -233,7 +233,7 @@ describe('moveBottleToCellar', () => {
   });
 });
 
-describe('rack group (support ticket 2026-09-06)', () => {
+describe('rack group', () => {
   const { normalizeRackGroup } = require('./rackOps');
   const cellar = { _id: 'c1', user: 'u1' };
   const REQ = { user: { id: 'u1' } };

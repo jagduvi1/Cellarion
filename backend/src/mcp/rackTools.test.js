@@ -197,7 +197,7 @@ describe('structural undo', () => {
   });
 });
 
-describe('rack groups (support ticket 2026-09-06)', () => {
+describe('rack groups', () => {
   test('list_racks reports each rack\'s group and names the groups in the summary', async () => {
     ownCellar();
     Rack.find.mockReturnValue(chain([

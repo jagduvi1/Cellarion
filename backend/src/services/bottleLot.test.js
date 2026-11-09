@@ -1,9 +1,9 @@
 /**
  * bottleLot — the one definition of "the lot" behind the edit-form checkbox,
- * the bulk bar and update_bottle apply_to_lot (support ticket 2026-09-06).
+ * the bulk bar and update_bottle apply_to_lot.
  * Every consumer mocks this module, so the invariants are pinned here:
  * owned cellars only, consumed excluded, NV folds '' and null, the bottle
- * itself excluded, no wine → no lot, capped at LOT_LIMIT (audit 2026-09-07).
+ * itself excluded, no wine → no lot, capped at LOT_LIMIT.
  */
 jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));

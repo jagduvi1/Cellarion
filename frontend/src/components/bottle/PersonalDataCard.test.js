@@ -198,7 +198,7 @@ test('a rejected value surfaces the backend message and keeps the modal open', a
   expect(screen.getByText('Add wine data')).toBeInTheDocument();
 });
 
-// The vintage page (beta feedback 2026-10-10): the card reaches the data
+// The vintage page: the card reaches the data
 // through one bottle of the vintage, so "This bottle only" means nothing
 // there. Add offers this vintage (preselected) or every vintage; one bottle's
 // own entries stay on that bottle's page.
@@ -259,9 +259,8 @@ test('delete removes own entry and reloads', async () => {
   await waitFor(() => expect(getPersonalData).toHaveBeenCalledTimes(2));
 });
 
-// A list key could never grow after its creation (user ticket 2026-10-27):
-// under the select, "Add a new value to the list" extends the key first, then
-// saves the entry with the new value.
+// A list key can grow after its creation: under the select, "Add a new value
+// to the list" extends the key first, then saves the entry with the new value.
 const LIST_KEY = { _id: 'k9', name: 'Closure', type: 'enum', unit: null, enumOptions: ['cork', 'screwcap'] };
 
 const openListKey = async () => {

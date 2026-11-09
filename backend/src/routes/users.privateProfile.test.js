@@ -61,7 +61,7 @@ const get = (targetId, viewerId = VIEWER) =>
 /** The route calls User.findById(id).select(...) and awaits the result. */
 const mockUser = (over = {}) => {
   const doc = {
-    _id: TARGET, username: 'boubou17', displayName: null, bio: 'a secret bio',
+    _id: TARGET, username: 'quietmember17', displayName: null, bio: 'a secret bio',
     followersCount: 3, followingCount: 4, reviewCount: 5,
     profileVisibility: 'private', createdAt: new Date('2026-08-31'),
     plan: 'free', preferences: { ratingScale: '5' },
@@ -132,7 +132,7 @@ describe('private profile whose owner has posted publicly', () => {
     const res = await get(TARGET);
     expect(res.status).toBe(200);
     const { user } = await res.json();
-    expect(user).toMatchObject({ username: 'boubou17', isPrivate: true, profileVisibility: 'private' });
+    expect(user).toMatchObject({ username: 'quietmember17', isPrivate: true, profileVisibility: 'private' });
   });
 
   test('the stub leaks nothing beyond the name already shown on their posts', async () => {
@@ -163,7 +163,7 @@ describe('unchanged paths', () => {
     const res = await get(TARGET);
     expect(res.status).toBe(200);
     const { user } = await res.json();
-    expect(user).toMatchObject({ username: 'boubou17', bio: 'a secret bio', followersCount: 3 });
+    expect(user).toMatchObject({ username: 'quietmember17', bio: 'a secret bio', followersCount: 3 });
     expect(user.isPrivate).toBeUndefined();
     // A public profile must not pay for the footprint checks.
     expect(Discussion.exists).not.toHaveBeenCalled();

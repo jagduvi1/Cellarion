@@ -224,7 +224,7 @@ describe('creation', () => {
       expect.objectContaining({ via: 'web', tier: 'newcomer', fields: ['appellation'] }));
   });
 
-  // Support ticket 2026-09-06: type and grapes are correctable by any user,
+  // Type and grapes are correctable by any user,
   // exactly as through the sommelier tool — resolved at filing, canonical names stored.
   test('grapes are resolved against the taxonomy at filing and stored as canonical names', async () => {
     resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1', 'g2'], names: ['Pinot Noir', 'Müller-Thurgau'], substitutions: [{ from: 'Riesling-Sylvaner', to: 'Müller-Thurgau' }] });
@@ -286,7 +286,7 @@ describe('creation', () => {
   });
 });
 
-// Support ticket 2026-09-17 ("Colour Sparkling/Rosè"): sparkling, dessert and
+// Sparkling, dessert and
 // fortified say nothing about colour, so a suggestion can carry one — judged
 // against the type the suggestion leaves the wine with.
 describe('colour', () => {
@@ -337,10 +337,10 @@ describe('colour', () => {
   });
 });
 
-// Support ticket 2026-09-12: the one-pending rule is per WINE, and the user's
-// own suggestion was what blocked their follow-up. Own pending → amend; someone
-// else's → conflict that says so. Audit 2026-09-12 H-1: the amendment is ONE
-// atomic update pinned to the pending row, never a hydrated save().
+// The one-pending rule is per WINE, so the user's own suggestion must not
+// block their follow-up. Own pending → amend; someone else's → conflict that
+// says so. The amendment is ONE atomic update pinned to the pending row,
+// never a hydrated save().
 describe('amending the caller\'s own pending suggestion', () => {
   const dup = () => Object.assign(new Error('dup'), { code: 11000 });
 
@@ -478,7 +478,7 @@ describe('pendingForWine', () => {
 });
 
 // The web bottle page reads the wine's review slot BEFORE a correction is
-// typed (support ticket 2026-09-17) — behind the same visibility rule as
+// typed — behind the same visibility rule as
 // filing, so a hidden wine's queue state reads as "nothing pending".
 describe('pendingForViewer', () => {
   const chain = (doc) => ({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(doc) }) });
@@ -503,10 +503,10 @@ describe('pendingForViewer', () => {
   });
 });
 
-// A variety the taxonomy lacks (support ticket 2026-09-17). The web grape
-// picker can only produce an unknown name through its explicit "add as a new
-// variety" action, and says so in `fields.newGrapes`; everything else about
-// an unknown name stays exactly as strict as before.
+// A variety the taxonomy lacks. The web grape picker can only produce an
+// unknown name through its explicit "add as a new variety" action, and says
+// so in `fields.newGrapes`; everything else about an unknown name stays
+// strict.
 describe('a deliberately-new grape variety', () => {
   const file = (fields) => ops.createFieldCorrection(ME, { ...GOOD, fields });
 

@@ -1,9 +1,9 @@
 /**
- * Classification rides the commit into the mint (ticket 6a8162c5).
+ * Classification rides the commit into the mint.
  *
- * The scan prompt now extracts the printed classification line ("Grand Cru
- * Classé en 1855") into its own field — before this it had no slot and landed
- * in the NAME (the Giscours case). The client threads it through the newWine
+ * The scan prompt extracts the printed classification line ("Grand Cru
+ * Classé en 1855") into its own field — without a slot it lands in the
+ * NAME. The client threads it through the newWine
  * payload invisibly; these tests pin that the commit passes it to
  * findOrCreateWine and that the request-validation cap covers it (the payload
  * is machine-generated, same rationale as region).

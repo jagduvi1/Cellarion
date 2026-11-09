@@ -93,8 +93,8 @@ describe('listForBottle', () => {
     expect(PersonalDataEntry.find).toHaveBeenCalledWith({
       wineDefinition: WINE,
       author: { $in: [ME, OTHER] },
-      // Vintage-scoped entries only surface on matching-vintage bottles
-      // (ticket 6a853211); a vintage-less bottle sees only unscoped entries.
+      // Vintage-scoped entries only surface on matching-vintage bottles;
+      // a vintage-less bottle sees only unscoped entries.
       $or: [{ vintage: null }, { vintage: null }],
     });
   });
@@ -228,9 +228,9 @@ describe('createEntry', () => {
 });
 
 /**
- * The add-bottle form (user ticket 6ab05cca) posts the same WINE-level field
- * once per bottle of a batch and re-posts it on a retry. Without this, a
- * six-bottle add wrote six identical ABV rows onto one wine record.
+ * The add-bottle form posts the same WINE-level field once per bottle of a
+ * batch and re-posts it on a retry. Without this, a six-bottle add would
+ * write six identical ABV rows onto one wine record.
  */
 describe('createEntry — dedupe', () => {
   const vintageBottle = { _id: BOTTLE_ID, wineDefinition: WINE, vintage: '2019' };
@@ -377,7 +377,7 @@ describe('deleteEntry', () => {
   });
 });
 
-describe('resolveKey by name (ticket 6aa6c90e: key_type only for a NEW key)', () => {
+describe('resolveKey by name (key_type only for a NEW key)', () => {
   test('an existing key is reused WITHOUT a type — the stored definition is the contract', async () => {
     PersonalDataKey.findOne.mockResolvedValue(abvKey);
     PersonalDataEntry.create.mockResolvedValue(entryDoc());
@@ -409,7 +409,7 @@ describe('resolveKey by name (ticket 6aa6c90e: key_type only for a NEW key)', ()
   });
 });
 
-describe('updateKey / deleteKey (ticket 6aa6c95e)', () => {
+describe('updateKey / deleteKey', () => {
   const keyDoc = (over = {}) => ({
     _id: KEY_ID, user: ME, name: 'Falstaff', nameKey: 'falstaff', type: 'decimal', unit: '/100',
     save: jest.fn().mockResolvedValue(undefined),
@@ -463,8 +463,7 @@ describe('updateKey / deleteKey (ticket 6aa6c95e)', () => {
     expect(await svc.updateKey(ME, KEY_ID, {})).toMatchObject({ ok: false, code: 'invalid' });
   });
 
-  // A list key's allowed values (user ticket 2026-10-27: a list could never
-  // grow after its creation).
+  // A list key's allowed values can grow after its creation.
   test('the allowed values of a list key can grow; the old list rides in prev', async () => {
     const key = keyDoc({ type: 'enum', unit: undefined, enumOptions: ['cork', 'screwcap'] });
     PersonalDataKey.findOne.mockResolvedValue(key);

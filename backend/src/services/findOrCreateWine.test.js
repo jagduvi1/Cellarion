@@ -118,7 +118,7 @@ function primeFind({ canonicalHits = [], canonicalSiblings = [], siblings = [], 
     if (q && q.normalizedKey) {
       return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(siblings) }) };
     }
-    // Label-variant stage (somm ticket e9b346ba): producer-scoped sweep.
+    // Label-variant stage: producer-scoped sweep.
 
     if (q && q.producer && !q.canonicalKey && !q.normalizedKey) {
 
@@ -856,7 +856,7 @@ describe('findOrCreateWine — creation', () => {
     expect(doc.normalizedKey).toBe(generateWineKey('Clos des Papes', 'Paul Avril', ''));
   });
 
-  describe('an appellation typed in the region column (Johan, 2026-09-08)', () => {
+  describe('an appellation typed in the region column', () => {
     const fleurie = { _id: 'ap-fleurie', name: 'Fleurie', region: 'region-beaujolais' };
     const beaujolais = { _id: 'region-beaujolais', name: 'Beaujolais' };
     // appellationInRegionColumn queries find({country, $or}).limit(2).lean();
@@ -1198,7 +1198,7 @@ describe('taxonomy find-or-create dedup', () => {
     expect(Grape).toHaveBeenCalledWith({
       name: 'Syrah', normalizedName: 'syrah', createdBy: USER_ID,
       createdByUser: true,
-      // Somm ticket 6a942a60 ("Honey", "Alvarão"): a user-write grape mint is
+      // A user-write grape mint is
       // born flagged for admin review — visible, never blocking. Same R3 rule
       // as the region mint above.
       createdByUser: true,
@@ -1273,7 +1273,7 @@ describe('taxonomy find-or-create dedup', () => {
 });
 
 /**
- * Region canon (policy 2026-08-16, ticket 6a8162c5): when the appellation
+ * Region canon: when the appellation
  * itself names a region the taxonomy has, the region field holds THAT region
  * — the most specific granularity — regardless of what the caller supplied.
  * This is what stops one import batch minting the same producer's wines under
@@ -1359,8 +1359,8 @@ describe('findOrCreateWine — region canon: appellation granularity wins', () =
 });
 
 /**
- * Classification (ticket 6a8162c5, the Giscours case): the scan prompt now
- * has a slot for the printed classification line, and it is stored on a
+ * Classification: the scan prompt has a slot for the printed classification
+ * line, and it is stored on a
  * CREATE — folded and capped like the identity fields, but never matched or
  * keyed on.
  */
@@ -1378,13 +1378,13 @@ describe('findOrCreateWine — classification is stored on create', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Label-variant detection must survive confirmCreate (somm ticket e9b346ba).
+// Label-variant detection must survive confirmCreate.
 //
-// v1.171.0 shipped this stage gated on skipSiblingMatch, which wineCommit sets
-// from confirmCreate. Five hours later HALL "The North End Cabernet Sauvignon"
-// was minted through the UI, duplicating "The North End" — because the pair
-// scores 0.748, BELOW the 0.85 soft-zone floor, so the existing wine was never
-// in the candidate list the user rejected. confirmCreate means "I reviewed the
+// wineCommit sets skipSiblingMatch from confirmCreate, so a stage gated on it
+// would let "The North End Cabernet Sauvignon" be minted beside the same
+// producer's "The North End" — the pair scores 0.748, BELOW the 0.85
+// soft-zone floor, so the existing wine is never in the candidate list the
+// user rejected. confirmCreate means "I reviewed the
 // suggestions"; it cannot mean "I rejected a wine nobody showed me".
 // ---------------------------------------------------------------------------
 describe('findOrCreateWine — label variants are caught even on confirmCreate', () => {
@@ -1475,10 +1475,10 @@ describe('findOrCreateWine — label variants are caught even on confirmCreate',
   });
 });
 
-describe('findOrCreateWine — a ripeness Prädikat is not an appellation (audit ticket 2026-09-03)', () => {
-  // The import paths already routed a bare Prädikat out of the appellation
-  // (PR #1173); the add-bottle form did not, and a Weingut Herztal record
-  // arrived with appellation "Kabinett". Every mint now applies the rule.
+describe('findOrCreateWine — a ripeness Prädikat is not an appellation', () => {
+  // The import paths route a bare Prädikat out of the appellation (PR #1173);
+  // the add-bottle form must too, or a record arrives with appellation
+  // "Kabinett". Every mint applies the rule.
   test('a bare Prädikat leaves the appellation and lands in classification', async () => {
     await findOrCreateWine({ ...INPUT, name: 'Spätburgunder Rotwein Kabinett Trocken', appellation: 'Kabinett' }, USER_ID);
     const doc = WineDefinition.mock.calls[0][0];

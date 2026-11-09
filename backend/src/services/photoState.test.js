@@ -1,8 +1,7 @@
 /**
  * photoState — the owner-facing photo state behind the MCP read path
- * (support ticket 2026-09-06: no way to tell "no photo", "photo exists" and
- * "upload stuck" apart over the connector). Audit 2026-09-07: own rows and
- * published rows are two bounded queries, own first, so a popular wine can
+ * (it tells "no photo", "photo exists" and "upload stuck" apart over the
+ * connector). Own rows and published rows are two bounded queries, own first, so a popular wine can
  * never push the viewer's own row past the cap; inline data: images never
  * travel.
  */

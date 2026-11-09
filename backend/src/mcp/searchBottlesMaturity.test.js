@@ -1,6 +1,5 @@
 /**
- * search_bottles → wine detail + resolved maturity on every row (support
- * tickets 6aad5481 + 6aad5c67).
+ * search_bottles → wine detail + resolved maturity on every row.
  *
  * Pins: grapes/region/country on the wine object; `maturity` reports the
  * window that governs the bottle (own override first, else the curated

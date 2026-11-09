@@ -91,7 +91,7 @@ describe('parseAndValidateVintage', () => {
     expect(parseAndValidateVintage('-2018', { now }).ok).toBe(false);
   });
 
-  it('rejects any year after the current one — a vintage cannot exist before its harvest (support ticket 2026-08-20)', () => {
+  it('rejects any year after the current one — a vintage cannot exist before its harvest', () => {
     // currentYear = 2026: this year's harvest may be recorded, next year's cannot.
     expect(parseAndValidateVintage('2026', { now }).ok).toBe(true);
     expect(parseAndValidateVintage('2025', { now }).ok).toBe(true); // en primeur of a past harvest

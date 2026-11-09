@@ -1,12 +1,12 @@
 /**
  * POST /api/wine-lists/:id/add-bottles — the wines of many bottles onto a
- * list in one step (the cellar view's select mode, ticket 6a9949e3).
+ * list in one step (the cellar view's select mode).
  *
  * Pinned: entries collapse on wine + vintage + size (a case of twelve is one
  * line; a second identical bottle is skipped as already_on_list), a wine
  * already on the ACTIVE container is skipped, a pendingIdentity wine the
- * caller holds goes on like any other (support ticket 2026-10-09 — it is the
- * owner's wine; what renders is decided by services/wineListData), a bottle
+ * caller holds goes on like any other (it is the owner's wine; what
+ * renders is decided by services/wineListData), a bottle
  * in a cellar the caller does not own reads as not_found, and a
  * custom-structured list needs a section unless it has exactly one.
  */

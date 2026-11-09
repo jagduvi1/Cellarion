@@ -1,8 +1,8 @@
 /**
- * utils/bottleListFilters — what the cellar views needed so the Statistics
- * charts can deep-link into them (support ticket 2026-09-19): chart NAMES
- * resolved to ids, the producer / size / purchase-year filters /api/bottles
- * already had, and grouping that never merges bottles across cellars.
+ * utils/bottleListFilters — what the cellar views need so the Statistics
+ * charts can deep-link into them: chart NAMES resolved to ids, the
+ * producer / size / purchase-year filters /api/bottles has, and grouping
+ * that never merges bottles across cellars.
  */
 jest.mock('../models/Country', () => ({ find: jest.fn() }));
 jest.mock('../models/Region', () => ({ find: jest.fn() }));

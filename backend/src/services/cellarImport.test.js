@@ -592,7 +592,7 @@ describe('attachImages sanitization (SECURITY_AUDIT L-13)', () => {
   });
 });
 
-describe('rack group round trip (support ticket 2026-09-06)', () => {
+describe('rack group round trip', () => {
   test('parseCellarExport keeps a rack\'s group so createRacks can restore it', () => {
     const out = parseCellarExport({ cellars: [{ cellarName: 'C', racks: [{ name: 'Left', type: 'grid', rows: 2, cols: 6, group: 'Basement' }], bottles: [] }] });
     expect(out.cellars[0].racks[0]).toMatchObject({ name: 'Left', group: 'Basement' });

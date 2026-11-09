@@ -37,10 +37,10 @@ describe('the seed tables', () => {
     expect([...langs].filter((l) => !SHIPPED.includes(l))).toEqual([]);
   });
 
-  test('the record that prompted all of this is present and correct', () => {
-    // Proposal 6a959b9d, "En Français svp".
+  test('Rhône Valley and Germany carry their French names', () => {
+    // A region's French name.
     expect(REGIONS['Rhône Valley'].fr).toBe('Vallée du Rhône');
-    // And the country his own import file wrote as "Allemagne".
+    // And a country's.
     expect(COUNTRIES.Germany.fr).toBe('Allemagne');
   });
 

@@ -1,6 +1,6 @@
 const { localizedName, baseLanguage, sanitizeTranslations } = require('./localizedName');
 
-// The record that prompted this: proposal 6a959b9d, "En Français svp".
+// A region with a French and a German display name beside its canonical one.
 const rhone = { name: 'Rhône Valley', translations: { fr: 'Vallée du Rhône', de: 'Rhônetal' } };
 const asMap = (obj) => ({ ...obj, translations: new Map(Object.entries(obj.translations)) });
 

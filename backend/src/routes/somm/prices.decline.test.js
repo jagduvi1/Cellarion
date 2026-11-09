@@ -1,8 +1,8 @@
 /**
  * POST /api/somm/prices/requests/:id/decline — decline a price-tracking
- * request WITH a required reason (support ticket 6a703236: junk requests —
- * e.g. everyday retail wines with no secondary market — had no exit from the
- * queue except fulfilment).
+ * request WITH a required reason (junk requests — e.g. everyday retail
+ * wines with no secondary market — need an exit from the queue other than
+ * fulfilment).
  *
  * WHY THIS TEST EXISTS:
  * The decline is a three-part contract and every part must hold:

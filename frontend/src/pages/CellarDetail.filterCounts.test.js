@@ -2,10 +2,10 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import CellarDetail from './CellarDetail';
 
-// The filter's numbers. Its button counted cards, not bottles: two identical
-// bottles share one card, so a filter matching both read "Show 1 bottles"
-// (support ticket 2026-10-14). And its maturity buttons never showed a count:
-// the counts were read from statistics that never carried them (#1291).
+// The filter's numbers. Its button counts bottles, not cards: two identical
+// bottles share one card, and a filter matching both must read "Show 2
+// bottles". Its maturity buttons show a count too, fetched from the cellar's
+// maturity-counts route — the statistics never carried them (#1291).
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k, o) => (o && o.count !== undefined ? `${k}:${o.count}` : k), i18n: { language: 'en' } }),

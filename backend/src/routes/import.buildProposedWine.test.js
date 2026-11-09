@@ -2,12 +2,11 @@
  * File geography beats AI geography, and the confidence floor never touches
  * the file.
  *
- * The bug this pins (found 2026-08-21): the parsers had been reading
- * CellarTracker's Appellation column all along, /validate matched on it — and
- * then every path that MINTED a wine used the AI's value instead, dropping it
- * entirely below AI_GEOGRAPHY_MIN_CONFIDENCE. One 231-wine import produced 86
- * null/null registry rows, and over half of a curation day went on putting
- * back appellations the user's own file had stated.
+ * The parsers read CellarTracker's Appellation column and /validate matches
+ * on it, so every path that MINTS a wine must use that value too — never the
+ * AI's in its place, and never drop it below AI_GEOGRAPHY_MIN_CONFIDENCE.
+ * Otherwise an import mints registry rows with no appellation the file had
+ * stated, and a curator has to put each one back by hand.
  */
 // Requiring the route pulls its whole dependency tree; meilisearch ships ESM
 // that jest does not transform, so the module boundary is stubbed exactly as
@@ -35,7 +34,7 @@ const ai = (over = {}) => ({
 
 describe('the confidence floor applies to the AI, never to the file', () => {
   it('keeps the FILE appellation even when the AI is unsure', () => {
-    // The whole bug in one case: pre-fix this returned null.
+    // The whole rule in one case: the file's value survives an unsure model.
     const out = buildProposedWine(ai({ confidence: UNSURE }), { appellation: 'Barolo', region: 'Piedmont' });
     expect(out.appellation).toBe('Barolo');
     expect(out.region).toBe('Piedmont');
@@ -72,8 +71,8 @@ describe('country keeps AI-first precedence, with the file as a fallback', () =>
   });
 
   it('falls back to the file country when the AI could not place it', () => {
-    // Pre-fix this row was REFUSED outright ("country could not be
-    // determined") and cost the user the bottle.
+    // Without the fallback this row would be REFUSED outright ("country could
+    // not be determined") and cost the user the bottle.
     const out = buildProposedWine(ai({ country: null }), { country: 'Australia' });
     expect(out.country).toBe('Australia');
   });
@@ -146,13 +145,13 @@ describe('hygiene', () => {
   });
 });
 
-describe('type: the file states, the model recalls (2026-08-22)', () => {
+describe('type: the file states, the model recalls', () => {
   it('prefers the file type over the AI type', () => {
     expect(buildProposedWine(ai({ type: 'red' }), { type: 'white' }).type).toBe('white');
   });
 
   it('falls back to the AI when the file says nothing', () => {
-    // The parsers now emit null for an unknown colour rather than guessing
+    // The parsers emit null for an unknown colour rather than guessing
     // 'red', so a null here is an honest "the file did not say".
     expect(buildProposedWine(ai({ type: 'red' }), { type: null }).type).toBe('red');
     expect(buildProposedWine(ai({ type: 'red' }), {}).type).toBe('red');
@@ -171,14 +170,13 @@ describe('type: the file states, the model recalls (2026-08-22)', () => {
   });
 });
 
-// ── Prädikat in the appellation column (somm ticket 6a966386, 2026-09-01) ────
+// ── Prädikat in the appellation column ──────────────────────────────────────
 //
-// Both rows below are verbatim from the import archive that produced the
-// ticket. The owner put the ripeness Prädikat in his appellation column, and
-// the same file misspelled the wine's own name ("Riesling Troken") — which is
-// how we know the typo is his and not ours. Taken literally, those wines end
-// up with no appellation at all: the thin-identity condition that makes
-// auto-enrichment decline them permanently.
+// An import file can carry the ripeness Prädikat in its appellation column,
+// misspellings included ("Riesling Troken", "Trokenbeerenauslese"). Taken
+// literally, those wines end up with no appellation at all: the
+// thin-identity condition that makes auto-enrichment decline them
+// permanently.
 describe('a Prädikat in the appellation column moves to classification', () => {
   const molitor = {
     wineName: 'Riesling Auslese Bernkasteler Badstube', producer: 'Markus Molitor',
@@ -192,16 +190,16 @@ describe('a Prädikat in the appellation column moves to classification', () => 
   });
 
   test('a Prädikat the wine CONTRADICTS is dropped, not moved to another field', () => {
-    // The second ticket record. Its file said "Trokenbeerenauslese" on a wine
-    // the model minted as "Riesling Trocken" — the sweetest botrytis category
-    // German law defines, on a bone-dry wine. Rescuing it would keep the
-    // falsehood and change only which field carried it, and a classification
-    // reads as curated fact: it would have argued for a decades-long dessert
-    // window on an estate dry Riesling. An honest gap is what asks to be filled.
+    // A file that says "Trokenbeerenauslese" on a wine the model mints as
+    // "Riesling Trocken" — the sweetest botrytis category German law defines,
+    // on a bone-dry wine. Rescuing it would keep the falsehood and change only
+    // which field carried it, and a classification reads as curated fact: it
+    // would argue for a decades-long dessert window on an estate dry Riesling.
+    // An honest gap is what asks to be filled.
     //
-    // This is independently the judgement the sommelier reached on these two
-    // records (proposals 6a965b19 / 6a965b0e, 2026-09-01): Auslese kept as a
-    // classification, Trockenbeerenauslese dropped, appellation Nahe.
+    // The curator's rule for such rows: a consistent Prädikat (Auslese) is
+    // kept as a classification, a contradicted one dropped, and the place
+    // (Nahe) supplied as the appellation.
     const donnhoff = { wineName: 'Riesling Troken', producer: 'Dönnhoff', country: 'Allemagne', appellation: 'Trokenbeerenauslese' };
     const out = buildProposedWine(ai({ name: 'Riesling Trocken', appellation: 'Nahe', classification: null }), donnhoff);
     expect(out.appellation).toBe('Nahe');
@@ -251,12 +249,9 @@ describe('a Prädikat in the appellation column moves to classification', () => 
 
 /**
  * The complete-row AI bypass is the OTHER way a wine enters the registry, and
- * it had the same defect. It writes the file's columns with no model involved,
- * so a German row that happens to carry a type column would have stored the
- * Prädikat as the appellation with nothing to catch it.
- *
- * The two ticket rows did not take this path (neither file row had a type), but
- * the next German import with a type column would have.
+ * it needs the same routing. It writes the file's columns with no model
+ * involved, so a German row that happens to carry a type column would store
+ * the Prädikat as the appellation with nothing to catch it.
  */
 describe('the complete-row bypass routes the Prädikat the same way', () => {
   const colourOf = (g) => (/riesling/i.test(g) ? 'White' : null);
@@ -296,7 +291,7 @@ describe('the complete-row bypass routes the Prädikat the same way', () => {
   });
 });
 
-describe('a producer the model mirrored from an unknown name is a missing producer (audit ticket 2026-09-04)', () => {
+describe('a producer the model mirrored from an unknown name is a missing producer', () => {
   it('drops a name-equals-producer answer when the file gave no producer', () => {
     const out = buildProposedWine(ai({ name: 'Les Caractères', producer: 'Les Caractères' }), { producer: '', appellation: '' });
     expect(out.producer).toBeNull();

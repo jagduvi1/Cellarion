@@ -1,5 +1,5 @@
 /**
- * AddBottle — how custom fields ride the bottle POSTs (user ticket 6ab05cca).
+ * AddBottle — how custom fields ride the bottle POSTs.
  *
  * The risky part is not the inputs, it is the split. A BOTTLE-level field is
  * true of one bottle, so it must ride every POST of a batch. A WINE-level
@@ -177,8 +177,8 @@ describe('AddBottle — custom fields on the bottle POSTs', () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', expect.objectContaining({ state: { addedNotice: expect.any(Object) } })));
   });
 
-  // Release audit 2026-09-27 (L): a refusal already received was lost when a
-  // later create threw — the error named the network failure only.
+  // A refusal already received must not be lost when a later create throws —
+  // the error would then name the network failure only.
   test('a refusal already received survives a network failure on a later bottle', async () => {
     let n = 0;
     apiFetchMock.mockImplementation(async (url) => {

@@ -3,8 +3,8 @@
  *
  * loadWineMap feeds routes/wineListPublic.js, which has NO auth at all, so the
  * wine query is the one place that decides what the open internet sees. The
- * rule (support ticket 2026-10-09 — an owner could not save a list of their
- * own cellar): every published registry wine, plus the pending-identity rows
+ * rule (an owner must be able to save a list of their own cellar): every
+ * published registry wine, plus the pending-identity rows
  * that are the owner's OWN — created by them, or held by a bottle in a cellar
  * they own or belong to. A stranger's hidden row is never queried for, so it
  * drops out exactly like a deleted wine. Expressed as a QUERY filter on

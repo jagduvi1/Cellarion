@@ -1,6 +1,6 @@
 /**
  * GET /api/bottles/:id — regional grape display decoration on the bottle page
- * (somm ticket: "Tinta Roriz stored as Tempranillo on a Douro Port").
+ * (a Douro Port's Tempranillo shows as Tinta Roriz).
  *
  * WHY THIS TEST EXISTS:
  * The bottle detail response serializes the populated wineDefinition; each
@@ -9,8 +9,8 @@
  * bottle page's grape pills (`g.displayName || g.name`) rest on. Storage is
  * untouched: the bottle still references the canonical Grape doc.
  *
- * The list route's in-memory search haystack is covered here too (audit
- * 2026-08-11): what the card DISPLAYS must be what search matches, so
+ * The list route's in-memory search haystack is covered here too: what the
+ * card DISPLAYS must be what search matches, so
  * `?search=` must hit the regional display name resolved for each wine's own
  * place — and only that one, not every mapping the grape carries.
  *
@@ -55,7 +55,7 @@ jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/PriceTrackingRequest', () => ({}));
 jest.mock('../models/BottleImage', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
-// find(): the sibling-bottle photo lookup (support ticket 2026-09-07) — empty here.
+// find(): the sibling-bottle photo lookup — empty here.
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })) }));
 
 const express = require('express');
@@ -115,7 +115,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, name: 'Main', user: USER_ID, members: [], deletedAt: null });
   // No pending/default images in this suite.
-  // Own photos: find().sort().limit().lean(); the vintage official: find().select().lean() (2026-10-09).
+  // Own photos: find().sort().limit().lean(); the vintage official: find().select().lean().
   BottleImage.find.mockImplementation(() => { const q = { sort: () => q, limit: () => q, select: () => q, lean: async () => [] }; return q; });
   BottleImage.findOne.mockReturnValue({ sort: () => ({ lean: async () => null }) });
   BottleImage.findById.mockReturnValue({ lean: async () => null });
@@ -233,8 +233,8 @@ describe('GET /api/bottles list search', () => {
 });
 
 // ── GET /api/bottles — history lists by the rating each bottle counts with ──
-// (support ticket 2026-10-11: a drunk bottle counts with the rating given when
-// drinking; a statistics band link selects exactly the band's bottles).
+// (a drunk bottle counts with the rating given when drinking; a statistics
+// band link selects exactly the band's bottles).
 describe('GET /api/bottles rating band and rating sort on history', () => {
   const wine = { _id: WINE_ID, name: 'Barolo', producer: 'X', type: 'red', grapes: [] };
   const drunk = (n, consumedRating, consumedRatingScale, over = {}) => ({

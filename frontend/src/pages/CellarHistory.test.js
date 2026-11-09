@@ -2,9 +2,9 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import CellarHistory from './CellarHistory';
 
-// The history is paged (2026-09-27): it used to receive and render every
-// consumed bottle at once, and a history imported from another app can hold
-// thousands. The page asks for 50 at a time: first the newest bottles of every
+// The history is paged rather than receiving and rendering every consumed
+// bottle at once: a history imported from another app can hold thousands.
+// The page asks for 50 at a time: first the newest bottles of every
 // section, then each section's "Load more" asks for that section's next page,
 // after the last bottle it shows. The summary and the section headers show the
 // server's counts for the whole history, not only what is loaded.
@@ -131,7 +131,7 @@ test('a "Load more" answer that arrives after the search changed is dropped; the
   expect(cardNames(section('history.reasonDrank'))).toEqual(['Wine s1']);
 });
 
-// Support ticket 2026-10-09 (follow-up): the vintage page must stay reachable
+// The vintage page must stay reachable
 // once the last bottle is drunk — from the history card, since the cellar
 // list's group is gone by then.
 test('a history card links to the vintage page of its wine and vintage', async () => {

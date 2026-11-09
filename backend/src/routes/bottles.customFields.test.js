@@ -2,11 +2,10 @@
  * POST /api/bottles with `personalData` — custom fields typed on the add form.
  *
  * WHY THIS TEST EXISTS:
- * User ticket 6ab05cca asked to enter ABV while adding a bottle. The data
- * already existed (#986 personal typed entries) and ABV was already an
- * accepted public registry key — but both were reachable only from the bottle
- * page, so seven users had independently minted their own private "ABV" key
- * and the reporter, with 117 bottles, had never found the card at all.
+ * A field such as ABV belongs on the add form, not only on the bottle page.
+ * The data model exists (#986 personal typed entries) and ABV is an accepted
+ * public registry key — reachable only from the bottle page, they go unfound
+ * and users mint their own private "ABV" keys instead.
  *
  * Pinned here:
  *   - fields ride the bottle create and reach the SHARED service, so the add
@@ -251,8 +250,8 @@ describe('POST /api/bottles — custom fields', () => {
     expect(personalData.createEntry).toHaveBeenCalledTimes(20);
     // A silent truncation is the one failure the caller cannot see: the add
     // is 201 and the field simply is not there. One line for all of them —
-    // one per dropped element let a 64 kB body come back as ~1.5 MB of
-    // repeats (release audit 2026-09-27, L).
+    // one per dropped element would let a 64 kB body come back as ~1.5 MB
+    // of repeats.
     expect(body.customFieldErrors).toEqual([
       { key: null, error: 'Too many custom fields in one add (max 20) — 3 not saved' },
     ]);

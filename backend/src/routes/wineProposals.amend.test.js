@@ -1,6 +1,6 @@
 /**
- * POST /api/wine-proposals — the transport half of the amend path (support
- * ticket 2026-09-12, audit M-3): a fresh filing answers 201, an amendment of
+ * POST /api/wine-proposals — the transport half of the amend path (audit
+ * M-3): a fresh filing answers 201, an amendment of
  * the caller's own pending suggestion answers 200 with `amended: true`, and
  * both forward to the registry bridge (an amendment there is an amendment on
  * the hosted side too). Service semantics live in wineProposalOps.test.js.
@@ -82,8 +82,8 @@ test('an amendment answers 200 with amended: true and still forwards to the brid
   });
 });
 
-// GET /mine also answers the wine's ONE review slot (support ticket
-// 2026-09-17), so the bottle page can say "another member's suggestion is
+// GET /mine also answers the wine's ONE review slot, so the bottle page can
+// say "another member's suggestion is
 // waiting" before a correction is typed instead of after, as a 409.
 describe('GET /mine', () => {
   const mine = () => fetch(`${base}/api/wine-proposals/mine?wine=${WINE}`);

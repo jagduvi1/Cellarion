@@ -1,6 +1,6 @@
 /**
  * GET /api/admin/wines/fragmentation — the SAME-WINE fragmentation queues
- * (curator ticket d4a0e96b). The detectors live in
+ * (one wine split across several registry rows). The detectors live in
  * services/registryFragmentation (unit-tested there); this suite pins the
  * route contract: mode switching, the producer-in-name-style pagination
  * envelope, mode validation, and that the pairs envelope carries the

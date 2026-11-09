@@ -1,5 +1,5 @@
 /**
- * SAME-WINE fragmentation detectors (curator ticket d4a0e96b). Pins the two
+ * SAME-WINE fragmentation detectors. Pins the two
  * queue contracts: exact producer+appellation grouping with the
  * disjoint-vintage discriminator (a vintage shared across records ⇒ NOT
  * disjoint — the multi-cuvée signature), the empty-key and dismissed-group

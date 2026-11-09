@@ -141,7 +141,7 @@ describe('search_registry — the sibling that was already right', () => {
   });
 });
 
-// Support ticket 2026-09-12: the one-pending-per-wine rule was only
+// The one-pending-per-wine rule must be visible before filing, not only
 // discoverable by composing a correction and having it refused.
 describe('get_wine — pending_correction', () => {
   const visible = { _id: WINE, name: 'Grand Vin de Bordeaux', producer: 'Chateau Martinat', grapes: [], slug: 'martinat' };

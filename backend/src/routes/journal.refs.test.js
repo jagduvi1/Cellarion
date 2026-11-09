@@ -1,14 +1,14 @@
 /**
- * Reference-validation tests for /api/journal (security audit 2026-07-08, L-5).
+ * Reference-validation tests for /api/journal (security audit L-5).
  *
  * WHY THIS TEST EXISTS:
- * sanitizeEntry used to accept any well-formed ObjectId for
- * pairings[].bottle / pairings[].wine / people[].user, and the populate on
- * create/read would then echo back a FOREIGN bottle's vintage + wine
+ * If sanitizeEntry accepted any well-formed ObjectId for
+ * pairings[].bottle / pairings[].wine / people[].user, the populate on
+ * create/read would echo back a FOREIGN bottle's vintage + wine
  * name/producer, and a private user's username/displayName — re-opening the
  * private-profile enumeration oracle users.js GET /public/:userId closes.
  *
- * The fix (mirroring sanitizeEntry's silently-drop style):
+ * The rule (mirroring sanitizeEntry's silently-drop style):
  *  - write time: pairings[].bottle must resolve to a bottle the author owns
  *    or can access via a cellar role (getCellarRole); pairings[].wine must
  *    exist. Inaccessible/unknown refs are nulled, not 400s.
@@ -351,7 +351,7 @@ describe('POST /api/journal response redaction (old rows / create echo)', () => 
   });
 });
 
-describe('GET /api/journal/wine-search offers drunk bottles too (chfish ticket 6aa6c200)', () => {
+describe('GET /api/journal/wine-search offers drunk bottles too', () => {
   // wine-search chains find → populate → select → (sort) → limit → lean, and
   // is called twice: active bottles, then consumed ones (newest first).
   const bottleChain = (docs) => {

@@ -2,13 +2,13 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 
 /**
- * Custom fields on the add-bottle form (user ticket 6ab05cca).
+ * Custom fields on the add-bottle form.
  *
  * The payload builder carries most of the risk: it decides what the bottle
  * POST writes, and a wrong level or a stale type silently files the number
  * in the wrong place — on one bottle instead of the vintage, or under a
  * second key with the same name, which is exactly the fragmentation this
- * feature exists to stop (seven users had minted their own "ABV" key).
+ * feature exists to stop (many users each minting their own "ABV" key).
  */
 
 vi.mock('../../api/personalData', () => ({ getPersonalDataKeys: vi.fn() }));
@@ -217,9 +217,9 @@ describe('AddBottleCustomFields', () => {
   });
 
   test('the public key and the user’s own key are both offered, side by side', async () => {
-    // The case the ticket actually describes: someone who has recorded "Cork
-    // type" before starts a new bottle and should see BOTH the shared ABV and
-    // their own key, without going looking for either.
+    // The main case: someone who has recorded "Cork type" before starts a new
+    // bottle and should see BOTH the shared ABV and their own key, without
+    // going looking for either.
     getRegistryKeys.mockResolvedValue(ok({ keys: [ABV_KEY] }));
     getPersonalDataKeys.mockResolvedValue(ok({ keys: [SAVED_CORK] }));
 
@@ -310,9 +310,9 @@ describe('AddBottleCustomFields', () => {
   });
 });
 
-// Release audit 2026-09-27 (L): the server refuses an enum key with fewer than
-// 2 or more than 20 options, or an option over 40 characters — the row now
-// says so while it is typed instead of after the add.
+// The server refuses an enum key with fewer than 2 or more than 20 options,
+// or an option over 40 characters — the row says so while it is typed
+// instead of after the add.
 const { enumOptionsProblem, ENUM_OPTIONS_MAX_CHARS } = await import('./AddBottleCustomFields');
 
 describe('enumOptionsProblem — the server rule, mirrored', () => {

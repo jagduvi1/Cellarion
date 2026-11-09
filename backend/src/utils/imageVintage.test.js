@@ -1,6 +1,6 @@
 /**
- * utils/imageVintage.photoVintage — the vintage a photo is filed under
- * (support ticket 2026-10-09). A photo is of ONE bottle, so it takes that
+ * utils/imageVintage.photoVintage — the vintage a photo is filed under.
+ * A photo is of ONE bottle, so it takes that
  * bottle's vintage; years nobody knows carry nothing worth matching on.
  */
 const { photoVintage } = require('./imageVintage');
@@ -25,7 +25,7 @@ test('unknown, empty and absurd values file the photo wine-wide (null)', () => {
 const { pickVintageOfficials, vintageOfficialOrder, vintageKey } = require('./imageVintage');
 
 /**
- * The photo a vintage shows (support ticket 2026-10-09): an admin's choice,
+ * The photo a vintage shows: an admin's choice,
  * else the wine's official image when it is of that vintage, else the FIRST
  * one approved — a later upload never silently replaces it.
  */

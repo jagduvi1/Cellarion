@@ -1,10 +1,9 @@
 /**
- * Cellar chat — honest scoping of the RAG context (support ticket 2026-08-12
- * "IA bottles known false").
+ * Cellar chat — honest scoping of the RAG context.
  *
  * The model only ever sees the chatMaxResults most relevant bottles. Without
- * being told the cellar's true size it presents that selection AS the cellar —
- * a user with 71 bottles concluded the AI "has knowledge only on 11". These
+ * being told the cellar's true size it presents that selection AS the cellar,
+ * and the user concludes the AI knows only a handful of their bottles. These
  * tests pin the three context shapes: matches (total + selection disclaimer),
  * empty search over a non-empty cellar (explicitly not empty), and a genuinely
  * empty cellar.
@@ -48,8 +47,8 @@ jest.mock('./vectorStore', () => ({ search: jest.fn(async () => []) }));
 jest.mock('../models/Bottle', () => ({
   distinct: jest.fn(), countDocuments: jest.fn(), find: jest.fn(), aggregate: jest.fn(async () => []),
 }));
-// Cellar.find({...}).distinct('_id') — the live-cellar resolution added for
-// ticket 6a86268f.
+// Cellar.find({...}).distinct('_id') — the live-cellar resolution (see
+// 'deleted cellars are not the cellar' below).
 jest.mock('../models/Cellar', () => ({
   find: jest.fn(() => ({ distinct: jest.fn(async () => []) })),
 }));
@@ -136,10 +135,9 @@ describe('chat context honest scoping', () => {
 /**
  * Deleting a cellar is a SOFT delete: the bottles keep deletedAt: null so a
  * restore can bring them back. Scoping by `user` alone therefore counts wine
- * the user believes they threw away — support ticket 6a86268f (2026-08-20),
- * where a 71-bottle cellar was reported as 779 because four deleted cellars
- * still held 708. The same user had raised it on 2026-08-12; the fix then made
- * the total prominent, which only published the wrong number more loudly.
+ * the user believes they threw away, and a small cellar is reported many
+ * times its size. Making the total prominent without this scoping only
+ * publishes the wrong number more loudly.
  */
 describe('deleted cellars are not the cellar', () => {
   test('every bottle query is scoped to LIVE cellars', async () => {

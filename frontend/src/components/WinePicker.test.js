@@ -1,12 +1,12 @@
 /**
  * WinePicker's "Smart Search" must never write to the shared registry.
  *
- * It used to call identify-text, which minted a WineDefinition for whatever the
- * model guessed — from free-text dinner notes, with no confirmation step, for a
- * wine the user often doesn't own, fired before the journal entry was even
- * saved. identify-text is now read-only, and these tests pin the three shapes
- * it can return plus the failure path, which previously produced no feedback at
- * all (`if (res.ok)` with no else, and `catch { }`).
+ * A write would mint a WineDefinition for whatever the model guessed — from
+ * free-text dinner notes, with no confirmation step, for a wine the user often
+ * doesn't own, before the journal entry is even saved. identify-text is
+ * read-only, and these tests pin the three shapes it can return plus the
+ * failure path, which must give feedback (not an `if (res.ok)` with no else,
+ * nor a `catch { }`).
  */
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
@@ -131,7 +131,7 @@ describe('WinePicker Smart Search — read-only', () => {
   });
 });
 
-describe('drunk bottles are pickable, and the stored text carries the producer, not the vintage (chfish ticket 6aa6c200)', () => {
+describe('drunk bottles are pickable, and the stored text carries the producer, not the vintage', () => {
   const JERMANN = { _id: 'w1', name: 'Sauvignon', producer: 'Jermann', type: 'white' };
 
   test('the dropdown shows a "Recently drunk" section and picking from it passes the bottle + wine ids', async () => {

@@ -1,13 +1,13 @@
 /**
  * GET /api/bottles/:id — the "pending photo" lookup, pinned.
  *
- * Support ticket 2026-09-03: a user's bottle page (and cellar list) showed the
- * RAW frame they had handed to the label scanner — background, table and all —
- * served from /api/uploads/originals/. That frame is kept as a private
- * kind:'label-scan' row so a curator can read a misread label; it carries the
- * wine it minted and sits at status 'uploaded' with no processed file, so the
- * by-wine arm of this lookup matched it and `processedUrl || originalUrl`
- * resolved to the raw upload. The lookup must exclude label scans.
+ * The RAW frame handed to the label scanner — background, table and all —
+ * must never show on a bottle page or cellar list. That frame is kept as a
+ * private kind:'label-scan' row so a curator can read a misread label; it
+ * carries the wine it minted and sits at status 'uploaded' with no processed
+ * file, so a by-wine arm of this lookup would match it and
+ * `processedUrl || originalUrl` would resolve to the raw upload served from
+ * /api/uploads/originals/. The lookup must exclude label scans.
  */
 const express = require('express');
 const http = require('http');
@@ -42,7 +42,7 @@ jest.mock('../models/PriceTrackingRequest', () => ({}));
 jest.mock('../models/PriceTrackingSkip', () => ({}));
 jest.mock('../models/BottleImage', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
-// find(): the sibling-bottle lookup added for support ticket 2026-09-07 — empty here.
+// find(): the sibling-bottle lookup — empty here.
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })) }));
 
 const Bottle = require('../models/Bottle');
@@ -118,14 +118,14 @@ describe('GET /api/bottles/:id pending photo', () => {
     expect(BottleImage.find).toHaveBeenCalledTimes(1);
     expect(BottleImage.find).toHaveBeenCalledWith(expect.objectContaining({
       uploadedBy: USER,
-      // 'approved' is deliberate — see the cellar-list twin (ticket 2026-09-05 / #1227).
+      // 'approved' is deliberate — see the cellar-list twin (#1227).
       status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
       // `$ne`, not `kind: 'bottle'` — rows older than the field have no kind.
       kind: { $ne: 'label-scan' },
     }));
   });
 
-  test('an APPROVED own photo keeps showing on the bottle page hero (ticket 2026-09-05 / #1227)', async () => {
+  test('an APPROVED own photo keeps showing on the bottle page hero', async () => {
     BottleImage.find.mockReturnValue(ownPhotos([{
       _id: 'img1', kind: 'bottle', status: 'approved', bottle: BOTTLE, visibility: 'public',
       originalUrl: null, processedUrl: '/api/uploads/processed/approved.png',
@@ -152,7 +152,7 @@ describe('GET /api/bottles/:id pending photo', () => {
 });
 
 /**
- * Photos per vintage (support ticket 2026-10-09). The hero picks, in order:
+ * Photos per vintage. The hero picks, in order:
  * this bottle's own photo, the viewer's photo of the SAME vintage, the
  * vintage's official photo (the first of that wine + vintage approved, or an
  * admin's choice), the wine's registry image (client), and only then the

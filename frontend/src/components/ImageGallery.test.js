@@ -18,10 +18,9 @@ const respondWith = (images) =>
 const dead = { _id: 'dead', processedUrl: null, originalUrl: null, status: 'rejected', uploadedBy: 'u1' };
 const live = { _id: 'live', processedUrl: '/api/uploads/processed/live.png', originalUrl: null, status: 'approved', uploadedBy: 'u1' };
 
-// Support ticket 2026-09-03: the server used to hand the uploader their own
-// rejected photo — a tombstone with both URLs nulled — and the gallery passed
-// it straight to the carousel, which threw. The gallery must treat a row
-// without a file behind it as if it were not there at all.
+// The server may hand the uploader their own rejected photo — a tombstone
+// with both URLs nulled — and the carousel throws on it. The gallery must
+// treat a row without a file behind it as if it were not there at all.
 describe('ImageGallery and rows without a file behind them', () => {
   beforeEach(() => apiFetch.mockReset());
 

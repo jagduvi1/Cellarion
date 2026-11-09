@@ -1,5 +1,5 @@
 /**
- * The auto-mode grouping controls (support ticket 2026-09-12): up to three
+ * The auto-mode grouping controls: up to three
  * nested levels picked one under the other, the collapse toggle that only
  * matters once there is a second level, the legacy groupBy kept in sync, and
  * the live preview rendering the nested headings from unsaved state.

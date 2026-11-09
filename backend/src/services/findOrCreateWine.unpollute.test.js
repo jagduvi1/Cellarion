@@ -1,7 +1,7 @@
 /**
- * unpolluteEstateName — the estate-name pollution guard (ticket 6a83f014).
+ * unpolluteEstateName — the estate-name pollution guard.
  *
- * Four Bordeaux classed growths arrived as name "Grand Cru Classé (de
+ * A Bordeaux classed growth can arrive as name "Grand Cru Classé (de
  * Graves)" / "Margaux" with the château in producer. The guard's precision
  * rules ARE the feature: négociant and Burgundy-domaine appellation-names are
  * legitimate and must never match, and the narrow classification vocabulary

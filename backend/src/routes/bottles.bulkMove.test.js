@@ -1,7 +1,7 @@
 /**
  * POST /api/bottles/bulk-move — many bottles to another owned cellar in ONE
- * request (support ticket 6a9949e3, 2026-09-03: a delivery logged in a
- * storage cellar had to be moved home one bottle at a time).
+ * request (a delivery logged in a storage cellar moves home in one step,
+ * not one bottle at a time).
  *
  * Pinned: the request is validated as a whole (ids, cap, a destination you
  * own), then applied PER BOTTLE through the shared rackOps.moveBottleToCellar.

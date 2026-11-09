@@ -347,7 +347,7 @@ describe('close_ticket (the user ends the conversation)', () => {
   });
 });
 
-describe('idempotency on the human-queue writes (support ticket 2026-09-12)', () => {
+describe('idempotency on the human-queue writes', () => {
   const McpActionLog = require('../models/McpActionLog');
   const claimed = () => ({ lastErrorObject: { updatedExisting: false } });
   const completed = (tool, result) => ({ lastErrorObject: { updatedExisting: true }, value: { tool, pending: false, result } });

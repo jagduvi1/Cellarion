@@ -111,7 +111,7 @@ describe('buildSections', () => {
   });
 });
 
-describe('nested auto grouping, hidden prices and the last-bottle marker (support ticket 2026-09-12)', () => {
+describe('nested auto grouping, hidden prices and the last-bottle marker', () => {
   const rioja = {
     _id: 'w4', name: 'Rioja Reserva', producer: 'Muga', type: 'red',
     country: { name: 'Spain' }, region: { name: 'Rioja' }, grapes: [],
@@ -191,7 +191,7 @@ describe('nested auto grouping, hidden prices and the last-bottle marker (suppor
   });
 });
 
-describe('nested grouping fallbacks (review 2026-09-12)', () => {
+describe('nested grouping fallbacks', () => {
   it('a wine without a region never repeats its country as a sub-heading; it goes to "Other", sorted last', () => {
     const chianti = { _id: 'w6', name: 'Chianti', producer: 'Antinori', type: 'red', country: { name: 'Italy' }, region: null, grapes: [] };
     const sections = buildSections({
@@ -204,7 +204,7 @@ describe('nested grouping fallbacks (review 2026-09-12)', () => {
   });
 });
 
-describe('geography in the list language (support ticket 2026-09-12)', () => {
+describe('geography in the list language', () => {
   const tuscan = {
     _id: 'g1', name: 'Brunello', producer: 'Biondi-Santi', type: 'red',
     country: { name: 'Italy', translations: { de: 'Italien' } },
