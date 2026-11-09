@@ -21,7 +21,6 @@ const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
-const { bumpWineOwners } = require('../../services/dataVersion');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
@@ -64,13 +63,14 @@ const {
 } = require('../../services/pendingWineOps');
 const { closeWineReport, MAX_RESPONSE } = require('../../services/wineReportOps');
 const priceOps = require('../../services/priceOps');
+const maturityOps = require('../../services/maturityOps');
 const WineReport = require('../../models/WineReport');
 // services/search is required lazily at call time, not here: it pulls in the
 // Meili client and half the model layer at module load, which every consumer
 // of the tool registry would then have to stand up (registry.test.js does not).
 
 const SOMM_ROLES = ['somm', 'admin'];
-const PHASE_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
+const { PHASE_FIELDS } = maturityOps;
 
 function requireSomm(ctx) {
   const roles = ctx.user?.roles || [];
@@ -302,7 +302,7 @@ registerTool({
       filter.wineDefinition = args.wine_id;
       if (args.vintage) {
         // Same canonical vintage form set_vintage_maturity uses.
-        filter.vintage = /^nv$/i.test(args.vintage.trim()) ? 'NV' : args.vintage.trim();
+        filter.vintage = maturityOps.canonicalVintage(args.vintage);
       }
     } else if (args.unprofiled) {
       // Windowed-but-unprofiled wines: with
@@ -397,7 +397,7 @@ registerTool({
       if (!profile) return fail('not_found', 'No such maturity profile. Use list_maturity_queue for valid ids.');
     } else if (args.wine_id && args.vintage) {
       // Same canonical vintage string the profiles store: trimmed, 'NV' upper.
-      const vintage = /^nv$/i.test(args.vintage.trim()) ? 'NV' : args.vintage.trim();
+      const vintage = maturityOps.canonicalVintage(args.vintage);
       profile = await WineVintageProfile.findOne({ wineDefinition: args.wine_id, vintage })
         .populate('wineDefinition', 'name producer');
       if (!profile) {
@@ -409,77 +409,23 @@ registerTool({
       return fail('invalid_input', 'Address the profile: pass profile_id, or wine_id and vintage together.');
     }
 
-    // Mirror REST validation exactly: NV → relative offsets [0,100], else
-    // absolute years [1900,2200] (routes/somm/maturity.js).
-    const isNv = profile.vintage === 'NV';
-    const [min, max] = isNv ? [0, 100] : [1900, 2200];
-    const incoming = {
+    // The merged window checked against the row's range (NV offsets or years),
+    // retained values included, then its ordering (services/maturityOps).
+    const merged = maturityOps.mergeWindow(profile, {
       earlyFrom: args.early_from, earlyUntil: args.early_until,
       peakFrom: args.peak_from, peakUntil: args.peak_until,
       lateFrom: args.late_from, lateUntil: args.late_until,
-    };
-    const next = {};
-    for (const f of PHASE_FIELDS) {
-      const v = incoming[f];
-      if (v === undefined) { next[f] = profile[f] ?? null; continue; }
-      if (v === null) { next[f] = null; continue; }
-      if (v < min || v > max) {
-        return fail('invalid_input', `${f}: ${v} out of range (${isNv ? 'NV uses relative offsets 0–100' : 'years 1900–2200'})`);
-      }
-      next[f] = v;
-    }
-    // RETAINED values must satisfy the target range too. Profiles that predate
-    // the relative-flag derivation (the #908 backfill's re-curation list) hold
-    // absolute years under vintage 'NV' — the save below flips relative=true,
-    // which would silently reinterpret a carried-forward 2024 as "2024 years
-    // after purchase" (audit 2026-08-10). Refuse the partial write and demand
-    // a full rewrite instead of laundering the corruption.
-    for (const f of PHASE_FIELDS) {
-      if (incoming[f] !== undefined) continue;
-      const v = next[f];
-      if (v != null && (v < min || v > max)) {
-        return fail('conflict',
-          `${f}=${v} retained from the stored profile is outside the ${isNv ? 'NV offset range 0–100' : 'year range 1900–2200'} — ` +
-          'this profile still carries values in the other unit. Rewrite all six phases in this call (pass null to clear a phase).');
-      }
-    }
-    const pairs = [['earlyFrom', 'earlyUntil'], ['peakFrom', 'peakUntil'], ['lateFrom', 'lateUntil']];
-    for (const [from, until] of pairs) {
-      if (next[from] != null && next[until] != null && next[until] < next[from]) {
-        return fail('invalid_input', `${until} cannot be before ${from}`);
-      }
-    }
-    if (next.earlyFrom != null && next.peakFrom != null && next.peakFrom < next.earlyFrom) {
-      return fail('invalid_input', 'peak_from cannot be before early_from');
-    }
-    if (next.peakFrom != null && next.lateFrom != null && next.lateFrom < next.peakFrom) {
-      return fail('invalid_input', 'late_from cannot be before peak_from');
-    }
+    });
+    if (!merged.ok) return fail(merged.code, merged.message);
+    const { next } = merged;
 
     // Snapshot for undo: phases + notes + review state, restored verbatim.
-    const prev = {
-      ...PHASE_FIELDS.reduce((acc, f) => ((acc[f] = profile[f] ?? null), acc), {}),
-      sommNotes: profile.sommNotes ?? null,
-      status: profile.status,
-      relative: profile.relative,
-      setBy: profile.setBy ? String(profile.setBy) : null,
-      setAt: profile.setAt || null,
-    };
+    const prev = maturityOps.windowSnapshot(profile);
 
-    for (const f of PHASE_FIELDS) profile[f] = next[f] === null ? undefined : next[f];
-    if (args.somm_notes !== undefined) profile.sommNotes = args.somm_notes;
-    profile.relative = isNv;
-    profile.status = 'reviewed';
-    profile.setBy = ctx.user.id;
-    profile.setAt = new Date();
-    await profile.save();
-    // Same as the REST route: the owners' maturity statistics change with the
-    // window — move their data version (audit 2026-09-27 M6).
-    bumpWineOwners([profile.wineDefinition?._id || profile.wineDefinition]);
-
-    logAudit(ctx.req, 'somm.maturity.review',
-      { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
-      { vintage: profile.vintage, relative: isNv, via: 'mcp' });
+    // Phases, note, reviewed stamp and relative flag written; the owners'
+    // data version moved; audited under the action string the REST route
+    // uses too.
+    const isNv = await maturityOps.applyWindow(profile, next, { sommNotes: args.somm_notes, actorId: ctx.user.id, req: ctx.req, via: 'mcp' });
 
     const envelope = {
       summary: `Maturity set for ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} (reviewed)`,
@@ -542,28 +488,11 @@ registerTool({
 
     // Same snapshot shape set_vintage_maturity logs, so undo_last's existing
     // somm_maturity branch restores it field for field with no new code.
-    const prev = {
-      ...PHASE_FIELDS.reduce((acc, f) => ((acc[f] = profile[f] ?? null), acc), {}),
-      sommNotes: profile.sommNotes ?? null,
-      status: profile.status,
-      relative: !!profile.relative,
-      setBy: profile.setBy ? String(profile.setBy) : null,
-      setAt: profile.setAt || null,
-    };
+    const prev = maturityOps.windowSnapshot(profile);
 
-    for (const f of PHASE_FIELDS) profile[f] = undefined;
-    profile.sommNotes = '';
-    profile.status = 'pending';
-    profile.setBy = null;
-    profile.setAt = null;
-    await profile.save();
-    // Same as the REST route: withdrawing the window changes the owners'
-    // maturity statistics — move their data version.
-    bumpWineOwners([profile.wineDefinition?._id || profile.wineDefinition]);
-
-    logAudit(ctx.req, 'somm.maturity.reset',
-      { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
-      { vintage: profile.vintage, ...(args.reason ? { reason: args.reason } : {}), via: 'mcp' });
+    // Cleared, pending again, stamp dropped, owners bumped, audited: the same
+    // body as the REST reset (services/maturityOps).
+    await maturityOps.resetWindow(profile, { reason: args.reason, req: ctx.req, via: 'mcp' });
 
     const envelope = {
       summary: `Withdrew the drink window on ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} — back in the pending queue`,
@@ -617,14 +546,11 @@ registerTool({
     // pending stub (phases and notes only exist on reviewed rows), so undoing
     // is re-seeding, not restoring field values.
     const prev = {
-      wineDefinition: String(profile.wineDefinition?._id || profile.wineDefinition),
+      wineDefinition: String(maturityOps.wineIdOf(profile)),
       vintage: profile.vintage,
     };
-    await WineVintageProfile.deleteOne({ _id: profile._id });
-
-    logAudit(ctx.req, 'somm.maturity.remove',
-      { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
-      { vintage: profile.vintage, ...(args.reason ? { reason: args.reason } : {}), via: 'mcp' });
+    // Deleted and audited: the same body as the REST remove (services/maturityOps).
+    await maturityOps.removePendingRow(profile, { reason: args.reason, req: ctx.req, via: 'mcp' });
 
     const envelope = {
       summary: `Removed ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} from the maturity queue — it returns if anyone adds a bottle of that wine+vintage`,

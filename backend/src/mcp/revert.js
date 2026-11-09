@@ -639,16 +639,10 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
 
-    const WineVintageProfile = require('../models/WineVintageProfile');
     try {
-      // Direct upsert rather than utils/vintageProfile's helper: that one
-      // swallows errors (seeding is best-effort), but an undo must fail
-      // loudly so the ledger row can be unclaimed and retried.
-      await WineVintageProfile.findOneAndUpdate(
-        { wineDefinition: prev.wineDefinition, vintage: prev.vintage },
-        { $setOnInsert: { wineDefinition: prev.wineDefinition, vintage: prev.vintage, status: 'pending' } },
-        { upsert: true }
-      );
+      // The pending stub comes back by upsert; the service fails loudly so
+      // the ledger row can be unclaimed and retried (services/maturityOps).
+      await require('../services/maturityOps').reseedPendingRow(prev);
     } catch (err) {
       await unclaim(row._id); // nothing restored yet → let the undo be retried
       throw err;
@@ -777,24 +771,15 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       envelope = { summary: del.deletedCount ? `Undid price entry — snapshot for vintage ${row.detail?.vintage} removed` : 'Price snapshot was already gone; ledger marked undone.', data: { undone: 'set_vintage_price', removed: !!del.deletedCount } };
     } else {
       const prev = row.prev || {};
-      for (const f of ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil']) {
-        profile[f] = prev[f] === null || prev[f] === undefined ? undefined : prev[f];
-      }
-      profile.sommNotes = prev.sommNotes === null ? undefined : prev.sommNotes;
-      profile.status = prev.status || 'pending';
-      profile.relative = !!prev.relative;
-      profile.setBy = prev.setBy || null;
-      profile.setAt = prev.setAt || null;
       try {
-        await profile.save();
+        // The snapshot re-applied field for field, saved, and the owners'
+        // data version moved (services/maturityOps).
+        await require('../services/maturityOps').restoreWindow(profile, prev);
       } catch (err) {
-        await unclaim(row._id); // failed → let the undo be retried (was unguarded, M1 class)
+        await unclaim(row._id); // failed → let the undo be retried
         if (err?.name === 'VersionError') return fail('conflict', 'The profile changed mid-undo — retry.');
         throw err;
       }
-      // The restored window changes the owners' maturity statistics like the
-      // write it undoes did: move their data version. Never throws.
-      require('../services/dataVersion').bumpWineOwners([profile.wineDefinition]);
       // reset_maturity_row ledgers as somm_maturity too, marked detail.reset.
       logAudit(ctx.req, row.detail?.reset ? 'somm.maturity.reset.undo' : 'somm.maturity.review.undo',
         { type: 'wine', id: profile.wineDefinition },
