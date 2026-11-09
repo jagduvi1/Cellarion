@@ -1,4 +1,4 @@
-// Admin registry curation over MCP (Johan's launch-day request): an ADMIN's
+// Admin registry curation over MCP: an ADMIN's
 // connected AI can add a wine to the SHARED registry directly — with an
 // official image and its credit — instead of bouncing through the web admin.
 //

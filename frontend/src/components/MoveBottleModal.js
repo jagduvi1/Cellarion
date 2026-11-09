@@ -11,8 +11,8 @@ import Modal from './Modal';
  * arrive unplaced in the destination. Calls onMoved() on success so the caller
  * can refresh or navigate.
  *
- * Bulk mode (support ticket 6a9949e3, 2026-09-03: a whole delivery moved from
- * a storage cellar to home): pass `bottleIds` instead of `bottleId`. One
+ * Bulk mode (e.g. a whole delivery moved from a storage cellar to home):
+ * pass `bottleIds` instead of `bottleId`. One
  * request moves them all; bottles the server could not move (already
  * consumed, or not the user's to move) are reported, not hidden.
  */

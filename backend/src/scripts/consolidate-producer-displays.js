@@ -9,7 +9,7 @@
  * (services/producerSpelling.js) prevents NEW splits; this script folds the
  * ones that predate it — or that its deliberate ambiguity guards let through.
  *
- * TARGET RULE (Johan, 2026-08-14 — "fullest estate form", hardened against
+ * TARGET RULE ("fullest estate form", hardened against
  * the single-outlier trap):
  *   1. a spelling with a legal suffix (Ltd, GmbH, S.L.) is never canonical
  *   2. prefer a spelling carrying an estate TITLE (Weingut/Domaine/Château/…)

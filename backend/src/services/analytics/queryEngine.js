@@ -198,8 +198,8 @@ function predicate(field, op, value, castOne) {
     return datePredicate(field, op, value, castOne);
   }
   // Text equality is case-insensitive and anchored — "gaja" must find "Gaja"
-  // exactly as the taxonomy path already does (support ticket 2026-09-05: a
-  // typed Producer "=" filter looked broken because it was byte-exact).
+  // exactly as the taxonomy path does; a byte-exact typed Producer "="
+  // filter looks broken.
   // Only 'text' takes this path: enum values are whitelisted already, and
   // numbers, dates and booleans compare as before.
   if (field.type === 'text' && (op === 'eq' || op === 'neq')) {

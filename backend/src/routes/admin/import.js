@@ -50,7 +50,7 @@ function mapType(colour, subType, wineTypeCol) {
   if (col === 'white') return 'white';
   if (col === 'red') return 'red';
   if (col === 'rosé' || col === 'rose') return 'rosé';
-  // Unknown colour is NULL (somm ticket 6a85ad44) — a guessed red closes the
+  // Unknown colour is NULL — a guessed red closes the
   // question a blank would have kept open.
   return null;
 }

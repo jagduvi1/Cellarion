@@ -5,8 +5,8 @@ import RatingChart from './RatingChart';
 const VIEWS = ['all', 'cellar', 'history'];
 
 /**
- * The rating distribution three ways (support ticket 2026-10-11: someone who
- * rates only when drinking saw an empty card). "All" by default: every
+ * The rating distribution three ways, so someone who rates only when
+ * drinking never sees an empty card. "All" by default: every
  * rating at once, the bottles in the cellar and the ones drunk, each bottle
  * once and a drunk one with the rating given when drinking. "In the cellar"
  * and "History" (drunk, gifted, sold — the cellar's History) show either

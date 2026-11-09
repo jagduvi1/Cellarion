@@ -287,7 +287,7 @@ router.get('/', async (req, res) => {
         reason: p.reason,
         // Later filings by the same proposer, each with its own reason and
         // evidence — the original reason/evidence above back the original
-        // fields only (support ticket 2026-09-12).
+        // fields only.
         amendments: (p.amendments || []).map((a) => ({
           at: a.at, fields: a.fields || [], reason: a.reason, evidenceUrl: a.evidenceUrl || null,
         })),
@@ -776,9 +776,9 @@ async function rejectProposal(proposalId, reason, req) {
   return { status: 200, body: { message: 'Proposal rejected', proposalId: proposal._id, status: 'rejected' } };
 }
 
-// ── Bulk decisions (ticket 6a8162c5, ask #3 — the middle road) ──────────────
+// ── Bulk decisions (the middle road) ────────────────────────────────────────
 // The somm files evidence-backed proposals one at a time; clearing a batch
-// through per-row round trips was the queue's whole overhead. The review gate
+// through per-row round trips is the queue's whole overhead. The review gate
 // STAYS — an admin still reads every row — the clicking goes. Each id runs
 // the EXACT single-decision machinery above, sequentially (registry applies
 // re-key, reindex and re-enrich; concurrency buys nothing and could

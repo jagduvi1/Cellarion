@@ -89,7 +89,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Typing a value that is not on a list key's list yet (the list is
-  // extended first, then the entry saved — user ticket 2026-10-27).
+  // extended first, then the entry saved).
   const [addingOption, setAddingOption] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(null);
   // Promotion path (#985): "suggest this to the registry" on an own entry.
@@ -265,7 +265,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
       if (modal.mode === 'edit') {
         res = await updatePersonalDataEntry(apiFetch, modal.entry._id, value);
       } else {
-        // 'wine-vintage' is UI sugar (user ticket 6a853211): a wine-level
+        // 'wine-vintage' is UI sugar: a wine-level
         // entry the server scopes to THIS bottle's vintage.
         const payload = {
           level: form.level === 'wine-vintage' ? 'wine' : form.level,
@@ -707,8 +707,8 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
                   </datalist>
 
                   {/* Saved keys as one-tap chips — the datalist alone is invisible
-                      until you type, which made reuse look broken (Johan, 08-17):
-                      a value list created on one wine seemed to vanish on the next. */}
+                      until you type, which makes reuse look broken: a value
+                      list created on one wine would seem to vanish on the next. */}
                   {keys.length > 0 && (
                     <div style={{ marginTop: '0.5rem' }}>
                       <span className="pd-chips-label">

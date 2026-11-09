@@ -7,7 +7,7 @@ import { useFeature } from '../../utils/featureFlags';
 
 /**
  * Rename a rack and set its group — the room or appliance it belongs to
- * (support ticket 2026-09-06: "the basement is not one rack, it is several").
+ * (a basement is usually several racks, not one).
  * The group input suggests the cellar's existing group names so "Basement"
  * keeps one spelling across racks; an empty group means ungrouped.
  *

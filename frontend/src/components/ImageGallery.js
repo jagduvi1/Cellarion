@@ -10,7 +10,7 @@ import Modal from './Modal';
 const REPORT_REASONS = ['private-info', 'not-this-wine', 'poor-quality', 'offensive', 'other'];
 
 // `vintage`: the bottle's vintage, so a wine-level photo of ANOTHER year can
-// say so on the slide (support ticket 2026-10-09).
+// say so on the slide.
 // `vintageScope` (the vintage page): the photos of every bottle of this
 // bottle's wine and vintage in its cellar, not only its own.
 const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinitionId, vintage, vintageScope = false, size = 'medium', onEmpty, onLoaded, defaultImageId: externalDefaultId, onSetDefault, showAll = false }, ref) {
@@ -34,15 +34,15 @@ const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinition
       const res = await apiFetch(endpoint);
       const data = await res.json();
       if (res.ok) {
-        // Coerce before storing: a 200 whose body has no `images` array used to
+        // Coerce before storing: a 200 whose body has no `images` array would
         // put undefined into state and throw on the next render, taking the
         // whole host page down with it. A gallery that cannot list images must
         // degrade to "no images", never break the page embedding it.
         // ...and drop any row without a file behind it. A rejected photo is a
         // tombstone (both URLs nulled when the admin deleted the files); the
-        // server no longer returns those, but the carousel must never be
-        // handed a row it cannot render — that is exactly how one rejected
-        // photo made a bottle page unreachable for its owner (ticket 2026-09-03).
+        // server does not return those, but the carousel must never be
+        // handed a row it cannot render — one such row is enough to make a
+        // bottle page unreachable for its owner.
         const list = (Array.isArray(data.images) ? data.images : [])
           .filter((img) => img && (img.processedUrl || img.originalUrl));
         setImages(list);

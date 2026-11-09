@@ -35,7 +35,7 @@ router.post('/', requireNonDemo, async (req, res, next) => {
     // this install's key. Fire-and-forget — the local proposal stands alone.
     registryBridge.forwardCorrection(result.wine, { fields, reason, evidenceUrl }).catch(() => {});
     // 201 for a new queue row; 200 when the caller's own pending suggestion
-    // absorbed these fields instead (support ticket 2026-09-12).
+    // absorbed these fields instead.
     res.status(result.amended ? 200 : 201).json({
       amended: !!result.amended,
       // true on a server that does not review contributions: already applied

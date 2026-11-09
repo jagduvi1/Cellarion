@@ -93,8 +93,8 @@ const CONTINUED_LABEL = {
 };
 
 // Auto-mode grouping: the fields a heading level may group on, outermost
-// first in the classic menu order, and the depth cap (support ticket
-// 2026-09-12 — a menu reads naturally at three).
+// first in the classic menu order, and the depth cap (a menu reads
+// naturally at three).
 const LEVEL_FIELDS = ['type', 'country', 'region', 'appellation'];
 const MAX_LEVELS = 3;
 const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified', 'other', 'unknown'];
@@ -194,7 +194,7 @@ function buildSections(wineList, wineMap) {
 
 // `lang` is the LIST's language: country and region print in it where the
 // taxonomy row carries that name, else the canonical name (Toskana, but
-// Bordeaux stays Bordeaux) — support ticket 2026-09-12.
+// Bordeaux stays Bordeaux).
 function resolveEntry(entry, wineMap, layout = {}, lang = 'en') {
   const key = entryKey(entry);
   const info = wineMap.get(key);
@@ -220,7 +220,7 @@ function resolveEntry(entry, wineMap, layout = {}, lang = 'en') {
     // "by the glass" and still build the by-the-glass lead section.
     byGlass: !!entry.byGlass,
     // Live cellar stock of exactly one — the marker is only ever shown for
-    // the last bottle, never a count (support ticket 2026-09-12).
+    // the last bottle, never a count.
     lastBottle: !!layout.markLastBottle && info.stock === 1,
     // The live count, only when the list shows counts (layout.showStock);
     // null otherwise, so no renderer and no payload carries it.
@@ -517,7 +517,7 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   // Page numbers + footer on all pages. They sit INSIDE the bottom margin, so
   // the margin is lifted while they are stamped — otherwise PDFKit treats
   // each of them as overflow and appends a blank page per element per page
-  // (support ticket 2026-09-12: a 4-page menu came out as 12).
+  // (a 4-page menu comes out as 12).
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);

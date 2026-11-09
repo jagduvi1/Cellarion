@@ -29,11 +29,10 @@ const MATURITY_QUEUE_EXCLUDED = { $or: [{ nonWine: true }, { pendingIdentity: tr
  *     but every re-added bottle of a quarantined cider kept re-seeding a
  *     pending profile and dragging it back into the somm queue.
  *   - NV seeds with relative:true from the start. The flag is fully determined
- *     by the vintage string, and leaving it to default false shipped every NV
- *     wine into the maturity queue in a self-contradictory state — a curator
- *     who did not notice would write absolute calendar years against a wine
- *     with no vintage to anchor them to (support ticket d49d2b36: three
- *     instances from three unrelated entry paths).
+ *     by the vintage string, and leaving it to default false would ship every
+ *     NV wine into the maturity queue in a self-contradictory state — a
+ *     curator who did not notice would write absolute calendar years against
+ *     a wine with no vintage to anchor them to.
  *   - Idempotent: an existing profile (pending OR reviewed) is left untouched
  *     thanks to $setOnInsert, so it never downgrades curated maturity data.
  *   - Non-throwing: any failure (including a unique-index race on concurrent

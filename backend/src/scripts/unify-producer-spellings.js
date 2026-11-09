@@ -1,7 +1,6 @@
 /**
- * Unify producer DISPLAY spellings across the registry (strategy 2026-07-29,
- * R1 — the ~85 spelling-splits the 2026-07-26 audit left on the backlog, plus
- * the Ribeauvillé accent split from support ticket 2026-07-28).
+ * Unify producer DISPLAY spellings across the registry (registry strategy
+ * R1 — spelling-splits such as an accent split).
  *
  * Groups every wine by normalizeString(producer) — which folds accents, case
  * and punctuation but deliberately NOT corporate suffixes or stop words, so

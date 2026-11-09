@@ -314,8 +314,8 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
 
           {/* The generated tasting profile, correctable in place. A curator
               researching this wine's drink window is the person best placed to
-              catch a wrong profile — before this they worked around it and the
-              bad prose survived (support ticket 2026-07-28). */}
+              catch a wrong profile; without a way to fix it here, the bad
+              prose stays on the wine. */}
           <SommWineProfilePanel wine={wine} />
 
 

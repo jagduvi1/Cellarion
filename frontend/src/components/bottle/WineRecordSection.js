@@ -23,10 +23,10 @@ import { formatVintage } from '../../utils/vintage';
  * into the admin-reviewed WineCorrectionProposal queue. Nothing a user does
  * here writes to the registry; approval stays a human act.
  *
- * Type and grapes are part of the record too (support ticket 2026-09-17). They
- * used to live outside it — grapes in a section of their own with a free-text
- * "suggest grapes" box that only appeared when the list was EMPTY, so a wrong
- * or incomplete grape list had no route at all. One record, one way to fix it.
+ * Type and grapes are part of the record too, so a wrong or incomplete grape
+ * list has the same route to a fix as every other field — not a separate
+ * section that only takes suggestions while the list is EMPTY. One record,
+ * one way to fix it.
  */
 
 // Every field a suggestion may carry (must match wineProposalOps FIELDS +
@@ -83,7 +83,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   const [proposed, setProposed] = useState('');
   const [proposedType, setProposedType] = useState('');
   // The colour of a sparkling/dessert/fortified wine — asked only once the
-  // chosen type is one of those (support ticket 2026-09-17).
+  // chosen type is one of those.
   const [proposedColour, setProposedColour] = useState('');
   const [proposedGrapes, setProposedGrapes] = useState([]); // [{ name, isNew? }]
   // The tier ids chosen in the classification picker; null until the picker is
@@ -100,7 +100,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   const [sentApplied, setSentApplied] = useState(false);
   const reviewed = useContributionReviewed();
   // Most users never file a fix — the per-row actions stay hidden behind ONE
-  // section-level toggle so the record reads clean (Johan, 2026-08-17).
+  // section-level toggle so the record reads clean.
   const [suggestMode, setSuggestMode] = useState(false);
   const sectionRef = useRef(null);
   // Public key vocabulary + values (#985 Slice B)
@@ -201,9 +201,8 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   // What the registry actually STORES. This is what the suggest-a-fix form
   // shows as "currently recorded", and it must stay canonical: a French reader
   // shown "Vallée du Rhône" as the current value would reasonably propose a
-  // French correction to it — which is precisely the proposal (6a959b9d) that
-  // led to this feature, and telling him the stored value is "Rhône Valley"
-  // is what would have prevented it. Same for grapes: the canonical variety,
+  // French correction to it, and showing the stored value "Rhône Valley" is
+  // what prevents that. Same for grapes: the canonical variety,
   // not the regional label the page shows ("Tinta Roriz" is stored Tempranillo).
   const values = {
     producer: wine.producer || null,
@@ -630,9 +629,9 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                         {t('wineRecord.scopeWine', 'all vintages')}
                       </span>
                     )}
-                    {/* Who contributed a value is stored, never shown (Johan,
-                        2026-09-18): the record is the registry's, not a byline
-                        — and the server no longer sends the name at all. */}
+                    {/* Who contributed a value is stored, never shown: the
+                        record is the registry's, not a byline — and the
+                        server does not send the name at all. */}
                   </span>
                   {/* ANY pending suggestion (yours or someone's) holds the
                       key's single review slot — show status, never a button

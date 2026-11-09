@@ -1,11 +1,11 @@
 /**
  * Recognized country names — the mint gate for findOrCreateCountry.
  *
- * Why this exists (support ticket 2026-07-26): findOrCreateCountry minted a
- * Country document for ANY unmatched string, so a garbled label scan created
- * the country "Espalda" (a misread "España") on prod — re-opening the drift
- * the 2026-07-18 taxonomy cleanup closed. A new Country may now only be minted
- * when the (alias-resolved) name appears in this list.
+ * Why this exists: without a gate, findOrCreateCountry would mint a Country
+ * document for ANY unmatched string, so a garbled label scan could create a
+ * country like "Espalda" (a misread "España") and let the taxonomy drift. A
+ * new Country may only be minted when the (alias-resolved) name appears in
+ * this list.
  *
  * Contents: ISO 3166-1 English short names, plus the wine-world conventions
  * the taxonomy already uses (England over United Kingdom — see COUNTRY_ALIASES

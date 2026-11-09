@@ -101,7 +101,7 @@ const buildDefaultFilters = (sort = DEFAULT_CELLAR_SORT) => ({
 });
 // Every URL param the page reads on arrival (and then clears from the URL).
 // `scope=owned` widens the view to every cellar the user owns — how the
-// Statistics page's chart segments land here (support ticket 2026-09-19).
+// Statistics page's chart segments land here.
 const URL_FILTER_KEYS = ['search', 'type', 'country', 'region', 'appellation',
   'grapes', 'vintage', 'minRating', 'maxRating', 'maturity', 'unplaced', 'reserved', 'storage',
   'producer', 'bottleSize', 'purchaseYear', 'ratingBand', 'sort'];
@@ -154,7 +154,7 @@ function CellarDetail() {
   // once we know the cellar has racks (true) — never while loading, and never
   // for cellars with no racks at all (false), where placement isn't a concept.
   const [hasRacks, setHasRacks] = useState(null);
-  // [{ id, name, group }] for the "Stored in" filter (support ticket 2026-09-06)
+  // [{ id, name, group }] for the "Stored in" filter
   const [storageRacks, setStorageRacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bottlesLoading, setBottlesLoading] = useState(false);
@@ -329,8 +329,8 @@ function CellarDetail() {
     } catch { /* quota / private mode — persistence is best-effort */ }
   }, [id, filters]);
 
-  // Picking a sort also remembers it on the account (support ticket
-  // 2026-09-26), so the next visit to any cellar opens in that order. Only a
+  // Picking a sort also remembers it on the account, so the next visit to
+  // any cellar opens in that order. Only a
   // pick here counts: a deep link's sort is not the user's choice.
   const changeSort = (sort) => {
     setFilters(prev => ({ ...prev, sort }));
@@ -1148,7 +1148,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
       return next;
     });
   };
-  // "Drink one" on a stacked card (support ticket 2026-10-09): the group
+  // "Drink one" on a stacked card: the group
   // whose bottle is being picked, then — after the server logged it — the
   // journal prompt the bottle page offers for a bottle drunk, unless the
   // user opted out of it. The list refreshes through onBulkDone either way.
@@ -1181,9 +1181,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   });
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
-  // ── Multi-select → "Move to cellar" (support ticket 6a9949e3, 2026-09-03:
-  // a whole delivery logged in a storage cellar had to go home one bottle at
-  // a time). Owner-only and single-cellar — the parent gates canBulkMove. A
+  // ── Multi-select → "Move to cellar" (a whole delivery logged in a storage
+  // cellar goes home in one step, not one bottle at a time). Owner-only and
+  // single-cellar — the parent gates canBulkMove. A
   // collapsed group toggles all of its bottles at once, which is exactly the
   // delivery case; expand the group to pick individual bottles.
   const [selectMode, setSelectMode] = useState(false);
@@ -1334,10 +1334,10 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         </button>
-        {/* The analytics table lives on the Dashboard page since support
-            ticket 2026-09-05 (this page's search bar and filters sat above a
-            table they did not filter); the shortcut keeps the old path alive
-            with this cellar's scope preselected. */}
+        {/* The analytics table lives on the Dashboard page (this page's
+            search bar and filters would sit above a table they do not
+            filter); the shortcut opens it with this cellar's scope
+            preselected. */}
         <Link
           to={multi ? '/dashboard?view=table' : `/dashboard?view=table&cellar=${cellarId}`}
           className="view-toggle-btn view-toggle-link"

@@ -1235,8 +1235,8 @@ router.patch('/:idOrSlug/pin', requireAuth, requireModeratorOrAdmin, async (req,
 //
 // The sanctioned response to a thread written in the wrong section: English is
 // the default forum, and someone posting in their own language there has
-// mis-filed rather than misbehaved, so a moderator MOVES it (Johan,
-// 2026-08-31). Deliberately not a delete, not a lock, and not a notification —
+// mis-filed rather than misbehaved, so a moderator MOVES it. Deliberately
+// not a delete, not a lock, and not a notification —
 // the thread and its replies are untouched, and the author is not told off for
 // a filing decision they were never asked to make.
 //

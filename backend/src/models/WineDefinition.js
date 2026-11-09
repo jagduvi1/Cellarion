@@ -56,8 +56,8 @@ const wineDefinitionSchema = new mongoose.Schema({
     trim: true,
     default: null
   },
-  // The classification as curated taxonomy rows (models/Classification,
-  // support ticket 2026-10-29): a wine carries several ("Spätlese" and "VDP
+  // The classification as curated taxonomy rows (models/Classification):
+  // a wine carries several ("Spätlese" and "VDP
   // Grosse Lage" are two rows). The string above is derived from them on
   // save and kept for every reader that shows or documents it.
   classifications: [{
@@ -113,10 +113,9 @@ const wineDefinitionSchema = new mongoose.Schema({
     ref: 'Grape'
   }],
   type: {
-    // NO default (somm ticket 6a85ad44, HIGH): defaulting to 'red' stamped
-    // every thin-data mint as a red wine — 4/4 in one import burst were
-    // white, and the wrong type drives filtering, serving guidance and
-    // drink-window shape. Unknown colour is stored as ABSENT; a null prompts
+    // NO default: defaulting to 'red' stamps every thin-data mint as a red
+    // wine, whites included, and the wrong type drives filtering, serving
+    // guidance and drink-window shape. Unknown colour is stored as ABSENT; a null prompts
     // a curator to look, a wrong value closes the question.
     type: String,
     enum: ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'],
@@ -194,29 +193,27 @@ const wineDefinitionSchema = new mongoose.Schema({
     // held rows blocked the sommelier's maturity queue because a held profile
     // shows no tasting note to judge a drink window against.
     //
-    // Ticket 6a6f94e5 asked that a description calling the producer
-    // undocumented must agree with a flag — that requirement now lands here,
-    // where it belongs, instead of on producerSuspect.
+    // A description calling the producer undocumented must agree with a
+    // flag — and that flag is this one, not producerSuspect.
     producerUnknown: { type: Boolean, default: false },
     producerNote:    { type: String,  default: null, trim: true },
-    // The verdict on producerSuspect, and ONLY that verdict (somm ticket
-    // 6a85f5e8, 2026-08-19). It used to be inferred from profileReviewedAt,
-    // which is the wrong signal for two reasons:
+    // The verdict on producerSuspect, and ONLY that verdict. It is never
+    // inferred from profileReviewedAt, which is the wrong signal for two
+    // reasons:
     //   - applyProfilePatch stamps profileReviewedAt on ANY curator profile
-    //     write, so fixing a wine's grapes silently dropped it out of the
-    //     suspect queue without anyone judging the producer. 23 prod rows had
-    //     left that way against ONE genuine uphold.
+    //     write, so fixing a wine's grapes would silently drop it out of the
+    //     suspect queue without anyone judging the producer.
     //   - upheld-count is the number the scaling review reads as "wines the
     //     registry genuinely cannot identify". Sharing a field with routine
-    //     curation deflated exactly the rows a curator looked hardest at.
-    // Now: 'upheld' (flag is right, keep it and stop asking) | 'confirmed'
+    //     curation would deflate exactly the rows a curator looked hardest at.
+    // Values: 'upheld' (flag is right, keep it and stop asking) | 'confirmed'
     // (flag was wrong, cleared). null = still awaiting judgement, whatever
     // else has been written to the row.
     suspectDecision:   { type: String, default: null, trim: true },
     suspectDecidedAt:  { type: Date,   default: null },
     // Which deterministic rule cleared producerSuspect, when one did — see
-    // utils/producerSuspectCheck DOWNGRADE_RULES. Requested by the sommelier
-    // (6a86baca): a rule that moves rows out of the queue must leave them
+    // utils/producerSuspectCheck DOWNGRADE_RULES. A rule that moves rows out
+    // of the queue must leave them
     // queryable as a set, so a rule that turns out to be wrong can be found
     // and reversed without re-deriving which rows it touched. Distinct from
     // suspectDecision, which records a HUMAN verdict.
@@ -228,13 +225,11 @@ const wineDefinitionSchema = new mongoose.Schema({
     // record's current values to know — exactly, not heuristically — whether
     // the stored profile still describes this wine.
     //
-    // WHY (somm ticket 6a86bb3b, 2026-08-20). reenrichAfterRecordEdit already
-    // fires on the three deliberate curation surfaces, but a BULK SCRIPT
-    // writing straight to the collection bypasses all of them. The 08-11
-    // cross-field triage did exactly that, and left two Friuli benchmarks —
-    // Le Vigne di Zamò and Venica & Venica — carrying a suspect flag and a
-    // note about "Giuli Ballarin", the wine those rows used to be. The note
-    // was never wrong; the row stopped being the wine it described.
+    // WHY: reenrichAfterRecordEdit fires on the three deliberate curation
+    // surfaces, but a BULK SCRIPT writing straight to the collection bypasses
+    // all of them, and can leave a row carrying a suspect flag and a note
+    // about the wine the row used to be. The note is not wrong; the row
+    // stopped being the wine it describes.
     //
     // Storing the inputs makes staleness a property of the DATA rather than
     // of whether a code path remembered to call a hook, so the next bulk edit
@@ -243,8 +238,8 @@ const wineDefinitionSchema = new mongoose.Schema({
     // Generation ran but PUBLICATION was withheld: the model flagged the
     // producer as suspect (a brand/range sold as a producer, a place, a
     // label term), so describing "this producer's style" would be confident
-    // fiction about a company that may not exist (ticket 6a8162c5 —
-    // "Fabelhaft" got a négociant biography). A held profile stores only the
+    // fiction about a company that may not exist (a range name such as
+    // "Fabelhaft" gets a négociant biography). A held profile stores only the
     // doubt (confidence/producerSuspect/producerNote); description and the
     // structured descriptors stay null, which is what keeps every read
     // surface (bottle page, MCP, embeddings) naturally silent. Cleared by:
@@ -256,11 +251,10 @@ const wineDefinitionSchema = new mongoose.Schema({
     // WHY the hold fired — 'producer_suspect' | 'low_confidence' |
     // 'unknown_low_confidence' | 'producer_claim' (enrichmentJob.
     // shouldHoldProfile) | 'taxonomy_conflict' (grapeStyleTypicals cross-
-    // check, 6a8464ea phase 2) | 'grape_colour_conflict' (utils/
-    // grapeColourCheck: the record's own type disagrees with every grape's
-    // curated colour, 6a85ad44). Plain String on purpose: held rows from
-    // before 2026-08-18 predate the field (null = producer_suspect era), and
-    // a future gate reason must not need a schema change.
+    // check) | 'grape_colour_conflict' (utils/grapeColourCheck: the record's
+    // own type disagrees with every grape's curated colour). Plain String on
+    // purpose: held rows that predate the field read null (= producer_suspect),
+    // and a future gate reason must not need a schema change.
     heldReason:   { type: String, default: null, trim: true },
     // This generation used the web-search rescue (pilot 2026-08-19). The
     // pilot's three numbers all derive from this flag: rescue rate
@@ -273,7 +267,7 @@ const wineDefinitionSchema = new mongoose.Schema({
     // enrichmentJob's FULL mode re-generates every wine and would otherwise
     // overwrite the correction, so it filters curator rows out. (Incremental
     // mode was already safe — it only picks up rows with a null description.)
-    // Support ticket 2026-07-28: the generator emits confident fiction on
+    // Why: the generator emits confident fiction on
     // wines it only half-knows, and a curator researching a drink window is
     // the person best placed to fix it, so curation is the upgrade path.
     source:       { type: String, default: 'ai', enum: ['ai', 'curator'] },
@@ -390,14 +384,13 @@ const wineDefinitionSchema = new mongoose.Schema({
   // minted the row; this says, field by field, whether a human stated the
   // value or a model supplied it.
   //
-  // Why it exists (somm ticket 6a958dbc, 2026-08-31): a 205-row import whose
-  // file carried appellation on every row and grapes on none produced 89 wines
-  // whose grapes were inferred BY THE MODEL FROM THE APPELLATION — all eight
-  // Montlouis wines got Chenin Blanc, including a pétillant naturel that is
-  // mostly Menu Pineau. The values were wrong, self-consistent and
-  // indistinguishable from researched ones, so the curator had to stop: a
-  // profile written onto a misidentified record marks it verified forever.
-  // Nothing on the record said "this grape is a guess". Now it does.
+  // Why it exists: an import file that carries appellation but no grapes
+  // gets its grapes inferred BY THE MODEL FROM THE APPELLATION — every
+  // Montlouis gets Chenin Blanc, even a pétillant naturel that is mostly
+  // Menu Pineau. Such values are wrong, self-consistent and
+  // indistinguishable from researched ones, and a curator must not build on
+  // them: a profile written onto a misidentified record marks it verified
+  // forever. This map is what says "this grape is a guess".
   //
   // Sparse by design — a field absent from the map means "not recorded",
   // which is what every row predating this carries. Never treat absence as
@@ -410,8 +403,7 @@ const wineDefinitionSchema = new mongoose.Schema({
     },
     default: undefined,
   },
-  // Non-wine quarantine (registry audit 2026-07-26; policy decided by Johan:
-  // KEEP, HIDE). Spirits/cider/sake rows imported by users stay in the
+  // Non-wine quarantine (policy: KEEP, HIDE). Spirits/cider/sake rows imported by users stay in the
   // registry — their owners' bottles keep working, direct wine pages render —
   // but flagged rows are excluded from the Meilisearch index (registry
   // search + type facets), public taxonomy/OG/sitemap listings, and the
@@ -511,7 +503,7 @@ const wineDefinitionSchema = new mongoose.Schema({
     default: false,
     index: true
   },
-  // PRIVATE DRAFT (support ticket 2026-09-12). A wine its creator is still
+  // PRIVATE DRAFT. A wine its creator is still
   // finishing before it enters the shared registry: visible to the creator
   // (and to members of a shared cellar holding a bottle of it), hidden from
   // everyone else INCLUDING curators, freely editable by the creator without
@@ -602,13 +594,13 @@ const wineDefinitionSchema = new mongoose.Schema({
     }],
     default: []
   },
-  // Human data-quality review (support ticket 2026-07-26): the registry's
+  // Human data-quality review: the registry's
   // false-positive whitelist AND its skip-on-rescan record. Each entry is a
   // RULE ID from utils/nameChecks.js that an admin has read this wine and
   // confirmed it passes — deliberately NOT a bare `verified` boolean: a rule
   // id nobody has cleared appears in no wine's array, so a NEW rule (or a
-  // REFINED one, whose id is bumped in the same commit) surfaces all ~4.3k
-  // rows by construction, where a bare flag would have silently suppressed
+  // REFINED one, whose id is bumped in the same commit) surfaces every
+  // matching row by construction, where a bare flag would have silently suppressed
   // every rule added after it was set.
   //
   // Cleared automatically when `name` or `producer` changes (pre-validate hook
@@ -633,8 +625,7 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  // Cross-field clearances (ticket analysis 2026-08-10, Tier-2 item 5): rule
-  // ids from utils/crossFieldChecks.js an admin has read this wine against
+  // Cross-field clearances: rule ids from utils/crossFieldChecks.js an admin has read this wine against
   // and confirmed the flagged value really belongs in its field. Deliberately
   // a SIBLING of verifiedChecks, not more entries in it: verifiedChecks'
   // scope rule (name+producer-only verdicts) is what makes its two-field

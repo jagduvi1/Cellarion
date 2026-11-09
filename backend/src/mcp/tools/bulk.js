@@ -256,7 +256,7 @@ registerTool({
             // a pendingIdentity row for sommelier completion instead of losing
             // the bottle mid-batch.
             allowPending: true,
-            // Private drafts, as fixed at preview (support ticket 2026-09-12).
+            // Private drafts, as fixed at preview.
             draft: draft === true,
             // The Other category: born outside the shared wine registry.
             nonWine: item.new_wine.category === 'other',

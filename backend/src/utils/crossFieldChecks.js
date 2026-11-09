@@ -1,8 +1,7 @@
 /**
  * The CROSS-FIELD check registry: rules that catch a registry value sitting in
  * the wrong FIELD by testing it against reference lists the app already holds
- * (ticket analysis 2026-08-10 §2 Class A — 16 prod records, one behaviour: a
- * label carries several strings and the parser/user assigns them to fields
+ * (one behaviour behind them all: a label carries several strings and the parser/user assigns them to fields
  * with no test of whether the value belongs to that field's domain. The
  * strings are almost always correct and merely misplaced: producer
  * "Monbazillac" [an appellation], producer "Dragasani" [a region], region
@@ -208,7 +207,7 @@ const CROSS_FIELD_CHECKS = [
   },
   {
     // "Dragasani" as producer — the mint-time place gate's blind spot when
-    // the Region doc was created later in the same call (ticket §3).
+    // the Region doc was created later in the same call.
     id: 'producer-is-region.v1',
     labelKey: 'producerIsRegion',
     field: 'producer',
@@ -381,9 +380,8 @@ const CROSS_FIELD_CHECKS = [
     detect: (w, refs) => lookupEntity(refs.grapes, w.appellation),
   },
   {
-    // Region "Spain". Not one of the plan section's nine pinned rules but in
-    // the same ticket's own Tier-2 item-5 list ("region == a country") and in
-    // the 16-record evidence — and nearly free here: wine.region is an
+    // Region "Spain" — a country in the region field. Nearly free here:
+    // wine.region is an
     // ObjectId, so the rule reads the RESOLVED display name the scan service
     // already attaches for the queue rows. Junk Region docs predating the
     // region-is-a-country mint gate keep getting reused; this surfaces every
@@ -401,7 +399,7 @@ const CROSS_FIELD_CHECKS = [
     },
   },
   {
-    // Domaine Rolet, name "Rosé Poulsard", type `red` (sommelier ticket 3).
+    // A name like "Rosé Poulsard" on a record typed `red`.
     // The label says one colour and the record says another; whichever is
     // wrong, a drinker filtering by type gets the wrong bottle and the
     // maturity curve is computed for the wrong style. Pure string test — the
@@ -477,8 +475,8 @@ const CROSS_FIELD_CHECKS = [
  */
 const DB_BACKED_CROSS_FIELD_CHECKS = [
   {
-    // Frédéric Magnien "Coeur de Roi" beside the real "Cœur de Roches"
-    // (sommelier ticket 3) — the VISION-MISREAD signature: one producer, two
+    // A "Coeur de Roi" beside the same producer's real "Cœur de Roches" —
+    // the VISION-MISREAD signature: one producer, two
     // names that are nearly but not quite the same string. Not the duplicate
     // scanner's job (that hunts the same wine entered twice, across the whole
     // registry, and its threshold is tuned for merging); this hunts a name the

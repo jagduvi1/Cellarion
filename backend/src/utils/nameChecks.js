@@ -1,6 +1,6 @@
 /**
  * The registry NAME-CHECK registry: the row-shaped data-quality rules an admin
- * can clear a wine for (support ticket 2026-07-26). Every rule's verdict reads
+ * can clear a wine for. Every rule's verdict reads
  * NOTHING but `name` and `producer` — that invariant is what lets
  * WineDefinition's pre-validate hook be a complete invalidation chokepoint for
  * clearances (see the verifiedChecks field comment there).
@@ -64,9 +64,9 @@ const NAME_CHECKS = [
     detect: (w) => stripProducerName(w.name, w.producer) ?? stripProducerKeyPrefix(w.name, w.producer),
   },
   {
-    // Defect (b) from the ticket. A SAFETY NET for rows already in the
+    // A SAFETY NET for rows already in the
     // registry; preventing NEW ones is a guard in stripProducerSuffix itself.
-    // v2: DANGLING_TAIL_WORDS gained by/sans/a (registry audit 2026-07-26) —
+    // v2: DANGLING_TAIL_WORDS gained by/sans/a —
     // the id bump invalidates v1 clearances so every row is re-examined
     // against the wider list (none existed at bump time).
     // v3: delegate to producerPrefix.hasDanglingTail, which also catches a

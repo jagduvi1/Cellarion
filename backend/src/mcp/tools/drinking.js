@@ -161,7 +161,7 @@ registerTool({
     // so the model can pair by style knowledge even with zero keyword hits.
     // Every type's first pick comes before any type's second, and the cap
     // never drops below the number of types — a 3-slot cap filled by two reds
-    // and a sparkling once hid every white in the cellar (ticket 6aad5481).
+    // and a sparkling would hide every white in the cellar.
     const perType = new Map();
     for (const r of rest) {
       const t = r.b.wineDefinition?.type || 'unknown';
@@ -180,10 +180,10 @@ registerTool({
     const spreadOut = await serializeCandidates(spread, sel.profileMap, scope.cellarIds, spreadLimit);
 
     return ok(
-      // Lead with the screened total (support ticket 2026-08-12 "IA bottles
-      // known false"): this tool reads the WHOLE cellar and returns a shortlist,
-      // but a summary that only counts the shortlist reads as "the AI can see
-      // 11 of my 72 bottles" to the person the answer is relayed to.
+      // Lead with the screened total: this tool reads the WHOLE cellar and
+      // returns a shortlist, but a summary that only counts the shortlist
+      // reads as "the AI can only see some of my bottles" to the person the
+      // answer is relayed to.
       `Screened all ${sel.totalActive} active bottle(s) in the cellar; returning a shortlist — ` +
         `${matchedOut.length} keyword match(es) for "${args.dish}", ${spreadOut.length} style-spread candidate(s). ` +
         'Tell the user the whole cellar was considered.',

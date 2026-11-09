@@ -160,8 +160,7 @@ const bottleSchema = new mongoose.Schema({
       }
     ]
   },
-  // Optional PEAK inside the personal window (ticket 6a94655283, 2026-08-31):
-  // "drinkable ≠ peak". Without these, the whole drinkFrom..drinkTo span
+  // Optional PEAK inside the personal window: "drinkable ≠ peak". Without these, the whole drinkFrom..drinkTo span
   // classifies as one long Peak — a wine enjoyable for ten years with a
   // four-year best stretch cannot be expressed except by lying about one of
   // them. With a peak set, the personal window classifies in the same five

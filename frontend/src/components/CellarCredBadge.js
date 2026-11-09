@@ -17,7 +17,7 @@ const SPECIALTY_ICONS = {
   allrounder:   '🔄',
 };
 
-// Supporter-tier chips (2026-08-27, Johan): one per paid plan, thanking the
+// Supporter-tier chips: one per paid plan, thanking the
 // people who fund development. Icons escalate as a celebration, never as a
 // rank — the /supporter page renders all tiers as equals and so do we.
 const PLAN_CONFIG = {
@@ -90,7 +90,7 @@ function Chip({ cls, size, icons, label, explain }) {
  * Renders up to two chips: the Cellar Cred tier (contributor and above, with
  * optional specialty) and the supporter plan (any paid tier). Both are
  * icon-only until pressed or hovered — the labels were crowding the
- * community cards (Johan, 2026-08-27).
+ * community cards.
  *
  * Props: tier, specialty, plan, size ('sm' | 'md'), showSpecialty (default true)
  */

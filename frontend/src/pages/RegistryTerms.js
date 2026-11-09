@@ -7,7 +7,7 @@ import './PrivacyPolicy.css';
 // AGPL; the shared registry's curated content — tasting profiles, drink
 // windows, sommelier notes, curated values — is not, and this page is where
 // that is said, in plain language: house rules for an open-source project,
-// not a contract drafted by counsel (Johan, 2026-09-06). The mechanics it
+// not a contract drafted by counsel. The mechanics it
 // describes (per-reader budgets, terms-bound keys) are what actually holds.
 // Reuses the privacy page's layout so the two legal pages read as one set.
 function RegistryTerms() {

@@ -22,10 +22,10 @@ const FIELD_KEYS = {
   region: 'admin.wines.proposals.fields.region',
   country: 'admin.wines.proposals.fields.country',
   classification: 'admin.wines.proposals.fields.classification',
-  // Proposable since 2026-08-19 (somm ticket 6a85ad44). Grapes arrive as a
+  // Type and grapes are proposable too. Grapes arrive as a
   // joined string from the route, so the generic diff row renders them as-is.
   type: 'admin.wines.proposals.fields.type',
-  // The colour of a sparkling/dessert/fortified wine (support ticket 2026-09-17).
+  // The colour of a sparkling/dessert/fortified wine.
   colour: 'admin.wines.proposals.fields.colour',
   grapes: 'admin.wines.proposals.fields.grapes',
 };

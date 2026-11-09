@@ -319,8 +319,8 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
     //
     // …with one exception, because the blanket 404 told a lie the rest of the
     // app contradicted: a forum post shows its author's username and links to
-    // this page, so clicking a visible name answered "User not found" for 84
-    // of 346 accounts (Johan, 2026-08-31). Where the member has ALREADY
+    // this page, so clicking a visible name answered "User not found" for
+    // a good share of accounts. Where the member has ALREADY
     // published content under this identity, their existence is public by
     // their own action and the 404 protects nothing — so they get a stub
     // saying the profile is private, and nothing else. A member who never

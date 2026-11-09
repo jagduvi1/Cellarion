@@ -77,11 +77,9 @@ const PRADIKAT_WORDS = new Set([
 const PRADIKAT_ALIASES = new Map([
   ['spaetlese', 'spatlese'],
   ['icewine', 'eiswein'],
-  // An OBSERVED misspelling, not a guess: one owner's export carried
-  // "Trokenbeerenauslese" (one c, one s) in its appellation column, and the
-  // same file misspelled the wine's own name "Riesling Troken" — which is how
-  // we know the typo is the writer's rather than ours (somm ticket 6a966386,
-  // 2026-09-01). Added because it was seen in real data. This map is not a
+  // An OBSERVED misspelling, not a guess: "Trokenbeerenauslese" (one c, one
+  // s) occurs in real cellar exports, written that way by the exporting
+  // owner. Present because it was seen in real data. This map is not a
   // general typo-tolerance scheme and should not grow into one: every entry
   // needs a file behind it.
   ['trokenbeerenauslese', 'trockenbeerenauslese'],
@@ -162,15 +160,14 @@ function statedStyle(name) {
 /**
  * Is this appellation value a ripeness Prädikat rather than a place?
  *
- * Some cellar exports put the Prädikat in the appellation column — one file
- * carried "Auslese" for a Mosel Riesling and "Trokenbeerenauslese" for a Nahe
- * one (somm ticket 6a966386). Stored as written, those wines end up with NO
+ * Some cellar exports put the Prädikat in the appellation column ("Auslese",
+ * "Trockenbeerenauslese"). Stored as written, those wines end up with NO
  * appellation at all, which is exactly the thin-identity condition that makes
  * auto-enrichment decline them permanently: a data-entry habit quietly costs
- * the owner his tasting notes. One of the two was worse than useless — a wine
- * named "Riesling Trocken" (bone dry) whose appellation claimed the sweetest
- * botrytis category German law defines, which curated at face value would have
- * produced a 35-year dessert-wine window on a dry estate Riesling.
+ * the owner their tasting notes. It can be worse than useless — a wine named
+ * "Riesling Trocken" (bone dry) whose appellation claims the sweetest botrytis
+ * category German law defines would, curated at face value, produce a
+ * decades-long dessert-wine window on a dry estate Riesling.
  *
  * DELIBERATELY STRICT. Only a value whose every meaningful token is a Prädikat
  * qualifies, so "Auslese" is routed and "Auslese Goldkapsel" is not: the
@@ -209,20 +206,18 @@ const DRY_SIDE_WORDS = new Set(['trocken', 'halbtrocken', 'feinherb', 'sec', 'se
 /**
  * Does this Prädikat contradict the wine it is attached to?
  *
- * The second ticket record is why this exists. Its file said appellation
- * "Trokenbeerenauslese" on a wine named "Riesling Trocken" — the sweetest
- * botrytis category German law defines, on a bone-dry wine. Both cannot be
- * true. Moving that value into the classification would keep the falsehood and
- * merely change which field carries it, and a classification is read as
- * curated fact: it would have argued for a decades-long dessert-wine window on
- * an estate dry Riesling.
+ * Appellation "Trockenbeerenauslese" on a wine named "Riesling Trocken" puts
+ * the sweetest botrytis category German law defines on a bone-dry wine. Both
+ * cannot be true. Moving that value into the classification would keep the
+ * falsehood and merely change which field carries it, and a classification is
+ * read as curated fact: it would argue for a decades-long dessert-wine window
+ * on an estate dry Riesling.
  *
  * So a contradicted Prädikat is DROPPED, not rescued — the appellation is still
  * cleared of it, because a ripeness level is not a place whether or not it is
  * true. What is left is an honest gap, which is the state that asks a curator
- * to fill it. That is independently the judgement the sommelier reached on
- * these two records (proposals 6a965b0e / 6a965b19, 2026-09-01): Auslese kept
- * as a classification, Trockenbeerenauslese dropped.
+ * to fill it. An uncontradicted Prädikat (an Auslese on a plain Riesling)
+ * still moves to an empty classification.
  *
  * @param {string} pradikat a value pradikatOnlyValue has already vouched for
  * @param {string} wineName the name the wine is being minted under

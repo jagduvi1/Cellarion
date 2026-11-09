@@ -1,13 +1,12 @@
 /**
  * One-time cleanup of RETAINED original uploads.
  *
- * Support ticket 2026-09-03: a user found their raw bottle photos — background,
- * kitchen, hands — still served from /api/uploads/originals/. Since that fix,
- * services/imageProcessor deletes the raw upload as soon as background removal
- * has produced the processed file (discardOriginal). Every image processed
- * BEFORE it still has both files on disk — unless an admin approved it, which
- * was the only path that used to delete the original. This script brings that
- * backlog in line with the new rule.
+ * A raw bottle photo — background, kitchen, hands — must not stay served from
+ * /api/uploads/originals/: services/imageProcessor deletes the raw upload as
+ * soon as background removal has produced the processed file
+ * (discardOriginal). An image processed before that rule existed can still
+ * have both files on disk, unless an admin approved it. This script brings
+ * that backlog in line with the rule.
  *
  * For every non-label-scan BottleImage whose originalUrl and processedUrl are
  * both set and DIFFERENT — a keepBackground row has them equal (its original

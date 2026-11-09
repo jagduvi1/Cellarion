@@ -1,5 +1,5 @@
 /**
- * Private draft wines over MCP (support ticket 2026-09-12): the connector's
+ * Private draft wines over MCP: the connector's
  * half of the draft lifecycle. add_bottle / bulk_add create a draft with
  * `draft:true`; here the caller lists their drafts, edits one in place (no
  * correction queue — nothing is shared yet) and publishes one or many, with

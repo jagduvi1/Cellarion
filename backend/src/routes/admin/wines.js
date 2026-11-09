@@ -292,7 +292,7 @@ router.post('/', async (req, res) => {
       appellation: cleanAppellation,
       ...classificationFields,
       grapes: grapes || [],
-      type: type || null, // no guessed red (ticket 6a85ad44)
+      type: type || null, // no guessed red
       // Kept only on a sparkling/dessert/fortified wine — the model hook drops
       // it otherwise, and fills it from a rosé name when none is given.
       colour: colour || null,
@@ -419,8 +419,8 @@ router.get('/duplicate-clusters', async (req, res) => {
 
     // Group by normalised producer KEY: wine stop words + corporate suffixes
     // stripped, so "Kumeu River Wines Limited" and "Kumeu River" land in the
-    // same bucket and the pairwise scorer + merge UI can surface them (ticket
-    // #2B). Bucketing only ever MERGES buckets (fewer distinct keys), never
+    // same bucket and the pairwise scorer + merge UI can surface them.
+    // Bucketing only ever MERGES buckets (fewer distinct keys), never
     // splits, so existing clusters can't regress; every surfaced cluster is
     // admin-reviewed before any merge, so over-grouping is safe.
     const byProducer = new Map();
@@ -851,21 +851,21 @@ router.get('/low-confidence', async (req, res) => {
         { 'aiProfile.confidence': null },
         { 'aiProfile.confidence': { $lte: threshold } },
         // A suspect producer is a doubt about the IDENTITY, not the profile's
-        // confidence — Fabelhaft's flagged at 0.5 while the default threshold
-        // is 0.3, so the one row the flag existed for never surfaced here
-        // (ticket 6a8162c5). Suspect rows appear regardless of threshold, and
+        // confidence — a flagged row can sit above the default threshold, and
+        // a confidence filter alone would never surface the very row the flag
+        // exists for. Suspect rows appear regardless of threshold, and
         // their profiles are HELD unpublished until someone in this queue
         // decides.
         //
-        // Since the 2026-08-17 split this branch means what it says: the
+        // This branch means what it says: the
         // producer FIELD looks wrong. producerUnknown ("a real winery name I
         // cannot place") is deliberately NOT a branch here — it describes most
         // small estates in the registry and is not review work, so listing it
         // would bury the rows that are genuinely wrong. It rides on each row
         // for context instead.
         { 'aiProfile.producerSuspect': true },
-        // Every HELD row surfaces regardless of threshold (gate 2026-08-18,
-        // ticket 6a83e765): an unknown-producer hold can sit at 0.5 —
+        // Every HELD row surfaces regardless of threshold (the publication
+        // gate): an unknown-producer hold can sit at 0.5 —
         // above the default threshold with no suspect flag — and this queue
         // is the only place a hold gets released. heldReason says why.
         { 'aiProfile.heldAt': { $ne: null } },
@@ -1138,15 +1138,15 @@ router.get('/canonical-collisions', async (req, res) => {
 //                                including key-token variants ("Felton Road
 //                                Block 3 Pinot Noir" / "Felton Road Wines Ltd")
 //   dangling-name-tail.v3      — name ends in a stranded connective
-//                                ("La Viña de" — support ticket 2026-07-26)
+//                                ("La Viña de")
 //   name-equals-producer.v1    — name === producer, non-estate shape
 // plus the non-default estate cohort via ?check=name-equals-producer-estate.v1.
 //
 // Query params:
 //   ?check=<ruleId>      scope to one rule (default = every defaultActive rule)
 //   ?includeVerified=1   AUDIT VIEW — ignore clearances entirely, so a newly
-//                        added or refined rule can be validated against all
-//                        ~4.3k rows before its suppression is trusted
+//                        added or refined rule can be validated against
+//                        every row before its suppression is trusted
 //
 // Rows an admin cleared via POST /verify-checks are suppressed PER RULE. The
 // key-token check has no aggregation mirror, so the scan runs in Node — same
@@ -1226,7 +1226,7 @@ router.get('/producer-in-name', async (req, res) => {
 });
 
 // GET /api/admin/wines/fragmentation?mode=groups|pairs — SAME-WINE
-// fragmentation the name-keyed nets cannot see (curator ticket d4a0e96b):
+// fragmentation the name-keyed nets cannot see:
 //   groups — records sharing an exact producer + appellation key, with the
 //            disjoint-vintage discriminator (see services/registryFragmentation)
 //   pairs  — producer keys within edit distance 1..2 inside one
@@ -1250,7 +1250,7 @@ router.get('/fragmentation', async (req, res) => {
     }
 
     if (mode === 'name-subsets') {
-      // Short-vs-full name fragments within one producer (ticket 6a800f39:
+      // Short-vs-full name fragments within one producer (e.g.
       // "Vat 8" / "Vat 8 Shiraz Cabernet"). Pair-level dismissal works via
       // POST /dismiss-duplicates with the pair's two wine ids — same store
       // and keying as the groups mode.
@@ -1266,9 +1266,8 @@ router.get('/fragmentation', async (req, res) => {
   }
 });
 
-// GET /api/admin/wines/cross-field-checks — the CROSS-FIELD domain scan
-// (ticket analysis 2026-08-10, Tier-2 item 5): registry values sitting in the
-// wrong FIELD, tested against the reference lists the app already holds
+// GET /api/admin/wines/cross-field-checks — the CROSS-FIELD domain scan:
+// registry values sitting in the wrong FIELD, tested against the reference lists the app already holds
 // (utils/crossFieldChecks.js — producer that is an appellation/region/
 // country/grape/style term/placeholder, parenthetical producers, name⊂producer
 // splits, appellation that is a grape, region that is a country). Flags only,

@@ -68,15 +68,13 @@ function getEventLog() {
  *
  * Deleting a cellar is a SOFT delete — the bottles keep `deletedAt: null` so a
  * restore can bring them back — so scoping bottles by `user` alone counts wine
- * the user believes they threw away. Support ticket 6a86268f (2026-08-20): a
- * user with 71 bottles was told they owned 779, because four deleted cellars
- * still held 708. On prod that day: 8 deleted cellars, 1,266 live bottles, 4
- * users, one of whom has an EMPTY cellar and was being quoted 132.
+ * the user believes they threw away: a user whose deleted cellars still hold
+ * bottles would be quoted a count far above what they actually own.
  *
- * Every sibling surface already does this (insightsService, mcp/tools/stats,
- * routes/stats, the analytics engine's deriveScope); the chat was the one that
- * did not. Members are included because a bottle can live in a cellar shared
- * with the user, exactly as deriveScope treats it.
+ * Every sibling surface does the same (insightsService, mcp/tools/stats,
+ * routes/stats, the analytics engine's deriveScope). Members are included
+ * because a bottle can live in a cellar shared with the user, exactly as
+ * deriveScope treats it.
  *
  * @returns {Promise<Array>} always an ARRAY — an empty one means "no live
  *   cellars", which must still filter everything out rather than mean "no
@@ -108,10 +106,10 @@ async function filterToUserCellar(hits, maxResults, { cellarIds } = {}) {
 
   // Fetch active bottles in the user's live cellars for those wine definitions.
   // Scoped by CELLAR, not by bottle owner: in a shared cellar the owner added
-  // the bottles, so `user: userId` hid every one of them from editors and
-  // viewers (issue #1421). The cellar list is therefore the ONLY scope and is
+  // the bottles, so `user: userId` would hide every one of them from editors
+  // and viewers (issue #1421). The cellar list is therefore the ONLY scope and is
   // mandatory — a missing or EMPTY list must match nothing, never every
-  // bottle in the database (and never deleted cellars, ticket 6a86268f).
+  // bottle in the database (and never deleted cellars).
   const bottleFilter = {
     status: 'active',
     wineDefinition: { $in: wineDefIds },
@@ -424,11 +422,10 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     // Enrich matches with maturity, price, and count data
     const enrichment = await fetchEnrichmentData(matches, scopedCellarIds);
 
-    // HONEST SCOPING (support ticket 2026-08-12 "IA bottles known false"): the
-    // model only ever sees the chatMaxResults most relevant bottles, and
-    // without the cellar's true size it presents that selection AS the cellar
-    // — a user with 71 bottles concluded the AI "has knowledge only on 11".
-    // State the total inside the context itself, counted on the SAME scope as
+    // HONEST SCOPING: the model only ever sees the chatMaxResults most
+    // relevant bottles, and without the cellar's true size it presents that
+    // selection AS the cellar — the user concludes the AI knows only a few of
+    // their bottles. State the total inside the context itself, counted on the SAME scope as
     // the search (user + active + optional cellar selection) so the number can
     // never contradict the list. The line lives in wineSection, so a reused
     // context (previousWines) carries it forward without re-counting.
@@ -441,7 +438,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
       wineSection = 'The user has no active bottles in their cellar.';
     } else {
       // Empty SEARCH, non-empty CELLAR — without the distinction the model
-      // told users their cellar had nothing in it.
+      // tells users their cellar has nothing in it.
       wineSection = `${scopeLine} None of them matched this question semantically — the cellar is not empty, this search just surfaced no relevant bottles.`;
     }
   } else {

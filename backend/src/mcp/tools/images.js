@@ -63,12 +63,12 @@ registerTool({
     image_url: z.string().url().optional().describe('https URL of the image (retailer/CDN product image)'),
     image_base64: z.string().max(MAX_BASE64_CHARS).optional().describe('Base64 image data (no data: prefix needed); alternative to image_url'),
     credit: z.string().max(200).optional().describe('Optional attribution/source note — admin accounts only; silently ignored for regular users (matches the web app)'),
-    // A photo of the label alone, filling the frame (support ticket
-    // 2026-10-10): background removal expects a bottle and cuts a flat
-    // label's edges away, so its background is kept — the app's "Keep the
-    // background" for the same photo. Named for what the photo IS, not for
-    // what to do with it: the broad keep_background was set on whole-bottle
-    // photos, which then kept their backgrounds (#1455). A bottle-shaped
+    // A photo of the label alone, filling the frame: background removal
+    // expects a bottle and cuts a flat label's edges away, so its background
+    // is kept — the app's "Keep the background" for the same photo. Named for
+    // what the photo IS, not for what to do with it: a broad keep_background
+    // gets set on whole-bottle photos, which then keep their backgrounds
+    // (#1455). A bottle-shaped
     // picture is cut out even with the flag (see BOTTLE_SHAPED).
     label_only: z.boolean().optional().describe('true ONLY for a photo of the label alone, cropped or rectified so the label fills the frame (no bottle, table or shelf in it): it keeps its background, with no background removal (which expects a bottle and would cut the label\'s edges away). Never set it for a retailer product image or any photo with the bottle in it. A tall, narrow, bottle-shaped picture is cut out anyway, with a warning.'),
     // Kept in the schema so a caller that still sends it is not refused
@@ -136,17 +136,17 @@ registerTool({
     // Shared pipeline: validate + strip metadata + persist + background-remove.
     // wineDefinitionId makes the photo WINE-linked exactly like the web upload
     // (routes/images.js): it then shows on all the user's bottles of this wine
-    // and enters the registry-image review pipeline. Without it the photo was
-    // stranded on the single bottle — the "attached 5 times for 5 identical
-    // bottles" launch-day report.
+    // and enters the registry-image review pipeline. Without it the photo is
+    // stranded on the single bottle, and identical bottles each need their
+    // own copy.
     // credit is gated + sanitised INSIDE the shared pipeline (admin-only,
     // stripHtml) — same rule as the web upload route, one implementation.
     const wineDefinitionId = bottle.wineDefinition
       ? String(bottle.wineDefinition._id || bottle.wineDefinition)
       : null;
-    // What the user already had, so a duplicate is visible in the answer
-    // (support ticket 2026-09-06: "attach once per wine" could not be honoured
-    // with no way to look). Counts are a courtesy — never fatal.
+    // What the user already had, so a duplicate is visible in the answer and
+    // "attach once per wine" can be honoured. Counts are a courtesy — never
+    // fatal.
     const count = (p) => Promise.resolve(p).then((n) => (Number.isFinite(n) ? n : null)).catch(() => null);
     const photosBefore = await count(BottleImage.countDocuments({
       uploadedBy: ctx.user.id, status: { $ne: 'rejected' }, kind: { $ne: 'label-scan' },
@@ -225,7 +225,7 @@ registerTool({
   },
 });
 
-// get_photo (support ticket 2026-09-07). get_bottle → photos and get_wine →
+// get_photo. get_bottle → photos and get_wine →
 // image hand out URLs, and an MCP client cannot open any of them: the uploads
 // sit behind the app, and Claude's fetch refuses URLs that arrive in tool
 // results. So the pixels travel as an MCP image content block instead, the

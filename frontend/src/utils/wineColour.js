@@ -1,6 +1,6 @@
 /**
- * A wine's COLOUR, kept apart from its TYPE (support ticket 2026-09-17,
- * "Colour Sparkling/Rosè"). Mirrors backend/src/utils/wineColour.js.
+ * A wine's COLOUR, kept apart from its TYPE. Mirrors
+ * backend/src/utils/wineColour.js.
  *
  * `wine.type` is one value, and three of its values — sparkling, dessert,
  * fortified — are styles that say nothing about colour. `wine.colour` records
@@ -24,8 +24,8 @@ export function recordedColour(wine) {
  * The key every SWATCH is drawn with — bottle placeholders, type pills, rack
  * slots, 3D bottles, list dots. The wine's type, except that a sparkling rosé
  * or sparkling red takes its colour: the sparkling swatch is what a white
- * sparkling wine looks like, and drawing a rosé that way is exactly what the
- * ticket reported. Dessert and fortified keep their own swatches — those
+ * sparkling wine looks like, and drawing a rosé that way would be wrong.
+ * Dessert and fortified keep their own swatches — those
  * already read as the style — and show their colour in the label instead.
  *
  * `fallback` is what the caller drew for an untyped wine before this helper

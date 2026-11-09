@@ -245,8 +245,8 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
         region: newWine.region,
         appellation: newWine.appellation,
         // Scan-extracted classification line ("Grand Cru Classé en 1855") —
-        // stored on creates only; before this rode along, the scan had no
-        // legitimate slot for it and it landed in the NAME (ticket 6a8162c5).
+        // stored on creates only; without this slot the line would land in
+        // the NAME.
         classification: newWine.classification,
         type: newWine.type,
         // The colour of a sparkling/dessert/fortified wine, when the form
@@ -261,7 +261,7 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
       // new wine anyway". Same semantics the find-or-create route had.
       {
         confirmCreate: !!newWine.confirmCreate, skipSiblingMatch: !!newWine.confirmCreate, createdVia: via, allowPending,
-        // PRIVATE DRAFT (support ticket 2026-09-12): the caller asked for the
+        // PRIVATE DRAFT: the caller asked for the
         // wine to stay theirs until they publish it. Strictly boolean true —
         // a body value can't turn a string into a draft by accident.
         draft: newWine.draft === true,

@@ -23,10 +23,9 @@
  *   segments        12-3-4, D-04-1,   2 segments → { row, col };
  *                   3.2, 5,8          3 segments → first segment names a
  *                                       SUB-RACK ("Cellar D"), rest row/col
- *                                     (separator: dash, dot or comma — a
- *                                       "row,column" bin is how at least one
- *                                       large CellarTracker cellar was typed;
- *                                       support ticket 2026-09-02)
+ *                                     (separator: dash, dot or comma —
+ *                                       CellarTracker owners do type bins
+ *                                       as "row,column")
  *   sequential      147, BIN1, P6     { rackPosition: number } (constant
  *                                       alpha prefix stripped)
  *
@@ -67,9 +66,9 @@
  * sequential position beyond 400 (a full 20×20 grid), is treated as unparsed
  * for that bottle rather than distorting the rack.
  *
- * Bin-code ORDER (opts.binOrder, support ticket 2026-09-05): the codes cannot
- * say whether "2,7" means row 2 / column 7 or the other way round — a
- * 1,354-bottle cellar typed every bin as "column,row". The default is
+ * Bin-code ORDER (opts.binOrder): the codes cannot say whether "2,7" means
+ * row 2 / column 7 or the other way round — some cellars type every bin as
+ * "column,row". The default is
  * 'row-col'; 'col-row' swaps the two numeric segments (2- and 3-segment
  * codes) and reads a letter+number code as column letter, row number. Codes
  * that NAME their axes (R3C2, R3C2D1) and sequential bins are never affected.

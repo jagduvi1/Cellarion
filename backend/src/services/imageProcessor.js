@@ -88,14 +88,14 @@ async function unlinkImageFiles(image) {
  * Drop the ORIGINAL upload once background removal has produced the processed
  * file — the processed image is the only copy Cellarion keeps.
  *
- * Support ticket 2026-09-03: a user's cellar showed photos "including the
- * background", served from /api/uploads/originals/. That frame is the raw
- * photo — a kitchen table, a hand, a face — and nothing needs it once rembg
- * has run: every display path prefers processedUrl, the cellar export ships
- * the processed file, and the only retry path (POST /api/images/:id/retry)
- * exists for images that have NO processed file yet. Keeping it was pure
- * exposure. Until now only an admin approval deleted the original, so a
- * private photo — the common case — kept its raw frame on disk for good.
+ * The original is the raw photo, background included — a kitchen table, a
+ * hand, a face — served from /api/uploads/originals/ for as long as it
+ * exists, and nothing needs it once rembg has run: every display path prefers
+ * processedUrl, the cellar export ships the processed file, and the only
+ * retry path (POST /api/images/:id/retry) exists for images that have NO
+ * processed file yet. Keeping it is pure exposure. Deleting it here, not only
+ * on admin approval, means a private photo — the common case — does not keep
+ * its raw frame on disk for good.
  *
  * Skipped when the original IS the kept file (a keepBackground row, where
  * processedUrl === originalUrl — see models/BottleImage) and when there is no

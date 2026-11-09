@@ -1,5 +1,5 @@
 /**
- * SAME-WINE fragmentation detectors (curator ticket d4a0e96b, 2026-08-10).
+ * SAME-WINE fragmentation detectors.
  *
  * Every existing duplicate net keys off the wine NAME in some form —
  * canonicalKey, normalizedKey, the fuzzy cluster scan. When one wine is split
@@ -54,8 +54,8 @@ const MIN_PRODUCER_KEY_LEN = 5;
 
 // The edit-distance window scales with key length: 2 edits is the ceiling for
 // ordinary keys, but a garbled long name drifts further — "Grenoble
-// Guillaume" is a real prod misread of "Vignoble Guillaume" (ticket d4a0e96b)
-// at distance 3, which a flat ≤2 window misses. Three edits inside a ≥8-char
+// Guillaume" is a real prod misread of "Vignoble Guillaume" at distance 3,
+// which a flat ≤2 window misses. Three edits inside a ≥8-char
 // key is still a smaller relative distortion than two inside a 5-char one,
 // and the queue sorts distance-ascending so the wider tail lists last.
 const LONG_KEY_LEN = 8;
@@ -307,10 +307,10 @@ async function nearProducerPairs({ limit = 50, offset = 0 } = {}) {
 
 /**
  * Detector 3 — one producer, one name a strict token-PREFIX of another
- * (ticket 6a800f39: a 226-row import minted "Vat 8" and "Vat 8 Shiraz
- * Cabernet" seconds apart — same wine, two records — and nothing fired:
- * detector 1 buries the pair inside the estate's whole same-appellation
- * range, and every name-keyed net sees two genuinely different strings).
+ * ("Vat 8" and "Vat 8 Shiraz Cabernet" — same wine, two records — fire
+ * nothing else: detector 1 buries the pair inside the estate's whole
+ * same-appellation range, and every name-keyed net sees two genuinely
+ * different strings).
  *
  * The signal is the containment itself: an import file writes the same wine
  * short on one row and long on another ("Vat 1" / "Vat 1 Semillon",

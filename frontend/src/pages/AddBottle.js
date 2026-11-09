@@ -148,7 +148,7 @@ function AddBottle() {
     consumedRating: '',
     consumedRatingScale: user?.preferences?.ratingScale || '5'
   });
-  // Custom fields typed on the form (user ticket 6ab05cca). Held here, written
+  // Custom fields typed on the form. Held here, written
   // only by the bottle POST — an abandoned form mints no keys and no entries,
   // the same discipline the wine itself follows. savedPersonalKeys is the
   // user's existing vocabulary, kept alongside so the payload builder can send
@@ -1074,7 +1074,7 @@ function AddBottle() {
         } : {})
       };
 
-      // Custom fields (user ticket 6ab05cca). A BOTTLE-level field rides every
+      // Custom fields. A BOTTLE-level field rides every
       // POST — each bottle gets its own copy, which is the point of the level.
       // A WINE-level field attaches to the shared wine record, so it rides
       // only the first POST of the batch; sending it N times would ask the
@@ -1494,8 +1494,8 @@ function AddBottle() {
                       // A colour belongs to sparkling/dessert/fortified only.
                       ...(isStyleType(e.target.value) ? {} : { colour: '' }),
                     }))}>
-                    {/* Unknown is a real answer: the scan and the AI now return
-                        null rather than defaulting to red (ticket 6a85ad44), so
+                    {/* Unknown is a real answer: the scan and the AI return
+                        null rather than defaulting to red, so
                         the form must be able to carry that through instead of
                         making the user pick a colour to get past it. */}
                     <option value="">{t('common.unknown')}</option>
@@ -2150,7 +2150,7 @@ function AddBottle() {
                   <p className="help-text">{t('addBottle.drinkWindowHint')}</p>
                 </div>
 
-                {/* ── Custom fields (user ticket 6ab05cca) ──
+                {/* ── Custom fields ──
                     ABV and anything else the label carries, typed while the
                     bottle is still in hand. The same personal typed data the
                     bottle page writes (#986) — this is a second entry point to

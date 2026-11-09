@@ -10,7 +10,7 @@ const mongoose = require('mongoose');
 // engine re-derives scope per request; a stale cellar id simply narrows to
 // nothing).
 //
-// MULTI-DASHBOARD (Johan 2026-08-19): several named dashboards per user,
+// MULTI-DASHBOARD: several named dashboards per user,
 // unique on (user, name), capped in the route. ⚠️ The first release shipped
 // one-per-user with a UNIQUE index on `user` alone — that index must be
 // DROPPED on prod at deploy (scripts/migrate-dashboards-multi.js) or the

@@ -138,7 +138,7 @@ function ImportBottles() {
   // Upload step
   const [parsedItems, setParsedItems] = useState([]);
   // The last CSV's raw text, kept so a CellarTracker bin-order change can
-  // re-run the parser (support ticket 2026-09-05: bins typed "column,row").
+  // re-run the parser (some owners type bins as "column,row").
   const [sourceText, setSourceText] = useState(null);
   const [ctBinOrder, setCtBinOrder] = useState('row-col');
   const [detectedFormat, setDetectedFormat] = useState(null);
@@ -168,7 +168,7 @@ function ImportBottles() {
   // currency column. Seeded from the user's profile preference, but can be
   // overridden per-import via the picker.
   const [importCurrency, setImportCurrency] = useState(user?.preferences?.currency || 'USD');
-  // Whole-import comment/occasion (support ticket 2026-07-30): typed once,
+  // Whole-import comment/occasion: typed once,
   // applied by the backend to every bottle this import creates — rows that
   // carry their own note in the file keep it (fill-blank only).
   const [importNotes, setImportNotes] = useState('');
@@ -2240,8 +2240,8 @@ function ImportBottles() {
                         <span>{r.item.wineName}</span>
                         <span className="source-meta">
                           {r.item.vintageMissing ? (
-                            // The file had no vintage for this row (audit ticket
-                            // 2026-09-05): say so, and take the year right here.
+                            // The file had no vintage for this row: say so,
+                            // and take the year right here.
                             <input
                               type="text"
                               inputMode="numeric"

@@ -224,9 +224,8 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
       )}
 
       {/* Grapes are a row of the wine record below, not a section of their
-          own (support ticket 2026-09-17): next to the rest of the record they
-          can be corrected the same way — a separate section could only ever
-          be ADDED to, and only while it was empty. */}
+          own: next to the rest of the record they can be corrected the same
+          way, not only ADDED to while empty. */}
 
       {/* A PRIVATE DRAFT wine: its creator edits and publishes it here; a
           shared-cellar member only sees that it is one. Drafts are edited
@@ -415,8 +414,8 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
       )}
 
       {/* An unplaced bottle, in a cellar that has racks: the way to give it a
-          slot (support ticket 2026-10-26 — placing was reachable only from the
-          rack page). The link opens the rack page in the placing mode the add
+          slot from the bottle itself, not only from the rack page. The link
+          opens the rack page in the placing mode the add
           flow uses, with this one bottle as the queue: tap a free slot, or
           let it take the first free one. */}
       {!rackInfo && cellarHasRacks && canEdit && bottle.status === 'active' && (

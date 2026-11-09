@@ -28,7 +28,7 @@ const TOP_K = 10;
  * storedVectorOnly: compare with the wine's STORED vector and skip the check
  * when it has none — never a paid embedding call. Set for every consume made
  * with an API or OAuth token (Home Assistant, a connected AI): nothing a
- * token can reach may spend AI money (Johan, 2026-10-21). A wine without a
+ * token can reach may spend AI money. A wine without a
  * vector simply gets no restock suggestion from that consume.
  */
 async function runCheck(userId, bottleId, cellarId, { storedVectorOnly = false } = {}) {

@@ -16,7 +16,7 @@ export default function TastingProfileCard({ wine, onReport }) {
   if (wine.nonWine === true) return null;
 
   // No published profile — an honest "not yet assessed" instead of a
-  // silent blank (somm ticket 6a83e765 rollout note). Held-by-the-gate and
+  // silent blank. Held-by-the-gate and
   // never-generated are deliberately indistinguishable here, so the card
   // can never leak WHY a profile is missing.
   if (!wine.aiProfile?.description) {

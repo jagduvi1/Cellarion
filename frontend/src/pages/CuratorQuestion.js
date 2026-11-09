@@ -8,16 +8,16 @@ import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
 import './CuratorQuestion.css';
 
 /**
- * What a curator-question notification opens (support ticket 2026-10-14).
+ * What a curator-question notification opens.
  *
- * The notification used to link straight to the bottle the question was sent
- * about, and that link went dead once the bottle or its cellar was deleted.
- * Now it opens this page, which asks the server for a bottle page of the wine
+ * The notification does not link straight to the bottle the question was sent
+ * about: that link would go dead once the bottle or its cellar was deleted.
+ * It opens this page, which asks the server for a bottle page of the wine
  * the member can open NOW and goes there (the question card renders on it).
  * With no bottle of the wine left, the question shows here on its own: THIS
  * question (the card is handed it, not left to look one up by wine), with
  * words that fit its state — still open, answered and waiting, replied to,
- * or closed without a reply (pre-release audit 2026-10-14).
+ * or closed without a reply.
  */
 export default function CuratorQuestion() {
   const { id } = useParams();

@@ -211,7 +211,7 @@ router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Wine definition not found' });
     }
 
-    // Cost control (Johan 2026-08-21) — see the same gate on the maturity
+    // Cost control — see the same gate on the maturity
     // suggestion. The curator researches market prices anyway.
     if (!aiConfig.get().sommPriceSuggestEnabled) {
       return res.status(503).json({
@@ -354,8 +354,8 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
  * Removes the request and records a PriceTrackingSkip for the pair, which
  * (a) keeps the pair out of the queue and (b) makes routes/bottles.js refuse
  * future tracking requests for the same wine+vintage while the skip stands.
- * (Replaces the old reason-less DELETE /requests/:requestId — support ticket
- * 6a703236: junk requests need a decline path the requester learns from.)
+ * (There is no reason-less delete: junk requests need a decline path the
+ * requester learns from.)
  */
 router.post('/requests/:requestId/decline', requireSommOrAdmin, async (req, res) => {
   try {

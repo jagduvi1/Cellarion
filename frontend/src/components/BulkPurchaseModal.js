@@ -8,8 +8,8 @@ import BulkOutcome from './BulkOutcome';
 
 /**
  * Bulk "Purchase details": one date, shop, link and price written to every
- * selected bottle — the other half of the delivery case (support ticket
- * 6a9949e3: a case from one merchant on one day should not be twelve edits).
+ * selected bottle — the other half of the delivery case (a case from one
+ * merchant on one day should not be twelve edits).
  * Only the fields the user fills in are sent; whatever is left blank stays as
  * it is on each bottle.
  */

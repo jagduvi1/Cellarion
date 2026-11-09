@@ -217,7 +217,7 @@ router.put('/:id', requireAuth, requireNonDemo, async (req, res) => {
 });
 
 // POST /api/wine-lists/:id/add-bottles — put the wines of MANY bottles on a
-// list in one step (the cellar view's select mode, support ticket 6a9949e3).
+// list in one step (the cellar view's select mode).
 // Entries are wine + vintage + size, so a case of twelve becomes ONE line, and
 // a wine already on the list is reported as skipped, never duplicated. Same
 // rules as the MCP add_to_list tool: writes go to the ACTIVE container only, a

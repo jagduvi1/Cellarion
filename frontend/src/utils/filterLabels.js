@@ -5,8 +5,8 @@ import { RATING_BAND_DEFS } from '../components/charts/chartHelpers';
 // 'none' = no maturity data. Mirrors backend MATURITY_FILTER_VALUES.
 export const MATURITY_FILTER_OPTIONS = ['peak', 'early', 'late', 'declining', 'not-ready', 'none'];
 
-// "Needs attention" — the combination almost every owner asks for (support
-// ticket 2026-09-12): what should I drink before it fades.
+// "Needs attention" — the combination almost every owner asks for: what
+// should I drink before it fades.
 export const NEEDS_ATTENTION = ['late', 'declining'];
 
 // i18n key under maturity.* for each bucket.

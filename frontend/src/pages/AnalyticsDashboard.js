@@ -12,9 +12,9 @@ import { isRatingField, ratingMeasureField, viewerRatingScale, formatRatingCell 
 import '../components/AnalyticsTable.css';
 import './AnalyticsDashboard.css';
 
-// The analytics table lives here since it moved off the cellar page (support
-// ticket 2026-09-05: the cellar page's search bar and filters sat above a
-// table they did not filter). Lazy — it ships its own catalogue fetch, query
+// The analytics table lives here, not on the cellar page, where the search
+// bar and filters would sit above a table they do not filter. Lazy — it
+// ships its own catalogue fetch, query
 // client and CSV assembly, none of which the boards pay for.
 const AnalyticsTable = lazy(() => import('../components/AnalyticsTable'));
 

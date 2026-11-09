@@ -255,7 +255,7 @@ router.put('/:id/resolve', async (req, res) => {
         appellation: cleanAppellation,
         ...classificationFields,
         grapes: grapes || [],
-        type: type || null, // no guessed red (ticket 6a85ad44)
+        type: type || null, // no guessed red
         // Sparkling/dessert/fortified only; the model hook drops anything else
         // and infers rosé from the name when this is empty.
         colour: WINE_COLOURS.includes(colour) ? colour : null,

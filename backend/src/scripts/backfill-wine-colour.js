@@ -1,7 +1,6 @@
 /**
  * Backfill WineDefinition.colour — the colour of a sparkling, dessert or
- * fortified wine (support ticket 2026-09-17, "Colour Sparkling/Rosè"; see
- * utils/wineColour.js). The model hook fills it from a rosé NAME on every
+ * fortified wine (see utils/wineColour.js). The model hook fills it from a rosé NAME on every
  * create or retype, so after this one pass new rows stay current by themselves.
  *
  * Two parts:

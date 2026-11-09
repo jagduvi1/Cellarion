@@ -8,8 +8,8 @@ import BulkOutcome from './BulkOutcome';
 
 /**
  * Bulk drink window: the years a wine and vintage share, written to every
- * selected bottle at once (support ticket 2026-09-06 — a case of six meant
- * six identical edits). A blank field stays as it is on each bottle; "clear"
+ * selected bottle at once, so a case of six is one edit, not six identical
+ * ones. A blank field stays as it is on each bottle; "clear"
  * removes all four. Same year rule and peak-inside-window rule as the single
  * edit form; a bottle whose own years conflict with the new ones is reported
  * as skipped rather than failing the batch.

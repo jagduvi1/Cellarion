@@ -7,14 +7,13 @@
  * before it existed — the same shape as reclassify-producer-suspect.js, which
  * backfilled the sibling ASSERTS_PRODUCER rule on 2026-08-19.
  *
- * WHY (somm 6a86baca). producer_suspect asserts a positive suspicion: the
+ * WHY. producer_suspect asserts a positive suspicion: the
  * value is a brand, a range, a retailer, a place. An epistemic note asserts no
  * such thing — it records that the model could not place the name, which is
  * what producerUnknown is for. Left as suspect, a real small estate wears a
  * permanent "cannot be verified" caveat on its wine and inflates upheld-count,
  * the number the scaling review reads as "wines the registry genuinely cannot
- * identify". Their own counter-example settled it: La Spia carried a pure
- * epistemic note and is a real Valtellina winery.
+ * identify".
  *
  * Every moved row is tagged aiProfile.suspectDowngradedBy so the set stays
  * queryable (list_rule_downgrades) and a wrong rule can be reversed wholesale.
@@ -47,8 +46,7 @@ const APPLY = process.argv.includes('--apply');
     // A curator verdict outranks any rule.
     'aiProfile.suspectDecision': { $in: [null, undefined] },
     // A curator-authored profile is a human judgement about this exact row —
-    // no rule overrides it (somm audit 6a86dad6: The Parish moved despite a
-    // curator verification two days earlier).
+    // no rule overrides it.
     'aiProfile.source': { $ne: 'curator' },
     nonWine: { $ne: true },
   })
@@ -62,8 +60,8 @@ const APPLY = process.argv.includes('--apply');
   for (const w of rows) {
     const note = w.aiProfile.producerNote || '';
     // Blockers before rules — see the same composition at the enrichment
-    // write site (somm audit 6a86dad6: placeholder fields and place-conflict
-    // notes must stay suspect for a human).
+    // write site: placeholder fields and place-conflict notes must stay
+    // suspect for a human.
     if (
       producerFieldLooksPlaceholder(w.producer, w.name) ||
       notePlaceConflict(note, { region: w.region?.name, appellation: w.appellation, country: w.country?.name })
@@ -75,7 +73,7 @@ const APPLY = process.argv.includes('--apply');
     } else if (noteIsEpistemicOnly(note, w.producer)) {
       move.push({ w, rule: DOWNGRADE_RULES.EPISTEMIC_ONLY });
     } else {
-      // Third rule (somm 6a872291): the doubt is about the cuvée while the
+      // Third rule: the doubt is about the cuvée while the
       // producer is affirmed. Lands clean, or on producerUnknown when the
       // note also carries first-person doubt about the producer.
       const cuvee = noteDoubtsCuveeNotProducer(note, w.producer, w.name);

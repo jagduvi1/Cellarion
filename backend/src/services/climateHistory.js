@@ -1,8 +1,7 @@
 const ClimateReading = require('../models/ClimateReading');
 const { boundsFor } = require('./climateAlerts');
 
-// Climate history aggregates for the MCP climate_status tool (support ticket
-// 6a71c6b2): per reading type (temperature/humidity), min/max/mean plus
+// Climate history aggregates for the MCP climate_status tool: per reading type (temperature/humidity), min/max/mean plus
 // excursion episodes over three windows — 24h / 30d / 12m — so a chat answer
 // can read "13–17 °C across the year, no excursions" without the model ever
 // seeing raw readings.

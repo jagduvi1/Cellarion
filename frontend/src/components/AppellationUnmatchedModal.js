@@ -17,7 +17,7 @@ import {
  * adding a bottle is never blocked by taxonomy, which is why this queue
  * exists at all.
  *
- * "Dismiss" is the queue's terminal state (ticket 6a842d5e): a string
+ * "Dismiss" is the queue's terminal state: a string
  * reviewed and judged NOT an appellation (a quality tier, a fantasy name)
  * leaves the queue for good instead of resurfacing on every visit. The
  * dismissed list below the queue is the restorable record.

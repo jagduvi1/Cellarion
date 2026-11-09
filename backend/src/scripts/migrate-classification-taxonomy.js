@@ -2,7 +2,7 @@
  * migrate-classification-taxonomy.js
  *
  * Classification moves from free text to a curated taxonomy
- * (models/Classification, support ticket 2026-10-29). This script:
+ * (models/Classification). This script:
  *
  *   1. seeds the taxonomy from data/classifications.json (--apply only);
  *   2. maps every wine's legacy `classification` string onto taxonomy rows —

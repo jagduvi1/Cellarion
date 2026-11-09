@@ -110,8 +110,8 @@ async function run({ apply = APPLY } = {}) {
       wineDefinition: m.wineDefinition,
       vintage: m.vintage,
       status: 'pending',
-      // Derived, same as ensurePendingVintageProfile — seeding it false shipped
-      // NV rows into the queue self-contradictory (ticket d49d2b36).
+      // Derived, same as ensurePendingVintageProfile — seeding it false would
+      // ship NV rows into the queue self-contradictory.
       relative: m.vintage === 'NV',
     }));
     // ordered:false so a single duplicate-key error (race with a live add/import)

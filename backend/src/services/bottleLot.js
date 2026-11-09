@@ -2,8 +2,7 @@
  * The "lot": every ACTIVE bottle of the same wine AND vintage in the user's
  * OWN cellars — the case journey's definition of a case (Cellarion has no
  * case entity). The drink window, and the price of a case bought as one
- * lot, are properties of the wine and vintage rather than of one bottle
- * (support ticket 2026-09-06: six identical updates for six bottles), so the
+ * lot, are properties of the wine and vintage rather than of one bottle, so the
  * bottle edit form's "also apply to the other N", the bulk bar and
  * update_bottle's apply_to_lot all write to the lot found HERE — one
  * definition, one query.

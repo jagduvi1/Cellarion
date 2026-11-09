@@ -101,8 +101,8 @@ async function listUnmatchedAppellations() {
     if (a.normalizedName) matched.add(a.normalizedName);
     for (const s of a.normalizedSynonyms || []) matched.add(s);
   }
-  // Dismissed keys suppress exactly like curated coverage does (ticket
-  // 6a842d5e): judged through candidateKeys below, so a dismissal of
+  // Dismissed keys suppress exactly like curated coverage does: judged
+  // through candidateKeys below, so a dismissal of
   // "somewhere" also silences a later "Somewhere DO".
   const dismissed = new Set(skips.map((s) => s.normalizedKey));
 
@@ -172,7 +172,7 @@ function unmatchedGroupKey(name) {
 
 /**
  * Dismiss an unmatched-appellation string: reviewed and judged NOT
- * promotable (ticket 6a842d5e — the queue's missing terminal state).
+ * promotable (the queue's terminal state besides promotion).
  * Suppression is by group key, so every spelling variant that folds onto it
  * goes quiet too. First dismisser wins a race ($setOnInsert, same stance as
  * the price-queue skip); the reason is the durable record of the judgement.

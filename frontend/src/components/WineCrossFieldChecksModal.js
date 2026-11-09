@@ -11,8 +11,8 @@ import {
 const PAGE_SIZE = 50;
 
 /**
- * Admin CROSS-FIELD check queue (ticket analysis 2026-08-10, Tier-2 item 5) —
- * sibling of WineProducerInNameModal, backed by backend
+ * Admin CROSS-FIELD check queue — sibling of WineProducerInNameModal, backed
+ * by backend
  * utils/crossFieldChecks.js: registry values sitting in the wrong FIELD,
  * caught by testing them against the reference lists the app already holds
  * (producer "Monbazillac" = an appellation, producer "Dragasani" = a region,

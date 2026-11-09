@@ -202,18 +202,18 @@ const userSchema = new mongoose.Schema({
         push:  { type: Boolean, default: true }
       },
       supportReply: {
-        // Support answered your ticket (2026-09-26). A service email about
+        // Support answered your ticket. A service email about
         // something you asked us, not a notification you opt into, so it is
-        // on by default: until now the answer only reached the in-app bell,
-        // and someone who asked and left never saw it. Settings turns it off,
+        // on by default: the in-app bell alone never reaches someone who
+        // asked and left. Settings turns it off,
         // and so does the one-click unsubscribe (utils/notifications.js).
         // No push: the bell already carries it inside the app.
         email: { type: Boolean, default: true }
       },
       ownerInquiry: {
-        // A curator's question about a wine you own a bottle of (2026-10-20).
-        // Until now it reached the bell and push only, and none of 64 open
-        // questions had an answer. Not marketing: one precise question about
+        // A curator's question about a wine you own a bottle of. The bell and
+        // push alone leave such questions unanswered, so it is emailed too.
+        // Not marketing: one precise question about
         // the record of your own bottle, with every send rationed by the
         // curators' contact budget and at most one such email a day. On by
         // default; Settings turns it off, so do the "stop these" link in the
@@ -228,7 +228,7 @@ const userSchema = new mongoose.Schema({
       default: 'all'
     },
     // The order the cellar page's bottle list opens in: the last sort the user
-    // picked there (support ticket 2026-09-26). Absent means newest first.
+    // picked there. Absent means newest first.
     // Validated against CELLAR_SORTS in accountOps and deliberately not a
     // schema enum: every sign-in saves the user document, so retiring a sort
     // option later must never make an old stored value fail validation. The
@@ -352,9 +352,9 @@ const userSchema = new mongoose.Schema({
   // When the user objected to ALL Cellarion email (the one-click unsubscribe
   // link in every mail — utils/notifications.js). Every sender honours it on
   // top of the per-category switches, so a category added after they clicked
-  // (support replies, 2026-09-26) is off for them too — the objection covers
-  // email as such, not the categories that existed that day (audit
-  // 2026-09-27 M7). Cleared when they turn any email back on in Settings
+  // (support replies, for one) is off for them too — the objection covers
+  // email as such, not the categories that existed that day. Cleared when
+  // they turn any email back on in Settings
   // (services/accountOps): from then on the per-category switches decide.
   // The exceptions are messages about the account itself, which the Privacy
   // Policy (section 8) names: email verification and password reset (the

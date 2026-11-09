@@ -301,8 +301,7 @@ function AppRoutes() {
           }
         />
         {/* A curator question from a notification: goes on to a bottle of the
-            wine the member can open now, or shows the question on its own
-            (support ticket 2026-10-14). */}
+            wine the member can open now, or shows the question on its own. */}
         <Route
           path="/questions/:id"
           element={

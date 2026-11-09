@@ -31,7 +31,7 @@ function Discussions() {
 
   const [category, setCategory] = useState('');
   // Language section. English is the forum's default view AND the default
-  // for a new thread (Johan, 2026-08-31) — a member picks another language
+  // for a new thread — a member picks another language
   // deliberately, and a moderator moves anything mis-filed.
   const [language, setLanguage] = useState('en');
   const [languages, setLanguages] = useState([]);

@@ -71,7 +71,7 @@ const wineRequestSchema = new mongoose.Schema({
   // What the import FILE said about the wine (CellarTracker / Vivino / Ploc
   // all name these). Plain strings for the curator's benefit — prefilled on
   // the admin page, never written to the registry until the request is
-  // resolved (support ticket 2026-09-05: 243 requests had to be re-derived).
+  // resolved, so a request never has to be re-derived from the file.
   hints: {
     country: { type: String, trim: true, maxlength: 100 },
     region: { type: String, trim: true, maxlength: 100 },

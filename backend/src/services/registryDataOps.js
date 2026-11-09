@@ -327,8 +327,8 @@ async function dataForWine(wineId, userId = null, { roles, vintage, locale } = {
   // WHO contributed a published value stays on the row (`suggestedBy` — the
   // admin queues, the audit trail and the contributor's own export read it) and
   // goes no further: this function feeds every user-facing surface (the bottle
-  // page, the connector), and none of them names the contributor (Johan,
-  // 2026-09-18 — the record is the registry's, not a byline; same rule as a
+  // page, the connector), and none of them names the contributor (the
+  // record is the registry's, not a byline; same rule as a
   // correction's proposer, #930). So it is not even loaded here.
   const [publishedRows, pendingRows] = await Promise.all([
     RegistryDataValue.find({ wineDefinition: { $eq: wid }, status: 'published' })

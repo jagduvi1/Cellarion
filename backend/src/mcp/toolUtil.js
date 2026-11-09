@@ -156,9 +156,8 @@ function bottleSummary(b) {
     rating_scale: b.rating != null ? b.ratingScale : undefined,
     drink_from: b.drinkFrom ?? null,
     drink_to: b.drinkTo ?? null,
-    // The peak pair is writable through update_bottle and was missing from
-    // every read (support ticket 2026-09-07) — an assistant could set it and
-    // never see it again.
+    // The peak pair is writable through update_bottle, so every read carries
+    // it too — an assistant that sets it must be able to see it again.
     peak_from: b.peakFrom ?? null,
     peak_until: b.peakUntil ?? null,
     opened_at: b.openedAt || undefined,

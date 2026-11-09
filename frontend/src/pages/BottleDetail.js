@@ -89,7 +89,7 @@ function BottleDetail() {
   const [cellarColor, setCellarColor] = useState(null);
   const [rackInfo, setRackInfo] = useState(null);
   // Whether the cellar has any rack: an unplaced bottle offers "Place in a
-  // rack" only then (support ticket 2026-10-26).
+  // rack" only then.
   const [cellarHasRacks, setCellarHasRacks] = useState(false);
   // The other active bottles of this wine and vintage in the viewer's own
   // cellars (from the bottle response) — drives the edit form's "also apply
@@ -153,7 +153,7 @@ function BottleDetail() {
   const [pendingImage, setPendingImage] = useState(null);
   const [defaultImage, setDefaultImage] = useState(null);
   // The vintage's official photo with its credit, and the viewer's own photo
-  // of another vintage as the last resort (ticket 2026-10-09).
+  // of another vintage as the last resort.
   const [vintageImage, setVintageImage] = useState(null);
   const [otherVintageImage, setOtherVintageImage] = useState(null);
 
@@ -789,7 +789,7 @@ function BottleDetail() {
       )}
 
       {/* ── The viewer's other bottles of this wine, and what happened to the
-          ones already drunk (support ticket 2026-09-16). Hides itself when
+          ones already drunk. Hides itself when
           there is nothing to say. Personal, so it sits with the personal
           cards, above the registry's profile and the community reviews. ── */}
       <CollapsibleBlock {...blockProps('vintage.history', t('lotHistory.title', 'This wine in your cellar'))}>

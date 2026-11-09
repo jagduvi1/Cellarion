@@ -42,7 +42,7 @@ const RegistryDataKey = require('../../models/RegistryDataKey');
 // is compiled as gte+lte; 'in' takes an array of enum options. The FIRST op
 // is what the filter builder preselects, so text leads with 'contains': a
 // typed producer filter should find "Gaja" by "gaj", not demand the exact
-// name (support ticket 2026-09-05).
+// name.
 const OPS_BY_TYPE = {
   text: ['contains', 'eq', 'neq'],
   integer: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
@@ -88,7 +88,7 @@ const STATIC_FIELDS = [
   dim({ key: 'bottle.cellar', label: 'Cellar', domain: 'inventory', type: 'text', source: 'computed', path: 'cellar', sortable: false, groupable: true }),
   dim({ key: 'bottle.location', label: 'Rack location', domain: 'inventory', type: 'text', source: 'bottle', path: 'location' }),
   // The rack a bottle actually sits in, and the rack's group (the room or
-  // appliance the user named — support ticket 2026-09-06). Joined from
+  // appliance the user named). Joined from
   // Rack.slots, so a sort would need the join on every row: sortable is off;
   // grouping and filtering are the point ("what is in the basement").
   dim({ key: 'rack.name', label: 'Rack', domain: 'inventory', type: 'text', source: 'rack', path: 'name', sortable: false }),
@@ -124,9 +124,9 @@ const STATIC_FIELDS = [
   dim({ key: 'open.openedAt', label: 'Opened date', domain: 'open', type: 'date', source: 'bottle', path: 'openedAt', groupable: false }),
   dim({ key: 'open.preservation', label: 'Preservation', domain: 'open', type: 'enum', source: 'bottle', path: 'preservationMethod', enumOptions: ['coravin', 'inert-gas', 'vacuum', 'sparkling-stopper', 'recorked'] }),
 
-  // Maturity. Two layers, and the labels say which is which (support ticket
-  // 2026-09-10 — a cellar relying on curated windows read all-null dates
-  // next to status "peak" and took the null for missing data):
+  // Maturity. Two layers, and the labels say which is which — a cellar
+  // relying on curated windows reads all-null own dates next to status
+  // "peak", and must not take the null for missing data:
   //   maturity.drinkFrom / drinkTo / peakFrom / peakUntil — the user's OWN
   //     per-bottle overrides (integers, filter/sortable). Null whenever the
   //     bottle relies on the sommelier profile, so a filter on them only
@@ -137,8 +137,8 @@ const STATIC_FIELDS = [
   //   maturity.status — the derived verdict, computed per row.
   dim({ key: 'maturity.drinkFrom', label: 'My drink from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkFrom' }),
   dim({ key: 'maturity.drinkTo', label: 'My drink to (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkTo' }),
-  // The peak pair (writable per bottle) was missing here, so a lot could not
-  // be checked for matching peaks in one query (support ticket 2026-09-07).
+  // The peak pair (writable per bottle) is listed so a lot can be checked
+  // for matching peaks in one query.
   dim({ key: 'maturity.peakFrom', label: 'My peak from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakFrom' }),
   dim({ key: 'maturity.peakUntil', label: 'My peak until (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakUntil' }),
   dim({ key: 'maturity.windowFrom', label: 'Effective drink from (year)', domain: 'maturity', type: 'integer', source: 'computed', path: null, sortable: false, groupable: false, filterable: false }),

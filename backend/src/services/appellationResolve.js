@@ -147,15 +147,13 @@ async function resolveCanonicalAppellation(rawAppellation) {
 
 /**
  * Does this appellation string resolve to a curated entry that PLACES the
- * wine — i.e. one carrying a region link? (Somm ticket 6a8eb2a9: the
- * producer-suspect narrowing — "a négociant bottling in Graves still has a
- * knowable house behind it".)
+ * wine — i.e. one carrying a region link? (The producer-suspect narrowing:
+ * a négociant bottling in Graves still has a knowable house behind it.)
  *
  * The test is deliberately about the CURATED ENTRY's geography, not about
  * the field being populated: "Vin de France" is curated but nationwide
  * (region null) → false; "Qualitätswein" is a quality tier, not curated →
- * false — both were named by the somm as rows a naive non-empty check would
- * wrongly clear. Multi-doc keys (same name across countries) must agree:
+ * false — both are rows a naive non-empty check would wrongly clear. Multi-doc keys (same name across countries) must agree:
  * EVERY matched doc needs a region, mirroring lookupCanonical's
  * all-must-agree stance — suppressing a suspicion is a publish decision, so
  * ambiguity counts as no.

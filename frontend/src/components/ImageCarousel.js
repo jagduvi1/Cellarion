@@ -60,15 +60,15 @@ function ImageCarousel({ images, size = 'medium', vintage, defaultImageId, onSet
         {currentImage.credit && (
           <div className="carousel-credit">© {currentImage.credit}</div>
         )}
-        {/* A wine-level photo of ANOTHER vintage says which year it shows
-            (support ticket 2026-10-09): the year on the label is not this
+        {/* A wine-level photo of ANOTHER vintage says which year it shows:
+            the year on the label is not this
             bottle's. Same-vintage and untagged photos carry nothing. */}
         {vintage && currentImage.vintage && String(currentImage.vintage) !== String(vintage) && (
           <div className="carousel-vintage" role="note">
             {t('imageGallery.otherVintage', '{{vintage}} label', { vintage: formatVintage(currentImage.vintage, t) })}
           </div>
         )}
-        {/* Removing a photo (ticket 6a865f60). Which verb you get depends on
+        {/* Removing a photo. Which verb you get depends on
             whether the photo is still only yours: once it is the wine's
             picture in the shared registry, taking it down changes other
             people's pages, so it becomes a report an admin decides. */}

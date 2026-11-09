@@ -1,5 +1,5 @@
 /**
- * Cross-field domain scan (ticket analysis 2026-08-10, Tier-2 item 5): apply
+ * Cross-field domain scan: apply
  * the utils/crossFieldChecks.js rules — "is this value sitting in the wrong
  * FIELD?" — across the registry. REVIEW QUEUE ONLY, pure reads: the rows feed
  * the admin Cross-field checks modal and the weekly watchdog's per-rule

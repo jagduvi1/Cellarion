@@ -13,16 +13,16 @@ import { getMyOwnerInquiries, respondToOwnerInquiry } from '../../api/ownerInqui
  * Two states, in priority order:
  *   ASK    — an unanswered inquiry: the question and the answer form.
  *   REPLY  — one the viewer answered and a curator has since resolved WITH a
- *            reply. Before this the card simply vanished on resolve, so
- *            someone who walked to their shelf and read a back label for us
- *            got silence; the reply is why they would do it a second time.
+ *            reply. The card must not simply vanish on resolve: someone
+ *            who walked to their shelf and read a back label for us would
+ *            get silence; the reply is why they would do it a second time.
  * An unanswered question outranks a reply — it is the one that still needs
  * them. Replies are transient by design: the server stops returning them 30
  * days after resolution.
  */
 function OwnerInquiryCard({ apiFetch, wineId, inquiry: given = null, intro = null }) {
   const { t } = useTranslation();
-  // `inquiry` given (the question page, support ticket 2026-10-14): show THAT
+  // `inquiry` given (the question page): show THAT
   // question, not whichever one the wine has, and skip the lookup. `intro`
   // replaces the "you own a bottle of it" line when the member has none left.
   const [inquiry, setInquiry] = useState(given);

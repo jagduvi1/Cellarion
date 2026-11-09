@@ -487,9 +487,8 @@ async function attachBottleImageUrls(bottles, userId) {
 
   // Sibling bottles: the viewer's OTHER bottles of the same wines, whether or
   // not they are on this page. A photo uploaded while the bottle still waited
-  // for its wine request carries no wineDefinition at all (support ticket
-  // 2026-09-07: one of two identical bottles showed the photo, the other did
-  // not), so the by-wine arm never sees it — the photo's bottle is the only
+  // for its wine request carries no wineDefinition at all, so the by-wine
+  // arm never sees it — the photo's bottle is the only
   // way to learn its wine.
   const wineOfBottle = {};
   // …and each bottle's vintage, so a photo pinned to a sibling counts as a
@@ -525,25 +524,23 @@ async function attachBottleImageUrls(bottles, userId) {
       ...(wineIds.length ? [{ wineDefinition: { $in: wineIds } }] : []),
     ],
     uploadedBy: userId,
-    // The uploader's OWN photos, pending OR approved. Approval used to drop a
-    // photo out of this lookup, so the moment an admin approved it the card
-    // went blank unless the wine had a registry image — while the bottle page
-    // gallery still listed it (support ticket 2026-09-05, discussion #1227;
-    // 471 bottles of 49 owners on 2026-09-06). Rejected stays out.
+    // The uploader's OWN photos, pending OR approved. Approval must not drop
+    // a photo out of this lookup, or the moment an admin approves it the card
+    // goes blank unless the wine has a registry image — while the bottle page
+    // gallery still lists it (discussion #1227). Rejected stays out.
     status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
-    // Never a label scan (support ticket 2026-09-03). The raw frame handed to
+    // Never a label scan. The raw frame handed to
     // the AI scanner is kept ONLY as private curation evidence (models/
     // BottleImage.kind); it carries the wine it minted, sits at status
-    // 'uploaded' with no processed file, and so matched the by-wine arm above —
-    // the scanner's kitchen-table photo became the card image of every bottle
-    // of that wine. `$ne`, not `kind: 'bottle'`: rows older than the field
+    // 'uploaded' with no processed file, and so would match the by-wine arm
+    // above — the scanner's kitchen-table photo would become the card image of
+    // every bottle of that wine. `$ne`, not `kind: 'bottle'`: rows older than the field
     // have no `kind` at all.
     kind: { $ne: 'label-scan' },
   }).sort({ createdAt: -1 }).lean();
 
-  // Which picture a card shows (support ticket 2026-10-09; Johan: "a new
-  // vintage without an image should display the wine's image … so we always
-  // show an image"). In order:
+  // Which picture a card shows — a new vintage without an image displays the
+  // wine's image, so a card always shows an image when one exists. In order:
   //   1. the bottle's starred photo (defaultImageUrl, below)
   //   2. the viewer's own photo of THIS bottle — choosing a per-bottle photo
   //      must never appear to do nothing
@@ -553,8 +550,8 @@ async function attachBottleImageUrls(bottles, userId) {
   //   6. the viewer's own photo of another vintage (otherVintageImageUrl) —
   //      only reached when the wine has no registry image, so a card with any
   //      photo of the wine is never blank
-  // 2–3 go out as pendingImageUrl, as before. A photo of the 2015 label no
-  // longer stands in for the 2016 bottles while the wine has an image.
+  // 2–3 go out as pendingImageUrl. A photo of the 2015 label never stands in
+  // for the 2016 bottles while the wine has an image.
   const pendingByBottle = {};
   const pendingByWineVintage = {};
   const pendingByWine = {};
@@ -727,9 +724,9 @@ router.get('/multi/bottles', async (req, res) => {
 
     await normalizeTaxonomyQuery(req.query);
     // ?group=1 collapses identical bottles (same cellar + wine + vintage +
-    // size) like the single-cellar view — needed now that chart deep links
-    // land here (support ticket 2026-09-19: "multiple identical bottles are
-    // listed sequentially"). Paginates over groups, so it takes the whole
+    // size) like the single-cellar view — chart deep links land here, and
+    // identical bottles must not be listed one after another. Paginates over
+    // groups, so it takes the whole
     // filtered set (the query's own 10k cap still bounds it).
     const grouped = req.query.group === '1' || req.query.group === 'true';
     const result = await queryBottlesAcrossCellars(req, {
@@ -1167,8 +1164,8 @@ router.get('/:id/history', async (req, res) => {
 // orders last. Any member may look; arriving / editing needs editor, which
 // those endpoints enforce. Capped like the other list paths.
 // GET /api/cellars/:id/vintages/:wineId/:vintage — one wine and vintage in
-// this cellar: the page behind a grouped "n identical bottles" entry
-// (support ticket 2026-10-09). A VIEW over data that already exists, not a
+// this cellar: the page behind a grouped "n identical bottles" entry.
+// A VIEW over data that already exists, not a
 // third storage level: the bottles with their rack slots and photos, what
 // they share (a note or drink window identical on every one), how many are
 // on order or already drunk, and a bottle id the page hands to the lot
@@ -1390,8 +1387,8 @@ router.get('/:id', async (req, res) => {
       sort = '-createdAt',
       exclude
     } = req.query;
-    // null when absent; a Set of statuses otherwise (multi-select, OR-combined
-    // — support ticket 2026-09-12). Coerced first: qs can hand us an array.
+    // null when absent; a Set of statuses otherwise (multi-select,
+    // OR-combined). Coerced first: qs can hand us an array.
     const maturityFilter = parseMaturityFilter(coerceStringQuery(maturityRaw));
 
     // Pagination — default 30, max 200; skip defaults to 0
@@ -1433,8 +1430,8 @@ router.get('/:id', async (req, res) => {
     }
 
     // ?rack=<id> or ?rackGroup=<name> — only the bottles placed in that rack,
-    // or in any rack of that group ("what is in the basement", support ticket
-    // 2026-09-06). Resolved to an id set once and applied on every path like
+    // or in any rack of that group ("what is in the basement"). Resolved to
+    // an id set once and applied on every path like
     // excludeSet; an unknown rack or group matches nothing.
     let onlyIds = null;
     if (req.query.rack || req.query.rackGroup) {
@@ -1714,7 +1711,7 @@ router.get('/:id', async (req, res) => {
         skip,
         grouped,
         // Grouped, `total` counts cards; the filter's "Show n bottles" needs
-        // the bottles behind them (support ticket 2026-10-14).
+        // the bottles behind them.
         ...(grouped ? { bottleTotal } : {}),
         items: responseItems
       },

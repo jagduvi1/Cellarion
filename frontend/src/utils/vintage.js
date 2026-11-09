@@ -14,7 +14,7 @@ export function formatVintage(vintage, t) {
 }
 
 // The words a vintage field accepts besides a year: the stored codes, and
-// their translations in the user's language (Johan, #1690).
+// their translations in the user's language (#1690).
 function vintageWords(t) {
   return {
     // An empty translation (a scaffolded sibling, a blank) must never make

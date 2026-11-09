@@ -1,6 +1,6 @@
 /**
- * Regional display names for grapes (somm ticket: "Tinta Roriz stored as
- * Tempranillo on a Douro Port").
+ * Regional display names for grapes ("Tinta Roriz", not "Tempranillo", on a
+ * Douro Port).
  *
  * Wines reference ONE canonical Grape doc — storage, dedup, search facets,
  * stats and pairing all keep a single vocabulary. What varies by place is the
@@ -10,13 +10,12 @@
  * Display-only: nothing here writes, and matching typed input to a grape
  * stays the job of Grape.synonyms/normalizedSynonyms.
  *
- * THE WINE'S OWN NAME OUTRANKS ANY MAPPING (somm ticket 6a8c8a68, decided by
- * Johan 2026-08-27). Australians write "Syrah" on a Shiraz-country label as a
- * deliberate style signal — cool-climate, Rhône-leaning — so an Australia-wide
- * "Shiraz" entry must NOT relabel a wine literally named "… Syrah". When the
- * wine's name carries the canonical variety as whole words, the canonical is
+ * THE WINE'S OWN NAME OUTRANKS ANY MAPPING. Australians write "Syrah" on a
+ * Shiraz-country label as a deliberate style signal — cool-climate,
+ * Rhône-leaning — so an Australia-wide "Shiraz" entry must NOT relabel a
+ * wine literally named "… Syrah". When the wine's name carries the canonical variety as whole words, the canonical is
  * shown; the mapping applies only when the name says the regional form or
- * names no variety at all (the somm's conservative option (b), generalized).
+ * names no variety at all.
  */
 const { normalizeString } = require('./normalize');
 

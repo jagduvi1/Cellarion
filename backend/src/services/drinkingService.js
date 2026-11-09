@@ -24,10 +24,9 @@ const { isReserved } = require('../utils/reservationUtils');
 const READINESS_RANK = { open: 0, declining: 1, late: 2, peak: 3, early: 4, unknown: 5, approaching: 6 };
 
 // A wine a year or two short of its drink window is usually a fine bottle
-// tonight — youthful, not wrong (support ticket 6aad5481: a 2025 Pfalz
-// Riesling curated "from 2027" was hidden from a chili-snack pairing, and it
-// was exactly the right wine). Hard-excluding it left the calling model
-// unaware the bottle existed. Beyond this margin a wine is genuinely unready.
+// tonight — youthful, not wrong, and it may be exactly the right wine for the
+// pairing. Hard-excluding it would leave the calling model unaware the bottle
+// exists. Beyond this margin a wine is genuinely unready.
 const APPROACHING_YEARS = 2;
 
 const parseMl = (size) => {
@@ -134,8 +133,8 @@ async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency
 /**
  * Whole-cellar headcount by wine type and by grape (every active bottle in
  * scope, ready or not, reserved included). A shortlist alone hides what else
- * is in the cellar: with zero keyword hits the model never learned nine
- * Rieslings were there to ask about (ticket 6aad5481). Grape counts include
+ * is in the cellar: with zero keyword hits the model would never learn which
+ * wines are there to ask about. Grape counts include
  * blends, so they can sum past the bottle total.
  */
 function cellarComposition(bottles) {
@@ -154,9 +153,9 @@ function cellarComposition(bottles) {
 
 /**
  * Collapse ranked entries to one per wine + vintage (an open bottle stays
- * apart — its state differs), preserving order. Identical bottles used to take
- * separate shortlist slots (3× the same Chenin in an 8-slot answer); now the
- * first entry stands for the group and carries the other bottle ids.
+ * apart — its state differs), preserving order, so identical bottles never
+ * take separate shortlist slots: the first entry stands for the group and
+ * carries the other bottle ids.
  */
 function groupSameWine(ranked) {
   const groups = new Map();
@@ -210,7 +209,7 @@ async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
           flavors: profile.flavors || [],
           food_pairings: profile.foodPairings || [],
           // Who wrote it and how sure: an AI profile at 0.65 is a guess, and
-          // sweetness is often the field a pairing turns on (ticket 6aad5481).
+          // sweetness is often the field a pairing turns on.
           source: profile.source === 'curator' ? 'sommelier' : 'ai',
           confidence: profile.source === 'curator' ? null : (profile.confidence ?? null),
         }

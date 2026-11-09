@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import './GrapeTokenInput.css';
 
 /**
- * GrapeTokenInput — pick grape varieties by typing (support ticket 2026-09-17:
- * a comma-separated text box is no way to enter varieties).
+ * GrapeTokenInput — pick grape varieties by typing (a comma-separated text
+ * box is no way to enter varieties).
  *
  * One field holding the chosen varieties as removable chips plus a search box;
  * matches appear underneath as you type. Matching reads synonyms too, so

@@ -463,7 +463,7 @@ function validateBottleCommitFields(fields = {}) {
     return { error: { status: 400, message: 'drinkFrom cannot be after drinkTo' } };
   }
   // Optional peak INSIDE the window — the personal twin of the somm profile's
-  // five-stage shape (ticket 6a94655283: "drinkable ≠ peak"). Ordering:
+  // five-stage shape ("drinkable ≠ peak"). Ordering:
   // drinkFrom ≤ peakFrom ≤ peakUntil ≤ drinkTo.
   const pw = validatePeakWindow(peakFrom, peakUntil, from.value, to.value);
   if (pw.error) return pw;
@@ -939,8 +939,8 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
   }
   if ('vintage' in changes) {
     // The bottle's photos are photos of THIS bottle, so they follow its
-    // vintage (support ticket 2026-10-09: same-vintage photos are preferred
-    // over the wine's generic image). Bookkeeping: never fails the edit.
+    // vintage (same-vintage photos are preferred over the wine's generic
+    // image). Bookkeeping: never fails the edit.
     try {
       const { photoVintage } = require('../utils/imageVintage');
       // An admin's "official for this vintage" was a choice about the OLD

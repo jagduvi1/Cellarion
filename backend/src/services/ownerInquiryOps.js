@@ -139,8 +139,7 @@ const questionLink = (inquiryId) => `/questions/${inquiryId}`;
  * bottle's page shows the question card too — it is keyed by the wine). Only
  * cellars that still exist and that they own or are a member of. Resolved
  * when the notification is clicked, so a bottle or cellar deleted after the
- * question went out no longer leads to "bottle not found" (support ticket
- * 2026-10-14).
+ * question went out does not lead to "bottle not found".
  */
 async function liveBottleLink(userId, wineId, preferBottleId) {
   if (!wineId || !isValidId(String(wineId))) return null;
@@ -303,8 +302,8 @@ async function buildRecipients(wineId) {
     { $match: { wineDefinition: wineOid, status: statusMatch } },
     // Only bottles in a cellar that still exists: a bottle in a cellar its
     // owner deleted keeps its status, but nobody can open it, so a question
-    // linked to it led to "bottle not found" (support ticket 2026-10-14). An
-    // owner whose only bottles sat in a deleted cellar is not asked at all.
+    // linked to it would lead to "bottle not found". An owner whose only
+    // bottles sit in a deleted cellar is not asked at all.
     { $lookup: { from: 'cellars', localField: 'cellar', foreignField: '_id', as: 'liveCellar', pipeline: [{ $match: { deletedAt: null } }, { $project: { _id: 1 } }] } },
     { $match: { 'liveCellar.0': { $exists: true } } },
     { $sort: { createdAt: -1 } },
@@ -405,11 +404,10 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
   }
 
   // In-app + push (existing notification consent surfaces), and email: the
-  // bell alone left every question unanswered (2026-10-20). The link opens the
-  // QUESTION, which finds the owner's bottle when they click: a bottle link
-  // written now goes dead when the bottle or its cellar is deleted later
-  // (support ticket 2026-10-14). Batch call: one insertMany + capped push
-  // fan-out.
+  // bell alone leaves questions unanswered. The link opens the QUESTION,
+  // which finds the owner's bottle when they click: a bottle link written now
+  // goes dead when the bottle or its cellar is deleted later. Batch call: one
+  // insertMany + capped push fan-out.
   const label = wineLabel(wine);
   createNotifications(recipients.map((r) => ({
     userId: r.user,
@@ -538,7 +536,7 @@ async function resolveOwnerInquiry({ inquiryId, userId, note, ownerReply, via = 
   // notification failure must not un-resolve an inquiry that is already
   // written (the wine-report close draws the same line). The link opens the
   // question, which finds a bottle of the wine the owner can open when they
-  // click (support ticket 2026-10-14) — the reply shows on its card.
+  // click — the reply shows on its card.
   const fallback = `Thank you — your answer helped settle the record for ${label}.`;
   createNotifications(answered.map((r) => ({
     userId: r.user,

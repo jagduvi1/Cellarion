@@ -221,7 +221,7 @@ function AdminRequests() {
   // What the import FILE said about the wine (request.hints — country,
   // region, appellation, type) pre-fills the create form the same way an AI
   // lookup does, so the curator starts from the file's geography instead of
-  // re-deriving it (support ticket 2026-09-05). Bails if another request was
+  // re-deriving it. Bails if another request was
   // selected while the region list was loading (selectedIdRef is the page's
   // existing "which request is open" ref).
   const prefillFromHints = async (request) => {

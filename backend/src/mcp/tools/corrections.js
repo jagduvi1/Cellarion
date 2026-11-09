@@ -8,8 +8,7 @@ const { registerTool } = require('../registry');
 const ops = require('../../services/wineProposalOps');
 const { ok, fail, objectId, FIELD_DESCRIPTIONS } = require('../toolUtil');
 // A suggestion cannot be withdrawn, so a retry after an ambiguous transport
-// failure must be safe: idempotency_key claims/replays through the ledger
-// (support ticket 2026-09-12).
+// failure must be safe: idempotency_key claims/replays through the ledger.
 const { logAction, replay } = require('../actionLedger');
 // The replayable body stored on the ledger row: what ok() serialises.
 const envelopeOf = (summary, data) => ({ summary, data });

@@ -9,8 +9,8 @@ const statType = (wd) => (wd?.nonWine === true ? 'other' : (wd?.type || 'unknown
 const avgOf = (sum, count) => (count > 0 ? Math.round((sum / count) * 10) / 10 : null);
 
 /**
- * The rating distribution three ways (support ticket 2026-10-11: someone who
- * rates only when drinking saw an empty "Rating distribution"): the bottles
+ * The rating distribution three ways (someone who rates only when drinking
+ * must not see an empty "Rating distribution"): the bottles
  * in the cellar, the history — bottles drunk, gifted or sold, each with the
  * rating given when drinking, else the one on the bottle
  * (utils/ratingUtils.bottleRating) — and all of them, each bottle once.

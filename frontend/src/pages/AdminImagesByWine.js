@@ -60,7 +60,7 @@ export default function AdminImagesByWine() {
     return wine.image === img.processedUrl || wine.image === img.originalUrl;
   };
 
-  // "This is the photo of its vintage" (support ticket 2026-10-09). Without a
+  // "This is the photo of its vintage". Without a
   // choice a vintage shows the first photo of it approved; this overrides.
   const setVintageOfficial = async (img) => {
     setBusyId(img._id);

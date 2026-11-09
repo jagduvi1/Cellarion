@@ -108,8 +108,8 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
 
     const { bottleId, wineDefinitionId, credit } = req.body;
     // Multipart field, so a string: "1" / "true" / "on" from the upload form's
-    // "keep the background" checkbox (ticket 6a97f870 — label-only photos
-    // came back cropped because rembg expects a whole bottle).
+    // "keep the background" checkbox (a label-only photo comes back cropped
+    // from rembg, which expects a whole bottle).
     const keepBackground = ['1', 'true', 'on'].includes(String(req.body.keepBackground ?? '').trim().toLowerCase());
 
     // Verify bottle ownership if bottleId is provided (access is the route's
@@ -202,9 +202,8 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
     // The uploader sees their own photos in every state EXCEPT rejected. The
     // reject route deletes the files and nulls both URLs, keeping only a
     // tombstone row — and a row with no URL is not a photo anyone can show.
-    // Handing it back took the whole bottle page down for its owner (support
-    // ticket 2026-09-03: ImageCarousel called .startsWith on the null URL and
-    // the ErrorBoundary swallowed the page) — 138 bottles / 47 owners on prod.
+    // Handing it back gives every client a photo it cannot render (the
+    // frontend side is pinned in components/ImageCarousel.test.js).
     // ?scope=vintage (the vintage page): the photos of EVERY bottle of this
     // wine and vintage in this cellar, not just this one — a label photo
     // added through one bottle belongs to the vintage, and the page must not
@@ -240,11 +239,11 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       }).sort({ assignedToWine: -1, createdAt: -1 });
       // Exclude any that are already in the bottle-specific list
       wineImages = wineImages.filter(img => !bottleImageIds.has(img._id.toString()));
-      // Photos of THIS vintage first (support ticket 2026-10-09), led by the
+      // Photos of THIS vintage first, led by the
       // vintage's official photo: the first wine-level slide is the one a
       // bottle without its own photo opens on, and a 2016 bottle should open
       // on a 2016 label when one exists. With none, the wine's official image
-      // leads, as before. Within each part the official-first, newest-first
+      // leads. Within each part the official-first, newest-first
       // order of the query holds.
       const thisVintage = photoVintage(bottle.vintage);
       if (thisVintage) {
@@ -557,7 +556,7 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
     const linkedIds = [...new Set(imageIds.map(String))].filter(id => ownIds.has(id));
 
     // The AddBottle flow uploads before the bottle exists, so the photo learns
-    // its vintage here, with its bottle (support ticket 2026-10-09).
+    // its vintage here, with its bottle.
     await BottleImage.updateMany(own, { bottle: bottleId, vintage: photoVintage(bottle.vintage) });
     if (linkedIds.length) {
       logAudit(req, 'image.link', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
@@ -614,13 +613,10 @@ router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
 
 // ── Removing a photo ────────────────────────────────────────────────────────
 //
-// Support ticket 6a865f60 (2026-08-20): "How do I remove a picture — the webcam
-// picked up too much to my taste." They could not. Until now a photo was only
-// ever deleted as a SIDE EFFECT of deleting the bottle, the cellar or the whole
-// account, so the smallest available remedy for one unwanted webcam frame was
-// destroying something much larger. An admin had no surface either: label scans
-// are deliberately excluded from the review queue (audit L-6), so the only way
-// to honour that request was a script against the database.
+// A member must be able to remove one unwanted photo on its own, not only as a
+// SIDE EFFECT of deleting the bottle, the cellar or the whole account. An admin
+// is no fallback for this: label scans are deliberately excluded from the
+// review queue (audit L-6), so the uploader's own verb is the only remedy.
 //
 // The line between the two verbs is whether the photo is still ONLY the
 // uploader's. A photo assigned to a wine has become registry content that other

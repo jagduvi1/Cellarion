@@ -1,8 +1,8 @@
 /**
  * Structural extremes that DEFINE a grape — the deterministic half of the
- * regional-prior defence (ticket 6a8464ea, phase 2).
+ * regional-prior defence.
  *
- * The failure this feeds: enrichment gave a Bacchus HIGH acidity — the grape
+ * The failure this feeds: enrichment gives a Bacchus HIGH acidity — the grape
  * is defined by low acidity, but the model reached for a regional prior.
  * No flag fires on such a row and confidence is mid-high, so no confidence
  * gate can catch it; a factual cross-check can.
@@ -17,13 +17,12 @@
  * aside — that asymmetry is what keeps false positives ~zero.
  *
  * ---------------------------------------------------------------------------
- * NO 'low' TANNIN ENTRIES. EVER. (somm ticket 6a896b7e, 2026-08-22)
+ * NO 'low' TANNIN ENTRIES. EVER.
  *
- * The table shipped with `pinot noir: { tannin: 'low' }` and it was wrong on
- * both records it ever fired on — two correct Pommards, flagged for having
- * the firm tannin Pommard is *known* for. 588 single-variety Pinot Noir rows
- * were exposed to it, including Nuits-Saint-Georges, Gevrey-Chambertin and
- * Central Otago, all appellations where grip is typical rather than anomalous.
+ * A `pinot noir: { tannin: 'low' }` entry is wrong: it flags correct
+ * Pommards for having the firm tannin Pommard is *known* for, and it would
+ * reach Nuits-Saint-Georges, Gevrey-Chambertin and Central Otago too, all
+ * appellations where grip is typical rather than anomalous.
  *
  * The reason is structural, not a matter of picking better varieties:
  *
@@ -39,9 +38,9 @@
  *   a ceiling nobody enforces, so it cannot be asserted as definitional.
  *
  * So: `tannin: 'high'` entries are legitimate; `tannin: 'low'` entries are
- * not, whatever the variety. Gamay went out with Pinot Noir under the same
+ * not, whatever the variety. Gamay stays out with Pinot Noir under the same
  * rule — cru Beaujolais (Moulin-à-Vent, Morgon) is structured on purpose and
- * would have been the next false positive. An invariant test enforces this.
+ * would be a false positive. An invariant test enforces this.
  * ---------------------------------------------------------------------------
  *
  * Keys are normalizeString-folded grape names (lowercase, accents folded).
@@ -54,7 +53,7 @@ const GRAPE_STYLE_TYPICALS = {
   assyrtiko:         { acidity: 'high' },
   furmint:           { acidity: 'high' },
   'chenin blanc':    { acidity: 'high' },
-  bacchus:           { acidity: 'low' },  // the ticket's worked example
+  bacchus:           { acidity: 'low' },  // the worked example above
   gewurztraminer:    { acidity: 'low' },
   viognier:          { acidity: 'low' },
   marsanne:          { acidity: 'low' },

@@ -29,8 +29,8 @@ const fail = (code, message) => ({ ok: false, code, message });
  * transport-neutral failure the ops services already speak.
  *
  * `budget: false` applies the ban only. Used when the write AMENDS a row the
- * user already has in a queue (support ticket 2026-09-12: adding a field to
- * one's own pending wine correction) — nothing new enters the queue, so it
+ * user already has in a queue (e.g. adding a field to one's own pending wine
+ * correction) — nothing new enters the queue, so it
  * must not be refused as "one more suggestion today".
  */
 async function checkContributionGate(userId, { budget = true } = {}) {

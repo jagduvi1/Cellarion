@@ -1,6 +1,6 @@
 /**
  * Normalize wine.region to the appellation's own region — the batch half of
- * the region-granularity canon (Johan, 2026-08-16 / ticket 6a8162c5).
+ * the region-granularity canon.
  *
  * CANON: when a wine's appellation itself names a region the taxonomy has
  * (appellation "Hunter Valley", and a Hunter Valley Region doc under the same

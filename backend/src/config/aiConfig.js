@@ -435,16 +435,16 @@ const defaults = {
   // is a knowledge-recall task where the quality gap over Haiku is meaningful.
   enrichmentPrompt: DEFAULT_ENRICHMENT_PROMPT,
   enrichmentModel: 'claude-sonnet-5',
-  // Enrichment publication gate (ticket 6a83e765; calibrated on prod
-  // 2026-08-18 over 5,836 published AI profiles). Below the floor a generated
+  // Enrichment publication gate (calibrated on the published AI profiles on
+  // prod). Below the floor a generated
   // profile is HELD whatever the flags say; an UNKNOWN producer holds below
   // the higher bar (unknown + weak confidence = regional guesswork, unknown +
-  // strong confidence = the honest appellation-level majority the 2026-08-17
-  // flag split released). 0.45 was measurably too aggressive — the published
+  // strong confidence = the honest appellation-level majority, which is
+  // published). A 0.45 floor is measurably too aggressive — the published
   // confidence mass sits in the 0.4 band. See enrichmentJob.shouldHoldProfile.
   enrichmentHoldConfidenceFloor: 0.4,
   enrichmentHoldUnknownConfidenceBar: 0.55,
-  // Web-search rescue pilot (Johan-approved 2026-08-19, cost-capped): when a
+  // Web-search rescue pilot (cost-capped): when a
   // generation would HOLD for low/unknown confidence, ONE search-assisted
   // retry may run — the gate itself is the difficulty detector, so wines the
   // model handles fine never spend a search. Anthropic-provider only. The
@@ -453,7 +453,7 @@ const defaults = {
   // restart resets the counter — acceptable for the pilot's bound).
   enrichmentSearchEnabled: true,
   enrichmentSearchDailyCap: 5,
-  // Who pays for a new wine's first profile (Johan, 2026-08-21). Adding a
+  // Who pays for a new wine's first profile. Adding a
   // bottle fires an enrichment per newly-minted wine, and at ~120 new wines a
   // day that drip — not the batch runs — is the steady API spend. It is also
   // the LEAST reliable population: a freshly scanned label often has no
@@ -471,7 +471,7 @@ const defaults = {
   //
   // Batch runs are unaffected — they are admin-triggered and simply not run.
   enrichmentOnAdd: 'sufficient',
-  // The sommelier's two AI helpers (Johan, 2026-08-21). Both answer questions
+  // The sommelier's two AI helpers. Both answer questions
   // the curator is already researching by hand — setting a drink window means
   // reading the producer, the vintage and the style, which is the same work
   // the suggestion does. The curator works on a flat-rate subscription, so

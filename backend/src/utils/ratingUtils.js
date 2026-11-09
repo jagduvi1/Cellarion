@@ -130,8 +130,8 @@ function normalizedOrNull(value, scale) {
  * bottle drunk (or gifted, sold) the rating given then, which is the final
  * verdict, else the rating on the bottle — also when the one given then
  * cannot be read. One rule for the statistics, the rating filters and the
- * rating sort (support ticket 2026-10-11: someone who rates only when
- * drinking saw an empty rating distribution, and the filters found nothing).
+ * rating sort (someone who rates only when drinking must still get a rating
+ * distribution, and filters that find their bottles).
  */
 function bottleRating(b) {
   if (!b) return null;
