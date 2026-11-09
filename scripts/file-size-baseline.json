@@ -7,7 +7,7 @@
   "backend/src/routes/cellars.js": 2178,
   "backend/src/routes/import.js": 2501,
   "backend/src/routes/og.js": 1607,
-  "backend/src/services/enrichmentJob.test.js": 1519,
+  "backend/src/services/enrichmentJob.test.js": 1514,
   "backend/src/services/findOrCreateWine.test.js": 1575,
   "backend/src/services/userDataRegistry.js": 1505,
   "frontend/src/pages/AddBottle.js": 2357,
