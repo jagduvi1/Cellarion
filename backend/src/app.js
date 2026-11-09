@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const { rateLimitKey } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
-const { uploadsGuard, uploadsCacheHeaders, convertedPhotoFallback } = require('./middleware/uploadsStatic');
+const { uploadsGuard, uploadsCacheHeaders, convertedPhotoFallback, isPublicUploadRead } = require('./middleware/uploadsStatic');
 const { thumbnailHandler } = require('./services/thumbnails');
 const healthRoute = require('./routes/health');
 const siteRoute = require('./routes/site');
@@ -283,14 +283,15 @@ const isMcp = (req) => {
     || p === '/api/bridge/v1' || p.startsWith('/api/bridge/v1/');
 };
 
-// Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)
+// Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable).
+// Reads of the public uploads mount don't count (isPublicUploadRead says why).
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: () => rateLimitsConfig.get().api.max,
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => isStripeWebhook(req) || isMcp(req),
+  skip: (req) => isStripeWebhook(req) || isMcp(req) || isPublicUploadRead(req),
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'api', limit: rateLimitsConfig.get().api.max });
     res.status(429).json({ error: 'Too many requests, please try again later' });
