@@ -28,7 +28,7 @@ jest.mock('../../utils/exchangeRates', () => ({
   getSnapshotsForDates: jest.fn().mockResolvedValue(new Map()),
 }));
 jest.mock('../../models/WineVintagePrice', () => ({ aggregate: jest.fn(), find: jest.fn() }));
-jest.mock('../../models/PriceTrackingRequest', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
+jest.mock('../../models/PriceTrackingRequest', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), deleteOne: jest.fn().mockResolvedValue({ deletedCount: 1 }) }));
 jest.mock('../../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn(), exists: jest.fn() }));
@@ -145,7 +145,7 @@ describe('POST /api/somm/prices/requests/:id/decline', () => {
       skippedBy: SOMM_ID,
     });
 
-    expect(doc.deleteOne).toHaveBeenCalledTimes(1);
+    expect(PriceTrackingRequest.deleteOne).toHaveBeenCalledWith({ _id: REQ_ID });
 
     // Both requesters, wine label + reason in the message.
     expect(createNotification).toHaveBeenCalledTimes(2);
