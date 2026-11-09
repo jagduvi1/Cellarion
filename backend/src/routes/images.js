@@ -616,7 +616,7 @@ router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
 // A member must be able to remove one unwanted photo on its own, not only as a
 // SIDE EFFECT of deleting the bottle, the cellar or the whole account. An admin
 // is no fallback for this: label scans are deliberately excluded from the
-// review queue (audit L-6), so the uploader's own verb is the only remedy.
+// review queue (audit L-6), so an admin has no surface that lists them.
 //
 // The line between the two verbs is whether the photo is still ONLY the
 // uploader's. A photo assigned to a wine has become registry content that other

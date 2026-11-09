@@ -240,8 +240,8 @@ function _resetSearchSlots() {
 // now forbids that directly, so this is a backstop rather than the main gate.
 //
 // CONFIDENCE IS PART OF THE DECISION too — as a calibrated FLOOR, not a
-// hold-on-any-doubt. The split above is right about the flags, but on its own
-// it leaves confidence read by NOBODY, and profiles would publish at 0.2.
+// hold-on-any-doubt. The split above is right about the flags, but the flags
+// alone never read confidence, and a profile at 0.2 would publish.
 // Calibrated on prod over 5,836 published AI profiles: the confidence mass
 // sits at 0.5–0.7, a 0.40 floor holds ~300 all-time, and 0.45 is measurably
 // too aggressive (1,158 — the mass sits in the 0.4 band). An UNKNOWN producer

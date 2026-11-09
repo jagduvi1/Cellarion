@@ -212,7 +212,7 @@ const userSchema = new mongoose.Schema({
       },
       ownerInquiry: {
         // A curator's question about a wine you own a bottle of. The bell and
-        // push alone leave such questions unanswered, so it is emailed too.
+        // push alone can leave such questions unanswered, so it is emailed too.
         // Not marketing: one precise question about
         // the record of your own bottle, with every send rationed by the
         // curators' contact budget and at most one such email a day. On by

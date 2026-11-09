@@ -253,7 +253,7 @@ const wineDefinitionSchema = new mongoose.Schema({
     // shouldHoldProfile) | 'taxonomy_conflict' (grapeStyleTypicals cross-
     // check) | 'grape_colour_conflict' (utils/grapeColourCheck: the record's
     // own type disagrees with every grape's curated colour). Plain String on
-    // purpose: held rows that predate the field read null (= producer_suspect),
+    // purpose: held rows that predate the field read null ('legacy' in list_held_profiles),
     // and a future gate reason must not need a schema change.
     heldReason:   { type: String, default: null, trim: true },
     // This generation used the web-search rescue (pilot 2026-08-19). The

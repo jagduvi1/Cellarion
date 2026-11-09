@@ -227,8 +227,9 @@ function buildProposedWine(aiData, item) {
  * The rules mirror mergeAiWithFile's precedence exactly — file first for the
  * label-stated fields, model for the rest. Its curator-facing point: a grape
  * the model INFERRED FROM THE APPELLATION must not look identical to one the
- * owner's file stated. A file with appellations and no grapes gets each wine
- * its appellation's signature grape, which an off-type cuvée does not have.
+ * owner's file stated. A file with appellations and no grapes can get each
+ * wine its appellation's signature grape from the model, which an off-type
+ * cuvée does not have.
  *
  * @param {Object} item the file's row
  * @param {Object} ai the identified wine actually being minted

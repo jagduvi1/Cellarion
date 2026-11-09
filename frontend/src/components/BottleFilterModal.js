@@ -11,8 +11,8 @@ const COLLAPSED_LIMIT = 8;
 
 // Rating bounds live in the filter state as NORMALISED 0–100 strings (the wire
 // format every list endpoint speaks), but the person types in their own scale
-// — 3.8★, 16.5/20, 91pts — at the scale's own precision (ratings are stored
-// to one decimal, so a whole-star 2+/3+/4+ choice would round them). Text is
+// — 3.8★, 16.5/20, 91pts — at the scale's own precision (star and 20-point
+// ratings carry one decimal, which a whole-star choice cannot express). Text is
 // local until blur/Enter so a half-typed
 // "3." is never round-tripped through the conversion mid-keystroke.
 function RatingRangeInputs({ minNorm, maxNorm, scale, onChange }) {

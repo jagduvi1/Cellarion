@@ -24,8 +24,8 @@
  *                   3.2, 5,8          3 segments → first segment names a
  *                                       SUB-RACK ("Cellar D"), rest row/col
  *                                     (separator: dash, dot or comma —
- *                                       CellarTracker owners do type bins
- *                                       as "row,column")
+ *                                       so a bin typed as "row,column"
+ *                                       parses too)
  *   sequential      147, BIN1, P6     { rackPosition: number } (constant
  *                                       alpha prefix stripped)
  *

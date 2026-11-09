@@ -157,11 +157,10 @@ const grapesLite = (grapes) => {
 /**
  * Does a stored profile EXIST — by content, not by who wrote it.
  *
- * generatedAt is the AI's stamp: a curator-written profile never has one, so
- * testing generatedAt alone reports every hand-written profile as absent. Most
- * curator profiles carry no generatedAt, so a queue that tested it would call
- * them all blank — with a reason string that instructs the curator to write
- * one. Following it in good faith overwrites another curator's research and
+ * generatedAt is the AI's stamp: a profile a curator wrote from scratch never
+ * has one, so testing generatedAt alone reports it as absent, and a queue that
+ * tested it would call it blank — with a reason string that instructs the
+ * curator to write one. Following it in good faith overwrites another curator's research and
  * restamps it as their own.
  *
  * list_held_profiles identifies a published suspect the same way ("a
@@ -3338,8 +3337,8 @@ registerTool({
 });
 
 // ── Colour-conflict worklist ──────────────────────────────────────────────
-// The grape_colour_conflict HOLD gates new generations — but rows whose
-// profile was already published are never held, so
+// The grape_colour_conflict HOLD is decided only when a profile is generated,
+// so a row whose profile is already published is not held by it, and
 // `held_reason:"grape_colour_conflict"` does not reach them, and without this
 // list the only way to work them would be outside the app. Work that lives
 // outside the app is work that does not get done, and it is not countable.

@@ -435,13 +435,11 @@ const defaults = {
   // is a knowledge-recall task where the quality gap over Haiku is meaningful.
   enrichmentPrompt: DEFAULT_ENRICHMENT_PROMPT,
   enrichmentModel: 'claude-sonnet-5',
-  // Enrichment publication gate (calibrated on the published AI profiles on
-  // prod). Below the floor a generated
-  // profile is HELD whatever the flags say; an UNKNOWN producer holds below
-  // the higher bar (unknown + weak confidence = regional guesswork, unknown +
-  // strong confidence = the honest appellation-level majority, which is
-  // published). A 0.45 floor is measurably too aggressive — the published
-  // confidence mass sits in the 0.4 band. See enrichmentJob.shouldHoldProfile.
+  // Enrichment publication gate. Below the floor a generated
+  // profile is HELD whatever the flags say; an UNKNOWN producer on a record
+  // too thin for a regional estimate (no place or no grapes/type) also holds
+  // below the higher bar, and publishes at or above it. A null confidence
+  // skips both checks. See enrichmentJob.shouldHoldProfile.
   enrichmentHoldConfidenceFloor: 0.4,
   enrichmentHoldUnknownConfidenceBar: 0.55,
   // Web-search rescue pilot (cost-capped): when a

@@ -7,7 +7,7 @@
  * in every language, and undo the French→English consolidation of the
  * taxonomy.
  *
- * But the gap is real. The interface ships in five languages while the
+ * But the gap is real. The interface ships in several languages while the
  * taxonomy speaks only English — and the asymmetry is visible in our own
  * code, which ACCEPTS "Allemagne" and "Vallée du Rhône" on import
  * (utils/normalize's COUNTRY_ALIASES is full of French, German and Swedish
