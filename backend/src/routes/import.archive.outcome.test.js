@@ -13,8 +13,10 @@
  *     minted once, and the repeat attaches to it
  *   - a confirmed proposal that findOrCreateWine matched to an existing wine
  *     is 'matched'
- *   - a confirmed proposal that resolved to no wine (the near-match zone, a
- *     missing name) is 'unresolved'
+ *   - a confirmed proposal in the near-match zone is 'request': the bottle
+ *     lands on a pending wine request under the proposal's identity instead
+ *     of being dropped
+ *   - a confirmed proposal with no name is 'unresolved'
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -49,8 +51,9 @@ jest.mock('../models/WineDefinition', () => ({
 }));
 // A Bottle that "saves" without a database.
 jest.mock('../models/Bottle', () => {
-  function Bottle(doc) { Object.assign(this, doc); this._id = 'bottle-' + (Bottle.__n++); }
+  function Bottle(doc) { Object.assign(this, doc); this._id = 'bottle-' + (Bottle.__n++); Bottle.__made.push(this); }
   Bottle.__n = 1;
+  Bottle.__made = [];
   Bottle.prototype.save = function () { return Promise.resolve(this); };
   Bottle.insertMany = jest.fn(async (docs) => docs);
   Bottle.countDocuments = jest.fn(async () => 0);
@@ -58,7 +61,8 @@ jest.mock('../models/Bottle', () => {
   return Bottle;
 });
 jest.mock('../models/WineRequest', () => {
-  function WineRequest(doc) { Object.assign(this, doc); this._id = 'req-1'; }
+  function WineRequest(doc) { Object.assign(this, doc); this._id = 'req-1'; WineRequest.__made.push(this); }
+  WineRequest.__made = [];
   WineRequest.prototype.save = function () { return Promise.resolve(this); };
   WineRequest.findOne = jest.fn().mockResolvedValue(null); // intake reuse lookup (services/wineRequestIntake)
   return WineRequest;
@@ -112,6 +116,8 @@ const REQUEST_ROW = { wineName: 'Unknown One', producer: 'Nobody', country: 'Ita
 
 beforeEach(() => {
   jest.clearAllMocks();
+  require('../models/Bottle').__made.length = 0;
+  require('../models/WineRequest').__made.length = 0;
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, user: USER_ID, deletedAt: null, members: [] });
   require('../models/WineDefinition').findById.mockResolvedValue({ _id: WINE_ID, name: 'X', producer: 'Y' });
   findOrCreateWine.mockResolvedValue({
@@ -168,7 +174,7 @@ describe('import archive outcome', () => {
     expect(rows.map((r) => r.outcome)).toEqual(['matched']);
   });
 
-  it('a confirmed AI proposal that resolved to no wine is archived as unresolved', async () => {
+  it('a near-match AI proposal is archived as request; a nameless one as unresolved', async () => {
     // The near-match zone: findOrCreateWine hands back candidates, no wine.
     findOrCreateWine.mockResolvedValue({ wine: null, candidates: [{ _id: WINE_ID }] });
 
@@ -177,11 +183,40 @@ describe('import archive outcome', () => {
       items: [AI_ROW, { ...AI_ROW, aiWine: { producer: 'Domaine Fictif' } }, MATCHED_ROW],
     });
     expect(status).toBe(200);
-    expect(body.created).toBe(1);
-    expect(body.errors).toHaveLength(2);
+    expect(body.created).toBe(2);
+    expect(body.errors).toHaveLength(1);
     await flush();
 
     const { rows } = ImportArchive.create.mock.calls[0][0];
-    expect(rows.map((r) => r.outcome)).toEqual(['unresolved', 'unresolved', 'matched']);
+    expect(rows.map((r) => r.outcome)).toEqual(['request', 'unresolved', 'matched']);
+  });
+
+  it('files a near-match bottle under the proposal, with the file geography as hints', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: null, candidates: [{ _id: WINE_ID }] });
+    // The file named no producer and a country of its own; the proposal split
+    // the producer out and guessed the rest.
+    const row = {
+      aiWine: { ...AI_WINE, region: 'Bordeaux' },
+      wineName: 'Domaine Fictif / Clos du Test', vintage: '2019', country: 'Belgium',
+    };
+
+    const { status, body } = await post({ cellarId: CELLAR_ID, items: [row, { ...row, vintage: '2020' }] });
+    expect(status).toBe(200);
+    expect(body.created).toBe(2);
+    expect(body.errors).toHaveLength(0);
+
+    // One request for both bottles, under the proposal the member confirmed.
+    const WineRequest = require('../models/WineRequest');
+    expect(WineRequest.__made).toHaveLength(1);
+    expect(WineRequest.__made[0]).toMatchObject({
+      requestType: 'new_wine', status: 'pending',
+      wineName: 'Clos du Test', producer: 'Domaine Fictif',
+      hints: { country: 'Belgium', region: 'Bordeaux', type: 'red' },
+    });
+
+    const Bottle = require('../models/Bottle');
+    const bottles = Bottle.__made.filter((b) => b.pendingWineRequest);
+    expect(bottles.map((b) => b.vintage)).toEqual(['2019', '2020']);
+    expect(bottles.every((b) => !b.wineDefinition)).toBe(true);
   });
 });

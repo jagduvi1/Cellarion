@@ -807,11 +807,19 @@ function ctClean(value) {
 // file was the whole problem (audit ticket 2026-09-05).
 // "N.V." / "n.v." / "NV." (Oeno writes "N.V.") is a STATED non-vintage, not a
 // missing one — and the backend's vintage gate accepts only the bare "NV".
+//
+// CellarTracker's sentinels are read here too, not only in ctVintage: a CT
+// file whose columns no CT fingerprint recognises (a "My Cellar" view export
+// with just Wine / Vintage / Size) is parsed by the GENERIC mapper, and every
+// non-vintage bottle in it carried "1001" to the backend, which refuses a year
+// below 1900 — the bottle was dropped. No wine has those years, so they are
+// sentinels whichever mapper claimed the file: 1001 is a stated non-vintage,
+// 9999 an unknown year (filed like a blank one).
 const NV_RE = /^n\.?\s?v\.?$/i;
 function vintageOrNV(raw) {
   const v = String(raw || '').trim();
-  if (!v) return { vintage: 'NV', vintageMissing: true };
-  if (NV_RE.test(v)) return { vintage: 'NV' };
+  if (!v || v === '9999') return { vintage: 'NV', vintageMissing: true };
+  if (NV_RE.test(v) || v === '1001') return { vintage: 'NV' };
   return { vintage: v };
 }
 
