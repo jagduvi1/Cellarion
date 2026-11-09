@@ -2,15 +2,15 @@
  * GET /api/cellars/:id/history and /multi/history — paged with ?limit.
  *
  * WHY THIS TEST EXISTS:
- * The history page used to receive and render every consumed bottle at once
- * (up to 10,000); a history imported from another app can hold thousands.
+ * A history imported from another app can hold thousands of consumed
+ * bottles, too many to receive and render at once.
  * With ?limit the routes send one page, newest-consumed first, with the total
  * and the per-reason counts the page's summary shows. The page lists bottles
  * in sections (drank, gifted, sold, other), so a section's next page is asked
  * for with ?reason and ?before (its last bottle): it continues after that
  * bottle's place in the order, so bottles consumed or restored between two
  * pages can't make it repeat or skip any. Without ?limit the whole history
- * comes back as before, now with the same totals.
+ * comes back, with the same totals.
  *
  * Real router + real requireAuth (HS256 test token); the Bottle model is a
  * small in-memory fake that honours filter, sort, skip and limit.
@@ -263,7 +263,7 @@ describe('GET /api/cellars/multi/history', () => {
   });
 });
 
-// A bottle rated only when it was drunk (support ticket 2026-10-11): the
+// A bottle rated only when it was drunk: the
 // rating filter reads the rating given then, as the statistics count it.
 describe('rating filter on drink-time ratings', () => {
   test('a bottle rated only when drinking is found by its drink-time rating', async () => {

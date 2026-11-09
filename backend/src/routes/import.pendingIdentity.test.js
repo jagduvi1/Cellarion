@@ -131,10 +131,9 @@ test('a row with NO producer still imports — the bottle lands, the wine goes t
   expect(fields.producer).toBe('');
   expect(userId).toBe(USER_ID);
   // toEqual, not objectContaining: the option set is a drift canary, so a new
-  // option has to be added here deliberately. `provenance` joined on
-  // 2026-08-31 (somm ticket 6a958dbc) — and this row is the purest case for
-  // it, since the file states nothing but a vintage, so every identity field
-  // the wine ends up with came from the model.
+  // option has to be added here deliberately. This row is the purest case
+  // for `provenance`: the file states nothing but a vintage, so every
+  // identity field the wine ends up with came from the model.
   expect(opts).toEqual({
     createdVia: 'import',
     allowPending: true,

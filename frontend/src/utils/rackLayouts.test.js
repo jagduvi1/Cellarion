@@ -392,7 +392,7 @@ describe('computeLayout', () => {
       expect(h2t.cabinet.headToTail).toBe(true);
     });
 
-    // Support forum 2026-10-13: a slim fridge lays one bottle across the front
+    // A slim fridge may lay one bottle across the front
     // of each shelf and fills its bin with bottles lying across.
     it('shelfSideways: lying bottles are marked in their own cells, numbering and places unchanged', () => {
       const base = { shelfRows: [1, 2, 2], shelfCols: [5, 4, 4], twoDeep: false };
@@ -426,8 +426,8 @@ describe('computeLayout', () => {
       expect(cabinetSlotSideways({ sideways: '' }, 1, 0)).toBe(false);
     });
 
-    // Forum 2026-10-14: 1 across + 4, with 3 in the grooves on top (it used
-    // to stack 4 on the 3 beside the bottle across). Mirrors the backend.
+    // 1 across + 4, with 3 in the grooves on top (not 4 stacked on the 3
+    // beside the bottle across). Mirrors the backend.
     it('a bottle across a stacked one-deep shelf: the levels above count and draw from the bottles behind it', () => {
       const front = { twoDeep: false, sideways: 'front' };
       expect([1, 2, 3].map((r) => cabinetRowWidth(r, 5, { ...front, alternate: true }))).toEqual([5, 3, 4]);
@@ -438,8 +438,8 @@ describe('computeLayout', () => {
       expect(cabinetRestsBehindAcross({ sideways: 'front', cols: 5 }, 1, false)).toBe(false);
       expect(cabinetRestsBehindAcross({ sideways: 'front', cols: 5 }, 2, true)).toBe(false);
       expect(cabinetRestsBehindAcross({ sideways: 'all', cols: 5 }, 2, false)).toBe(false);
-      // Release audit 2026-10-14: a one-wide shelf has nothing behind the bottle
-      // across, and moving its levels a cell over drew them outside the bay.
+      // A one-wide shelf has nothing behind the bottle across, and moving its
+      // levels a cell over would draw them outside the bay.
       expect(cabinetRestsBehindAcross({ sideways: 'front', cols: 1 }, 2, false)).toBe(false);
       const narrow = computeLayout('cabinet', 1, 1, { shelfRows: [3], twoDeep: false, shelfSideways: ['front'] });
       expect(narrow.slots.map((s) => s.cx)).toEqual(computeLayout('cabinet', 1, 1, { shelfRows: [3], twoDeep: false }).slots.map((s) => s.cx));
@@ -520,7 +520,7 @@ describe('computeLayout', () => {
       expect(computeLayout('cabinet', 1, 3, { shelfRows: [2] }).shelfYs).toBeUndefined();
     });
 
-    // Support ticket 2026-09-15: a Liebherr GrandCru 5001 stacks 6 in front
+    // A Liebherr GrandCru 5001 stacks 6 in front
     // of 5, then 5 in front of 6 — rows alternate cols / cols−1, the narrow
     // ones lying in the grooves of the wide ones. Changes capacity and the
     // numbering, so unlike stagger it is pinned slot by slot.
@@ -819,7 +819,7 @@ describe('getTotalSlots', () => {
 });
 
 describe('cabinetBayUnits', () => {
-  it("counts the two-deep back row's half bottle only where the back row is drawn offset (audit 2026-09-16)", () => {
+  it("counts the two-deep back row's half bottle only where the back row is drawn offset", () => {
     const bay = { rows: 2, cols: 6, alternate: false };
     // The 2D map draws the back row at c + 0.5, so it needs the half.
     expect(cabinetBayUnits(bay, { twoDeep: true, stagger: false })).toBe(6.5);

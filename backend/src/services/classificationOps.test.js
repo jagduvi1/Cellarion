@@ -1,5 +1,5 @@
 /**
- * Classification taxonomy operations (support ticket 2026-10-29): splitting
+ * Classification taxonomy operations: splitting
  * a legacy string, stripping ride-along words, resolving names and synonyms
  * (the wine's country breaks ties between systems), the write rule
  * (assignClassification: strict for curators, lenient for members, a no-op

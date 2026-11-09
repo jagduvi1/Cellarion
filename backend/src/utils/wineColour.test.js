@@ -1,5 +1,5 @@
 /**
- * utils/wineColour — support ticket 2026-09-17 ("Colour Sparkling/Rosè").
+ * utils/wineColour — the colour of a sparkling, dessert or fortified wine.
  *
  * Pins the inference the model hook runs on every created or retyped
  * sparkling/dessert/fortified wine: rosé words only, whole words only, never a
@@ -14,7 +14,7 @@ const { NAME_COLOUR_TERMS } = require('./crossFieldChecks');
 describe('inferColourFromName', () => {
   test.each([
     ['Rosé Extra Brut', 'Maso Martis'],
-    ['Brut Rosè', 'Ferrari'],             // grave accent, as the ticket spelled it
+    ['Brut Rosè', 'Ferrari'],             // grave accent instead of acute
     ['ROSÉ', 'Billecart-Salmon'],
     ['Cuvée Rosato', 'Cantina X'],
     ['Cava Rosado Brut', 'Codorníu'],
@@ -75,7 +75,7 @@ test('drift: WINE_COLOURS match the WineDefinition schema enum', () => {
   expect(types.filter((t) => !WINE_COLOURS.includes(t))).toEqual(STYLE_TYPES);
 });
 
-// Audit 2026-09-19: a stated colour beats the hook's inference, and a colour
+// A stated colour beats the hook's inference, and a colour
 // the type cannot carry is refused instead of silently dropped.
 describe('stateColour / colourTypeConflict', () => {
   const { stateColour, colourTypeConflict } = require('./wineColour');

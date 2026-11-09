@@ -17,7 +17,7 @@ jest.mock('../models/WineOwnerInquiry', () => ({
   findById: jest.fn(),
   findOneAndUpdate: jest.fn(),
 }));
-// GET /:id resolves a bottle page the caller can open now (support ticket 2026-10-14).
+// GET /:id resolves a bottle page the caller can open now.
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ find: jest.fn(), findOne: jest.fn() }));
 // requireAuth calls User.exists for demo tokens (must resolve truthy or the
@@ -89,7 +89,7 @@ const INQUIRY_ROW = {
   expiresAt: '2026-10-01T00:00:00.000Z',
 };
 
-// Support ticket 2026-10-14: what a curator-question notification opens.
+// What a curator-question notification opens.
 describe('GET /:id', () => {
   const Cellar = require('../models/Cellar');
   const Bottle = require('../models/Bottle');
@@ -291,7 +291,7 @@ describe('POST /:id/respond', () => {
 
     // Addressed to someone else: reported exactly like one that does not exist,
     // as the MCP tool does — this surface never confirms what other owners were
-    // asked (release audit 2026-09-27, L: it answered 403).
+    // asked (a 403 here would confirm it).
     diagnose({ status: 'open', expiresAt: new Date(Date.now() + 1000), recipients: [{ user: OTHER, response: null }] });
     res = await respond(I1, { response: 'answer' });
     expect(res.status).toBe(404);

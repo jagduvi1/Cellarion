@@ -1,11 +1,11 @@
 /**
- * The label-variant detector, tested against the REAL pairs a curator merged
- * by hand on 2026-08-23 (somm ticket e9b346ba) and the ones they explicitly
+ * The label-variant detector, tested against REAL pairs a curator merged
+ * by hand and the ones they explicitly
  * ruled out. Every "should match" case below is a duplicate that actually
  * existed in the production registry; every "must not" is a pair of genuinely
  * different wines that a naive rule would have destroyed.
  *
- * Why a bespoke detector at all: all 17 merged pairs scored BELOW 0.85 on the
+ * Why a bespoke detector at all: every merged pair scored BELOW 0.85 on the
  * existing fuzzy scorer — the floor of even the "did you mean?" soft zone —
  * spread 0.58 to 0.85. No threshold change could reach them without folding
  * unrelated wines together.
@@ -23,7 +23,7 @@ const G = grapeTokenSet(FORMS);
 const match = (a, b, ap, extra = {}) =>
   isLabelVariant({ name: a, appellation: ap, ...extra.a }, { name: b, appellation: ap, ...extra.b }, G);
 
-describe('real duplicates from the 2026-08-23 curation sweep', () => {
+describe('real duplicates from a curation sweep', () => {
   test.each([
     ['variety suffix', 'Bin 389', 'Bin 389 Cabernet Shiraz', null],
     ['variety suffix, reversed argument order', 'Bin 407 Cabernet Sauvignon', 'Bin 407', null],

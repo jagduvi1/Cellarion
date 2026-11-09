@@ -145,7 +145,7 @@ describe('teardown', () => {
   });
 });
 
-describe('in-flight requests (support ticket 2026-09-12: "session expired" after a committed write)', () => {
+describe('in-flight requests (no "session expired" after a committed write)', () => {
   test('expiry or eviction while a request is in flight unroutes the session but keeps its transport until the request ends', async () => {
     const s = sessions.createSession({ userId: 'u1' });
     s.transport = mkTransport();

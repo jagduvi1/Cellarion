@@ -1,7 +1,7 @@
 /**
  * POST /api/bottles/bulk — one edit or consume applied to many bottles
- * (support ticket 6a9949e3 follow-up: purchase details for a delivery, one
- * date for a dinner's bottles, a reservation across a case).
+ * (purchase details for a delivery, one date for a dinner's bottles, a
+ * reservation across a case).
  *
  * Pinned: access is editor+ per bottle's cellar (a viewer's bottle reads as
  * not_found), `fields` is cut down to the bulk whitelist before the shared
@@ -239,7 +239,7 @@ describe('POST /api/bottles/bulk', () => {
   });
 });
 
-describe('POST /api/bottles/bulk — post-ship audit fixes (2026-09-03)', () => {
+describe('POST /api/bottles/bulk — deleted cellars, reservations and the restock check', () => {
   test('a bottle in a soft-deleted cellar reads as not_found, as on the single routes', async () => {
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: DELETED, status: 'active' }]);
     const { status, body } = await postJson(app(), '/api/bottles/bulk', { action: 'update', bottleIds: [B(1)], fields: { price: 10 } });
@@ -283,7 +283,7 @@ describe('POST /api/bottles/bulk — post-ship audit fixes (2026-09-03)', () => 
   });
 });
 
-describe('POST /api/bottles/bulk — drink window (support ticket 2026-09-06)', () => {
+describe('POST /api/bottles/bulk — drink window', () => {
   test('update: the four window fields pass the whitelist and reach the shared update; rating does not', async () => {
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }, { _id: B(2), cellar: OWNED, status: 'active' }]);
     updateBottleFields.mockResolvedValue({ changes: { drinkFrom: 2028 }, prev: {} });
@@ -309,7 +309,7 @@ describe('POST /api/bottles/bulk — drink window (support ticket 2026-09-06)', 
   });
 });
 
-describe('POST /api/bottles/bulk — per-bottle window conflicts (audit 2026-09-07)', () => {
+describe('POST /api/bottles/bulk — per-bottle window conflicts', () => {
   test('a peak-outside-window refusal on the FIRST bottle is a skip, not a whole-request 400', async () => {
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }, { _id: B(2), cellar: OWNED, status: 'active' }]);
     updateBottleFields
@@ -365,7 +365,7 @@ describe('POST /api/bottles/bulk — arrive (bottles on order)', () => {
     expect(updateBottleFields).not.toHaveBeenCalled();
   });
 
-  // 2026-10-13: Chrome's page translation sent "EURO" for "EUR".
+  // A browser's page translation can send "EURO" for "EUR".
   test('update: an unsupported currency is refused up front; an alias reaches every bottle as its code', async () => {
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }]);
     let res = await postJson(app(), '/api/bottles/bulk', {
@@ -383,7 +383,7 @@ describe('POST /api/bottles/bulk — arrive (bottles on order)', () => {
       expect.objectContaining({ _id: B(1) }), { price: 9, currency: 'EUR' }, expect.anything());
   });
 
-  // Release audit 2026-10-13: a lot edit of a bottle with an older import's
+  // A lot edit of a bottle with an older import's
   // code carries that code; it must not be refused up front.
   test('update: an unsupported code that is a selected bottle\'s own reaches the shared update', async () => {
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active', currency: 'ILS' }]);

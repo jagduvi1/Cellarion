@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // "Also apply the drink window and price to the other N bottles of this wine
-// and vintage" (support ticket 2026-09-06). The checkbox only appears when the
+// and vintage". The checkbox only appears when the
 // bottle response listed siblings; ticked, the CHANGED lot-level fields go to
 // them through the bulk route after the single save; the outcome travels to
 // the page through onSaved.

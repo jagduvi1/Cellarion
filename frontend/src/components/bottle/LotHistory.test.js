@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-// "This wine in your cellar" (support ticket 2026-09-16): the viewer's other
+// "This wine in your cellar": the viewer's other
 // bottles of this wine, and what happened to the ones already drunk. Pins the
 // three decisions that make the card worth having — it hides itself when there
 // is nothing to say, it links each drunk sibling to its own page without
@@ -163,7 +163,7 @@ describe('LotHistory', () => {
 });
 
 /**
- * Support ticket 2026-10-09 (follow-up): once the last bottle of a vintage is
+ * Once the last bottle of a vintage is
  * drunk the cellar list has no group to open the vintage page from, so the
  * card offers the link — and shows for the link alone on a lone drunk bottle.
  */
@@ -184,7 +184,7 @@ describe('LotHistory and the vintage page link', () => {
 });
 
 /**
- * On the vintage page itself (beta feedback 2026-10-10): the page already
+ * On the vintage page itself: the page already
  * says how many bottles there are, so no counts; the drunk bottles of this
  * vintage keep their dates, ratings and notes; the other vintages are rows
  * that open their own vintage pages, with no "kept apart" hint.

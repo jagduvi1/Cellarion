@@ -1,7 +1,7 @@
 /**
- * Rack group on the REST routes (support ticket 2026-09-06, discussion #1228):
+ * Rack group on the REST routes (discussion #1228):
  * POST passes the group to the shared grid creator, PUT stores it normalised
- * and clears it on '', and the update audit row now names the cellar.
+ * and clears it on '', and the update audit row names the cellar.
  */
 process.env.JWT_SECRET = 'test-secret';
 
@@ -122,7 +122,7 @@ describe('POST /api/racks group', () => {
   });
 });
 
-describe('PUT /api/racks/:id group validation (audit 2026-09-07)', () => {
+describe('PUT /api/racks/:id group validation', () => {
   test('a non-string group is a 400, not a silent un-group', async () => {
     const doc = rackDoc({ group: 'Basement' });
     Rack.findOne.mockResolvedValue(doc);
@@ -182,7 +182,7 @@ describe('PUT /api/racks/:id cabinet options', () => {
 
   test('the alternate flag rides along untouched, and a non-boolean one is refused', async () => {
     // An EMPTY cabinet: on a loaded one whose rows alternate, two-deep is
-    // part of the shape and locked (pinned below, audit 2026-09-16).
+    // part of the shape and locked (pinned below).
     const doc = cabinet({ typeConfig: { shelfRows: [2, 2, 2], twoDeep: true, stagger: true, alternate: true }, slots: [] });
     Rack.findOne.mockResolvedValue(doc);
     const ok = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, {
@@ -211,7 +211,7 @@ describe('PUT /api/racks/:id cabinet options', () => {
     expect(bad.body.error).toMatch(/cabinet width \(4\)/);
   });
 
-  test('a narrower cols alone is checked against the stored per-shelf widths (audit 2026-09-16)', async () => {
+  test('a narrower cols alone is checked against the stored per-shelf widths', async () => {
     const doc = cabinet({ typeConfig: { shelfRows: [2, 2, 2], shelfCols: [4, 3, 4], twoDeep: true, stagger: true } });
     Rack.findOne.mockResolvedValue(doc);
     const { status, body } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { cols: 3 });
@@ -242,7 +242,7 @@ describe('PUT /api/racks/:id cabinet options', () => {
     expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { shelfRows: [2, 2, 2], twoDeep: false, stagger: true } })).status).toBe(200);
   });
 
-  // Forum 2026-10-14: a bottle across the front of a stacked one-deep shelf
+  // A bottle across the front of a stacked one-deep shelf
   // leaves one bottle fewer on each level above, so switching it renumbers
   // every bottle after that shelf. Every other lie stays drawing only.
   test('the bottle across a stacked one-deep shelf is fixed on a LOADED cabinet; other lies are not', async () => {
@@ -268,9 +268,9 @@ describe('PUT /api/racks/:id cabinet options', () => {
     expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { ...deep, shelfSideways: ['front', '', ''] } })).status).toBe(200);
   });
 
-  // Release audit 2026-10-14: with a bottle across a stacked one-deep shelf,
-  // ticking Two deep (or leaving it out, which means two deep) changed the
-  // widths and moved a placed bottle — the old guard only knew alternating rows.
+  // With a bottle across a stacked one-deep shelf, ticking Two deep (or
+  // leaving it out, which means two deep) changes the widths and would move a
+  // placed bottle — the guard covers this, not only alternating rows.
   test('two deep is fixed on a loaded cabinet where it changes a width; zones and switched-off slots count as loaded', async () => {
     const shape = { shelfRows: [3, 1, 1], twoDeep: false, stagger: true, shelfSideways: ['front', '', ''] };
     const loaded = cabinet({ typeConfig: { ...shape } });
@@ -293,7 +293,7 @@ describe('PUT /api/racks/:id cabinet options', () => {
     expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { ...shape, twoDeep: true } })).status).toBe(200);
   });
 
-  test('a shape edit is audited with both sides; a rename carries no shape (audit 2026-09-16)', async () => {
+  test('a shape edit is audited with both sides; a rename carries no shape', async () => {
     const { logAudit } = require('../services/audit');
     Rack.findOne.mockResolvedValue(cabinet({ slots: [] }));
     await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { shelfRows: [2, 2, 2], twoDeep: false, stagger: true } });

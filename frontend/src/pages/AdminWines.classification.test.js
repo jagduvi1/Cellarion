@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // The admin wine form's classification is a picker over the classification
-// taxonomy (support ticket 2026-10-29): the tiers the registry knows, the
+// taxonomy: the tiers the registry knows, the
 // selected country's own plus the country-less ones, sent as row ids. The
 // server derives the string the registry shows from the rows.
 

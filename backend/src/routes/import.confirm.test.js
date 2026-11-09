@@ -44,7 +44,7 @@ jest.mock('../utils/vintageProfile', () => ({
 
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), find: jest.fn() }));
-// Audit 2026-09 D02-3: confirm resolves wines through the visibility helper;
+// Confirm resolves wines through the visibility helper;
 // these tests describe the confirm behaviour, not the visibility rule, so
 // route it back to the findById mock the cases already configure.
 jest.mock('../services/wineVisibility', () => ({
@@ -410,7 +410,7 @@ describe('item.addToWishlist', () => {
   });
 });
 
-// ── Whole-import comment/occasion (support ticket 2026-07-30) ───────────────
+// ── Whole-import comment/occasion ───────────────────────────────────────────
 
 describe('importNotes / importOccasion', () => {
   const confirmWith = (items, extra) =>
@@ -484,7 +484,7 @@ describe('importNotes / importOccasion', () => {
   });
 });
 
-// ── Currency: file data is checked like every other write path (audit 2026-10-14)
+// ── Currency: file data is checked like every other write path ───────────────
 
 describe('currency on confirm', () => {
   const confirmWith = (items, extra) =>

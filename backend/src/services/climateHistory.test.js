@@ -1,5 +1,5 @@
 /**
- * Climate history aggregates for MCP climate_status (support ticket 6a71c6b2).
+ * Climate history aggregates for MCP climate_status.
  *
  * WHY THIS TEST EXISTS:
  * The feature's promise is "13–17 °C across the year, no excursions" computed

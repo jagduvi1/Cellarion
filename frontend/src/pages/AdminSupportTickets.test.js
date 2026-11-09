@@ -1,10 +1,9 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminSupportTickets from './AdminSupportTickets';
 
-// On a phone the ticket list sits above the detail panel, so opening a ticket
-// used to render the conversation below the fold with no visible change. The
-// page now scrolls the panel into view on narrow screens only, once per
-// ticket (Johan, 2026-09-07).
+// On a phone the ticket list sits above the detail panel, so an opened
+// ticket's conversation lands below the fold with no visible change. The
+// page scrolls the panel into view on narrow screens only, once per ticket.
 
 const apiFetch = vi.fn();
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch }) }));

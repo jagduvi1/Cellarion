@@ -1,7 +1,7 @@
 /**
  * GET /api/bottles/:id/lot-history — the viewer's own story with this wine
- * (support ticket 2026-09-16: "when I drink a bottle of a wine I have several
- * of, I can't see that on the bottles still in my cellar").
+ * (a bottle drunk from a lot shows on the bottles of that lot still in the
+ * cellar).
  *
  * The route is a thin adapter over services/insightsService.buildCaseJourneys,
  * so what is pinned here is the ADAPTER's contract: the owned-cellar gate, the
@@ -140,7 +140,7 @@ describe('GET /api/bottles/:id/lot-history', () => {
 
   // The lot is the VIEWER's bottles. From a bottle in someone else's cellar
   // that would be the wrong story to tell, so it is not told at all — the same
-  // rule GET /api/bottles/:id applies to lotSiblingIds (audit 2026-09-07).
+  // rule GET /api/bottles/:id applies to lotSiblingIds.
   test('a bottle in a cellar the viewer does not own returns no lots', async () => {
     Cellar.findById.mockResolvedValue({
       _id: CELLAR, user: OTHER_USER, deletedAt: null, userColors: [],

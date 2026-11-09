@@ -270,7 +270,7 @@ describe('taxonomy review tools', () => {
     expect(Appellation).not.toHaveBeenCalled();
   });
 
-  // ── dismiss / restore — the queue's terminal state (ticket 6a842d5e) ──────
+  // ── dismiss / restore — the queue's terminal state ────────────────────────
 
   test('dismiss_appellation records the skip via the shared service and audits like the REST twin', async () => {
     dismissUnmatchedAppellation.mockResolvedValue({ key: 'qualitatswein', name: 'Qualitätswein', created: true });

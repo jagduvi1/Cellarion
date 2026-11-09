@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { render, fireEvent, act } from '@testing-library/react';
 
-// Tap to focus on a camera preview (support ticket 2026-10-10): a tap on the
+// Tap to focus on a camera preview: a tap on the
 // picture focuses at that point of the camera FRAME — through the preview's
 // object-fit scaling, since part of the frame is cropped off — and shows the
 // ring where the finger was. A tap on a button or the controls bar, a second

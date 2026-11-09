@@ -1,12 +1,11 @@
 /**
  * Editing a taxonomy display name in another language.
  *
- * A French owner filed a correction proposal asking that "Rhône Valley" read
- * "Vallée du Rhône" (6a959b9d, 2026-09-01, reason: "En Français svp"). It had
- * to be rejected as filed — a region's `name` is stored once and shared, so a
- * rename would have moved all 298 wines on it into a French-named region for
- * every user in every language. This endpoint is the thing he actually wanted:
- * a translation beside the canonical name, not instead of it.
+ * Asking that "Rhône Valley" read "Vallée du Rhône" is not a rename: a
+ * region's `name` is stored once and shared, so a rename would move every
+ * wine on it into a French-named region for every user in every language.
+ * This endpoint gives a translation beside the canonical name, not instead
+ * of it.
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -78,7 +77,7 @@ const docStub = (over = {}) => ({
 beforeEach(() => jest.clearAllMocks());
 
 describe('PUT /:kind/:id/translations', () => {
-  test('stores the French name the owner asked for, leaving the canonical name alone', async () => {
+  test('stores a French name, leaving the canonical name alone', async () => {
     const doc = docStub();
     mockRegionFindById.mockResolvedValue(doc);
     const res = await put(`regions/${RHONE}/translations`, { translations: { fr: 'Vallée du Rhône' } });
@@ -89,7 +88,7 @@ describe('PUT /:kind/:id/translations', () => {
     expect(doc.save).toHaveBeenCalled();
   });
 
-  test('countries work the same way — his own file said "Allemagne" on the way in', async () => {
+  test('countries work the same way', async () => {
     const doc = docStub({ name: 'Germany' });
     mockCountryFindById.mockResolvedValue(doc);
     const res = await put(`countries/${RHONE}/translations`, { translations: { fr: 'Allemagne', de: 'Deutschland' } });

@@ -155,9 +155,9 @@ describe('maturityForecast personal-window consistency (BUG 5)', () => {
 });
 
 /**
- * The rating distribution three ways (support ticket 2026-10-11): someone who
- * rates only when drinking saw zero in every band, because only the ratings
- * on bottles still in the cellar were counted. Each drunk bottle now counts
+ * The rating distribution three ways: someone who rates only when drinking
+ * would see zero in every band if only the ratings on bottles still in the
+ * cellar were counted. Each drunk bottle counts
  * with the rating given when drinking (else the one on the bottle), and "all"
  * counts every bottle once.
  */

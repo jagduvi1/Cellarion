@@ -1,6 +1,6 @@
 /**
  * GET /api/admin/wines/cross-field-checks + POST/DELETE /cross-checks-clear —
- * the cross-field domain queue (ticket analysis 2026-08-10, Tier-2 item 5).
+ * the cross-field domain queue.
  * The detection lives in services/crossFieldScan (unit-tested there); this
  * suite pins the route contract:
  *   - the producer-in-name-style pagination envelope, ?check= validation and

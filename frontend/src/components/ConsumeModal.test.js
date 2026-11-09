@@ -16,7 +16,7 @@ const localToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-describe('ConsumeModal — the day the bottle was drunk (support ticket 2026-09-13)', () => {
+describe('ConsumeModal — the day the bottle was drunk', () => {
   test('offers a date field that defaults to today and cannot be set in the future', () => {
     render(<ConsumeModal wineName="Rioja Reserva" onConfirm={vi.fn()} onCancel={vi.fn()} />);
     const date = screen.getByLabelText('bulk.consumeDate');
@@ -48,7 +48,7 @@ describe('ConsumeModal — the day the bottle was drunk (support ticket 2026-09-
   });
 });
 
-// One drink dialog (usability plan 2026-10-14, D2): the rack page and the 3D
+// One drink dialog: the rack page and the 3D
 // room use this dialog too, with "Just a glass" on top; the bottle page has
 // its own "Open bottle…" button and does not pass it.
 describe('ConsumeModal — "Just a glass" and the reservation warning', () => {

@@ -1,6 +1,6 @@
 /**
  * services/imageVintageBackfill — photos written before BottleImage.vintage
- * existed learn their bottle's vintage at boot (support ticket 2026-10-09).
+ * existed learn their bottle's vintage at boot.
  * Only rows WITHOUT the key are touched, every row ends with the key present
  * (null for wine-level uploads and label scans), and the loop stops when a
  * page writes nothing rather than spinning.

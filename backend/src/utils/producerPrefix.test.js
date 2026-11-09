@@ -71,8 +71,8 @@ describe('stripProducerSuffix', () => {
     expect(stripProducerSuffix('Meerlust Chardonnay', 'Meerlust')).toBeNull();
   });
 
-  test('never strips to a stranded connective — the "La Viña de" ticket class (2026-07-26)', () => {
-    // The two real prod rows this guard would have prevented:
+  test('never strips to a stranded connective — the "La Viña de" class', () => {
+    // Two real-world shapes this guard prevents:
     expect(stripProducerSuffix('La Viña de Madaras', 'Madaras')).toBeNull();
     expect(stripProducerSuffix('Re di Renieri', 'Renieri')).toBeNull();
     // Other connectives from the shared list, either script:
@@ -80,9 +80,9 @@ describe('stripProducerSuffix', () => {
     expect(stripProducerSuffix('Blanc du Château Y', 'Château Y')).toBeNull();
   });
 
-  test('v2 additions: by / sans / bare a cannot be left stranded either (registry audit 2026-07-26)', () => {
+  test('by / sans / bare a cannot be left stranded either', () => {
     // "The Barry Bros by Jim Barry" → stripping the producer would leave "The
-    // Barry Bros by" (a real prod row minted before the words were listed).
+    // Barry Bros by".
     expect(stripProducerSuffix('The Barry Bros by Jim Barry', 'Jim Barry')).toBeNull();
     expect(stripProducerSuffix('Vin Sans Soufre Ajouté', 'Soufre Ajouté')).toBeNull();
     expect(stripProducerSuffix('Barolo Dedicato a Renina', 'Renina')).toBeNull();
@@ -91,12 +91,12 @@ describe('stripProducerSuffix', () => {
       .toBe('Vigna a Sole');
   });
 
-  test('v3: a connective + article tail is stranded too (code audit 2026-07-27)', () => {
-    // The v1/v2 guard read only the FINAL token. Bare articles are excluded
+  test('a connective + article tail is stranded too', () => {
+    // Reading only the FINAL token is not enough. Bare articles are excluded
     // from DANGLING_TAIL_WORDS on purpose (they open names far more often than
-    // they end them), so when one trailed a connective the "de" doing the
-    // stranding sat second-to-last and was never inspected — "Clos de la Pape"
-    // stripped to "Clos de la".
+    // they end them), so when one trails a connective the "de" doing the
+    // stranding sits second-to-last — "Clos de la Pape" must not strip to
+    // "Clos de la".
     expect(stripProducerSuffix('Clos de la Pape', 'Pape')).toBeNull();
     expect(stripProducerSuffix('Weingut von der Nahe', 'Nahe')).toBeNull();
     expect(stripProducerSuffix('Cascina di lo Barolo', 'Barolo')).toBeNull();
@@ -177,11 +177,11 @@ describe('stripProducerSuffix', () => {
   });
 });
 
-// ── Key-token twin: producer VARIANTS (registry duplicate analysis 2026-07-22) ─
+// ── Key-token twin: producer VARIANTS ───────────────────────────────────────
 describe('stripProducerKeyPrefix', () => {
   const { stripProducerKeyPrefix } = require('./producerPrefix');
 
-  test('strips the key run when the producer string is a variant — the July prod duplicates', () => {
+  test('strips the key run when the producer string is a variant', () => {
     expect(stripProducerKeyPrefix('Felton Road Block 3 Pinot Noir', 'Felton Road Wines Ltd'))
       .toBe('Block 3 Pinot Noir');
     expect(stripProducerKeyPrefix('Maude Kids Block Pinot Noir', 'Maude Wines'))

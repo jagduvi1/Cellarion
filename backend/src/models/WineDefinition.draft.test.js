@@ -1,5 +1,5 @@
 /**
- * The PRIVATE DRAFT invariants on the model (support ticket 2026-09-12):
+ * The PRIVATE DRAFT invariants on the model:
  *
  *   draft ⇒ pendingIdentity   — set first thing in the pre-validate hook, so
  *                               no write path can produce a visible draft;

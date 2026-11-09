@@ -160,7 +160,7 @@ describe('adoptWine — registry keys this install only knows as a proposal', ()
 });
 
 describe('adoptWine', () => {
-  // Support ticket 2026-09-17: a sparkling rosé arrives as one.
+  // A sparkling rosé arrives as one.
   test('carries the colour the registry sends; an older registry that sends no colour key clears nothing', async () => {
     client.fetchWine.mockResolvedValue(registryWine({ type: 'sparkling', colour: 'rosé' }));
     await bridge.adoptWine(RID, USER);

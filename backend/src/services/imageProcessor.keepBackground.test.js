@@ -1,12 +1,12 @@
 /**
  * imageProcessor honours BottleImage.keepBackground.
  *
- * Support ticket 6a97f870 (2026-09-02): label-only photos came back cropped
- * because rembg expects a whole bottle. An uploader who opts out must never
- * have their photo sent to rembg — not on the initial hand-off (imageOps skips
- * it) and not on a retry. (The reprocess-everything maintenance job that this
- * suite also guarded is gone: originals are no longer retained once processed,
- * so there is nothing to re-run — see imageProcessor.discardOriginal.)
+ * Label-only photos come back cropped because rembg expects a whole bottle.
+ * An uploader who opts out must never have their photo sent to rembg — not
+ * on the initial hand-off (imageOps skips it) and not on a retry. (There is
+ * no reprocess-everything job to guard: originals are not retained once
+ * processed, so there is nothing to re-run — see
+ * imageProcessor.discardOriginal.)
  */
 jest.mock('../config/upload', () => ({ PROCESSED_DIR: '/tmp/processed' }));
 jest.mock('../models/BottleImage', () => ({ findById: jest.fn() }));

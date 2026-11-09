@@ -124,7 +124,7 @@ describe('service worker API cache', () => {
     expect(res.body).toBe('cached');
   });
 
-  // Review 2026-09-27: a "Load more" answer kept from an earlier visit could
+  // A "Load more" answer kept from an earlier visit could
   // say nothing is left after a bottle when bottles were logged elsewhere since.
   it('asks the server for a history section\'s next page, never the cache; the first page stays cached', async () => {
     const next = '/api/cellars/c1/history?limit=50&reason=drank&before=2026-01-05T00%3A00%3A00.000Z%7Cb9';
@@ -323,8 +323,9 @@ describe('service worker offline shell', () => {
     expect([...caches.store.keys()].some((n) => n.startsWith('cellarion-shell-'))).toBe(false);
   });
 
-  // Support ticket 2026-10-14: a page URL fetched outside a navigation, on a
-  // network blip, logged "Uncaught (in promise) TypeError: Failed to fetch".
+  // A page URL fetched outside a navigation, on a network blip, must answer
+  // with an error response rather than leave an "Uncaught (in promise)
+  // TypeError: Failed to fetch" in the console.
   it('nothing cached and the network down: a network-error response, not a rejection', async () => {
     const network = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
     const handlers = loadWorker({ caches: makeCaches({}, network), network });

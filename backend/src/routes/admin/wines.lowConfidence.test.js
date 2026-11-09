@@ -101,19 +101,18 @@ describe('GET /low-confidence', () => {
     const filter = WineDefinition.find.mock.calls[0][0];
     expect(filter.nonWine).toEqual({ $ne: true });
     // Null is MATCHED, not excluded. An unusable model answer (a non-number,
-    // or Infinity from a 1e400 in the JSON) sanitises to null, and the old
-    // `$ne: null` shut exactly those rows out of the queue built to catch
-    // them — so sanitising made them permanently unreviewable (audit
-    // 2026-08-03, adversarial pass).
+    // or Infinity from a 1e400 in the JSON) sanitises to null, and a
+    // `$ne: null` would shut exactly those rows out of the queue built to
+    // catch them — sanitising would make them permanently unreviewable.
     expect(filter.$or).toEqual([
       { 'aiProfile.confidence': null },
       { 'aiProfile.confidence': { $lte: 0.3 } },
-      // Suspect producers surface REGARDLESS of threshold (ticket 6a8162c5):
-      // the flag is a doubt about the identity, not the profile's confidence
-      // — Fabelhaft sat at 0.5 while the default threshold is 0.3, so the one
-      // row the flag existed for never appeared here.
+      // Suspect producers surface REGARDLESS of threshold: the flag is a
+      // doubt about the identity, not the profile's confidence — a suspect
+      // row can sit at 0.5 while the default threshold is 0.3, and must
+      // still appear here.
       { 'aiProfile.producerSuspect': true },
-      // Every HELD row surfaces too (gate 2026-08-18, ticket 6a83e765): an
+      // Every HELD row surfaces too: an
       // unknown-producer hold can sit at 0.5 with no suspect flag, and this
       // queue is the only place a hold gets released.
       { 'aiProfile.heldAt': { $ne: null } },
@@ -144,19 +143,18 @@ describe('GET /low-confidence', () => {
     const filter = WineDefinition.find.mock.calls[0][0];
     expect(filter.$expr).toBeUndefined();
     // Null is MATCHED, not excluded. An unusable model answer (a non-number,
-    // or Infinity from a 1e400 in the JSON) sanitises to null, and the old
-    // `$ne: null` shut exactly those rows out of the queue built to catch
-    // them — so sanitising made them permanently unreviewable (audit
-    // 2026-08-03, adversarial pass).
+    // or Infinity from a 1e400 in the JSON) sanitises to null, and a
+    // `$ne: null` would shut exactly those rows out of the queue built to
+    // catch them — sanitising would make them permanently unreviewable.
     expect(filter.$or).toEqual([
       { 'aiProfile.confidence': null },
       { 'aiProfile.confidence': { $lte: 0.3 } },
-      // Suspect producers surface REGARDLESS of threshold (ticket 6a8162c5):
-      // the flag is a doubt about the identity, not the profile's confidence
-      // — Fabelhaft sat at 0.5 while the default threshold is 0.3, so the one
-      // row the flag existed for never appeared here.
+      // Suspect producers surface REGARDLESS of threshold: the flag is a
+      // doubt about the identity, not the profile's confidence — a suspect
+      // row can sit at 0.5 while the default threshold is 0.3, and must
+      // still appear here.
       { 'aiProfile.producerSuspect': true },
-      // Every HELD row surfaces too (gate 2026-08-18, ticket 6a83e765): an
+      // Every HELD row surfaces too: an
       // unknown-producer hold can sit at 0.5 with no suspect flag, and this
       // queue is the only place a hold gets released.
       { 'aiProfile.heldAt': { $ne: null } },
@@ -184,9 +182,9 @@ describe('GET /low-confidence', () => {
 
 describe('profile-reviewed toggle', () => {
   test('a HELD row is released, not stamped: the review lands only when the publish succeeds', async () => {
-    // Stamping first (v1.116.0) hid the row from the queue forever when the
-    // AI call failed — reviewedAt outran generatedAt and the incremental job
-    // skips held rows by design (audit 2026-08-16). The stamp now lives
+    // Stamping first would hide the row from the queue forever when the
+    // AI call fails — reviewedAt outruns generatedAt and the incremental job
+    // skips held rows by design. The stamp lives
     // inside releaseHeldProfile, on success only.
     const { releaseHeldProfile } = require('../../services/enrichmentJob');
     WineDefinition.findById.mockReturnValue({

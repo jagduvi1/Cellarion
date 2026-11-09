@@ -1,6 +1,6 @@
 /**
  * dismissUnmatchedAppellation / restoreDismissedAppellation — the unmatched
- * queue's terminal state (ticket 6a842d5e).
+ * queue's terminal state.
  *
  * Pins: the group key is derived exactly as the listing derives it (so a
  * dismissal by any spelling variant lands on the row it means to silence),

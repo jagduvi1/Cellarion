@@ -1,7 +1,7 @@
 /**
  * POST /api/images/link-to-bottle — the AddBottle flow uploads photos before
- * the bottle exists, then links them here. Linking now also files each photo
- * under the bottle's vintage (support ticket 2026-10-09), so a photo taken
+ * the bottle exists, then links them here. Linking also files each photo
+ * under the bottle's vintage, so a photo taken
  * while adding a 2016 is a 2016 photo from the start.
  */
 

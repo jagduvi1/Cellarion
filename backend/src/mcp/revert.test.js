@@ -494,7 +494,7 @@ describe('undo rolls back wines the undone action minted', () => {
   });
 });
 
-describe('lot_update (update_bottle apply_to_lot, support ticket 2026-09-06)', () => {
+describe('lot_update (update_bottle apply_to_lot)', () => {
   test('restores the prev snapshot on every bottle of the lot, claim first, one reverse row', async () => {
     resolveBottleAccess.mockImplementation(async (uid, id) => ({ bottle: { _id: id, vintage: 2018, cellar: 'c1' } }));
     bottleOps.updateBottleFields.mockImplementation(async (b, prev) => ({ changes: prev, prev: { drinkFrom: 2030 } }));

@@ -63,7 +63,7 @@ test('the export labels every image with its kind (bottle vs label-scan)', async
   ]);
 });
 
-// Ticket 6a865f60: a report is the user's own words about someone else's photo,
+// A report is the user's own words about someone else's photo,
 // so portability covers it — but the photo is not theirs and must not ride
 // along. The image is named by id only.
 test('the export includes reports the user filed, WITHOUT the reported photo', async () => {

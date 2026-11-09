@@ -3,12 +3,11 @@
  * the cellar list (BottleCard) renders when a bottle has no starred image and
  * its wine has no registry image.
  *
- * Support ticket 2026-09-03: the cellar's card view showed the RAW frame a
- * user had handed to the label scanner — background and all — served from
- * /api/uploads/originals/. That frame is kept as a private kind:'label-scan'
- * row so a curator can read a misread label; it carries the wine it minted
- * and sits at status 'uploaded' with no processed file, so the by-wine arm of
- * this lookup (added 2026-08-03, before label scans existed) matched it on
+ * The cellar's card view must never show the RAW frame handed to the label
+ * scanner — background and all — served from /api/uploads/originals/. That
+ * frame is kept as a private kind:'label-scan' row so a curator can read a
+ * misread label; it carries the wine it minted and sits at status 'uploaded'
+ * with no processed file, so the by-wine arm of this lookup would match it on
  * every bottle of that wine. The lookup must exclude label scans.
  */
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
@@ -26,7 +25,7 @@ jest.mock('../utils/exchangeRates', () => ({
   getSnapshotsForDates: jest.fn(), getOrCreateDailySnapshot: jest.fn(), convertCurrency: jest.fn(),
 }));
 jest.mock('../models/Cellar', () => ({}));
-// Sibling lookup (support ticket 2026-09-07): the viewer's other bottles of
+// Sibling lookup: the viewer's other bottles of
 // the same wines. Empty unless a test says otherwise.
 const mockBottleFind = jest.fn(() => ({ select: () => ({ lean: async () => [] }) }));
 jest.mock('../models/Bottle', () => ({ find: (...a) => mockBottleFind(...a) }));
@@ -65,8 +64,8 @@ test('the own-photo lookup excludes label scans, is scoped to the viewer, and in
   expect(BottleImage.find).toHaveBeenCalledTimes(1);
   expect(BottleImage.find).toHaveBeenCalledWith(expect.objectContaining({
     uploadedBy: USER,
-    // 'approved' is deliberate: approval used to drop a photo out of this
-    // lookup and blank the card (support ticket 2026-09-05, discussion #1227).
+    // 'approved' is deliberate: approval must not drop a photo out of this
+    // lookup and blank the card (discussion #1227).
     status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
     // `$ne`, not `kind: 'bottle'` — rows older than the field have no kind.
     kind: { $ne: 'label-scan' },
@@ -88,7 +87,7 @@ test('a photo pinned to the bottle beats one that merely matches the wine, and t
 
   expect(out[0].pendingImageUrl).toBe('/api/uploads/processed/b1.png');   // pinned to B1
   // Same wine, no pin and no vintage in common: the last resort, shown only
-  // when the wine has no registry image (support ticket 2026-10-09).
+  // when the wine has no registry image.
   expect(out[1].pendingImageUrl).toBeNull();
   expect(out[1].otherVintageImageUrl).toBe('/api/uploads/processed/wine.png');
 });
@@ -103,8 +102,8 @@ test('an approved own photo — public or private — still shows on the card', 
 });
 
 test('a photo whose row carries no wine (uploaded while the bottle awaited its wine request) still reaches the sibling bottle', async () => {
-  // Support ticket 2026-09-07: two identical bottles, the photo pinned to
-  // B1 with wineDefinition null — B2 showed nothing.
+  // Two identical bottles, the photo pinned to B1 with wineDefinition
+  // null — B2 must show it too.
   BottleImage.find.mockReturnValue(chain([
     { _id: 'noWineRef', wineDefinition: null, bottle: B1, status: 'approved', originalUrl: null, processedUrl: '/api/uploads/processed/b1.png' },
   ]));
@@ -136,12 +135,12 @@ test('empty input is returned as-is without a query', async () => {
 });
 
 /**
- * Photos per vintage (support ticket 2026-10-09). A photo carries its bottle's
+ * Photos per vintage. A photo carries its bottle's
  * vintage, and a card shows, in order: the bottle's own photo, the viewer's
  * photo of the same vintage, the vintage's official photo (the first of that
  * wine + vintage approved, or an admin's choice — vintageImageUrl), the wine's
  * registry image (client side), and only then the viewer's photo of another
- * vintage (otherVintageImageUrl). A 2015 label no longer stands in for a 2016
+ * vintage (otherVintageImageUrl). A 2015 label never stands in for a 2016
  * bottle while the wine has a picture.
  */
 describe('attachBottleImageUrls and the photo\'s vintage', () => {

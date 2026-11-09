@@ -130,9 +130,9 @@ describe('segments family (12-3-4 / D-04-1 / 3.2)', () => {
     expect(r.subRacks).toBeUndefined();
   });
 
-  // Support ticket 2026-09-02: a 1,354-bottle CellarTracker cellar typed every
-  // bin as "row,column" ("5,8"). The comma was not a separator, so 1,174 bins
-  // fell through to the freeform-text fallback and no rack was auto-mapped.
+  // CellarTracker cellars may type bins as "row,column" ("5,8"). The comma is
+  // a separator; otherwise such bins fall through to the freeform-text
+  // fallback and no rack is auto-mapped.
   it('parses comma-separated row,col bins (5,8) exactly like dashes and dots', () => {
     const r = analyzeBinGroup(['5,8', '5,9', '6,1', '1,12', '2,3']);
     expect(r.pattern).toBe('segments');
@@ -172,9 +172,8 @@ describe('segments family (12-3-4 / D-04-1 / 3.2)', () => {
   });
 });
 
-// Support ticket 2026-09-05: the same 1,354-bottle cellar turned out to type
-// its bins as "column,row" — the importer had read every "2,7" as row 2,
-// column 7. The order is the user's to declare; the codes cannot tell.
+// Some cellars type their bins as "column,row", so "2,7" is column 2, row 7,
+// not row 2, column 7. The order is the user's to declare; the codes cannot tell.
 describe('binOrder option (column,row cellars)', () => {
   it('col-row swaps the two numeric segments, sub-rack codes included', () => {
     const r = analyzeBinGroup(['2,7', '2,8', '3,1', '1,12'], { binOrder: 'col-row' });

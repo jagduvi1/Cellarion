@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// The rating distribution three ways (support ticket 2026-10-11): "All" by
+// The rating distribution three ways: "All" by
 // default — someone who rates only when drinking sees their ratings at once
 // — with "In the cellar" and "History" beside it. A band in either part opens
 // the bottles behind it; "All" has no single list, so its bands are not links.

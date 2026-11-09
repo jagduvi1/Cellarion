@@ -103,7 +103,7 @@ describe('registration + scopes', () => {
   });
 });
 
-describe('update_personal_key / delete_personal_key (ticket 6aa6c95e)', () => {
+describe('update_personal_key / delete_personal_key', () => {
   const keyRow = { _id: KEY_ID, name: 'Falstaff', type: 'decimal', unit: '/100', enumOptions: null };
 
   test('rename delegates to the service and logs an undoable key_update row carrying the previous definition', async () => {

@@ -21,7 +21,7 @@ const renderCard = (props = {}) => render(
 /**
  * A stacked card (several identical bottles) in select mode: a tap toggles the
  * whole group, and the ⊕ is a real button that expands it instead — the only
- * way to pick one bottle out of five (Johan, 2026-09-03, from the phone).
+ * way to pick one bottle out of five, on a phone too.
  */
 describe('BottleCard stacked card in select mode', () => {
   test('a tap toggles the selection; the expand button opens the group without touching it', () => {
@@ -65,7 +65,7 @@ describe('BottleCard stacked card in select mode', () => {
   });
 });
 
-describe('BottleCard long-press (post-ship audit 2026-09-03)', () => {
+describe('BottleCard long-press', () => {
   test('a long press enters select mode, and the next tap is not swallowed when no click followed the press', () => {
     vi.useFakeTimers();
     try {
@@ -93,11 +93,10 @@ describe('BottleCard long-press (post-ship audit 2026-09-03)', () => {
 });
 
 /**
- * Which photo a card shows (support ticket 2026-09-05, discussion #1227): the
- * owner's chosen default, else the owner's OWN photo — pending or approved —
- * else the registry image. Approval used to make a card go blank because the
- * own-photo lookup dropped approved rows and the card preferred the registry
- * image, which most wines do not have.
+ * Which photo a card shows (discussion #1227): the owner's chosen default,
+ * else the owner's OWN photo — pending or approved — else the registry image.
+ * The own-photo lookup must keep approved rows, or approval would leave the
+ * card on the registry image, which most wines do not have, and so blank.
  */
 describe('BottleCard image precedence', () => {
   const WITH_REGISTRY_IMAGE = {
@@ -128,7 +127,7 @@ describe('BottleCard image precedence', () => {
   });
 });
 
-/** A private draft wine (2026-09-12) is marked on the card in both views. */
+/** A private draft wine is marked on the card in both views. */
 describe('BottleCard private-draft badge', () => {
   test('a draft wine shows the badge in list and grid view; an ordinary wine does not', () => {
     const draftBottle = { ...BOTTLE, wineDefinition: { ...BOTTLE.wineDefinition, draft: true } };
@@ -144,7 +143,7 @@ describe('BottleCard private-draft badge', () => {
 });
 
 /**
- * Support ticket 2026-10-09: a stacked card gets two direct actions. "Info"
+ * A stacked card gets two direct actions. "Info"
  * opens the vintage page and "Drink one" takes a single bottle out without
  * expanding the group first; the card's own click still expands. Hidden in
  * select mode, where a tap means "toggle" and nothing else.
@@ -215,7 +214,7 @@ describe('BottleCard with one page per wine and vintage', () => {
 });
 
 /**
- * Photos per vintage (support ticket 2026-10-09): a public photo of this
+ * Photos per vintage: a public photo of this
  * wine AND vintage shows before the wine's generic registry image, which may
  * be another year's label — but never before the owner's own photo.
  */
@@ -239,9 +238,9 @@ describe('BottleCard same-vintage photo', () => {
     expect(screen.queryByText('Anna')).toBeNull();
   });
 
-  // Johan, 2026-10-09: "a new vintage without an image should display the
-  // wine's image … so we always show an image". The owner's photo of ANOTHER
-  // vintage never beats the wine's image; it only stands in when there is none.
+  // A new vintage without an image shows the wine's image, so a card always
+  // has one. The owner's photo of ANOTHER vintage never beats the wine's
+  // image; it only stands in when there is none.
   test('a photo of another vintage loses to the wine\'s image, and fills in only when the wine has none', () => {
     const other = '/api/uploads/processed/mine-2015.webp';
     const { container, unmount } = renderCard({ bottle: {
@@ -275,7 +274,7 @@ describe('BottleCard vintage', () => {
 /**
  * The list view's meta line puts a generated dot before its second span, so
  * the producer span must be left out when there is no producer — otherwise a
- * producer-less bottle reads "· 2019" (Johan, #1739).
+ * producer-less bottle reads "· 2019" (#1739).
  */
 describe('BottleCard meta line without a producer', () => {
   const metaSpans = (container) => [...container.querySelectorAll('.bottle-meta > span')];

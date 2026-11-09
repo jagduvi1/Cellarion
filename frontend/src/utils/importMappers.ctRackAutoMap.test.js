@@ -162,7 +162,7 @@ describe('applyCtRackAutoMap', () => {
     wineName: 'W', producer: 'P', _ctLocation: loc, _ctBin: bin, ...extra,
   });
 
-  it('honours binOrder: col-row for "column,row" cellars (support ticket 2026-09-05)', () => {
+  it('honours binOrder: col-row for "column,row" cellars', () => {
     const items = [mk('North rack', '2,7'), mk('North rack', '2,8'), mk('North rack', '3,1'), mk('North rack', '1,12')];
     const { racks } = applyCtRackAutoMap(items, { binOrder: 'col-row' });
     expect(items[0]).toMatchObject({ rackName: 'North rack', row: 7, col: 2, rackRows: 12, rackCols: 3 });

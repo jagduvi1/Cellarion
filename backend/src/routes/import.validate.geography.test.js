@@ -1,20 +1,20 @@
 /**
- * POST /api/bottles/import/validate — post-AI geography hygiene
- * (ticket 6a8162c5: the 226-row batch that split one producer across region
- * granularities and across countries).
+ * POST /api/bottles/import/validate — post-AI geography hygiene (a batch
+ * must not split one producer across region granularities or across
+ * countries).
  *
  * Two behaviours pinned, both applied to aiIdentified BEFORE matching so the
  * preview, the aiProposed payload and the /confirm mint all agree:
  *
- *   A) One producer, one country per batch. Per-row identification let an
- *      obscure producer come back as South Africa on one row and Australia on
- *      another; both minted, and the different-country guard then kept them
- *      apart forever. Rows whose FILE stated a country anchor the group and
+ *   A) One producer, one country per batch. Per-row identification can let
+ *      an obscure producer come back as South Africa on one row and Australia
+ *      on another; both would mint, and the different-country guard would
+ *      then keep them apart forever. Rows whose FILE stated a country anchor the group and
  *      are never overwritten.
  *
  *   B) Geography identified below AI_GEOGRAPHY_MIN_CONFIDENCE (0.6) is
  *      dropped (region/appellation → null): "reasonably sure" is the band
- *      that wrote the producer's home region onto wines from elsewhere
+ *      that writes the producer's home region onto wines from elsewhere
  *      (Sister's Run "Epiphany", a McLaren Vale Shiraz recorded as Barossa).
  *      Country is kept — a wine cannot mint without one, and the same
  *      producer-consistency pass above governs it.
@@ -175,9 +175,9 @@ describe('B) confidence floor on AI geography', () => {
     expect(row.aiProposed.appellation).toBeNull();
     // Country survives the floor — a wine cannot mint without one.
     expect(row.aiProposed.country).toBe('Australia');
-    // The MATCHER still saw the full geography (audit 2026-08-16): the dedup
-    // keys embed the appellation, and stripping before Pass 2 made exactly
-    // the low-confidence rows most likely to duplicate lose their registry
+    // The MATCHER still sees the full geography: the dedup keys embed the
+    // appellation, and stripping before Pass 2 would make exactly the
+    // low-confidence rows most likely to duplicate lose their registry
     // match. Matching is resolution, not assertion — nothing below the floor
     // is ever WRITTEN (the aiProposed asserts above).
     expect(findOrCreateWine.mock.calls[0][0].region).toBe('Barossa Valley');
@@ -207,8 +207,8 @@ describe('B) confidence floor on AI geography', () => {
   });
 
   // The floor is about the MODEL asserting a place it inferred. It has no
-  // business deleting a column the user filled in — and until 2026-08-21 it
-  // did, because nothing downstream of the parser ever read that column.
+  // business deleting a column the user filled in, so everything downstream
+  // of the parser reads that column.
   test('THE FILE outranks the floor: a stated appellation survives a 0.5 identification', async () => {
     primeAi(aiResult({
       name: 'Epiphany', producer: "Sister's Run",
@@ -275,7 +275,7 @@ describe('A) one producer, one country per batch', () => {
     // A ≥0.6-confidence row keeps its own country: one producer string can be
     // two wineries on two continents (Domaine Chandon FR vs Bodegas Chandon
     // AR), and overriding it here would bypass the mint's different-country
-    // guard (audit 2026-08-16). Sub-floor rows still adopt (test below).
+    // guard. Sub-floor rows still adopt (test below).
     expect(a.aiProposed.country).toBe('South Africa');
   });
 
@@ -294,9 +294,9 @@ describe('A) one producer, one country per batch', () => {
   });
 
   test('an anchored row whose AI contradicts its own file column is corrected to the FILE value', async () => {
-    // The anchor is the file's STATED value, not the AI's echo of it (audit
-    // 2026-08-16: anchoring on the echo let a contradicting AI spread its
-    // contradiction to the whole group).
+    // The anchor is the file's STATED value, not the AI's echo of it:
+    // anchoring on the echo would let a contradicting AI spread its
+    // contradiction to the whole group.
     primeAi(
       aiResult({ name: 'Mistura', producer: 'Thomas Allen', country: null, confidence: 0.5 }),
       aiResult({ name: 'Origins', producer: 'Thomas Allen', country: 'South Africa', confidence: 0.9 }));
@@ -320,8 +320,8 @@ describe('A) one producer, one country per batch', () => {
       { wineName: 'Zin B', producer: 'Ridge Alt' },
     ]);
 
-    // Under normalizeString alone these counted as TWO countries and the
-    // pass no-opped (audit 2026-08-16). Folded, the group agrees and both
+    // Under normalizeString alone these would count as TWO countries and the
+    // pass would no-op. Folded, the group agrees and both
     // stated values stand untouched.
     expect(res.body.results[0].aiProposed.country).toBe('USA');
     expect(res.body.results[1].aiProposed.country).toBe('United States');
@@ -353,7 +353,7 @@ describe('A) one producer, one country per batch', () => {
 
     const row = res.body.results[0];
     // /confirm's mint throws Country-required — offering ai_new here
-    // guaranteed a lost bottle (audit 2026-08-16). The row falls back to
+    // would guarantee a lost bottle. The row falls back to
     // the no-match flow, where the user matches or requests instead.
     expect(row.aiProposed).toBeUndefined();
     expect(row.status).toBe('no_match');

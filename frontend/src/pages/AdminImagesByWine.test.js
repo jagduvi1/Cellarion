@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-// The admin by-wine view (support ticket 2026-10-09): each photo shows its
+// The admin by-wine view: each photo shows its
 // vintage, the photo a vintage shows is marked, and "Use for <vintage>"
 // makes another one that vintage's photo.
 
