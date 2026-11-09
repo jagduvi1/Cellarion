@@ -3,10 +3,13 @@
 //
 //   node scripts/repoHygiene.cjs            list every finding
 //   node scripts/repoHygiene.cjs --update   lower scripts/repo-hygiene-baseline.json
+//   node scripts/repoHygiene.cjs --seed     rewrite the baseline from the current counts
+//                                           (only when the scanner itself learns a new shape)
 //
 // What it finds:
 //   ticket-id     the word "ticket" followed within 24 characters by an 8-hex
-//                 id, anywhere in the file (comments, strings, test titles)
+//                 id or an incident date (2026-09 or 2026-09-13), anywhere in
+//                 the file (comments, strings, test titles)
 //   hex-id        a bare 8-hex token with both letters and digits in a comment
 //                 or a test title (24-hex ObjectIds, UUID parts, #rrggbbaa
 //                 colours and 0x literals do not match)
@@ -32,7 +35,8 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '__snaps
 // The scanner and its tests describe the patterns they look for.
 const SKIP_FILES = new Set(['scripts/repoHygiene.cjs', 'backend/src/repoHygiene.test.js', 'frontend/src/repoHygiene.test.js']);
 
-const TICKET_RE = /\btickets?\b[^\n]{0,24}?\b[0-9a-f]{8}\b/i;
+// "ticket" followed within 24 characters by an 8-hex id or by a 2026-09(-13) style date.
+const TICKET_RE = /\btickets?\b[^\n]{0,24}?\b(?:[0-9a-f]{8}|20\d\d-\d\d(?:-\d\d)?)\b/i;
 const HEX_RE = /(?<![\w#\-/.])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{8}(?![\w\-])/;
 const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
 const TITLE_RE = /\b(?:describe|it|test)(?:\.(?:only|skip))?\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
@@ -146,8 +150,9 @@ const ALL_TREES = ['backend/src', 'frontend/src', 'cellarion-mcp', 'scripts'];
 
 function main(argv) {
   const scanned = scanTrees(ALL_TREES);
-  if (argv.includes('--update')) {
-    const baseline = readBaseline();
+  const seed = argv.includes('--seed');
+  if (seed || argv.includes('--update')) {
+    const baseline = seed ? {} : readBaseline();
     const next = {};
     for (const [file, list] of Object.entries(scanned)) {
       const n = list.filter((x) => x.kind !== 'control-byte').length;
