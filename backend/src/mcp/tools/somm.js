@@ -12,9 +12,7 @@
 const { z } = require('zod');
 const mongoose = require('mongoose');
 const WineVintageProfile = require('../../models/WineVintageProfile');
-const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
-const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const WineDefinition = require('../../models/WineDefinition');
 const { DOWNGRADE_RULES } = require('../../utils/producerSuspectCheck');
 const aiConfig = require('../../config/aiConfig');
@@ -25,7 +23,7 @@ const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { bumpWineOwners } = require('../../services/dataVersion');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
-const { isValidId, parseAndValidateVintage } = require('../../utils/validation');
+const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
 const { normalizeString, sanitizeTaxonomyName, resolveCountryName, resolveGrapeName, normalizeClassification } = require('../../utils/normalize');
 const { claimKey, findGrapeClaim } = require('../../services/grapeClaims');
@@ -65,6 +63,7 @@ const {
   MAX_BOTTLE_IMAGES,
 } = require('../../services/pendingWineOps');
 const { closeWineReport, MAX_RESPONSE } = require('../../services/wineReportOps');
+const priceOps = require('../../services/priceOps');
 const WineReport = require('../../models/WineReport');
 // services/search is required lazily at call time, not here: it pulls in the
 // Meili client and half the model layer at module load, which every consumer
@@ -72,7 +71,6 @@ const WineReport = require('../../models/WineReport');
 
 const SOMM_ROLES = ['somm', 'admin'];
 const PHASE_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
-const PRICE_STALE_MS = 90 * 24 * 60 * 60 * 1000; // mirror routes/somm/prices.js
 
 function requireSomm(ctx) {
   const roles = ctx.user?.roles || [];
@@ -1086,40 +1084,11 @@ registerTool({
     const requests = await PriceTrackingRequest.find({})
       .populate({ path: 'wineDefinition', select: 'name producer type', populate: ['country', 'region'] })
       .lean();
-    let alive = requests.filter((r) => r.wineDefinition);
+    // Declined pairs hidden, stale-or-missing prices kept, queue order: the
+    // same body as GET /api/somm/prices/queue (services/priceOps).
+    const actionable = await priceOps.actionablePriceRequests(requests);
 
-    // Curator-declined pairs never surface: reject_price_request deletes the
-    // request AND records a PriceTrackingSkip, so this filter is normally a
-    // no-op — it exists so a re-request that raced a decline can't resurrect
-    // the row while the skip stands (mirrors routes/somm/prices.js GET /queue).
-    if (alive.length) {
-      const skips = await PriceTrackingSkip.find({ wineDefinition: { $in: alive.map((r) => r.wineDefinition._id) } })
-        .select('wineDefinition vintage').lean();
-      if (skips.length) {
-        const skipped = new Set(skips.map((s) => `${s.wineDefinition}:${s.vintage}`));
-        alive = alive.filter((r) => !skipped.has(`${r.wineDefinition._id}:${r.vintage}`));
-      }
-    }
-
-    // Actionable = no price yet, or latest snapshot stale (>90d) — mirrors
-    // routes/somm/prices.js GET /queue.
-    const latestByPair = new Map();
-    if (alive.length) {
-      const rows = await WineVintagePrice.aggregate([
-        { $match: { wineDefinition: { $in: alive.map((r) => r.wineDefinition._id) } } },
-        { $sort: { setAt: 1 } },
-        { $group: { _id: { w: '$wineDefinition', v: '$vintage' }, price: { $last: '$price' }, currency: { $last: '$currency' }, setAt: { $last: '$setAt' } } },
-      ]);
-      for (const row of rows) latestByPair.set(`${row._id.w}:${row._id.v}`, row);
-    }
-    const now = Date.now();
-    const actionable = alive
-      .map((r) => ({ r, latest: latestByPair.get(`${r.wineDefinition._id}:${r.vintage}`) || null }))
-      .filter(({ latest }) => !latest || now - new Date(latest.setAt).getTime() > PRICE_STALE_MS)
-      .sort((a, b) => (b.r.requesters?.length || 0) - (a.r.requesters?.length || 0)
-        || new Date(a.r.firstRequestedAt || 0) - new Date(b.r.firstRequestedAt || 0));
-
-    const data = actionable.slice(0, limit).map(({ r, latest }) => ({
+    const data = actionable.slice(0, limit).map(({ request: r, latest }) => ({
       request_id: r._id,
       wine: wineLite(r.wineDefinition),
       vintage: r.vintage,
@@ -1153,53 +1122,35 @@ registerTool({
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
     if (denied) return denied;
-    const currency = String(args.currency || 'USD').toUpperCase();
-    if (!SUPPORTED_CURRENCIES.includes(currency)) {
-      return fail('invalid_input', `Unsupported currency ${currency}. Supported: ${SUPPORTED_CURRENCIES.join(', ')}`);
+    const currency = priceOps.normalizeCurrency(args.currency);
+    if (!currency.ok) {
+      return fail('invalid_input', `Unsupported currency ${currency.value}. Supported: ${SUPPORTED_CURRENCIES.join(', ')}`);
     }
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
-    // The bottles' canonical vintage ("nv" → "NV", a malformed or impossible
-    // year refused), so the snapshot matches the bottles and the request it
-    // answers. An unknown vintage has no vintage price.
-    // The helper reads a blank value as NV; for a price that is a missing vintage.
-    if (!String(args.vintage).trim()) return fail('invalid_input', 'vintage is required: a year or NV.');
-    const vintage = parseAndValidateVintage(args.vintage);
-    if (!vintage.ok) return fail('invalid_input', vintage.error);
-    if (vintage.value === 'Unknown') return fail('invalid_input', 'A price needs a vintage year or NV.');
+    // The bottles' canonical vintage, as on REST; the refusal wording is this door's.
+    const vintage = priceOps.parsePriceVintage(args.vintage);
+    if (!vintage.ok) {
+      if (vintage.code === 'required') return fail('invalid_input', 'vintage is required: a year or NV.');
+      if (vintage.code === 'unknown') return fail('invalid_input', 'A price needs a vintage year or NV.');
+      return fail('invalid_input', vintage.error);
+    }
     const wine = await WineDefinition.findById(args.wine_id).select('name producer draft');
     if (!wine || wine.draft === true) return fail('not_found', 'No registry wine with that id.');
 
-    const entry = new WineVintagePrice({
-      wineDefinition: wine._id,
+    // Rate snapshot, save, audit and the requesters' notification: the same
+    // body as POST /api/somm/prices (services/priceOps).
+    const entry = await priceOps.addPriceSnapshot({
+      wineId: wine._id,
       vintage: vintage.value,
       price: args.price,
-      currency,
-      source: args.source?.trim() || undefined,
-      sommNotes: args.somm_notes?.trim() || undefined,
-      setBy: ctx.user.id,
+      currency: currency.value,
+      source: args.source,
+      sommNotes: args.somm_notes,
+      actorId: ctx.user.id,
+      wine,
+      req: ctx.req,
+      via: 'mcp',
     });
-    // Today's rate snapshot before the save, as on REST: the snapshot's setAt
-    // date anchors later currency conversions. Non-fatal.
-    try { await require('../../utils/exchangeRates').getOrCreateDailySnapshot(); } catch { /* as on REST */ }
-    await entry.save();
-
-    // Requesters: the same title, body and link as routes/somm/prices.js
-    // (best-effort). The link is the public wine page — requesters are members,
-    // and the somm prices page answers them with Access Denied.
-    PriceTrackingRequest.findOne({ wineDefinition: wine._id, vintage: entry.vintage }).lean()
-      .then((reqDoc) => {
-        if (!reqDoc?.requesters?.length) return;
-        const { createNotification } = require('../../services/notifications');
-        const wineLabel = [wine.producer, wine.name].filter(Boolean).join(' — ');
-        const body = `A sommelier just added a market price for ${wineLabel} ${entry.vintage}: ${entry.currency} ${entry.price}.`;
-        for (const { user } of reqDoc.requesters) {
-          createNotification(user, 'price_tracked', 'Market price updated', body, `/wines/${wine._id}`).catch(() => {});
-        }
-      }).catch(() => {});
-
-    logAudit(ctx.req, 'somm.price.add',
-      { type: 'wine', id: wine._id },
-      { vintage: entry.vintage, price: entry.price, currency: entry.currency, via: 'mcp' });
 
     const envelope = {
       summary: `Price recorded: ${wine.name} ${entry.vintage} = ${entry.price} ${entry.currency}`,
@@ -1222,10 +1173,9 @@ registerTool({
   },
 });
 
-// Mirror routes/somm/prices.js POST /requests/:id/decline — same bounds, same
-// audit action string, same requester notification wording.
-const DECLINE_REASON_MIN = 5;
-const DECLINE_REASON_MAX = 500;
+// The same bounds, audit action string and requester wording as
+// POST /api/somm/prices/requests/:id/decline, from the shared service.
+const { DECLINE_REASON_MIN, DECLINE_REASON_MAX } = priceOps;
 
 registerTool({
   name: 'reject_price_request',
@@ -1248,68 +1198,25 @@ registerTool({
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
     if (denied) return denied;
-    // Same hygiene as the REST route: the reason reaches the skip document and
-    // the requester notifications — plain text only, bounded even after strip.
-    const reason = stripHtml(typeof args.reason === 'string' ? args.reason : '');
-    if (!reason || reason.length < DECLINE_REASON_MIN) {
-      return fail('invalid_input', `reason must be at least ${DECLINE_REASON_MIN} characters of plain text (HTML is stripped) — the requester(s) read it.`);
+    // The reason reaches the skip document and the requester notifications:
+    // plain text only, bounded after the strip. The wording is this door's.
+    const checked = priceOps.validateDeclineReason(args.reason);
+    if (!checked.ok) {
+      return fail('invalid_input', checked.code === 'long'
+        ? `reason must be at most ${DECLINE_REASON_MAX} characters.`
+        : `reason must be at least ${DECLINE_REASON_MIN} characters of plain text (HTML is stripped) — the requester(s) read it.`);
     }
-    if (reason.length > DECLINE_REASON_MAX) {
-      return fail('invalid_input', `reason must be at most ${DECLINE_REASON_MAX} characters.`);
-    }
+    const { reason } = checked;
 
     const request = await PriceTrackingRequest.findById(args.request_id);
     if (!request) {
       return fail('not_found', 'No such price-tracking request — it may already be fulfilled or declined. Use list_price_tracking_requests for valid ids.');
     }
-    const wine = await WineDefinition.findById(request.wineDefinition).select('name producer');
 
-    // Suppression: the skip is what keeps the pair from re-entering the queue
-    // via future user requests (routes/bottles.js refuses on it). $setOnInsert
-    // keeps the FIRST decline's reason if two curators race; updatedExisting
-    // tells the undo whether THIS call created the suppression (only then may
-    // an undo lift it).
-    const skipRes = await PriceTrackingSkip.findOneAndUpdate(
-      { wineDefinition: request.wineDefinition, vintage: request.vintage },
-      { $setOnInsert: {
-        wineDefinition: request.wineDefinition,
-        vintage: request.vintage,
-        reason,
-        skippedBy: ctx.user.id,
-        skippedAt: new Date(),
-      } },
-      { upsert: true, new: false, includeResultMetadata: true }
-    );
-    const skipCreated = !skipRes?.lastErrorObject?.updatedExisting;
-
-    // Everything the undo needs to put the request back verbatim.
-    const prev = {
-      wineDefinition: String(request.wineDefinition),
-      vintage: request.vintage,
-      requesters: (request.requesters || []).map((r) => ({ user: String(r.user), requestedAt: r.requestedAt, note: r.note })),
-      firstRequestedAt: request.firstRequestedAt || null,
-      lastRequestedAt: request.lastRequestedAt || null,
-      skipCreated,
-    };
-    await PriceTrackingRequest.deleteOne({ _id: request._id });
-
-    // Notify every requester with the verbatim reason — best-effort, exactly
-    // like set_vintage_price: delivery never blocks the decline.
-    const wineLabel = wine ? [wine.producer, wine.name].filter(Boolean).join(' — ') : 'this wine';
-    {
-      const { createNotification } = require('../../services/notifications');
-      const title = 'Price tracking request declined';
-      const body = `Your request to track market price for ${wineLabel} ${request.vintage} was declined by a sommelier. Reason: ${reason}`;
-      for (const r of prev.requesters) {
-        createNotification(r.user, 'price_tracking_declined', title, body, null, 'community').catch(() => {});
-      }
-    }
-
-    // Same audit action string as the REST decline route — REST and MCP
-    // curation must audit identically (see this file's header).
-    logAudit(ctx.req, 'somm.price.decline',
-      { type: 'wine', id: request.wineDefinition },
-      { vintage: request.vintage, reason, requesters: prev.requesters.length, via: 'mcp' });
+    // Skip upserted (the suppression routes/bottles.js refuses on), request
+    // deleted, requesters told verbatim, audited: the same body as the REST
+    // decline (services/priceOps). `prev` is all the undo has to work from.
+    const { prev, wine } = await priceOps.declinePriceRequest({ request, reason, actorId: ctx.user.id, req: ctx.req, via: 'mcp' });
 
     const envelope = {
       summary: `Declined price tracking for ${wine?.name || 'wine'} ${request.vintage} — ${prev.requesters.length} requester(s) notified with the reason`,

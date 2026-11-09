@@ -682,28 +682,10 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
 
-    const PriceTrackingRequest = require('../models/PriceTrackingRequest');
-    const PriceTrackingSkip = require('../models/PriceTrackingSkip');
     try {
-      // Upsert, not insert: if a user re-requested the pair the instant the
-      // skip lifted (or a concurrent undo raced this one), the row is simply
-      // found and the undo still lands on "the request is back in the queue".
-      await PriceTrackingRequest.findOneAndUpdate(
-        { wineDefinition: prev.wineDefinition, vintage: prev.vintage },
-        { $setOnInsert: {
-          wineDefinition: prev.wineDefinition,
-          vintage: prev.vintage,
-          requesters: prev.requesters || [],
-          firstRequestedAt: prev.firstRequestedAt || new Date(),
-          lastRequestedAt: prev.lastRequestedAt || new Date(),
-        } },
-        { upsert: true }
-      );
-      if (prev.skipCreated) {
-        // Only the suppression THIS decline created — scoped to the caller,
-        // like the somm_price snapshot delete below.
-        await PriceTrackingSkip.deleteOne({ wineDefinition: prev.wineDefinition, vintage: prev.vintage, skippedBy: ctx.user.id });
-      }
+      // The request comes back by upsert and only the suppression THIS decline
+      // created is lifted, scoped to the caller (services/priceOps).
+      await require('../services/priceOps').restoreDeclinedRequest(prev, ctx.user.id);
     } catch (err) {
       await unclaim(row._id); // nothing restored yet → let the undo be retried
       throw err;
@@ -789,8 +771,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
 
     let envelope;
     if (row.action === 'somm_price') {
-      const WineVintagePrice = require('../models/WineVintagePrice');
-      const del = await WineVintagePrice.deleteOne({ _id: row.detail?.entryId, setBy: ctx.user.id });
+      const del = await require('../services/priceOps').removePriceSnapshot({ entryId: row.detail?.entryId, actorId: ctx.user.id });
       logAudit(ctx.req, 'somm.price.add.undo', { type: 'wine', id: row.detail?.wineId },
         { vintage: row.detail?.vintage, entryId: row.detail?.entryId, removed: !!del.deletedCount, via: 'undo', ledgerRow: String(row._id) });
       envelope = { summary: del.deletedCount ? `Undid price entry — snapshot for vintage ${row.detail?.vintage} removed` : 'Price snapshot was already gone; ledger marked undone.', data: { undone: 'set_vintage_price', removed: !!del.deletedCount } };
