@@ -56,6 +56,21 @@ describe('mergeWindow', () => {
   });
 });
 
+describe('checkWindow', () => {
+  test('answers the merged window, or what was refused for the caller to word', () => {
+    const p = row({ peakFrom: 2024, peakUntil: 2030 });
+    expect(ops.checkWindow(p, { peakUntil: 2032 })).toEqual({
+      ok: true, next: { earlyFrom: null, earlyUntil: null, peakFrom: 2024, peakUntil: 2032, lateFrom: null, lateUntil: null },
+    });
+    expect(ops.checkWindow(p, { peakFrom: 1500 })).toEqual({ ok: false, code: 'invalid_input', rule: 'range', relative: false, field: 'peakFrom', value: 1500 });
+    expect(ops.checkWindow(p, { peakUntil: 2020 })).toEqual({ ok: false, code: 'invalid_input', rule: 'order', relative: false, field: 'peakUntil', after: 'peakFrom' });
+    expect(ops.checkWindow(p, { earlyFrom: 2026 })).toEqual({ ok: false, code: 'invalid_input', rule: 'order', relative: false, field: 'peakFrom', after: 'earlyFrom' });
+    expect(ops.checkWindow(p, { lateFrom: 2020 })).toEqual({ ok: false, code: 'invalid_input', rule: 'order', relative: false, field: 'lateFrom', after: 'peakFrom' });
+    expect(ops.checkWindow(row({ vintage: 'NV', peakFrom: 2024 }), { earlyFrom: 0 }))
+      .toEqual({ ok: false, code: 'conflict', rule: 'retained', relative: true, field: 'peakFrom', value: 2024 });
+  });
+});
+
 describe('windowSnapshot', () => {
   test('records the six phases (null when unset), the note and the review state', () => {
     const setAt = new Date('2026-01-01');

@@ -7,7 +7,8 @@
  *     curator's stamp, relative is false for a year vintage
  *   - an NV row takes offsets 0–100 and becomes relative
  *   - a non-number, an out-of-range year or an out-of-order pair is a 400 and
- *     nothing is saved
+ *     nothing is saved; the order is checked on the window the row would hold
+ *     after the patch, stored values included, as the MCP tool checks it
  *   - the owners' data version moves once, after the save; the audit row is
  *     somm.maturity.review with the vintage and the relative flag
  *   - unknown id 404, plain member 403
@@ -147,17 +148,57 @@ test.each([
   expect(logAudit).not.toHaveBeenCalled();
 });
 
-// Today the web route checks ordering only among the fields SENT, unlike the
-// MCP tool, which checks the merged window. A new until below a stored from
-// is therefore accepted here. Pinned so that aligning the two is a deliberate,
-// separately decided change.
-test('ordering is checked only among the fields sent: a new until below a stored from is accepted', async () => {
-  const doc = profileDoc({ peakFrom: 2030 });
+// The window is checked as the row would hold it after the patch, like the
+// MCP set_vintage_maturity: a value that is not sent still counts.
+test.each([
+  ['a new until below a stored from', { peakFrom: 2030 }, { peakUntil: 2026 }, /Peak "until" must be after peak "from"/],
+  ['a new peak start before a stored early start', { earlyFrom: 2028 }, { peakFrom: 2026 }, /Peak phase cannot start before early phase/],
+  ['a new late start before a stored peak start', { peakFrom: 2030 }, { lateFrom: 2027 }, /Late phase cannot start before peak phase/],
+])('%s is a 400 and nothing is saved', async (_label, stored, body, message) => {
+  const doc = profileDoc(stored);
   WineVintageProfile.findById.mockResolvedValue(doc);
-  const res = await put({ peakUntil: 2026 });
+  const res = await put(body);
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(message);
+  expect(doc.save).not.toHaveBeenCalled();
+  expect(logAudit).not.toHaveBeenCalled();
+});
+
+test('a partial patch that stays in order against the stored values is saved', async () => {
+  const doc = profileDoc({ peakFrom: 2026, peakUntil: 2030 });
+  WineVintageProfile.findById.mockResolvedValue(doc);
+  const res = await put({ peakUntil: 2034 });
   expect(res.status).toBe(200);
-  expect(doc.peakFrom).toBe(2030);
-  expect(doc.peakUntil).toBe(2026);
+  expect(doc).toMatchObject({ peakFrom: 2026, peakUntil: 2034 });
+});
+
+// An NV row that still holds calendar years would have them reread as
+// "2024 years after purchase" once the save marks it relative.
+test('an NV row whose stored values are calendar years must be rewritten whole: a partial patch is a 409, all six fields are saved', async () => {
+  const doc = profileDoc({ vintage: 'NV', peakFrom: 2024, peakUntil: 2029 });
+  WineVintageProfile.findById.mockResolvedValue(doc);
+  const partial = await put({ earlyFrom: 0 });
+  expect(partial.status).toBe(409);
+  expect(partial.body.error).toMatch(/stored peakFrom \(2024\).*Send all six fields/);
+  expect(doc.save).not.toHaveBeenCalled();
+
+  const whole = await put({ earlyFrom: 0, earlyUntil: 1, peakFrom: 2, peakUntil: 5, lateFrom: null, lateUntil: null });
+  expect(whole.status).toBe(200);
+  expect(doc).toMatchObject({ earlyFrom: 0, earlyUntil: 1, peakFrom: 2, peakUntil: 5, relative: true });
+});
+
+test.each([
+  ['a year with a trailing word', '2026abc'],
+  ['a decimal', 2026.5],
+  ['a decimal as text', '2026.5'],
+  ['a boolean', true],
+])('%s is not a year: 400, nothing saved', async (_label, value) => {
+  const doc = profileDoc();
+  WineVintageProfile.findById.mockResolvedValue(doc);
+  const res = await put({ peakFrom: value });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/Invalid value for peakFrom/);
+  expect(doc.save).not.toHaveBeenCalled();
 });
 
 test('a note over the stored limit is a 400 and nothing is saved', async () => {
