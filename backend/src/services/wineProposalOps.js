@@ -41,6 +41,7 @@ const { originFrom } = require('../utils/contributionOrigin');
 
 const { findVisibleWine } = require('./wineVisibility');
 const { stripHtml } = require('../utils/sanitize');
+const { identitySnapshot } = require('../utils/proposalSnapshot');
 const { isValidId } = require('../utils/validation');
 const { WINE_COLOURS, isStyleType } = require('../utils/wineColour');
 
@@ -242,19 +243,9 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
     }
   }
 
-  const currentSnapshot = {
-    producer: wine.producer || null,
-    name: wine.name || null,
-    appellation: wine.appellation || null,
-    region: wine.region?.name || null,
-    country: wine.country?.name || null,
-    classification: wine.classification || null,
-    type: wine.type || null,
-    colour: wine.colour || null,
-    // Joined names, the shape the admin diff compares against (its liveIdentity
-    // and the somm path both join) — an array here rendered as permanent drift.
-    grapes: (wine.grapes || []).map((g) => (g && g.name) || String(g)).filter(Boolean).join(', ') || null,
-  };
+  // The shape the admin diff compares against, shared with the sommelier
+  // path and the review route (utils/proposalSnapshot): grapes as joined names.
+  const currentSnapshot = identitySnapshot(wine);
 
   const addendum = { fields: Object.keys(proposedFields), reason: cleanReason, evidenceUrl: cleanUrl };
   const label = `${wine.producer || '?'} — ${wine.name}`;
