@@ -11,12 +11,10 @@
 // review, somm.price.add) so REST and MCP curation audit identically.
 const { z } = require('zod');
 const WineVintageProfile = require('../../models/WineVintageProfile');
-const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const WineDefinition = require('../../models/WineDefinition');
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
-const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
 const { normalizeString, sanitizeTaxonomyName, resolveCountryName, resolveGrapeName, normalizeClassification } = require('../../utils/normalize');
@@ -36,7 +34,6 @@ const {
   applyProfilePatch,
   snapshotProfile,
 } = require('../../services/wineProfileOps');
-const priceOps = require('../../services/priceOps');
 const maturityOps = require('../../services/maturityOps');
 // services/search is required lazily at call time, not here: it pulls in the
 // Meili client and half the model layer at module load, which every consumer
