@@ -54,6 +54,9 @@ const {
 const {
   AI_GEOGRAPHY_MIN_CONFIDENCE, buildProposedWine, computeIdentityProvenance, fileCompleteIdentity,
 } = require('../services/importIdentity');
+// The failure reasons grouped for the audit row, and the archive of the
+// file's identity columns.
+const { summariseReasons, ARCHIVE_ROW_CAP, IMPORT_ARCHIVE_DAYS, archiveRow } = require('../services/importArchive');
 
 /**
  * A row flagged `onOrder` (a CellarTracker pending purchase, or a receipt the
@@ -76,80 +79,6 @@ router.use(requireAuth, requireNonDemo);
 
 // Alias for readability (imported from config/constants.js)
 const EXACT_THRESHOLD = IMPORT_EXACT_THRESHOLD;
-
-// Distinct failure reasons kept in one import's audit row, and the length each
-// is truncated to. Enough to name every failure mode a real file hits without
-// letting a pathological one bloat the document.
-const AUDIT_REASON_MAX_KINDS = 12;
-const AUDIT_REASON_MAX_LEN = 160;
-
-/**
- * Group per-row {reason} entries into { reason: count } for the audit.
- *
- * Deliberately reason-only: the row's wine name, producer and notes are the
- * user's data and the audit needs the failure MODE, not the record. Messages
- * that embed a caught err.message can vary per row, so they are truncated and
- * the tail is folded into one "+N more" bucket rather than dropped silently —
- * a cap that hides its own truncation is how you end up trusting a partial
- * picture.
- */
-function summariseReasons(entries) {
-  const counts = new Map();
-  for (const e of entries) {
-    const raw = (e && typeof e.reason === 'string' && e.reason.trim()) ? e.reason.trim() : '(no reason recorded)';
-    const key = raw.length > AUDIT_REASON_MAX_LEN ? `${raw.slice(0, AUDIT_REASON_MAX_LEN)}…` : raw;
-    counts.set(key, (counts.get(key) || 0) + 1);
-  }
-  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const kept = ranked.slice(0, AUDIT_REASON_MAX_KINDS);
-  const out = Object.fromEntries(kept);
-  const spilled = ranked.slice(AUDIT_REASON_MAX_KINDS);
-  if (spilled.length) {
-    out[`+${spilled.length} more reason kind(s)`] = spilled.reduce((s, [, n]) => s + n, 0);
-  }
-  return out;
-}
-
-// ── Import archive (2026-08-30) ─────────────────────────────────────────────
-//
-// The identity columns kept from each row, and nothing else. These are the
-// fields that decide how a wine is identified, matched and minted — every
-// import defect so far has lived in one of them. Price, purchase location,
-// notes and ratings are deliberately absent: they answer no import bug, and
-// leaving them out is what makes a 30-day archive of other people's cellars
-// a small thing rather than a large one. See models/ImportArchive.
-const IDENTITY_FIELDS = [
-  'wineName', 'producer', 'vintage', 'country', 'region', 'appellation',
-  'classification', 'type', 'grapes', 'quantity', 'bottleSize',
-];
-// One import is bounded by MAX_IMPORT_SIZE (2,000 rows); the archive keeps
-// the head of anything larger so a pathological file cannot write an
-// unbounded document. rowsTruncated + rowCount keep the omission visible.
-const ARCHIVE_ROW_CAP = 2000;
-// Retention window for the archive. Matches the unattached label-scan sweep
-// (services/scanImageRetentionJob) so the app has ONE retention story to
-// explain, not two.
-const IMPORT_ARCHIVE_DAYS = 30;
-
-/**
- * Project one import row down to its identity columns plus its outcome.
- * `outcome` is what the row's SELECTION resolved to — matched an existing
- * wine, minted a new one, or filed a request ('other' when it had none). A
- * confirmed AI proposal records what /confirm resolved it to: 'created' only
- * when this row minted the wine, 'matched' when it found one, 'unresolved'
- * when it found none. Any other row that errored keeps its selection's
- * outcome. "What the file said" and "what we did with it" are only diagnostic
- * together.
- */
-function archiveRow(item, outcome) {
-  const row = { outcome };
-  for (const f of IDENTITY_FIELDS) {
-    const v = item[f];
-    if (v === undefined || v === null || v === '') continue;
-    row[f] = Array.isArray(v) ? v.slice(0, 20).map((g) => String(g).slice(0, 80)) : String(v).slice(0, 200);
-  }
-  return row;
-}
 
 /**
  * POST /api/bottles/import/validate
