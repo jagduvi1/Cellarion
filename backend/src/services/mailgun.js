@@ -45,8 +45,11 @@ function supportReplyTo() {
 function supportSignature() {
   const configured = (process.env.SUPPORT_SIGNATURE || '').trim();
   if (configured) return configured;
-  const display = FROM.replace(/<[^>]*>/, '').trim();
-  return display || 'Cellarion';
+  // "Name <address>": the part before the angle bracket. A From that is only
+  // an address (bracketed or bare) has no name to sign with.
+  const bracket = FROM.indexOf('<');
+  const display = (bracket >= 0 ? FROM.slice(0, bracket) : FROM).trim();
+  return display && !display.includes('@') ? display : 'Cellarion';
 }
 
 /**

@@ -58,5 +58,6 @@ test('without it, the display name of MAILGUN_FROM signs', async () => {
 test('with neither, and with a bare address as From, it is "Cellarion"; the hosted install gets no special name', async () => {
   expect(lastLine((await thankYou({ FRONTEND_URL: 'http://localhost' })).text)).toBe('Cellarion');
   expect(lastLine((await thankYou({ FRONTEND_URL: 'https://wine.example.org', MAILGUN_FROM: '<help@example.org>' })).text)).toBe('Cellarion');
+  expect(lastLine((await thankYou({ FRONTEND_URL: 'https://wine.example.org', MAILGUN_FROM: 'help@example.org' })).text)).toBe('Cellarion');
   expect(lastLine((await thankYou({ FRONTEND_URL: 'https://cellarion.app' })).text)).toBe('Cellarion');
 });
