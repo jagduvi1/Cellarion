@@ -34,7 +34,7 @@ const deletedBottleSchema = new mongoose.Schema({
   // The deleted bottle's _id, which the restore re-uses.
   bottleId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
   // Kept outside the snapshot so a wine merge can re-point it
-  // (routes/admin/wines.reassignWineRefs) and the registry's "is this wine
+  // (services/wineMergeOps.reassignWineRefs) and the registry's "is this wine
   // still referenced?" guards can count it. Wins over the snapshot's copy.
   wineDefinition: { type: mongoose.Schema.Types.ObjectId, ref: 'WineDefinition', default: null, index: true },
   // One id per bulk delete, so "Undo" and "Restore all" act on the batch.

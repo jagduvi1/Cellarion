@@ -1,5 +1,5 @@
 /**
- * Which tasting profile a merge keeper ends up with (routes/admin/wines.js
+ * Which tasting profile a merge keeper ends up with (services/wineMergeOps.js
  * inheritAiProfile). Pins: a keeper without one inherits the best donor's (as
  * before); a curator-reviewed donor profile now REPLACES an unreviewed one on
  * the keeper and brings its review stamp along — on 2026-09-28 merging

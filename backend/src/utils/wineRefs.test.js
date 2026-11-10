@@ -21,7 +21,7 @@ const modelsWithWineRef = fs.readdirSync(modelsDir)
 test('every model that references a wine is handled by the merge or exempt with a reason', () => {
   const covered = new Set([...WINE_REF_HANDLED, ...Object.keys(WINE_REF_EXEMPT)]);
   // If this fails: re-point or drop the model in reassignWineRefs
-  // (routes/admin/wines.js) and list it in WINE_REF_HANDLED, or list it in
+  // (services/wineMergeOps.js) and list it in WINE_REF_HANDLED, or list it in
   // WINE_REF_EXEMPT with the service that moves it.
   expect(modelsWithWineRef.filter((name) => !covered.has(name))).toEqual([]);
 });

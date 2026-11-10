@@ -602,7 +602,7 @@ async function queryInquiryPage(filter, { limit, offset }) {
 }
 
 /**
- * Wine-merge lifecycle (called by performWineMerge, routes/admin/wines.js):
+ * Wine-merge lifecycle (called by performWineMerge, services/wineMergeOps.js):
  * ACTIVE inquiries follow the bottles to the keeper. 'answered' rows always
  * re-point — they carry owner answers that must stay reachable in the queue.
  * The (at most one) 'open' row re-points too, unless the keeper already has
