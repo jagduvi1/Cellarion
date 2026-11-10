@@ -98,6 +98,12 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      # The guard scripts' own tests (file sizes, comment-only proof). They
+      # run in this job because the comment-only proof minifies with esbuild,
+      # which the install above provides.
+      - name: Guard scripts
+        run: node --test scripts/guards.test.mjs
+
   mcp-bridge:
     # cellarion-mcp is published to npm on its own tag
     # (cellarion-mcp-publish.yml); its tests gate every PR like the app's.
