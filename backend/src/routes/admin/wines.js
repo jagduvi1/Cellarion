@@ -74,8 +74,7 @@ const { scanCrossFieldChecks, detectCrossFieldForWines } = require('../../servic
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
 // What follows a wine that is merged away (references, profile, vectors)
-// lives in the service. This file keeps the two merge routes and re-exports,
-// at the bottom, the names its other callers require from here.
+// lives in the service; this file keeps the two merge routes.
 const {
   performWineMerge, purgeSourceVectors, inheritAiProfile, reembedKeeper, reassignWineRefs,
 } = require('../../services/wineMergeOps');
@@ -2042,11 +2041,3 @@ router.post('/merge', async (req, res) => {
 });
 
 module.exports = router;
-// Re-exported from services/wineMergeOps. The correction-proposal approve
-// (wineProposals.js) requires the single-pair merge from this path, and its
-// test mocks this path.
-module.exports.performWineMerge = performWineMerge;
-module.exports.inheritAiProfile = inheritAiProfile;
-// The full reference re-pointer, required from this path when a private
-// draft is ATTACHED to an existing wine (services/wineDraftOps).
-module.exports.reassignWineRefs = reassignWineRefs;

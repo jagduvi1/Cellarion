@@ -8,8 +8,6 @@
 //     re-points the draft's references with reassignWineRefs;
 //   - the admin wine delete and the not-wine quarantine drop the vectors
 //     with purgeSourceVectors.
-// routes/admin/wines.js re-exports performWineMerge, inheritAiProfile and
-// reassignWineRefs: that is the path those callers and their tests require.
 //
 // A model that references WineDefinition is moved or dropped in
 // reassignWineRefs and listed in utils/wineRefs.js;

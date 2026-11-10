@@ -35,7 +35,7 @@ jest.mock('./search', () => ({ removeWine: jest.fn(), bulkIndexBottles: jest.fn(
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn(async () => {}) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn(async () => {}) }));
 // The admin merge's reference re-pointer — attach delegates to it (audit 2026-09-12).
-jest.mock('../routes/admin/wines', () => ({ reassignWineRefs: jest.fn(async () => 2) }));
+jest.mock('./wineMergeOps', () => ({ reassignWineRefs: jest.fn(async () => 2) }));
 
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
@@ -53,7 +53,7 @@ const { findVisibleWine } = require('./wineVisibility');
 const { findOrCreateWine } = require('./findOrCreateWine');
 const { detectBlockingProducerIssue } = require('./crossFieldScan');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
-const { reassignWineRefs } = require('../routes/admin/wines');
+const { reassignWineRefs } = require('./wineMergeOps');
 const ops = require('./wineDraftOps');
 
 const ME = 'aaaaaaaaaaaaaaaaaaaaaaaa';

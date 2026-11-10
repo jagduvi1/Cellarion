@@ -54,7 +54,7 @@ jest.mock('../../services/producerSpelling', () => ({
 }));
 // The extracted merge helper — the whole point of the extraction is that this
 // route invokes IT rather than re-implementing the machinery.
-jest.mock('./wines', () => ({ performWineMerge: jest.fn() }));
+jest.mock('../../services/wineMergeOps', () => ({ performWineMerge: jest.fn() }));
 // Grape resolution is the somm's own set_wine_profile helper; the route must
 // call it rather than touching the Grape collection itself, so it is mocked
 // and asserted on. WINE_TYPES stays real — it is a constant list.
@@ -84,7 +84,7 @@ const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
 const Grape = require('../../models/Grape');
 const { createNotification } = require('../../services/notifications');
-const { performWineMerge } = require('./wines');
+const { performWineMerge } = require('../../services/wineMergeOps');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 const { generateWineKey } = require('../../utils/normalize');
