@@ -42,7 +42,6 @@ const WineRequest = require('../models/WineRequest');
 const { findOrCreatePendingRequest, pickImportHints } = require('../services/wineRequestIntake');
 const WishlistItem = require('../models/WishlistItem');
 const ImportSession = require('../models/ImportSession');
-const ImportArchive = require('../models/ImportArchive');
 const { parseExpectedArrival } = require('../utils/onOrder');
 // Which registry wine a row is, if any: the exact key, a known producer
 // split off the name, the scored candidates and the colour gate.
@@ -56,7 +55,7 @@ const {
 } = require('../services/importIdentity');
 // The failure reasons grouped for the audit row, and the archive of the
 // file's identity columns.
-const { summariseReasons, ARCHIVE_ROW_CAP, IMPORT_ARCHIVE_DAYS, archiveRow } = require('../services/importArchive');
+const { summariseReasons, writeImportArchive } = require('../services/importArchive');
 
 /**
  * A row flagged `onOrder` (a CellarTracker pending purchase, or a receipt the
@@ -1555,51 +1554,29 @@ router.post('/confirm', async (req, res) => {
     });
 
     // Archive what the file contained, identity columns only, for 30 days.
-    //
-    // NOT awaited, deliberately — the same fire-and-forget shape as logAudit
-    // above. The import is finished and audited by this point; a diagnostic
-    // copy must never delay the user's response, and a slow or failing write
-    // must never turn a successful import into an error. (Awaiting it also
-    // made every /confirm test hang on Mongoose's buffer timeout, which is
-    // the same stall a real connection hiccup would cause in production.)
-    // The rows are projected, not stored raw — see IDENTITY_FIELDS.
-    try {
-      const rows = items.slice(0, ARCHIVE_ROW_CAP).map((item, i) => archiveRow(
-        item,
-        item.requestWine ? 'request'
-          // The import client sends a confirmed AI proposal as `aiWine`
-          // (utils/importPayload); the loop above recorded what it resolved
-          // to ('request' for the near-match zone). One it never resolved (a
-          // missing name, a bad vintage) has no wineDefinition: the loop fills
-          // that in only on a row it resolved.
-          : (aiOutcomes.get(i)
-            || (item.wineDefinition ? 'matched' : (item.aiWine ? 'unresolved' : 'other')))
-      ));
-      ImportArchive.create({
-        user: req.user.id,
-        cellar: cellarId,
-        fileName: typeof req.body.fileName === 'string' ? req.body.fileName.slice(0, 260) : undefined,
-        detectedFormat: typeof req.body.detectedFormat === 'string' ? req.body.detectedFormat.slice(0, 40) : undefined,
-        detectedEncoding: typeof req.body.detectedEncoding === 'string' ? req.body.detectedEncoding.slice(0, 40) : undefined,
-        importWarnings: sanitizeImportWarnings(req.body.importWarnings),
-        rows,
-        rowCount: items.length,
-        rowsTruncated: items.length > ARCHIVE_ROW_CAP,
-        summary: {
-          created, createdActive, createdHistory, wishlistCreated,
-          ...(createdOnOrder ? { createdOnOrder } : {}),
-          skipped: skipped.length, errors: errors.length,
-          ...(errors.length ? { errorReasons: summariseReasons(errors) } : {}),
-          pendingIdentity: pendingIdentityCount,
-        },
-        retainUntil: new Date(Date.now() + IMPORT_ARCHIVE_DAYS * 24 * 60 * 60 * 1000),
-      }).catch((err) => {
-        console.warn('[import] archive write failed (non-fatal):', err.message);
-      });
-    } catch (err) {
-      // Projection/build failure — the create above never launched.
-      console.warn('[import] archive build failed (non-fatal):', err.message);
-    }
+    // Not awaited and never failing: the import is finished and audited by
+    // this point (services/importArchive.writeImportArchive).
+    writeImportArchive({
+      userId: req.user.id,
+      cellarId,
+      meta: req.body,
+      items,
+      // The import client sends a confirmed AI proposal as `aiWine`
+      // (utils/importPayload); the loop above recorded what it resolved
+      // to ('request' for the near-match zone). One it never resolved (a
+      // missing name, a bad vintage) has no wineDefinition: the loop fills
+      // that in only on a row it resolved.
+      outcomeOf: (item, i) => (item.requestWine ? 'request'
+        : (aiOutcomes.get(i)
+          || (item.wineDefinition ? 'matched' : (item.aiWine ? 'unresolved' : 'other')))),
+      summary: () => ({
+        created, createdActive, createdHistory, wishlistCreated,
+        ...(createdOnOrder ? { createdOnOrder } : {}),
+        skipped: skipped.length, errors: errors.length,
+        ...(errors.length ? { errorReasons: summariseReasons(errors) } : {}),
+        pendingIdentity: pendingIdentityCount,
+      }),
+    });
 
     res.json({
       created,

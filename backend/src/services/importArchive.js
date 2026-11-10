@@ -9,6 +9,10 @@
 // Caller: POST /api/bottles/import/confirm in routes/import.js, which
 // re-exports summariseReasons for its test.
 
+const ImportArchive = require('../models/ImportArchive');
+// Parse-time warnings are bounded before they are stored.
+const { sanitizeImportWarnings } = require('../utils/importWarnings');
+
 // Distinct failure reasons kept in one import's audit row, and the length each
 // is truncated to. Enough to name every failure mode a real file hits without
 // letting a pathological one bloat the document.
@@ -42,7 +46,7 @@ function summariseReasons(entries) {
   return out;
 }
 
-// ── Import archive (2026-08-30) ─────────────────────────────────────────────
+// ── Import archive ──────────────────────────────────────────────────────────
 //
 // The identity columns kept from each row, and nothing else. These are the
 // fields that decide how a wine is identified, matched and minted — every
@@ -83,9 +87,50 @@ function archiveRow(item, outcome) {
   return row;
 }
 
+/**
+ * Keep what an import's file contained, identity columns only, for
+ * IMPORT_ARCHIVE_DAYS (models/ImportArchive). The rows are projected through
+ * archiveRow, never stored raw.
+ *
+ *   meta       the request body: fileName, detectedFormat, detectedEncoding
+ *              and importWarnings are read from it, each bounded
+ *   outcomeOf  (item, index) → what the row's selection resolved to
+ *   summary    () → the import's counts; called here so that a failure to
+ *              build them is a failed archive, not a failed import
+ *
+ * NOT awaited by its caller, and it never throws: the import is finished and
+ * audited by the time this runs, so a diagnostic copy must not delay the
+ * response, and a slow or failing write must not turn a successful import
+ * into an error. Caller: POST /api/bottles/import/confirm.
+ */
+function writeImportArchive({ userId, cellarId, meta, items, outcomeOf, summary }) {
+  try {
+    const rows = items.slice(0, ARCHIVE_ROW_CAP).map((item, i) => archiveRow(item, outcomeOf(item, i)));
+    ImportArchive.create({
+      user: userId,
+      cellar: cellarId,
+      fileName: typeof meta.fileName === 'string' ? meta.fileName.slice(0, 260) : undefined,
+      detectedFormat: typeof meta.detectedFormat === 'string' ? meta.detectedFormat.slice(0, 40) : undefined,
+      detectedEncoding: typeof meta.detectedEncoding === 'string' ? meta.detectedEncoding.slice(0, 40) : undefined,
+      importWarnings: sanitizeImportWarnings(meta.importWarnings),
+      rows,
+      rowCount: items.length,
+      rowsTruncated: items.length > ARCHIVE_ROW_CAP,
+      summary: summary(),
+      retainUntil: new Date(Date.now() + IMPORT_ARCHIVE_DAYS * 24 * 60 * 60 * 1000),
+    }).catch((err) => {
+      console.warn('[import] archive write failed (non-fatal):', err.message);
+    });
+  } catch (err) {
+    // Projection/build failure — the create above never launched.
+    console.warn('[import] archive build failed (non-fatal):', err.message);
+  }
+}
+
 module.exports = {
   summariseReasons,
   ARCHIVE_ROW_CAP,
   IMPORT_ARCHIVE_DAYS,
   archiveRow,
+  writeImportArchive,
 };
