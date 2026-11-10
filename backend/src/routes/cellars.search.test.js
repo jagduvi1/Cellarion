@@ -565,6 +565,141 @@ describe('GET /api/cellars/:id?group=1 — the default page, grouped and paged i
   });
 });
 
+// The cross-cellar list without a search. In an order MongoDB can sort, with
+// nothing to filter in memory, the page is cut in the database. A rating,
+// maturity or chart filter, or an order MongoDB cannot sort, loads the set
+// (capped) and filters, sorts and pages it in memory.
+describe('GET /api/cellars/multi/bottles — without a search', () => {
+  const { NOT_IN_CELLAR_STATUSES } = require('../config/constants');
+  const oid = (h) => new (require('mongoose').Types.ObjectId)(h);
+  const YEAR = new Date().getFullYear();
+  const savedRows = { ...ROWS };
+  const savedList = [...LIST];
+  afterEach(() => {
+    Object.assign(ROWS, savedRows);
+    LIST.splice(0, LIST.length, ...savedList);
+  });
+  const listIs = (...rows) => LIST.splice(0, LIST.length, ...rows);
+
+  // What each Bottle.find was asked, on top of the suite's query chain.
+  let asked;
+  beforeEach(() => {
+    asked = [];
+    Bottle.find.mockImplementation((filter) => {
+      const q = bottleQuery(filter);
+      const call = { filter };
+      asked.push(call);
+      for (const step of ['sort', 'skip', 'limit']) q[step] = (arg) => { call[step] = arg; return q; };
+      return q;
+    });
+  });
+  // The list queries: the ones over a cellar set (not the photo lookups).
+  const listQueries = () => asked.filter((c) => c.filter.cellar);
+  const SET = { cellar: { $in: [oid(CELLAR_ID), oid(CELLAR_2)] }, status: { $nin: NOT_IN_CELLAR_STATUSES } };
+  const both = (query = '') => request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID},${CELLAR_2}${query}`);
+
+  test('the default view is cut in the database: one page query, one count, the facets from one grouping query', async () => {
+    Bottle.countDocuments.mockResolvedValue(41);
+
+    const { status, body } = await both('&limit=5');
+
+    expect(status).toBe(200);
+    expect(listQueries()).toEqual([{ filter: SET, sort: { createdAt: -1 }, skip: 0, limit: 5 }]);
+    expect(Bottle.countDocuments).toHaveBeenCalledWith(SET);
+    expect(body.bottles).toMatchObject({ count: 1, total: 41, limit: 5, skip: 0, grouped: false });
+    expect(idsOf(body.bottles.items)).toEqual([B3]);
+    // Each bottle says which cellar it lies in.
+    expect(body.bottles.items[0]).toMatchObject({ cellarName: 'Home', cellarColor: null });
+    expect(body.cellars).toEqual([
+      { _id: CELLAR_ID, name: 'Home', userColor: null },
+      { _id: CELLAR_2, name: 'Home', userColor: null },
+    ]);
+    expect(bottleSearch.searchBottles).not.toHaveBeenCalled();
+    expect(bottleSearch.bottleFacets).toHaveBeenCalledWith({ cellarIds: [CELLAR_ID, CELLAR_2], statusFilter: 'active' });
+    expect(body.facets).toEqual(PLAIN_FACETS.facetDistribution);
+  });
+
+  test('the order and the page asked for go to the database', async () => {
+    await both('&sort=-price&limit=5&skip=10');
+
+    expect(listQueries()).toEqual([{ filter: SET, sort: { price: -1 }, skip: 10, limit: 5 }]);
+  });
+
+  test('only cellars the user can read are listed: another one is dropped, none left is a 403, no id a 400', async () => {
+    const OTHER = '64b0000000000000000000c9';
+
+    const { status } = await request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID},${OTHER},junk`);
+
+    expect(status).toBe(200);
+    expect(Cellar.find).toHaveBeenCalledWith({ $or: [{ user: USER_ID }, { 'members.user': USER_ID }], deletedAt: null });
+    expect(listQueries()[0].filter.cellar).toEqual({ $in: [oid(CELLAR_ID)] });
+
+    expect((await request(`/api/cellars/multi/bottles?cellars=${OTHER}`)).status).toBe(403);
+    expect((await request('/api/cellars/multi/bottles?cellars=junk')).status).toBe(400);
+  });
+
+  test('a chart filter loads the set once, capped and newest first, then filters, sorts and pages in memory', async () => {
+    ROWS[B1] = bottleRow(B1, { bottleSize: '1500ml', vintage: '2019' });
+    ROWS[B2] = bottleRow(B2, { bottleSize: '1500ml', vintage: '2012' });
+    ROWS[B3] = bottleRow(B3, { vintage: '2001' });
+    listIs(ROWS[B1], ROWS[B2], ROWS[B3]);
+
+    const { body } = await both('&bottleSize=1500ml&sort=vintage&limit=1&skip=1');
+
+    expect(listQueries()).toEqual([{ filter: SET, sort: { createdAt: -1 }, limit: 10000 }]);
+    expect(Bottle.countDocuments).not.toHaveBeenCalled();
+    // Two magnums, 2012 before 2019: the second is this page.
+    expect(body.bottles).toMatchObject({ total: 2, limit: 1, skip: 1 });
+    expect(idsOf(body.bottles.items)).toEqual([B1]);
+  });
+
+  test('a rating filter keeps the bottles whose own rating is within it', async () => {
+    ROWS[B1] = bottleRow(B1, { rating: 5, ratingScale: '5' });
+    ROWS[B2] = bottleRow(B2, { rating: 2, ratingScale: '5' });
+    listIs(ROWS[B1], ROWS[B2], ROWS[B3]);
+
+    const { body } = await both('&minRating=80');
+
+    expect(listQueries()).toEqual([{ filter: SET, sort: { createdAt: -1 }, limit: 10000 }]);
+    expect(body.bottles.total).toBe(1);
+    expect(idsOf(body.bottles.items)).toEqual([B1]);
+  });
+
+  test('a maturity filter and the maturity order read each bottle, and every bottle carries its status', async () => {
+    ROWS[B1] = bottleRow(B1, { drinkFrom: YEAR + 5 });
+    ROWS[B2] = bottleRow(B2, { drinkFrom: YEAR - 1, drinkTo: YEAR + 1 });
+    ROWS[B3] = bottleRow(B3, { drinkTo: YEAR - 1 });
+    listIs(ROWS[B1], ROWS[B2], ROWS[B3]);
+
+    const filtered = await both('&maturity=peak,declining');
+    expect(filtered.body.bottles.items.map((b) => [String(b._id), b.maturityStatus]).sort()).toEqual([[B2, 'peak'], [B3, 'declining']].sort());
+
+    // Drink soonest first: past its window, at its peak, not ready yet.
+    const ordered = await both('&sort=maturity');
+    expect(ordered.body.bottles.items.map((b) => [String(b._id), b.maturityStatus])).toEqual([[B3, 'declining'], [B2, 'peak'], [B1, 'not-ready']]);
+    const reversed = await both('&sort=-maturity');
+    expect(idsOf(reversed.body.bottles.items)).toEqual([B1, B2, B3]);
+  });
+
+  test('the name order sorts in memory, A to Z or Z to A, a bottle without a wine last', async () => {
+    ROWS[B1] = bottleRow(B1, { wineDefinition: { _id: '64b0000000000000000000f1', name: 'Zinfandel' } });
+    ROWS[B2] = bottleRow(B2, { wineDefinition: { _id: '64b0000000000000000000f2', name: 'albariño' } });
+    listIs(ROWS[B1], ROWS[B2], ROWS[B3]);
+
+    expect(idsOf((await both('&sort=name')).body.bottles.items)).toEqual([B2, B1, B3]);
+    expect(idsOf((await both('&sort=-name')).body.bottles.items)).toEqual([B3, B1, B2]);
+  });
+
+  test('a repeated or bracketed parameter is read as absent, never a 500', async () => {
+    const { status } = await both('&sort=name&sort=vintage&search[$gt]=x&minRating=1&minRating=2');
+
+    expect(status).toBe(200);
+    // No sort, no search, no rating limit: the default view.
+    expect(listQueries()).toEqual([{ filter: SET, sort: { createdAt: -1 }, skip: 0, limit: 30 }]);
+    expect(bottleSearch.searchBottles).not.toHaveBeenCalled();
+  });
+});
+
 // "Open now" above the list: the first page of either list names the open
 // bottles of the cellars in view (whatever the filters); later pages do not
 // ask again, and a failed lookup shows no strip instead of failing the list.
