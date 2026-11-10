@@ -1,6 +1,6 @@
 {
   "backend/src/mcp/sommTools.test.js": 2455,
-  "backend/src/mcp/tools/somm.js": 1967,
+  "backend/src/mcp/tools/somm.js": 1602,
   "backend/src/routes/admin/taxonomy.js": 1603,
   "backend/src/routes/admin/wines.js": 2451,
   "backend/src/routes/bottles.js": 1892,
