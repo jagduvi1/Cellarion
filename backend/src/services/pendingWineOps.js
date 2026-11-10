@@ -30,7 +30,7 @@ const Country = require('../models/Country');
 // pendingWineKey comes from utils/normalize (beside generateWineKey), NOT from
 // services/findOrCreateWine: one definition of the key shape, and no dependency
 // from the curation queue onto the resolver's module tree to build a string.
-const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity, normalizeClassification } = require('../utils/normalize');
+const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
 const { assignClassification } = require('./classificationOps');
 const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = require('../utils/crossFieldChecks');
 // Top-level: labelScanAccess requires nothing at load (its own model require is

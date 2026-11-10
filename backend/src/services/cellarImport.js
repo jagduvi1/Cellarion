@@ -35,7 +35,6 @@ const Rack = require('../models/Rack');
 const { RACK_TYPES } = require('../models/Rack');
 const CellarLayout = require('../models/CellarLayout');
 const BottleImage = require('../models/BottleImage');
-const WineRequest = require('../models/WineRequest');
 const { findOrCreatePendingRequest, pickImportHints } = require('./wineRequestIntake');
 const { currencyOrFallback } = require('../config/currencies');
 const Review = require('../models/Review');

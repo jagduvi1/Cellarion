@@ -36,7 +36,6 @@ const { validatePriceSanity } = require('../utils/priceValidation');
 const { computeUserMediansByCurrency } = require('../services/priceWarnings');
 const { parseCurrency, currencyOrFallback, isSupportedCurrency } = require('../config/currencies');
 const { runConcurrent } = require('../utils/concurrency');
-const WineRequest = require('../models/WineRequest');
 const { findOrCreatePendingRequest, pickImportHints } = require('../services/wineRequestIntake');
 const WishlistItem = require('../models/WishlistItem');
 const { parseExpectedArrival } = require('../utils/onOrder');

@@ -9,7 +9,6 @@ const { findVisibleWine } = require('../services/wineVisibility');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
-const WineVintageProfile = require('../models/WineVintageProfile');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const BottleImage = require('../models/BottleImage');

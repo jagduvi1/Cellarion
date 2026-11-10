@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const WineReport = require('../models/WineReport');
-const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');

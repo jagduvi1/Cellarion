@@ -6,7 +6,6 @@ const { ROLE_LEVELS } = require('../middleware/bottleAccess');
 const Rack = require('../models/Rack');
 const { RACK_TYPES } = require('../models/Rack');
 const Cellar = require('../models/Cellar');
-const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate, cabinetRows, modularTotalSlots } = require('../utils/rackGeometry');
