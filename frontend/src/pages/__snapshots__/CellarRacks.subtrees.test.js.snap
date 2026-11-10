@@ -1,0 +1,1007 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the NFC dialog > on a device that cannot write tags 1`] = `
+<div
+  aria-label="nfc.linkTitle"
+  aria-modal="true"
+  class="slot-modal"
+  role="dialog"
+  style="max-width: 400px;"
+  tabindex="-1"
+>
+  <div
+    class="slot-popup-header"
+  >
+    <span
+      class="slot-popup-title"
+    >
+      nfc.linkTitle
+    </span>
+    <button
+      aria-label="Close"
+      class="slot-popup-close"
+    >
+      ×
+    </button>
+  </div>
+  <div
+    style="padding: 1rem;"
+  >
+    <p
+      style="font-size: 0.85rem; color: var(--color-text-muted); margin: 0px 0px 1rem;"
+    >
+      nfc.linkDescription
+    </p>
+    <div
+      style="font-size: 0.8rem; color: var(--color-text-muted); word-break: break-all; margin-bottom: 1rem; padding: 0.5rem; background: var(--color-surface-raised); border-radius: var(--radius-sm);"
+    >
+      <strong>
+        URL:
+      </strong>
+       
+      http://localhost:3000/nfc/rack/r1
+    </div>
+    <div
+      style="font-size: 0.85rem; color: var(--color-text-muted);"
+    >
+      <p
+        style="margin: 0px 0px 0.5rem; font-weight: 600;"
+      >
+        nfc.notSupported
+      </p>
+      <p
+        style="margin: 0px;"
+      >
+        nfc.manualInstructions
+      </p>
+    </div>
+    <div
+      style="display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end;"
+    >
+      <button
+        class="btn btn-primary btn-small"
+      >
+        nfc.markAsLinked
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`the new-rack form > for a grid, the type the form opens on 1`] = `
+<div
+  class="new-rack-section"
+>
+  <form
+    class="card new-rack-form"
+  >
+    <h3>
+      racks.newRackTitle
+    </h3>
+    <div
+      data-rack-type="grid"
+    >
+      <button
+        type="button"
+      >
+        choose-cabinet
+      </button>
+    </div>
+    <div
+      class="new-rack-fields"
+    >
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.nameLabel
+        </label>
+        <input
+          placeholder="racks.namePlaceholder"
+          required=""
+          type="text"
+          value=""
+        />
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.groupLabel
+        </label>
+        <input
+          list="new-rack-group-options"
+          maxlength="40"
+          placeholder="racks.groupPlaceholder"
+          type="text"
+          value=""
+        />
+        <datalist
+          id="new-rack-group-options"
+        />
+        <small
+          class="help-text"
+        >
+          racks.groupHint
+        </small>
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.rowsLabel
+        </label>
+        <input
+          inputmode="numeric"
+          max="20"
+          min="1"
+          type="number"
+          value="4"
+        />
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.colsLabel
+        </label>
+        <input
+          inputmode="numeric"
+          max="20"
+          min="1"
+          type="number"
+          value="8"
+        />
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.doubleHeightRowsLabel
+        </label>
+        <input
+          placeholder="racks.doubleHeightRowsPlaceholder"
+          type="text"
+          value=""
+        />
+        <small
+          style="color: var(--color-text-muted); font-size: 0.75rem;"
+        >
+          racks.doubleHeightRowsHelp
+        </small>
+      </div>
+      <button
+        class="btn btn-secondary new-rack-preview-toggle "
+        type="button"
+      >
+        racks.preview
+      </button>
+      <button
+        class="btn btn-primary"
+        type="submit"
+      >
+        racks.createRack
+      </button>
+    </div>
+    <div
+      class="new-rack-preview-hint"
+    >
+      racks.totalSlots
+      : 
+      32
+    </div>
+  </form>
+</div>
+`;
+
+exports[`the new-rack form > for a wine cabinet, with its shape fields 1`] = `
+<div
+  class="new-rack-section"
+>
+  <form
+    class="card new-rack-form"
+  >
+    <h3>
+      racks.newRackTitle
+    </h3>
+    <div
+      data-rack-type="cabinet"
+    >
+      <button
+        type="button"
+      >
+        choose-cabinet
+      </button>
+    </div>
+    <div
+      class="new-rack-fields"
+    >
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.nameLabel
+        </label>
+        <input
+          placeholder="racks.namePlaceholder"
+          required=""
+          type="text"
+          value=""
+        />
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.groupLabel
+        </label>
+        <input
+          list="new-rack-group-options"
+          maxlength="40"
+          placeholder="racks.groupPlaceholder"
+          type="text"
+          value=""
+        />
+        <datalist
+          id="new-rack-group-options"
+        />
+        <small
+          class="help-text"
+        >
+          racks.groupHint
+        </small>
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.shelvesLabel
+        </label>
+        <input
+          inputmode="numeric"
+          max="20"
+          min="1"
+          type="number"
+          value="5"
+        />
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.bottlesAcrossLabel
+        </label>
+        <input
+          inputmode="numeric"
+          max="20"
+          min="1"
+          type="number"
+          value="6"
+        />
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.cabinetPresetLabel
+        </label>
+        <select>
+          <option
+            value="custom"
+          >
+            racks.cabinetPresetCustom
+          </option>
+          <optgroup
+            label="racks.cabinetPresetGroup_liebherrGrandCru"
+          >
+            <option
+              value="liebherrWkes653"
+            >
+              racks.cabinetPreset_liebherrWkes653
+            </option>
+            <option
+              value="liebherrWkes553"
+            >
+              racks.cabinetPreset_liebherrWkes553
+            </option>
+            <option
+              value="liebherrWkes4552"
+            >
+              racks.cabinetPreset_liebherrWkes4552
+            </option>
+            <option
+              value="liebherrWkt6451"
+            >
+              racks.cabinetPreset_liebherrWkt6451
+            </option>
+            <option
+              value="liebherrWpbl4201"
+            >
+              racks.cabinetPreset_liebherrWpbl4201
+            </option>
+            <option
+              value="liebherrWpbl4601"
+            >
+              racks.cabinetPreset_liebherrWpbl4601
+            </option>
+            <option
+              value="liebherrWpbli5231"
+            >
+              racks.cabinetPreset_liebherrWpbli5231
+            </option>
+            <option
+              value="liebherrWsbli7731"
+            >
+              racks.cabinetPreset_liebherrWsbli7731
+            </option>
+            <option
+              value="liebherrWpbl5001"
+            >
+              racks.cabinetPreset_liebherrWpbl5001
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_liebherrVinidor"
+          >
+            <option
+              value="liebherrWtes1672"
+            >
+              racks.cabinetPreset_liebherrWtes1672
+            </option>
+            <option
+              value="liebherrWtes4677"
+            >
+              racks.cabinetPreset_liebherrWtes4677
+            </option>
+            <option
+              value="liebherrWtes5872"
+            >
+              racks.cabinetPreset_liebherrWtes5872
+            </option>
+            <option
+              value="liebherrWtes5972"
+            >
+              racks.cabinetPreset_liebherrWtes5972
+            </option>
+            <option
+              value="liebherrWpbsi5252"
+            >
+              racks.cabinetPreset_liebherrWpbsi5252
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_liebherrVinothek"
+          >
+            <option
+              value="liebherrWkb4212"
+            >
+              racks.cabinetPreset_liebherrWkb4212
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_eurocave"
+          >
+            <option
+              value="eurocaveS"
+            >
+              racks.cabinetPreset_eurocaveS
+            </option>
+            <option
+              value="eurocaveM"
+            >
+              racks.cabinetPreset_eurocaveM
+            </option>
+            <option
+              value="eurocaveL"
+            >
+              racks.cabinetPreset_eurocaveL
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_vintec"
+          >
+            <option
+              value="vintec50"
+            >
+              racks.cabinetPreset_vintec50
+            </option>
+            <option
+              value="vintec110"
+            >
+              racks.cabinetPreset_vintec110
+            </option>
+            <option
+              value="vintec148"
+            >
+              racks.cabinetPreset_vintec148
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_mquvee"
+          >
+            <option
+              value="mquveeWinecave70060d"
+            >
+              racks.cabinetPreset_mquveeWinecave70060d
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_dometic"
+          >
+            <option
+              value="dometicC46"
+            >
+              racks.cabinetPreset_dometicC46
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_temptech"
+          >
+            <option
+              value="temptechCol150"
+            >
+              racks.cabinetPreset_temptechCol150
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_boschSiemens"
+          >
+            <option
+              value="boschKuw21"
+            >
+              racks.cabinetPreset_boschKuw21
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_caso"
+          >
+            <option
+              value="casoWinecomfort66"
+            >
+              racks.cabinetPreset_casoWinecomfort66
+            </option>
+          </optgroup>
+          <optgroup
+            label="racks.cabinetPresetGroup_generic"
+          >
+            <option
+              value="sliding"
+            >
+              racks.cabinetPreset_sliding
+            </option>
+          </optgroup>
+        </select>
+        <small
+          style="color: var(--color-text-muted); font-size: 0.75rem;"
+        >
+          racks.cabinetPresetHint
+        </small>
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          racks.cabinetShelfRowsLabel
+        </label>
+        <div
+          style="display: flex; flex-direction: column; gap: 0.35rem;"
+        >
+          <div
+            style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.6rem; font-size: 0.85rem;"
+          >
+            <span
+              style="min-width: 4.5rem;"
+            >
+              racks.cabinetShelfN:{"n":1}
+            </span>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":1} racks.cabinetShelfRowsShort"
+                inputmode="numeric"
+                max="12"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="2"
+              />
+              <span>
+                racks.cabinetShelfRowsShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":1} racks.cabinetShelfAcrossShort"
+                inputmode="numeric"
+                max="6"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="6"
+              />
+              <span>
+                racks.cabinetShelfAcrossShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":1} racks.cabinetShelfAlternateShort"
+                type="checkbox"
+              />
+              <span>
+                racks.cabinetShelfAlternateShort
+              </span>
+            </label>
+          </div>
+          <div
+            style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.6rem; font-size: 0.85rem;"
+          >
+            <span
+              style="min-width: 4.5rem;"
+            >
+              racks.cabinetShelfN:{"n":2}
+            </span>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":2} racks.cabinetShelfRowsShort"
+                inputmode="numeric"
+                max="12"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="2"
+              />
+              <span>
+                racks.cabinetShelfRowsShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":2} racks.cabinetShelfAcrossShort"
+                inputmode="numeric"
+                max="6"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="6"
+              />
+              <span>
+                racks.cabinetShelfAcrossShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":2} racks.cabinetShelfAlternateShort"
+                type="checkbox"
+              />
+              <span>
+                racks.cabinetShelfAlternateShort
+              </span>
+            </label>
+          </div>
+          <div
+            style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.6rem; font-size: 0.85rem;"
+          >
+            <span
+              style="min-width: 4.5rem;"
+            >
+              racks.cabinetShelfN:{"n":3}
+            </span>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":3} racks.cabinetShelfRowsShort"
+                inputmode="numeric"
+                max="12"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="2"
+              />
+              <span>
+                racks.cabinetShelfRowsShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":3} racks.cabinetShelfAcrossShort"
+                inputmode="numeric"
+                max="6"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="6"
+              />
+              <span>
+                racks.cabinetShelfAcrossShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":3} racks.cabinetShelfAlternateShort"
+                type="checkbox"
+              />
+              <span>
+                racks.cabinetShelfAlternateShort
+              </span>
+            </label>
+          </div>
+          <div
+            style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.6rem; font-size: 0.85rem;"
+          >
+            <span
+              style="min-width: 4.5rem;"
+            >
+              racks.cabinetShelfN:{"n":4}
+            </span>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":4} racks.cabinetShelfRowsShort"
+                inputmode="numeric"
+                max="12"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="2"
+              />
+              <span>
+                racks.cabinetShelfRowsShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":4} racks.cabinetShelfAcrossShort"
+                inputmode="numeric"
+                max="6"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="6"
+              />
+              <span>
+                racks.cabinetShelfAcrossShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":4} racks.cabinetShelfAlternateShort"
+                type="checkbox"
+              />
+              <span>
+                racks.cabinetShelfAlternateShort
+              </span>
+            </label>
+          </div>
+          <div
+            style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.6rem; font-size: 0.85rem;"
+          >
+            <span
+              style="min-width: 4.5rem;"
+            >
+              racks.cabinetShelfN:{"n":5}
+            </span>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":5} racks.cabinetShelfRowsShort"
+                inputmode="numeric"
+                max="12"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="2"
+              />
+              <span>
+                racks.cabinetShelfRowsShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":5} racks.cabinetShelfAcrossShort"
+                inputmode="numeric"
+                max="6"
+                min="1"
+                style="width: 4.2rem;"
+                type="number"
+                value="6"
+              />
+              <span>
+                racks.cabinetShelfAcrossShort
+              </span>
+            </label>
+            <label
+              style="display: flex; align-items: center; gap: 0.3rem;"
+            >
+              <input
+                aria-label="racks.cabinetShelfN:{"n":5} racks.cabinetShelfAlternateShort"
+                type="checkbox"
+              />
+              <span>
+                racks.cabinetShelfAlternateShort
+              </span>
+            </label>
+          </div>
+        </div>
+        <small
+          style="color: var(--color-text-muted); font-size: 0.75rem;"
+        >
+          racks.cabinetShelfRowsHelp
+        </small>
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          <input
+            checked=""
+            type="checkbox"
+          />
+           
+          racks.cabinetTwoDeepLabel
+        </label>
+        <small
+          style="color: var(--color-text-muted); font-size: 0.75rem;"
+        >
+          racks.cabinetTwoDeepHelp
+        </small>
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          <input
+            type="checkbox"
+          />
+           
+          racks.cabinetAlternateLabel
+        </label>
+        <small
+          style="color: var(--color-text-muted); font-size: 0.75rem;"
+        >
+          racks.cabinetAlternateHelp
+        </small>
+      </div>
+      <div
+        class="form-group"
+      >
+        <label>
+          <input
+            checked=""
+            type="checkbox"
+          />
+           
+          racks.cabinetStaggerLabel
+        </label>
+        <small
+          style="color: var(--color-text-muted); font-size: 0.75rem;"
+        >
+          racks.cabinetStaggerHelp
+        </small>
+      </div>
+      <button
+        class="btn btn-secondary new-rack-preview-toggle "
+        type="button"
+      >
+        racks.preview
+      </button>
+      <button
+        class="btn btn-primary"
+        type="submit"
+      >
+        racks.createRack
+      </button>
+    </div>
+    <div
+      class="new-rack-preview-hint"
+    >
+      racks.totalSlots
+      : 
+      60
+    </div>
+  </form>
+</div>
+`;
+
+exports[`the slot popups > a free slot, once its picker has listed the unplaced bottles 1`] = `
+<div
+  aria-labelledby="slot-popup-heading"
+  aria-modal="true"
+  class="slot-modal"
+  role="dialog"
+  tabindex="-1"
+>
+  <div
+    class="slot-popup-header"
+  >
+    <span
+      class="slot-popup-title"
+      id="slot-popup-heading"
+    >
+      racks.slotPlaceBottle:{"position":3}
+    </span>
+    <button
+      aria-label="Close"
+      class="slot-popup-close"
+    >
+      ×
+    </button>
+  </div>
+  <input
+    aria-label="racks.searchWines"
+    class="slot-search"
+    placeholder="racks.searchWines"
+    type="text"
+    value=""
+  />
+  <div
+    class="slot-bottle-list"
+  >
+    <div
+      class="slot-bottle-item"
+      role="button"
+      tabindex="0"
+    >
+      <span
+        aria-hidden="true"
+        class="slot-bottle-type-dot type-red"
+      />
+      <div
+        class="slot-bottle-info"
+      >
+        <strong>
+          Château Exemple
+        </strong>
+        <span
+          class="slot-bottle-meta"
+        >
+          Domaine Exemple
+           · 
+          2015
+        </span>
+      </div>
+    </div>
+  </div>
+  <div
+    class="slot-popup-actions"
+  >
+    <button
+      class="btn btn-secondary btn-small"
+    >
+      racks.disableSlot
+    </button>
+  </div>
+</div>
+`;
+
+exports[`the slot popups > a position marked unusable 1`] = `
+<div
+  aria-labelledby="slot-popup-heading"
+  aria-modal="true"
+  class="slot-modal"
+  role="dialog"
+  tabindex="-1"
+>
+  <div
+    class="slot-popup-header"
+  >
+    <span
+      class="slot-popup-title"
+      id="slot-popup-heading"
+    >
+      racks.disabledSlotTitle:{"position":2}
+    </span>
+    <button
+      aria-label="Close"
+      class="slot-popup-close"
+    >
+      ×
+    </button>
+  </div>
+  <p
+    class="slot-disabled-note"
+  >
+    racks.disabledSlotNote
+  </p>
+  <div
+    class="slot-popup-actions"
+  >
+    <button
+      class="btn btn-secondary btn-small"
+    >
+      racks.enableSlot
+    </button>
+  </div>
+</div>
+`;
+
+exports[`the slot popups > a slot with a bottle 1`] = `
+<div
+  aria-labelledby="slot-popup-heading"
+  aria-modal="true"
+  class="slot-modal"
+  role="dialog"
+  tabindex="-1"
+>
+  <div
+    class="slot-popup-header"
+  >
+    <span
+      class="slot-popup-title"
+      id="slot-popup-heading"
+    >
+      racks.slotTitle:{"position":1}
+    </span>
+    <button
+      aria-label="Close"
+      class="slot-popup-close"
+    >
+      ×
+    </button>
+  </div>
+  <div
+    class="slot-bottle-detail"
+  >
+    <div
+      class="slot-detail-info"
+    >
+      <h4>
+        Cuvée Exemple
+      </h4>
+      <p
+        class="slot-detail-producer"
+      >
+        Domaine Exemple
+      </p>
+      <p
+        class="slot-detail-meta"
+      >
+        <span
+          class="slot-bottle-type-dot type-red"
+        />
+        statistics.typeLabels.red
+         · 
+        2015
+      </p>
+    </div>
+  </div>
+  <div
+    class="slot-popup-actions"
+  >
+    <button
+      class="btn btn-secondary btn-small"
+    >
+      racks.removeFromRack
+    </button>
+    <button
+      class="btn btn-consume btn-small"
+    >
+      racks.remove
+    </button>
+  </div>
+</div>
+`;
