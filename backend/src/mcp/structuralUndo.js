@@ -5,7 +5,6 @@
 //   - claims the ledger row atomically BEFORE mutating (McpActionLog has no
 //     optimistic concurrency; plain save is not a guard),
 //   - records a viaUndo:true row so sequential undos walk backward.
-const mongoose = require('mongoose');
 const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');

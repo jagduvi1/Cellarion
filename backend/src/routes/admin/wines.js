@@ -11,7 +11,6 @@ const {
   normalizeString,
   normalizeProducerKey,
   normalizeAppellation,
-  normalizeClassification,
 } = require('../../utils/normalize');
 const { assignClassification } = require('../../services/classificationOps');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');

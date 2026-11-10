@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Review = require('../models/Review');
 const ReviewVote = require('../models/ReviewVote');
-const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
 const User = require('../models/User');
 const Follow = require('../models/Follow');

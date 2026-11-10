@@ -3,7 +3,6 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const WineRequest = require('../models/WineRequest');
 const registryBridge = require('../services/registryBridge');
-const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { createWineRequest } = require('../services/accountOps');
 const { originFrom } = require('../utils/contributionOrigin');

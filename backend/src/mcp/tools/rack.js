@@ -5,7 +5,6 @@
 // can't drift between surfaces.
 const { z } = require('zod');
 const Rack = require('../../models/Rack');
-const Cellar = require('../../models/Cellar');
 const Bottle = require('../../models/Bottle');
 const { registerTool } = require('../registry');
 const {

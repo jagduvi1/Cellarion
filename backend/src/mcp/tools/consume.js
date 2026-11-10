@@ -17,7 +17,6 @@
 // bottleOps is the SAME implementation the REST routes run — validation, rack
 // freeing, re-indexing, audit and restock checks cannot drift between surfaces.
 const { z } = require('zod');
-const Bottle = require('../../models/Bottle');
 const { CONSUMED_STATUSES } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const { consumeBottle, restoreBottle, RESTORE_WINDOW_MS } = require('../../services/bottleOps');

@@ -1,7 +1,6 @@
 const express = require('express');
 const { classificationsOut } = require('../services/classificationOps');
 const { labelSweetnessOut, wineDisplayName } = require('../services/sweetnessOps');
-const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 

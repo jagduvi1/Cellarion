@@ -12,7 +12,7 @@ const {
 } = require('../../services/imageModerationOps');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
-const { photoVintage, vintageKey, pickVintageOfficials } = require('../../utils/imageVintage');
+const { photoVintage, pickVintageOfficials } = require('../../utils/imageVintage');
 
 const router = express.Router();
 

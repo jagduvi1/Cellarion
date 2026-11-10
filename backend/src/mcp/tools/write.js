@@ -14,7 +14,6 @@
 // an MCP add costs exactly what a UI add costs, and dedup means a known wine
 // costs nothing.
 const { z } = require('zod');
-const WineDefinition = require('../../models/WineDefinition');
 const { findVisibleWine } = require('../../services/wineVisibility');
 const { registerTool } = require('../registry');
 // findOrCreateWine is required LAZILY inside handlers: it top-requires

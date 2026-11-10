@@ -4,8 +4,6 @@
 // Errors are returned as an error JSON body (a resource read has no isError
 // envelope), keeping the §5.4 taxonomy visible to the model either way.
 const pkg = require('../../package.json');
-const Bottle = require('../models/Bottle');
-const { CONSUMED_STATUSES } = require('../config/constants');
 const { isHostedCellarion } = require('../config/hostedInstance');
 const { registerResource } = require('./registry');
 const { accessibleCellars, countBottlesByCellar } = require('./toolUtil');

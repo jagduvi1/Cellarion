@@ -1,7 +1,6 @@
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Recommendation = require('../models/Recommendation');
-const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
 const User = require('../models/User');
 const Follow = require('../models/Follow');

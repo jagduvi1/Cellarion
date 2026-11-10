@@ -4,7 +4,6 @@
  * Computes each user's cellar value (in USD) and stores a snapshot
  * for the time-series "Collection Value Over Time" chart.
  */
-const User = require('../models/User');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');

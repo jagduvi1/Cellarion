@@ -15,7 +15,6 @@
  * be access-checked to editor+.
  */
 const path = require('path');
-const fs = require('fs');
 const { writeFileAtomic } = require('../utils/atomicWrite');
 const crypto = require('crypto');
 const BottleImage = require('../models/BottleImage');

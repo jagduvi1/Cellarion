@@ -50,7 +50,7 @@ const { currencySpellings, normalizeCurrency } = require('../../config/currencie
 // value was typed in, so a saved view means the same after a settings change.
 const RATING_SCALES = ['5', '20', '100'];
 const RATING_MAX = { 5: 5, 20: 20, 100: 100 };
-const { getOrCreateDailySnapshot, convertCurrency } = require('../../utils/exchangeRates');
+const { getOrCreateDailySnapshot } = require('../../utils/exchangeRates');
 const { classifyMaturity, buildProfileMap, resolveEffectiveWindow } = require('../../utils/maturityUtils');
 
 const MAX_TIME_MS = 5000;
