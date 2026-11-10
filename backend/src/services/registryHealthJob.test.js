@@ -252,6 +252,9 @@ describe('the curation-queue metrics (name subsets, suspect, core-unverified, he
     const suspectCall = WineDefinition.countDocuments.mock.calls.find(
       (c) => c[0] && c[0]['aiProfile.producerSuspect'] === true);
     expect(suspectCall).toBeTruthy();
+    // Outstanding by the admin queue's rule, so the count and the queue agree:
+    // a flagged producer counts until someone rules on the flag.
+    expect(suspectCall[0].$expr).toBe(require('../utils/profileReview').REVIEW_QUEUE_OUTSTANDING_EXPR);
     const lowConfCall = WineDefinition.countDocuments.mock.calls.find(
       (c) => c[0] && c[0].$or && !c[0]['aiProfile.producerSuspect']);
     expect(JSON.stringify(lowConfCall[0].$or)).not.toMatch(/producerSuspect/);

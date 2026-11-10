@@ -122,10 +122,25 @@ describe('GET /low-confidence', () => {
     expect(filter['aiProfile.generatedAt']).toEqual({ $ne: null });
     // The self-invalidation contract: suppression is a COMPARISON, so a
     // re-enriched profile (new generatedAt) re-surfaces the row with no hook.
+    // Beside it: a published profile with a flagged producer stays until
+    // someone rules on the flag, whatever its stamp says. That is the
+    // curator queue's rule, so both queues are done with a wine together.
     expect(filter.$expr).toEqual({
       $or: [
-        { $eq: ['$profileReviewedAt', null] },
-        { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
+        {
+          $or: [
+            { $eq: ['$profileReviewedAt', null] },
+            { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
+          ],
+        },
+        {
+          $and: [
+            { $eq: [{ $ifNull: ['$aiProfile.heldAt', null] }, null] },
+            { $eq: ['$aiProfile.producerSuspect', true] },
+            { $gt: [{ $ifNull: ['$aiProfile.description', ''] }, ''] },
+            { $eq: [{ $ifNull: ['$aiProfile.suspectDecision', null] }, null] },
+          ],
+        },
       ],
     });
   });
@@ -177,6 +192,30 @@ describe('GET /low-confidence', () => {
       producer: 'Arcane', confidence: 0.2, producerSuspect: true,
       producerNote: 'Arcane is a range of Xavier Vignon', bottleCount: 8,
     });
+  });
+
+  test('each row says whether it is reviewed by the queue\'s own rule: a stamp does not settle a flagged producer', async () => {
+    const generatedAt = new Date('2026-07-26T08:00:00Z');
+    const after = new Date('2026-07-27T08:00:00Z');
+    const row = (name, aiProfile, profileReviewedAt) => ({ _id: WINE_ID, name, producer: 'P', aiProfile: { generatedAt, description: 'd', ...aiProfile }, profileReviewedAt });
+    WineDefinition.find.mockReturnValue(listChain([
+      row('never reviewed', { confidence: 0.2 }, null),
+      row('reviewed', { confidence: 0.2 }, after),
+      row('flagged, stamped by a profile write, no verdict', { producerSuspect: true }, after),
+      row('flagged and upheld', { producerSuspect: true, suspectDecision: 'upheld' }, after),
+      row('held and stamped', { heldAt: generatedAt, producerSuspect: true, description: null }, after),
+    ]));
+
+    const data = await (await get('?includeReviewed=1')).json();
+    expect(data.wines.map((w) => [w.name, w.reviewed])).toEqual([
+      ['never reviewed', false],
+      ['reviewed', true],
+      ['flagged, stamped by a profile write, no verdict', false],
+      ['flagged and upheld', true],
+      ['held and stamped', true],
+    ]);
+    // The verdict is loaded for it.
+    expect(WineDefinition.find.mock.results[0].value.select.mock.calls[0][0]).toMatch(/aiProfile\.suspectDecision/);
   });
 });
 
@@ -246,6 +285,58 @@ describe('profile-reviewed toggle', () => {
       { type: 'wine', id: WINE_ID },
       expect.objectContaining({ producer: 'Arcane' })
     );
+  });
+
+  // "This data is correct" on a flagged producer is a verdict on the flag:
+  // the same confirm the curator's review_held_profile records.
+  test('a published profile with a flagged producer: POST records a confirm, not just a stamp', async () => {
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockResolvedValue({
+        _id: WINE_ID, name: 'Le Valet d’Épée', producer: 'Arcane',
+        aiProfile: { heldAt: null, producerSuspect: true, description: 'A Rhône blend.', producerNote: 'Arcane is a range of Xavier Vignon' },
+      }),
+    });
+
+    const res = await fetch(`${baseUrl}/api/admin/wines/${WINE_ID}/profile-reviewed`, {
+      method: 'POST', headers: { Authorization: `Bearer ${adminToken()}` },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ message: 'Marked reviewed', suspectCleared: true });
+    expect(new Date(body.profileReviewedAt).getTime()).not.toBeNaN();
+
+    expect(WineDefinition.updateOne).toHaveBeenCalledTimes(1);
+    const [q, update] = WineDefinition.updateOne.mock.calls[0];
+    expect(String(q._id)).toBe(WINE_ID);
+    expect(update.$set).toMatchObject({
+      'aiProfile.producerSuspect': false,
+      'aiProfile.suspectDecision': 'confirmed',
+      'aiProfile.producerNote': null,
+    });
+    expect(update.$set.profileReviewedAt).toBeInstanceOf(Date);
+    expect(update.$set['aiProfile.suspectDecidedAt']).toBeInstanceOf(Date);
+    // One audit row, the decision's own, with the note it cleared.
+    expect(logAudit).toHaveBeenCalledTimes(1);
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'admin.wine.profileReviewed',
+      { type: 'wine', id: WINE_ID },
+      expect.objectContaining({ decision: 'confirm', state: 'published_suspect', suspectCleared: true, clearedProducerNote: 'Arcane is a range of Xavier Vignon' })
+    );
+  });
+
+  test('a flagged producer someone already ruled on is stamped like any other row', async () => {
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockResolvedValue({
+        _id: WINE_ID, name: 'Douro Tinto', producer: 'Fabelhaft',
+        aiProfile: { heldAt: null, producerSuspect: true, description: 'x', suspectDecision: 'upheld' },
+      }),
+    });
+    const res = await fetch(`${baseUrl}/api/admin/wines/${WINE_ID}/profile-reviewed`, {
+      method: 'POST', headers: { Authorization: `Bearer ${adminToken()}` },
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).suspectCleared).toBeUndefined();
+    expect(WineDefinition.updateOne.mock.calls[0][1]).toEqual({ $set: { profileReviewedAt: expect.any(Date) } });
   });
 
   test('DELETE nulls the review and audits the undo', async () => {
