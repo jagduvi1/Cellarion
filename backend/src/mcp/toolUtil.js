@@ -197,6 +197,20 @@ function hasContent(obj) {
   });
 }
 
+// The curator roles, one list for the whole app (services/wineVisibility):
+// a tool declares `requireRole: SOMM_ROLES` so the registry never advertises
+// it to other callers, and re-checks inside the handler with requireSomm —
+// two layers that can only drift safely.
+const { CURATION_ROLES: SOMM_ROLES } = require('../services/wineVisibility');
+
+/** The in-handler role re-check of a sommelier tool: null when allowed, else the refusal envelope. */
+function requireSomm(ctx) {
+  const roles = ctx.user?.roles || [];
+  return SOMM_ROLES.some((r) => roles.includes(r))
+    ? null
+    : fail('forbidden_scope', 'This tool needs the sommelier (or admin) role.');
+}
+
 /** Clamp a limit/offset pair from validated zod input. */
 function pageParams(args, defLimit, maxLimit) {
   const limit = Math.min(Math.max(parseInt(args.limit, 10) || defLimit, 1), maxLimit);
@@ -233,4 +247,6 @@ module.exports = {
   pageParams,
   hasContent,
   ROLE_LEVELS,
+  SOMM_ROLES,
+  requireSomm,
 };
