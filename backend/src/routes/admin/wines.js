@@ -61,6 +61,7 @@ const { submitUrls } = require('../../services/indexNow');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
+const { OUTSTANDING_REVIEW_EXPR } = require('../../utils/profileReview');
 const { stripProducerName, stripProducerKeyPrefix, canonicalizeWineName } = require('../../utils/producerPrefix');
 const {
   NAME_CHECKS, NAME_CHECK_IDS, DEFAULT_CHECK_IDS, NAME_CHECK_SELECT,
@@ -874,15 +875,7 @@ router.get('/low-confidence', async (req, res) => {
       // has no aiProfile at all would match the null branch above.
       'aiProfile.generatedAt': { $ne: null },
     };
-    const outstanding = {
-      ...base,
-      $expr: {
-        $or: [
-          { $eq: ['$profileReviewedAt', null] },
-          { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
-        ],
-      },
-    };
+    const outstanding = { ...base, $expr: OUTSTANDING_REVIEW_EXPR };
 
     const filter = includeReviewed ? base : outstanding;
     const [rows, total, reviewedCount] = await Promise.all([
