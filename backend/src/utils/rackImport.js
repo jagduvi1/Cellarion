@@ -10,7 +10,10 @@
  * explicitly in the CSV.
  */
 
-const { totalSlots, cabinetPosition, cabinetRows, cabinetRowWidth, cabinetOptions, cabinetBays, cabinetBayOpts } = require('./rackGeometry');
+const {
+  totalSlots, cabinetPosition, cabinetRows, cabinetRowWidth, cabinetOptions, cabinetBays, cabinetBayOpts,
+  cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways,
+} = require('./rackGeometry');
 
 const DEFAULT_RACK_TYPE = 'grid';
 const VALID_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
@@ -486,6 +489,117 @@ function placeBottles(existingSlots, requests, maxPosition, disabledPositions) {
   return { placements, unplaced };
 }
 
+/**
+ * The per-rack configuration an import request carries, validated: what the
+ * user chose in the review for each rack the file names. Anything malformed
+ * is dropped rather than refused, so the import falls back to the dimensions
+ * it infers from the file.
+ *
+ * Shape: { [rackName]: { skip?, type?, rows?, cols?, typeConfig?: {...}, disabledPositions?: [Number] } }
+ * skip — when true, drop this rack from auto-creation AND placement;
+ *   bottles referencing it land in the cellar without rack placement
+ * type — kept only when it is one of `rackTypes`; a rack without one
+ *   keeps the type planRackCreations settled on
+ * rows/cols — clamped to 1..20
+ * typeConfig — optional shape config (bottlesPerCell, bottlesPerSection,
+ *   moduleRows, moduleCols, backCols), each clamped to model bounds
+ * disabledPositions — global 1-indexed positions marked unusable (e.g.
+ *   Oeno-export cabinets); deduped here, clamped to the created rack's
+ *   capacity by the route when it creates the rack
+ *
+ * `positionAnchor` is the corner the file numbers its slots from: a cabinet
+ * with fewer shelf entries than shelves grows at the top for a
+ * bottom-anchored file. `rackTypes` is the list of rack types the model
+ * accepts (models/Rack RACK_TYPES), passed in so this module needs no model.
+ * Returns { [rackName]: entry }. Caller: POST /api/bottles/import/confirm.
+ */
+function sanitizeRackConfigs(rawRackConfigs, { positionAnchor, rackTypes: RACK_TYPES }) {
+  const rackConfigs = {};
+  const clampInt = (v, min, max) => {
+    const n = parseInt(v, 10);
+    if (isNaN(n)) return undefined;
+    return Math.max(min, Math.min(max, n));
+  };
+  if (rawRackConfigs && typeof rawRackConfigs === 'object') {
+    for (const [name, cfg] of Object.entries(rawRackConfigs)) {
+      if (!cfg || typeof cfg !== 'object') continue;
+
+      // skip:true short-circuits — no rows/cols required since the rack
+      // won't be created and no bottles will be placed.
+      if (cfg.skip === true) {
+        rackConfigs[String(name)] = { skip: true };
+        continue;
+      }
+
+      const rows = clampInt(cfg.rows, 1, 20);
+      const cols = clampInt(cfg.cols, 1, 20);
+      if (!rows || !cols) continue;
+
+      const entry = { rows, cols };
+      if (cfg.type && RACK_TYPES.includes(cfg.type)) entry.type = cfg.type;
+
+      if (cfg.typeConfig && typeof cfg.typeConfig === 'object') {
+        const tc = {};
+        const mr = clampInt(cfg.typeConfig.moduleRows, 1, 10);
+        const mc = clampInt(cfg.typeConfig.moduleCols, 1, 10);
+        const bpc = clampInt(cfg.typeConfig.bottlesPerCell, 1, 20);
+        const bps = clampInt(cfg.typeConfig.bottlesPerSection, 1, 30);
+        const bc = clampInt(cfg.typeConfig.backCols, 0, 20);
+        if (mr !== undefined) tc.moduleRows = mr;
+        if (mc !== undefined) tc.moduleCols = mc;
+        if (bpc !== undefined) tc.bottlesPerCell = bpc;
+        if (bps !== undefined) tc.bottlesPerSection = bps;
+        if (bc !== undefined) tc.backCols = bc;
+        // Cabinet racks only: per-shelf row counts fitted to rows (1..12)
+        // and the two-deep flag. A list shorter than rows grows with 1-row
+        // shelves — at the TOP for bottom-anchored files (Oeno numbers
+        // shelves from the bottom, so "the cabinet has more shelves than
+        // the file shows" means extra shelves above), at the bottom
+        // otherwise (audit 2026-09-15).
+        if (entry.type === 'cabinet') {
+          const raw = Array.isArray(cfg.typeConfig.shelfRows) ? cfg.typeConfig.shelfRows : [];
+          const fitted = raw.slice(0, rows).map((v) => clampInt(v, 1, 12) || 1);
+          const missing = rows - fitted.length;
+          const bottomAnchored = positionAnchor === 'bottom-left' || positionAnchor === 'bottom-right';
+          tc.shelfRows = missing > 0
+            ? (bottomAnchored ? [...Array(missing).fill(1), ...fitted] : [...fitted, ...Array(missing).fill(1)])
+            : fitted;
+          tc.twoDeep = cfg.typeConfig.twoDeep !== false;
+          tc.stagger = cfg.typeConfig.stagger !== false;
+          tc.headToTail = !tc.twoDeep && cfg.typeConfig.headToTail === true;
+          tc.alternate = cfg.typeConfig.alternate === true;
+          // Per-shelf width / pattern, when the file has them (a Cellarion
+          // export); fitted to the shelf count the same way as shelfRows.
+          // A short list grows at the same end as shelfRows above, or a
+          // bottom-anchored file's narrow bottom shelf would be read as a
+          // full-width top one (audit 2026-09-16).
+          const grown = (list) => {
+            const kept = list.slice(0, rows);
+            const gap = rows - kept.length;
+            return gap > 0 && bottomAnchored ? [...Array(gap).fill(undefined), ...kept] : kept;
+          };
+          if (Array.isArray(cfg.typeConfig.shelfCols)) tc.shelfCols = cabinetShelfCols(rows, cols, { shelfCols: grown(cfg.typeConfig.shelfCols) });
+          if (Array.isArray(cfg.typeConfig.shelfAlternate)) tc.shelfAlternate = cabinetShelfAlternate(rows, { alternate: tc.alternate, shelfAlternate: grown(cfg.typeConfig.shelfAlternate) });
+          if (Array.isArray(cfg.typeConfig.shelfSideways)) tc.shelfSideways = cabinetShelfSideways(rows, { shelfSideways: grown(cfg.typeConfig.shelfSideways) });
+        }
+        if (Object.keys(tc).length > 0) entry.typeConfig = tc;
+      }
+
+      if (Array.isArray(cfg.disabledPositions)) {
+        const dp = [...new Set(
+          cfg.disabledPositions
+            .map(p => parseInt(p, 10))
+            .filter(p => !isNaN(p) && p >= 1)
+        )];
+        if (dp.length > 0) entry.disabledPositions = dp;
+      }
+
+      rackConfigs[String(name)] = entry;
+    }
+  }
+  return rackConfigs;
+}
+
 module.exports = {
   computeRackPosition,
   planRackCreations,
@@ -493,6 +607,7 @@ module.exports = {
   findNextFreeSlot,
   placeBottles,
   placeBottlesInRack,
+  sanitizeRackConfigs,
   DEFAULT_RACK_TYPE,
   DEFAULT_ANCHOR,
   VALID_ANCHORS,

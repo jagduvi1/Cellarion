@@ -4,7 +4,7 @@
   "backend/src/routes/admin/wines.js": 2071,
   "backend/src/routes/bottles.js": 1892,
   "backend/src/routes/cellars.js": 2178,
-  "backend/src/routes/import.js": 1628,
+  "backend/src/routes/import.js": 1537,
   "backend/src/routes/og.js": 1607,
   "backend/src/services/enrichmentJob.test.js": 1514,
   "backend/src/services/findOrCreateWine.test.js": 1575,
