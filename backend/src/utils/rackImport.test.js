@@ -818,3 +818,74 @@ describe('cabinet racks: shelf + layer + slotInLayer land in the exact cell', ()
     expect(placements.map(p => [p.bottle, p.position])).toEqual([['a', 7], ['c', 24], ['b', 8]]);
   });
 });
+
+// The per-rack configuration an import request carries. Malformed input is
+// dropped, never refused: the import then falls back to the dimensions it
+// infers from the file.
+describe('sanitizeRackConfigs', () => {
+  const { sanitizeRackConfigs } = require('./rackImport');
+  const RACK_TYPES = ['grid', 'shelf', 'cabinet'];
+  const clean = (raw, positionAnchor = 'top-left') => sanitizeRackConfigs(raw, { positionAnchor, rackTypes: RACK_TYPES });
+
+  test('nothing usable in, nothing out', () => {
+    expect(clean(undefined)).toEqual({});
+    expect(clean('A1')).toEqual({});
+    expect(clean({ A: null, B: 'x', C: { rows: 'many', cols: 4 }, D: { rows: 4 } })).toEqual({});
+  });
+
+  test('a skipped rack keeps only the flag, whatever else was sent', () => {
+    expect(clean({ Cellar: { skip: true, rows: 99, type: 'cabinet' } })).toEqual({ Cellar: { skip: true } });
+  });
+
+  test('rows and columns are clamped to 1..20; the type is kept only when the model knows it', () => {
+    expect(clean({ A: { rows: 50, cols: '0', type: 'shelf' }, B: { rows: 3, cols: 4, type: 'pyramid' } })).toEqual({
+      A: { rows: 20, cols: 1, type: 'shelf' },
+      B: { rows: 3, cols: 4 },
+    });
+  });
+
+  test('shape settings are clamped to the model bounds, and an empty set is left out', () => {
+    expect(clean({
+      A: { rows: 2, cols: 2, typeConfig: { moduleRows: 99, moduleCols: 0, bottlesPerCell: 25, bottlesPerSection: 40, backCols: -3, junk: 1 } },
+      B: { rows: 2, cols: 2, typeConfig: { junk: 1 } },
+    })).toEqual({
+      A: { rows: 2, cols: 2, typeConfig: { moduleRows: 10, moduleCols: 1, bottlesPerCell: 20, bottlesPerSection: 30, backCols: 0 } },
+      B: { rows: 2, cols: 2 },
+    });
+  });
+
+  test('a cabinet gets one shelf entry per row: extra shelves at the bottom, or at the top for a bottom-anchored file', () => {
+    const raw = { Cab: { rows: 4, cols: 6, type: 'cabinet', typeConfig: { shelfRows: [2, 99, 'x'] } } };
+    expect(clean(raw).Cab.typeConfig.shelfRows).toEqual([2, 12, 1, 1]);
+    expect(clean(raw, 'bottom-left').Cab.typeConfig.shelfRows).toEqual([1, 2, 12, 1]);
+    expect(clean(raw, 'bottom-right').Cab.typeConfig.shelfRows).toEqual([1, 2, 12, 1]);
+    // More entries than shelves: the list is cut to the shelf count.
+    expect(clean({ Cab: { rows: 2, cols: 6, type: 'cabinet', typeConfig: { shelfRows: [3, 3, 3] } } }).Cab.typeConfig.shelfRows).toEqual([3, 3]);
+  });
+
+  test('cabinet flags: two-deep and stagger default on, head-to-tail only on a single-depth cabinet, alternate only when asked', () => {
+    const flags = (typeConfig) => {
+      const { twoDeep, stagger, headToTail, alternate } = clean({ Cab: { rows: 1, cols: 6, type: 'cabinet', typeConfig } }).Cab.typeConfig;
+      return { twoDeep, stagger, headToTail, alternate };
+    };
+    expect(flags({})).toEqual({ twoDeep: true, stagger: true, headToTail: false, alternate: false });
+    expect(flags({ headToTail: true })).toEqual({ twoDeep: true, stagger: true, headToTail: false, alternate: false });
+    expect(flags({ twoDeep: false, stagger: false, headToTail: true, alternate: true })).toEqual({ twoDeep: false, stagger: false, headToTail: true, alternate: true });
+  });
+
+  test('per-shelf lists are fitted to the shelf count when the file has them, and absent otherwise', () => {
+    const none = clean({ Cab: { rows: 3, cols: 6, type: 'cabinet', typeConfig: {} } }).Cab.typeConfig;
+    expect(none).not.toHaveProperty('shelfCols');
+    expect(none).not.toHaveProperty('shelfAlternate');
+    expect(none).not.toHaveProperty('shelfSideways');
+    const some = clean({ Cab: { rows: 3, cols: 6, type: 'cabinet', typeConfig: { shelfCols: [4], shelfAlternate: [true], shelfSideways: [true] } } }).Cab.typeConfig;
+    expect(some.shelfCols).toHaveLength(3);
+    expect(some.shelfAlternate).toHaveLength(3);
+    expect(some.shelfSideways).toHaveLength(3);
+  });
+
+  test('disabled positions are whole numbers from 1, each once; none left means no list', () => {
+    expect(clean({ A: { rows: 2, cols: 2, disabledPositions: ['3', 3, 0, -1, 'x', 7.9] } }).A.disabledPositions).toEqual([3, 7]);
+    expect(clean({ A: { rows: 2, cols: 2, disabledPositions: [0, 'x'] } }).A).toEqual({ rows: 2, cols: 2 });
+  });
+});
