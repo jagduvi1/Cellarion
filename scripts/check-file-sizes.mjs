@@ -12,7 +12,8 @@
 //   - a file not in the baseline over the cap          -> fail
 //   - a file between the warning line and the cap      -> warning only
 //
-// --update only lowers entries and drops missing files. It never raises an
+// --update only lowers entries, and drops a file that is gone or back under
+// the cap (from then on the plain cap rule applies to it). It never raises an
 // entry and never adds one: a defect fix that must add lines to a baselined
 // file raises that entry by hand, with the reason in the PR body. Features
 // never raise it. --seed (first run only) writes the baseline from scratch.
@@ -110,6 +111,7 @@ export function lowered(sizes, baseline) {
   for (const [file, limit] of Object.entries(baseline)) {
     const lines = sizes[file];
     if (lines === undefined) { changes.push(`${file}: removed (file is gone)`); continue; }
+    if (lines <= CAP) { changes.push(`${file}: removed (${lines} lines, back under the ${CAP}-line cap)`); continue; }
     if (lines < limit) { changes.push(`${file}: ${limit} -> ${lines}`); next[file] = lines; continue; }
     if (lines > limit) needRaise.push({ file, limit, lines });
     next[file] = limit;
