@@ -8,6 +8,10 @@ import {
 } from '../api/admin';
 
 const PAGE_SIZE = 20;
+// The server's bounds on a reject reason (backend routes/admin/wineProposals,
+// REJECT_REASON_MIN / REJECT_REASON_MAX), for the single and the bulk reject.
+const REJECT_REASON_MIN = 5;
+const REJECT_REASON_MAX = 2000;
 
 const KIND_KEYS = {
   field_correction: 'admin.wines.proposals.kindFieldCorrection',
@@ -239,7 +243,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
 
   const reject = async (proposal) => {
     const reason = rejectReason.trim();
-    if (reason.length < 5) {
+    if (reason.length < REJECT_REASON_MIN) {
       setError(t('admin.wines.proposals.rejectReasonRequired'));
       return;
     }
@@ -330,7 +334,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
     const ids = [...selectedIds];
     const reason = bulkReason.trim();
     if (ids.length === 0) return;
-    if (reason.length < 5) {
+    if (reason.length < REJECT_REASON_MIN) {
       setError(t('admin.wines.proposals.rejectReasonRequired'));
       return;
     }
@@ -441,7 +445,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                 value={bulkReason}
                 onChange={(e) => setBulkReason(e.target.value)}
                 placeholder={t('admin.wines.proposals.bulkRejectPlaceholder')}
-                maxLength={2000}
+                maxLength={REJECT_REASON_MAX}
                 disabled={!!pendingId}
                 style={{ flex: '1 1 220px', minWidth: 180 }}
               />
@@ -688,7 +692,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                         value={rejectReason}
                         onChange={(e) => setRejectReason(e.target.value)}
                         placeholder={t('admin.wines.proposals.rejectPlaceholder')}
-                        maxLength={2000}
+                        maxLength={REJECT_REASON_MAX}
                         disabled={!!pendingId}
                         style={{ flex: '1 1 220px', minWidth: 180 }}
                       />

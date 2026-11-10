@@ -22,7 +22,7 @@
  *                        (+ existingSpelling) | 'renameAll' | 'proposed' } —
  *                        and answers 409 code 'producer_spelling_split' with
  *                        the registry's spellings until it has one.
- *   POST /:id/reject   — reason required (5–500), stored on the row.
+ *   POST /:id/reject   — reason required (5–2000), stored on the row.
  *
  * Query-filter values are always literals from static arrays — never raw
  * request input (CodeQL query-injection rule, aiBudgetRequests pattern).
@@ -77,7 +77,9 @@ const IDENTITY_FIELDS = ['producer', 'name', 'appellation', 'region', 'country',
 const grapeLabel = (names) => (Array.isArray(names) && names.length ? names.join(', ') : null);
 
 const REJECT_REASON_MIN = 5;
-const REJECT_REASON_MAX = 500;
+// What the proposal row can store (models/WineCorrectionProposal rejectReason)
+// and what the review form lets an admin type: a real explanation needs room.
+const REJECT_REASON_MAX = 2000;
 
 // The live identity values a diff row compares against (region/country as names).
 const liveIdentity = (wine) => ({
