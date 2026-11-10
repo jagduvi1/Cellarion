@@ -449,6 +449,122 @@ describe('GET /api/cellars/:id?group=1&sort=-quantity — counted in the databas
   });
 });
 
+// The default cellar page in an order MongoDB can sort (newest first, vintage,
+// price, rating; no search, no filters): the cards are grouped AND paged in
+// the database — one pipeline for the page, one for the totals — and only the
+// page's bottles are loaded, never the whole cellar.
+describe('GET /api/cellars/:id?group=1 — the default page, grouped and paged in the database', () => {
+  const { NOT_IN_CELLAR_STATUSES } = require('../config/constants');
+  const W1 = '64b0000000000000000000f1';
+  const GONE = '64b0000000000000000000b9';
+  const oid = (h) => new (require('mongoose').Types.ObjectId)(h);
+  const saved = { ...ROWS };
+  beforeEach(() => {
+    ROWS[B1] = bottleRow(B1, { wineDefinition: { _id: W1, name: 'Zinfandel' } });
+    ROWS[B2] = bottleRow(B2, { wineDefinition: { _id: W1, name: 'Zinfandel' } });
+    ROWS[B3] = bottleRow(B3);
+  });
+  afterAll(() => Object.assign(ROWS, saved));
+
+  // The page pipeline ends in $skip and $limit; the other one counts.
+  const isPage = (p) => p.some((st) => st.$limit !== undefined);
+  let pipelines;
+  const groupedAnswers = (pageGroups, totals) => {
+    pipelines = [];
+    Bottle.aggregate.mockImplementation((p) => {
+      pipelines.push(p);
+      return { allowDiskUse: async () => (isPage(p) ? pageGroups : [totals]) };
+    });
+  };
+  const TWO_CARDS = [
+    { _id: { wine: oid(W1), vintage: '2015', size: '750ml' }, sortVal: new Date('2026-02-01'), wineRef: oid(W1), memberIds: [oid(B1), oid(B2)] },
+    // No wine: the bottle is a card of its own, keyed by its own id.
+    { _id: { wine: oid(B3), vintage: 'NV', size: '750ml' }, sortVal: new Date('2026-01-01'), wineRef: null, memberIds: [oid(B3)] },
+  ];
+
+  test('one pipeline pages the cards, one counts them; only the page is loaded', async () => {
+    groupedAnswers(TWO_CARDS, { _id: null, total: 7, bottles: 12 });
+
+    const { status, body } = await request(`/api/cellars/${CELLAR_ID}?group=1&limit=2&skip=4`);
+
+    expect(status).toBe(200);
+    expect(pipelines).toHaveLength(2);
+    const page = pipelines.find(isPage);
+    expect(page[0]).toEqual({ $match: { cellar: oid(CELLAR_ID), status: { $nin: NOT_IN_CELLAR_STATUSES } } });
+    expect(page[1]).toEqual({ $sort: { createdAt: -1 } });
+    // A card: one wine, vintage and size. No vintage reads NV, no size 750ml.
+    expect(page[2].$group).toEqual({
+      _id: {
+        wine: { $ifNull: ['$wineDefinition', '$_id'] },
+        vintage: { $let: { vars: { v: { $ifNull: ['$vintage', 'NV'] } }, in: { $cond: [{ $eq: ['$$v', ''] }, 'NV', '$$v'] } } },
+        size: { $let: { vars: { v: { $ifNull: ['$bottleSize', '750ml'] } }, in: { $cond: [{ $eq: ['$$v', ''] }, '750ml', '$$v'] } } },
+      },
+      sortVal: { $first: '$createdAt' },
+      wineRef: { $first: '$wineDefinition' },
+      memberIds: { $push: '$_id' },
+    });
+    // The card's id breaks a tie, so tied cards keep one order from page to page.
+    expect(page.slice(3)).toEqual([{ $sort: { sortVal: -1, _id: 1 } }, { $skip: 4 }, { $limit: 2 }]);
+
+    const count = pipelines.find((p) => !isPage(p));
+    expect(count[0]).toEqual(page[0]);
+    expect(count[1].$group._id).toEqual(page[2].$group._id);
+    expect(count[2]).toEqual({ $group: { _id: null, total: { $sum: 1 }, bottles: { $sum: '$n' } } });
+
+    expect(body.bottles.total).toBe(7);
+    expect(body.bottles.bottleTotal).toBe(12);
+    expect(body.bottles.items.map((g) => g.key)).toEqual([`${W1}::2015::750ml`, `none:${B3}::NV::750ml`]);
+    expect(body.bottles.items.map((g) => g.count)).toEqual([2, 1]);
+    expect(idsOf(body.bottles.items[0].bottles)).toEqual([B1, B2]);
+    // One load, of the page's three bottles.
+    expect(loads.filter((l) => l.populate)).toHaveLength(1);
+    expect(loads.find((l) => l.populate).ids.sort()).toEqual([B1, B2, B3].sort());
+    expect(bottleSearch.searchBottles).not.toHaveBeenCalled();
+  });
+
+  test('the order asked for is the order MongoDB sorts and breaks ties in', async () => {
+    groupedAnswers(TWO_CARDS, { _id: null, total: 2, bottles: 3 });
+
+    await request(`/api/cellars/${CELLAR_ID}?group=1&sort=vintage`);
+
+    const page = pipelines.find(isPage);
+    expect(page[1]).toEqual({ $sort: { vintage: 1 } });
+    expect(page[2].$group.sortVal).toEqual({ $first: '$vintage' });
+    expect(page.slice(3)).toEqual([{ $sort: { sortVal: 1, _id: 1 } }, { $skip: 0 }, { $limit: 30 }]);
+  });
+
+  test('bottles to leave out, and a rack to stay inside, narrow both pipelines', async () => {
+    groupedAnswers(TWO_CARDS, { _id: null, total: 2, bottles: 3 });
+    await request(`/api/cellars/${CELLAR_ID}?group=1&exclude=${B3}`);
+    expect(pipelines.map((p) => p[0].$match._id)).toEqual([{ $nin: [oid(B3)] }, { $nin: [oid(B3)] }]);
+
+    Rack.find.mockReturnValueOnce({ select: () => ({ lean: async () => [{ slots: [{ bottle: oid(B1) }, { bottle: oid(B2) }] }] }) });
+    groupedAnswers(TWO_CARDS, { _id: null, total: 1, bottles: 2 });
+    await request(`/api/cellars/${CELLAR_ID}?group=1&rack=${RACK_ID}`);
+    expect(pipelines.map((p) => p[0].$match._id)).toEqual([{ $in: [oid(B1), oid(B2)] }, { $in: [oid(B1), oid(B2)] }]);
+  });
+
+  test('a card whose bottles are gone by the time they are loaded is left out', async () => {
+    groupedAnswers([
+      { _id: { wine: oid(W1), vintage: '2015', size: '750ml' }, sortVal: 1, wineRef: oid(W1), memberIds: [oid(B1), oid(GONE)] },
+      { _id: { wine: oid(GONE), vintage: 'NV', size: '750ml' }, sortVal: 0, wineRef: null, memberIds: [oid(GONE)] },
+    ], { _id: null, total: 2, bottles: 3 });
+
+    const { body } = await request(`/api/cellars/${CELLAR_ID}?group=1`);
+
+    expect(body.bottles.items.map((g) => [g.key, g.count])).toEqual([[`${W1}::2015::750ml`, 1]]);
+  });
+
+  test('a filter the database cannot apply takes the other path: no grouping pipeline', async () => {
+    groupedAnswers(TWO_CARDS, { _id: null, total: 2, bottles: 3 });
+
+    const { status } = await request(`/api/cellars/${CELLAR_ID}?group=1&reserved=1`);
+
+    expect(status).toBe(200);
+    expect(pipelines).toHaveLength(0);
+  });
+});
+
 // "Open now" above the list: the first page of either list names the open
 // bottles of the cellars in view (whatever the filters); later pages do not
 // ask again, and a failed lookup shows no strip instead of failing the list.
