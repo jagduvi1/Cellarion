@@ -166,7 +166,13 @@ registerTool({
       // again (taxonomy moves), but a name that is unknown today is almost
       // always a typo, and telling them immediately is the whole point.
       if (Array.isArray(src.grapes) && src.grapes.length) {
-        const resolved = await resolveGrapeIdsStrict(src.grapes);
+        // Plain text like every other proposed field, as on the member path:
+        // markup around a name is cleaned away, not read as part of the name.
+        const names = src.grapes.map((g) => stripHtml(String(g == null ? '' : g)).trim()).filter(Boolean);
+        if (names.length === 0) {
+          return fail('invalid_input', 'proposed_fields.grapes needs at least one variety name in plain text.');
+        }
+        const resolved = await resolveGrapeIdsStrict(names);
         if (!resolved.ok) {
           return fail('invalid_input',
             `These grape names are not in the taxonomy: ${resolved.unmatched.map((g) => `"${g}"`).join(', ')}. ` +

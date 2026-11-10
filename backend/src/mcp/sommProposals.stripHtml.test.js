@@ -16,6 +16,8 @@ const chain = (result) => {
 
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn() }));
+// The taxonomy lookup behind a proposed grape list (services/wineProfileOps).
+jest.mock('../models/Grape', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // The self-apply route is mocked: this suite pins what the TOOL files, and
@@ -31,6 +33,7 @@ jest.mock('../services/producerSpelling', () => ({
 
 const WineDefinition = require('../models/WineDefinition');
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+const Grape = require('../models/Grape');
 const { classifyProposal } = require('../services/proposalDirectApply');
 const { allTools } = require('./registry');
 require('./tools/somm');
@@ -85,5 +88,29 @@ describe('propose_wine_correction strips HTML from proposed fields', () => {
     expect(body.error.code).toBe('invalid_input');
     expect(body.error.message).toMatch(/at least one non-empty field/);
     expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('markup around a grape name is cleaned before the name is looked up; a list that is only markup is refused', async () => {
+    mkWine();
+    WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-g' });
+    // The taxonomy knows Merlot, by its normalised name.
+    Grape.findOne.mockImplementation((q) => chain(q.$or[0].normalizedName === 'merlot' ? { _id: oid('9'), name: 'Merlot' } : null));
+
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction',
+      proposed_fields: { grapes: ['<b>Merlot</b> ', '<i></i>'] },
+      reason: REASON,
+    }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ grapes: ['Merlot'] });
+
+    const empty = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction',
+      proposed_fields: { grapes: ['<i></i>'] },
+      reason: REASON,
+    }, SOMM_CTX));
+    expect(empty.error.code).toBe('invalid_input');
+    expect(empty.error.message).toMatch(/at least one variety name in plain text/);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledTimes(1);
   });
 });
