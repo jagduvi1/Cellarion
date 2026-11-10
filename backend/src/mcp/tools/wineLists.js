@@ -24,8 +24,8 @@ const { logAction, replay } = require('../actionLedger');
 // editor's, and now floored at one step so a cheap wine no longer suggests 0.
 const { suggestGlassPrice } = require('../../utils/glassPrice');
 // get_wine_list reads the SAME rendered structure the app and the PDF use —
-// nested auto-mode headings and live per-entry stock (support ticket
-// 2026-09-12: a client could not see the grouping of the menu it was reading).
+// nested auto-mode headings and live per-entry stock, so a client sees the
+// grouping of the menu it is reading.
 const { loadWineMap, entryKey, ownerWineFilter } = require('../../services/wineListData');
 const { buildSections, groupingLevels } = require('../../services/wineListPdf');
 

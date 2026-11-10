@@ -353,8 +353,8 @@ describe('contributions', () => {
     expect(res.status).toBe(201);
     expect(createFieldCorrection).toHaveBeenCalledWith('u1', { wineId: ID, fields: { producer: 'Familia Torres' }, reason: 'The label reads Familia Torres.', evidenceUrl: 'https://torres.es' }, expect.objectContaining({ via: 'bridge' }));
     expect((await res.json()).proposal).toEqual({ id: 'p1', status: 'pending', applied: false, amended: false });
-    // The key owner's own pending proposal absorbed the fields (support ticket
-    // 2026-09-12): 200, and the install learns it was an amendment.
+    // The key owner's own pending proposal absorbed the fields: 200, and the
+    // install learns it was an amendment.
     createFieldCorrection.mockResolvedValue({ ok: true, amended: true, proposal: { _id: 'p1', status: 'pending' } });
     const amended = await call('POST', '/api/bridge/v1/corrections', { wineId: ID, fields: { grapes: ['Garnacha'] }, reason: 'Back label lists Garnacha.' });
     expect(amended.status).toBe(200);

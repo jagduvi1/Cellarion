@@ -4,16 +4,15 @@ const WineRequest = require('../models/WineRequest');
  * Import-time wine requests, shared by routes/import.js and
  * services/cellarImport.js.
  *
- * Two lessons from the 2026-09-05 CellarTracker import (support ticket
- * 2026-09-05, 243 requests / 642 bottles in one run):
+ * Two rules a large import depends on (hundreds of requests in one run):
  *
- *   1. A request must be REUSED across imports. The per-run cache only
- *      deduplicated within one file, so a user who re-imports (a cleaned-up
- *      export, a second cellar) minted a second pending request for every
- *      wine still waiting — and the admin queue doubled.
+ *   1. A request must be REUSED across imports. A cache that deduplicates
+ *      within one file only lets a user who re-imports (a cleaned-up
+ *      export, a second cellar) mint a second pending request for every
+ *      wine still waiting, and the admin queue doubles.
  *   2. A request must CARRY what the file said about the wine. CellarTracker,
  *      Vivino and Ploc exports all name the country, region, appellation and
- *      type; dropping them left the curator to re-derive 243 geographies by
+ *      type; dropping them leaves the curator to re-derive every geography by
  *      hand. They ride along as `hints` — plain strings, never written to the
  *      registry until an admin resolves the request.
  */

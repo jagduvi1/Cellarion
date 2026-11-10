@@ -38,9 +38,9 @@ const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = requ
 const { stampPromotedScanRetention } = require('./labelScanAccess');
 const { DRAFT_EXCLUDED } = require('./wineVisibility');
 // Not curation work either: a row quarantined as not wine (the Other
-// category) keeps pendingIdentity but never gets an identity completed —
-// it stayed on the curators' list after every quarantine (sommelier ticket
-// 2026-10-28). Spread beside DRAFT_EXCLUDED at every site: the draft-gates
+// category) keeps pendingIdentity but never gets an identity completed,
+// so without this filter it stays on the curators' list for good.
+// Spread beside DRAFT_EXCLUDED at every site: the draft-gates
 // guard reads the word next to each pendingIdentity filter.
 const NOT_WINE_EXCLUDED = { nonWine: { $ne: true } };
 // Same reasoning: appellationResolve requires only the Appellation model and

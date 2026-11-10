@@ -28,8 +28,8 @@ export function framePoint(video, rect, clientX, clientY) {
 }
 
 /**
- * Tap to focus on a camera preview, as in a camera app (support ticket
- * 2026-10-10). Put `onPointerDown` on the element that holds the <video>
+ * Tap to focus on a camera preview, as in a camera app.
+ * Put `onPointerDown` on the element that holds the <video>
  * (position: relative) and render <CameraFocusRing ring={ring} /> inside it.
  * Only a plain tap on the picture counts: a tap on a button or on the
  * controls bar is left alone, as are a second finger and other mouse

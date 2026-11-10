@@ -403,7 +403,7 @@
   }
 }
 
-/* Each photo's vintage, and the one its vintage shows (support ticket 2026-10-09). */
+/* Each photo's vintage, and the one its vintage shows. */
 .by-wine-vintage {
   font-weight: 600;
   color: var(--color-text-secondary);

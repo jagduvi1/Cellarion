@@ -109,7 +109,7 @@
   color: var(--color-text-muted);
 }
 
-/* Heading row with the vintage page link (support ticket 2026-10-09). */
+/* Heading row with the vintage page link. */
 .lot-history__head {
   display: flex;
   align-items: baseline;

@@ -15,9 +15,8 @@ const today = () => {
 //
 // onConfirm(reason, note, rating, ratingScale, consumedAt): consumedAt is the
 // day the bottle was actually drunk (YYYY-MM-DD), defaulting to today — a
-// bottle logged after the fact used to be stamped with the logging day, and
-// the only way to say otherwise was the bulk action (support ticket
-// 2026-09-13). Same field and rule as BulkConsumeModal: never in the future.
+// bottle logged after the fact would otherwise be stamped with the logging
+// day. Same field and rule as BulkConsumeModal: never in the future.
 //
 // `onJustAGlass`: the rack page and the 3D room open this dialog straight
 // from a slot, where the bottle page's own "Open bottle…" button is not at

@@ -1,6 +1,6 @@
 /**
- * The one-time relink of curator-question notifications (support ticket
- * 2026-10-14): only exact matches change, only their link, and a dry run
+ * The one-time relink of curator-question notifications: only exact matches
+ * change, only their link, and a dry run
  * writes nothing.
  */
 jest.mock('../models/Notification', () => ({ find: jest.fn(), updateOne: jest.fn() }));

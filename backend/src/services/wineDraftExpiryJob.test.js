@@ -1,6 +1,5 @@
 /**
- * services/wineDraftExpiryJob — the private-draft clock (support ticket
- * 2026-09-12):
+ * services/wineDraftExpiryJob — the private-draft clock:
  *   - EMPTY drafts lapsing within 24 h are warned once (a touch clears the
  *     mark, so a revived draft is warned again); drafts holding bottles are
  *     never warned — they are never deleted;

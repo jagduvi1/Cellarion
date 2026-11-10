@@ -445,8 +445,8 @@
   }
 }
 
-/* The vintage page link beside the wishlist button (support ticket
-   2026-10-09): above the stretched card link, like the button. */
+/* The vintage page link beside the wishlist button: above the stretched
+   card link, like the button. */
 .history-vintage-link {
   position: relative;
   z-index: 2;

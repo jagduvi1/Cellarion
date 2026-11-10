@@ -38,7 +38,7 @@ const { normalizeString } = require('../utils/normalize');
 const APPLY = process.argv.includes('--apply');
 const DATA = path.join(__dirname, '..', 'data', 'taxonomy-descriptions');
 
-// Hand-curated entries left untouched (Johan's Swedish home-market prose).
+// Hand-curated entries left untouched (the Swedish home-market prose).
 // Keyed by "<kind>:<normalizedName>".
 const PRESERVE = new Set(['country:sweden', 'region:skane', 'region:norrland']);
 

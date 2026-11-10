@@ -63,8 +63,8 @@ function WineListEditor() {
   const [saveState, setSaveState] = useState('saved'); // saved | unsaved | saving | error
   // Why the last save failed: the server's own reason when it answered with
   // one, '' when it answered without, null when the request never got through.
-  // A refused save used to show as "check your connection" (support ticket
-  // 2026-10-09) — the reason the server gave is what the owner needs to see.
+  // A refused save must not show as "check your connection": the reason the
+  // server gave is what the owner needs to see.
   const [saveError, setSaveError] = useState(null);
   const [activeTab, setActiveTab] = useState('wines');
   const [error, setError] = useState(null);

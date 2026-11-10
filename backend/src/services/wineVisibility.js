@@ -36,8 +36,8 @@ const CURATION_ROLES = Object.freeze(['somm', 'admin']);
 const isCurator = (roles) => Array.isArray(roles) && roles.some((r) => CURATION_ROLES.includes(r));
 
 /**
- * The one clause that keeps PRIVATE DRAFTS out of a query (support ticket
- * 2026-09-12). A draft is `pendingIdentity: true` as well (model invariant),
+ * The one clause that keeps PRIVATE DRAFTS out of a query.
+ * A draft is `pendingIdentity: true` as well (model invariant),
  * so every pending exclusion already hides it; this constant is for the
  * surfaces that deliberately INCLUDE pending rows — the curation queue, the
  * curator scan reads, the admin wine loads — and must still not see a draft.

@@ -1,6 +1,6 @@
 /**
- * services/wineDraftOps — the private-draft lifecycle (support ticket
- * 2026-09-12). Mocked models; the resolver, the promotion follow-through and
+ * services/wineDraftOps — the private-draft lifecycle.
+ * Mocked models; the resolver, the promotion follow-through and
  * the visibility rule are mocked at their module boundary so each assertion
  * is about THIS module's decisions:
  *   - edits stay in the draft key namespace and restart the clock

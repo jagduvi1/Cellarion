@@ -438,8 +438,7 @@
 
 /* ── Tasting-profile panel ─────────────────────────────────────────────────
    Shown inside a maturity card so the curator judges the generated profile
-   against the drink window they are setting, and can correct it in place
-   (support ticket 2026-07-28). */
+   against the drink window they are setting, and can correct it in place. */
 
 .somm-profile-panel {
   border: 1px solid var(--color-border-light);

@@ -2,8 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AnalyticsDashboard from './AnalyticsDashboard';
 
-// The analytics table moved here from the cellar page (support ticket
-// 2026-09-05). These tests pin the tab contract: ?view=table opens the Table
+// The analytics table lives here, not on the cellar page.
+// These tests pin the tab contract: ?view=table opens the Table
 // tab, ?cellar=<id> preselects that cellar's scope, and the boards stay the
 // default so the nav link still lands on the pages people just look at.
 

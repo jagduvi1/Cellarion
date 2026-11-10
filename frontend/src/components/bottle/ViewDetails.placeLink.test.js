@@ -2,8 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import ViewDetails from './ViewDetails';
 
-// An unplaced bottle offers "Place in a rack" on its own page (support ticket
-// 2026-10-26: placing was reachable only from the rack page). The link opens
+// An unplaced bottle offers "Place in a rack" on its own page, so placing is
+// not reachable from the rack page alone. The link opens
 // the rack page in the add flow's placing mode with this one bottle queued.
 // Renders the REAL component, like ViewDetails.serving.test.js.
 

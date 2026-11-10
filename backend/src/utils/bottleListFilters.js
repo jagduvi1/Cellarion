@@ -2,9 +2,9 @@
  * Bottle-list helpers shared by the cellar views (GET /api/cellars/:id and
  * GET /api/cellars/multi/bottles).
  *
- * The Statistics page's charts deep-link into the cellar view (support ticket
- * 2026-09-19: the separate /bottles drill-down list had no grouping, sorting,
- * list view or photos — everything the cellar view already has). The charts
+ * The Statistics page's charts deep-link into the cellar view, which has the
+ * grouping, sorting, list view and photos a separate drill-down list would
+ * lack. The charts
  * speak in NAMES (a country bar is "Italy", a grape bar "Nebbiolo") and filter
  * on producer / bottle size / purchase year, which the cellar views did not
  * know. These helpers teach them, with the same semantics GET /api/bottles

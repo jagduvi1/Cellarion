@@ -1,10 +1,10 @@
 /**
- * A photo's state as its OWNER sees it, for the MCP read path (support ticket
- * 2026-09-06: the connector could upload a photo but never see whether one
- * existed, was still processing, awaited review or had been rejected — so an
- * assistant answered "no pending changes" from the wrong queue, and could not
- * honour attach_bottle_image's "attach once per wine" rule because it had no
- * way to check first).
+ * A photo's state as its OWNER sees it, for the MCP read path. A connector
+ * that can upload a photo must also see whether one exists, is still
+ * processing, awaits review or was rejected: without that an assistant
+ * answers "no pending changes" from the wrong queue, and cannot honour
+ * attach_bottle_image's "attach once per wine" rule, having no way to check
+ * first.
  *
  * The lifecycle lives in ONE status enum on BottleImage (models/BottleImage.js,
  * services/imageProcessor.js, routes/admin/images.js); this module only
@@ -94,10 +94,9 @@ async function photosForBottle(userId, bottle) {
         ...NOT_SCAN, wineDefinition: wineId, status: 'approved', visibility: 'public', uploadedBy: { $ne: userId },
       }).sort({ createdAt: -1 }).limit(MAX_ROWS).lean()
     : [];
-  // The viewer's own label-scan frames of this wine (support ticket
-  // 2026-09-07): never a "photo of the bottle" — kept out of items, count and
-  // has_photo, the 2026-09-03 leak — but the sharpest image of the label
-  // there is, and get_photo can now show it.
+  // The viewer's own label-scan frames of this wine: never a "photo of the
+  // bottle" — kept out of items, count and has_photo — but the sharpest
+  // image of the label there is, and get_photo can show it.
   const scans = wineId
     ? await BottleImage.find({ kind: 'label-scan', uploadedBy: userId, wineDefinition: wineId })
         .sort({ createdAt: -1 }).limit(MAX_SCANS).select('side createdAt').lean()

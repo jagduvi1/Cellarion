@@ -1227,7 +1227,7 @@
 .slot-open-info--soon { color: #e65100; }
 .slot-open-info--past { color: #c62828; }
 
-/* Rack tabs sectioned by group (support ticket 2026-09-06). */
+/* Rack tabs sectioned by group. */
 .rack-tab-group { margin-bottom: 0.25rem; }
 .rack-tab-group-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); margin: 0.5rem 0 0.2rem 0.25rem; }
 .rack-tab-group--none .rack-tabs { margin-top: 0.25rem; }

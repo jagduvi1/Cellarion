@@ -1,6 +1,6 @@
 /**
- * /api/wine-drafts — a creator's PRIVATE DRAFT wines (support ticket
- * 2026-09-12; design on models/WineDefinition.draft). Its own router rather
+ * /api/wine-drafts — a creator's PRIVATE DRAFT wines (design on
+ * models/WineDefinition.draft). Its own router rather
  * than more paths under /api/wines, whose `/:id` and `/:idOrSlug/*` routes
  * would shadow them.
  *

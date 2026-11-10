@@ -193,7 +193,7 @@
   }
 }
 
-/* Delete / report control (ticket 6a865f60). Sits left of the default star so
+/* Delete / report control. Sits left of the default star so
    the two never overlap, and reveals on hover exactly like it — a destructive
    control should not shout on a page you are only reading. Kept visible on
    :focus-visible so it is reachable by keyboard, where "hover" never happens. */
@@ -259,7 +259,7 @@
 .carousel-state-published { background: rgba(47, 122, 58, 0.88); }
 .carousel-state-review { background: rgba(161, 92, 0, 0.88); }
 
-/* A wine-level photo of another vintage names its year (ticket 2026-10-09). */
+/* A wine-level photo of another vintage names its year. */
 .carousel-vintage {
   position: absolute;
   top: 0.5rem;

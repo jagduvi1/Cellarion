@@ -1,8 +1,7 @@
-// The bottle list remembers list vs card per browser. 'table' was a third
-// mode until the analytics table moved to the Dashboard page (support ticket
-// 2026-09-05: the cellar page's own search bar and filters sat above a table
-// they did not filter). A stored 'table' now falls back to the list, so
-// nobody opens a cellar into a mode that no longer exists there.
+// The bottle list remembers list vs card per browser. 'table' is not a mode
+// here (the analytics table lives on the Dashboard page): a stored 'table'
+// falls back to the list, so nobody opens a cellar into a mode that does
+// not exist there.
 export const VIEW_MODES = ['list', 'card'];
 export const VIEW_MODE_KEY = 'cellarion_bottle_view';
 

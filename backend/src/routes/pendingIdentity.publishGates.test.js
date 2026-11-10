@@ -8,8 +8,8 @@
  * unlike the creator-aware rule in services/wineVisibility: attaching is the
  * act of publishing, so not even the pending row's own creator may do it.
  *
- * Wine lists used to share this gate; they no longer do (support ticket
- * 2026-10-09). A list is the owner's own menu and prints only menu fields, so
+ * Wine lists do not share this gate.
+ * A list is the owner's own menu and prints only menu fields, so
  * the owner's own pending rows go on like any other wine — the owner rule in
  * services/wineListData.ownerWineFilter decides what renders, pinned in
  * services/wineListData.pendingIdentity.test.js.

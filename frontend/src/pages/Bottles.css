@@ -15,9 +15,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  /* Theme tokens, like the cellar view's chips: the old fixed light-beige
-     text was unreadable on the light theme's pale fill (support ticket
-     2026-09-19). */
+  /* Theme tokens, like the cellar view's chips: a fixed light-beige text
+     is unreadable on the light theme's pale fill. */
   background: var(--color-primary-light);
   color: var(--color-primary);
   border: 1px solid var(--color-border);
