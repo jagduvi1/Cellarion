@@ -47,7 +47,8 @@
     "undo": "Ångra",
     "loadFailed": "Det gick inte att läsa in ({{status}})",
     "actionFailed": "Misslyckades ({{status}})",
-    "done": "Klar"
+    "done": "Klar",
+    "retry": "Försök igen"
   },
   "nav": {
     "myCellars": "Mina källare",
