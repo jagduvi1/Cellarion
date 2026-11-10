@@ -13,7 +13,7 @@
  *                        wine PUT (trim, normalizeAppellation, resolve-only
  *                        country, gated region mint, normalizedKey regen,
  *                        E11000 → 409 "merge instead"); merge via the extracted
- *                        performWineMerge (routes/admin/wines.js); non_wine via
+ *                        performWineMerge (services/wineMergeOps.js); non_wine via
  *                        the quarantine flag + pending maturity-queue cleanup.
  *                        Any apply failure reverts the claim — no half-approved
  *                        states. A producer change that would give the wine a

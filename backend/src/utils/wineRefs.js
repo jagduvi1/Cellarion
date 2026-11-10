@@ -1,7 +1,7 @@
 /**
  * Every model that references a WineDefinition, and how a merge deals with it.
  *
- * A wine merge (reassignWineRefs in routes/admin/wines.js, also used when a
+ * A wine merge (reassignWineRefs in services/wineMergeOps.js, also used when a
  * private draft is attached to a registry wine) must move or drop every
  * reference to the wine it then deletes, or rows are left pointing at nothing.
  * utils/wineRefs.test.js checks this list against the model files, and
