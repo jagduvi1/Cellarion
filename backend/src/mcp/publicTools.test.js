@@ -131,6 +131,24 @@ describe('drink_window_for', () => {
     expect(JSON.stringify(body)).not.toMatch(/sommNotes/);
   });
 
+  // status_now is the app's own reading of the window, in this tool's words
+  // (not_ready, early, peak, late, past). The first five are the cases a
+  // shorter rule read differently from the bottle page.
+  test.each([
+    ['an early phase still open, the peak without a start', { earlyFrom: THIS_YEAR - 2, earlyUntil: THIS_YEAR + 1, peakUntil: THIS_YEAR + 5 }, 'early'],
+    ['the gap between peak and late belongs to the peak', { peakFrom: THIS_YEAR - 5, peakUntil: THIS_YEAR - 1, lateFrom: THIS_YEAR + 2, lateUntil: THIS_YEAR + 5 }, 'peak'],
+    ['a late phase with no end stays late', { peakFrom: THIS_YEAR - 8, peakUntil: THIS_YEAR - 4, lateFrom: THIS_YEAR - 3 }, 'late'],
+    ['an early phase alone, once begun', { earlyFrom: THIS_YEAR - 1 }, 'early'],
+    ['a late phase alone cannot be read', { lateFrom: THIS_YEAR - 1, lateUntil: THIS_YEAR + 3 }, null],
+    ['before the window', { earlyFrom: THIS_YEAR + 2, peakFrom: THIS_YEAR + 5 }, 'not_ready'],
+    ['after the window', { peakFrom: THIS_YEAR - 9, peakUntil: THIS_YEAR - 5, lateFrom: THIS_YEAR - 4, lateUntil: THIS_YEAR - 1 }, 'past'],
+  ])('status_now: %s', async (_label, window, expected) => {
+    WineDefinition.findById.mockReturnValue(chain(WINE));
+    WineVintageProfile.find.mockReturnValue(chain([{ vintage: '2015', relative: false, ...window }]));
+    const res = await tool('drink_window_for').handler({ wine_id: oid('f') }, SIGNED_IN);
+    expect(parse(res).data.vintages[0].status_now).toBe(expected);
+  });
+
   test('relative (NV) profiles report offsets with no now-status', async () => {
     WineDefinition.findById.mockReturnValue(chain(WINE));
     WineVintageProfile.find.mockReturnValue(chain([
