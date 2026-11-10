@@ -23,6 +23,7 @@ const User = require('../models/User');
 const RegistryHealthSnapshot = require('../models/RegistryHealthSnapshot');
 const { runNameChecks, NAME_CHECK_SELECT } = require('../utils/nameChecks');
 const { DEFAULT_CROSS_FIELD_CHECK_IDS } = require('../utils/crossFieldChecks');
+const { OUTSTANDING_REVIEW_EXPR } = require('../utils/profileReview');
 const { scanCrossFieldChecks } = require('./crossFieldScan');
 const { nearProducerPairs, nameSubsetPairs } = require('./registryFragmentation');
 const { incompleteGeographyRows } = require('./registryCompleteness');
@@ -167,12 +168,7 @@ async function computeMetrics() {
         { 'aiProfile.confidence': { $lte: LOW_CONFIDENCE_THRESHOLD } },
       ],
       'aiProfile.generatedAt': { $ne: null },
-      $expr: {
-        $or: [
-          { $eq: ['$profileReviewedAt', null] },
-          { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
-        ],
-      },
+      $expr: OUTSTANDING_REVIEW_EXPR,
     }),
     // The suspect class the admin queue shows regardless of threshold
     // (v1.116.0) — outstanding-filtered the same way, so queue and metric
@@ -181,12 +177,7 @@ async function computeMetrics() {
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       'aiProfile.producerSuspect': true,
       'aiProfile.generatedAt': { $ne: null },
-      $expr: {
-        $or: [
-          { $eq: ['$profileReviewedAt', null] },
-          { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
-        ],
-      },
+      $expr: OUTSTANDING_REVIEW_EXPR,
     }),
     // Held rows awaiting a release decision — outstanding-filtered like the
     // suspect metric, so the count agrees with what the admin queue shows.
@@ -194,12 +185,7 @@ async function computeMetrics() {
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       'aiProfile.heldAt': { $ne: null },
       'aiProfile.generatedAt': { $ne: null },
-      $expr: {
-        $or: [
-          { $eq: ['$profileReviewedAt', null] },
-          { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
-        ],
-      },
+      $expr: OUTSTANDING_REVIEW_EXPR,
     }),
     // Core ownership sets (≥3 distinct owners of active bottles) — the wine
     // filter happens after the join below; one Bottle aggregate, the job's

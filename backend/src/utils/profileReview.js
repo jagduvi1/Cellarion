@@ -36,4 +36,38 @@ const UNPROFILED_QUERY = Object.freeze({
   'aiProfile.body': null,
 });
 
-module.exports = { hasProfileContent, UNPROFILED_QUERY };
+/**
+ * "No human has reviewed this profile since it was generated": the $expr
+ * clause the admin low-confidence queue, the registry-health counts and the
+ * held-profile queue all filter by. A re-enrichment bumps generatedAt past
+ * the review and the row re-surfaces by comparison alone, so there is
+ * nothing to clear on later edits.
+ */
+const OUTSTANDING_REVIEW_EXPR = Object.freeze({
+  $or: [
+    { $eq: ['$profileReviewedAt', null] },
+    { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
+  ],
+});
+
+/**
+ * What the held-profile queue (list_held_profiles) still needs judged. Its
+ * two states answer DIFFERENT questions, so they cannot share a marker:
+ *
+ *   HELD          — "is this generated profile publishable?" profileReviewedAt
+ *                   is the right signal: any human write to the profile
+ *                   answers it, which is why applyProfilePatch stamps it.
+ *   PUBLISHED     — "is the producer field real?" A tasting-profile write does
+ *   SUSPECT         NOT answer that, yet it stamps profileReviewedAt, so that
+ *                   stamp must not take the row out of this queue. Only an
+ *                   explicit uphold/confirm (suspectDecision) closes it.
+ */
+const HELD_QUEUE_OUTSTANDING_EXPR = Object.freeze({
+  $cond: [
+    { $ne: ['$aiProfile.heldAt', null] },
+    OUTSTANDING_REVIEW_EXPR,
+    { $eq: [{ $ifNull: ['$aiProfile.suspectDecision', null] }, null] },
+  ],
+});
+
+module.exports = { hasProfileContent, UNPROFILED_QUERY, OUTSTANDING_REVIEW_EXPR, HELD_QUEUE_OUTSTANDING_EXPR };
