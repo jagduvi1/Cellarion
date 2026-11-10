@@ -19,11 +19,33 @@ router.use(requireAuth);
 
 const { PHASE_FIELDS } = maturityOps;
 
-// Parse an optional year field from the request body (returns null if blank/absent)
+// An optional year field of the request body: null when blank or absent, NaN
+// when it is not a whole number. The whole value must be the number: a figure
+// with a decimal or a trailing word is refused, not cut off at the first
+// stray character.
 function parseYear(val) {
   if (val === undefined || val === null || val === '') return null;
-  const yr = parseInt(val);
-  return isNaN(yr) ? NaN : yr;
+  if (typeof val === 'number') return Number.isInteger(val) ? val : NaN;
+  if (typeof val === 'string' && /^-?\d+$/.test(val.trim())) return parseInt(val.trim(), 10);
+  return NaN;
+}
+
+// A refused window (maturityOps.checkWindow) in this route's words.
+const ORDER_WORDS = {
+  'earlyUntil<earlyFrom': 'Early "until" must be after early "from"',
+  'peakUntil<peakFrom': 'Peak "until" must be after peak "from"',
+  'lateUntil<lateFrom': 'Late "until" must be after late "from"',
+  'peakFrom<earlyFrom': 'Peak phase cannot start before early phase',
+  'lateFrom<peakFrom': 'Late phase cannot start before peak phase',
+};
+function windowRefusal(refusal) {
+  const { rule, relative, field, value, after } = refusal;
+  if (rule === 'range') return relative ? `${field} must be between 0 and 100 years` : `Year out of range for ${field}`;
+  if (rule === 'retained') {
+    return `The stored ${field} (${value}) is outside ${relative ? 'the 0–100 year offsets an NV wine uses' : 'the years 1900–2200'}: ` +
+      'this window still holds values in the other unit. Send all six fields to rewrite it.';
+  }
+  return ORDER_WORDS[`${field}<${after}`];
 }
 
 /**
@@ -124,44 +146,25 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Profile not found' });
     }
 
-    // Parse all year fields
-    // NV wines store the window as year-offsets after each bottle's purchase
-    // year (relative), since there's no vintage to anchor absolute years to.
-    const isNv = profile.vintage === 'NV';
-    const [lo, hi] = isNv ? [0, 100] : [1900, 2200];
-    const years = {};
+    // Only the fields explicitly sent change (null or blank = clear the
+    // field); a field not sent keeps its stored value.
+    const incoming = {};
     for (const field of PHASE_FIELDS) {
       const yr = parseYear(req.body[field]);
-      if (yr !== null && isNaN(yr)) {
+      if (Number.isNaN(yr)) {
         return res.status(400).json({ error: `Invalid value for ${field}` });
       }
-      if (yr !== null && (yr < lo || yr > hi)) {
-        return res.status(400).json({ error: isNv ? `${field} must be between 0 and 100 years` : `Year out of range for ${field}` });
-      }
-      years[field] = yr;
+      incoming[field] = req.body[field] === undefined ? undefined : yr;
     }
-
-    const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = years;
-
-    // Ordering validations — only check pairs that are both provided.
-    // Compare against null, not truthiness: 0 is a legitimate NV offset.
-    if (earlyFrom != null && earlyUntil != null && earlyUntil < earlyFrom)
-      return res.status(400).json({ error: 'Early "until" must be after early "from"' });
-    if (peakFrom  != null && peakUntil  != null && peakUntil  < peakFrom)
-      return res.status(400).json({ error: 'Peak "until" must be after peak "from"' });
-    if (lateFrom  != null && lateUntil  != null && lateUntil  < lateFrom)
-      return res.status(400).json({ error: 'Late "until" must be after late "from"' });
-    if (earlyFrom != null && peakFrom   != null && peakFrom   < earlyFrom)
-      return res.status(400).json({ error: 'Peak phase cannot start before early phase' });
-    if (peakFrom  != null && lateFrom   != null && lateFrom   < peakFrom)
-      return res.status(400).json({ error: 'Late phase cannot start before peak phase' });
-
-    // Apply — only the fields explicitly sent change (null = clear the field);
-    // a field not sent keeps its stored value.
-    const next = {};
-    for (const field of PHASE_FIELDS) {
-      next[field] = req.body[field] !== undefined ? years[field] : (profile[field] ?? null);
+    // The window the row would hold AFTER the patch is what is checked: the
+    // range (year offsets for NV, years otherwise), stored values the patch
+    // keeps, and the ordering across sent and stored values alike. The same
+    // check as the MCP set_vintage_maturity (services/maturityOps).
+    const checked = maturityOps.checkWindow(profile, incoming);
+    if (!checked.ok) {
+      return res.status(checked.code === 'conflict' ? 409 : 400).json({ error: windowRefusal(checked) });
     }
+    const { next } = checked;
     // String() coercion: a truthy non-string threw on .trim() → 500.
     const sommNotes = req.body.sommNotes !== undefined
       ? (req.body.sommNotes ? String(req.body.sommNotes).trim() : '')

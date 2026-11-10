@@ -44,52 +44,72 @@ function windowRange(profile) {
  * The six phases the row would hold after a patch: each incoming value
  * (undefined = keep the stored one, null = clear) checked against the row's
  * range, then every RETAINED value checked too, then the ordering. Returns
- * { ok: true, next } or { ok: false, code, message } with code 'invalid_input'
- * or 'conflict'. Caller: set_vintage_maturity (the web PUT keeps its own
- * validator, which checks only the fields sent).
+ * { ok: true, next }, or a refusal the caller words itself:
+ *   { rule: 'range', field, value }       an incoming value outside the range
+ *   { rule: 'retained', field, value }    a stored value this patch keeps is
+ *                                         outside it (code 'conflict')
+ *   { rule: 'order', field, after }       `field` lies before `after`
+ * each with ok: false, a code ('invalid_input' or 'conflict') and `relative`,
+ * which says whether the range was NV offsets or years. Callers:
+ * PUT /api/somm/maturity/:id, and mergeWindow below for set_vintage_maturity.
  *
  * The retained-value check is what keeps a profile that predates the relative
  * flag — absolute years stored under vintage NV — from being half-rewritten:
  * the save flips relative, which would silently reread a carried-forward 2024
  * as "2024 years after purchase". Such a row has to be rewritten whole.
  */
-function mergeWindow(profile, incoming) {
+function checkWindow(profile, incoming) {
   const { relative, min, max } = windowRange(profile);
-  const rangeWord = relative ? 'NV uses relative offsets 0–100' : 'years 1900–2200';
+  const refuse = (code, rule, about) => ({ ok: false, code, rule, relative, ...about });
   const next = {};
   for (const f of PHASE_FIELDS) {
     const v = incoming[f];
     if (v === undefined) { next[f] = profile[f] ?? null; continue; }
     if (v === null) { next[f] = null; continue; }
-    if (v < min || v > max) {
-      return { ok: false, code: 'invalid_input', message: `${f}: ${v} out of range (${rangeWord})` };
-    }
+    if (v < min || v > max) return refuse('invalid_input', 'range', { field: f, value: v });
     next[f] = v;
   }
   for (const f of PHASE_FIELDS) {
     if (incoming[f] !== undefined) continue;
     const v = next[f];
-    if (v != null && (v < min || v > max)) {
-      return {
-        ok: false,
-        code: 'conflict',
-        message: `${f}=${v} retained from the stored profile is outside the ${relative ? 'NV offset range 0–100' : 'year range 1900–2200'} — ` +
-          'this profile still carries values in the other unit. Rewrite all six phases in this call (pass null to clear a phase).',
-      };
-    }
+    if (v != null && (v < min || v > max)) return refuse('conflict', 'retained', { field: f, value: v });
   }
   for (const [from, until] of PHASE_PAIRS) {
     if (next[from] != null && next[until] != null && next[until] < next[from]) {
-      return { ok: false, code: 'invalid_input', message: `${until} cannot be before ${from}` };
+      return refuse('invalid_input', 'order', { field: until, after: from });
     }
   }
   if (next.earlyFrom != null && next.peakFrom != null && next.peakFrom < next.earlyFrom) {
-    return { ok: false, code: 'invalid_input', message: 'peak_from cannot be before early_from' };
+    return refuse('invalid_input', 'order', { field: 'peakFrom', after: 'earlyFrom' });
   }
   if (next.peakFrom != null && next.lateFrom != null && next.lateFrom < next.peakFrom) {
-    return { ok: false, code: 'invalid_input', message: 'late_from cannot be before peak_from' };
+    return refuse('invalid_input', 'order', { field: 'lateFrom', after: 'peakFrom' });
   }
   return { ok: true, next };
+}
+
+/**
+ * checkWindow as set_vintage_maturity answers it: { ok: true, next } or
+ * { ok: false, code, message }, the message in the tool's words.
+ */
+function mergeWindow(profile, incoming) {
+  const checked = checkWindow(profile, incoming);
+  if (checked.ok) return checked;
+  const { code, rule, relative, field, value, after } = checked;
+  if (rule === 'range') {
+    return { ok: false, code, message: `${field}: ${value} out of range (${relative ? 'NV uses relative offsets 0–100' : 'years 1900–2200'})` };
+  }
+  if (rule === 'retained') {
+    return {
+      ok: false,
+      code,
+      message: `${field}=${value} retained from the stored profile is outside the ${relative ? 'NV offset range 0–100' : 'year range 1900–2200'} — ` +
+        'this profile still carries values in the other unit. Rewrite all six phases in this call (pass null to clear a phase).',
+    };
+  }
+  if (field === 'peakFrom' && after === 'earlyFrom') return { ok: false, code, message: 'peak_from cannot be before early_from' };
+  if (field === 'lateFrom' && after === 'peakFrom') return { ok: false, code, message: 'late_from cannot be before peak_from' };
+  return { ok: false, code, message: `${field} cannot be before ${after}` };
 }
 
 /**
@@ -243,6 +263,7 @@ module.exports = {
   wineIdOf,
   canonicalVintage,
   windowRange,
+  checkWindow,
   mergeWindow,
   windowSnapshot,
   hasWindowContent,
