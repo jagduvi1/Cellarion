@@ -19,7 +19,12 @@ vi.mock('react-i18next', () => {
 });
 vi.mock('../components/CellarNav', () => ({ default: () => null }));
 vi.mock('../components/WineImage', () => ({ default: () => null }));
-vi.mock('../utils/featureFlags', () => ({ useFeature: () => false }));
+// Early access: off, as for most members, unless a test turns it on.
+let earlyAccess = false;
+vi.mock('../utils/featureFlags', () => ({ useFeature: () => earlyAccess }));
+// The early-access badge is a shared component with a feedback dialog of its
+// own; here it only has to show which feature it marks.
+vi.mock('../components/BetaBadge', () => ({ default: ({ feature }) => <span data-beta={feature} /> }));
 // The 3D preview loads three.js; the form only has to show where it goes.
 vi.mock('../components/racks/ShelfView3D', () => ({ default: () => <div>shelf-view-3d</div> }));
 // The type picker draws a small rack for every type: a component of its own,
@@ -68,6 +73,7 @@ const rack = () => ({
 });
 
 beforeEach(() => {
+  earlyAccess = false;
   const api = vi.fn(async (url) => {
     if (url === '/api/cellars/c1') return ok({ cellar: { _id: 'c1', name: 'Home', userRole: 'owner' } });
     if (url === '/api/racks?cellar=c1') return ok({ racks: [rack()] });
@@ -109,6 +115,14 @@ describe('the new-rack form', () => {
   });
 
   test('for a wine cabinet, with its shape fields', async () => {
+    const form = await openForm();
+    fireEvent.click(within(form).getByRole('button', { name: 'choose-cabinet' }));
+
+    expect(form).toMatchSnapshot();
+  });
+
+  test('for a wine cabinet with early access on: the options still in early access, and their badges', async () => {
+    earlyAccess = true;
     const form = await openForm();
     fireEvent.click(within(form).getByRole('button', { name: 'choose-cabinet' }));
 
