@@ -68,7 +68,7 @@ jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findBy
 // rather than duplicating the write. Mocked so this suite stays a unit test of
 // the TOOL's routing; the apply itself is covered by wineProposals.test.js and
 // the direct/gated decision by services/proposalDirectApply.test.js.
-jest.mock('../routes/admin/wineProposals', () => ({ approveProposal: jest.fn() }));
+jest.mock('../services/wineProposalDecisionOps', () => ({ approveProposal: jest.fn() }));
 // Defaults to GATED so every pre-existing proposal test keeps asserting the
 // admin-review path it was written for; the self-apply tests opt in.
 jest.mock('../services/proposalDirectApply', () => ({

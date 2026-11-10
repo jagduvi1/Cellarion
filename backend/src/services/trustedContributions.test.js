@@ -17,13 +17,13 @@ jest.mock('../models/BottleImage', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('./imageModerationOps', () => ({ approveImage: jest.fn() }));
-jest.mock('../routes/admin/wineProposals', () => ({ approveProposal: jest.fn() }));
+jest.mock('./wineProposalDecisionOps', () => ({ approveProposal: jest.fn() }));
 
 const BottleImage = require('../models/BottleImage');
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
 const WineDefinition = require('../models/WineDefinition');
 const { approveImage } = require('./imageModerationOps');
-const { approveProposal } = require('../routes/admin/wineProposals');
+const { approveProposal } = require('./wineProposalDecisionOps');
 const contributionReview = require('../config/contributionReview');
 const { appliesDirectly, approvePhotoIfTrusted, applyCorrectionIfTrusted } = require('./trustedContributions');
 

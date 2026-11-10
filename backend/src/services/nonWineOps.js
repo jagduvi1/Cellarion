@@ -15,7 +15,7 @@
  * ONE quarantine procedure: a member's move is the same non_wine proposal the
  * sommelier files, decided by the same rule (services/proposalDirectApply:
  * direct while at most a few members hold the row) and applied by the same
- * code (routes/admin/wineProposals.approveProposal), so Admin → Proposals
+ * code (services/wineProposalDecisionOps.approveProposal), so Admin → Proposals
  * shows every move under Decided with its Restore button, and a flag an
  * admin wants to re-seed or revisit has one place to look.
  */
@@ -110,11 +110,11 @@ async function markNotWineByMember({ wineId, userId, req = null, via = 'member' 
     return { ok: true, status: 'filed', category: 'wine', holders: await countHoldingMembers(wine._id) };
   }
 
-  // Required lazily: the admin route tree requires the MCP registry, which
-  // requires the tools, which require this module (the sommelier tool does
-  // the same for the same reason). approveProposal reads req.user.id for
+  // Required lazily: the decision service loads the search client and most
+  // of the registry write path, which only an applying proposal needs (the
+  // sommelier tool does the same). approveProposal reads req.user.id for
   // decidedBy; a request-less caller (MCP contexts, scripts) gets a stand-in.
-  const { approveProposal } = require('../routes/admin/wineProposals');
+  const { approveProposal } = require('./wineProposalDecisionOps');
   const asReq = req && req.user ? req : { user: { id: userId } };
   const outcome = await approveProposal(proposal._id, asReq);
   if (outcome.status !== 200) {

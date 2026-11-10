@@ -20,7 +20,7 @@ jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // The self-apply route is mocked: this suite pins what the TOOL files, and
 // the apply itself is covered by the admin route's own suite.
-jest.mock('../routes/admin/wineProposals', () => ({ approveProposal: jest.fn() }));
+jest.mock('../services/wineProposalDecisionOps', () => ({ approveProposal: jest.fn() }));
 jest.mock('../services/proposalDirectApply', () => ({
   classifyProposal: jest.fn(async () => ({ direct: false, reason: 'admin-reviewed' })),
 }));
