@@ -10,6 +10,7 @@
 // Audit action strings are IDENTICAL to the REST somm routes (somm.maturity.
 // review, somm.price.add) so REST and MCP curation audit identically.
 const { z } = require('zod');
+const mongoose = require('mongoose');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const WineDefinition = require('../../models/WineDefinition');
