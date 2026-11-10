@@ -1215,13 +1215,6 @@ registerTool({
   },
 });
 
-// ── The held-profile review queue over MCP ──────────────────────────────────
-// The publication gate holds profiles; judging those holds must be possible
-// over MCP, not only in the web admin queue. One list + one decision verb,
-// and every decision path leaves the row OUT of the queue by construction —
-// a release path that skips the profileReviewedAt stamp leaves rows stuck
-// unstamped, and this surface must not create that bug.
-
 // ── Held-profile review queue ────────────────────────────────────────────
 // list_held_profiles, review_held_profile, list_profile_audits:
 // tools/somm/heldProfiles.js, registered here so the tool order is unchanged.

@@ -15,6 +15,13 @@ const { hasProfileContent, UNPROFILED_QUERY } = require('../../../utils/profileR
 const heldProfileOps = require('../../../services/heldProfileOps');
 const { profileLite } = require('./shared');
 
+// ── The held-profile review queue over MCP ──────────────────────────────────
+// The publication gate holds profiles; judging those holds must be possible
+// over MCP, not only in the web admin queue. One list + one decision verb,
+// and every decision path leaves the row OUT of the queue by construction —
+// a release path that skips the profileReviewedAt stamp leaves rows stuck
+// unstamped, and this surface must not create that bug.
+
 const HELD_LIST_CAP = 500;
 // What still needs judging: held rows unreviewed since generation, published
 // suspects with no verdict. Defined with the other review predicates in
