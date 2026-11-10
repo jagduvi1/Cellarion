@@ -442,7 +442,7 @@ async function applyPendingFix(wine, clean, userId) {
   // the label may say so with crossFieldOverride; the override is refused
   // unless a producer is actually being written, it is never a default, and the
   // caller logs it — see the audit metadata in routes/somm/pendingWines.js and
-  // mcp/tools/somm.fix_pending_wine.
+  // mcp/tools/somm/pendingWines.fix_pending_wine.
   let crossFieldOverridden = null;
   if (clean.producer !== undefined || willPromote) {
     // Lazy require, same reason as findOrCreateRegion above: keep the curation
