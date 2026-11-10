@@ -4,7 +4,6 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
-const Rack = require('../models/Rack');
 const Grape = require('../models/Grape');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
@@ -29,9 +28,10 @@ const { stripHtml, sanitizeGrapeNames } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { extractAiExplanation } = require('../utils/jsonExtract');
-const { getMaxPosition, cabinetShelfRows, fitCabinetTypeConfig } = require('../utils/rackGeometry');
-const { planRackCreations, placeBottlesInRack, sanitizeRackConfigs, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
+const { sanitizeRackConfigs, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
+// The racks a file names: created before the bottles, filled after them.
+const { createImportRacks, placeImportedBottles } = require('../services/importRacks');
 const { validatePriceSanity } = require('../utils/priceValidation');
 const { computeUserMediansByCurrency } = require('../services/priceWarnings');
 const { parseCurrency, currencyOrFallback, isSupportedCurrency } = require('../config/currencies');
@@ -814,63 +814,10 @@ router.post('/confirm', async (req, res) => {
       await getOrCreateDailySnapshot().catch(err => console.error('Failed to fetch daily exchange rate snapshot:', err.message));
     }
 
-    // Auto-create any racks referenced in the import that don't already exist
-    // in this cellar. User-supplied rackConfigs take precedence over inferred
-    // dimensions. Runs once up-front so the bottle-placement step below can
-    // rely on every rack being present.
-    const createdRacks = [];
-    try {
-      const rackPlan = planRackCreations(items);
-      if (rackPlan.size > 0) {
-        const existing = await Rack.find({
-          cellar: cellarId,
-          name: { $in: Array.from(rackPlan.keys()) },
-          deletedAt: null
-        }).select('name').lean();
-        const existingNames = new Set(existing.map(r => r.name));
-
-        for (const [name, spec] of rackPlan.entries()) {
-          if (existingNames.has(name)) continue;
-          const override = rackConfigs[name];
-          // User opted out of creating this rack — bottles will be imported
-          // into the cellar without placement (handled in the placement loop).
-          if (override?.skip) continue;
-          const rows = override?.rows || spec.rows;
-          const cols = override?.cols || spec.cols;
-          const chosenType = override?.type || spec.type;
-          const safeType = RACK_TYPES.includes(chosenType) ? chosenType : 'grid';
-          const rackData = {
-            cellar: cellarId,
-            user: cellar.user,
-            name,
-            type: safeType,
-            rows,
-            cols
-          };
-          if (override?.typeConfig) rackData.typeConfig = override.typeConfig;
-          // A cabinet is always stored with a list that matches its shelf count
-          // (the update route's shape gate would otherwise reject every later
-          // rename/group/zone edit — audit 2026-09-15).
-          if (safeType === 'cabinet') {
-            rackData.typeConfig = fitCabinetTypeConfig(rows, cols, rackData.typeConfig);
-          }
-          const rack = new Rack(rackData);
-          // Disabled positions beyond the created geometry address cells that
-          // don't exist — drop them rather than storing dead entries.
-          if (override?.disabledPositions?.length) {
-            const rackMax = getMaxPosition(rack);
-            rack.disabledPositions = override.disabledPositions.filter(p => p <= rackMax);
-          }
-          await rack.save();
-          createdRacks.push({ name, type: safeType, rows, cols, typeConfig: override?.typeConfig });
-          // cellarId: an editor's import changes the OWNER's cellar, so the
-          // owner's caches (offline copy, search, stats) must move too.
-          logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: cellar._id }, { source: 'import', name });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to auto-create racks during import (non-fatal):', err.message);
-    }
+    // Create the racks the file names that this cellar does not have yet.
+    // Before the bottles, so the placement step below finds every rack
+    // (services/importRacks).
+    const createdRacks = await createImportRacks({ req, cellar, cellarId, items, rackConfigs });
 
     let created = 0;
     // Split of `created` for the done-screen breakdown: active bottles vs
@@ -1347,80 +1294,9 @@ router.post('/confirm', async (req, res) => {
       }
     }
 
-    // Per-rack two-pass placement: for each rack referenced in this import,
-    // assign each item to its requested slot first (or, for shelf racks, the
-    // first slot of the requested shelf), then overflow extras into the
-    // nearest empty slot on the same rack.
-    let placedCount = 0;
-    let overflowedCount = 0;
-    const unplacedDetails = []; // [{ sourceIndex, rackName, requestedPosition, reason }]
-    if (pendingPlacements.length > 0) {
-      // Group by rackName
-      const byRack = new Map();
-      for (const p of pendingPlacements) {
-        if (!byRack.has(p.rackName)) byRack.set(p.rackName, []);
-        byRack.get(p.rackName).push(p);
-      }
-
-      for (const [rackName, group] of byRack.entries()) {
-        try {
-          const rack = await Rack.findOne({ cellar: cellarId, name: rackName, deletedAt: null });
-          if (!rack) {
-            for (const p of group) {
-              unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: 'Rack not found' });
-            }
-            continue;
-          }
-
-          const { placements, unplaced } = placeBottlesInRack(
-            {
-              type: rack.type,
-              rows: rack.rows,
-              cols: rack.cols,
-              // Pass typeConfig as a plain object — for Mongoose subdocs the
-              // .toObject() shape is what the helper expects.
-              typeConfig: rack.typeConfig?.toObject ? rack.typeConfig.toObject() : rack.typeConfig,
-              slots: rack.slots,
-              maxPosition: getMaxPosition(rack),
-              disabledPositions: rack.disabledPositions
-            },
-            group,
-            positionAnchor
-          );
-
-          for (const pl of placements) {
-            rack.slots.push({ position: pl.position, bottle: pl.bottle });
-          }
-          for (const u of unplaced) {
-            unplacedDetails.push({ ...u, rackName });
-          }
-
-          // Count placements only AFTER the save succeeds — a swallowed save
-          // failure (e.g. VersionError from a concurrent rack edit) used to
-          // report bottles as placed that never persisted.
-          if (placements.length > 0) {
-            try {
-              await rack.save();
-              for (const pl of placements) {
-                placedCount++;
-                if (pl.overflowed) overflowedCount++;
-              }
-            } catch (err) {
-              console.error(`Failed to save rack ${rackName} during import:`, err.message);
-              for (const pl of placements) {
-                const src = group.find(p => String(p.bottleId) === String(pl.bottle));
-                unplacedDetails.push({ sourceIndex: src?.sourceIndex ?? null, rackName, requestedPosition: pl.position, reason: `Rack save failed: ${err.message}` });
-              }
-            }
-          }
-        } catch (err) {
-          console.error(`Failed placement for rack ${rackName}:`, err.message);
-          for (const p of group) {
-            unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: err.message });
-          }
-        }
-      }
-    }
+    // Place the bottles in their racks: the slot the file gives, or the
+    // nearest free one on the same rack (services/importRacks).
+    const { placedCount, overflowedCount, unplacedDetails } = await placeImportedBottles({ cellarId, pendingPlacements, positionAnchor });
 
     // cellarId as well as id: that is what moves the owner's data version
     // when an editor of a shared cellar imports (services/audit).
