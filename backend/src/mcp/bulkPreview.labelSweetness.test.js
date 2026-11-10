@@ -34,7 +34,7 @@ jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1'
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
-jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn() }));
+jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn(), CURATION_ROLES: ['somm', 'admin'] }));
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), removeFromRacks: jest.fn(),
   RESTORE_WINDOW_MS: 2 * 24 * 60 * 60 * 1000,

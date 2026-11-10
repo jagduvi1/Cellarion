@@ -7,6 +7,7 @@ const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const { getSnapshotsForDates } = require('../../utils/exchangeRates');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
+const { isValidId } = require('../../utils/validation');
 // The curation body shared with the MCP somm tools: queue rules, snapshot,
 // decline and their undo. This route parses input and words the answers.
 const priceOps = require('../../services/priceOps');
@@ -64,13 +65,14 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
     ]));
 
     const queue = actionable.map(({ request: r, latest }) => {
-      const firstReq = r.requesters[0];
+      const requesters = r.requesters || [];
+      const firstReq = requesters[0];
       return {
         requestId:      r._id,
         wineDefinition: r.wineDefinition,
         vintage:        r.vintage,
         bottleCount:    bottleCountMap.get(priceOps.pairKey(r.wineDefinition._id, r.vintage)) || 0,
-        requesterCount: r.requesters.length,
+        requesterCount: requesters.length,
         firstRequestedAt: r.firstRequestedAt,
         firstRequester:  firstReq ? { username: firstReq.user?.username, note: firstReq.note } : null,
         latestPrice: latest
@@ -147,6 +149,9 @@ router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
     if (!wineId || !vintage) {
       return res.status(400).json({ error: 'wineDefinition and vintage are required' });
     }
+    if (!isValidId(wineId)) {
+      return res.status(400).json({ error: 'Invalid wineDefinition ID' });
+    }
 
     const wine = await WineDefinition.findById(wineId)
       .populate('country', 'name')
@@ -210,7 +215,7 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     // Coerce + validate user-controlled values before they reach Mongo queries.
     // Without this an attacker could pass an object like { $ne: null } as the
     // vintage and turn an exact-match into a broad query.
-    if (!mongoose.isValidObjectId(wineDefinition)) {
+    if (!isValidId(wineDefinition)) {
       return res.status(400).json({ error: 'Invalid wineDefinition ID' });
     }
     if (typeof vintage !== 'string') {
@@ -224,8 +229,13 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
       if (parsedVintage.code === 'unknown') return res.status(400).json({ error: 'A price needs a vintage year or NV' });
       return res.status(400).json({ error: parsedVintage.error });
     }
-    const priceNum = parseFloat(price);
-    if (isNaN(priceNum) || priceNum < 0) {
+    // The whole value must be a number: a figure with a decimal comma or a
+    // trailing unit is refused, not cut off at the first stray character, and
+    // an infinite one never reaches the shared price history.
+    const priceNum = typeof price === 'number' ? price
+      : typeof price === 'string' ? Number(price.trim())
+        : NaN;
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
       return res.status(400).json({ error: 'price must be a non-negative number' });
     }
 
@@ -296,9 +306,13 @@ router.post('/requests/:requestId/decline', requireSommOrAdmin, async (req, res)
 
     // Skip upserted, request deleted, requesters told verbatim, audited: the
     // same body as the MCP reject_price_request (services/priceOps).
-    const { requestersNotified } = await priceOps.declinePriceRequest({ request, reason: checked.reason, actorId: req.user.id, req });
+    const declined = await priceOps.declinePriceRequest({ request, reason: checked.reason, actorId: req.user.id, req });
+    // Another curator declined it between the load above and the delete.
+    if (declined.gone) {
+      return res.status(404).json({ error: 'Tracking request not found — it may already be fulfilled or declined' });
+    }
 
-    res.json({ message: 'Tracking request declined', requestersNotified });
+    res.json({ message: 'Tracking request declined', requestersNotified: declined.requestersNotified });
   } catch (error) {
     console.error('Decline tracking request error:', error);
     res.status(500).json({ error: 'Failed to decline tracking request' });

@@ -1,6 +1,6 @@
 // Drink-window (maturity) curation, the one body behind both doors: the REST
 // routes in routes/somm/maturity.js (the web somm page) and the MCP tools in
-// mcp/tools/somm.js (set_vintage_maturity, reset_maturity_row,
+// mcp/tools/somm/maturity.js (set_vintage_maturity, reset_maturity_row,
 // remove_from_maturity_queue), plus the undo inverses mcp/revert.js applies.
 //
 // A WineVintageProfile row is one wine+vintage pair. Setting its window marks
@@ -22,6 +22,8 @@ const { bumpWineOwners } = require('./dataVersion');
 
 const PHASE_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
 const PHASE_PAIRS = [['earlyFrom', 'earlyUntil'], ['peakFrom', 'peakUntil'], ['lateFrom', 'lateUntil']];
+/** The curator note's length limit, as the WineVintageProfile schema enforces it. */
+const SOMM_NOTES_MAX = 2000;
 
 /** The wine id of a profile whether or not wineDefinition is populated. */
 const wineIdOf = (profile) => profile.wineDefinition?._id || profile.wineDefinition;
@@ -107,13 +109,27 @@ function windowSnapshot(profile) {
 }
 
 /**
- * Write a validated window onto the row: the six phases from `next` (null
- * clears), the note when given (undefined leaves it), reviewed with the
- * curator's stamp and the row's relative flag. Saves, moves the owners'
- * data version, audits somm.maturity.review. Returns the relative flag.
+ * Does a row carry anything beyond the auto-seeded pending stub: a phase, a
+ * note or an author? A member's import can create a PENDING row with all
+ * three (a suggested window), so "pending" does not mean "empty".
+ */
+function hasWindowContent(profile) {
+  return PHASE_FIELDS.some((f) => profile[f] !== null && profile[f] !== undefined)
+    || !!profile.sommNotes || !!profile.setBy;
+}
+
+/**
+ * Write a validated window onto the row: the phases named in `next` (null
+ * clears; a phase `next` does not name is left as it is), the note when given
+ * (undefined leaves it), reviewed with the curator's stamp and the row's
+ * relative flag. Saves, moves the owners' data version, audits
+ * somm.maturity.review. Returns the relative flag.
  */
 async function applyWindow(profile, next, { sommNotes, actorId, req, via }) {
-  for (const f of PHASE_FIELDS) profile[f] = next[f] === null ? undefined : next[f];
+  for (const f of PHASE_FIELDS) {
+    if (!(f in next)) continue;
+    profile[f] = next[f] === null ? undefined : next[f];
+  }
   if (sommNotes !== undefined) profile.sommNotes = sommNotes;
   const { relative } = windowRange(profile);
   profile.relative = relative;
@@ -149,20 +165,39 @@ async function resetWindow(profile, { reason, req, via } = {}) {
 /**
  * Delete a pending row the wine was never released in. Nothing is remembered
  * on purpose: the next bottle add of this wine+vintage re-seeds the row. The
- * caller has checked the row is not reviewed. Audits somm.maturity.remove.
+ * caller has checked the row is not reviewed, and the delete checks it again:
+ * a row another curator reviewed between that load and this delete stays.
+ * Audits somm.maturity.remove. Returns false, with nothing audited, when the
+ * row was reviewed or already gone.
  */
 async function removePendingRow(profile, { reason, req, via } = {}) {
-  await WineVintageProfile.deleteOne({ _id: profile._id });
+  const res = await WineVintageProfile.deleteOne({ _id: profile._id, status: { $ne: 'reviewed' } });
+  if (!res?.deletedCount) return false;
   logAudit(req, 'somm.maturity.remove',
     { type: 'wine', id: wineIdOf(profile) },
     { vintage: profile.vintage, ...(reason ? { reason } : {}), ...(via ? { via } : {}) });
+  return true;
+}
+
+/**
+ * What the undo of a removal needs: the pair, and the row's content when it
+ * had any (windowSnapshot's shape, so an imported suggestion comes back whole).
+ * A plain stub records the pair alone.
+ */
+function removalSnapshot(profile) {
+  return {
+    wineDefinition: String(wineIdOf(profile)),
+    vintage: profile.vintage,
+    ...(hasWindowContent(profile) ? windowSnapshot(profile) : {}),
+  };
 }
 
 /**
  * Undo of applyWindow and resetWindow: re-apply a windowSnapshot field for
- * field, then save (a VersionError is thrown to the caller) and move the
- * owners' data version. The audit row stays with the caller, whose action
- * string depends on what is being undone.
+ * field, then save (a failed save, such as the row having been deleted
+ * meanwhile, is thrown to the caller) and move the owners' data version. The
+ * audit row stays with the caller, whose action string depends on what is
+ * being undone.
  */
 async function restoreWindow(profile, prev) {
   for (const f of PHASE_FIELDS) {
@@ -178,30 +213,43 @@ async function restoreWindow(profile, prev) {
 }
 
 /**
- * Undo of removePendingRow: the pending stub comes back by upsert on the
- * unique (wineDefinition, vintage) index, so a bottle add that re-seeded it
- * in the meantime is simply found. A direct upsert rather than the seeding
- * helper, which swallows errors: an undo must fail loudly so its ledger row
- * can be unclaimed and retried.
+ * Undo of removePendingRow, from a removalSnapshot: the pending row comes
+ * back by upsert on the unique (wineDefinition, vintage) index, so a bottle
+ * add that re-seeded it in the meantime is simply found. It comes back as it
+ * was: relative for an NV pair (as the seeding helper writes it), and with
+ * the phases, note and author an imported suggestion carried. A direct upsert
+ * rather than the seeding helper, which swallows errors: an undo must fail
+ * loudly so its ledger row can be unclaimed and retried.
  */
-async function reseedPendingRow({ wineDefinition, vintage }) {
+async function reseedPendingRow(prev) {
+  const { wineDefinition, vintage } = prev;
+  const content = {};
+  for (const f of PHASE_FIELDS) {
+    if (prev[f] !== null && prev[f] !== undefined) content[f] = prev[f];
+  }
+  if (prev.sommNotes) content.sommNotes = prev.sommNotes;
+  if (prev.setBy) content.setBy = prev.setBy;
+  const relative = prev.relative !== undefined ? !!prev.relative : vintage === 'NV';
   await WineVintageProfile.findOneAndUpdate(
     { wineDefinition, vintage },
-    { $setOnInsert: { wineDefinition, vintage, status: 'pending' } },
+    { $setOnInsert: { wineDefinition, vintage, status: 'pending', relative, ...content } },
     { upsert: true }
   );
 }
 
 module.exports = {
   PHASE_FIELDS,
+  SOMM_NOTES_MAX,
   wineIdOf,
   canonicalVintage,
   windowRange,
   mergeWindow,
   windowSnapshot,
+  hasWindowContent,
   applyWindow,
   resetWindow,
   removePendingRow,
+  removalSnapshot,
   restoreWindow,
   reseedPendingRow,
 };

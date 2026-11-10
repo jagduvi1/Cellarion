@@ -12,12 +12,12 @@ jest.mock('../models/WineVintagePrice', () => {
   M.deleteOne = jest.fn();
   return M;
 });
-jest.mock('../models/PriceTrackingRequest', () => ({ findOne: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/PriceTrackingRequest', () => ({ findOne: jest.fn(), findOneAndDelete: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../utils/exchangeRates', () => ({ getOrCreateDailySnapshot: jest.fn().mockResolvedValue(null) }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('./audit', () => ({ logAudit: jest.fn() }));
+jest.mock('./audit', () => ({ logAudit: jest.fn(), logger: { warn: jest.fn() } }));
 
 const WineVintagePrice = require('../models/WineVintagePrice');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
@@ -25,7 +25,7 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const WineDefinition = require('../models/WineDefinition');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { createNotification } = require('./notifications');
-const { logAudit } = require('./audit');
+const { logAudit, logger } = require('./audit');
 const ops = require('./priceOps');
 
 const chain = (result) => {
@@ -149,6 +149,14 @@ describe('addPriceSnapshot', () => {
     await new Promise((r) => setImmediate(r));
     expect(createNotification).not.toHaveBeenCalled();
   });
+
+  test('a failed requester lookup is logged with its pair and never fails the price', async () => {
+    PriceTrackingRequest.findOne.mockReturnValue({ populate: () => ({ lean: () => Promise.reject(new Error('db down')) }) });
+    const entry = await ops.addPriceSnapshot({ wineId: 'w1', vintage: '2019', price: 1, currency: 'USD', actorId: 's' });
+    await new Promise((r) => setImmediate(r));
+    expect(entry.price).toBe(1);
+    expect(logger.warn).toHaveBeenCalledWith({ err: 'db down', wineId: 'w1', vintage: '2019' }, 'Notify price requesters failed');
+  });
 });
 
 describe('validateDeclineReason', () => {
@@ -167,6 +175,11 @@ describe('declinePriceRequest and its undo', () => {
     firstRequestedAt: new Date('2026-07-01'), lastRequestedAt: new Date('2026-07-02'),
   };
 
+  beforeEach(() => {
+    PriceTrackingRequest.findOneAndDelete.mockResolvedValue(request);
+    PriceTrackingRequest.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: false }, value: null });
+  });
+
   test('records the skip with the first decline kept, deletes the request, notifies verbatim, audits, and says whether it created the suppression', async () => {
     WineDefinition.findById.mockReturnValue(chain({ name: 'Everyday Red', producer: 'Big Brand' }));
     PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: false } });
@@ -175,7 +188,7 @@ describe('declinePriceRequest and its undo', () => {
     expect(filter).toEqual({ wineDefinition: 'w1', vintage: '2018' });
     expect(update.$setOnInsert).toMatchObject({ wineDefinition: 'w1', vintage: '2018', reason: 'No secondary market.', skippedBy: 'somm1' });
     expect(options).toMatchObject({ upsert: true, includeResultMetadata: true });
-    expect(PriceTrackingRequest.deleteOne).toHaveBeenCalledWith({ _id: 'r1' });
+    expect(PriceTrackingRequest.findOneAndDelete).toHaveBeenCalledWith({ _id: 'r1' });
     expect(createNotification).toHaveBeenCalledTimes(2);
     expect(createNotification).toHaveBeenCalledWith('u1', 'price_tracking_declined', 'Price tracking request declined',
       'Your request to track market price for Big Brand — Everyday Red 2018 was declined by a sommelier. Reason: No secondary market.', null);
@@ -197,18 +210,71 @@ describe('declinePriceRequest and its undo', () => {
     expect(createNotification.mock.calls[0][3]).toMatch(/for this wine 2018 was declined/);
   });
 
+  test('a request another curator took first is gone: nobody is told a second time, nothing is audited, and the suppression stands', async () => {
+    WineDefinition.findById.mockReturnValue(chain({ name: 'Everyday Red', producer: 'Big Brand' }));
+    PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: true }, value: { _id: 'sk1' } });
+    PriceTrackingRequest.findOneAndDelete.mockResolvedValueOnce(null);
+    expect(await ops.declinePriceRequest({ request, reason: 'Junk again.', actorId: 'somm2', req: {} })).toEqual({ gone: true });
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
+    expect(PriceTrackingSkip.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('the deleted document is the list of requesters: a member who joined after the load is told and snapshotted', async () => {
+    WineDefinition.findById.mockReturnValue(chain({ name: 'Everyday Red', producer: 'Big Brand' }));
+    PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: false } });
+    const joined = { user: 'u3', requestedAt: new Date('2026-07-03') };
+    PriceTrackingRequest.findOneAndDelete.mockResolvedValueOnce({ ...request, requesters: [...request.requesters, joined], lastRequestedAt: joined.requestedAt });
+    const out = await ops.declinePriceRequest({ request, reason: 'No secondary market.', actorId: 'somm1', req: {} });
+    expect(out.requestersNotified).toBe(3);
+    expect(out.prev.requesters.map((r) => r.user)).toEqual(['u1', 'u2', 'u3']);
+    expect(out.prev.lastRequestedAt).toBe(joined.requestedAt);
+    expect(createNotification).toHaveBeenCalledTimes(3);
+  });
+
+  test('a requester notification that fails is counted in the log and does not fail the decline', async () => {
+    WineDefinition.findById.mockReturnValue(chain({ name: 'Everyday Red', producer: 'Big Brand' }));
+    PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: false } });
+    createNotification.mockRejectedValueOnce(new Error('push down'));
+    const out = await ops.declinePriceRequest({ request, reason: 'No secondary market.', actorId: 'somm1', req: {} });
+    await new Promise((r) => setImmediate(r));
+    expect(out.requestersNotified).toBe(2);
+    expect(logger.warn).toHaveBeenCalledWith({ failed: 1, wineId: 'w1', vintage: '2018' }, 'Notify declined price requesters failed');
+  });
+
   test('the undo puts the request back by upsert and lifts only a suppression this decline created, only the caller\'s own', async () => {
     const prev = { wineDefinition: 'w1', vintage: '2018', requesters: [{ user: 'u1' }], firstRequestedAt: 'a', lastRequestedAt: 'b', skipCreated: true };
-    await ops.restoreDeclinedRequest(prev, 'somm1');
+    expect(await ops.restoreDeclinedRequest(prev, 'somm1')).toEqual({ requestersRestored: 1 });
     expect(PriceTrackingRequest.findOneAndUpdate).toHaveBeenCalledWith(
       { wineDefinition: 'w1', vintage: '2018' },
       { $setOnInsert: { wineDefinition: 'w1', vintage: '2018', requesters: [{ user: 'u1' }], firstRequestedAt: 'a', lastRequestedAt: 'b' } },
-      { upsert: true });
+      { upsert: true, new: false, includeResultMetadata: true });
+    expect(PriceTrackingRequest.updateOne).not.toHaveBeenCalled();
     expect(PriceTrackingSkip.deleteOne).toHaveBeenCalledWith({ wineDefinition: 'w1', vintage: '2018', skippedBy: 'somm1' });
 
     jest.clearAllMocks();
     await ops.restoreDeclinedRequest({ ...prev, skipCreated: false }, 'somm1');
     expect(PriceTrackingSkip.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('the undo adds the declined requesters to a request that exists again, and counts only those it put back', async () => {
+    const prev = {
+      wineDefinition: 'w1', vintage: '2018', requesters: [{ user: 'u1', note: 'please' }, { user: 'u2' }],
+      firstRequestedAt: new Date('2026-07-01'), skipCreated: false,
+    };
+    PriceTrackingRequest.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true }, value: { _id: 'r9', requesters: [{ user: 'u2' }, { user: 'u7' }] },
+    });
+    expect(await ops.restoreDeclinedRequest(prev, 'somm1')).toEqual({ requestersRestored: 1 });
+    expect(PriceTrackingRequest.updateOne).toHaveBeenCalledWith({ _id: 'r9' },
+      { $push: { requesters: { $each: [{ user: 'u1', note: 'please' }] } }, $min: { firstRequestedAt: prev.firstRequestedAt } });
+
+    jest.clearAllMocks();
+    PriceTrackingRequest.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true }, value: { _id: 'r9', requesters: [{ user: 'u1' }, { user: 'u2' }] },
+    });
+    expect(await ops.restoreDeclinedRequest(prev, 'somm1')).toEqual({ requestersRestored: 0 });
+    expect(PriceTrackingRequest.updateOne).not.toHaveBeenCalled();
   });
 
   test('removing a snapshot is scoped to the caller\'s own', () => {

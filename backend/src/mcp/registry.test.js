@@ -31,6 +31,19 @@ describe('MCP registry — scope gating (the security-relevant logic)', () => {
     expect(() => registerTool({ name: 'no_scope', handler: async () => ({}) })).toThrow(/scope/i);
     expect(() => registerTool({ name: 'get_source_info', scope: 'public', handler: async () => ({}) })).toThrow(/duplicate/i);
   });
+
+  test('a role gate that is named but undefined, empty or not a string list is refused, never read as "no role needed"', () => {
+    const def = (requireRole) => ({ name: 'unit_test_gated_tool', scope: 'write', requireRole, handler: async () => ({}) });
+    for (const bad of [undefined, null, [], 'somm', [null]]) {
+      expect(() => registerTool(def(bad))).toThrow(/requireRole/);
+    }
+    expect(allTools().some((t) => t.name === 'unit_test_gated_tool')).toBe(false);
+
+    const roles = Object.freeze(['somm', 'admin']);
+    registerTool(def(roles));
+    expect(toolsForScopes(['write'], ['user']).map((t) => t.name)).not.toContain('unit_test_gated_tool');
+    expect(toolsForScopes(['write'], ['admin']).map((t) => t.name)).toContain('unit_test_gated_tool');
+  });
 });
 
 describe('get_source_info handler', () => {

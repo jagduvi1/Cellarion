@@ -90,6 +90,12 @@ describe('applyWindow', () => {
     expect(logAudit.mock.calls[0][2]).toEqual({ type: 'wine', id: 'w2' });
     expect(logAudit.mock.calls[0][3]).toEqual({ vintage: '2019', relative: false });
   });
+
+  test('a phase the patch does not name keeps its stored value', async () => {
+    const p = row({ lateFrom: 2040, lateUntil: 2050 });
+    await ops.applyWindow(p, { peakFrom: 2026, peakUntil: 2030 }, { actorId: 's', req: {} });
+    expect(p).toMatchObject({ peakFrom: 2026, peakUntil: 2030, lateFrom: 2040, lateUntil: 2050 });
+  });
 });
 
 describe('resetWindow and removePendingRow', () => {
@@ -108,11 +114,19 @@ describe('resetWindow and removePendingRow', () => {
     expect(logAudit.mock.calls[0][3]).toEqual({ vintage: '2019' });
   });
 
-  test('remove deletes the row by id and audits, with no bump (nothing is left to read)', async () => {
-    await ops.removePendingRow(row({ _id: 'p7' }), { reason: 'never released', req: { id: 'req' }, via: 'mcp' });
-    expect(WineVintageProfile.deleteOne).toHaveBeenCalledWith({ _id: 'p7' });
+  test('remove deletes the row only while it is not reviewed, audits, and bumps nothing (nothing is left to read)', async () => {
+    WineVintageProfile.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
+    const removed = await ops.removePendingRow(row({ _id: 'p7' }), { reason: 'never released', req: { id: 'req' }, via: 'mcp' });
+    expect(removed).toBe(true);
+    expect(WineVintageProfile.deleteOne).toHaveBeenCalledWith({ _id: 'p7', status: { $ne: 'reviewed' } });
     expect(bumpWineOwners).not.toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith({ id: 'req' }, 'somm.maturity.remove', { type: 'wine', id: 'w1' }, { vintage: '2019', reason: 'never released', via: 'mcp' });
+  });
+
+  test('a row reviewed or removed since it was loaded is left alone: nothing deleted, nothing audited', async () => {
+    WineVintageProfile.deleteOne.mockResolvedValueOnce({ deletedCount: 0 });
+    expect(await ops.removePendingRow(row({ _id: 'p7' }), { req: {} })).toBe(false);
+    expect(logAudit).not.toHaveBeenCalled();
   });
 });
 
@@ -132,11 +146,34 @@ describe('the undo inverses', () => {
     expect(bumpWineOwners).not.toHaveBeenCalled();
   });
 
-  test('reseedPendingRow upserts the pending stub on the unique pair', async () => {
+  test('reseedPendingRow upserts the pending stub on the unique pair, relative for an NV pair as the seeding writes it', async () => {
     await ops.reseedPendingRow({ wineDefinition: 'w1', vintage: '2027' });
     expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledWith(
       { wineDefinition: 'w1', vintage: '2027' },
-      { $setOnInsert: { wineDefinition: 'w1', vintage: '2027', status: 'pending' } },
+      { $setOnInsert: { wineDefinition: 'w1', vintage: '2027', status: 'pending', relative: false } },
       { upsert: true });
+
+    jest.clearAllMocks();
+    await ops.reseedPendingRow({ wineDefinition: 'w1', vintage: 'NV' });
+    expect(WineVintageProfile.findOneAndUpdate.mock.calls[0][1].$setOnInsert)
+      .toEqual({ wineDefinition: 'w1', vintage: 'NV', status: 'pending', relative: true });
+  });
+
+  test('a removed row that carried an imported suggestion is snapshotted whole and comes back whole; a plain stub records the pair alone', async () => {
+    const suggested = row({ _id: 'p8', vintage: 'NV', relative: true, peakFrom: 2, peakUntil: 6, sommNotes: 'from my cellar book', setBy: 'member1' });
+    expect(ops.hasWindowContent(suggested)).toBe(true);
+    const prev = ops.removalSnapshot(suggested);
+    expect(prev).toMatchObject({
+      wineDefinition: 'w1', vintage: 'NV', status: 'pending', relative: true,
+      earlyFrom: null, peakFrom: 2, peakUntil: 6, sommNotes: 'from my cellar book', setBy: 'member1',
+    });
+    await ops.reseedPendingRow(prev);
+    expect(WineVintageProfile.findOneAndUpdate.mock.calls[0][1].$setOnInsert).toEqual({
+      wineDefinition: 'w1', vintage: 'NV', status: 'pending', relative: true,
+      peakFrom: 2, peakUntil: 6, sommNotes: 'from my cellar book', setBy: 'member1',
+    });
+
+    expect(ops.hasWindowContent(row())).toBe(false);
+    expect(ops.removalSnapshot(row())).toEqual({ wineDefinition: 'w1', vintage: '2019' });
   });
 });

@@ -14,23 +14,34 @@
  * tested it would call it blank — with a reason string that instructs the
  * curator to write one. Following it in good faith overwrites another curator's
  * research and restamps it as their own. A HELD profile has generatedAt but no
- * description; a prose-less curator profile may carry body/flavors without
- * prose. Neither is "nothing describes the wine".
+ * description; a prose-less curator profile carries a body without prose.
+ * Neither is "nothing describes the wine". The test reads three fields only:
+ * a profile holding nothing but tannin or flavors still counts as absent.
  *
- * Callers: profileLite and set_vintage_maturity's courtesy warning in
- * mcp/tools/somm.js, and list_held_profiles' state labelling. UNPROFILED_QUERY
- * below is this test written as a query.
+ * Callers: profileLite (mcp/tools/somm/shared.js), set_vintage_maturity's
+ * courtesy warning (mcp/tools/somm/maturity.js) and list_held_profiles' state
+ * labelling (mcp/tools/somm/heldProfiles.js). UNPROFILED_QUERY below is this
+ * test written as a query.
  *
  * @param {object} ap  aiProfile subdoc (lean or hydrated)
  */
 const hasProfileContent = (ap) => !!(ap && (ap.generatedAt || ap.description || ap.body));
+
+/** Object.freeze all the way down: these constants are shared by every request. */
+function deepFreeze(value) {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const inner of Object.values(value)) deepFreeze(inner);
+  }
+  return value;
+}
 
 /**
  * The rows for which hasProfileContent is false: never generated, no
  * description (null or the empty string the predicate also reads as absent),
  * no body. Pass it as the whole filter or as one $or branch.
  */
-const UNPROFILED_QUERY = Object.freeze({
+const UNPROFILED_QUERY = deepFreeze({
   'aiProfile.generatedAt': null,
   'aiProfile.description': { $in: [null, ''] },
   'aiProfile.body': null,
@@ -43,7 +54,7 @@ const UNPROFILED_QUERY = Object.freeze({
  * the review and the row re-surfaces by comparison alone, so there is
  * nothing to clear on later edits.
  */
-const OUTSTANDING_REVIEW_EXPR = Object.freeze({
+const OUTSTANDING_REVIEW_EXPR = deepFreeze({
   $or: [
     { $eq: ['$profileReviewedAt', null] },
     { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
@@ -61,10 +72,16 @@ const OUTSTANDING_REVIEW_EXPR = Object.freeze({
  *   SUSPECT         NOT answer that, yet it stamps profileReviewedAt, so that
  *                   stamp must not take the row out of this queue. Only an
  *                   explicit uphold/confirm (suspectDecision) closes it.
+ *
+ * In an aggregation expression a MISSING field is not equal to null, unlike in
+ * a query. A wine stored without the profile fields has no heldAt key at all,
+ * so the held test reads it through $ifNull: read bare, such a row takes the
+ * held arm, where a profile write closes it, and its producer question is
+ * never listed.
  */
-const HELD_QUEUE_OUTSTANDING_EXPR = Object.freeze({
+const HELD_QUEUE_OUTSTANDING_EXPR = deepFreeze({
   $cond: [
-    { $ne: ['$aiProfile.heldAt', null] },
+    { $ne: [{ $ifNull: ['$aiProfile.heldAt', null] }, null] },
     OUTSTANDING_REVIEW_EXPR,
     { $eq: [{ $ifNull: ['$aiProfile.suspectDecision', null] }, null] },
   ],

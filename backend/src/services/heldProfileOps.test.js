@@ -34,6 +34,13 @@ test('loads the fields the decision reads, producerNote included, and reports an
   expect(DECISION_SELECT).toMatch(/aiProfile\.producerNote/);
 });
 
+test('an unknown decision is refused before any read: it must never fall through to the branch that clears a profile', async () => {
+  load(held());
+  expect(await decideHeldProfile('w1', 'purge', { req: REQ })).toEqual({ wine_id: 'w1', error: 'invalid_decision' });
+  expect(WineDefinition.findById).not.toHaveBeenCalled();
+  expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+});
+
 test('a published row with nothing held, flagged, unknown or rule-tagged is nothing to review', async () => {
   load(publishedSuspect({ producerSuspect: false }));
   expect(await decideHeldProfile('w1', 'confirm', { req: REQ })).toEqual({ wine_id: 'w1', error: 'nothing_to_review' });
@@ -62,7 +69,10 @@ describe('release', () => {
 
     aiConfig.get.mockReturnValue({ enrichmentOnAdd: 'off' });
     load(held());
-    expect((await decideHeldProfile('w1', 'release', { req: REQ })).error).toMatch(/^ai_profiles_off.*set_wine_profile/);
+    // The refusal is read by the curator's assistant: its words are part of the tool's answer.
+    expect((await decideHeldProfile('w1', 'release', { req: REQ })).error).toBe(
+      'ai_profiles_off — automatic AI profiles are switched off on this server, so a held profile is not regenerated; '
+      + 'write it with set_wine_profile (that replaces the held one and clears the hold)');
     expect(releaseHeldProfile).toHaveBeenCalledTimes(1);
   });
 });
@@ -146,5 +156,19 @@ describe('reject', () => {
 
     load(publishedSuspect());
     expect((await decideHeldProfile('w1', 'reject', { req: REQ })).error).toMatch(/^reject_is_held_only/);
+  });
+
+  test('the serving trait a curator set is not part of the generation and survives the clear', async () => {
+    expect(DECISION_SELECT).toMatch(/aiProfile\.servingTempMin aiProfile\.servingTempMax aiProfile\.needsAir/);
+    load(held({ body: 'full', servingTempMin: 16, servingTempMax: 18, needsAir: 'decant' }));
+    await decideHeldProfile('w1', 'reject', { req: REQ });
+    expect(WineDefinition.updateOne.mock.calls[0][1].$set.aiProfile)
+      .toMatchObject({ body: null, description: null, servingTempMin: 16, servingTempMax: 18, needsAir: 'decant' });
+
+    // A trait never set is not written at all: the schema default stands.
+    load(held({ servingTempMin: null }));
+    await decideHeldProfile('w1', 'reject', { req: REQ });
+    const cleared = WineDefinition.updateOne.mock.calls[1][1].$set.aiProfile;
+    for (const f of ['servingTempMin', 'servingTempMax', 'needsAir']) expect(cleared).not.toHaveProperty(f);
   });
 });

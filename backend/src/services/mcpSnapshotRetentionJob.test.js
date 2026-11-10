@@ -1,7 +1,9 @@
 /**
- * mcpSnapshotRetentionJob — a delete_bottle snapshot is cleared once the undo
- * window has passed (GDPR data minimisation): only `delete` rows, only past
- * RESTORE_WINDOW_MS, only rows that still hold one; the row itself stays.
+ * mcpSnapshotRetentionJob — an undo snapshot that holds personal data is
+ * cleared once the undo window has passed (GDPR data minimisation): a deleted
+ * bottle's document, and the requesters of a declined price-tracking request.
+ * Only those actions, only past RESTORE_WINDOW_MS, only rows that still hold
+ * one; the row itself stays.
  */
 jest.mock('../models/McpActionLog', () => ({ updateMany: jest.fn() }));
 jest.mock('./bottleOps', () => ({ RESTORE_WINDOW_MS: 2 * 24 * 60 * 60 * 1000 }));
@@ -9,14 +11,14 @@ jest.mock('./bottleOps', () => ({ RESTORE_WINDOW_MS: 2 * 24 * 60 * 60 * 1000 }))
 const McpActionLog = require('../models/McpActionLog');
 const { runMcpSnapshotScrub } = require('./mcpSnapshotRetentionJob');
 
-test('clears prev on delete rows older than the undo window, and nothing else', async () => {
+test('clears prev on delete and price-decline rows older than the undo window, and nothing else', async () => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
   McpActionLog.updateMany.mockResolvedValue({ modifiedCount: 3 });
   const before = Date.now();
   const out = await runMcpSnapshotScrub();
   expect(out).toEqual({ scrubbed: 3 });
   const [filter, update] = McpActionLog.updateMany.mock.calls[0];
-  expect(filter.action).toBe('delete');
+  expect(filter.action).toEqual({ $in: ['delete', 'somm_price_decline'] });
   expect(filter.prev).toEqual({ $ne: null });
   const cutoff = filter.createdAt.$lt.getTime();
   expect(cutoff).toBeGreaterThanOrEqual(before - 2 * 24 * 60 * 60 * 1000 - 1000);

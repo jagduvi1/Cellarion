@@ -13,7 +13,6 @@ const { isValidId } = require('../../../utils/validation');
 const { stripHtml } = require('../../../utils/sanitize');
 const { hasProfileContent, UNPROFILED_QUERY } = require('../../../utils/profileReview');
 const heldProfileOps = require('../../../services/heldProfileOps');
-const { profileLite } = require('./shared');
 
 // ── The held-profile review queue over MCP ──────────────────────────────────
 // The publication gate holds profiles; judging those holds must be possible
@@ -93,7 +92,9 @@ registerTool({
     // published_suspect as a hard 0 (not "uncounted") and under-size the
     // backlog. A count counts every state.
     if (((args.include_published_suspects || args.counts_only) && wantState('published_suspect')) || args.state === 'published_suspect') {
-      or.push({ 'aiProfile.heldAt': null, 'aiProfile.generatedAt': { $ne: null }, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
+      // An empty description is no content: review_held_profile reads it that
+      // way, so a row listed here must be one it can decide.
+      or.push({ 'aiProfile.heldAt': null, 'aiProfile.generatedAt': { $ne: null }, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $nin: [null, ''] } });
     }
     if (wantState('unprofiled')) {
       // The Mongo form of hasProfileContent, shared with list_maturity_queue.

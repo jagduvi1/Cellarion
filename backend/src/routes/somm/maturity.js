@@ -166,6 +166,9 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
     const sommNotes = req.body.sommNotes !== undefined
       ? (req.body.sommNotes ? String(req.body.sommNotes).trim() : '')
       : undefined;
+    if (sommNotes !== undefined && sommNotes.length > maturityOps.SOMM_NOTES_MAX) {
+      return res.status(400).json({ error: `Notes too long (max ${maturityOps.SOMM_NOTES_MAX} characters)` });
+    }
 
     // Phases, note, reviewed stamp and relative flag written; the owners'
     // data version moved; audited: the same body as the MCP
@@ -185,6 +188,10 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
 
     res.json({ profile });
   } catch (error) {
+    // The row was removed from the queue between the load and the save.
+    if (error?.name === 'DocumentNotFoundError') {
+      return res.status(409).json({ error: 'This vintage was removed from the queue while saving — reload the queue.' });
+    }
     console.error('Update maturity profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
   }
@@ -272,6 +279,9 @@ router.delete('/:id/reset', requireSommOrAdmin, async (req, res) => {
 
     res.json({ profile });
   } catch (error) {
+    if (error?.name === 'DocumentNotFoundError') {
+      return res.status(409).json({ error: 'This vintage was removed from the queue while saving — reload the queue.' });
+    }
     console.error('Reset maturity profile error:', error);
     res.status(500).json({ error: 'Failed to reset profile' });
   }
@@ -306,8 +316,12 @@ router.delete('/:id', requireSommOrAdmin, async (req, res) => {
     }
 
     // Deleted and audited like the review it stands in for: the same body as
-    // the MCP remove_from_maturity_queue (services/maturityOps).
-    await maturityOps.removePendingRow(profile, { req });
+    // the MCP remove_from_maturity_queue (services/maturityOps). The delete
+    // re-checks the status, so a row reviewed since the load above stays.
+    const removed = await maturityOps.removePendingRow(profile, { req });
+    if (!removed) {
+      return res.status(409).json({ error: 'This vintage was reviewed or removed by someone else just now — reload the queue.' });
+    }
 
     res.json({ removed: true });
   } catch (error) {

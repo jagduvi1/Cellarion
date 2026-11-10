@@ -58,7 +58,7 @@ jest.mock('../models/WineVintagePrice', () => {
   M.deleteOne = jest.fn();
   return M;
 });
-jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), findOneAndDelete: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 // The self-apply path (2026-08-21) reaches the admin route's own approveProposal
@@ -449,7 +449,7 @@ describe('remove_from_maturity_queue', () => {
     const body = parse(await tool('remove_from_maturity_queue').handler(
       { profile_id: oid('1'), reason: '2027 not released' }, SOMM_CTX));
     expect(body.error).toBeUndefined();
-    expect(WineVintageProfile.deleteOne).toHaveBeenCalledWith({ _id: oid('1') });
+    expect(WineVintageProfile.deleteOne).toHaveBeenCalledWith({ _id: oid('1'), status: { $ne: 'reviewed' } });
     const row = McpActionLog.create.mock.calls[0][0];
     expect(row.action).toBe('somm_maturity_remove');
     // The row being deleted, wine+vintage is ALL the undo has to work from.
@@ -480,7 +480,7 @@ describe('remove_from_maturity_queue', () => {
     // the undo must land on "it is in the queue again" either way.
     expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledWith(
       { wineDefinition: oid('f'), vintage: '2027' },
-      { $setOnInsert: { wineDefinition: oid('f'), vintage: '2027', status: 'pending' } },
+      { $setOnInsert: { wineDefinition: oid('f'), vintage: '2027', status: 'pending', relative: false } },
       { upsert: true }
     );
     expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
@@ -1369,7 +1369,7 @@ describe('the unprofiled intake queue (somm-owned data)', () => {
     await tool('list_held_profiles').handler({ state: 'published_suspect', limit: 30, offset: 0 }, SOMM_CTX);
     const or = WineDefinition.find.mock.calls[0][0].$or;
     expect(or).toHaveLength(1);
-    expect(or[0]).toMatchObject({ 'aiProfile.producerSuspect': true });
+    expect(or[0]).toMatchObject({ 'aiProfile.producerSuspect': true, 'aiProfile.description': { $nin: [null, ''] } });
   });
 
   test('an unprofiled row is shaped with state "unprofiled" and sorts after flagged rows of equal impact', async () => {
@@ -1588,7 +1588,7 @@ describe('reject_price_request', () => {
   beforeEach(() => {
     WineDefinition.findById.mockReturnValue(chain({ _id: WINE_ID, name: 'Everyday Shiraz', producer: 'Casella' }));
     PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: false }, value: null });
-    PriceTrackingRequest.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    PriceTrackingRequest.findOneAndDelete.mockResolvedValue(mkRequest());
   });
 
   test('requires a real plain-text reason — missing, too-short, and HTML-only all refused before any read', async () => {
@@ -1615,7 +1615,7 @@ describe('reject_price_request', () => {
     expect(skipFilter).toEqual({ wineDefinition: WINE_ID, vintage: '2019' });
     expect(skipUpdate.$setOnInsert).toMatchObject({ reason: 'No secondary market for this wine.', skippedBy: ME });
 
-    expect(PriceTrackingRequest.deleteOne).toHaveBeenCalledWith({ _id: REQ_ID });
+    expect(PriceTrackingRequest.findOneAndDelete).toHaveBeenCalledWith({ _id: REQ_ID });
 
     // Every requester gets the wine label AND the reason, verbatim.
     expect(createNotification).toHaveBeenCalledTimes(2);
@@ -1651,7 +1651,7 @@ describe('reject_price_request', () => {
       { request_id: REQ_ID, reason: 'No secondary market.' }, SOMM_CTX));
     expect(body.error.code).toBe('not_found');
     expect(PriceTrackingSkip.findOneAndUpdate).not.toHaveBeenCalled();
-    expect(PriceTrackingRequest.deleteOne).not.toHaveBeenCalled();
+    expect(PriceTrackingRequest.findOneAndDelete).not.toHaveBeenCalled();
     expect(createNotification).not.toHaveBeenCalled();
     expect(McpActionLog.create).not.toHaveBeenCalled();
   });
@@ -1680,7 +1680,7 @@ describe('reject_price_request', () => {
     expect(PriceTrackingRequest.findOneAndUpdate).toHaveBeenCalledWith(
       { wineDefinition: WINE_ID, vintage: '2019' },
       { $setOnInsert: expect.objectContaining({ requesters: prev.requesters }) },
-      { upsert: true }
+      { upsert: true, new: false, includeResultMetadata: true }
     );
     // The lift is scoped to the caller's own skip, like the somm_price delete.
     expect(PriceTrackingSkip.deleteOne).toHaveBeenCalledWith({ wineDefinition: WINE_ID, vintage: '2019', skippedBy: ME });

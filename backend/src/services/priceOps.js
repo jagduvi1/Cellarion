@@ -1,6 +1,6 @@
 // Sommelier price curation, the one body behind both doors: the REST routes in
 // routes/somm/prices.js (the web somm page) and the MCP tools in
-// mcp/tools/somm.js (list_price_tracking_requests, set_vintage_price,
+// mcp/tools/somm/prices.js (list_price_tracking_requests, set_vintage_price,
 // reject_price_request), plus the undo inverses mcp/revert.js applies.
 //
 // What is shared here is the part that must not drift between the doors: which
@@ -19,7 +19,7 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const WineDefinition = require('../models/WineDefinition');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { createNotification } = require('./notifications');
-const { logAudit } = require('./audit');
+const { logAudit, logger } = require('./audit');
 const { stripHtml } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { SUPPORTED_CURRENCIES } = require('../config/currencies');
@@ -150,7 +150,7 @@ function notifyPriceRequesters({ wineId, vintage, entry, wine }) {
         createNotification(r.user, 'price_tracked', 'Market price updated', body, `/wines/${wineId}`);
       }
     })
-    .catch((err) => console.error('Notify price requesters failed:', err.message));
+    .catch((err) => logger.warn({ err: err.message, wineId: String(wineId), vintage }, 'Notify price requesters failed'));
 }
 
 /**
@@ -205,7 +205,12 @@ function validateDeclineReason(raw) {
  * unique (wineDefinition, vintage) index; `prev.skipCreated` records whether
  * THIS call created the suppression, because only then may an undo lift it.
  * `prev` is everything restoreDeclinedRequest needs to put the request back.
- * Returns { prev, wine, requestersNotified }.
+ *
+ * Returns { prev, wine, requestersNotified }, or { gone: true } when the
+ * request was no longer there to take (another curator declined it first):
+ * nobody is notified and nothing is audited then, and the caller answers
+ * "not found". Callers: POST /api/somm/prices/requests/:id/decline and
+ * reject_price_request.
  */
 async function declinePriceRequest({ request, reason, actorId, req, via }) {
   // No populate on the request: a deleted wine would null the ref and lose
@@ -225,21 +230,32 @@ async function declinePriceRequest({ request, reason, actorId, req, via }) {
   );
   const skipCreated = !skipRes?.lastErrorObject?.updatedExisting;
 
+  // The delete is the claim: of two curators declining the same request, one
+  // takes the row, and the other must not tell the requesters a second time
+  // or ledger a row it did not remove. The suppression recorded above stays
+  // either way — the other curator's decline relies on it. The deleted
+  // document is also the freshest list of requesters.
+  const taken = await PriceTrackingRequest.findOneAndDelete({ _id: request._id });
+  if (!taken) return { gone: true };
+
   const prev = {
     wineDefinition: String(request.wineDefinition),
     vintage: request.vintage,
-    requesters: (request.requesters || []).map((r) => ({ user: String(r.user), requestedAt: r.requestedAt, note: r.note })),
-    firstRequestedAt: request.firstRequestedAt || null,
-    lastRequestedAt: request.lastRequestedAt || null,
+    requesters: (taken.requesters || []).map((r) => ({ user: String(r.user), requestedAt: r.requestedAt, note: r.note })),
+    firstRequestedAt: taken.firstRequestedAt || null,
+    lastRequestedAt: taken.lastRequestedAt || null,
     skipCreated,
   };
-  await PriceTrackingRequest.deleteOne({ _id: request._id });
 
   const label = wineLabel(wine, 'this wine');
   const title = 'Price tracking request declined';
   const body = `Your request to track market price for ${label} ${request.vintage} was declined by a sommelier. Reason: ${reason}`;
   // Best-effort, like the "price added" notifications: delivery never blocks the decline.
-  Promise.allSettled(prev.requesters.map((r) => createNotification(r.user, 'price_tracking_declined', title, body, null)));
+  Promise.allSettled(prev.requesters.map((r) => createNotification(r.user, 'price_tracking_declined', title, body, null)))
+    .then((results) => {
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed) logger.warn({ failed, wineId: prev.wineDefinition, vintage: prev.vintage }, 'Notify declined price requesters failed');
+    });
 
   logAudit(req, 'somm.price.decline',
     { type: 'wine', id: request.wineDefinition },
@@ -254,27 +270,48 @@ function removePriceSnapshot({ entryId, actorId }) {
 }
 
 /**
- * Undo of declinePriceRequest. Upsert, not insert: if a member re-requested
- * the pair the instant the skip lifted (or a concurrent undo raced), the row
- * is simply found and the undo still lands on "the request is back". The
- * suppression is lifted only when this decline created it, and only the
- * caller's own skip: a skip that pre-existed is someone else's judgement.
+ * Undo of declinePriceRequest. Upsert, not insert: if a request for the pair
+ * exists again by the time of the undo, the declined requesters who are not
+ * on it are added to it, so the undo always lands on "everyone who asked is
+ * on the request". The suppression is lifted only when this decline created
+ * it, and only the caller's own skip: a skip that pre-existed is someone
+ * else's judgement. Returns { requestersRestored }: how many of the declined
+ * requesters this call put back. Caller: the somm_price_decline undo in
+ * mcp/revert.js.
  */
 async function restoreDeclinedRequest(prev, actorId) {
-  await PriceTrackingRequest.findOneAndUpdate(
+  const declined = prev.requesters || [];
+  const res = await PriceTrackingRequest.findOneAndUpdate(
     { wineDefinition: prev.wineDefinition, vintage: prev.vintage },
     { $setOnInsert: {
       wineDefinition: prev.wineDefinition,
       vintage: prev.vintage,
-      requesters: prev.requesters || [],
+      requesters: declined,
       firstRequestedAt: prev.firstRequestedAt || new Date(),
       lastRequestedAt: prev.lastRequestedAt || new Date(),
     } },
-    { upsert: true }
+    { upsert: true, new: false, includeResultMetadata: true }
   );
+  let requestersRestored = declined.length;
+  const existing = res?.lastErrorObject?.updatedExisting ? res.value : null;
+  if (existing) {
+    const onIt = new Set((existing.requesters || []).map((r) => String(r.user)));
+    const missing = declined.filter((r) => !onIt.has(String(r.user)));
+    requestersRestored = missing.length;
+    if (missing.length) {
+      await PriceTrackingRequest.updateOne(
+        { _id: existing._id },
+        {
+          $push: { requesters: { $each: missing } },
+          ...(prev.firstRequestedAt ? { $min: { firstRequestedAt: prev.firstRequestedAt } } : {}),
+        }
+      );
+    }
+  }
   if (prev.skipCreated) {
     await PriceTrackingSkip.deleteOne({ wineDefinition: prev.wineDefinition, vintage: prev.vintage, skippedBy: actorId });
   }
+  return { requestersRestored };
 }
 
 module.exports = {

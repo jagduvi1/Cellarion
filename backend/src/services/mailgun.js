@@ -48,7 +48,12 @@ function supportSignature() {
   // "Name <address>": the part before the angle bracket. A From that is only
   // an address (bracketed or bare) has no name to sign with.
   const bracket = FROM.indexOf('<');
-  const display = (bracket >= 0 ? FROM.slice(0, bracket) : FROM).trim();
+  let display = (bracket >= 0 ? FROM.slice(0, bracket) : FROM).trim();
+  // A display name holding a comma or a period is written in double quotes;
+  // the quotes are the header's, not the name's.
+  if (display.length >= 2 && display.startsWith('"') && display.endsWith('"')) {
+    display = display.slice(1, -1).trim();
+  }
   return display && !display.includes('@') ? display : 'Cellarion';
 }
 

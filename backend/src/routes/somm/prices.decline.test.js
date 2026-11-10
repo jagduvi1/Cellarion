@@ -28,7 +28,7 @@ jest.mock('../../utils/exchangeRates', () => ({
   getSnapshotsForDates: jest.fn().mockResolvedValue(new Map()),
 }));
 jest.mock('../../models/WineVintagePrice', () => ({ aggregate: jest.fn(), find: jest.fn() }));
-jest.mock('../../models/PriceTrackingRequest', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), deleteOne: jest.fn().mockResolvedValue({ deletedCount: 1 }) }));
+jest.mock('../../models/PriceTrackingRequest', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), findOneAndDelete: jest.fn() }));
 jest.mock('../../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn(), exists: jest.fn() }));
@@ -123,6 +123,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   WineDefinition.findById.mockReturnValue(chain({ _id: WINE_ID, name: 'Everyday Red', producer: 'Big Brand' }));
   PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({});
+  PriceTrackingRequest.findOneAndDelete.mockResolvedValue(makeRequestDoc());
 });
 
 describe('POST /api/somm/prices/requests/:id/decline', () => {
@@ -145,7 +146,7 @@ describe('POST /api/somm/prices/requests/:id/decline', () => {
       skippedBy: SOMM_ID,
     });
 
-    expect(PriceTrackingRequest.deleteOne).toHaveBeenCalledWith({ _id: REQ_ID });
+    expect(PriceTrackingRequest.findOneAndDelete).toHaveBeenCalledWith({ _id: REQ_ID });
 
     // Both requesters, wine label + reason in the message.
     expect(createNotification).toHaveBeenCalledTimes(2);
@@ -162,6 +163,16 @@ describe('POST /api/somm/prices/requests/:id/decline', () => {
       { type: 'wine', id: WINE_ID },
       expect.objectContaining({ vintage: '2018', reason: 'Everyday retail wine — no secondary market.', requesters: 2 })
     );
+  });
+
+  test('declined by another curator between the load and the delete → 404, nobody notified a second time, nothing audited', async () => {
+    PriceTrackingRequest.findById.mockResolvedValue(makeRequestDoc());
+    PriceTrackingRequest.findOneAndDelete.mockResolvedValueOnce(null);
+    const { status, body } = await decline('No secondary market for this bottling.');
+    expect(status).toBe(404);
+    expect(body.error).toMatch(/already be fulfilled or declined/);
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
   });
 
   test('admin role may decline too', async () => {

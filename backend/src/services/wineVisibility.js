@@ -28,7 +28,9 @@
 const WineDefinition = require('../models/WineDefinition');
 const { isValidId } = require('../utils/validation');
 
-const CURATION_ROLES = ['somm', 'admin'];
+// Frozen: the MCP tools hold this very array as their role gate
+// (mcp/toolUtil SOMM_ROLES), so a write through any holder would widen all.
+const CURATION_ROLES = Object.freeze(['somm', 'admin']);
 
 /** somm/admin — the roles whose job is completing pending rows. */
 const isCurator = (roles) => Array.isArray(roles) && roles.some((r) => CURATION_ROLES.includes(r));
