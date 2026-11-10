@@ -256,7 +256,7 @@ registerTool({
     //
     // The proposal row is still written first and still carries the reason and
     // evidence: oversight moves from approve-BEFORE to review-AFTER, it does
-    // not disappear. Applying through the admin route's own approveProposal
+    // not disappear. Applying through the admin review's own approveProposal
     // (rather than a second write path) is what keeps canonicalization, the
     // dedup key, the search/embed/IndexNow follow-through and the re-enrich
     // identical between the two doors.
@@ -267,10 +267,10 @@ registerTool({
     let applied = null;
     let reviewReason = null;
     if (args.kind === 'field_correction' || args.kind === 'non_wine') {
-      // Required lazily: wineProposals pulls in the whole admin route tree
-      // (which requires the MCP registry back), so a top-level require here
-      // would close a cycle.
-      const { approveProposal } = require('../../../routes/admin/wineProposals');
+      // Required lazily: the decision service loads the search client and
+      // most of the registry write path, which only a proposal that applies
+      // without review needs.
+      const { approveProposal } = require('../../../services/wineProposalDecisionOps');
       const verdict = await classifyProposal(wine, args.kind, proposedFields);
       if (verdict.direct) {
         // approveProposal reads req.user.id for decidedBy and for its audit

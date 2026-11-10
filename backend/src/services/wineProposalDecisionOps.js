@@ -11,8 +11,10 @@
 //     (mcp/tools/somm/corrections.js), a member's not-wine flag
 //     (services/nonWineOps) and a member's field correction on a server that
 //     does not review (services/trustedContributions).
-// Those three reach approveProposal through routes/admin/wineProposals.js,
-// which re-exports it.
+// It is deliberately the ONE write path. Canonicalization, the dedup-key
+// regeneration, the search, embedding and IndexNow follow-through and the
+// re-enrich all live in approveProposal; a second implementation would drift
+// from them silently, and an appellation would reach a wine unresolved.
 //
 // This module stays free of Express: `req` is passed for the decider's id
 // (req.user.id) and for audit attribution.

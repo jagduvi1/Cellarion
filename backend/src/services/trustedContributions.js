@@ -50,7 +50,7 @@ async function approvePhotoIfTrusted(imageId, req) {
 
 /**
  * Apply a just-filed field correction (wineProposalOps result) when this
- * server does not review: approveProposal, the admin route's own machinery,
+ * server does not review: approveProposal, the admin review's own machinery,
  * decided by the member who filed it. Returns the result with the applied
  * proposal and wine, or unchanged when it stays pending (review on, a bridge
  * relay, or a choice approveProposal leaves to a human).
@@ -58,8 +58,9 @@ async function approvePhotoIfTrusted(imageId, req) {
 async function applyCorrectionIfTrusted(result, userId, { via, req } = {}) {
   if (!result?.ok || !result.proposal || !appliesDirectly(via)) return result;
   try {
-    // Lazy: the admin route tree requires much of the app back.
-    const { approveProposal } = require('../routes/admin/wineProposals');
+    // Lazy: the decision service loads the search client and most of the
+    // registry write path, which only an applying correction needs.
+    const { approveProposal } = require('./wineProposalDecisionOps');
     const asReq = req && req.user ? req : { user: { id: String(userId), roles: ['user'] } };
     const outcome = await approveProposal(result.proposal._id, asReq);
     if (outcome.status !== 200) return result;

@@ -180,7 +180,7 @@ async function awardAccepted(kind, row) {
   }
 }
 
-/** An approved proposal (routes/admin/wineProposals.approveProposal) earns its proposer. */
+/** An approved proposal (services/wineProposalDecisionOps.approveProposal) earns its proposer. */
 const awardProposal = (proposal) => awardAccepted('proposal', proposal);
 
 /** A published value (registryDataOps.decideValue) earns its suggester. */
