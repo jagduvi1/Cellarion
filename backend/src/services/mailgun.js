@@ -36,6 +36,20 @@ function supportReplyTo() {
 }
 
 /**
+ * Who signs the emails written in the first person (the supporter
+ * thank-you): SUPPORT_SIGNATURE when the install sets it, else the display
+ * name of MAILGUN_FROM ("Cellarion" out of "Cellarion <no-reply@…>"), else
+ * "Cellarion". Never a person's name by default: the code is shared by every
+ * install, and whose signature belongs on the mail is each install's own.
+ */
+function supportSignature() {
+  const configured = (process.env.SUPPORT_SIGNATURE || '').trim();
+  if (configured) return configured;
+  const display = FROM.replace(/<[^>]*>/, '').trim();
+  return display || 'Cellarion';
+}
+
+/**
  * Send an email verification link to a newly registered user.
  * @param {string} toEmail  - Recipient email address
  * @param {string} username - Username for greeting
@@ -561,6 +575,7 @@ async function sendSecurityAlertEmail(toEmail, trigger) {
  */
 async function sendSupporterThankYou(toEmail, username, tier) {
   const replyTo = supportReplyTo();
+  const signature = supportSignature();
 
   await mg.messages.create(DOMAIN, {
     from: FROM,
@@ -576,7 +591,7 @@ async function sendSupporterThankYou(toEmail, username, tier) {
       '',
       'There is no obligation to answer. You have already done the important part. If you do write back, it comes straight to me.',
       '',
-      'Johan'
+      signature
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;line-height:1.55;">
@@ -588,7 +603,7 @@ async function sendSupporterThankYou(toEmail, username, tier) {
            and is there anything you are missing?</p>
         <p>There is no obligation to answer. You have already done the important part.
            If you do write back, it comes straight to me.</p>
-        <p>Johan</p>
+        <p>${escapeHtml(signature)}</p>
       </div>
     `
   });
