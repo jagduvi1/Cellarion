@@ -102,7 +102,7 @@ const { logAudit } = require('../../services/audit');
 const SERVICES = { bumpDataVersion, closePendingForWine, repointInquiriesForWineMerge, closeInquiriesForWineDelete, unlinkImageFiles, embedSinglePair, removeWine: searchService.removeWine, indexWine: searchService.indexWine, logAudit };
 
 const adminWinesRouter = require('./wines');
-const { performWineMerge, reassignWineRefs } = adminWinesRouter;
+const { performWineMerge, reassignWineRefs } = require('../../services/wineMergeOps');
 
 const ADMIN_ID = '64b000000000000000000001';
 const S = '64b0000000000000000000a1'; // source

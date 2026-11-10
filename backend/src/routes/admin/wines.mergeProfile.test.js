@@ -49,7 +49,7 @@ jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 
 const WineDefinition = require('../../models/WineDefinition');
-const { inheritAiProfile } = require('./wines');
+const { inheritAiProfile } = require('../../services/wineMergeOps');
 
 const d = (s) => new Date(s);
 const ai = (description, confidence, generatedAt = '2026-08-01') => ({ description, confidence, source: 'ai', generatedAt: d(generatedAt) });

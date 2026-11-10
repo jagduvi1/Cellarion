@@ -529,8 +529,8 @@ async function attachDraftBottles(wine, targetWineId, { userId, roles = [], req 
   // pairings, recommendations, restock alerts, wine-list entries. A draft's
   // bottle can acquire any of these exactly like an ordinary one, and a
   // two-collection re-point left the rest pointing at a deleted id.
-  // Lazy: the admin router is a heavy module tree.
-  const { reassignWineRefs } = require('../routes/admin/wines');
+  // Lazy: the merge service loads every model that references a wine.
+  const { reassignWineRefs } = require('./wineMergeOps');
   await reassignWineRefs(wine._id, target._id);
   try {
     const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
