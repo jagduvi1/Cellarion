@@ -17,7 +17,6 @@ const { DOWNGRADE_RULES } = require('../../utils/producerSuspectCheck');
 const aiConfig = require('../../config/aiConfig');
 const Bottle = require('../../models/Bottle');
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
-const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
