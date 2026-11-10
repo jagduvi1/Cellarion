@@ -13,12 +13,15 @@ const { logAction } = require('../../actionLedger');
 const { isValidId } = require('../../../utils/validation');
 const { stripHtml } = require('../../../utils/sanitize');
 const { identitySnapshot } = require('../../../utils/proposalSnapshot');
-const { normalizeString, resolveCountryName, normalizeClassification } = require('../../../utils/normalize');
+const { normalizeString, resolveCountryName } = require('../../../utils/normalize');
 const { WINE_COLOURS, colourTypeConflict } = require('../../../utils/wineColour');
-const { WINE_TYPES, GRAPES_MAX, GRAPE_NAME_MAX, resolveGrapeIdsStrict } = require('../../../services/wineProfileOps');
+const { WINE_TYPES, GRAPES_MAX, GRAPE_NAME_MAX } = require('../../../services/wineProfileOps');
 const { otherProducerSpellings, displaySpelling } = require('../../../services/producerSpelling');
 const { classifyProposal } = require('../../../services/proposalDirectApply');
-const { assignClassification } = require('../../../services/classificationOps');
+const {
+  TEXT_FIELDS, EXTRA_FIELDS, FIELD_MAX, REASON_MIN, REASON_MAX, URL_MAX,
+  readProposedFields, settleClassificationByCountry,
+} = require('../../../services/proposalFields');
 
 // Correction proposals — the human-gated tier of registry curation. Direct
 // somm writes cover type/grapes/tasting profile (set_wine_profile, recoverable
@@ -29,15 +32,33 @@ const { assignClassification } = require('../../../services/classificationOps');
 // the curator's research preserved as structured data instead of a prose
 // ticket the admin re-types.
 const PROPOSAL_KINDS = ['field_correction', 'merge', 'non_wine'];
-// The plain-STRING proposable fields. `type` and `grapes` are proposable too
-// but validate differently — an enum
-// and a taxonomy-resolved list — so they are handled apart from this loop.
-const PROPOSAL_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
-const PROPOSAL_ALL_FIELDS = [...PROPOSAL_FIELDS, 'type', 'colour', 'grapes'];
-const PROPOSAL_REASON_MIN = 10;
-const PROPOSAL_REASON_MAX = 1000;
-const PROPOSAL_FIELD_MAX = 200;
-const PROPOSAL_URL_MAX = 500;
+// The proposable fields, their limits and how a proposed value is read are
+// the member path's too (services/proposalFields).
+const PROPOSAL_ALL_FIELDS = [...TEXT_FIELDS, ...EXTRA_FIELDS];
+
+const quoted = (names) => names.map((g) => `"${g}"`).join(', ');
+
+/** What a refused reading of proposed_fields (services/proposalFields) says to the curator's assistant. */
+function fieldRefusal(refusal) {
+  switch (refusal.code) {
+    case 'field_too_long':
+      return `proposed_fields.${refusal.field} must be at most ${FIELD_MAX} characters.`;
+    case 'regulatory_mark':
+      return `proposed_fields.classification: "${refusal.value}" is a regulatory mark, not a classification tier — leave classification out, or name the tier as list_classifications has it.`;
+    case 'unknown_tier':
+      return refusal.message;
+    case 'unknown_grapes':
+      return `These grape names are not in the taxonomy: ${quoted(refusal.names)}. ` +
+        'Check the spelling, or use describe_grape to find the canonical name. A proposal cannot create a variety.';
+    case 'grape_name':
+      return 'proposed_fields.grapes needs at least one variety name in plain text.';
+    case 'no_fields':
+      return `field_correction needs at least one non-empty field in proposed_fields (${PROPOSAL_ALL_FIELDS.join(', ')}).`;
+    // The schema refuses these shapes before the handler runs.
+    default:
+      return `proposed_fields is not valid (${refusal.code}).`;
+  }
+}
 
 registerTool({
   name: 'propose_wine_correction',
@@ -73,20 +94,20 @@ registerTool({
     wine_id: objectId.describe('From list_maturity_queue, search_registry or get_wine'),
     kind: z.enum(PROPOSAL_KINDS),
     proposed_fields: z.object({
-      producer: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      name: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      appellation: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.appellation),
-      region: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.region),
-      country: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-      classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.classification),
+      producer: z.string().min(1).max(FIELD_MAX).optional(),
+      name: z.string().min(1).max(FIELD_MAX).optional(),
+      appellation: z.string().min(1).max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.appellation),
+      region: z.string().min(1).max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.region),
+      country: z.string().min(1).max(FIELD_MAX).optional(),
+      classification: z.string().min(1).max(FIELD_MAX).optional().describe(FIELD_DESCRIPTIONS.classification),
       type: z.enum(WINE_TYPES).optional(),
       colour: z.enum(WINE_COLOURS).optional(),
       grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).min(1).max(GRAPES_MAX).optional(),
     }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `colour` is the colour of a sparkling, dessert or fortified wine (a sparkling rosé is type "sparkling", colour "rosé"); `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety. A BRAND THAT CHANGED HANDS: registry wines are vintage-neutral, so a producer that was acquired has no single true value. The convention is CURRENT OWNER WINS — put today\'s owner in `producer` and record the predecessor in the reason, e.g. "ZAREA acquired the brand from Domeniile Tohani in 2019". Do not uphold a suspect flag on a wine whose producer is knowable just because ownership moved: that leaves a permanent cannot-identify caveat on an identifiable wine and inflates the residue count the scaling review reads.'),
     merge_target_id: objectId.optional().describe('kind "merge" only: the duplicate\'s SURVIVING wine — must differ from wine_id'),
-    evidence_url: z.string().max(PROPOSAL_URL_MAX).optional()
+    evidence_url: z.string().max(URL_MAX).optional()
       .describe('http(s) URL backing the claim — cite one whenever the somm has it; it is what makes approval fast'),
-    reason: z.string().min(PROPOSAL_REASON_MIN).max(PROPOSAL_REASON_MAX)
+    reason: z.string().min(REASON_MIN).max(REASON_MAX)
       .describe('What is wrong and how the somm verified the fix — the admin reads this verbatim'),
   },
   handler: async (args, ctx) => {
@@ -96,11 +117,11 @@ registerTool({
     // Same reason hygiene as reject_price_request: plain text only, bounded
     // even after strip — the admin reads it verbatim in the review diff.
     const reason = stripHtml(typeof args.reason === 'string' ? args.reason : '');
-    if (!reason || reason.length < PROPOSAL_REASON_MIN) {
-      return fail('invalid_input', `reason must be at least ${PROPOSAL_REASON_MIN} characters of plain text (HTML is stripped) — say what is wrong and how it was verified.`);
+    if (!reason || reason.length < REASON_MIN) {
+      return fail('invalid_input', `reason must be at least ${REASON_MIN} characters of plain text (HTML is stripped) — say what is wrong and how it was verified.`);
     }
-    if (reason.length > PROPOSAL_REASON_MAX) {
-      return fail('invalid_input', `reason must be at most ${PROPOSAL_REASON_MAX} characters.`);
+    if (reason.length > REASON_MAX) {
+      return fail('invalid_input', `reason must be at most ${REASON_MAX} characters.`);
     }
     if (!PROPOSAL_KINDS.includes(args.kind)) {
       return fail('invalid_input', `kind must be one of: ${PROPOSAL_KINDS.join(', ')}`);
@@ -112,8 +133,8 @@ registerTool({
       if (evidenceUrl && !/^https?:\/\//i.test(evidenceUrl)) {
         return fail('invalid_input', 'evidence_url must be an http:// or https:// URL.');
       }
-      if (evidenceUrl.length > PROPOSAL_URL_MAX) {
-        return fail('invalid_input', `evidence_url must be at most ${PROPOSAL_URL_MAX} characters.`);
+      if (evidenceUrl.length > URL_MAX) {
+        return fail('invalid_input', `evidence_url must be at most ${URL_MAX} characters.`);
       }
     }
 
@@ -127,64 +148,14 @@ registerTool({
       if (args.merge_target_id) {
         return fail('invalid_input', 'merge_target_id only applies to kind "merge" — file a separate merge proposal.');
       }
-      proposedFields = {};
-      const src = args.proposed_fields || {};
-      for (const f of PROPOSAL_FIELDS) {
-        if (src[f] === undefined || src[f] === null) continue;
-        const v = stripHtml(String(src[f])).trim();
-        if (!v) continue;
-        if (v.length > PROPOSAL_FIELD_MAX) {
-          return fail('invalid_input', `proposed_fields.${f} must be at most ${PROPOSAL_FIELD_MAX} characters.`);
-        }
-        if (f === 'classification') {
-          // The filing rules of the member path (services/wineProposalOps). A
-          // regulatory mark is no tier and would apply as nothing at approval,
-          // so it is refused here rather than dropped from the proposal.
-          const tier = normalizeClassification(v);
-          if (!tier) {
-            return fail('invalid_input', `proposed_fields.classification: "${v}" is a regulatory mark, not a classification tier — leave classification out, or name the tier as list_classifications has it.`);
-          }
-          // Resolved against the classification list now, like the grapes
-          // below: approval refuses a tier the registry does not list, and the
-          // curator should learn that while filing. The proposal then records
-          // the canonical name that would be written.
-          const cls = await assignClassification({}, { classification: tier, strict: true });
-          if (!cls.ok) return fail('invalid_input', cls.message);
-          proposedFields[f] = cls.classification || tier;
-          classificationTier = tier;
-          continue;
-        }
-        proposedFields[f] = v;
-      }
-      // type: the zod enum already refused anything outside WINE_TYPES.
-      if (src.type) proposedFields.type = src.type;
-      // colour: same — the enum is the validation. Whether the wine's type can
-      // carry one is judged at approval, against the type it has by then.
-      if (src.colour) proposedFields.colour = src.colour;
-      // grapes: resolved against the taxonomy HERE so the curator finds out now
-      // rather than when an admin tries to approve. The approve path resolves
-      // again (taxonomy moves), but a name that is unknown today is almost
-      // always a typo, and telling them immediately is the whole point.
-      if (Array.isArray(src.grapes) && src.grapes.length) {
-        // Plain text like every other proposed field, as on the member path:
-        // markup around a name is cleaned away, not read as part of the name.
-        const names = src.grapes.map((g) => stripHtml(String(g == null ? '' : g)).trim()).filter(Boolean);
-        if (names.length === 0) {
-          return fail('invalid_input', 'proposed_fields.grapes needs at least one variety name in plain text.');
-        }
-        const resolved = await resolveGrapeIdsStrict(names);
-        if (!resolved.ok) {
-          return fail('invalid_input',
-            `These grape names are not in the taxonomy: ${resolved.unmatched.map((g) => `"${g}"`).join(', ')}. ` +
-            'Check the spelling, or use describe_grape to find the canonical name. A proposal cannot create a variety.');
-        }
-        // Store the CANONICAL names: the proposal should record what will
-        // actually be written, not a synonym the admin then has to decode.
-        proposedFields.grapes = resolved.names;
-      }
-      if (Object.keys(proposedFields).length === 0) {
-        return fail('invalid_input', `field_correction needs at least one non-empty field in proposed_fields (${PROPOSAL_ALL_FIELDS.join(', ')}).`);
-      }
+      // One reading of the proposed values for both doors
+      // (services/proposalFields): plain text, a classification resolved
+      // against the registry's list, grapes against the taxonomy, so the
+      // curator finds out now rather than when an admin tries to approve.
+      const read = await readProposedFields(args.proposed_fields || {}, { grapesMax: GRAPES_MAX });
+      if (!read.ok) return fail('invalid_input', fieldRefusal(read));
+      proposedFields = read.proposedFields;
+      classificationTier = read.classificationTier;
     } else {
       if (args.proposed_fields && Object.keys(args.proposed_fields).length > 0) {
         return fail('invalid_input', 'proposed_fields only applies to kind "field_correction" — file a separate field_correction proposal.');
@@ -208,13 +179,9 @@ registerTool({
     // A user's private draft is nobody's curation work (draft design 2026-09-12).
     if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
 
-    // A word two tier systems share ("Ortswein" is Austria's tier and a
-    // spelling of VDP.Ortswein) resolved above to whichever row came first.
-    // The wine's country settles it: the country approval resolves in.
-    if (classificationTier) {
-      const own = await assignClassification({ country: wine.country }, { classification: classificationTier, strict: true });
-      if (own.ok && own.classification) proposedFields.classification = own.classification;
-    }
+    // A word two tier systems share is settled by the wine's country, the
+    // country approval resolves in.
+    if (proposedFields) await settleClassificationByCountry(proposedFields, classificationTier, wine);
 
     // Same rule the user path applies at filing (wineProposalOps): a colour on
     // a wine this proposal leaves red/white/rosé would be "approved" and then

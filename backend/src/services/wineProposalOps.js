@@ -48,16 +48,13 @@ const { WINE_COLOURS, isStyleType } = require('../utils/wineColour');
 const { TIER_DAILY, checkContributionGate } = require('./contributionGate');
 const { appliesDirectly, applyCorrectionIfTrusted } = require('./trustedContributions');
 
-const FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
-// Structural fields a user may also correct, as the sommelier tool can —
-// otherwise a whole class of registry errors, wrong grape lists, would be
-// unfixable from a connector.
-// `type` is validated against the wine-type enum; `grapes` REPLACES the whole
-// variety list and every name must already exist in the taxonomy — resolved
-// at filing so the user learns about a typo now, and again at approval.
-// `colour` is the colour of a sparkling, dessert or
-// fortified wine — refused on a wine the suggestion leaves red/white/rosé.
-const EXTRA_FIELDS = ['type', 'colour', 'grapes'];
+// The fields a correction may change, their limits and how a proposed value
+// is read are shared with the sommelier's tool (services/proposalFields), so
+// the two doors cannot accept different things for the same approval.
+const {
+  TEXT_FIELDS: FIELDS, EXTRA_FIELDS, WINE_TYPES, FIELD_MAX, GRAPE_NAME_MAX, REASON_MIN, REASON_MAX, URL_MAX,
+  readProposedFields, settleClassificationByCountry,
+} = require('./proposalFields');
 // Not a field but a MODIFIER of `grapes`: the names
 // in the grape list the caller asserts are genuinely missing from the taxonomy.
 // It rides inside `fields` so every transport that forwards `fields` verbatim
@@ -67,19 +64,12 @@ const EXTRA_FIELDS = ['type', 'colour', 'grapes'];
 // proposal — nothing is minted here or at approval, which still refuses an
 // unknown variety until an admin has added it to the taxonomy deliberately.
 const FIELD_MODIFIERS = ['newGrapes'];
-const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+// How many varieties a member's list may hold (a curator's tool allows more).
 const GRAPES_MAX = 12;
-const GRAPE_NAME_MAX = 60;
-const REASON_MIN = 10;
-const REASON_MAX = 1000;
 // Amendments bypass the daily budget (nothing new enters the queue), so they
 // are capped per proposal instead — enough for "I noticed three more gaps",
 // not enough to farm.
 const AMENDMENTS_MAX = 10;
-const FIELD_MAX = 200;
-const URL_MAX = 500;
-
-const { assignClassification } = require('./classificationOps');
 
 const fail = (code, message) => ({ ok: false, code, message });
 
@@ -118,12 +108,6 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
     }
   }
 
-  const proposedFields = {};
-  // Varieties the caller declared missing from the taxonomy — audit only.
-  let newGrapeNames = [];
-  // The cleaned classification as sent, resolved again once the wine (and so
-  // its country) is loaded.
-  let classificationTier = null;
   const src = fields || {};
   for (const f of Object.keys(src)) {
     if (!FIELDS.includes(f) && !EXTRA_FIELDS.includes(f) && !FIELD_MODIFIERS.includes(f)) {
@@ -133,66 +117,13 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
   if (src.newGrapes !== undefined && src.newGrapes !== null && (src.grapes === undefined || src.grapes === null)) {
     return fail('invalid', 'newGrapes only qualifies a grapes list — send the complete corrected grapes list with it.');
   }
-  for (const f of FIELDS) {
-    if (src[f] === undefined || src[f] === null) continue;
-    const v = stripHtml(String(src[f])).trim();
-    if (!v) continue;
-    if (v.length > FIELD_MAX) {
-      return fail('invalid', `${f} must be at most ${FIELD_MAX} characters.`);
-    }
-    if (f === 'classification') {
-      // A regulatory mark (DOCG, AOC …) is no tier: it would apply as nothing
-      // at approval, so it does not count as a changed field at filing.
-      const { normalizeClassification } = require('../utils/normalize');
-      const tier = normalizeClassification(v);
-      if (!tier) {
-        return fail('invalid', `"${v}" is a regulatory mark, not a classification tier — leave classification out, or name the tier (Grand Cru, Premier Cru, Kabinett, Spätlese…).`);
-      }
-      // Resolved against the classification taxonomy at filing, so the filer
-      // learns NOW about a tier the registry does not know, and the admin
-      // diff shows the canonical names that would be written. The wine is
-      // not loaded yet here: a word two systems share is settled by the
-      // wine's country below, once it is.
-      const cls = await assignClassification({}, { classification: tier, strict: true });
-      if (!cls.ok) return fail('invalid', cls.message);
-      proposedFields[f] = cls.classification || tier;
-      classificationTier = tier;
-      continue;
-    }
-    proposedFields[f] = v;
-  }
-  if (src.type !== undefined && src.type !== null) {
-    const t = String(src.type).trim().toLowerCase();
-    if (!WINE_TYPES.includes(t)) {
-      return fail('invalid', `type must be one of ${WINE_TYPES.join(', ')}.`);
-    }
-    proposedFields.type = t;
-  }
-  if (src.colour !== undefined && src.colour !== null) {
-    const c = String(src.colour).trim().toLowerCase();
-    if (!WINE_COLOURS.includes(c)) {
-      return fail('invalid', `colour must be one of ${WINE_COLOURS.join(', ')}.`);
-    }
-    proposedFields.colour = c;
-  }
-  if (src.grapes !== undefined && src.grapes !== null) {
-    if (!Array.isArray(src.grapes) || src.grapes.length === 0 || src.grapes.length > GRAPES_MAX) {
-      return fail('invalid', `grapes must be a list of 1 to ${GRAPES_MAX} variety names — the complete corrected list, since it replaces the current one.`);
-    }
-    const names = src.grapes.map((g) => stripHtml(String(g == null ? '' : g)).trim()).filter(Boolean);
-    if (names.length === 0 || names.some((n) => n.length > GRAPE_NAME_MAX)) {
-      return fail('invalid', `Each grape name must be 1 to ${GRAPE_NAME_MAX} characters.`);
-    }
-    const resolved = await resolveProposedGrapes(names, src.newGrapes);
-    if (!resolved.ok) return resolved;
-    // Canonical names, so the admin diff shows what would actually be written
-    // (a declared new variety stays as typed — there is no canonical form yet).
-    proposedFields.grapes = resolved.names;
-    newGrapeNames = resolved.newNames;
-  }
-  if (Object.keys(proposedFields).length === 0) {
-    return fail('invalid', 'Suggest at least one changed field.');
-  }
+  // One reading of the proposed values for both doors (services/proposalFields);
+  // newGrapeNames are the varieties the caller declared missing from the
+  // taxonomy (audit only), classificationTier the cleaned classification as
+  // sent, settled by the wine's country once the wine is loaded.
+  const read = await readProposedFields(src, { grapesMax: GRAPES_MAX, declaredNew: src.newGrapes });
+  if (!read.ok) return fieldFailure(read);
+  const { proposedFields, classificationTier, newGrapeNames } = read;
 
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
 
@@ -219,14 +150,9 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
   });
   if (!wine) return fail('not_found', 'Wine not found');
 
-  // A word two tier systems share ("Ortswein" is Austria's tier and a
-  // spelling of VDP Ortswein) resolved above to whichever row came first, and
-  // approval applies the filed NAME as it stands — so the tie is broken here,
-  // by the wine's country, the country approval resolves in.
-  if (classificationTier) {
-    const own = await assignClassification({ country: wine.country }, { classification: classificationTier, strict: true });
-    if (own.ok && own.classification) proposedFields.classification = own.classification;
-  }
+  // A word two tier systems share is settled by the wine's country, the
+  // country approval resolves in.
+  await settleClassificationByCountry(proposedFields, classificationTier, wine);
 
   // A colour only means something on a style type — judged against the type
   // this suggestion leaves the wine with: its own type field, else the type in
@@ -332,83 +258,44 @@ const OTHER_USER_CONFLICT =
 
 const isOwn = (row, userId) => !!row && String(row.proposer) === String(userId);
 
-// A deliberately-new variety is still a NAME: it starts with a letter or digit
-// and carries nothing but letters, digits and the punctuation real variety
-// names use ("Rkatsiteli", "Müller-Thurgau", "VB 32-7", "Pinot Meunier (Auxerrois)").
-// That refuses the shapes that polluted the taxonomy before the review gate —
-// "60% Merlot", "Merlot & Cabernet" — and, by length, a pasted sentence: the
-// longest real name runs to five words ("Muscat Blanc à Petits Grains").
-const NEW_GRAPE_NAME = /^[\p{L}\d][\p{L}\p{M}\d .'’()/-]*$/u;
-const NEW_GRAPE_MAX_WORDS = 5;
-const looksLikeGrapeName = (s) => NEW_GRAPE_NAME.test(s)
-  && (s.match(/\p{L}/gu) || []).length >= 2
-  && s.trim().split(/\s+/).length <= NEW_GRAPE_MAX_WORDS;
+const quoted = (names) => names.map((g) => `"${g}"`).join(', ');
 
 /**
- * Resolve a proposed grape list against the taxonomy. Every name must match a
- * variety (by name or synonym) EXCEPT the ones the caller declared in
- * `declaredNew`: those are kept as typed, for an admin to add to the taxonomy
- * before approving. Returns { ok: true, names, newNames } or a fail().
+ * What a refused reading of the proposed fields (services/proposalFields)
+ * says on the member path. Transport-neutral: the same text reaches the web
+ * form, the member's MCP tool and the Registry Bridge.
  */
-async function resolveProposedGrapes(names, declaredNew) {
-  const { resolveGrapeIdsStrict } = require('./wineProfileOps');
-  const { normalizeString, resolveGrapeName } = require('../utils/normalize');
-  // The key the resolver itself dedupes and matches on.
-  const keyOf = (n) => normalizeString(resolveGrapeName(n));
-
-  let declared = new Set();
-  if (declaredNew !== undefined && declaredNew !== null) {
-    if (!Array.isArray(declaredNew) || declaredNew.length > GRAPES_MAX) {
+function fieldFailure(refusal) {
+  switch (refusal.code) {
+    case 'field_too_long':
+      return fail('invalid', `${refusal.field} must be at most ${FIELD_MAX} characters.`);
+    case 'regulatory_mark':
+      return fail('invalid', `"${refusal.value}" is a regulatory mark, not a classification tier — leave classification out, or name the tier (Grand Cru, Premier Cru, Kabinett, Spätlese…).`);
+    case 'unknown_tier':
+      return fail('invalid', refusal.message);
+    case 'bad_type':
+      return fail('invalid', `type must be one of ${WINE_TYPES.join(', ')}.`);
+    case 'bad_colour':
+      return fail('invalid', `colour must be one of ${WINE_COLOURS.join(', ')}.`);
+    case 'grapes_list':
+      return fail('invalid', `grapes must be a list of 1 to ${GRAPES_MAX} variety names — the complete corrected list, since it replaces the current one.`);
+    case 'grape_name':
+      return fail('invalid', `Each grape name must be 1 to ${GRAPE_NAME_MAX} characters.`);
+    case 'new_grapes_list':
       return fail('invalid', `newGrapes must be a list of at most ${GRAPES_MAX} variety names.`);
-    }
-    declared = new Set(
-      declaredNew.map((g) => normalizeString(stripHtml(String(g == null ? '' : g)))).filter(Boolean)
-    );
+    case 'unknown_grapes':
+      return fail('invalid',
+        `These grape names are not in the taxonomy: ${quoted(refusal.names)}. ` +
+        'Check the spelling or use the grape\'s canonical name — a suggestion cannot create a variety.');
+    case 'implausible_grapes':
+      return fail('invalid',
+        `${quoted(refusal.names)} does not look like a grape variety name — ` +
+        'leave out percentages and anything that is not the variety itself.');
+    case 'taxonomy_changed':
+      return fail('conflict', 'The grape taxonomy changed while filing — please try again.');
+    default:
+      return fail('invalid', 'Suggest at least one changed field.');
   }
-
-  const strict = await resolveGrapeIdsStrict(names);
-  // Declaring a name that IS in the taxonomy costs nothing: it resolves.
-  if (strict.ok) return { ok: true, names: strict.names, newNames: [] };
-
-  // A name that normalizes to nothing (non-Latin script) can never be declared:
-  // it could not be matched or deduplicated later either.
-  const undeclared = strict.unmatched.filter((g) => !declared.has(normalizeString(g)));
-  if (undeclared.length) {
-    return fail('invalid',
-      `These grape names are not in the taxonomy: ${undeclared.map((g) => `"${g}"`).join(', ')}. ` +
-      'Check the spelling or use the grape\'s canonical name — a suggestion cannot create a variety.');
-  }
-  const implausible = strict.unmatched.filter((g) => !looksLikeGrapeName(g));
-  if (implausible.length) {
-    return fail('invalid',
-      `${implausible.map((g) => `"${g}"`).join(', ')} does not look like a grape variety name — ` +
-      'leave out percentages and anything that is not the variety itself.');
-  }
-
-  // By the resolver's KEY, not by raw string: it skips a second spelling of a
-  // name it has already seen ("Solaris", "solaris" — only the first comes back
-  // unmatched), so a raw comparison read the repeat as a KNOWN variety and the
-  // second pass below failed it as "the taxonomy changed", on every retry
-  // (pre-deploy audit 2026-09-18).
-  const unmatchedKeys = new Set(strict.unmatched.map(keyOf));
-  const known = names.filter((n) => { const k = keyOf(n); return !!k && !unmatchedKeys.has(k); });
-  let canonical = [];
-  if (known.length) {
-    const again = await resolveGrapeIdsStrict(known);
-    // The taxonomy moved between the two reads — the caller simply retries.
-    if (!again.ok) return fail('conflict', 'The grape taxonomy changed while filing — please try again.');
-    canonical = again.names;
-  }
-  const seen = new Set(canonical.map((n) => normalizeString(n)));
-  const newNames = [];
-  for (const raw of strict.unmatched) {
-    const clean = raw.replace(/\s+/g, ' ').trim();
-    const key = normalizeString(clean);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    newNames.push(clean);
-  }
-  return { ok: true, names: [...canonical, ...newNames], newNames };
 }
 
 /**
