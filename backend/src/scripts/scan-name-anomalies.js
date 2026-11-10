@@ -1,6 +1,6 @@
 /**
- * scan-name-anomalies — size the registry name-check queues (support ticket
- * 2026-07-26). Read-only; changes nothing, has no --apply flag.
+ * scan-name-anomalies — size the registry name-check queues.
+ * Read-only; changes nothing, has no --apply flag.
  *
  * Prints, per rule in utils/nameChecks.js: outstanding / already-cleared /
  * total-matching, plus up to 40 sample rows. Use it BEFORE trusting a newly

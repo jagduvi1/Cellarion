@@ -1,7 +1,7 @@
 /**
- * The phone camera for close work — a label, a barcode (support ticket
- * 2026-10-10: on some Android phones the preview never came into focus, so a
- * barcode could not be read, while the phone's own camera app focused fine).
+ * The phone camera for close work — a label, a barcode. On some Android
+ * phones the preview never comes into focus on its own, so a barcode cannot
+ * be read, while the phone's own camera app focuses fine.
  *
  * A browser opens the camera with whatever focus it defaults to. Where the
  * camera reports its focus modes (Chrome on Android), three things help:

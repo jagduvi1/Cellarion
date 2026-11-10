@@ -1,8 +1,7 @@
 /**
- * bottleSummary — the bottle line item every MCP list returns. Support ticket
- * 2026-09-07: peak_from / peak_until are writable through update_bottle but
- * were missing from every read, so an assistant could set them and never see
- * them again.
+ * bottleSummary — the bottle line item every MCP list returns. peak_from /
+ * peak_until are writable through update_bottle, so every read carries
+ * them: an assistant that sets them must be able to see them again.
  */
 jest.mock('../utils/reservationUtils', () => ({ isReserved: () => false }));
 

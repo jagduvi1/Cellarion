@@ -1,7 +1,7 @@
 /**
  * The colour of a sparkling/dessert/fortified wine through the pending-wine
- * fix (and, via the shared validator, the private-draft edit) — support ticket
- * 2026-09-17 ("Colour Sparkling/Rosè"). The validator owns the vocabulary;
+ * fix (and, via the shared validator, the private-draft edit).
+ * The validator owns the vocabulary;
  * whether the type can carry a colour is the model hook's call.
  */
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));

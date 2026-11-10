@@ -8,8 +8,8 @@ import DraftWineEditModal from '../DraftWineEditModal';
 import './DraftWineBanner.css';
 
 /**
- * The bottle page's view of a PRIVATE DRAFT wine (support ticket
- * 2026-09-12). Its creator edits and publishes from here; a member of a
+ * The bottle page's view of a PRIVATE DRAFT wine.
+ * Its creator edits and publishes from here; a member of a
  * shared cellar holding a bottle of it only sees what it is.
  *
  * Publish outcomes: published (or filed for curation when the producer is

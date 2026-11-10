@@ -1,7 +1,7 @@
 /**
- * What the owner sees when a save does not go through (support ticket
- * 2026-10-09: a refused save showed as "check your connection", and the
- * reason the server gave was never displayed).
+ * What the owner sees when a save does not go through: the reason the
+ * server gave, never a generic "check your connection" for a save the
+ * server refused.
  *
  *   - the server answered with a reason → that reason, under the header
  *   - the server answered without one → "Failed to save", no banner

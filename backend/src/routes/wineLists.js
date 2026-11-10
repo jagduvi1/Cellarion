@@ -25,8 +25,7 @@ const router = express.Router();
 // other, with no gate at write time. What may RENDER is decided in one place,
 // services/wineListData.ownerWineFilter — the owner's own pending rows do,
 // a stranger's hidden row never does, so an id that is not the owner's to
-// show simply never resolves, exactly like a deleted wine (support ticket
-// 2026-10-09: an owner could not save a list of their own cellar).
+// show simply never resolves, exactly like a deleted wine.
 
 // --- Logo upload setup ---
 ensureLogoDir();

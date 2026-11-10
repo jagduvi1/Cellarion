@@ -10,8 +10,8 @@ import { slotLabel as slotWords } from '../utils/slotLabel';
 import { bottleSizeLabel, DEFAULT_SIZE } from '../config/bottleSizes';
 
 /**
- * "Drink one" from a grouped entry or the vintage page (support ticket
- * 2026-10-09): pick WHICH bottle of the group leaves — by rack slot, with
+ * "Drink one" from a grouped entry or the vintage page: pick WHICH bottle of
+ * the group leaves — by rack slot, with
  * its purchase and reservation beside it — then the ordinary consume form.
  * One bottle, one request: the group's other bottles are never touched.
  *

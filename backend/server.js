@@ -126,7 +126,7 @@ connectDB().then(async () => {
     // Collection doesn't exist yet — nothing to do
   }
 
-  // Migration: photos learn their bottle's vintage (support ticket 2026-10-09).
+  // Migration: photos learn their bottle's vintage.
   // Rows written before the field carry no `vintage` key; after this, every
   // row does, so a later boot finds nothing to do.
   try {

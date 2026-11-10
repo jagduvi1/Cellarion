@@ -16,13 +16,14 @@
 // the cap (from then on the plain cap rule applies to it). It never raises an
 // entry and never adds one: a defect fix that must add lines to a baselined
 // file raises that entry by hand, with the reason in the PR body. Features
-// never raise it. --seed (first run only) writes the baseline from scratch.
+// never raise it. --seed writes the baseline from scratch and is refused
+// once a baseline exists: it would take every current size as allowed.
 //
 // Node built-ins only, so CI needs no npm ci for this job.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { dirname, join, extname, resolve } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
+import { dirname, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const CAP = 1500;
@@ -34,7 +35,7 @@ const BASELINE_PATH = join(ROOT, 'scripts', 'file-size-baseline.json');
 const EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 const TREES = ['backend/', 'frontend/', 'cellarion-mcp/', 'scripts/'];
 // Vendored bundles are not ours to shrink.
-const EXCLUDED = ['frontend/public/', 'node_modules/'];
+const EXCLUDED = ['frontend/public/developers/'];
 
 export function countLines(text) {
   if (text.length === 0) return 0;
@@ -48,7 +49,7 @@ export function trackedSourceFiles() {
     .filter(Boolean)
     .filter((p) => EXTENSIONS.has(extname(p)))
     .filter((p) => TREES.some((t) => p.startsWith(t)))
-    .filter((p) => !EXCLUDED.some((e) => p.includes(e)));
+    .filter((p) => !EXCLUDED.some((e) => p.startsWith(e)));
 }
 
 export function measure(files) {
@@ -78,6 +79,12 @@ export function check(sizes, baseline) {
   const rows = [];
   for (const [file, limit] of Object.entries(baseline)) {
     const lines = sizes[file];
+    // A value that is not a line count compares false both ways and would
+    // switch the check off for that file.
+    if (!Number.isInteger(limit) || limit <= 0) {
+      errors.push({ file, message: `has a baseline value that is not a whole number of lines` });
+      continue;
+    }
     if (lines === undefined) {
       errors.push({ file, message: `is in the baseline but no longer exists: run --update` });
       continue;
@@ -130,6 +137,10 @@ function main(argv) {
   const baseline = readBaseline();
 
   if (argv.includes('--seed')) {
+    if (Object.keys(baseline).length > 0) {
+      console.error(`${BASELINE_PATH} already holds ${Object.keys(baseline).length} entries. --seed is for the first run only: lower entries with --update, raise one by hand with the reason in the PR.`);
+      return 1;
+    }
     const seeded = Object.fromEntries(Object.entries(sizes).filter(([, n]) => n > CAP));
     writeBaseline(seeded);
     console.log(`Seeded ${BASELINE_PATH} with ${Object.keys(seeded).length} files over ${CAP} lines.`);
@@ -160,6 +171,7 @@ function main(argv) {
   return errors.length ? 1 : 0;
 }
 
-// Case-insensitive so a Windows `C:` versus `c:` drive letter does not stop the CLI.
-const isMain = process.argv[1] && resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase();
+// Real paths, so a checkout reached through a link still runs the check, and
+// case-insensitive so a Windows `C:` versus `c:` drive letter does not stop it.
+const isMain = process.argv[1] && realpathSync(process.argv[1]).toLowerCase() === realpathSync(fileURLToPath(import.meta.url)).toLowerCase();
 if (isMain) process.exit(main(process.argv.slice(2)));

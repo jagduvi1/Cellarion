@@ -1789,8 +1789,8 @@ function AddBottle() {
           {/* A wine the registry does not know yet will be MINTED with this
               bottle. Offer to keep it private first: a draft is editable by
               its creator without the correction queue, hidden from everyone
-              else, and published when they are done (support ticket
-              2026-09-12). Only shown on that path — an existing wine is
+              else, and published when they are done.
+              Only shown on that path — an existing wine is
               already shared. */}
           {pendingNewWine && pendingNewWine.category !== 'other' && (
             <label className="draft-wine-toggle">
