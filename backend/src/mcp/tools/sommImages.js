@@ -31,7 +31,7 @@ const BottleImage = require('../../models/BottleImage');
 const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
-const { ok, fail, objectId } = require('../toolUtil');
+const { ok, fail, objectId, SOMM_ROLES, requireSomm } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const { logAudit } = require('../../services/audit');
 const { renderImage } = require('../../services/photoBytes');
@@ -45,7 +45,6 @@ const {
   dismissImageReport,
 } = require('../../services/imageModerationOps');
 
-const SOMM_ROLES = ['somm', 'admin'];
 const PAGE_MAX = 8;
 const IMAGE_MAX_EDGE = 1024;
 const IMAGE_TOTAL_CAP_BYTES = 4 * 1024 * 1024;
@@ -60,13 +59,6 @@ const PENDING_FILTER = {
 };
 const ORPHAN_FILTER = { kind: NOT_SCAN, status: 'processed', bottle: null, wineDefinition: null };
 const REPORTED_FILTER = { kind: NOT_SCAN, reportedAt: { $ne: null }, status: { $ne: 'rejected' } };
-
-function requireSomm(ctx) {
-  const roles = ctx.user?.roles || [];
-  return SOMM_ROLES.some((r) => roles.includes(r))
-    ? null
-    : fail('forbidden_scope', 'This tool needs the sommelier (or admin) role.');
-}
 
 // Stable across calls, so "the same person uploaded these" survives paging;
 // not a user id, and nothing on this surface maps it back to one.
