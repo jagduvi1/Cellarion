@@ -26,7 +26,7 @@
  *
  * Lives in its own module, like services/wineVisibility, because the same
  * question is asked from three places that must not drift — the MCP tool
- * (mcp/tools/somm.get_pending_wine_images), the REST image gate
+ * (mcp/tools/somm/pendingWines.get_pending_wine_images), the REST image gate
  * (routes/images.js) and the retention sweep.
  */
 
