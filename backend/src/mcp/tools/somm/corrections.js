@@ -12,6 +12,7 @@ const { logAudit } = require('../../../services/audit');
 const { logAction } = require('../../actionLedger');
 const { isValidId } = require('../../../utils/validation');
 const { stripHtml } = require('../../../utils/sanitize');
+const { identitySnapshot } = require('../../../utils/proposalSnapshot');
 const { normalizeString, resolveCountryName, normalizeClassification } = require('../../../utils/normalize');
 const { WINE_COLOURS, colourTypeConflict } = require('../../../utils/wineColour');
 const { WINE_TYPES, GRAPES_MAX, GRAPE_NAME_MAX, resolveGrapeIdsStrict } = require('../../../services/wineProfileOps');
@@ -204,20 +205,8 @@ registerTool({
 
     // Identity fields as they stand NOW (region/country as display names) —
     // the admin diff renders against live values and uses this to show drift.
-    const currentSnapshot = {
-      producer: wine.producer || null,
-      name: wine.name || null,
-      appellation: wine.appellation || null,
-      region: wine.region?.name || null,
-      country: wine.country?.name || null,
-      classification: wine.classification || null,
-      // Both sides of the admin drift check compare against this, so the two
-      // new proposable fields have to be in it — otherwise every type/grapes
-      // proposal would render as "drifted since filing" against undefined.
-      type: wine.type || null,
-      colour: wine.colour || null,
-      grapes: (wine.grapes || []).map((g) => g && g.name).filter(Boolean).join(', ') || null,
-    };
+    // One shape for both sides of that check (utils/proposalSnapshot).
+    const currentSnapshot = identitySnapshot(wine);
 
     let proposal;
     try {

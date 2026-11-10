@@ -42,6 +42,7 @@ const { otherProducerSpellings, displaySpelling } = require('../../services/prod
 const { normalizeString, resolveGrapeName } = require('../../utils/normalize');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+const { grapeLabel, identitySnapshot } = require('../../utils/proposalSnapshot');
 // What approving or rejecting one proposal does lives in the service. This
 // file parses the requests, lists the queue with its live diff, and runs the
 // bulk loops over the same two functions.
@@ -61,23 +62,9 @@ const PROPOSAL_STATUSES = ['pending', 'approved', 'rejected', 'closed'];
 // alongside these, in the diff builder below.
 const IDENTITY_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification', 'type', 'colour'];
 
-/** Grape names for display in a diff row — the same join both sides use. */
-const grapeLabel = (names) => (Array.isArray(names) && names.length ? names.join(', ') : null);
-
-// The live identity values a diff row compares against (region/country as names).
-const liveIdentity = (wine) => ({
-  producer: wine.producer || null,
-  name: wine.name || null,
-  appellation: wine.appellation || null,
-  region: wine.region?.name || null,
-  country: wine.country?.name || null,
-  classification: wine.classification || null,
-  type: wine.type || null,
-  colour: wine.colour || null,
-  // Populated when the caller asked for it; a bare id array joins to nothing
-  // and the row simply reads "—", which is honest for an unpopulated read.
-  grapes: grapeLabel((wine.grapes || []).map((g) => g && g.name).filter(Boolean)),
-});
+// The live identity values a diff row compares against (region/country as
+// names): the same shape the proposals recorded as their snapshot.
+const liveIdentity = identitySnapshot;
 
 // GET /api/admin/wine-proposals — list, pending first, newest first within status
 router.get('/', async (req, res) => {
