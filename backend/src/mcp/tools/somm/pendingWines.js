@@ -4,7 +4,6 @@
 // Registered where its block sat in somm.js, so the tool order is unchanged.
 const { z } = require('zod');
 const WineDefinition = require('../../../models/WineDefinition');
-const Bottle = require('../../../models/Bottle');
 const { registerTool } = require('../../registry');
 const { ok, fail, objectId, pageParams, FIELD_DESCRIPTIONS, SOMM_ROLES, requireSomm } = require('../../toolUtil');
 const { logAudit } = require('../../../services/audit');

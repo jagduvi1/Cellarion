@@ -42,7 +42,7 @@ jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimila
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
-jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn(), wineVisibilityFilter: jest.fn(() => ({})) }));
+jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn(), wineVisibilityFilter: jest.fn(() => ({})), CURATION_ROLES: ['somm', 'admin'] }));
 jest.mock('../services/imageOps', () => ({
   ingestBottleImage: jest.fn(), setBottleDefaultImage: jest.fn(), deleteOwnImage: jest.fn(),
 }));

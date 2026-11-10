@@ -420,3 +420,46 @@ describe('SupportTicket export', () => {
     }
   });
 });
+
+// A curator's undo snapshot (McpActionLog.prev) can hold ANOTHER person's
+// data: the stamp and note of whoever wrote a drink window, the members who
+// asked for a price. Those rows belong to the curator, so the ledger purge
+// never reaches them; without these passes an undo after the erasure would
+// write the erased person back.
+describe('undo snapshots in another curator\'s ledger rows', () => {
+  const McpActionLog = require('../models/McpActionLog');
+  const WineVintageProfile = require('../models/WineVintageProfile');
+  const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+  const ctx = { userId: 'u1' };
+
+  test('erasing a curator clears their stamp and note from drink-window snapshots; a bridge note stays', async () => {
+    const profileSpy = jest.spyOn(WineVintageProfile, 'updateMany').mockResolvedValue({});
+    const ledgerSpy = jest.spyOn(McpActionLog, 'updateMany').mockResolvedValue({});
+    try {
+      await REGISTRY.find(e => e.model.modelName === 'WineVintageProfile').purge(ctx);
+      const ofUser = { action: { $in: ['somm_maturity', 'somm_maturity_remove'] }, 'prev.setBy': 'u1' };
+      expect(ledgerSpy.mock.calls).toEqual([
+        [{ ...ofUser, 'prev.sommNotes': { $ne: 'From the shared registry (cellarion.app)' } },
+          { $set: { 'prev.setBy': null, 'prev.setAt': null, 'prev.sommNotes': null } }],
+        [ofUser, { $set: { 'prev.setBy': null, 'prev.setAt': null } }],
+      ]);
+    } finally {
+      profileSpy.mockRestore(); ledgerSpy.mockRestore();
+    }
+  });
+
+  test('erasing a member takes them, and the note they wrote, out of a declined price request\'s snapshot', async () => {
+    const requestSpy = jest.spyOn(PriceTrackingRequest, 'updateMany').mockResolvedValue({ modifiedCount: 1 });
+    const ledgerSpy = jest.spyOn(McpActionLog, 'updateMany').mockResolvedValue({});
+    try {
+      const out = await REGISTRY.find(e => e.model.modelName === 'PriceTrackingRequest').purge(ctx);
+      expect(ledgerSpy).toHaveBeenCalledWith(
+        { action: 'somm_price_decline', 'prev.requesters.user': 'u1' },
+        { $pull: { 'prev.requesters': { user: 'u1' } } });
+      expect(requestSpy).toHaveBeenCalledWith({ 'requesters.user': 'u1' }, { $pull: { requesters: { user: 'u1' } } });
+      expect(out).toEqual({ modifiedCount: 1 });
+    } finally {
+      requestSpy.mockRestore(); ledgerSpy.mockRestore();
+    }
+  });
+});

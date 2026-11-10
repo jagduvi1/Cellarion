@@ -142,6 +142,13 @@ describe('drink_window_for', () => {
     expect(v.status_now).toBeNull();
   });
 
+  test('the vintage is read as the profiles store it: "nv" in any case asks for the NV row', async () => {
+    WineDefinition.findById.mockReturnValue(chain(WINE));
+    WineVintageProfile.find.mockReturnValue(chain([]));
+    await tool('drink_window_for').handler({ wine_id: oid('f'), vintage: ' nv ' }, SIGNED_IN);
+    expect(WineVintageProfile.find.mock.calls.at(-1)[0]).toMatchObject({ status: 'reviewed', vintage: 'NV' });
+  });
+
   test('no curated profile → honest empty with estimate warning; bad/missing wine handled', async () => {
     WineDefinition.findById.mockReturnValue(chain(WINE));
     WineVintageProfile.find.mockReturnValue(chain([]));

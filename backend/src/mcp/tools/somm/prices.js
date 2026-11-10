@@ -167,7 +167,13 @@ registerTool({
     // Skip upserted (the suppression routes/bottles.js refuses on), request
     // deleted, requesters told verbatim, audited: the same body as the REST
     // decline (services/priceOps). `prev` is all the undo has to work from.
-    const { prev, wine } = await priceOps.declinePriceRequest({ request, reason, actorId: ctx.user.id, req: ctx.req, via: 'mcp' });
+    const declined = await priceOps.declinePriceRequest({ request, reason, actorId: ctx.user.id, req: ctx.req, via: 'mcp' });
+    // Another curator declined it between the load above and the delete:
+    // nothing was changed here, so there is nothing to ledger either.
+    if (declined.gone) {
+      return fail('not_found', 'No such price-tracking request — it may already be fulfilled or declined. Use list_price_tracking_requests for valid ids.');
+    }
+    const { prev, wine } = declined;
 
     const envelope = {
       summary: `Declined price tracking for ${wine?.name || 'wine'} ${request.vintage} — ${prev.requesters.length} requester(s) notified with the reason`,

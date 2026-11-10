@@ -88,6 +88,35 @@ test('"nv" is stored as NV and the open request is looked up as NV', async () =>
   expect(PriceTrackingRequest.findOne).toHaveBeenCalledWith({ wineDefinition: WINE_ID, vintage: 'NV' });
 });
 
+test.each([
+  ['an infinite number', 1e999],
+  ['an infinite number as text', 'Infinity'],
+  ['a decimal comma', '12,5'],
+  ['a figure with a unit', '40 EUR'],
+  ['a boolean', true],
+  ['a negative number', -1],
+])('a price that is %s is a 400 and nothing is stored', async (_label, price) => {
+  const res = await addPrice({ wineDefinition: WINE_ID, vintage: '2019', price });
+  expect(res.status).toBe(400);
+  expect(WineVintagePrice).not.toHaveBeenCalled();
+});
+
+test('a price sent as text with surrounding spaces is read as the number it is', async () => {
+  const res = await addPrice({ wineDefinition: WINE_ID, vintage: '2019', price: ' 45.50 ' });
+  expect(res.status).toBe(201);
+  expect(WineVintagePrice.mock.calls[0][0].price).toBe(45.5);
+});
+
+test.each([
+  ['a number', 5],
+  ['an object', { id: 'aaaaaaaaaaaa' }],
+])('a wineDefinition that is %s is a 400, not a server error', async (_label, wineDefinition) => {
+  const res = await addPrice({ wineDefinition, vintage: '2019', price: 40 });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toBe('Invalid wineDefinition ID');
+  expect(WineDefinition.exists).not.toHaveBeenCalled();
+});
+
 test('a malformed year is a 400 with the vintage rule, and nothing is stored', async () => {
   const res = await addPrice({ wineDefinition: WINE_ID, vintage: '20015', price: 40 });
   expect(res.status).toBe(400);

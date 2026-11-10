@@ -676,10 +676,11 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
 
+    let restored;
     try {
       // The request comes back by upsert and only the suppression THIS decline
       // created is lifted, scoped to the caller (services/priceOps).
-      await require('../services/priceOps').restoreDeclinedRequest(prev, ctx.user.id);
+      restored = await require('../services/priceOps').restoreDeclinedRequest(prev, ctx.user.id);
     } catch (err) {
       await unclaim(row._id); // nothing restored yet → let the undo be retried
       throw err;
@@ -689,7 +690,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
 
     const envelope = {
       summary: `Undid price-request decline — vintage ${prev.vintage} is back in the price queue and can be requested again`,
-      data: { undone: 'reject_price_request', vintage: prev.vintage, requesters_restored: (prev.requesters || []).length },
+      data: { undone: 'reject_price_request', vintage: prev.vintage, requesters_restored: restored?.requestersRestored ?? (prev.requesters || []).length },
     };
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);
@@ -765,7 +766,13 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
 
     let envelope;
     if (row.action === 'somm_price') {
-      const del = await require('../services/priceOps').removePriceSnapshot({ entryId: row.detail?.entryId, actorId: ctx.user.id });
+      let del;
+      try {
+        del = await require('../services/priceOps').removePriceSnapshot({ entryId: row.detail?.entryId, actorId: ctx.user.id });
+      } catch (err) {
+        await unclaim(row._id); // nothing removed → let the undo be retried
+        throw err;
+      }
       logAudit(ctx.req, 'somm.price.add.undo', { type: 'wine', id: row.detail?.wineId },
         { vintage: row.detail?.vintage, entryId: row.detail?.entryId, removed: !!del.deletedCount, via: 'undo', ledgerRow: String(row._id) });
       envelope = { summary: del.deletedCount ? `Undid price entry — snapshot for vintage ${row.detail?.vintage} removed` : 'Price snapshot was already gone; ledger marked undone.', data: { undone: 'set_vintage_price', removed: !!del.deletedCount } };
@@ -778,6 +785,8 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       } catch (err) {
         await unclaim(row._id); // failed → let the undo be retried
         if (err?.name === 'VersionError') return fail('conflict', 'The profile changed mid-undo — retry.');
+        // The row left the queue between the load above and this save.
+        if (err?.name === 'DocumentNotFoundError') return fail('conflict', 'That maturity profile no longer exists; nothing was changed.');
         throw err;
       }
       // reset_maturity_row ledgers as somm_maturity too, marked detail.reset.

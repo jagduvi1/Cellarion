@@ -297,15 +297,16 @@ registerTool({
       return fail('conflict', 'This vintage is already reviewed — call reset_maturity_row first, then remove it.');
     }
 
-    // Wine+vintage is all the undo needs: a removed row is the auto-seeded
-    // pending stub (phases and notes only exist on reviewed rows), so undoing
-    // is re-seeding, not restoring field values.
-    const prev = {
-      wineDefinition: String(maturityOps.wineIdOf(profile)),
-      vintage: profile.vintage,
-    };
+    // For the auto-seeded stub, wine+vintage is all the undo needs. A pending
+    // row can also carry a window a member's import suggested; then the
+    // snapshot keeps it, so undoing brings the suggestion back too.
+    const prev = maturityOps.removalSnapshot(profile);
     // Deleted and audited: the same body as the REST remove (services/maturityOps).
-    await maturityOps.removePendingRow(profile, { reason: args.reason, req: ctx.req, via: 'mcp' });
+    // The delete re-checks the status, so a row reviewed since the load stays.
+    const removed = await maturityOps.removePendingRow(profile, { reason: args.reason, req: ctx.req, via: 'mcp' });
+    if (!removed) {
+      return fail('conflict', 'This vintage was reviewed or removed by someone else just now — list_maturity_queue shows where it stands.');
+    }
 
     const envelope = {
       summary: `Removed ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} from the maturity queue — it returns if anyone adds a bottle of that wine+vintage`,

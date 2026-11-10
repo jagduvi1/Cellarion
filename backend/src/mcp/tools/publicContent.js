@@ -44,7 +44,9 @@ registerTool({
     }
 
     const filter = { wineDefinition: wine._id, status: 'reviewed' };
-    if (args.vintage) filter.vintage = String(args.vintage).trim();
+    // The vintage as the profiles store it ("nv" in any case is NV), the same
+    // form the sommelier tools address a row by.
+    if (args.vintage) filter.vintage = require('../../services/maturityOps').canonicalVintage(args.vintage);
     // Window years only — never sommNotes or curator identity.
     const profiles = await WineVintageProfile.find(filter)
       .select('vintage relative earlyFrom earlyUntil peakFrom peakUntil lateFrom lateUntil')

@@ -55,6 +55,13 @@ test('without it, the display name of MAILGUN_FROM signs', async () => {
   expect(msg.html).toContain('<p>Our Cellar</p>');
 });
 
+test('a display name written in quotes signs without them', async () => {
+  const msg = await thankYou({ FRONTEND_URL: 'https://wine.example.org', MAILGUN_FROM: '"Cellar, Our" <help@example.org>' });
+  expect(lastLine(msg.text)).toBe('Cellar, Our');
+  expect(msg.html).toContain('<p>Cellar, Our</p>');
+  expect(lastLine((await thankYou({ FRONTEND_URL: 'https://wine.example.org', MAILGUN_FROM: '"" <help@example.org>' })).text)).toBe('Cellarion');
+});
+
 test('with neither, and with a bare address as From, it is "Cellarion"; the hosted install gets no special name', async () => {
   expect(lastLine((await thankYou({ FRONTEND_URL: 'http://localhost' })).text)).toBe('Cellarion');
   expect(lastLine((await thankYou({ FRONTEND_URL: 'https://wine.example.org', MAILGUN_FROM: '<help@example.org>' })).text)).toBe('Cellarion');

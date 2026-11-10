@@ -160,6 +160,24 @@ test('ordering is checked only among the fields sent: a new until below a stored
   expect(doc.peakUntil).toBe(2026);
 });
 
+test('a note over the stored limit is a 400 and nothing is saved', async () => {
+  const doc = profileDoc();
+  WineVintageProfile.findById.mockResolvedValue(doc);
+  const res = await put({ peakFrom: 2026, peakUntil: 2030, sommNotes: 'x'.repeat(2001) });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/too long/i);
+  expect(doc.save).not.toHaveBeenCalled();
+});
+
+test('a row removed from the queue while its window was being saved is a 409, with no bump and no audit row', async () => {
+  const doc = profileDoc({ save: jest.fn().mockRejectedValue(Object.assign(new Error('gone'), { name: 'DocumentNotFoundError' })) });
+  WineVintageProfile.findById.mockResolvedValue(doc);
+  const res = await put({ peakFrom: 2026, peakUntil: 2030 });
+  expect(res.status).toBe(409);
+  expect(bumpWineOwners).not.toHaveBeenCalled();
+  expect(logAudit).not.toHaveBeenCalled();
+});
+
 test('an unknown profile is 404, a bad id 400 and a plain member 403', async () => {
   WineVintageProfile.findById.mockResolvedValue(null);
   expect((await put({ peakFrom: 2026 })).status).toBe(404);

@@ -1,6 +1,6 @@
 // Held-profile decisions: the body behind the MCP review_held_profile tool
-// (mcp/tools/somm.js), one wine at a time, shared by its single and batch
-// paths so the semantics and the stamp rule cannot fork.
+// (mcp/tools/somm/heldProfiles.js), one wine at a time, shared by its single
+// and batch paths so the semantics and the stamp rule cannot fork.
 //
 // A generated tasting profile is HELD unpublished by the publication gate
 // (services/enrichmentJob) for a stated reason, or PUBLISHED with a doubt
@@ -15,10 +15,12 @@
 //   uphold   published rows only — the flag is CORRECT; the row keeps flag and
 //            caveat and leaves the queue as honest residue.
 //   reject   held rows only — the generation is garbage; the profile clears
-//            and the wine returns to the enrichment pool.
-// Every path takes the row out of the queue: release/confirm/uphold stamp
-// profileReviewedAt, reject clears the generation itself. The suspect verdict
-// is recorded in its own field (suspectDecision), because a curator profile
+//            and the wine returns to the enrichment pool. The curator's
+//            serving trait is not part of the generation and stays.
+// Every path settles the held or flagged state: release/confirm/uphold stamp
+// profileReviewedAt, reject clears the generation itself (the wine is then
+// listed as "unprofiled", awaiting a first profile). The suspect verdict is
+// recorded in its own field (suspectDecision), because a curator profile
 // write also stamps profileReviewedAt and must not close a question nobody
 // answered.
 //
@@ -35,8 +37,15 @@ const WineDefinition = require('../models/WineDefinition');
 const aiConfig = require('../config/aiConfig');
 const { logAudit } = require('./audit');
 
-/** The fields a decision reads; producerNote is included so confirm can clear it. */
-const DECISION_SELECT = 'name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.suspectDowngradedBy aiProfile.producerNote aiProfile.description';
+/**
+ * The fields a decision reads; producerNote is included so confirm can clear
+ * it, and the serving trait so reject can carry it over.
+ */
+const DECISION_SELECT = 'name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.suspectDowngradedBy aiProfile.producerNote aiProfile.description aiProfile.servingTempMin aiProfile.servingTempMax aiProfile.needsAir';
+
+const DECISIONS = ['release', 'confirm', 'uphold', 'reject'];
+/** A curator's serving trait: set by hand, never generated, so a rejected generation does not take it along. */
+const SERVING_FIELDS = ['servingTempMin', 'servingTempMax', 'needsAir'];
 
 /** A rejected generation: the aiProfile subdoc as a fresh, re-enrichable blank. */
 const CLEARED_PROFILE = Object.freeze({
@@ -54,6 +63,9 @@ const CLEARED_PROFILE = Object.freeze({
  * to its own refusal codes, never thrown, so a batch can continue.
  */
 async function decideHeldProfile(id, decision, { reason = null, context = null, req, via } = {}) {
+  // Refused before any read: the last branch below clears a profile, and an
+  // unknown verb must never fall through to it.
+  if (!DECISIONS.includes(decision)) return { wine_id: id, error: 'invalid_decision' };
   const wine = await WineDefinition.findById(id).select(DECISION_SELECT);
   if (!wine) return { wine_id: id, error: 'not_found' };
   const ap = wine.aiProfile || {};
@@ -83,7 +95,7 @@ async function decideHeldProfile(id, decision, { reason = null, context = null, 
     // replaces the held text and clears the hold
     // (services/wineProfileOps.applyProfilePatch).
     if (aiConfig.get().enrichmentOnAdd === 'off') {
-      return { wine_id: id, error: 'ai_profiles_off — automatic AI profiles are switched off on this server, so a held profile is not regenerated; write it with set_wine_profile, which replaces the held one and clears the hold' };
+      return { wine_id: id, error: 'ai_profiles_off — automatic AI profiles are switched off on this server, so a held profile is not regenerated; write it with set_wine_profile (that replaces the held one and clears the hold)' };
     }
     const { releaseHeldProfile } = require('./enrichmentJob');
     const published = await releaseHeldProfile(wine._id, { context });
@@ -187,9 +199,15 @@ async function decideHeldProfile(id, decision, { reason = null, context = null, 
   // different operation (set_wine_profile, or an identity fix).
   if (!held) return { wine_id: id, error: 'reject_is_held_only — for a published profile, set_wine_profile, confirm (clears the flag) or uphold (keeps it)' };
   const now = new Date();
+  // The write replaces the whole subdocument, so what must survive the clear
+  // is carried over by name.
+  const serving = {};
+  for (const f of SERVING_FIELDS) {
+    if (ap[f] !== null && ap[f] !== undefined) serving[f] = ap[f];
+  }
   await WineDefinition.updateOne(
     { _id: wine._id },
-    { $set: { aiProfile: { ...CLEARED_PROFILE, flavors: [], foodPairings: [] }, updatedAt: now } }
+    { $set: { aiProfile: { ...CLEARED_PROFILE, flavors: [], foodPairings: [], ...serving }, updatedAt: now } }
   );
   logAudit(req, 'somm.profile.rejectHeld', { type: 'wine', id: wine._id },
     { name: wine.name, producer: wine.producer, previousReason: ap.heldReason || null, reason, ...door });

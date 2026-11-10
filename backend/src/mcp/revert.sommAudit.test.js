@@ -22,7 +22,7 @@ jest.mock('./actionLedger', () => ({ logAction: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ findById: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => ({ deleteOne: jest.fn() }));
-jest.mock('../models/PriceTrackingRequest', () => ({ findOneAndUpdate: jest.fn() }));
+jest.mock('../models/PriceTrackingRequest', () => ({ findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ deleteOne: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ findById: jest.fn(), deleteOne: jest.fn() }));
 
@@ -93,6 +93,16 @@ describe('somm_maturity', () => {
     expect(logAudit).not.toHaveBeenCalled();
   });
 
+  test('a profile removed from the queue mid-undo is a conflict: the claim is released and nothing is audited', async () => {
+    const profile = profileDoc();
+    profile.save.mockRejectedValue(Object.assign(new Error('gone'), { name: 'DocumentNotFoundError' }));
+    WineVintageProfile.findById.mockResolvedValue(profile);
+    const res = await revertLedgerRow({ _id: ROW, action: 'somm_maturity', detail: { profileId: 'p1', vintage: 2015 }, prev }, sommCtx, H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: ROW }, { $set: { reversed: false } });
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
   test('a caller without the somm role audits nothing', async () => {
     const res = await revertLedgerRow({ _id: ROW, action: 'somm_maturity', detail: { profileId: 'p1' } },
       { ...sommCtx, user: { id: 'u1', roles: ['user'] } }, H);
@@ -117,6 +127,13 @@ describe('somm_price', () => {
     expect(res.ok).toBe(true);
     expectAudit('somm.price.add.undo', { vintage: 2015, entryId: 'e1', removed: false });
   });
+
+  test('a failed removal releases the claim so the undo can be retried, and audits nothing', async () => {
+    WineVintagePrice.deleteOne.mockRejectedValueOnce(new Error('db down'));
+    await expect(revertLedgerRow(row, sommCtx, H)).rejects.toThrow('db down');
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: ROW }, { $set: { reversed: false } });
+    expect(logAudit).not.toHaveBeenCalled();
+  });
 });
 
 describe('somm_price_decline', () => {
@@ -130,7 +147,17 @@ describe('somm_price_decline', () => {
     PriceTrackingSkip.deleteOne.mockResolvedValue({ deletedCount: 1 });
     const res = await revertLedgerRow(row, sommCtx, H);
     expect(res.ok).toBe(true);
+    expect(res.data.requesters_restored).toBe(1);
     expectAudit('somm.price.decline.undo', { vintage: 2015, skipLifted: true });
+  });
+
+  test('onto a request that exists again, the missing requesters are added and that count is the one reported', async () => {
+    PriceTrackingRequest.findOneAndUpdate.mockResolvedValue({
+      lastErrorObject: { updatedExisting: true }, value: { _id: 'r9', requesters: [{ user: 'u7' }] },
+    });
+    const res = await revertLedgerRow({ ...row, prev: { ...row.prev, requesters: [{ user: 'u2' }, { user: 'u7' }], skipCreated: false } }, sommCtx, H);
+    expect(res.data.requesters_restored).toBe(1);
+    expect(PriceTrackingRequest.updateOne).toHaveBeenCalledWith({ _id: 'r9' }, { $push: { requesters: { $each: [{ user: 'u2' }] } } });
   });
 
   test('a failed restore audits nothing', async () => {

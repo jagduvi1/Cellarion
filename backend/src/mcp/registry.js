@@ -50,6 +50,16 @@ function registerTool(def) {
   if (!scopeOk) {
     throw new Error(`registerTool(${def.name}): scope (string or non-empty string[]) is required`);
   }
+  // A role gate that is named must be a real list. toolsForScopes reads a
+  // missing requireRole as "no role needed", so a list that failed to load
+  // (requireRole: undefined) would advertise the tool to every caller.
+  if ('requireRole' in def) {
+    const rolesOk = Array.isArray(def.requireRole) && def.requireRole.length > 0
+      && def.requireRole.every((r) => typeof r === 'string');
+    if (!rolesOk) {
+      throw new Error(`registerTool(${def.name}): requireRole, when given, is a non-empty string[]`);
+    }
+  }
   if (tools.some((t) => t.name === def.name)) {
     throw new Error(`registerTool: duplicate tool name "${def.name}"`);
   }

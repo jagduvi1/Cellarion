@@ -3,7 +3,7 @@
  * agree on every shape a row can take, or the two somm queues list different
  * wines as unprofiled.
  */
-const { hasProfileContent, UNPROFILED_QUERY } = require('./profileReview');
+const { hasProfileContent, UNPROFILED_QUERY, OUTSTANDING_REVIEW_EXPR, HELD_QUEUE_OUTSTANDING_EXPR } = require('./profileReview');
 
 // A tiny evaluator for the three-field equality/$in query, so the test can
 // run the query against the same rows the predicate sees.
@@ -34,6 +34,18 @@ test.each(cases)('%s: predicate and query agree (has content: %s)', (_label, aiP
   expect(matchesUnprofiledQuery(aiProfile)).toBe(!hasContent);
 });
 
-test('the query is frozen, so a caller cannot bend one queue without the other', () => {
+test('the query and the review expressions are frozen all the way down, so a caller cannot bend one queue without the other', () => {
   expect(Object.isFrozen(UNPROFILED_QUERY)).toBe(true);
+  expect(Object.isFrozen(UNPROFILED_QUERY['aiProfile.description'].$in)).toBe(true);
+  expect(Object.isFrozen(OUTSTANDING_REVIEW_EXPR.$or[1].$lt)).toBe(true);
+  expect(Object.isFrozen(HELD_QUEUE_OUTSTANDING_EXPR.$cond[2].$eq[0].$ifNull)).toBe(true);
+});
+
+// In an aggregation expression a missing field is not equal to null. A wine
+// stored without the heldAt key must take the published arm, where only an
+// explicit verdict closes the question; read bare, it takes the held arm.
+test('the held test reads heldAt through $ifNull, and the held arm is the shared review expression', () => {
+  expect(HELD_QUEUE_OUTSTANDING_EXPR.$cond[0]).toEqual({ $ne: [{ $ifNull: ['$aiProfile.heldAt', null] }, null] });
+  expect(HELD_QUEUE_OUTSTANDING_EXPR.$cond[1]).toBe(OUTSTANDING_REVIEW_EXPR);
+  expect(HELD_QUEUE_OUTSTANDING_EXPR.$cond[2]).toEqual({ $eq: [{ $ifNull: ['$aiProfile.suspectDecision', null] }, null] });
 });

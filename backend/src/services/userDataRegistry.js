@@ -102,6 +102,7 @@ const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
 const searchService = require('./search');
+const { eraseCuratorFromWindowSnapshots, eraseRequesterFromDeclineSnapshots } = require('./undoSnapshotErasure');
 
 const EXPORT_MAX = 50000;
 const AUDIT_MAX = 1000;
@@ -1148,7 +1149,8 @@ const REGISTRY = [
   },
   {
     model: PriceTrackingRequest, category: 'shared-content', userFields: ['requesters.user'],
-    purge: (ctx) => PriceTrackingRequest.updateMany({ 'requesters.user': ctx.userId }, { $pull: { requesters: { user: ctx.userId } } }),
+    purge: (ctx) => eraseRequesterFromDeclineSnapshots(ctx.userId)
+      .then(() => PriceTrackingRequest.updateMany({ 'requesters.user': ctx.userId }, { $pull: { requesters: { user: ctx.userId } } })),
     // After the pull, a doc with no requesters left is an orphan.
     postPurge: () => PriceTrackingRequest.deleteMany({ requesters: { $size: 0 } }),
     exportFragment: async (ctx) => {
@@ -1193,15 +1195,13 @@ const REGISTRY = [
   },
   {
     model: WineVintageProfile, category: 'creator-ref', userFields: ['setBy'],
-    // BUG FIX: also clear sommNotes (the old code unset setBy+setAt but left the
-    // somm's authored notes on the now-anonymised profile, unlike WineVintagePrice).
-    // Two passes. A somm's own row is fully anonymised, as before. A row the
-    // Registry Bridge wrote keeps its note: clearing it left the row looking
-    // like a local edit ('reviewed', no bridge note), which froze every copied
-    // drink window on a one-admin install forever (audit 2026-09-08). Dropping
-    // setBy/setAt still removes the personal reference, and an unstamped
-    // bridge row is treated as the bridge's own again.
+    // Two passes. A somm's own row loses the stamp and the note they wrote. A
+    // row the Registry Bridge wrote keeps its note: without it the row reads
+    // as a local edit and the bridge never updates that drink window again;
+    // dropping the stamp removes the personal reference. The same two passes
+    // run first on the undo snapshots other curators hold of such rows.
     purge: async (ctx) => {
+      await eraseCuratorFromWindowSnapshots(ctx.userId, BRIDGE_REGISTRY_NOTE);
       await WineVintageProfile.updateMany(
         { setBy: ctx.userId, sommNotes: { $ne: BRIDGE_REGISTRY_NOTE } },
         { $unset: { setBy: '', setAt: '', sommNotes: '' } }
