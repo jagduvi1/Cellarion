@@ -18,6 +18,7 @@ const { WINE_COLOURS, colourTypeConflict } = require('../../../utils/wineColour'
 const { WINE_TYPES, GRAPES_MAX, GRAPE_NAME_MAX, resolveGrapeIdsStrict } = require('../../../services/wineProfileOps');
 const { otherProducerSpellings, displaySpelling } = require('../../../services/producerSpelling');
 const { classifyProposal } = require('../../../services/proposalDirectApply');
+const { assignClassification } = require('../../../services/classificationOps');
 
 // Correction proposals — the human-gated tier of registry curation. Direct
 // somm writes cover type/grapes/tasting profile (set_wine_profile, recoverable
@@ -119,6 +120,9 @@ registerTool({
     // Per-kind shape: refuse mixed payloads loudly rather than silently
     // dropping fields the model believed would ride along.
     let proposedFields = null;
+    // The cleaned classification as sent, resolved again once the wine (and so
+    // its country) is loaded.
+    let classificationTier = null;
     if (args.kind === 'field_correction') {
       if (args.merge_target_id) {
         return fail('invalid_input', 'merge_target_id only applies to kind "merge" — file a separate merge proposal.');
@@ -133,11 +137,21 @@ registerTool({
           return fail('invalid_input', `proposed_fields.${f} must be at most ${PROPOSAL_FIELD_MAX} characters.`);
         }
         if (f === 'classification') {
-          // Same filing rule as the user path (wineProposalOps): a regulatory
-          // mark is no tier and would apply as nothing at approval.
+          // The filing rules of the member path (services/wineProposalOps). A
+          // regulatory mark is no tier and would apply as nothing at approval,
+          // so it is refused here rather than dropped from the proposal.
           const tier = normalizeClassification(v);
-          if (!tier) continue;
-          proposedFields[f] = tier;
+          if (!tier) {
+            return fail('invalid_input', `proposed_fields.classification: "${v}" is a regulatory mark, not a classification tier — leave classification out, or name the tier as list_classifications has it.`);
+          }
+          // Resolved against the classification list now, like the grapes
+          // below: approval refuses a tier the registry does not list, and the
+          // curator should learn that while filing. The proposal then records
+          // the canonical name that would be written.
+          const cls = await assignClassification({}, { classification: tier, strict: true });
+          if (!cls.ok) return fail('invalid_input', cls.message);
+          proposedFields[f] = cls.classification || tier;
+          classificationTier = tier;
           continue;
         }
         proposedFields[f] = v;
@@ -187,6 +201,14 @@ registerTool({
       .populate('country', 'name').populate('region', 'name').populate('grapes', 'name');
     // A user's private draft is nobody's curation work (draft design 2026-09-12).
     if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
+
+    // A word two tier systems share ("Ortswein" is Austria's tier and a
+    // spelling of VDP.Ortswein) resolved above to whichever row came first.
+    // The wine's country settles it: the country approval resolves in.
+    if (classificationTier) {
+      const own = await assignClassification({ country: wine.country }, { classification: classificationTier, strict: true });
+      if (own.ok && own.classification) proposedFields.classification = own.classification;
+    }
 
     // Same rule the user path applies at filing (wineProposalOps): a colour on
     // a wine this proposal leaves red/white/rosé would be "approved" and then
