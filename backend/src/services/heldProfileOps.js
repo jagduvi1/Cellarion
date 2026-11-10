@@ -24,10 +24,11 @@
 // write also stamps profileReviewedAt and must not close a question nobody
 // answered.
 //
-// The web twin, POST /api/admin/wines/:id/profile-reviewed, keeps a simpler
-// contract (a held row is released without waiting, any other row is stamped
-// as reviewed with no flag change), pinned by routes/admin/
-// wines.lowConfidence.test.js; aligning the two is its own decision.
+// The web twin, POST /api/admin/wines/:id/profile-reviewed, calls
+// decideHeldProfile for a published suspect: its "mark reviewed" is a
+// confirm. It keeps its own path for the rest (a held row is released without
+// waiting, any other row is stamped as reviewed), pinned by
+// routes/admin/wines.lowConfidence.test.js.
 //
 // This module stays free of the MCP envelope: it returns plain result objects
 // ({ wine_id, label, decision, ... } or { wine_id, error }) that the tool

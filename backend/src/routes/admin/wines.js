@@ -59,7 +59,10 @@ const { submitUrls } = require('../../services/indexNow');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
-const { OUTSTANDING_REVIEW_EXPR } = require('../../utils/profileReview');
+const {
+  REVIEW_QUEUE_OUTSTANDING_EXPR, isUndecidedPublishedSuspect, isOutstandingInReviewQueue,
+} = require('../../utils/profileReview');
+const { decideHeldProfile } = require('../../services/heldProfileOps');
 const { stripProducerName, stripProducerKeyPrefix, canonicalizeWineName } = require('../../utils/producerPrefix');
 const {
   NAME_CHECKS, NAME_CHECK_IDS, DEFAULT_CHECK_IDS, NAME_CHECK_SELECT,
@@ -763,12 +766,15 @@ router.post('/:id/non-wine', async (req, res) => {
 
 // POST /api/admin/wines/:id/profile-reviewed — record that an admin read this
 // low-confidence wine and judged its data correct as of the CURRENT profile.
-// DELETE undoes it. Self-invalidating by timestamp comparison (see GET above),
-// so there is nothing to clear on later edits.
+// DELETE undoes the stamp. Self-invalidating by timestamp comparison (see GET
+// above), so there is nothing to clear on later edits. On a published profile
+// whose producer is flagged, "correct" is a verdict on the flag and is
+// recorded as one (below); DELETE does not bring a cleared flag back.
 router.post('/:id/profile-reviewed', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const wine = await WineDefinition.findById(req.params.id).select('name producer aiProfile.heldAt draft');
+    const wine = await WineDefinition.findById(req.params.id)
+      .select('name producer aiProfile.heldAt aiProfile.producerSuspect aiProfile.description aiProfile.suspectDecision draft');
     if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
 
     // A HELD profile + an admin review = the human override the hold was
@@ -797,6 +803,22 @@ router.post('/:id/profile-reviewed', async (req, res) => {
       logAudit(req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
         { name: wine.name, producer: wine.producer, heldRelease: true });
       return res.json({ message: 'Publishing the held profile', profileReviewedAt: null });
+    }
+
+    // A PUBLISHED profile whose producer is flagged: "this data is correct"
+    // answers the flag, so it is recorded as the confirm the curator's
+    // review_held_profile gives (services/heldProfileOps). The flag and the
+    // caveat owners see go, the verdict stays on the row, the model's note
+    // moves into the audit row, and the wine is done in both queues. A stamp
+    // alone left the caveat on the wine and the row in the curator's queue.
+    if (isUndecidedPublishedSuspect(wine.aiProfile)) {
+      const decided = await decideHeldProfile(String(wine._id), 'confirm', { req });
+      if (decided.error) {
+        return res.status(decided.error === 'not_found' ? 404 : 409).json({
+          error: decided.error === 'not_found' ? 'Wine not found' : 'This wine changed while it was being reviewed — reload the list.',
+        });
+      }
+      return res.json({ message: 'Marked reviewed', profileReviewedAt: decided.reviewed_at, suspectCleared: true });
     }
 
     const now = new Date();
@@ -830,7 +852,10 @@ router.delete('/:id/profile-reviewed', async (req, res) => {
 // EXCLUDING rows an admin already reviewed SINCE their profile was last
 // generated: profileReviewedAt >= aiProfile.generatedAt suppresses; a
 // re-enrichment bumps generatedAt past the review and the row re-surfaces
-// by comparison alone. ?includeReviewed=1 is the audit view. Sorted most
+// by comparison alone. A published profile with a flagged producer stays
+// until someone rules on the flag, whatever its stamp says (the curator
+// queue's rule, utils/profileReview). ?includeReviewed=1 is the audit view,
+// and each row says whether it is `reviewed` by that same rule. Sorted most
 // doubtful first. producerSuspect/producerNote ride along so the model's
 // specific worry is visible per row.
 router.get('/low-confidence', async (req, res) => {
@@ -878,12 +903,12 @@ router.get('/low-confidence', async (req, res) => {
       // has no aiProfile at all would match the null branch above.
       'aiProfile.generatedAt': { $ne: null },
     };
-    const outstanding = { ...base, $expr: OUTSTANDING_REVIEW_EXPR };
+    const outstanding = { ...base, $expr: REVIEW_QUEUE_OUTSTANDING_EXPR };
 
     const filter = includeReviewed ? base : outstanding;
     const [rows, total, reviewedCount] = await Promise.all([
       WineDefinition.find(filter)
-        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.generatedAt aiProfile.heldAt aiProfile.heldReason')
+        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.generatedAt aiProfile.heldAt aiProfile.heldReason aiProfile.suspectDecision')
         .populate('region', 'name')
         .populate('country', 'name')
         .sort({ 'aiProfile.confidence': 1, producer: 1 })
@@ -921,6 +946,9 @@ router.get('/low-confidence', async (req, res) => {
         heldAt: w.aiProfile?.heldAt || null,
         heldReason: w.aiProfile?.heldReason || null,
         profileReviewedAt: w.profileReviewedAt || null,
+        // By the queue's own rule, so the page does not derive it from the
+        // two timestamps: a flagged producer nobody ruled on is not reviewed.
+        reviewed: !isOutstandingInReviewQueue(w),
         bottleCount: bottleCounts.get(String(w._id)) || 0,
       })),
       total,

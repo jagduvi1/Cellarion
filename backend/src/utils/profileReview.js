@@ -87,4 +87,55 @@ const HELD_QUEUE_OUTSTANDING_EXPR = deepFreeze({
   ],
 });
 
-module.exports = { hasProfileContent, UNPROFILED_QUERY, OUTSTANDING_REVIEW_EXPR, HELD_QUEUE_OUTSTANDING_EXPR };
+/**
+ * A PUBLISHED profile whose producer is flagged and nobody has ruled on the
+ * flag: the published-suspect state of the held-profile queue, on its own.
+ * The description test matches the decision (services/heldProfileOps): a
+ * flagged row without prose is not one a confirm or an uphold can settle.
+ */
+const PUBLISHED_SUSPECT_UNDECIDED_EXPR = deepFreeze({
+  $and: [
+    { $eq: [{ $ifNull: ['$aiProfile.heldAt', null] }, null] },
+    { $eq: ['$aiProfile.producerSuspect', true] },
+    { $gt: [{ $ifNull: ['$aiProfile.description', ''] }, ''] },
+    { $eq: [{ $ifNull: ['$aiProfile.suspectDecision', null] }, null] },
+  ],
+});
+
+/** PUBLISHED_SUSPECT_UNDECIDED_EXPR for a loaded row's aiProfile subdoc. */
+const isUndecidedPublishedSuspect = (ap) => !!(ap
+  && !ap.heldAt && ap.producerSuspect === true && ap.description && !ap.suspectDecision);
+
+/**
+ * What the admin low-confidence queue and the registry-health suspect count
+ * still need a human for: a profile nobody reviewed since it was generated,
+ * OR a published suspect nobody ruled on. The second arm is the curator
+ * queue's rule, so a flagged wine is done in both queues at the same moment:
+ * a profile write stamps profileReviewedAt without answering whether the
+ * producer is real, and only a verdict (suspectDecision) closes that.
+ */
+const REVIEW_QUEUE_OUTSTANDING_EXPR = deepFreeze({
+  $or: [OUTSTANDING_REVIEW_EXPR, PUBLISHED_SUSPECT_UNDECIDED_EXPR],
+});
+
+/**
+ * REVIEW_QUEUE_OUTSTANDING_EXPR for a loaded row that has a generated
+ * profile: is it still outstanding in the admin queue?
+ */
+function isOutstandingInReviewQueue(wine) {
+  const ap = wine.aiProfile || {};
+  const reviewed = wine.profileReviewedAt && ap.generatedAt
+    && new Date(wine.profileReviewedAt) >= new Date(ap.generatedAt);
+  return !reviewed || isUndecidedPublishedSuspect(ap);
+}
+
+module.exports = {
+  hasProfileContent,
+  UNPROFILED_QUERY,
+  OUTSTANDING_REVIEW_EXPR,
+  HELD_QUEUE_OUTSTANDING_EXPR,
+  PUBLISHED_SUSPECT_UNDECIDED_EXPR,
+  isUndecidedPublishedSuspect,
+  REVIEW_QUEUE_OUTSTANDING_EXPR,
+  isOutstandingInReviewQueue,
+};

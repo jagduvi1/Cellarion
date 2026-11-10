@@ -23,7 +23,7 @@ const User = require('../models/User');
 const RegistryHealthSnapshot = require('../models/RegistryHealthSnapshot');
 const { runNameChecks, NAME_CHECK_SELECT } = require('../utils/nameChecks');
 const { DEFAULT_CROSS_FIELD_CHECK_IDS } = require('../utils/crossFieldChecks');
-const { OUTSTANDING_REVIEW_EXPR } = require('../utils/profileReview');
+const { OUTSTANDING_REVIEW_EXPR, REVIEW_QUEUE_OUTSTANDING_EXPR } = require('../utils/profileReview');
 const { scanCrossFieldChecks } = require('./crossFieldScan');
 const { nearProducerPairs, nameSubsetPairs } = require('./registryFragmentation');
 const { incompleteGeographyRows } = require('./registryCompleteness');
@@ -170,14 +170,14 @@ async function computeMetrics() {
       'aiProfile.generatedAt': { $ne: null },
       $expr: OUTSTANDING_REVIEW_EXPR,
     }),
-    // The suspect class the admin queue shows regardless of threshold
-    // (v1.116.0) — outstanding-filtered the same way, so queue and metric
-    // agree.
+    // The suspect class the admin queue shows regardless of threshold,
+    // outstanding by the queue's own rule, so queue and metric agree: a
+    // flagged producer counts until someone rules on the flag.
     WineDefinition.countDocuments({
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       'aiProfile.producerSuspect': true,
       'aiProfile.generatedAt': { $ne: null },
-      $expr: OUTSTANDING_REVIEW_EXPR,
+      $expr: REVIEW_QUEUE_OUTSTANDING_EXPR,
     }),
     // Held rows awaiting a release decision — outstanding-filtered like the
     // suspect metric, so the count agrees with what the admin queue shows.

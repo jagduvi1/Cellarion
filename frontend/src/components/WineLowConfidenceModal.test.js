@@ -66,6 +66,29 @@ test('"Mark reviewed" calls the API, drops the row, and offers Undo', async () =
   expect(screen.getByText('common.undo')).toBeInTheDocument();
 });
 
+test('a verdict on a flagged producer offers no Undo: the flag is cleared for good', async () => {
+  adminMarkProfileReviewed.mockResolvedValue(ok({ profileReviewedAt: 'now', suspectCleared: true }));
+  renderModal();
+
+  fireEvent.click(await screen.findByText('admin.wines.lowConfidence.reviewBtn'));
+
+  expect(await screen.findByText('admin.wines.lowConfidence.empty')).toBeInTheDocument();
+  expect(screen.queryByText('common.undo')).not.toBeInTheDocument();
+});
+
+test('a row is reviewed when the server says so, not by its timestamps', async () => {
+  // Stamped by a profile write, but nobody ruled on the flagged producer.
+  adminGetLowConfidenceWines.mockResolvedValue(ok({
+    ...PAYLOAD,
+    wines: [{ ...ARCANE, profileReviewedAt: '2026-07-27T00:00:00Z', reviewed: false }],
+  }));
+  renderModal();
+
+  expect(await screen.findByText('admin.wines.lowConfidence.reviewBtn')).toBeInTheDocument();
+  expect(screen.queryByText('admin.wines.lowConfidence.unreviewBtn')).not.toBeInTheDocument();
+  expect(screen.queryByText('admin.wines.lowConfidence.reviewedBadge')).not.toBeInTheDocument();
+});
+
 test('Undo reverses the review and refetches', async () => {
   adminMarkProfileReviewed.mockResolvedValue(ok({}));
   adminUnmarkProfileReviewed.mockResolvedValue(ok({}));
