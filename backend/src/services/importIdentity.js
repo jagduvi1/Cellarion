@@ -165,39 +165,6 @@ function computeIdentityProvenance(item, ai) {
   };
 }
 
-/**
- * Complete-row AI bypass (the somm is free and we pay for AI). A row whose
- * FILE already states the identity does not need a
- * model to restate it: findOrCreateWine's ladder does the normalization work
- * deterministically (producer-prefix canon, trailing-vintage strip,
- * estate-name unpollution, appellation resolution), the somm/enrichment
- * pipeline fills the tail, and the AI call would mostly echo the row back.
- * One large import measured 430 debited calls; most rows carried full data.
- * The AI keeps the rows it is actually FOR: incomplete or messy ones.
- *
- * The gate is "can this row mint cleanly and match correctly without AI",
- * NOT "is every column filled":
- *   - producer + wineName + country: required. Identity plus the one field
- *     the mint hard-requires — and the country must RESOLVE (the file may
- *     say "AU"; resolveCountryName normalizes it, and an unrecognizable
- *     country would only turn into a /confirm-time error).
- *   - type: the file's, or inferred from the file's grapes when they all
- *     share one taxonomy colour (Riesling → white). Without either the row
- *     goes to AI — findOrCreateWine defaults a missing type to 'red', and a
- *     white minted red is exactly the silent error the AI's answer prevents.
- *     (Known limit: a red-grape rosé with no type column infers 'red' — the
- *     file's own type column always wins when present.)
- *   - grapes, region, appellation: NEVER gate the bypass. Grapes are
- *     inferable from the name and enrichable later; region derives from the
- *     appellation (regionForAppellation — the appellation's region
- *     deliberately outranks the file's); appellation was never required.
- *
- * Returns an aiIdentified-shaped object (confidence null) so Pass 2 and the
- * result builder treat the row exactly like an AI-identified one — same
- * matchOnly probe, same buildProposedWine precedence, no third path — or
- * null when the row genuinely needs (or lacks the data to skip) the model.
- */
-
 // Vivino-shaped cellar exports name the varietal composition rather than the
 // grape: "Sangiovese Blend", "Red Blend", "Sémillon-Sauvignon Blanc Blend".
 // None of those are taxonomy grape names, so a plain lookup misses every one
@@ -262,6 +229,38 @@ function producerMirroredFromName(aiData, item) {
   return !ESTATE_WORD_RE.test(name);
 }
 
+/**
+ * Complete-row AI bypass (the somm is free and we pay for AI). A row whose
+ * FILE already states the identity does not need a
+ * model to restate it: findOrCreateWine's ladder does the normalization work
+ * deterministically (producer-prefix canon, trailing-vintage strip,
+ * estate-name unpollution, appellation resolution), the somm/enrichment
+ * pipeline fills the tail, and the AI call would mostly echo the row back.
+ * One large import measured 430 debited calls; most rows carried full data.
+ * The AI keeps the rows it is actually FOR: incomplete or messy ones.
+ *
+ * The gate is "can this row mint cleanly and match correctly without AI",
+ * NOT "is every column filled":
+ *   - producer + wineName + country: required. Identity plus the one field
+ *     the mint hard-requires — and the country must RESOLVE (the file may
+ *     say "AU"; resolveCountryName normalizes it, and an unrecognizable
+ *     country would only turn into a /confirm-time error).
+ *   - type: the file's, or inferred from the file's grapes when they all
+ *     share one taxonomy colour (Riesling → white). Without either the row
+ *     goes to AI — findOrCreateWine defaults a missing type to 'red', and a
+ *     white minted red is exactly the silent error the AI's answer prevents.
+ *     (Known limit: a red-grape rosé with no type column infers 'red' — the
+ *     file's own type column always wins when present.)
+ *   - grapes, region, appellation: NEVER gate the bypass. Grapes are
+ *     inferable from the name and enrichable later; region derives from the
+ *     appellation (regionForAppellation — the appellation's region
+ *     deliberately outranks the file's); appellation was never required.
+ *
+ * Returns an aiIdentified-shaped object (confidence null) so Pass 2 and the
+ * result builder treat the row exactly like an AI-identified one — same
+ * matchOnly probe, same buildProposedWine precedence, no third path — or
+ * null when the row genuinely needs (or lacks the data to skip) the model.
+ */
 function fileCompleteIdentity(item, grapeColourOf) {
   const clean = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   const name = clean(item.wineName);
