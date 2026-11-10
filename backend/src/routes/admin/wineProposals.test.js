@@ -936,6 +936,18 @@ describe('POST /:id/reject', () => {
     res = await post(`/${P1}/reject`, { reason: 'Late second opinion.' });
     expect(res.status).toBe(409);
   });
+
+  test('a reason may fill what the proposal row stores: 2000 characters are kept whole, 2001 are refused', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValueOnce({ _id: P1, kind: 'merge', wineDefinition: W1 });
+    const long = 'x'.repeat(2000);
+    expect((await post(`/${P1}/reject`, { reason: long })).status).toBe(200);
+    expect(WineCorrectionProposal.findOneAndUpdate.mock.calls[0][1].$set.rejectReason).toBe(long);
+
+    const res = await post(`/${P1}/reject`, { reason: 'x'.repeat(2001) });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Reject reason must be at most 2000 characters');
+    expect(WineCorrectionProposal.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**
@@ -1017,6 +1029,9 @@ describe('POST /bulk-approve and /bulk-reject', () => {
   test('bulk-reject: a bad shared reason is 400 and decides NOTHING', async () => {
     const res = await post('/bulk-reject', { ids: [P1], reason: 'x' });
     expect(res.status).toBe(400);
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+    // The same upper bound as the single reject.
+    expect((await post('/bulk-reject', { ids: [P1], reason: 'x'.repeat(2001) })).status).toBe(400);
     expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });

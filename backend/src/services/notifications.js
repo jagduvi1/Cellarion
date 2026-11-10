@@ -10,6 +10,17 @@ const { bumpNotificationsVersion } = require('./dataVersion');
 // push service.
 const PUSH_CONCURRENCY = 10;
 
+// A push service refuses a payload over 4 KB, and a device shows a few lines
+// at most. The push carries the opening of a long message (a curator's reason
+// can run to 2000 characters); the bell keeps the whole text. Counted in code
+// points so a character is never cut in half, and small enough that four-byte
+// characters still fit.
+const PUSH_MESSAGE_MAX = 500;
+function pushText(message) {
+  const chars = [...String(message ?? '')];
+  return chars.length > PUSH_MESSAGE_MAX ? `${chars.slice(0, PUSH_MESSAGE_MAX - 1).join('').trimEnd()}…` : chars.join('');
+}
+
 let webpush;
 const VAPID_CONFIGURED = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 if (VAPID_CONFIGURED) {
@@ -143,7 +154,7 @@ async function createNotifications(items) {
     for (const item of allowed) {
       const userSubs = subsByUser.get(String(item.userId));
       if (!userSubs) continue;
-      const payload = JSON.stringify({ title: item.title, message: item.message, link: item.link || null, tag: item.type });
+      const payload = JSON.stringify({ title: item.title, message: pushText(item.message), link: item.link || null, tag: item.type });
       for (const sub of userSubs) {
         tasks.push(() => sendToSubscription(sub, payload));
       }
