@@ -9,6 +9,7 @@ const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail } = require('../toolUtil');
 const { siteBaseUrl } = require('../../utils/siteUrl');
+const { windowPhase } = require('../../utils/maturityClassify');
 
 registerTool({
   name: 'drink_window_for',
@@ -62,13 +63,12 @@ registerTool({
         peak: { from: p.peakFrom ?? null, until: p.peakUntil ?? null },
         late: { from: p.lateFrom ?? null, until: p.lateUntil ?? null },
       };
+      // Read the way the app reads a bottle of this vintage
+      // (utils/maturityClassify), in this tool's own words.
       let now = null;
       if (!p.relative) {
-        if (p.peakFrom && currentYear < p.peakFrom) now = (p.earlyFrom && currentYear >= p.earlyFrom) ? 'early' : 'not_ready';
-        else if (p.peakUntil && currentYear <= p.peakUntil) now = 'peak';
-        else if (p.lateUntil && currentYear <= p.lateUntil) now = 'late';
-        else if (p.peakUntil || p.lateUntil) now = 'past';
-        else if (p.peakFrom && currentYear >= p.peakFrom) now = 'peak';
+        const phase = windowPhase(p, currentYear);
+        now = phase === 'not-ready' ? 'not_ready' : phase === 'declining' ? 'past' : phase;
       }
       return {
         vintage: p.vintage,
