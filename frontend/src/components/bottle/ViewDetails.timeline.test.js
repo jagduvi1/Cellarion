@@ -211,14 +211,15 @@ test('a window made under the sommelier\'s moves to its own section with the key
   const adjust = await screen.findByRole('button', { name: 'Adjust your drink window' });
   expect(within(screen.getByTestId('personal-window')).getByTestId('maturity-timeline')).toBeInTheDocument();
   expect(screen.queryByTestId('personal-window-offer')).toBeNull();
-  expect(adjust).toHaveFocus();
+  // The focus moves in an effect of the section that has just mounted.
+  await waitFor(() => expect(adjust).toHaveFocus());
 
   updateBottle.mockResolvedValue({ ok: true, json: async () => ({ bottle: { _id: 'b1', drinkFrom: null, peakFrom: null, peakUntil: null, drinkTo: null } }) });
   fireEvent.click(adjust);
   fireEvent.click(screen.getByRole('button', { name: 'Remove my window' }));
   const offer = await screen.findByTestId('personal-window-offer');
   expect(screen.queryByTestId('personal-window')).toBeNull();
-  expect(within(offer).getByRole('button', { name: 'Set your own window' })).toHaveFocus();
+  await waitFor(() => expect(within(offer).getByRole('button', { name: 'Set your own window' })).toHaveFocus());
 });
 
 test('a drink that is not wine gets no drink-window offer, in early access or not', () => {
