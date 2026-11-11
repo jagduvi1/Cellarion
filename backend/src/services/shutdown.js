@@ -134,7 +134,6 @@ module.exports = {
   createShutdown,
   drainingConnectionClose,
   isDraining,
-  DEFAULT_BUDGET_MS,
   // tests only: the draining flag is process-wide by design
   _resetForTests: () => { draining = false; },
 };

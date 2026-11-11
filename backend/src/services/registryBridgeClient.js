@@ -174,5 +174,5 @@ function _reset() { searchCache.clear(); blockedUntil = 0; blockedReason = null;
 module.exports = {
   config, isEnabled, transportState, request, search, fetchWine, changes, me,
   forwardRequest, requestStatuses, forwardCorrection, forwardValue, _reset,
-  DEFAULT_URL, TIMEOUT_MS, SEARCH_CACHE_TTL_MS,
+  TIMEOUT_MS,
 };

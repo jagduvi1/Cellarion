@@ -673,5 +673,5 @@ function renderWineEntry(doc, wine, opts) {
 
 module.exports = {
   generateWineListPdf, buildSections, resolveEntry, groupingLevels, priceWithSymbol,
-  LEVEL_FIELDS, MAX_LEVELS, LAST_BOTTLE_LABEL, CONTINUED_LABEL, BOTTLE_COUNT_LABEL, bottleCountText,
+  LEVEL_FIELDS, MAX_LEVELS, LAST_BOTTLE_LABEL, BOTTLE_COUNT_LABEL, bottleCountText,
 };

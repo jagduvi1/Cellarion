@@ -658,7 +658,6 @@ module.exports = {
   loadPendingWine,
   runPromotionFollowThrough,
   FIXABLE_FIELDS,
-  CROSS_FIELD_OVERRIDE_FIELD,
   CREATED_VIA_FILTERS,
   FIELD_MAX,
   MAX_BOTTLE_IMAGES,

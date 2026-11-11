@@ -267,5 +267,4 @@ module.exports = {
   sweepOrphanThumbs: defaultService.sweepOrphanThumbs,
   THUMB_MAX_WIDTH,
   THUMB_MAX_HEIGHT,
-  FAILED_TTL_MS,
 };

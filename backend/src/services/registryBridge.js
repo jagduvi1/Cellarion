@@ -804,5 +804,5 @@ function _reset() { lastRefresh = null; }
 module.exports = {
   isEnabled, adoptWine, registrySearch, refreshHeld, forwardCorrection, forwardValueFor, forwardRequest, status,
   forwardAndTrackRequest, syncForwardedRequests,
-  refreshMode, setRefreshMode, REFRESH_MODES, profileFrom, REGISTRY_NOTE, bridgeState, _reset,
+  refreshMode, setRefreshMode, REGISTRY_NOTE, _reset,
 };

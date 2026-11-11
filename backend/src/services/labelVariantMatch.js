@@ -160,4 +160,4 @@ function isLabelVariant(a, b, grapeTokens) {
   return { match: true, reason: `same reduced name "${[...ra.core].sort().join(' ')}"` };
 }
 
-module.exports = { isLabelVariant, reduceName, grapeTokenSet, FURNITURE };
+module.exports = { isLabelVariant, reduceName, grapeTokenSet };

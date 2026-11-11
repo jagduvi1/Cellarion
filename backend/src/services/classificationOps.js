@@ -377,7 +377,7 @@ async function ensureClassificationSeed() {
 }
 
 module.exports = {
-  splitClassificationString, stripNoise, resolveClassifications, resolveLoaded, loadTaxonomy, pickForCountry,
-  assignClassification, classificationString, classificationsOut, knownTiersHint, detectFromName, seedClassifications,
+  splitClassificationString, stripNoise, resolveClassifications, resolveLoaded, loadTaxonomy,
+  assignClassification, classificationString, classificationsOut, detectFromName, seedClassifications,
   ensureClassificationSeed, invalidateClassificationCache, primeClassificationCache, KIND_ORDER,
 };

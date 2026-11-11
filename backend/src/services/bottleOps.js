@@ -1307,7 +1307,7 @@ async function changeBottleWine(bottle, wineDoc, req) {
 
 module.exports = {
   consumeBottle, restoreBottle, removeFromRacks, RESTORE_WINDOW_MS,
-  markArrived, parseOnOrderFields, NOT_ARRIVED_ERROR, changeBottleWine,
+  markArrived, changeBottleWine,
   addBottle, validateBottleCommitFields, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
   snapshotBottleForDelete, restoreDeletedBottle,
   openBottle, pourFromBottle, closeBottle, putBackInSlot,

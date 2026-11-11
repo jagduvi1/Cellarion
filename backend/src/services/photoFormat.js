@@ -71,7 +71,6 @@ module.exports = {
   encodeKeptPhoto,
   prepareRembgInput,
   KEPT_MAX_EDGE,
-  KEPT_QUALITY,
   KEPT_EXTENSION,
   REMBG_MAX_EDGE,
 };

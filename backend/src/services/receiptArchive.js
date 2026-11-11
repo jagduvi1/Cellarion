@@ -106,4 +106,4 @@ function purgeUserReceiptScans(userId) {
   return deleteScans({ user: userId });
 }
 
-module.exports = { archiveReceiptScan, runReceiptRetentionSweep, purgeUserReceiptScans, RECEIPT_RETENTION_DAYS, receiptsDir };
+module.exports = { archiveReceiptScan, runReceiptRetentionSweep, purgeUserReceiptScans, RECEIPT_RETENTION_DAYS };

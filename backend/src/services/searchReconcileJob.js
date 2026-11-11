@@ -171,5 +171,4 @@ module.exports = {
   reconcileIndex,
   PAGE_SIZE,
   MAX_DELETES_PER_INDEX,
-  TARGETS,
 };

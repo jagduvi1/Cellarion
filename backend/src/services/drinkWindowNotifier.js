@@ -547,6 +547,6 @@ async function storeDrinkWindowDefaultsOff() {
 }
 
 module.exports = {
-  runDrinkWindowCheck, processUser, processOpenBottles, processReservations, processArrivals,
+  runDrinkWindowCheck, processUser, processReservations, processArrivals,
   shouldSendDigestEmail, maybeSendDrinkWindowEmail, storeDrinkWindowDefaultsOff, EMAIL_GAP_MS,
 };

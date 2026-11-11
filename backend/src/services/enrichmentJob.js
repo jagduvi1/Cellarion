@@ -1120,6 +1120,6 @@ module.exports = {
   start, requestStop, getStatus, enrichWineById, releaseHeldProfile,
   profileInputsSnapshot, reenrichAfterRecordEdit, isProfileStale,
   // exported for unit tests + the reset-misheld migration
-  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile, identityDataSufficient, findNoteVarietyConflict,
+  shouldHoldProfile, identityDataSufficient,
   _resetSearchSlots,
 };

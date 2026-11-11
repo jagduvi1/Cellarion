@@ -302,19 +302,12 @@ async function saveWithNewSession(user, entry, now) {
 }
 
 module.exports = {
-  generateAccessToken,
   generateRefreshToken,
   hashRefreshToken,
   COOKIE_SECURE,
-  refreshCookieBase,
-  refreshCookieOptions,
   clearRefreshCookie,
-  buildCookieOptions,
-  REFRESH_ABSOLUTE_LIFETIME_MS,
   MAX_SESSIONS_PER_USER,
-  REUSE_GRACE_MS,
   clientHint,
-  pruneSessions,
   removeSession,
   revokeAllSessions,
   sessionForCookie,

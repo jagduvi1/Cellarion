@@ -1096,7 +1096,6 @@ module.exports = {
   attachMaturity,
   attachImages,
   importCellar,
-  clearCellarContents,
   EXPORT_SCHEMA,
   MAX_IMAGES_PER_BOTTLE,
   MAX_IMPORT_CELLARS,

@@ -54,4 +54,4 @@ async function runRegistryReadReport(day = yesterday()) {
   return { day, readers, alerted };
 }
 
-module.exports = { runRegistryReadReport, topReaders };
+module.exports = { runRegistryReadReport };

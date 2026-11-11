@@ -182,6 +182,6 @@ function quota(kind) {
 }
 
 module.exports = {
-  QUOTAS, KINDS, IMPORT_MULTIPLIER, IMPORT_WINDOW_MS, IMPORT_COOLDOWN_MS,
+  QUOTAS, KINDS, IMPORT_WINDOW_MS, IMPORT_COOLDOWN_MS,
   takeQuota, usageFor, openImportWindow, quota, capFor, capsNow, importWindowActive, resetAt, dayKey,
 };

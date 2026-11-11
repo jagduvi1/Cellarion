@@ -203,9 +203,7 @@ async function redeemExportLink(link, res, req = null) {
 }
 
 module.exports = {
-  LINK_PREFIX,
   LINK_TTL_MS,
-  ACCOUNT_EXPORT_COOLDOWN_MS,
   isExportLinkToken,
   hashLinkToken,
   mintExportLink,

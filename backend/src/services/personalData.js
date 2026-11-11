@@ -674,6 +674,5 @@ module.exports = {
   updateKey,
   deleteKey,
   // exported for tests
-  serializeEntry,
   cellarMemberIds,
 };

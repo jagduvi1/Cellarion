@@ -93,4 +93,4 @@ async function findOrCreatePendingRequest({ userId, wineName, producer, suggeste
   return { wineRequest, reused };
 }
 
-module.exports = { findOrCreatePendingRequest, pickImportHints, hasHints, HINT_LIMITS };
+module.exports = { findOrCreatePendingRequest, pickImportHints, hasHints };

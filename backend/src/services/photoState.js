@@ -149,4 +149,4 @@ async function photoPresence(userId, docs) {
   return out;
 }
 
-module.exports = { STATE, PENDING_STATES, MAX_ROWS, absoluteImageUrl, isInlineImage, photoState, photosForBottle, photoPresence };
+module.exports = { STATE, MAX_ROWS, absoluteImageUrl, isInlineImage, photoState, photosForBottle, photoPresence };

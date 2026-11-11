@@ -30,4 +30,4 @@ async function findVintageOfficials(wineIds, vintages) {
   return out;
 }
 
-module.exports = { findVintageOfficials, ELIGIBLE };
+module.exports = { findVintageOfficials };

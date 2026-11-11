@@ -285,8 +285,6 @@ module.exports = {
   appellationImpliedByName,
   proposedAppellationCountryConflict,
   appellationsAgree,
-  fieldIsEmpty,
-  DIRECT_FIELDS,
   NON_WINE_DIRECT_MAX_OWNERS,
   countHoldingMembers,
 };

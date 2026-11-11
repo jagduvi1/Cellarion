@@ -39,4 +39,4 @@ async function runMcpSnapshotScrub() {
   return { scrubbed };
 }
 
-module.exports = { runMcpSnapshotScrub, SCRUBBED_ACTIONS };
+module.exports = { runMcpSnapshotScrub };
