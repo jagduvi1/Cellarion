@@ -164,7 +164,7 @@ registerTool({
       return fail('not_found', 'No such price-tracking request — it may already be fulfilled or declined. Use list_price_tracking_requests for valid ids.');
     }
 
-    // Skip upserted (the suppression routes/bottles.js refuses on), request
+    // Skip upserted (the suppression routes/bottlePriceTracking.js refuses on), request
     // deleted, requesters told verbatim, audited: the same body as the REST
     // decline (services/priceOps). `prev` is all the undo has to work from.
     const declined = await priceOps.declinePriceRequest({ request, reason, actorId: ctx.user.id, req: ctx.req, via: 'mcp' });

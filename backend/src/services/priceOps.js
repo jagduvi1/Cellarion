@@ -198,7 +198,7 @@ function validateDeclineReason(raw) {
 /**
  * Decline a loaded tracking request with a validated reason: record the
  * PriceTrackingSkip for the pair (the suppression that keeps it out of the
- * queue and makes routes/bottles.js refuse new requests for it), delete the
+ * queue and makes routes/bottlePriceTracking.js refuse new requests for it), delete the
  * request, notify every requester with the reason verbatim, audit.
  *
  * $setOnInsert keeps the FIRST decline's reason if two curators race on the
