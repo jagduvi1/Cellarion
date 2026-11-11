@@ -3,7 +3,7 @@
  *
  * Discussions are optionalAuth, their wine is populated into the response,
  * baked into the anonymously-searchable discussion Meili index, and rendered
- * for CRAWLERS by routes/og.js — and a thread links to a registry page the
+ * for CRAWLERS by routes/og/discussions.js — and a thread links to a registry page the
  * reader may not open. So the gate is at WRITE time, and it is ABSOLUTE —
  * unlike the creator-aware rule in services/wineVisibility: attaching is the
  * act of publishing, so not even the pending row's own creator may do it.
