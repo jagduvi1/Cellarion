@@ -4,11 +4,7 @@ const { idempotency } = require('../middleware/idempotency');
 const { requireBottleAccess } = require('../middleware/bottleAccess');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
-const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
-const Country = require('../models/Country');
-const Region = require('../models/Region');
-const Grape = require('../models/Grape');
 const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { photoVintage, vintageKey } = require('../utils/imageVintage');
@@ -19,25 +15,17 @@ const OWN_PHOTO_CANDIDATES = 50;
 const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
+const { CONSUMED_STATUSES, ORDERED_STATUS, WINE_POPULATE } = require('../config/constants');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
 const { buildCaseJourneys } = require('../services/insightsService');
-const { stripHtml, escapeRegex } = require('../utils/sanitize');
-const { bottleRating, filterByRating } = require('../utils/ratingUtils');
-const {
-  classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter,
-  buildMaturitySortKeys, compareMaturitySortKeys,
-} = require('../utils/maturityUtils');
-const { parsePagination } = require('../utils/pagination');
+const { stripHtml } = require('../utils/sanitize');
 const personalData = require('../services/personalData');
 // Read-surface decoration: populated grapes gain `displayName` — the
 // regionally correct label for the bottle's wine (Tinta Roriz on a Douro
 // Port) — while `name` stays canonical for storage/filters/stats.
-// resolveGrapeDisplayName feeds the in-memory search haystack below: what
-// the card displays must be what search matches.
-const { decorateGrapes, resolveGrapeDisplayName } = require('../utils/grapeDisplay');
+const { decorateGrapes } = require('../utils/grapeDisplay');
 const mongoose = require('mongoose');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
 // shared service so the REST routes and the MCP tools can never drift (§7).
@@ -53,6 +41,7 @@ const { applyOtherCategoryAfterAdd } = require('../services/nonWineOps');
 const { moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
 const { TRASH_DAYS, trashBottle } = require('../services/bottleTrash');
+const { queryUserBottles } = require('../services/bottleListQuery');
 
 const router = express.Router();
 
@@ -91,30 +80,10 @@ router.use(requireAuth);
 // most once; without the header nothing changes.
 router.use(idempotency);
 
-// GET /api/bottles — list the authenticated user's active bottles across all
-// cellars they OWN (shared/read-only cellars are excluded, matching the
-// Statistics page's scope so the deep-links from Statistics chart segments
-// land on a bottle set with matching counts).
-//
-// Supported filter query params (all optional, combinable):
-//   search       — free-text match against wine name / producer / notes / location / type / appellation / grape names
-//   type         — wine type enum, comma-separated allowed
-//   country      — country ID, comma-separated allowed
-//   region       — region ID, comma-separated allowed
-//   grapes       — grape ID, comma-separated
-//   vintage      — vintage year string, comma-separated
-//   producer     — exact producer string (case-insensitive)
-//   bottleSize   — exact bottle-size string (e.g. "750ml")
-//   minRating    — minimum normalised rating (0-100)
-//   maxRating    — maximum normalised rating (0-100); with minRating it is a range
-//   maturity     — 'declining','late','peak','early','not-ready','none' — one, or
-//                  several comma-separated (OR-combined)
-//   sort         — 'createdAt'|'vintage'|'price'|'rating'|'name'|'maturity' with optional leading '-' for descending
-//   limit / offset — pagination (defaults: limit 30, max 200)
+// GET /api/bottles — the bottles in the cellars the user owns, narrowed, sorted
+// and paged by the query parameters (services/bottleListQuery lists them).
 router.get('/', async (req, res) => {
   try {
-    const { isValidObjectId } = mongoose;
-
     // Version read BEFORE anything is loaded, so a change landing mid-compute
     // leaves the stored answer already out of date (see tokenListCache).
     const listCacheKey = req.apiToken ? `${req.user.id}|${canonicalQuery(req.query)}` : null;
@@ -126,279 +95,14 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const cellarIds = await Cellar.find({ user: req.user.id, deletedAt: null }).distinct('_id');
-    const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
-
-    if (cellarIds.length === 0) {
+    const found = await queryUserBottles(req.user.id, req.query);
+    const { limit, skip, maturityMap } = found;
+    // No bottle was read (see queryUserBottles): answered as it is, never stored.
+    if (found.nothingCanMatch) {
       return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
     }
-
-    // Defensive scalar coercion: Express's qs query parser turns inputs
-    // like `?bottleSize[$ne]=1` into `{ bottleSize: { $ne: '1' } }`,
-    // which would bypass per-field guards and leak Mongo operators into
-    // the filter we build below. Reject anything that isn't a plain
-    // string so every value below is guaranteed to be primitive.
-    const q = (v) => (typeof v === 'string' ? v : undefined);
-    const search           = q(req.query.search);
-    const type             = q(req.query.type);
-    const country          = q(req.query.country);
-    const region           = q(req.query.region);
-    const grapes           = q(req.query.grapes);
-    const vintage          = q(req.query.vintage);
-    const producer         = q(req.query.producer);
-    const bottleSize       = q(req.query.bottleSize);
-    const minRating        = q(req.query.minRating);
-    const maxRating        = q(req.query.maxRating);
-    const ratingBandParam  = q(req.query.ratingBand); // one of RATING_BANDS (a statistics band link)
-    // null when absent; a Set of statuses otherwise (multi-select, OR).
-    const maturityFilter   = parseMaturityFilter(q(req.query.maturity));
-    const sort             = q(req.query.sort) || '-createdAt';
-    // Lifecycle filters — default is active-only, matching the
-    // Statistics page's by-type / by-country / etc. aggregates.
-    const statusFilter     = q(req.query.status);
-    // Purchase / consumption year filters apply to bottle.purchaseDate
-    // and bottle.consumedAt respectively — driven by the Statistics
-    // page's Purchase History and Consumption History charts.
-    const purchaseYear     = q(req.query.purchaseYear);
-    const consumedYear     = q(req.query.consumedYear);
-
-    const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
-    const sortDir = sort.startsWith('-') ? -1 : 1;
-
-    const filter = {
-      user: req.user.id,
-      cellar: { $in: cellarIds },
-    };
-
-    // Status / lifecycle scope
-    if (!statusFilter || statusFilter === 'active') {
-      filter.status = { $nin: NOT_IN_CELLAR_STATUSES };
-    } else if (statusFilter === 'all') {
-      // no status constraint — include everything
-    } else if (statusFilter === ORDERED_STATUS) {
-      // Bought, not delivered yet
-      filter.status = ORDERED_STATUS;
-    } else if (CONSUMED_STATUSES.includes(statusFilter)) {
-      filter.status = statusFilter;
-    } else if (statusFilter === 'consumed') {
-      filter.status = { $in: CONSUMED_STATUSES };
-    } else {
-      // Unknown value — fall back to the default active scope
-      filter.status = { $nin: NOT_IN_CELLAR_STATUSES };
-    }
-
-    if (vintage) {
-      const vintages = String(vintage).split(',').map(v => v.trim()).filter(Boolean);
-      filter.vintage = vintages.length === 1 ? vintages[0] : { $in: vintages };
-    }
-
-    if (bottleSize) {
-      filter.bottleSize = String(bottleSize);
-    }
-
-    // Year-range filters on purchaseDate / consumedAt. Using $gte/$lt of
-    // Jan 1 of the year and Jan 1 of next year lets MongoDB use the
-    // existing date indexes and avoids JS-side getFullYear() iteration.
-    const yearRange = (yearStr) => {
-      const y = parseInt(yearStr, 10);
-      if (isNaN(y) || y < 1900 || y > 2200) return null;
-      return { $gte: new Date(y, 0, 1), $lt: new Date(y + 1, 0, 1) };
-    };
-
-    if (purchaseYear) {
-      const range = yearRange(purchaseYear);
-      if (range) filter.purchaseDate = range;
-    }
-    if (consumedYear) {
-      const range = yearRange(consumedYear);
-      if (range) filter.consumedAt = range;
-    }
-
-    // Pre-query WineDefinition for taxonomy / type / producer filters.
-    // country/region values may be ObjectIds OR display names — the
-    // Statistics charts only know names (the byCountry/byRegion stats
-    // aggregate by name), so we resolve names to IDs on the fly here
-    // so the same query param works from both worlds.
-    const wdFilter = {};
-
-    const resolveTaxonomy = async (raw, Model) => {
-      const ids = [];
-      const names = [];
-      for (const v of String(raw).split(',').map(s => s.trim()).filter(Boolean)) {
-        if (isValidObjectId(v)) ids.push(v);
-        else names.push(v);
-      }
-      if (names.length > 0) {
-        const found = await Model.find({ name: { $in: names } }).distinct('_id');
-        ids.push(...found.map(id => id.toString()));
-      }
-      return ids;
-    };
-
-    if (country) {
-      const ids = await resolveTaxonomy(country, Country);
-      if (ids.length === 0) {
-        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
-      }
-      wdFilter.country = ids.length === 1 ? ids[0] : { $in: ids };
-    }
-    if (region) {
-      const ids = await resolveTaxonomy(region, Region);
-      if (ids.length === 0) {
-        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
-      }
-      wdFilter.region = ids.length === 1 ? ids[0] : { $in: ids };
-    }
-    // Grapes can also be passed as names (the byGrape stat is a name list)
-    if (grapes) {
-      const grapeIds2 = await resolveTaxonomy(grapes, Grape);
-      if (grapeIds2.length === 0) {
-        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
-      }
-      wdFilter.grapes = grapeIds2.length === 1 ? grapeIds2[0] : { $in: grapeIds2 };
-    }
-    // 'unknown' is the stats bucket for bottles WITHOUT a wine definition
-    // (typically pending wine requests from an import) — no WineDefinition
-    // ever has that type, so it must match null-wineDefinition bottles
-    // instead of going into the wd pre-query.
-    let includeNoWine = false;
-    if (type) {
-      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
-      includeNoWine = types.includes('unknown');
-      const realTypes = types.filter(t => t !== 'unknown');
-      if (realTypes.length > 0) {
-        wdFilter.type = realTypes.length === 1 ? realTypes[0] : { $in: realTypes };
-      }
-    }
-    if (producer) {
-      // Producer is a free-text field on WineDefinition; match case-insensitively
-      // with an anchored regex so chart segments that pass the exact value
-      // (e.g. "Château Margaux") find that producer's bottles.
-      const escaped = escapeRegex(producer);
-      wdFilter.producer = new RegExp(`^${escaped}$`, 'i');
-    }
-
-    if (Object.keys(wdFilter).length > 0) {
-      const wdIds = await WineDefinition.find(wdFilter).distinct('_id');
-      if (wdIds.length === 0 && !includeNoWine) {
-        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
-      }
-      // $in with null matches bottles whose wineDefinition is null or absent.
-      filter.wineDefinition = includeNoWine ? { $in: [...wdIds, null] } : { $in: wdIds };
-    } else if (includeNoWine) {
-      filter.wineDefinition = null;
-    }
-
-    // A list that holds history bottles sorts "by rating" on the rating each
-    // bottle counts with — for a drunk one the rating given when drinking —
-    // as it filters (utils/ratingUtils.bottleRating), so in memory.
-    const holdsHistory = statusFilter === 'all' || statusFilter === 'consumed' || CONSUMED_STATUSES.includes(statusFilter);
-    const directSortFields = ['createdAt', 'vintage', 'price', ...(holdsHistory ? [] : ['rating'])];
-    const canSortInDb = directSortFields.includes(sortField);
-    const needsInMemoryFilter = !!(search || minRating || maxRating || ratingBandParam || maturityFilter);
-    const canPaginateInDb = canSortInDb && !needsInMemoryFilter;
-
-    let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
-    if (canSortInDb) query = query.sort({ [sortField]: sortDir });
-    if (canPaginateInDb) {
-      query = query.skip(skip).limit(limit);
-    } else {
-      // Fallback (text search / min-rating / maturity filters, or in-memory
-      // sorts) hydrates the set for in-memory processing — cap it like the
-      // cellars.js fallbacks so one request can't load an unbounded
-      // collection. When there's no DB sort to cap on, anchor on newest-added
-      // so the >10k slice is at least deterministic.
-      if (!canSortInDb) query = query.sort({ createdAt: -1 });
-      query = query.limit(10000);
-    }
-    let bottles = await query.lean();
-    let totalCount = canPaginateInDb ? await Bottle.countDocuments(filter) : null;
-
-    // ── In-memory text search (multi-word AND across populated fields) ─────────
-    if (search) {
-      const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const words = stripAccents(String(search).toLowerCase()).split(/\s+/).filter(Boolean);
-      bottles = bottles.filter(b => {
-        const allText = [
-          b.wineDefinition?.name,
-          b.wineDefinition?.producer,
-          b.notes,
-          b.location,
-          b.wineDefinition?.country?.name,
-          b.wineDefinition?.region?.name,
-          b.wineDefinition?.appellation,
-          b.wineDefinition?.type,
-          // Canonical grape names PLUS the regional display name resolved for
-          // this wine's own country/region when it differs ("Tinta Roriz" on
-          // a Douro Port) — the card shows the regional label, so searching
-          // it must hit (audit 2026-08-11). Undefineds fall to filter(Boolean).
-          ...(b.wineDefinition?.grapes || []).flatMap(g => {
-            const names = [g?.name];
-            const display = resolveGrapeDisplayName(g, {
-              countryId: b.wineDefinition.country,
-              regionId: b.wineDefinition.region,
-              wineName: b.wineDefinition.name,
-            });
-            if (display && display !== g?.name) names.push(display);
-            return names;
-          }),
-        ].filter(Boolean).map(s => stripAccents(String(s).toLowerCase())).join(' ');
-        return words.every(word => allText.includes(word));
-      });
-    }
-
-    // ── Rating post-filter (rating scales must be normalised) ──────────────────
-    // A drunk bottle counts with the rating given when drinking, and a band is
-    // exactly the statistics' band (utils/ratingUtils).
-    bottles = filterByRating(bottles, { minRating, maxRating, ratingBand: ratingBandParam });
-
-    // ── Maturity post-filter / sort (needs WineVintageProfile lookup) ─────────
-    let maturityMap = null;
-    let maturitySortKeys = null;
-    const needsMaturity = !!(maturityFilter || sortField === 'maturity');
-    if (needsMaturity) {
-      const profileMap = await buildProfileMap(bottles);
-      maturityMap = new Map();
-      for (const b of bottles) {
-        maturityMap.set(b._id.toString(), classifyMaturity(b, profileMap));
-      }
-      if (sortField === 'maturity') maturitySortKeys = buildMaturitySortKeys(bottles, profileMap, maturityMap);
-    }
-
-    if (maturityFilter && maturityMap) {
-      bottles = bottles.filter(b => matchesMaturityFilter(maturityMap.get(b._id.toString()), maturityFilter));
-    }
-
-    // ── In-memory sort for fields we couldn't sort in the DB ──────────────────
-    if (!canSortInDb) {
-      bottles.sort((a, b) => {
-        // Stage, then the year that stage ends (utils/maturityUtils).
-        if (maturitySortKeys) {
-          return sortDir * compareMaturitySortKeys(
-            maturitySortKeys.get(a._id.toString()), maturitySortKeys.get(b._id.toString()));
-        }
-        let aVal, bVal;
-        if (sortField === 'name') {
-          aVal = a.wineDefinition?.name || '';
-          bVal = b.wineDefinition?.name || '';
-        } else if (sortField === 'rating') {
-          // Unrated last when sorting high to low, as the database sorts nulls.
-          aVal = bottleRating(a) ?? -1;
-          bVal = bottleRating(b) ?? -1;
-        } else {
-          aVal = a.createdAt;
-          bVal = b.createdAt;
-        }
-        if (aVal < bVal) return -sortDir;
-        if (aVal > bVal) return sortDir;
-        return 0;
-      });
-    }
-
-    if (!canPaginateInDb) {
-      totalCount = bottles.length;
-      bottles = bottles.slice(skip, skip + limit);
-    }
+    let bottles = found.bottles;
+    const totalCount = found.total;
 
     // The user's own photos (chosen default, own uploads by bottle or wine) —
     // the same resolution every cellar list uses. Without it this list shows
