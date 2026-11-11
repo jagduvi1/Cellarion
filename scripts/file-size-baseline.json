@@ -2,7 +2,6 @@
   "backend/src/mcp/sommTools.test.js": 2455,
   "backend/src/routes/admin/taxonomy.js": 1603,
   "backend/src/routes/admin/wines.js": 2070,
-  "backend/src/routes/og.js": 1556,
   "backend/src/services/enrichmentJob.test.js": 1514,
   "backend/src/services/findOrCreateWine.test.js": 1575,
   "backend/src/services/userDataRegistry.js": 1505,

@@ -2,7 +2,7 @@
  * The crawler-rendered taxonomy pages: GET /api/og/regions/:slug,
  * /countries/:slug, /grapes/:slug and /wine-types/:type.
  *
- * All four are drawn by taxonomyHtml in og.js. A page exists only when at
+ * All four are drawn by taxonomyHtml in og/taxonomy.js. A page exists only when at
  * least MIN_WINES public wines use the term (config/taxonomyPages.js), and it
  * lists what the API's first pages list: never a canary, a non-wine or a wine
  * whose identity is pending.
