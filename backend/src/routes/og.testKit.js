@@ -8,7 +8,7 @@ const express = require('express');
 const http = require('http');
 const { CRAWLER_LANGUAGES } = require('../config/languages');
 
-// The address the pages build their links from (SITE_URL in og.js).
+// The address the pages build their links from (SITE_URL in og/shared.js).
 const SITE = process.env.FRONTEND_URL || 'https://cellarion.app';
 
 /** Chainable like a Mongoose Query, awaitable to `value`. */
@@ -46,7 +46,7 @@ function openPages(ogRouter) {
   });
 }
 
-/** Text as the pages escape it for HTML (esc in og.js). */
+/** Text as the pages escape it for HTML (esc in og/shared.js). */
 function escHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')

@@ -1,5 +1,4 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const { recordRead, readerFor } = require('../services/registryReadTracker');
 const { publicProfileSummary } = require('../services/registryTiering');
@@ -16,8 +15,10 @@ const { fromNormalized } = require('../utils/ratingUtils');
 const { isValidId } = require('../utils/validation');
 const { sanitizeForumHtml, sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml } = require('../utils/sanitizeHtml');
 const { stripHtml } = require('../utils/sanitize');
-const { rateLimitKey } = require('../utils/clientIp');
 const { CRAWLER_LANGUAGES } = require('../config/languages');
+const {
+  SITE_URL, API_URL, esc, serializeJsonLd, hreflangLinks, ogLimiter,
+} = require('./og/shared');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const { MIN_WINES } = require('../config/taxonomyPages');
@@ -26,50 +27,7 @@ const { MIN_WINES } = require('../config/taxonomyPages');
 // two cannot be compared to pick the canaries out.
 const TAXONOMY_LISTED = { nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true } };
 
-/**
- * Serialize a JSON-LD object for safe embedding inside a <script
- * type="application/ld+json"> block. JSON.stringify does NOT escape `<`/`>`/`&`,
- * so a user-controlled field containing `</script>` (e.g. a wine name) could
- * otherwise break out of the script element. Escaping these as \uXXXX keeps the
- * JSON valid and the parsed data intact while making breakout impossible. (The
- * global CSP already blocks inline-script execution; this is defense-in-depth +
- * correct structured data for non-CSP crawlers.)
- */
-function serializeJsonLd(obj) {
-  return JSON.stringify(obj)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026');
-}
-
-/**
- * hreflang alternates for a crawler-rendered page. One entry per language the
- * site is offered in, plus x-default. Both this and the SPA's SEOHead advertise
- * the same finished languages — they previously disagreed, with this side
- * omitting Swedish entirely.
- */
-function hreflangLinks(pageUrl) {
-  return [...CRAWLER_LANGUAGES, 'x-default']
-    .map((lang) => `  <link rel="alternate" hreflang="${lang}" href="${esc(pageUrl)}" />`)
-    .join('\n');
-}
-
 const router = express.Router();
-
-const ogLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 60,
-  // Key on the masked client IP (security audit L-10): the default keyGenerator
-  // uses the raw req.ip, so an IPv6 client could rotate the low 64 bits of its
-  // /64 for an unbounded number of (uncached, DB-hitting) OG renders. rateLimitKey
-  // collapses IPv6 to its /64 and honours the CF-Connecting-IP trust model.
-  keyGenerator: (req) => rateLimitKey(req),
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
-const API_URL = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://cellarion.app';
 
 // ── Landing-page copy ────────────────────────────────────────────────────────
 // Mirrors the marketing copy in frontend/src/locales/en/translation.json under
@@ -1594,14 +1552,5 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
     res.status(500).send('Error generating page');
   }
 });
-
-// Escape HTML entities for safe embedding in HTML attributes
-function esc(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
 
 module.exports = router;

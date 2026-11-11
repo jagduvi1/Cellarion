@@ -27,7 +27,7 @@ afterAll((done) => {
   server.close(done);
 });
 
-// The page escapes text for HTML (esc in og.js); compare the same way.
+// The page escapes text for HTML (esc in og/shared.js); compare the same way.
 const esc = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;');
