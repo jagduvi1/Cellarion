@@ -353,7 +353,7 @@ function parseExpandResult(text, originalMessage, hasHistory) {
   return { searchQuery, needsNewSearch };
 }
 
-// ── Shared pipeline (used by both chat and chatStream) ────────────────────
+// ── The pipeline behind chat() ─────────────────────────────────────────────
 
 /**
  * Prepare the chat context: expand query, search, filter, enrich.
@@ -488,7 +488,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
   };
 }
 
-// ── Main entry point (non-streaming) ──────────────────────────────────────
+// ── Entry point ────────────────────────────────────────────────────────────
 
 async function chat(userId, message, opts = {}) {
   const { cfg, callParams, wines, searchQuery, needsNewSearch, wineSection, useQueryExpansion } =
@@ -543,100 +543,4 @@ async function chat(userId, message, opts = {}) {
   };
 }
 
-// ── Streaming entry point (SSE) ───────────────────────────────────────────
-
-/**
- * Stream the chat response via SSE events written to an Express response.
- *
- * Events sent:
- *   meta  – { wines, expandedQuery, searchPerformed, wineContext }
- *   delta – { text }  (each token as it arrives)
- *   done  – { usage }
- *   error – { error }
- */
-async function chatStream(userId, message, opts, res) {
-  const { cfg, callParams, wines, searchQuery, needsNewSearch, wineSection, useQueryExpansion } =
-    await _prepareChatContext(userId, message, opts);
-
-  // Send metadata before streaming starts
-  _sseWrite(res, 'meta', {
-    wines,
-    expandedQuery: useQueryExpansion && needsNewSearch ? searchQuery : null,
-    searchPerformed: needsNewSearch,
-    wineContext: wineSection,
-  });
-
-  const client = aiProvider.getChatClient({ feature: 'chat' });
-
-  // messages.stream() returns synchronously and reports HTTP failures via the
-  // 'error' event (never by throwing), so the model fallback has to live in
-  // the error handler: retry once on the fallback model if the primary fails
-  // before any tokens were emitted.
-  const canFallback = canFallbackTo(cfg);
-
-  return new Promise((resolve, reject) => {
-    let aborted = false;
-    let receivedText = false;
-    let stream;
-
-    const runStream = (model, allowFallback) => {
-      stream = client.messages.stream({ ...callParams, model, ...thinkingOff(model) });
-
-      stream.on('text', (textDelta) => {
-        receivedText = true;
-        if (!aborted) {
-          _sseWrite(res, 'delta', { text: textDelta });
-        }
-      });
-
-      stream.on('finalMessage', (msg) => {
-        if (!aborted) {
-          const usage = {
-            inputTokens:  msg.usage?.input_tokens  ?? 0,
-            outputTokens: msg.usage?.output_tokens ?? 0,
-          };
-          _sseWrite(res, 'done', { usage });
-          res.end();
-        }
-        resolve({ usage: { inputTokens: msg.usage?.input_tokens ?? 0, outputTokens: msg.usage?.output_tokens ?? 0 } });
-      });
-
-      stream.on('error', (err) => {
-        const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
-          || err.error?.type === 'overloaded_error';
-        if (allowFallback && isRetryable && !receivedText && !aborted) {
-          runStream(cfg.chatModelFallback, false);
-          return;
-        }
-        if (!aborted) {
-          _sseWrite(res, 'error', { error: err.message || 'Stream error' });
-          res.end();
-        }
-        reject(err);
-      });
-
-      // An aborted stream emits 'abort' — NOT 'error' — and with no listener
-      // the SDK turns it into an unhandled promise rejection (process-fatal
-      // under Node's default policy). It also means neither 'finalMessage'
-      // nor 'error' fires, so without this the promise never settles and the
-      // caller's finally (concurrency-slot release) never runs.
-      stream.on('abort', () => {
-        resolve({ usage: null, aborted: true });
-      });
-    };
-
-    res.on('close', () => {
-      aborted = true;
-      stream?.abort?.();
-    });
-
-    runStream(cfg.chatModel, canFallback);
-  });
-}
-
-/** Write a single SSE event to the response. */
-function _sseWrite(res, event, data) {
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-module.exports = { chat, chatStream, getEventLog };
+module.exports = { chat, getEventLog };

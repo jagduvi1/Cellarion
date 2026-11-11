@@ -206,10 +206,12 @@ async function openAiCreate(params, { maxRetries = 2 } = {}) {
 }
 
 /**
- * Streaming completion with the event surface aiChat.chatStream expects from
- * the Anthropic SDK: 'text' (delta), 'finalMessage' ({content, usage}),
- * 'error', 'abort', plus an .abort() method. The request only starts on a
- * later tick, so callers can attach listeners synchronously after the call.
+ * Streaming completion with the event surface of the Anthropic SDK's stream:
+ * 'text' (delta), 'finalMessage' ({content, usage}), 'error', 'abort', plus
+ * an .abort() method, so a caller that streams works with either provider.
+ * Nothing in the app streams at present: the chat answers in one piece. The
+ * request only starts on a later tick, so callers can attach listeners
+ * synchronously after the call.
  *
  * Contract: callers MUST attach an 'error' listener in the same synchronous
  * block — this is a bare EventEmitter, and an 'error' event with no listener
