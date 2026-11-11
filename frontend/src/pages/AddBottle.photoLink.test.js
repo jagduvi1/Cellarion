@@ -147,6 +147,31 @@ describe('AddBottle — linking the uploaded photos', () => {
     expect(linkCalls()).toHaveLength(1);
   });
 
+  test('a link the server refuses is tried again when the flow resumes', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let linkTries = 0;
+    routeApi((n) => (n === 1
+      ? { customFieldErrors: [{ key: 'ABV', error: 'You already use "ABV" as a text key' }] }
+      : {}));
+    const answer = apiFetchMock.getMockImplementation();
+    apiFetchMock.mockImplementation(async (url, opts) => {
+      if (url !== '/api/images/link-to-bottle') return answer(url, opts);
+      linkTries += 1;
+      return linkTries === 1 ? jsonRes({ error: 'Too many requests' }, false, 429) : jsonRes({ linked: 1 });
+    });
+    await uploadAndSubmitWithFields();
+
+    await waitFor(() =>
+      expect(screen.getByText('addBottle.customFieldsNotSaved')).toBeInTheDocument());
+    await waitFor(() => expect(linkCalls()).toHaveLength(1));
+
+    // Closing the notice resumes the flow: the refused link gets its second try.
+    await act(async () => { fireEvent.click(screen.getByText('common.close')); });
+    await waitFor(() => expect(linkCalls()).toHaveLength(2));
+    expect(linkCalls()[1]).toEqual({ bottleId: 'b1', imageIds: ['img-1'] });
+    quiet.mockRestore();
+  });
+
   test('a clean add links the photos once, on the way to the cellar', async () => {
     routeApi();
     await uploadAndSubmitWithFields();
