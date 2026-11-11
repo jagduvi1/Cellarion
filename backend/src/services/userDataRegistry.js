@@ -28,10 +28,6 @@ const User = require('../models/User');
 const AiBudgetRequest = require('../models/AiBudgetRequest');
 const ApiToken = require('../models/ApiToken');
 const BridgeKey = require('../models/BridgeKey');
-// Kept in step with REGISTRY_NOTE in services/registryBridge.js. A literal on
-// purpose: requiring the bridge service here would pull its taxonomy and
-// search dependencies into every erasure run.
-const BRIDGE_REGISTRY_NOTE = 'From the shared registry (cellarion.app)';
 const BridgeUsageDay = require('../models/BridgeUsageDay');
 const ExportLink = require('../models/ExportLink');
 const IdempotencyRecord = require('../models/IdempotencyRecord');
@@ -103,15 +99,7 @@ const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
 const searchService = require('./search');
 const { eraseCuratorFromWindowSnapshots, eraseRequesterFromDeclineSnapshots } = require('./undoSnapshotErasure');
-
-const EXPORT_MAX = 50000;
-const AUDIT_MAX = 1000;
-
-// Record that an export array hit its cap so the payload's _truncated map flags it.
-function markTrunc(ctx, key, arr, cap = EXPORT_MAX) {
-  if (arr.length >= cap) ctx.truncated[key] = cap;
-  return arr;
-}
+const { EXPORT_MAX, AUDIT_MAX, markTrunc, BRIDGE_REGISTRY_NOTE } = require('./userData/shared');
 
 /**
  * Models with a user reference that are intentionally NOT purged/exported here,
