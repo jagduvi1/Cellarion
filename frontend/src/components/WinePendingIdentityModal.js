@@ -46,15 +46,16 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   // non-editing row, so one shared value paints the same red paragraph under
   // all 25 rows and follows the curator through paging (audit HIGH-1).
   const [rowErrors, setRowErrors] = useState({});
+  // What the last write answered. It stays through the reload that follows the
+  // write, and goes when the curator pages, changes a filter or writes again.
   const [successMsg, setSuccessMsg] = useState(null);
 
   const fetchPage = useCallback(async (p) => {
     setLoading(true);
     setError(null);
-    // Stale row errors and a stale green banner must not survive a reload —
-    // they would follow the curator through paging and filter changes.
+    // Row errors belong to the rows that were on screen; they do not follow
+    // the curator into the next load.
     setRowErrors({});
-    setSuccessMsg(null);
     try {
       const params = new URLSearchParams({ page: p, limit: PAGE_SIZE });
       if (viaFilter) params.set('createdVia', viaFilter);
@@ -81,6 +82,10 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
 
   useEffect(() => { fetchPage(page); }, [fetchPage, page]);
 
+  // The curator moved on: the last write's confirmation is about the view
+  // they left, so it goes with it.
+  const moveToPage = (nextPage) => { setSuccessMsg(null); setPage(nextPage); };
+
   const startEdit = (w) => {
     setRowErrors({});
     setEditing(w._id);
@@ -103,9 +108,11 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
    */
   const refetchAfterWrite = async () => {
     const rowLeavesList = !showUnavailable;   // with the filter on, a dispositioned row stays visible (audit LOW-5)
-    const nextPage = rowLeavesList && wines.length === 1 && page > 1 ? page - 1 : page;
-    if (nextPage !== page) setPage(nextPage);
-    await fetchPage(nextPage);
+    const stepBack = rowLeavesList && wines.length === 1 && page > 1;
+    // A new page number is loaded by the effect above; loading it here as
+    // well would ask the server twice.
+    if (stepBack) setPage(page - 1);
+    else await fetchPage(page);
   };
 
   /**
@@ -119,6 +126,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
     if (value && !window.confirm(t('admin.wines.pendingIdentity.unavailableConfirm'))) return;
     setSaving(true);
     setRowErrors({});
+    setSuccessMsg(null);
     try {
       const res = await sommFixPendingWine(apiFetch, wineId, { identityUnavailable: value });
       const data = await res.json().catch(() => ({}));
@@ -138,6 +146,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   const save = async (wineId) => {
     setSaving(true);
     setRowErrors({});
+    setSuccessMsg(null);
     try {
       // Only send what the curator actually typed — an untouched field must
       // not be echoed back as a "change" (and an empty producer would be
@@ -205,7 +214,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
           {t('admin.wines.pendingIdentity.sourceLabel')}:{' '}
           <select
             value={viaFilter}
-            onChange={e => { setViaFilter(e.target.value); setPage(1); }}
+            onChange={e => { setViaFilter(e.target.value); moveToPage(1); }}
             disabled={loading || saving}
           >
             <option value="">{t('admin.wines.pendingIdentity.allSources')}</option>
@@ -216,7 +225,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
           <input
             type="checkbox"
             checked={showUnavailable}
-            onChange={e => { setShowUnavailable(e.target.checked); setPage(1); }}
+            onChange={e => { setShowUnavailable(e.target.checked); moveToPage(1); }}
             disabled={loading || saving}
           />{' '}
           {t('admin.wines.pendingIdentity.showUnavailable', { n: unavailableTotal })}
@@ -412,11 +421,11 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
 
       {pages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-          <button className="btn btn-secondary btn-sm" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)}>
+          <button className="btn btn-secondary btn-sm" disabled={page <= 1 || loading} onClick={() => moveToPage(page - 1)}>
             {t('common.previous')}
           </button>
           <span style={{ fontSize: '0.85rem' }}>{t('admin.audit.page', { current: page, total: pages })}</span>
-          <button className="btn btn-secondary btn-sm" disabled={page >= pages || loading} onClick={() => setPage(p => p + 1)}>
+          <button className="btn btn-secondary btn-sm" disabled={page >= pages || loading} onClick={() => moveToPage(page + 1)}>
             {t('common.next')}
           </button>
           <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #888)' }}>
