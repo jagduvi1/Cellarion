@@ -3,13 +3,10 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const JournalEntry = require('../models/JournalEntry');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
-const { logAudit } = require('../services/audit');
-// Entry sanitisation / ref validation / create / delete live in
+// Entry sanitisation, ref validation, create, update and delete live in
 // services/journalOps.js — ONE implementation shared with the MCP
 // capture_tasting_note tool, so the two surfaces cannot drift.
-const {
-  sanitizeEntry, validatePairingRefs, createEntry, deleteEntry, OCCASIONS,
-} = require('../services/journalOps');
+const { createEntry, updateEntry, deleteEntry, OCCASIONS } = require('../services/journalOps');
 const { escapeRegex } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 const { CONSUMED_STATUSES } = require('../config/constants');
@@ -183,21 +180,13 @@ router.post('/', requireNonDemo, async (req, res) => {
 // PUT /api/journal/:id — update an entry
 router.put('/:id', async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const result = await updateEntry(req.user.id, req.params.id, req.body, req);
+    if (result.notFound) return res.status(404).json({ error: 'Entry not found' });
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    const entry = await JournalEntry.findOne({ _id: req.params.id, user: req.user.id });
-    if (!entry) return res.status(404).json({ error: 'Entry not found' });
-
-    const clean = sanitizeEntry(req.body);
-    await validatePairingRefs(clean, req.user.id);
-    Object.assign(entry, clean);
-    await entry.save();
-
-    const populated = await JournalEntry.findById(entry._id)
+    const populated = await JournalEntry.findById(result.entry._id)
       .populate(POPULATE_PAIRINGS)
       .lean();
-
-    logAudit(req, 'journal.update', { type: 'journal', id: entry._id });
 
     res.json({ entry: redactPeople(populated, req.user.id) });
   } catch (err) {
