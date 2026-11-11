@@ -1,7 +1,7 @@
 /**
- * routes/cellars attachBottleImageUrls — the per-bottle "pending photo" that
- * the cellar list (BottleCard) renders when a bottle has no starred image and
- * its wine has no registry image.
+ * attachBottleImageUrls — the per-bottle "pending photo" that the cellar list
+ * (BottleCard) renders when a bottle has no starred image and its wine has no
+ * registry image.
  *
  * The cellar's card view must never show the RAW frame handed to the label
  * scanner — background and all — served from /api/uploads/originals/. That
@@ -10,36 +10,14 @@
  * with no processed file, so the by-wine arm of this lookup would match it on
  * every bottle of that wine. The lookup must exclude label scans.
  */
-process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
-
-jest.mock('../services/search', () => ({
-  indexWine: jest.fn(),
-  getIsAvailable: jest.fn(() => false),
-}));
-jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
-jest.mock('../services/rackOps', () => ({ createCellar: jest.fn() }));
-jest.mock('../services/notifications', () => ({ createNotification: jest.fn() }));
-jest.mock('../services/cellarTransfer', () => ({ transferCellarOwnership: jest.fn() }));
-jest.mock('../services/mailgun', () => ({ sendCellarInviteEmail: jest.fn() }));
-jest.mock('../utils/exchangeRates', () => ({
-  getSnapshotsForDates: jest.fn(), getOrCreateDailySnapshot: jest.fn(), convertCurrency: jest.fn(),
-}));
-jest.mock('../models/Cellar', () => ({}));
 // Sibling lookup: the viewer's other bottles of
 // the same wines. Empty unless a test says otherwise.
 const mockBottleFind = jest.fn(() => ({ select: () => ({ lean: async () => [] }) }));
 jest.mock('../models/Bottle', () => ({ find: (...a) => mockBottleFind(...a) }));
-jest.mock('../models/Rack', () => ({}));
-jest.mock('../models/User', () => ({}));
-jest.mock('../models/AuditLog', () => ({}));
-jest.mock('../models/WineDefinition', () => ({}));
-jest.mock('../models/PendingShare', () => ({}));
-jest.mock('../models/ClimateDevice', () => ({}));
-jest.mock('../models/WineRequest', () => ({}));
 jest.mock('../models/BottleImage', () => ({ find: jest.fn() }));
 
 const BottleImage = require('../models/BottleImage');
-const { attachBottleImageUrls } = require('./cellars');
+const { attachBottleImageUrls } = require('./bottleImageUrls');
 
 const USER = '64b000000000000000000001';
 const WINE = '64b0000000000000000000aa';

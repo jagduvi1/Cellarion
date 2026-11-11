@@ -1215,7 +1215,3 @@ router.post('/:id/transfer-ownership', requireNonDemo, async (req, res) => {
 });
 
 module.exports = router;
-// Re-exported: routes/bottles.js, routes/offline.js and routes/inventory.js
-// reach it through this router, and so does its unit test
-// (routes/cellars.pendingImage.test.js).
-module.exports.attachBottleImageUrls = attachBottleImageUrls;

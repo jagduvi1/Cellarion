@@ -35,7 +35,7 @@ jest.mock('../utils/maturityUtils', () => ({
   buildProfileMap: jest.fn().mockResolvedValue(new Map()),
   classifyMaturity: jest.fn((b) => b.testMaturity ?? null),
 }));
-jest.mock('./cellars', () => ({ attachBottleImageUrls: jest.fn(async (bottles) => bottles) }));
+jest.mock('../services/bottleImageUrls', () => ({ attachBottleImageUrls: jest.fn(async (bottles) => bottles) }));
 
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
@@ -57,7 +57,7 @@ const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
-const { attachBottleImageUrls } = require('./cellars');
+const { attachBottleImageUrls } = require('../services/bottleImageUrls');
 const { buildProfileMap } = require('../utils/maturityUtils');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const bottlesRouter = require('./bottles');

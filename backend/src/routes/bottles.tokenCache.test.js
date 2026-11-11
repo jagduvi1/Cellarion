@@ -36,7 +36,7 @@ jest.mock('../utils/maturityUtils', () => ({
   buildProfileMap: jest.fn().mockResolvedValue(new Map()),
   classifyMaturity: jest.fn(() => 'peak'),
 }));
-jest.mock('./cellars', () => ({ attachBottleImageUrls: async (bottles) => bottles }));
+jest.mock('../services/bottleImageUrls', () => ({ attachBottleImageUrls: async (bottles) => bottles }));
 
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));

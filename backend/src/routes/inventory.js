@@ -15,7 +15,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
 const { buildInventory, inventoryTag, parseInclude } = require('../services/integrationInventory');
-const { attachBottleImageUrls } = require('./cellars');
+const { attachBottleImageUrls } = require('../services/bottleImageUrls');
 
 const router = express.Router();
 

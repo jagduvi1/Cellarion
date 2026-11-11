@@ -11,7 +11,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
 const { buildOfflineSnapshot, snapshotTag } = require('../services/offlineSnapshot');
-const { attachBottleImageUrls } = require('./cellars');
+const { attachBottleImageUrls } = require('../services/bottleImageUrls');
 
 const router = express.Router();
 
