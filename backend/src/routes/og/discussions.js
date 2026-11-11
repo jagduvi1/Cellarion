@@ -5,8 +5,7 @@ const express = require('express');
 const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
 const { isValidId } = require('../../utils/validation');
-const { sanitizeForumHtml } = require('../../utils/sanitizeHtml');
-const { stripHtml } = require('../../utils/sanitize');
+const { sanitizeForumHtml, visibleText } = require('../../utils/sanitizeHtml');
 const { SITE_URL, esc, serializeJsonLd, ogLimiter } = require('./shared');
 
 const router = express.Router();
@@ -77,7 +76,7 @@ router.get('/community/discussions', ogLimiter, async (req, res) => {
       const url = `${SITE_URL}/community/discussions/${d.slug || d._id}`;
       // Body is HTML — strip to plain text for the preview snippet so we don't
       // leak markup into the list view.
-      const plain = stripHtml(d.body || '');
+      const plain = visibleText(d.body || '');
       const preview = plain.slice(0, 160);
       const cat = DISCUSSION_CATEGORY_LABELS[d.category] || d.category;
       return `<li><a href="${esc(url)}"><strong>${esc(d.title)}</strong></a> — ${esc(cat)} · ${d.replyCount || 0} ${d.replyCount === 1 ? 'reply' : 'replies'}<br/><small>${esc(preview)}${plain.length > 160 ? '…' : ''}</small></li>`;
@@ -136,7 +135,7 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
 
     // body is sanitized HTML — strip to plain text for the meta description
     // so we don't leak `<p>` etc. into Google's snippet.
-    const plainBody = stripHtml(discussion.body || '');
+    const plainBody = visibleText(discussion.body || '');
     const fullDesc = plainBody.slice(0, 160);
     const metaDescription = fullDesc.length > 0 ? fullDesc : `${discussion.title} — Cellarion wine discussion`;
     const datePublished = discussion.createdAt ? new Date(discussion.createdAt).toISOString() : '';
@@ -169,7 +168,7 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
       ...(replies.length > 0 ? {
         comment: replies.map(r => ({
           '@type': 'Comment',
-          text: stripHtml(r.body || ''),
+          text: visibleText(r.body || ''),
           datePublished: r.createdAt ? new Date(r.createdAt).toISOString() : undefined,
           author: { '@type': 'Person', name: r.author?.displayName || r.author?.username || 'Anonymous' }
         }))

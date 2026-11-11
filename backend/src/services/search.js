@@ -3,7 +3,7 @@
 const { Meilisearch: MeiliSearch } = require('meilisearch');
 const WineDefinition = require('../models/WineDefinition');
 const Discussion = require('../models/Discussion');
-const { stripHtml } = require('../utils/sanitize');
+const { visibleText } = require('../utils/sanitizeHtml');
 const { grapeSearchNames } = require('../utils/grapeDisplay');
 
 const INDEX_NAME = 'wines';
@@ -367,7 +367,7 @@ function buildDiscussionDocument(discussion, replyTexts = []) {
     slug: discussion.slug || '',
     title: discussion.title || '',
     // Index plain text — Meilisearch shouldn't tokenize HTML markup as content
-    body: stripHtml(discussion.body || ''),
+    body: visibleText(discussion.body || ''),
     replyContent,
     category: discussion.category || '',
     // Threads written before language sections existed carry no field; they
@@ -401,7 +401,7 @@ async function fetchReplyTextsForIndex(discussionId) {
     .sort({ createdAt: 1 })
     .select('body')
     .lean();
-  return replies.map(r => stripHtml(r.body || '')).filter(Boolean);
+  return replies.map(r => visibleText(r.body || '')).filter(Boolean);
 }
 
 // Same contract as fullSync: the enqueued task uids, and `throwOnError` for a
@@ -429,7 +429,7 @@ async function fullSyncDiscussions({ throwOnError = false } = {}) {
       for (const r of replies) {
         const key = r.discussion.toString();
         if (!repliesByDiscussion.has(key)) repliesByDiscussion.set(key, []);
-        repliesByDiscussion.get(key).push(stripHtml(r.body || ''));
+        repliesByDiscussion.get(key).push(visibleText(r.body || ''));
       }
       const documents = batch.map(d =>
         buildDiscussionDocument(d, repliesByDiscussion.get(d._id.toString()) || [])

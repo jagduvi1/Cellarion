@@ -13,7 +13,7 @@ const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
 const BlogPost = require('../models/BlogPost');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
-const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml');
+const { sanitizeForumHtml, visibleTextLength, visibleText } = require('../utils/sanitizeHtml');
 const { logAudit } = require('../services/audit');
 const { incrementCred, decrementCred } = require('../utils/cellarCred');
 const {
@@ -787,7 +787,7 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
         // Strip the quoted body to plain text before truncating — slicing raw
         // HTML would split tags ("<stro|ng>") and break rendering. The quote
         // is rendered in a styled blockquote, so plain text is the right form.
-        const quotedPlain = stripHtml(quotedReply.body || '');
+        const quotedPlain = visibleText(quotedReply.body || '');
         const snippetBody = quotedPlain.length > 300
           ? quotedPlain.slice(0, 300) + '…'
           : quotedPlain;
@@ -868,7 +868,7 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
     const replierName = replier?.displayName || replier?.username || 'Someone';
     const link = `/community/discussions/${discussion.slug || discussion._id}`;
     const fullUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}${link}`;
-    const replyTextPreview = stripHtml(cleanBody).slice(0, 280);
+    const replyTextPreview = visibleText(cleanBody).slice(0, 280);
     const notified = new Set();
     const selfId = String(req.user.id);
 
