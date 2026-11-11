@@ -9,6 +9,7 @@ const { validateImageRef } = require('../../services/accountOps');
 const { WINE_COLOURS, stateColour, colourTypeConflict } = require('../../utils/wineColour');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
+const { bottleCountsByWine } = require('../../services/wineUsage');
 const BottleImage = require('../../models/BottleImage');
 const DeletedBottle = require('../../models/DeletedBottle');
 const WineVintageProfile = require('../../models/WineVintageProfile');
@@ -591,14 +592,7 @@ router.get('/low-confidence', async (req, res) => {
         all - await WineDefinition.countDocuments(outstanding)),
     ]);
 
-    const bottleCounts = new Map();
-    if (rows.length > 0) {
-      const counts = await Bottle.aggregate([
-        { $match: { wineDefinition: { $in: rows.map(w => w._id) } } },
-        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
-      ]);
-      for (const c of counts) bottleCounts.set(String(c._id), c.count);
-    }
+    const bottleCounts = await bottleCountsByWine(rows.map(w => w._id));
 
     res.json({
       wines: rows.map(w => ({

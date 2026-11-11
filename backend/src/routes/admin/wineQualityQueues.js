@@ -17,7 +17,7 @@ const {
   incompleteGeographyRows, stillIncomplete, GEOGRAPHY_INCOMPLETE_CHECK_ID,
 } = require('../../services/registryCompleteness');
 const WineDefinition = require('../../models/WineDefinition');
-const Bottle = require('../../models/Bottle');
+const { bottleCountsByWine } = require('../../services/wineUsage');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
@@ -96,14 +96,7 @@ router.get('/producer-in-name', async (req, res) => {
     const pageRows = flagged.slice(skip, skip + parsedLimit);
 
     // Bottle counts for the page's rows in one aggregate
-    const bottleCounts = new Map();
-    if (pageRows.length > 0) {
-      const counts = await Bottle.aggregate([
-        { $match: { wineDefinition: { $in: pageRows.map(w => w._id) } } },
-        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
-      ]);
-      for (const c of counts) bottleCounts.set(String(c._id), c.count);
-    }
+    const bottleCounts = await bottleCountsByWine(pageRows.map(w => w._id));
 
     res.json({
       wines: pageRows.map(w => ({

@@ -12,7 +12,7 @@ const {
 const { scoreWineMatch } = require('../../services/wineMatching');
 const { conflictingStyleTerms } = require('../../utils/styleTerms');
 const WineDefinition = require('../../models/WineDefinition');
-const Bottle = require('../../models/Bottle');
+const { bottleCountsByWine } = require('../../services/wineUsage');
 const { loadNotDuplicates, markNotDuplicates, unmarkNotDuplicates } = require('../../services/notDuplicateStore');
 const { logAudit } = require('../../services/audit');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
@@ -157,14 +157,7 @@ router.get('/duplicate-clusters', async (req, res) => {
 
     // Look up bottle counts in one aggregate
     const allClusterWineIds = trimmed.flatMap(c => c.wineIds);
-    const bottleCounts = new Map();
-    if (allClusterWineIds.length > 0) {
-      const counts = await Bottle.aggregate([
-        { $match: { wineDefinition: { $in: allClusterWineIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
-      ]);
-      for (const c of counts) bottleCounts.set(String(c._id), c.count);
-    }
+    const bottleCounts = await bottleCountsByWine(allClusterWineIds.map(id => new mongoose.Types.ObjectId(id)));
 
     res.json({
       scannedCount: wines.length,
@@ -371,14 +364,7 @@ router.get('/canonical-collisions', async (req, res) => {
     });
 
     const ids = active.flatMap(([, arr]) => arr.map(w => w._id));
-    const bottleCounts = new Map();
-    if (ids.length > 0) {
-      const counts = await Bottle.aggregate([
-        { $match: { wineDefinition: { $in: ids } } },
-        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
-      ]);
-      for (const c of counts) bottleCounts.set(String(c._id), c.count);
-    }
+    const bottleCounts = await bottleCountsByWine(ids);
 
     const totalBottles = (arr) => arr.reduce((s, w) => s + (bottleCounts.get(String(w._id)) || 0), 0);
     const sets = active
