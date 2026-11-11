@@ -26,7 +26,7 @@ const Review = require('../models/Review');
 const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
 const WineEmbedding = require('../models/WineEmbedding');
-const WineNotDuplicate = require('../models/WineNotDuplicate');
+const { forgetWine } = require('./notDuplicateStore');
 const WineList = require('../models/WineList');
 const WishlistItem = require('../models/WishlistItem');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
@@ -393,7 +393,7 @@ async function reassignWineRefs(sourceId, keeperId) {
     // Delete the source's vectors (its WineEmbedding rows).
     purgeSourceVectors(sourceId),
     // Drop any "not duplicate" decisions referencing the disappearing source.
-    WineNotDuplicate.deleteMany({ $or: [{ wineA: sourceId }, { wineB: sourceId }] }),
+    forgetWine(sourceId),
     // Reviews have no unique index on (author, wineDefinition) — a user may
     // hold several reviews per wine — so a plain re-point cannot collide.
     Review.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),

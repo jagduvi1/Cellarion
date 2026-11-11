@@ -33,7 +33,7 @@
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 const WineVintageProfile = require('../models/WineVintageProfile');
-const WineNotDuplicate = require('../models/WineNotDuplicate');
+const { loadNotDuplicates } = require('./notDuplicateStore');
 const {
   normalizeProducerKey,
   normalizeAppellationKey,
@@ -110,8 +110,8 @@ async function collectVintageEvidence(ids) {
  * too noisy — every estate's whole range would group), and so are empty
  * producer keys (all-stopword producers like "Domaine" would lump unrelated
  * estates into one bucket). Groups where the admin has dismissed EVERY member
- * pair as not-a-duplicate stop resurfacing — the same suppression, store and
- * keying (WineNotDuplicate {wineA, wineB}, smaller hex first) as the
+ * pair as not-a-duplicate stop resurfacing — the same suppression and store
+ * (services/notDuplicateStore) as the
  * canonical-collisions queue, so one "Not duplicates" click silences a group
  * across all three queues.
  *
@@ -141,12 +141,11 @@ async function sameProducerAppellationGroups({ limit = 50, offset = 0 } = {}) {
   const candidates = [...byKey.entries()].filter(([, arr]) => arr.length >= 2);
 
   // Suppress groups whose every pair an admin already judged distinct.
-  const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
-  const dismissed = new Set(notDup.map(d => `${d.wineA}|${d.wineB}`));
+  const dismissed = await loadNotDuplicates();
   const active = candidates.filter(([, arr]) => {
     for (let i = 0; i < arr.length; i++) {
       for (let j = i + 1; j < arr.length; j++) {
-        if (!dismissed.has(pairKey(arr[i]._id, arr[j]._id))) return true;
+        if (!dismissed.has(arr[i]._id, arr[j]._id)) return true;
       }
     }
     return false;
@@ -327,7 +326,7 @@ async function nearProducerPairs({ limit = 50, offset = 0 } = {}) {
  * is a REVIEW queue like its siblings, with detector 1's vintage-axis
  * discriminator: fragments of one wine split its vintages (disjoint sorts
  * first), a real pair of cuvées overlaps most years. Pair dismissals use the
- * same WineNotDuplicate store and keying as detector 1, so one "Not
+ * same store (services/notDuplicateStore) as detector 1, so one "Not
  * duplicates" click silences the pair across every queue.
  *
  * @returns {Promise<{pairs: Array, total: number, scannedCount: number,
@@ -371,9 +370,8 @@ async function nameSubsetPairs({ limit = 50, offset = 0 } = {}) {
 
   // Same suppression store and keying as detector 1 — pair-level, so the
   // existing dismiss endpoint works verbatim on [short, long].
-  const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
-  const dismissed = new Set(notDup.map((d) => `${d.wineA}|${d.wineB}`));
-  const active = rawPairs.filter((p) => !dismissed.has(pairKey(p.short._id, p.long._id)));
+  const dismissed = await loadNotDuplicates();
+  const active = rawPairs.filter((p) => !dismissed.has(p.short._id, p.long._id));
 
   // The health job asks only for the count (limit: 0) — total is known here,
   // and everything below (the Bottle aggregate, entry building, the sort) is
