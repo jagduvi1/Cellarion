@@ -17,7 +17,7 @@ const WineReport = require('../../models/WineReport');
 const Review = require('../../models/Review');
 const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
-const WineNotDuplicate = require('../../models/WineNotDuplicate');
+const { forgetWine } = require('../../services/notDuplicateStore');
 const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
 // Pending correction proposals close with their wine THROUGH this service, so
 // a user who filed one is told what happened (it owns the model access).
@@ -912,7 +912,7 @@ router.delete('/:id', async (req, res) => {
       WineReport.deleteMany({ wineDefinition: id }),
       WineReport.updateMany({ duplicateOf: id }, { $unset: { duplicateOf: '' } }),
       WineRequest.updateMany({ linkedWineDefinition: id }, { $unset: { linkedWineDefinition: '' } }),
-      WineNotDuplicate.deleteMany({ $or: [{ wineA: id }, { wineB: id }] }),
+      forgetWine(id),
       // Registry data values (suggested, published, rejected) describe only
       // this wine; nothing can read or review them once it is gone.
       RegistryDataValue.deleteMany({ wineDefinition: id }),

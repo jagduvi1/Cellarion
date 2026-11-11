@@ -13,7 +13,7 @@ const { scoreWineMatch } = require('../../services/wineMatching');
 const { conflictingStyleTerms } = require('../../utils/styleTerms');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
-const WineNotDuplicate = require('../../models/WineNotDuplicate');
+const { loadNotDuplicates, markNotDuplicates, unmarkNotDuplicates } = require('../../services/notDuplicateStore');
 const { logAudit } = require('../../services/audit');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
@@ -81,9 +81,8 @@ router.get('/duplicate-clusters', async (req, res) => {
     };
 
     // Pairs an admin has confirmed are NOT the same wine — skip these edges so
-    // they stop resurfacing on every scan. Keyed canonically as "smaller|larger".
-    const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
-    const dismissed = new Set(notDup.map(d => `${d.wineA}|${d.wineB}`));
+    // they stop resurfacing on every scan.
+    const dismissed = await loadNotDuplicates();
 
     // Score pairs within each producer group
     const edgeScore = new Map(); // "a|b" -> best score (so we can keep cluster score later)
@@ -98,7 +97,7 @@ router.get('/duplicate-clusters', async (req, res) => {
           const bId = String(b._id);
           if (!parent.has(bId)) parent.set(bId, bId);
           const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
-          if (dismissed.has(key)) continue; // admin marked these as not duplicates
+          if (dismissed.has(aId, bId)) continue; // admin marked these as not duplicates
           // Names stating a DIFFERENT Prädikat/sweetness are a producer's
           // range, not duplicates: a Mosel estate's whole
           // range scores 0.83–0.90 pairwise, far above the default 0.6 floor,
@@ -185,19 +184,6 @@ router.get('/duplicate-clusters', async (req, res) => {
   }
 });
 
-// All canonical unordered pairs (wineA < wineB by hex) from a set of wine ids,
-// as ObjectIds — used to record / remove "not duplicate" decisions.
-function buildWinePairs(ids) {
-  const pairs = [];
-  for (let i = 0; i < ids.length; i++) {
-    for (let j = i + 1; j < ids.length; j++) {
-      const [a, b] = ids[i] < ids[j] ? [ids[i], ids[j]] : [ids[j], ids[i]];
-      pairs.push({ wineA: new mongoose.Types.ObjectId(a), wineB: new mongoose.Types.ObjectId(b) });
-    }
-  }
-  return pairs;
-}
-
 // POST /api/admin/wines/dismiss-duplicates — mark a cluster's wines as NOT the
 // same wine. Records every pair so the duplicate scanner stops surfacing them.
 // Body: { wineIds: [id, id, ...] } (the cluster's wine ids)
@@ -207,19 +193,9 @@ router.post('/dismiss-duplicates', async (req, res) => {
     if (ids.length < 2) {
       return res.status(400).json({ error: 'wineIds must contain at least 2 valid, distinct ids' });
     }
-    const pairs = buildWinePairs(ids);
-    await WineNotDuplicate.bulkWrite(
-      pairs.map(p => ({
-        updateOne: {
-          filter: { wineA: p.wineA, wineB: p.wineB },
-          update: { $setOnInsert: { wineA: p.wineA, wineB: p.wineB } },
-          upsert: true,
-        },
-      })),
-      { ordered: false }
-    );
-    logAudit(req, 'admin.wine.dismissDuplicates', { type: 'wine', id: ids[0] }, { wineIds: ids, pairs: pairs.length });
-    res.json({ message: 'Marked as not duplicates', pairsRecorded: pairs.length });
+    const pairsRecorded = await markNotDuplicates(ids);
+    logAudit(req, 'admin.wine.dismissDuplicates', { type: 'wine', id: ids[0] }, { wineIds: ids, pairs: pairsRecorded });
+    res.json({ message: 'Marked as not duplicates', pairsRecorded });
   } catch (error) {
     console.error('Dismiss duplicates error:', error);
     res.status(500).json({ error: 'Failed to mark as not duplicates' });
@@ -234,9 +210,9 @@ router.delete('/dismiss-duplicates', async (req, res) => {
     if (ids.length < 2) {
       return res.status(400).json({ error: 'wineIds must contain at least 2 valid, distinct ids' });
     }
-    const result = await WineNotDuplicate.deleteMany({ $or: buildWinePairs(ids) });
+    const pairsRemoved = await unmarkNotDuplicates(ids);
     logAudit(req, 'admin.wine.undismissDuplicates', { type: 'wine', id: ids[0] }, { wineIds: ids });
-    res.json({ message: 'Restored', pairsRemoved: result.deletedCount || 0 });
+    res.json({ message: 'Restored', pairsRemoved });
   } catch (error) {
     console.error('Undismiss duplicates error:', error);
     res.status(500).json({ error: 'Failed to restore' });
@@ -384,13 +360,11 @@ router.get('/canonical-collisions', async (req, res) => {
     const collisions = [...groups.entries()].filter(([, arr]) => arr.length >= 2);
 
     // Sets where the admin has dismissed EVERY pair stop resurfacing.
-    const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
-    const dismissed = new Set(notDup.map(d => `${d.wineA}|${d.wineB}`));
-    const pairKey = (a, b) => (String(a) < String(b) ? `${a}|${b}` : `${b}|${a}`);
+    const dismissed = await loadNotDuplicates();
     const active = collisions.filter(([, arr]) => {
       for (let i = 0; i < arr.length; i++) {
         for (let j = i + 1; j < arr.length; j++) {
-          if (!dismissed.has(pairKey(arr[i]._id, arr[j]._id))) return true;
+          if (!dismissed.has(arr[i]._id, arr[j]._id)) return true;
         }
       }
       return false;
