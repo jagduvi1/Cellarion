@@ -9,7 +9,7 @@ const DEFAULT_IMAGE = `${SITE_URL}/cellarion-logo.jpg`;
 // script children via innerHTML — a user-influenced field containing
 // `</script>` (e.g. a registry wine name on WineDetail) could otherwise break
 // out of the script element. Same escaping as the crawler-side twin
-// (backend/src/routes/og.js serializeJsonLd): the JSON stays valid and parses
+// (backend/src/routes/og/shared.js serializeJsonLd): the JSON stays valid and parses
 // to identical data, while breakout becomes impossible.
 export function serializeJsonLd(obj) {
   return JSON.stringify(obj)

@@ -32,7 +32,7 @@ const exportLinks = () => require('../../services/exportLinks');
 
 // Public origin for the download URL. The link path (/api/mcp/export/…) is
 // served by the backend but fronted at the public origin (Traefik routes /api),
-// so FRONTEND_URL is the right base — same convention as routes/og.js etc.
+// so FRONTEND_URL is the right base — same convention as routes/og/shared.js etc.
 function publicBase() {
   return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 }
