@@ -52,6 +52,13 @@ function AdminRequests() {
     selectedIdRef.current = selected?._id ?? null;
   }, [selected]);
 
+  // The create form as it is now, for an async chain that lands after the
+  // admin has typed on (the AI lookup reads the name and producer from here).
+  const wineDataRef = useRef(resolveData.wineData);
+  useEffect(() => {
+    wineDataRef.current = resolveData.wineData;
+  }, [resolveData.wineData]);
+
   // Debounce timer + monotonic request id for the duplicate check, so
   // per-keystroke requests are coalesced and stale responses discarded.
   const dupTimerRef = useRef(null);
@@ -265,23 +272,21 @@ function AdminRequests() {
         return;
       }
       const wine = data.wine;
-      const newWineData = {
-        ...resolveData.wineData,
-        type: wine.type || resolveData.wineData.type,
-        appellation: wine.appellation || '',
-        region: '',
-      };
+      // Only the fields the lookup answers. They are merged into the form as
+      // it is when the lookup lands, so what the admin typed meanwhile stays.
+      const found = { appellation: wine.appellation || '', region: '' };
+      if (wine.type) found.type = wine.type;
 
       const country = countries.find(c => c.name.toLowerCase() === wine.country?.toLowerCase());
       if (country) {
-        newWineData.country = country._id;
+        found.country = country._id;
         const regRes = await adminGetRegions(apiFetch, country._id);
         const regData = await regRes.json();
         if (stale()) return;
         if (regRes.ok) {
           setRegions(regData.regions);
           const region = regData.regions.find(r => r.name.toLowerCase() === wine.region?.toLowerCase());
-          if (region) newWineData.region = region._id;
+          if (region) found.region = region._id;
           const appParams = new URLSearchParams({ country: country._id });
           if (region) appParams.set('region', region._id);
           const appRes = await adminGetAppellations(apiFetch, appParams);
@@ -292,14 +297,14 @@ function AdminRequests() {
       }
 
       if (wine.grapes?.length > 0) {
-        newWineData.grapes = wine.grapes
+        found.grapes = wine.grapes
           .map(gName => grapes.find(g => g.name.toLowerCase() === gName.toLowerCase()))
           .filter(Boolean)
           .map(g => g._id);
       }
 
-      setResolveData(prev => ({ ...prev, mode: 'create', wineData: newWineData }));
-      checkDuplicates(newWineData.name, newWineData.producer);
+      setResolveData(prev => ({ ...prev, mode: 'create', wineData: { ...prev.wineData, ...found } }));
+      checkDuplicates(wineDataRef.current.name, wineDataRef.current.producer);
       setAiLookup({ loading: false, error: null });
     } catch {
       if (stale()) return;
