@@ -402,5 +402,5 @@ async function initStatefulSession(req, res, ctx) {
 module.exports = {
   handleMcpRequest, initStatefulSession,
   budgetedHandler, budgetedResourceHandler, budgetedPromptHandler, MAX_CALLS_PER_REQUEST,
-  takeMutationSlot, WRITE_WINDOW_MS, EVENT_RESOURCE_MAP,
+  takeMutationSlot, WRITE_WINDOW_MS,
 };

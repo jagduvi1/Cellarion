@@ -251,6 +251,5 @@ function sessionCounts() {
 module.exports = {
   createSession, getSession, destroySession, closeAllSessions, sessionCounts,
   beginRequest, endRequest,
-  dropUserSessions, dropTokenSessions,
   MAX_SESSIONS_PER_USER, MAX_SESSIONS_GLOBAL, IDLE_TTL_MS, ABSOLUTE_TTL_MS, DRAIN_MAX_MS,
 };

@@ -113,7 +113,6 @@ module.exports = {
   DEFAULT_TEMPS,
   DEFAULT_AIR,
   AIR_BY_PHASE,
-  AIR_TEXT,
   isTemp,
   defaultServingTemp,
   servingAdvice,

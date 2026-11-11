@@ -379,4 +379,4 @@ registerTool({
   },
 });
 
-module.exports = { uploaderRef, reviewState };
+module.exports = { uploaderRef };

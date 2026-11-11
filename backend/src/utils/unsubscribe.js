@@ -108,5 +108,4 @@ module.exports = {
   verifyUnsubscribeToken,
   createScopedUnsubscribeToken,
   verifyScopedUnsubscribeToken,
-  UNSUBSCRIBE_SCOPES,
 };

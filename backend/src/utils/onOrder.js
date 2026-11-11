@@ -69,4 +69,4 @@ function formatArrivalMonth(expectedArrival) {
   return new Date(expectedArrival).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
-module.exports = { parseExpectedArrival, isArrivalDue, formatArrivalMonth, MIN_ARRIVAL_YEAR, MAX_YEARS_AHEAD };
+module.exports = { parseExpectedArrival, isArrivalDue, formatArrivalMonth };

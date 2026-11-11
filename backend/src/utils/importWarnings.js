@@ -23,4 +23,4 @@ function sanitizeImportWarnings(list) {
   }).filter(Boolean);
 }
 
-module.exports = { sanitizeImportWarnings, MAX_WARNINGS, CODE_MAX, SAMPLE_MAX };
+module.exports = { sanitizeImportWarnings };

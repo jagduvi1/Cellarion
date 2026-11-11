@@ -337,8 +337,6 @@ function conflictingStyleTerms(wineA, wineB) {
 
 module.exports = {
   SWEETNESS_WORDS,
-  PRADIKAT_WORDS,
-  NAME_AMBIGUOUS_WORDS,
   statedStyle,
   styleOf,
   sweetnessStated,

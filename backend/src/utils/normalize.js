@@ -1303,7 +1303,6 @@ module.exports = {
   appendSweetnessTerm,
   MAX_STAR_GRADE,
   sanitizeTaxonomyName,
-  MAX_TAXONOMY_NAME,
   slugify,
   tokenize,
   generateWineKey,

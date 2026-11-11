@@ -121,4 +121,4 @@ function parseDrinkYear(raw, label = 'Drink year') {
   return { ok: true, value: n };
 }
 
-module.exports = { isValidId, coerceStringQuery, parseAndValidateVintage, parseDrinkYear, MIN_VINTAGE_YEAR, DRINK_YEAR_MIN, DRINK_YEAR_MAX };
+module.exports = { isValidId, coerceStringQuery, parseAndValidateVintage, parseDrinkYear, DRINK_YEAR_MIN, DRINK_YEAR_MAX };

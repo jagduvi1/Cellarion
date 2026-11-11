@@ -484,5 +484,4 @@ module.exports = router;
 // Exported for unit tests (the account-linking logic is the important part).
 module.exports.upsertSsoUser = upsertSsoUser;
 module.exports.upsertGoogleUser = upsertGoogleUser;
-module.exports.upsertOidcUser = upsertOidcUser;
 module.exports.generateUniqueUsername = generateUniqueUsername;

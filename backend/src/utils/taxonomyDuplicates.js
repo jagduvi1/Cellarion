@@ -110,4 +110,4 @@ function findDuplicateClusters(docs) {
     .sort((a, b) => b.members.length - a.members.length);
 }
 
-module.exports = { nameSignature, findDuplicateClusters, STOP_TOKENS };
+module.exports = { nameSignature, findDuplicateClusters };

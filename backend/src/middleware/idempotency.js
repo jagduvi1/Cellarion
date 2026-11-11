@@ -95,4 +95,4 @@ async function idempotency(req, res, next) {
   return next();
 }
 
-module.exports = { idempotency, KEY_PATTERN, STALE_MS };
+module.exports = { idempotency, STALE_MS };

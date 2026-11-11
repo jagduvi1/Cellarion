@@ -428,4 +428,4 @@ registerTool({
   },
 });
 
-module.exports = { prefsView, profileView };
+module.exports = {};

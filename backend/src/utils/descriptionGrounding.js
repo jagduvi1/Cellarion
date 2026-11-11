@@ -316,4 +316,4 @@ function gradeDescription(description, { region, appellation, country, grapes, p
 // "pear fruit" would report a variety claim.
 const NON_VARIETY_VOCAB = new Set(['apple', 'pear', 'quince', 'honey']);
 
-module.exports = { gradeDescription, extractClaims, STRONG_FRAME, WEAK_FRAME, normPlace, NON_VARIETY_VOCAB };
+module.exports = { gradeDescription, extractClaims, normPlace, NON_VARIETY_VOCAB };

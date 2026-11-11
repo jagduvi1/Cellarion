@@ -113,4 +113,4 @@ function convertCurrency(amount, from, to, rates) {
   return (amount / fromRate) * toRate;
 }
 
-module.exports = { fetchExchangeRates, getOrCreateDailySnapshot, getSnapshotForDate, getRecentSnapshot, getSnapshotsForDates, convertCurrency };
+module.exports = { getOrCreateDailySnapshot, getSnapshotForDate, getRecentSnapshot, getSnapshotsForDates, convertCurrency };

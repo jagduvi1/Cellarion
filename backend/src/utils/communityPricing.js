@@ -130,7 +130,6 @@ function buildReleaseCurve(vintages, opts = {}) {
 
 module.exports = {
   FIRM_MIN_OWNERS,
-  SUSPECT_BAND,
   median,
   quantileSorted,
   trimOutliersIQR,

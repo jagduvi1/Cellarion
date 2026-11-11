@@ -245,4 +245,4 @@ async function safeFetchImage(rawUrl) {
   throw new Error(`image URL redirected more than ${MAX_REDIRECTS} times`);
 }
 
-module.exports = { safeFetchImage, isPrivateAddress, pinnedLookup, MAX_BYTES };
+module.exports = { safeFetchImage, isPrivateAddress, pinnedLookup };

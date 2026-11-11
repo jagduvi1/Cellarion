@@ -257,4 +257,3 @@ function createSitemapRouter({
 
 module.exports = createSitemapRouter();
 module.exports.createSitemapRouter = createSitemapRouter;
-module.exports.URLS_PER_FILE = URLS_PER_FILE;
