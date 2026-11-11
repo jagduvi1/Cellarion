@@ -260,6 +260,12 @@ describe('buildBottle drink window + occasion', () => {
     expect(bottle.occasion).toBe('For my 50th');
   });
 
+  test('an occasion longer than a bottle keeps is cut to 500 characters, so the bottle still validates', () => {
+    const bottle = build({ vintage: '2018', occasion: 'A'.repeat(620) });
+    expect(bottle.occasion).toHaveLength(500);
+    expect(bottle.validateSync()?.errors?.occasion).toBeUndefined();
+  });
+
   test('drops an inverted window whole (mirrors routes/import.js)', () => {
     const bottle = build({ vintage: '2018', drinkFrom: 2040, drinkTo: 2030 });
     expect(bottle.drinkFrom).toBeUndefined();
