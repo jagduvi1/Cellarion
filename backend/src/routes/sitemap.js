@@ -41,7 +41,7 @@ const URLS_PER_FILE = 40000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX_CHARS = 16 * 1024 * 1024;
 
-// The rows the public pages serve (routes/og.js): a quarantined non-wine or a
+// The rows the public pages serve (routes/og/wine.js): a quarantined non-wine or a
 // half-identified wine — every private draft is one (draft ⇒ pendingIdentity)
 // — is a 404 there. Canaries ARE listed: their pages carry noindex, and being
 // on every path a copier walks is what they are for (models/WineDefinition).

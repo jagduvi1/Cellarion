@@ -9,7 +9,7 @@ const { MIN_WINES } = require('../config/taxonomyPages');
  * the sommelier drink windows.
  *
  * Callers: GET /api/wines/:idOrSlug/public (the page people see) and the
- * og.js crawler page (the page search engines read), so both show the same.
+ * og/wine.js crawler page (the page search engines read), so both show the same.
  *
  * Drink windows are the registry data most worth keeping: a signed-out
  * reader learns only how many vintages have a reviewed window
