@@ -180,3 +180,16 @@ test('a failed lookup never costs the search', async () => {
   expect(body.wines.map((w) => w._id)).toEqual([WINE]);
   warn.mockRestore();
 });
+
+// A search or sort that is not one plain value (Express: an array for a
+// repeated parameter, an object for `?search[$gt]=1`).
+test('a search shaped like an operator is no search term: 400, not 500', async () => {
+  const { status, body } = await get('/api/wines?search[$gt]=1');
+  expect(status).toBe(400);
+  expect(body.error).toBe('A search term is required');
+});
+
+test('a repeated sort is ignored and the search still answers', async () => {
+  const { status } = await get('/api/wines?search=blanc&sort=name&sort=producer');
+  expect(status).toBe(200);
+});

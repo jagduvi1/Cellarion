@@ -735,3 +735,28 @@ describe('openBottles for the "Open now" strip', () => {
     expect(idsOf(body.bottles.items)).toEqual([B3]);
   });
 });
+
+// Express hands a repeated parameter over as an array and `?sort[$gt]=1` as
+// an object; the page read `sort` as it came and answered 500.
+describe('a query parameter that is not one plain value', () => {
+  test.each([
+    ['repeated', 'sort=name&sort=price'],
+    ['shaped like an operator', 'sort[$gt]=1'],
+    ['a nested list', 'sort[]=name'],
+  ])('a sort that is %s is ignored: the page keeps its default order instead of failing', async (name, qs) => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B1]));
+    const { status } = await request(`/api/cellars/${CELLAR_ID}?search=barollo&${qs}`);
+    expect(status).toBe(200);
+    expect(bottleSearch.searchBottles).toHaveBeenCalledWith('barollo', expect.objectContaining({ sort: '-createdAt' }));
+  });
+
+  test('a filter that is repeated or shaped like an operator is not handed to the search', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B1]));
+    const { status } = await request(`/api/cellars/${CELLAR_ID}?search=barollo&type=red&type=white&vintage[$gt]=1&country[]=x`);
+    expect(status).toBe(200);
+    const [, opts] = bottleSearch.searchBottles.mock.calls[0];
+    expect(opts.type).toBeUndefined();
+    expect(opts.vintage).toBeUndefined();
+    expect(opts.countryId).toBeUndefined();
+  });
+});

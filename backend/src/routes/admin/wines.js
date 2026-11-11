@@ -41,7 +41,7 @@ const { reembedActiveVintages } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
-const { isValidId } = require('../../utils/validation');
+const { isValidId, coerceStringQuery } = require('../../utils/validation');
 const { parsePagination } = require('../../utils/pagination');
 const {
   REVIEW_QUEUE_OUTSTANDING_EXPR, isUndecidedPublishedSuspect, isOutstandingInReviewQueue,
@@ -64,7 +64,11 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/wines - List wine definitions
 router.get('/', async (req, res) => {
   try {
-    const { search, type, sort } = req.query;
+    // One plain string each, or nothing: a repeated or operator-shaped
+    // parameter must not reach the search, a regex or a filter.
+    const search = coerceStringQuery(req.query.search);
+    const type = coerceStringQuery(req.query.type);
+    const sort = coerceStringQuery(req.query.sort);
     const { limit: parsedLimit, offset: skip, page: parsedPage } =
       parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
