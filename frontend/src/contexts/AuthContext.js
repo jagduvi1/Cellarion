@@ -747,7 +747,9 @@ export const AuthProvider = ({ children }) => {
     updatePreferences,
     acceptPolicy,
     apiFetch,
-    setUser
+    // What a page calls after a save that echoes the user (the profile form):
+    // the stamp-keeping replace, not the raw setter.
+    setUser: replaceUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

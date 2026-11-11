@@ -73,3 +73,19 @@ it('and never grants it to anyone else', async () => {
   await act(async () => { await ctx.updatePreferences({ cellarSort: 'maturity' }); });
   expect(screen.getByText('admin:false sort:maturity')).toBeInTheDocument();
 });
+
+// The Settings page replaces the user itself after a profile save, with the
+// echo of PUT /api/profile, which has no stamp either.
+it('a page that replaces the user with a server echo keeps the stamp', async () => {
+  await signedInAs(true);
+  act(() => { ctx.setUser({ ...SERVER_USER, displayName: 'Anna B' }); });
+  expect(ctx.user.displayName).toBe('Anna B');
+  expect(ctx.user.isSuperAdmin).toBe(true);
+  expect(screen.getByText('admin:true sort:-')).toBeInTheDocument();
+});
+
+it('and a page-side replace grants it to nobody', async () => {
+  await signedInAs(false);
+  act(() => { ctx.setUser({ ...SERVER_USER, displayName: 'Anna B' }); });
+  expect(ctx.user.isSuperAdmin).toBe(false);
+});
