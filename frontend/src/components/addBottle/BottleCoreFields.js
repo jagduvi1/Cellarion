@@ -71,9 +71,9 @@ export default function BottleCoreFields({
         <div className="form-group">
           <label>{t('common.currency')}</label>
           {/* Each option carries its code as value, and the list is
-              never translated: browser page translation rewrote the
+              never translated: browser page translation rewrites the
               option TEXT "EUR" as "EURO", and an option without a value
-              sends its text (2026-10-13). */}
+              sends its text. */}
           <select
             translate="no"
             value={bottleData.currency}
