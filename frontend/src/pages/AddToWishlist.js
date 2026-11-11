@@ -1045,9 +1045,7 @@ function AddToWishlist() {
       {selectedWine && !success && (
         <div className="card">
           <div className="selected-wine-bar">
-            {selectedWine.image && (
-              <img src={selectedWine.image} alt={selectedWine.name} className="selected-wine-bar-img" onError={(e) => { e.target.style.display = 'none'; }} />
-            )}
+            <WineImage image={selectedWine.image} alt={selectedWine.name} className="selected-wine-bar-img" />
             <div className="selected-wine-bar-info">
               <strong className="selected-wine-bar-name">{selectedWine.name}</strong>
               <span className="selected-wine-bar-producer">{selectedWine.producer}</span>

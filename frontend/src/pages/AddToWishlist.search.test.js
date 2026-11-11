@@ -162,3 +162,32 @@ describe('AddToWishlist — a failed search says so', () => {
     expect(screen.queryByText('addToWishlist.searchFailed')).not.toBeInTheDocument();
   });
 });
+
+// A wine's picture is stored as a file name or an /api path, never as a full
+// address. The bar above the details form used it as it was stored, so the
+// browser asked the page's own folder for it.
+describe('AddToWishlist: the picture of the chosen wine', () => {
+  test('is asked for at the uploads address, like every other wine picture', async () => {
+    searchWines.mockResolvedValueOnce(jsonRes({ wines: [{ ...LONG_WINE, image: 'processed/tonnerre.webp' }] }));
+
+    openTextSearch();
+    await searchFor('chablis premier cru');
+    await act(async () => { fireEvent.click(screen.getByText(LONG_WINE.name)); });
+
+    const picture = document.querySelector('img.selected-wine-bar-img');
+    expect(picture).not.toBeNull();
+    expect(picture.getAttribute('src')).toMatch(/\/api\/uploads\/.*tonnerre\.webp/);
+    expect(picture).toHaveAttribute('alt', LONG_WINE.name);
+  });
+
+  test('a wine without a picture shows the bar without one', async () => {
+    searchWines.mockResolvedValueOnce(jsonRes({ wines: [LONG_WINE] }));
+
+    openTextSearch();
+    await searchFor('chablis premier cru');
+    await act(async () => { fireEvent.click(screen.getByText(LONG_WINE.name)); });
+
+    expect(document.querySelector('.selected-wine-bar')).not.toBeNull();
+    expect(document.querySelector('img.selected-wine-bar-img')).toBeNull();
+  });
+});
