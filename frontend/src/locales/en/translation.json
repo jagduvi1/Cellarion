@@ -1840,6 +1840,7 @@
     "submitFailed": "The request could not be sent. Please try again.",
     "submitFailedReason": "The request could not be sent: {{reason}}",
     "photoTooLarge": "This photo could not be made small enough to send. Try another photo, or send the request without one.",
+    "photoUnreadable": "This photo could not be read. Try another photo, or send the request without one.",
     "backPhotoTooLarge": "The back label photo could not be made small enough to send. Try another photo, or send the request without it.",
     "moreLinksLabel": "More links",
     "linksHint": "A winery page and a review each give the reviewer something different.",
