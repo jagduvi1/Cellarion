@@ -9,6 +9,5 @@
   "backend/src/services/userDataRegistry.js": 1505,
   "frontend/src/pages/AddBottle.js": 2357,
   "frontend/src/pages/CellarRoom.js": 1788,
-  "frontend/src/pages/ImportBottles.js": 2897,
-  "frontend/src/utils/importMappers.js": 1926
+  "frontend/src/pages/ImportBottles.js": 2897
 }
