@@ -192,3 +192,31 @@ test('reason pills render from the server\'s label-key map', async () => {
   const matches = await screen.findAllByText('admin.wines.producerInName.reasons.nameEqualsProducer');
   expect(matches.length).toBeGreaterThanOrEqual(2);
 });
+
+// After "Looks fine" the row has left the list. An undo that fails has to say
+// so somewhere the admin can see, and leave the Undo banner for another try.
+test('an undo the server refuses shows its reason at the top of the dialog and keeps Undo', async () => {
+  adminVerifyWineChecks.mockResolvedValue(ok({ updated: 1, notFlagged: [] }));
+  adminUnverifyWineChecks.mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'This wine changed since it was cleared' }) });
+  renderModal();
+
+  fireEvent.click(await screen.findByText('admin.wines.producerInName.verifyBtn'));
+  fireEvent.click(await screen.findByText('common.undo'));
+
+  expect(await screen.findByText('This wine changed since it was cleared')).toBeInTheDocument();
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
+  // nothing was undone, so the list is not read again
+  expect(adminGetProducerInNameWines).toHaveBeenCalledTimes(1);
+});
+
+test('an undo that never reaches the server says so and keeps Undo', async () => {
+  adminVerifyWineChecks.mockResolvedValue(ok({ updated: 1, notFlagged: [] }));
+  adminUnverifyWineChecks.mockRejectedValue(new TypeError('Failed to fetch'));
+  renderModal();
+
+  fireEvent.click(await screen.findByText('admin.wines.producerInName.verifyBtn'));
+  fireEvent.click(await screen.findByText('common.undo'));
+
+  expect(await screen.findByText('common.networkError')).toBeInTheDocument();
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
+});

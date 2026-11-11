@@ -158,3 +158,31 @@ test('the audit checkbox requests includeReviewed=1 and reviewed rows swap to Un
   expect(await screen.findByText('admin.wines.lowConfidence.unreviewBtn')).toBeInTheDocument();
   expect(screen.getByText('admin.wines.lowConfidence.reviewedBadge')).toBeInTheDocument();
 });
+
+// After "Mark reviewed" the row has left the list. A message on that row is
+// shown nowhere, so an undo that fails reports at the top of the dialog and
+// leaves the Undo banner for another try.
+test('an undo the server refuses shows its reason at the top of the dialog and keeps Undo', async () => {
+  adminMarkProfileReviewed.mockResolvedValue(ok({}));
+  adminUnmarkProfileReviewed.mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'This profile changed since it was reviewed' }) });
+  renderModal();
+
+  fireEvent.click(await screen.findByText('admin.wines.lowConfidence.reviewBtn'));
+  fireEvent.click(await screen.findByText('common.undo'));
+
+  expect(await screen.findByText('This profile changed since it was reviewed')).toBeInTheDocument();
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
+  expect(adminGetLowConfidenceWines).toHaveBeenCalledTimes(1);
+});
+
+test('an undo that never reaches the server says so and keeps Undo', async () => {
+  adminMarkProfileReviewed.mockResolvedValue(ok({}));
+  adminUnmarkProfileReviewed.mockRejectedValue(new TypeError('Failed to fetch'));
+  renderModal();
+
+  fireEvent.click(await screen.findByText('admin.wines.lowConfidence.reviewBtn'));
+  fireEvent.click(await screen.findByText('common.undo'));
+
+  expect(await screen.findByText('common.networkError')).toBeInTheDocument();
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
+});

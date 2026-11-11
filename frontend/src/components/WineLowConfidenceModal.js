@@ -148,11 +148,14 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
         fetchPage(page);
         onChanged?.();
       } else {
+        // The row has left the list, so a message on the row would be shown
+        // nowhere: the refusal goes to the top of the dialog, and the Undo
+        // banner stays for another try.
         const data = await res.json().catch(() => ({}));
-        setRowError(wine._id, data.error || t('common.actionFailed', { status: res.status }));
+        setError(data.error || t('common.actionFailed', { status: res.status }));
       }
     } catch {
-      setRowError(wine._id, t('common.networkError'));
+      setError(t('common.networkError'));
     } finally {
       setPending(null);
     }
