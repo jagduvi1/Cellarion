@@ -118,6 +118,15 @@ const wineRequestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // When a decision (resolve or reject) took this request to work on it, or
+  // null. One decision holds a pending request at a time, so a second one is
+  // refused before it creates a wine or detaches a bottle. Cleared when the
+  // decision is stored or given up; a claim older than the service's limit is
+  // an abandoned one and may be taken over (services/wineRequestOps).
+  claimedAt: {
+    type: Date,
+    default: null
+  },
   // Self-hosted installs only (Registry Bridge): the id the shared registry
   // gave this request when it was forwarded there, and when its outcome was
   // last asked for. A request answered on cellarion.app finishes here too

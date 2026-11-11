@@ -10,9 +10,9 @@ const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
-const { logAudit } = require('../../services/audit');
+const { logAudit, logger } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
-const { completeRequestResolve, completeRequestReject } = require('../../services/wineRequestOps');
+const { claimRequest, releaseRequestClaim, completeRequestResolve, completeRequestReject } = require('../../services/wineRequestOps');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
@@ -76,7 +76,7 @@ router.put('/:id/resolve', async (req, res) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { wineDefinitionId, createNew, wineData, adminNotes, applyGrapes } = req.body;
 
-    const wineRequest = await WineRequest.findById(req.params.id);
+    let wineRequest = await WineRequest.findById(req.params.id);
     if (!wineRequest) {
       return res.status(404).json({ error: 'Wine request not found' });
     }
@@ -84,6 +84,25 @@ router.put('/:id/resolve', async (req, res) => {
     if (wineRequest.status !== 'pending') {
       return res.status(400).json({ error: 'Wine request has already been resolved' });
     }
+
+    // Take the request before anything else happens to it. A second decision
+    // (another admin, a double click, the bridge sync) is refused here, not
+    // after it has created a wine of its own.
+    const claim = await claimRequest(wineRequest._id);
+    if (claim.refused === 'decided') {
+      return res.status(400).json({ error: 'Wine request has already been resolved' });
+    }
+    if (claim.refused) {
+      return res.status(409).json({ error: 'Someone else is deciding this wine request right now. Reload and try again in a moment.' });
+    }
+    wineRequest = claim.request;
+    // Given back when the answer goes out without a decision (a refusal, a
+    // failure), so the request can be decided again at once.
+    let decided = false;
+    res.on('finish', () => {
+      if (decided) return;
+      releaseRequestClaim(wineRequest._id).catch((err) => logger.warn({ err, requestId: String(wineRequest._id) }, 'wine request claim not released'));
+    });
 
     let linkedWine;
 
@@ -371,11 +390,13 @@ router.put('/:id/resolve', async (req, res) => {
     // and notify the requester (not for a bridge request its install follows:
     // the install tells its own user) — shared with the Registry Bridge request sync
     // (services/wineRequestOps), so both finish a request the same way.
-    // Null: decided meanwhile (another admin, or the bridge sync) — nothing written.
-    const resolved = await completeRequestResolve(wineRequest, linkedWine, { resolvedBy: req.user.id, adminNotes });
+    // Null: no longer pending. This resolve holds the request, so only a
+    // request that left the queue another way (its cellar was deleted) gets here.
+    const resolved = await completeRequestResolve(wineRequest, linkedWine, { resolvedBy: req.user.id, adminNotes, holdsClaim: true });
     if (!resolved) {
       return res.status(400).json({ error: 'Wine request has already been resolved' });
     }
+    decided = true;
 
     // Award Cellar Cred to the submitting user
     const credEvent = wineRequest.requestType === 'grape_suggestion' ? 'grape_suggestion_approved' : 'wine_request_approved';
@@ -417,7 +438,7 @@ router.put('/:id/reject', async (req, res) => {
       return res.status(400).json({ error: 'Admin notes are required when rejecting a request' });
     }
 
-    const wineRequest = await WineRequest.findById(req.params.id);
+    let wineRequest = await WineRequest.findById(req.params.id);
     if (!wineRequest) {
       return res.status(404).json({ error: 'Wine request not found' });
     }
@@ -426,13 +447,33 @@ router.put('/:id/reject', async (req, res) => {
       return res.status(400).json({ error: 'Wine request has already been resolved' });
     }
 
+    // Take the request before anything else happens to it. A second decision
+    // (another admin, a double click, the bridge sync) is refused here, not
+    // after it has created a wine of its own.
+    const claim = await claimRequest(wineRequest._id);
+    if (claim.refused === 'decided') {
+      return res.status(400).json({ error: 'Wine request has already been resolved' });
+    }
+    if (claim.refused) {
+      return res.status(409).json({ error: 'Someone else is deciding this wine request right now. Reload and try again in a moment.' });
+    }
+    wineRequest = claim.request;
+    // Given back when the answer goes out without a decision (a refusal, a
+    // failure), so the request can be decided again at once.
+    let decided = false;
+    res.on('finish', () => {
+      if (decided) return;
+      releaseRequestClaim(wineRequest._id).catch((err) => logger.warn({ err, requestId: String(wineRequest._id) }, 'wine request claim not released'));
+    });
+
     // Detach the waiting bottles BEFORE the status flip, mark rejected with the
     // reason and notify the requester — shared with the Registry Bridge
-    // request sync (services/wineRequestOps). Null: decided meanwhile.
-    const rejected = await completeRequestReject(wineRequest, { resolvedBy: req.user.id, adminNotes });
+    // request sync (services/wineRequestOps). Null: no longer pending.
+    const rejected = await completeRequestReject(wineRequest, { resolvedBy: req.user.id, adminNotes, holdsClaim: true });
     if (!rejected) {
       return res.status(400).json({ error: 'Wine request has already been resolved' });
     }
+    decided = true;
     const { bottlesDetached } = rejected;
 
     await wineRequest.populate([
