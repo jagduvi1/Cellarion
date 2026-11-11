@@ -16,7 +16,6 @@
  *  - a network failure at startup keeps the last signed-in profile instead of
  *    showing the login page (contexts/AuthContext.js, below)
  */
-export const OFFLINE_MODE_RELEASED = true;
 
 const PREF_KEY = 'cellarion-offline';          // 'on' | 'off' | absent (default)
 const OWNER_KEY = 'cellarion-offline-owner';   // the account id the choice belongs to
@@ -45,13 +44,13 @@ export function isStandaloneApp() {
 }
 
 export function isOfflineModeEnabled() {
-  return OFFLINE_MODE_RELEASED && readPref() === 'on';
+  return readPref() === 'on';
 }
 
 /** The installed app, and the user hasn't chosen yet: ask once (OfflinePrompt). */
 export function needsOfflineChoice() {
   const pref = readPref();
-  return OFFLINE_MODE_RELEASED && pref !== 'on' && pref !== 'off' && isStandaloneApp();
+  return pref !== 'on' && pref !== 'off' && isStandaloneApp();
 }
 
 /**

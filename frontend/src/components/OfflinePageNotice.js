@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { OFFLINE_MODE_RELEASED } from '../utils/offlineMode';
 
 /**
  * Shown instead of a page that needs the network while the device is offline
@@ -25,7 +24,7 @@ export default function OfflinePageNotice({ modeOn }) {
           </p>
           <Link to="/cellars" className="btn btn-primary">{t('offline.page.toCellars', 'Go to my cellars')}</Link>
         </>
-      ) : OFFLINE_MODE_RELEASED && (
+      ) : (
         <p style={{ margin: 0, opacity: 0.85 }}>
           {t('offline.page.modeHint', 'Turn on offline mode in Settings to keep your cellar available without a connection.')}
         </p>
