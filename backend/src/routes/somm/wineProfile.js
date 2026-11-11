@@ -118,6 +118,10 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
       grapeSubstitutions,
     });
   } catch (error) {
+    // Two saves of the same wine at once: the second finds it changed under it.
+    if (error.name === 'VersionError') {
+      return res.status(409).json({ error: 'This wine was modified by another request. Please refresh and try again.' });
+    }
     console.error('Update wine profile error:', error);
     res.status(500).json({ error: 'Failed to update tasting profile' });
   }

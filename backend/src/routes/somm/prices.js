@@ -221,6 +221,12 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     if (typeof vintage !== 'string') {
       return res.status(400).json({ error: 'vintage must be a string' });
     }
+    // Text, and no longer than the snapshot stores: the schema would refuse
+    // it at save, as a failure of the server's instead of the request's.
+    for (const [field, value, max] of [['source', source, priceOps.PRICE_SOURCE_MAX], ['sommNotes', sommNotes, priceOps.PRICE_NOTES_MAX]]) {
+      if (value != null && typeof value !== 'string') return res.status(400).json({ error: `${field} must be text` });
+      if (typeof value === 'string' && value.trim().length > max) return res.status(400).json({ error: `${field} must be ${max} characters or less` });
+    }
     const wineDefId = String(wineDefinition);
     // The bottles' canonical vintage, shared with the MCP tool; the wording is this route's.
     const parsedVintage = priceOps.parsePriceVintage(vintage);

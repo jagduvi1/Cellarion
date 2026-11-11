@@ -159,3 +159,21 @@ test('an ordinary year is stored unchanged', async () => {
   expect(res.status).toBe(201);
   expect(res.body.entry.vintage).toBe('2016');
 });
+
+test.each([
+  ['a source over 100 characters', { source: 'x'.repeat(101) }, 'source must be 100 characters or less'],
+  ['notes over 2,000 characters', { sommNotes: 'x'.repeat(2001) }, 'sommNotes must be 2000 characters or less'],
+  ['a source that is not text', { source: { $gt: '' } }, 'source must be text'],
+  ['notes that are not text', { sommNotes: 5 }, 'sommNotes must be text'],
+])('%s is a 400, and nothing is stored', async (name, extra, message) => {
+  const res = await addPrice({ wineDefinition: WINE_ID, vintage: '2019', price: 40, ...extra });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toBe(message);
+  expect(WineVintagePrice).not.toHaveBeenCalled();
+});
+
+test('a source and notes within the limits are stored', async () => {
+  const res = await addPrice({ wineDefinition: WINE_ID, vintage: '2019', price: 40, source: 'x'.repeat(100), sommNotes: 'auction result' });
+  expect(res.status).toBe(201);
+  expect(WineVintagePrice.mock.calls[0][0]).toMatchObject({ source: 'x'.repeat(100), sommNotes: 'auction result' });
+});

@@ -30,6 +30,10 @@ const PRICE_STALE_MS = 90 * 24 * 60 * 60 * 1000;
 /** Decline reasons are written for the requester: required, plain text, bounded (the max matches PriceTrackingSkip.reason). */
 const DECLINE_REASON_MIN = 5;
 const DECLINE_REASON_MAX = 500;
+// The longest source and sommelier note a price snapshot stores (the schema's
+// maxlength); the REST route and the MCP tool refuse more before saving.
+const PRICE_SOURCE_MAX = 100;
+const PRICE_NOTES_MAX = 2000;
 
 const pairKey = (wineId, vintage) => `${wineId}:${vintage}`;
 
@@ -317,6 +321,8 @@ async function restoreDeclinedRequest(prev, actorId) {
 module.exports = {
   DECLINE_REASON_MIN,
   DECLINE_REASON_MAX,
+  PRICE_SOURCE_MAX,
+  PRICE_NOTES_MAX,
   pairKey,
   wineLabel,
   isStalePrice,
