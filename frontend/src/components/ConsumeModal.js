@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import RatingInput from './RatingInput';
 import { useDialogA11y } from '../utils/useDialogA11y';
+import { useOverlayClose } from './Modal';
 
 // Local calendar date, YYYY-MM-DD — what <input type="date"> speaks.
 const today = () => {
@@ -37,6 +38,7 @@ export function ConsumeModal({ wineName, defaultRatingScale, reservationText, on
   const titleId = useId();
   const dateId = useId();
   const boxRef = useDialogA11y(onCancel);
+  const overlayClose = useOverlayClose(saving ? undefined : onCancel);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,7 +55,7 @@ export function ConsumeModal({ wineName, defaultRatingScale, reservationText, on
     // close it: a refusal keeps the dialog open with what was typed (the
     // racks, the room), and a stray tap must not throw that away. Escape and
     // Back still close it — those are meant.
-    <div className="modal-overlay" onClick={saving ? undefined : onCancel}>
+    <div className="modal-overlay" {...overlayClose}>
       <div className="modal-box" onClick={e => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <h2 id={titleId}>{t('bottleDetail.removeBottleTitle')}</h2>
         {wineName && <p className="modal-wine-name">{wineName}</p>}

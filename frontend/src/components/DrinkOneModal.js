@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { consumeBottle } from '../api/bottles';
 import { ConsumeModal } from './ConsumeModal';
 import { useDialogA11y } from '../utils/useDialogA11y';
+import { useOverlayClose } from './Modal';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import './DrinkOneModal.css';
 import { slotLabel as slotWords } from '../utils/slotLabel';
@@ -57,6 +58,7 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
   const [pickerShown, setPickerShown] = useState(!nothingToChoose);
   const titleId = useId();
   const boxRef = useDialogA11y(onClose);
+  const overlayClose = useOverlayClose(onClose);
 
   // A refusal goes back to the picker, which is where the error shows — the
   // consume form has no room for one. With a single bottle too: the picker
@@ -93,7 +95,7 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" {...overlayClose}>
       <div className="modal-box drink-one" onClick={(e) => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <h2 id={titleId}>{t('drinkOne.title', 'Which bottle?')}</h2>
         {wineName && <p className="modal-wine-name">{wineName}</p>}

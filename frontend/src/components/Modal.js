@@ -26,14 +26,32 @@ import './Modal.css';
 const openModals = new Set();
 let modalSeq = 0;
 
+/**
+ * The overlay's handlers for "a click beside the box closes the dialog".
+ * Spread them on the overlay element; `onClose` may be undefined (no close).
+ *
+ * A click whose press began INSIDE the box — selecting text in a field and
+ * releasing past the edge — is reported by the browser on the overlay. Closing
+ * on it loses whatever was typed (a tasting note, a journal entry, a support
+ * message), so only a press that also began on the overlay closes.
+ */
+export function useOverlayClose(onClose) {
+  const pressTarget = useRef(null);
+  return {
+    onPointerDown: (e) => { pressTarget.current = e.target; },
+    onClick: (e) => {
+      const startedInside = pressTarget.current && pressTarget.current !== e.currentTarget;
+      pressTarget.current = null;
+      if (startedInside || e.target !== e.currentTarget) return;
+      if (onClose) onClose(e);
+    },
+  };
+}
+
 function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus = false }) {
   const titleId = useId();
   const boxRef = useRef(null);
-  // Where the current press began. A click whose press began INSIDE the box —
-  // selecting text in a field and releasing past the edge — is reported by the
-  // browser on the overlay, and used to close the dialog with whatever had
-  // been typed in it (journal entry, review, support message).
-  const pressTarget = useRef(null);
+  const overlayClose = useOverlayClose(onClose);
   // The phone's Back closes the dialog instead of leaving the page.
   useBackToClose(onClose);
   const token = useRef(null);
@@ -91,16 +109,7 @@ function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus 
   }, [trapFocus]);
 
   return (
-    <div
-      className="modal-overlay"
-      onPointerDown={(e) => { pressTarget.current = e.target; }}
-      onClick={(e) => {
-        const startedInside = pressTarget.current && pressTarget.current !== e.currentTarget;
-        pressTarget.current = null;
-        if (startedInside || e.target !== e.currentTarget) return;
-        if (onClose) onClose(e);
-      }}
-    >
+    <div className="modal-overlay" {...overlayClose}>
       <div
         className={`modal-box${wide ? ' modal-box--wide' : ''}`}
         style={boxStyle}
