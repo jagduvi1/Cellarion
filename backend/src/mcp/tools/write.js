@@ -177,7 +177,7 @@ registerTool({
       // id gets — security audit M-4.
       wineDoc = await findVisibleWine(args.wine_id, {
         userId: ctx.user.id, roles: ctx.user.roles,
-        populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }],
+        populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }],
       });
       if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
     } else {

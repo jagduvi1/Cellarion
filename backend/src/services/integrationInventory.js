@@ -38,7 +38,7 @@ const { thumbPath } = require('../utils/thumbPath');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const { snapshotTag } = require('./offlineSnapshot');
 const { listForBottles } = require('./personalData');
-const { labelSweetnessOut, wineDisplayName } = require('./sweetnessOps');
+const { labelSweetnessOut, sweetnessStyleOut, wineDisplayName } = require('./sweetnessOps');
 
 const INVENTORY_SCHEMA = 1;
 // Salts the offline snapshot's validator: an inventory tag can never equal a
@@ -73,13 +73,14 @@ const CONSUMED_SELECT = 'consumedAt consumedNote consumedRating consumedRatingSc
 const INVENTORY_WINE_POPULATE = [
   {
     path: 'wineDefinition',
-    select: 'name producer type colour nonWine country region appellation classification labelSweetness grapes image',
+    select: 'name producer type colour nonWine country region appellation classification labelSweetness sweetnessStyle grapes image',
     populate: [
       { path: 'country', select: 'name' },
       { path: 'region', select: 'name' },
       // regionalNames: the display name on this wine's label (utils/grapeDisplay).
       { path: 'grapes', select: 'name regionalNames' },
       { path: 'labelSweetness', select: 'name band scale regulated -_id' },
+      { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' },
     ],
   },
   { path: 'pendingWineRequest', select: 'wineName producer' },
@@ -153,6 +154,10 @@ function wineOf(wine, profile) {
     // states. On a bottle, the vintage's own term once those exist; the
     // wine's until then (the documented meaning, written once).
     labelSweetness: labelSweetnessOut(w),
+    // { name, band, scale, regulated, source, sourceUrl } or null — the term
+    // the wine is KNOWN by when its label states none, named by the producer
+    // or the trade. Descriptive: never part of the name or the identity.
+    sweetnessStyle: sweetnessStyleOut(w),
     producer: text(w.producer),
     type: text(w.type),
     // 'other' = a drink that is not wine (cider, beer, spirits), outside the

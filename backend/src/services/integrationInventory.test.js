@@ -129,12 +129,26 @@ describe('assembleInventory — the contract', () => {
       appellation: 'Pauillac',
       classification: null,
       labelSweetness: null,
+      sweetnessStyle: null,
       grapes: ['Cabernet Sauvignon', 'Tinta Pauillac'],
       image: '/api/uploads/thumbs/processed/w1.webp.webp',
       profile: {
         body: 'full', acidity: 'medium', sweetness: 'dry', tannin: 'high',
         flavors: ['blackcurrant', 'cedar'], foodPairings: ['lamb'],
       },
+    });
+  });
+
+  test('a wine with a sweetness style sends it in its documented shape, beside the label term and out of the name', () => {
+    const styled = {
+      ...WINE, _id: 'w2', name: 'Riesling Kabinett', labelSweetness: null,
+      sweetnessStyle: { term: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false }, source: 'trade', url: 'https://merchant.example/kabinett' },
+    };
+    const s = inv({ bottles: [bottle({ wineDefinition: styled })] });
+    expect(s.wines.w2).toMatchObject({
+      displayName: 'Riesling Kabinett',
+      labelSweetness: null,
+      sweetnessStyle: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: 'https://merchant.example/kabinett' },
     });
   });
 
@@ -394,7 +408,9 @@ describe('buildInventory — what is loaded', () => {
       { path: 'region', select: 'name' },
       { path: 'grapes', select: 'name regionalNames' },
       { path: 'labelSweetness', select: 'name band scale regulated -_id' },
+      { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' },
     ]);
+    expect(wine.select.split(' ')).toEqual(expect.arrayContaining(['labelSweetness', 'sweetnessStyle']));
   });
 
   test('no cellars → an empty inventory without further queries', async () => {

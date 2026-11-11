@@ -8,6 +8,7 @@ const { createValidator } = require('./validator');
 const { RACK_TYPES } = require('../models/Rack');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
+const SweetnessTerm = require('../models/SweetnessTerm');
 const { TOKEN_SCOPES } = require('../models/ApiToken');
 const { TYPES: PERSONAL_TYPES } = require('../utils/personalDataTypes');
 const { CONSUMED_STATUSES } = require('../config/constants');
@@ -103,5 +104,8 @@ test('enums are the code\'s', () => {
   expect(values(S.Bottle.properties.consumedReason)).toEqual(CONSUMED_STATUSES);
   expect(values(S.WineSummary.properties.type)).toEqual(WineDefinition.schema.path('type').enumValues);
   expect(values(S.PersonalEntry.properties.type)).toEqual(PERSONAL_TYPES);
+  expect(values(S.SweetnessStyle.properties.source)).toEqual(WineDefinition.SWEETNESS_STYLE_SOURCES);
+  expect(values(S.SweetnessStyle.properties.band)).toEqual(SweetnessTerm.ALL_BANDS);
+  expect(values(S.SweetnessStyle.properties.scale)).toEqual(SweetnessTerm.SCALES);
   for (const o of v.operations()) for (const s of o.scopes.flat()) expect(TOKEN_SCOPES).toContain(s);
 });

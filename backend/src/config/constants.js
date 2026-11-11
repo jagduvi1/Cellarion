@@ -44,12 +44,24 @@ const MEMBER_WINE_EXCLUDE = excludeFields(MEMBER_WINE_HIDDEN_FIELDS);
 // it from the payload afterwards.
 const MEMBER_WINE_EXCLUDE_KEEP_CREATOR = excludeFields(MEMBER_WINE_HIDDEN_FIELDS.filter((f) => f !== 'createdBy'));
 
+// The sweetness style's term (WineDefinition.sweetnessStyle), populated with
+// the label term's own fields, beside labelSweetness in the bottle reads below.
+const SWEETNESS_STYLE_POPULATE = { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' };
+// The wine of a LEAN bottle read leaves the server with its sweetness style
+// in the outgoing shape, the one a document's toJSON gives
+// (services/sweetnessOps.shapeSweetnessStyle; a document is left alone).
+const shapeLeanWine = (wine) => require('../services/sweetnessOps').shapeSweetnessStyle(wine);
+
 // The wine of ONE bottle, as the bottle page and every bottle write answer
 // send it: the whole record with its profile, minus the member-hidden fields
 // above. Anyone with access to the cellar reads these answers, a viewer
 // included, so they follow the same list as the bottle lists.
 const winePopulate = (select) => [
-  { path: 'wineDefinition', select, populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }] },
+  {
+    path: 'wineDefinition', select,
+    populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }, SWEETNESS_STYLE_POPULATE],
+    transform: shapeLeanWine,
+  },
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
 const WINE_POPULATE = winePopulate(MEMBER_WINE_EXCLUDE);
@@ -71,7 +83,8 @@ const WINE_POPULATE_LIST = [
     select: WINE_LIST_SELECT,
     // The label sweetness term as the API shape ({ name, band, scale,
     // regulated }) — a card shows it beside the name once the word has left it.
-    populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }]
+    populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, SWEETNESS_STYLE_POPULATE],
+    transform: shapeLeanWine,
   },
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
@@ -91,7 +104,9 @@ const WINE_POPULATE_CARDS = [
       { path: 'region', select: 'name slug country' },
       { path: 'grapes', select: 'name slug color' },
       { path: 'labelSweetness', select: 'name band scale regulated -_id' },
+      SWEETNESS_STYLE_POPULATE,
     ],
+    transform: shapeLeanWine,
   },
   { path: 'pendingWineRequest', select: 'wineName producer' },
 ];

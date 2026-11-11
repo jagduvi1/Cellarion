@@ -23,7 +23,8 @@ const { conflictingStyleTerms } = require('../utils/styleTerms');
 // Every wine read here populates the same taxonomy rows — the label sweetness
 // term among them, as the API shape ({ name, band, scale, regulated }): the
 // style guard reads it off a candidate, and a member read sends it, not an id.
-const WINE_READ_POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
+// The sweetness style's term beside it, for the same reason.
+const WINE_READ_POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }];
 const { parsePagination } = require('../utils/pagination');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
 const { MEMBER_WINE_HIDDEN_FIELDS, MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require('../config/constants');
@@ -1024,7 +1025,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
-const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification classifications labelSweetness aiProfile canary';
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification classifications labelSweetness sweetnessStyle aiProfile canary';
 // The populated places and grapes on the public page carry their public
 // fields only: a bare populate also sent createdBy / reviewedBy, the ids of
 // the members who added or reviewed a region or grape. Descriptions feed the
@@ -1035,6 +1036,7 @@ const PUBLIC_TAXONOMY_POPULATE = [
   { path: 'grapes', select: 'name slug color description regionalNames translations' },
   { path: 'classifications', select: 'name kind' },
   { path: 'labelSweetness', select: 'name band scale regulated -_id' },
+  { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' },
 ];
 
 // Anti-enumeration limit for the ONE wine endpoint that needs no account.

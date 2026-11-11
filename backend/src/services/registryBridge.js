@@ -25,6 +25,7 @@ const RegistryDataValue = require('../models/RegistryDataValue');
 const client = require('./registryBridgeClient');
 const { generateWineKey, appendSweetnessTerm } = require('../utils/normalize');
 const { resolveTerm, scaleForType, SCALES } = require('./sweetnessOps');
+const { assignSweetnessStyle } = require('./sweetnessWrite');
 const { TYPES: VALUE_TYPES } = require('../utils/personalDataTypes');
 // Loaded on first use, not at require time: the intake routes that forward
 // contributions require this module, and findOrCreateWine / search pull in
@@ -225,6 +226,25 @@ function sweetnessFields(w, s) {
   };
 }
 
+/**
+ * The registry's sweetness style (protocol v2) onto a copy, through the write
+ * rule (services/sweetnessWrite assignSweetnessStyle, lenient). Only when the
+ * registry SAYS something — the key present, the colour rule — so an older
+ * registry never clears a style held here. The term is matched by word on
+ * this table and never minted from the wire (an unknown one is dropped); a
+ * style the copy holds yields only to a stronger source. A null clears it only
+ * where `mayClear`: a new copy, or one not edited here since the last sync.
+ * Kept out of identityFields: the style is not identity. Returns the rule's
+ * verdict, or null when the registry said nothing usable.
+ */
+async function applyRegistryStyle(wine, w, { mayClear }) {
+  if (!w || !Object.prototype.hasOwnProperty.call(w, 'sweetnessStyle')) return null;
+  const s = w.sweetnessStyle;
+  if (s === null) return mayClear ? assignSweetnessStyle(wine, { term: null }) : null;
+  if (!s || typeof s !== 'object' || typeof s.name !== 'string' || !s.name.trim()) return null;
+  return assignSweetnessStyle(wine, { term: s.name, source: s.source, url: s.sourceUrl });
+}
+
 /** The word the dedup key carries for a copy: the resolved term's, else none (the name keeps an unknown word). */
 const sweetnessKeyWord = (tax) => (tax && tax.sweetness && tax.sweetness.row ? tax.sweetness.row.name : null);
 
@@ -406,6 +426,8 @@ async function adoptWine(registryId, userId) {
     if (!wine.image && remoteImage(w.image)) { wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null; }
     const locallyCurated = wine.aiProfile && wine.aiProfile.source === 'curator' && wine.aiProfile.description;
     if (profile && !locallyCurated) wine.aiProfile = profile;
+    // A row typed here keeps its own style unless the registry's is stronger.
+    await applyRegistryStyle(wine, w, { mayClear: false });
     await wine.save();
   } else {
     wine = new WineDefinition({
@@ -426,6 +448,7 @@ async function adoptWine(registryId, userId) {
     // registry holds as uncoloured, and the next refresh cleared it again
     // (audit 2026-09-19). An older registry sends no key: the hook infers.
     if (Object.prototype.hasOwnProperty.call(w, 'colour')) stateColour(wine, wine.colour);
+    await applyRegistryStyle(wine, w, { mayClear: true });
     try {
       await wine.save();
     } catch (err) {
@@ -494,6 +517,10 @@ async function applyRegistryUpdate(local, w) {
   } else if (!wine.image && remoteImage(w.image)) {
     wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null;
   }
+  // Descriptive, so applied on an edited copy too: the rule keeps a style
+  // held here unless the registry's source is stronger; only an untouched
+  // copy follows the registry to "none".
+  await applyRegistryStyle(wine, w, { mayClear: untouchedLocally });
   if (profile && !curatedHere) wine.aiProfile = profile;
   // The stamp is taken HERE, immediately before the save, and reused for the
   // rows below. Using the run's start time meant `updatedAt` (stamped by the

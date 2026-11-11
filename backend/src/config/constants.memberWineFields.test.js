@@ -12,6 +12,8 @@ test('the list names the contributor fields', () => {
 test('the list names the label-sweetness curation marks — the term itself stays readable', () => {
   expect(MEMBER_WINE_HIDDEN_FIELDS).toEqual(expect.arrayContaining(['sweetnessReview', 'sweetnessInName']));
   expect(MEMBER_WINE_HIDDEN_FIELDS).not.toContain('labelSweetness');
+  // The sweetness style is public too: a term, its source and a public page.
+  expect(MEMBER_WINE_HIDDEN_FIELDS).not.toContain('sweetnessStyle');
 });
 
 test('WINE_LIST_SELECT excludes every member-hidden field', () => {

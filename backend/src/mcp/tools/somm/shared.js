@@ -4,7 +4,7 @@
 // queue row. Output shapes only; nothing here writes.
 
 const aiConfig = require('../../../config/aiConfig');
-const { labelSweetnessFields } = require('../../toolUtil');
+const { labelSweetnessFields, sweetnessStyleFields } = require('../../toolUtil');
 const { hasProfileContent } = require('../../../utils/profileReview');
 
 /**
@@ -66,6 +66,8 @@ const wineLite = (wd, { termLoaded = false } = {}) => (wd ? {
   region: wd.region?.name || null,
   appellation: wd.appellation || null,
   ...(labelSweetnessFields(wd, { loaded: termLoaded })),
+  // The sweetness style beside it, under the same rule.
+  ...(sweetnessStyleFields(wd, { loaded: termLoaded })),
   ...(grapesLite(wd.grapes)),
   ...(provenanceLite(wd.identityProvenance)),
 } : null);

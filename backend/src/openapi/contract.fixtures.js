@@ -58,8 +58,13 @@ async function seedContractData() {
   const merlot = await Grape.create({ name: 'Merlot', normalizedName: 'merlot', createdBy: alice._id });
   const sauvignon = await Grape.create({ name: 'Sauvignon Blanc', normalizedName: 'sauvignon blanc', createdBy: alice._id });
 
+  // The red carries a sweetness style (the term it is known by, named by its
+  // producer, with the page), so that documented shape is exercised too; the
+  // white carries a label term and no style.
+  const dry = await SweetnessTerm.create({ name: 'dry', scale: 'still', band: 'dry', system: 'EU 2019/33 Annex III A (en)', reviewedAt: new Date() });
   const red = await WineDefinition.create({
     name: 'Château Exemple', producer: 'Château Exemple', type: 'red',
+    sweetnessStyle: { term: dry._id, source: 'producer', url: 'https://www.example.com/chateau-exemple/wines' },
     country: france._id, region: pauillac._id, appellation: 'Pauillac', grapes: [cab._id, merlot._id],
     normalizedKey: 'chateau exemple|chateau exemple|pauillac', createdBy: alice._id, image: PHOTO(1),
     aiProfile: {

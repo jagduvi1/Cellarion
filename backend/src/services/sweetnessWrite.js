@@ -11,16 +11,21 @@
  *     against a Prädikat that is sweet by law; with the extract switch on
  *     (config/constants SWEETNESS_EXTRACT_FROM_NAME), the word in a name being
  *     written moves into the field.
+ *   assignSweetnessStyle — THE write rule for sweetnessStyle, the term a wine
+ *     is known by when its label prints none: never without the page that
+ *     names it, a regulated term only from the producer, the label's own term
+ *     first, producer before trade.
  *
  * Kept apart from sweetnessOps because every read surface imports that module
  * and none of them needs this one: the rule has its own vocabulary (the
- * ambiguity kinds, the review markers, the switch), and a reader looking for
+ * ambiguity kinds, the review markers, the switch, the verdicts), and a reader looking for
  * what happens when a term is written finds all of it here. How a name is
  * split into words, and which characters join the words of one term, is
  * utils/normalize (sweetnessWords): the display name and the slug read names
  * the same way, so they never repeat a term the rule reads in a name.
  *
- * No write path calls the rule yet.
+ * The Registry Bridge copy calls assignSweetnessStyle (services/registryBridge).
+ * No other write path calls either rule yet.
  */
 const mongoose = require('mongoose');
 const constants = require('../config/constants');
@@ -28,6 +33,8 @@ const Region = require('../models/Region');
 const { normalizeSweetnessTerm, sweetnessWords, sweetnessSpanKeys, SWEETNESS_TERM_GAP_RX } = require('../utils/normalize');
 const { NAME_AMBIGUOUS_WORDS, statedStyle, sweetByLawPradikat } = require('../utils/styleTerms');
 const { loadTerms, resolveLoaded, scaleForType } = require('./sweetnessOps');
+const { isSafeUrl } = require('../utils/sanitize');
+const { URL_MAX } = require('./proposalFields');
 
 // Glue that makes one word of two ("Demi/Sec", "Brut.Rosé", "L'Extra Brut"):
 // a term attached to a neighbour by it is not read.
@@ -840,8 +847,125 @@ async function assignSweetness(target, { labelSweetness, name, type, countryId =
   return result;
 }
 
+// ── The sweetness style ──────────────────────────────────────────────────────
+
+// Who may name a style, weakest first: a value replaces a stored one only
+// from a stronger source (producer beats trade). The keys are the model's
+// sources (WineDefinition.SWEETNESS_STYLE_SOURCES).
+const STYLE_SOURCE_RANK = Object.freeze({ trade: 1, producer: 2 });
+
+/**
+ * THE write rule for a wine's sweetness style (WineDefinition.sweetnessStyle):
+ * the term the wine is KNOWN by when its label prints none, named by the
+ * producer or the trade, with the page that names it. Sets `sweetnessStyle`,
+ * or the `sweetnessReview` marker, on `target`. Callers: the Registry Bridge
+ * copy (services/registryBridge); no REST or MCP caller yet.
+ *
+ * Input: `term` as printed (or a term row id) — null or '' clears the style
+ * (the caller decides who may clear), undefined leaves it; `source`
+ * 'producer' | 'trade'; `url` the http(s) page that names the term; `type` /
+ * `countryId` default to the target's own. `strict` refuses what lenient
+ * drops: a style is never stored without its source, so invalid input is
+ * neither kept nor marked.
+ *
+ * Returns { ok: true, changed, verdict, reason, style, review, message? } —
+ * `style` the value on the target after the call, `review` the marker set —
+ * with `verdict`:
+ *   applied       written: a blank filled, or a stronger source replaced a
+ *                 weaker one
+ *   unchanged     the same term from an equal or weaker source (the stored
+ *                 value and link stay), or no term given
+ *   needs_review  a different term from an equal or weaker source: NOT
+ *                 written (reason equal_source | weaker_source); the caller
+ *                 sends it to a person
+ *   redundant     the label's own term is the same term: the style is cleared
+ *   held          contradicts the label's term, or a Prädikat sweet by law:
+ *                 nothing written, marker term_contradiction
+ *   cleared       null or '' given: the style removed
+ *   dropped       lenient only — invalid input (reason as below, or no_table)
+ * or, strict, { ok: false, code: 'invalid_input', reason, message }, reason ∈
+ * no_scale | unknown_term | type_mismatch | bad_source | url_required |
+ * bad_url | regulated_needs_producer. Reason codes for the caller, not an
+ * HTTP body.
+ */
+async function assignSweetnessStyle(target, { term, source, url, type, countryId = null, strict = false } = {}) {
+  const terms = await loadTerms();
+  const done = (verdict, extra = {}) => ({
+    ok: true, changed: false, verdict, reason: null, review: null, ...extra, style: target.sweetnessStyle ?? null,
+  });
+  const invalid = (reason, message) => (strict
+    ? { ok: false, code: 'invalid_input', reason, message }
+    : done('dropped', { reason, message }));
+  const held = (detail) => mark(target, done('held', { reason: 'term_contradiction' }), 'term_contradiction', detail);
+
+  if (term === undefined) return done('unchanged');
+  const word = term == null ? '' : String(term).trim();
+  if (!word) {
+    const had = target.sweetnessStyle != null;
+    if (had) target.sweetnessStyle = null;
+    return done('cleared', { changed: had });
+  }
+  const nonWine = target.nonWine === true;
+  const scale = scaleForType(type !== undefined ? type : target.type, { nonWine });
+  if (scale === false) {
+    return invalid('no_scale', nonWine ? 'A drink that is not wine has no sweetness style.' : 'Fortified wines have no sweetness style yet.');
+  }
+  const src = typeof source === 'string' ? source.trim().toLowerCase() : '';
+  if (!STYLE_SOURCE_RANK[src]) {
+    return invalid('bad_source', `The source of a sweetness style is "producer" or "trade", not "${String(source ?? '').slice(0, 40)}".`);
+  }
+  const link = typeof url === 'string' ? url.trim() : '';
+  if (!link) return invalid('url_required', 'A sweetness style needs the link to the page that names it.');
+  if (link.length > URL_MAX || !isSafeUrl(link)) {
+    return invalid('bad_url', `The link must be an http:// or https:// URL of at most ${URL_MAX} characters.`);
+  }
+  // No table (no database connection, nothing seeded): nothing resolves.
+  if (terms.empty) return done('dropped', { reason: 'no_table' });
+
+  const cid = countryId || idOf(target.country) || null;
+  const found = termFor(terms, word, { scale, countryId: cid });
+  if (!found.row) {
+    if (found.bothScales) return invalid('type_mismatch', `"${word}" is a term of both scales; the wine's type decides which. Set the type first.`);
+    if (found.otherScale) return invalid('type_mismatch', `"${word}" is a term for ${scaleWords(found.otherScale)}, and this is ${scaleWords(scale)}.`);
+    return invalid('unknown_term', `"${word}" is not a sweetness term for ${scaleWords(scale)}. Known terms here: ${knownTermsHint(terms, scale, cid)}. A term the list lacks is added under Admin → Taxonomy → Sweetness terms.`);
+  }
+  const row = found.row;
+  // A legal definition is a statement by the wine; a merchant's "trocken" is not.
+  if (row.regulated !== false && src !== 'producer') {
+    return invalid('regulated_needs_producer', `"${row.name}" is a term with a legal definition; only the producer names it as a style (source "producer").`);
+  }
+
+  // The label's own term wins: the same term makes the style redundant, a
+  // different one is a question for a person.
+  const label = storedRow(terms, target.labelSweetness);
+  if (label === 'unresolved') return held(`the label states a term this server cannot name; the style "${row.name}" was not written`);
+  if (label) {
+    if (!sameTerm(label, row)) return held(`the label states "${label.name}", the style named is "${row.name}"`);
+    const had = target.sweetnessStyle != null;
+    if (had) target.sweetnessStyle = null;
+    return done('redundant', { changed: had });
+  }
+  const byLaw = pradikatContradiction(row, { name: target.name, classifications: target.classifications, classification: target.classification });
+  if (byLaw) return held(byLaw);
+
+  // A stored style yields only to a stronger source, so two contributors who
+  // disagree cannot flip a wine back and forth.
+  const current = target.sweetnessStyle;
+  if (current && current.term != null) {
+    const stronger = STYLE_SOURCE_RANK[src] > (STYLE_SOURCE_RANK[current.source] || 0);
+    const currentRow = storedRow(terms, current.term);
+    if (currentRow !== 'unresolved' && sameTerm(currentRow, row)) {
+      if (!stronger) return done('unchanged');
+    } else if (!stronger) {
+      return done('needs_review', { reason: STYLE_SOURCE_RANK[src] === STYLE_SOURCE_RANK[current.source] ? 'equal_source' : 'weaker_source' });
+    }
+  }
+  target.sweetnessStyle = { term: row._id, source: src, url: link };
+  return done('applied', { changed: true });
+}
+
 module.exports = {
-  extractFromName, extractLoaded, assignSweetness,
+  extractFromName, extractLoaded, assignSweetness, assignSweetnessStyle, STYLE_SOURCE_RANK,
   // Tests: the cut on names longer than the reader accepts, for its time bound.
   __testing: { cutSpan },
 };

@@ -53,7 +53,7 @@ registerTool({
     // private draft wine is reported exactly like a missing id.
     // The term populated, so the summary of the new wine can state it (or its absence).
     const wineDoc = await findVisibleWine(args.wine_id, {
-      userId: ctx.user.id, roles: ctx.user.roles, populate: [{ path: 'labelSweetness', select: 'name band scale regulated -_id' }],
+      userId: ctx.user.id, roles: ctx.user.roles, populate: [{ path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }],
     });
     if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
 

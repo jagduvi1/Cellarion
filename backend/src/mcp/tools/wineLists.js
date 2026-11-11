@@ -237,7 +237,7 @@ registerTool({
       // by them or held in a cellar of theirs. A stranger's hidden row reads
       // as not_found, so what can be added is exactly what will render.
       ownerWineFilter(ctx.user.id, [args.wine_id])
-        .then((filter) => WineDefinition.findOne(filter).populate(['country', 'region', { path: 'labelSweetness', select: 'name band scale regulated -_id' }])),
+        .then((filter) => WineDefinition.findOne(filter).populate(['country', 'region', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }])),
     ]);
     if (!list) return fail('not_found', 'No such wine list. Use list_wine_lists for valid ids.');
     if (!wine) return fail('not_found', 'No such registry wine. Find the wine_id via search_registry or a bottle\'s wine.');

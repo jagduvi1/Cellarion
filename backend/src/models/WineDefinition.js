@@ -6,6 +6,40 @@ require('./SweetnessTerm'); // the same for labelSweetness (the key/slug hook re
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 const { isStyleType, inferColourFromName } = require('../utils/wineColour');
 
+// Who may name a wine's sweetness style (sweetnessStyle below).
+const SWEETNESS_STYLE_SOURCES = ['producer', 'trade'];
+
+// The sweetness style: the term a wine is KNOWN by when its label prints none
+// ("feinherb" for a wine whose label says nothing), named by the producer or
+// the trade, with the http(s) page that names it. DESCRIPTIVE, never identity:
+// not in normalizedKey, canonicalKey, the slug or the display name, and not
+// read by the style guard (utils/styleTerms) or the resolver — two records
+// never split or link over it. The label's own term (labelSweetness) always
+// wins. Written only through services/sweetnessWrite assignSweetnessStyle,
+// which holds the rules (a regulated term only from the producer; producer
+// beats trade). It leaves the server shaped as { name, band, scale, regulated,
+// source, sourceUrl }: the toJSON transform here for a document sent as it
+// is, services/sweetnessOps.shapeSweetnessStyle for a plain copy.
+const sweetnessStyleSchema = new mongoose.Schema({
+  term: { type: mongoose.Schema.Types.ObjectId, ref: 'SweetnessTerm', required: true },
+  source: { type: String, enum: SWEETNESS_STYLE_SOURCES, required: true },
+  // The write rule bounds it (services/proposalFields URL_MAX, the evidence
+  // link limit); the model refuses anything but an http(s) link.
+  url: {
+    type: String,
+    trim: true,
+    required: true,
+    maxlength: 500,
+    validate: {
+      validator: (v) => /^https?:\/\//i.test(v),
+      message: 'sweetnessStyle.url must start with http:// or https://',
+    },
+  },
+}, {
+  _id: false,
+  toJSON: { transform: (doc, ret) => require('../services/sweetnessOps').sweetnessStyleOut({ sweetnessStyle: ret }) },
+});
+
 const wineDefinitionSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -90,14 +124,23 @@ const wineDefinitionSchema = new mongoose.Schema({
   // a sparkling term on a still wine … `reason` is a code (unknown_term,
   // term_contradiction, type_mismatch, name_ambiguous, in_classification),
   // `detail` a short human line. Null when nothing is pending. Cleared by the
-  // pre-validate hook whenever name, labelSweetness, sweetnessInName or type
-  // changes — any of them may settle the question. Never holds a person.
+  // pre-validate hook whenever name, labelSweetness, sweetnessInName,
+  // sweetnessStyle or type changes — any of them may settle the question.
+  // Never holds a person.
   sweetnessReview: {
     type: {
       reason: { type: String, trim: true, maxlength: 40 },
       detail: { type: String, trim: true, maxlength: 300 },
       since: { type: Date },
     },
+    default: null
+  },
+  // The sweetness term this wine is KNOWN by when its label prints none,
+  // named by the producer (its own wording) or the trade (a merchant, a
+  // critic, a wine database), with the page that names it. See
+  // sweetnessStyleSchema above.
+  sweetnessStyle: {
+    type: sweetnessStyleSchema,
     default: null
   },
   lwin: {
@@ -860,7 +903,8 @@ wineDefinitionSchema.pre('validate', function(next) {
   // about; a stale marker would send a curator to a row somebody already fixed.
   if (!this.isNew && this.sweetnessReview && (
     this.isModified('name') || this.isModified('labelSweetness') ||
-    this.isModified('sweetnessInName') || this.isModified('type')
+    this.isModified('sweetnessInName') || this.isModified('sweetnessStyle') ||
+    this.isModified('type')
   ) && !this.isModified('sweetnessReview')) {
     this.sweetnessReview = null;
   }
@@ -1123,4 +1167,7 @@ wineDefinitionSchema.post('save', async function (doc) {
   await stampPromotedScanRetention(doc);
 });
 
-module.exports = mongoose.model('WineDefinition', wineDefinitionSchema);
+const WineDefinition = mongoose.model('WineDefinition', wineDefinitionSchema);
+WineDefinition.SWEETNESS_STYLE_SOURCES = SWEETNESS_STYLE_SOURCES;
+
+module.exports = WineDefinition;

@@ -222,6 +222,8 @@ function project(doc, select, coll) {
 const REFS = {
   wineDefinition: ['wines', WINES], pendingWineRequest: ['wineRequests', REQUESTS], country: ['countries', COUNTRIES],
   region: ['regions', REGIONS], grapes: ['grapes', GRAPES], labelSweetness: ['sweetnessTerms', TERMS], key: ['personalDataKeys', KEYS], author: ['users', USERS],
+  // A ref inside a subdocument: the sweetness style's term.
+  'sweetnessStyle.term': ['sweetnessTerms', TERMS],
 };
 function populate(rows, spec, selectArg) {
   const specs = Array.isArray(spec) ? spec : typeof spec === 'string' ? [{ path: spec, select: selectArg }] : [spec];
@@ -235,6 +237,12 @@ function populate(rows, spec, selectArg) {
         const doc = project(structuredClone(found), s.select, coll);
         return s.populate ? populate([doc], s.populate)[0] : doc;
       };
+      // A dotted path populates the ref inside the subdocument (a copy of it).
+      const [head, tail] = s.path.split('.');
+      if (tail) {
+        if (out[head] && typeof out[head] === 'object' && out[head][tail] != null) out[head] = { ...out[head], [tail]: resolve(out[head][tail]) };
+        continue;
+      }
       const v = out[s.path];
       if (Array.isArray(v)) out[s.path] = v.map(resolve).filter(Boolean);
       else if (v != null) out[s.path] = resolve(v);
@@ -362,7 +370,7 @@ describe('a read token gets the inventory', () => {
     });
     expect(body.wines[W1]).toEqual({
       name: 'Barolo', displayName: 'Barolo secco', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
-      appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'secco', band: 'dry', scale: 'still', regulated: true }, grapes: ['Nebbiolo'],
+      appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'secco', band: 'dry', scale: 'still', regulated: true }, sweetnessStyle: null, grapes: ['Nebbiolo'],
       image: '/api/uploads/thumbs/processed/w1img.webp.webp',
       profile: { body: 'full', acidity: 'high', sweetness: 'dry', tannin: 'high', flavors: ['tar', 'rose'], foodPairings: ['truffle'] },
     });

@@ -100,8 +100,8 @@ registerTool({
     // This tool is public scope: a quarantined non-wine must never be
     // anyone's "similar wine", whatever vectors it still has (audit 2026-10-14).
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, canary: { $ne: true }, nonWine: { $ne: true } })
-      .select('name producer slug country region appellation classification labelSweetness grapes type colour communityRating')
-      .populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }])
+      .select('name producer slug country region appellation classification labelSweetness sweetnessStyle grapes type colour communityRating')
+      .populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }])
       .lean();
     const byId = new Map(docs.map((d) => [String(d._id), d]));
     const data = ranked

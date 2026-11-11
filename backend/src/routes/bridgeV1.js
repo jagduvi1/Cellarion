@@ -1,6 +1,6 @@
 const express = require('express');
 const { classificationsOut } = require('../services/classificationOps');
-const { labelSweetnessOut, wineDisplayName } = require('../services/sweetnessOps');
+const { labelSweetnessOut, sweetnessStyleOut, wineDisplayName } = require('../services/sweetnessOps');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
@@ -49,9 +49,9 @@ const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 // that does not exist); a direct fetch still serves one — that is the path a
 // copier walks, and the fetch is what gets reported.
 const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
-const IDENTITY_SELECT = 'name producer slug country region appellation classification classifications labelSweetness sweetnessInName grapes type colour image imageCredit';
+const IDENTITY_SELECT = 'name producer slug country region appellation classification classifications labelSweetness sweetnessInName sweetnessStyle grapes type colour image imageCredit';
 // Every identity read populates the same taxonomy rows.
-const BRIDGE_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
+const BRIDGE_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }];
 
 // Protocol version, negotiated by request header (`X-Cellarion-Bridge-Protocol`).
 // v1 — no header, every install before label sweetness — gets the name AS THE
@@ -134,7 +134,10 @@ function identity(w, protocol = 1) {
     producer: w.producer || null,
     name: protocol >= 2 ? w.name : wineDisplayName(w),
     // v2 only, and only the shape: { name, band, scale, regulated } or null.
-    ...(protocol >= 2 ? { labelSweetness: term } : {}),
+    // The sweetness style beside it, v2 only too: { name, band, scale,
+    // regulated, source, sourceUrl } or null — descriptive, by word and
+    // scale like the term, never part of the identity a copy is keyed on.
+    ...(protocol >= 2 ? { labelSweetness: term, sweetnessStyle: sweetnessStyleOut(w) } : {}),
     type: w.type || null,
     // Additive (v1 clients ignore unknown keys): the colour of a sparkling,
     // dessert or fortified wine, null for the rest.
@@ -306,7 +309,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
     const wine = await findVisibleWine(req.params.id, {
       userId: null, roles: [], lean: true, noDrafts: true,
       select: `${IDENTITY_SELECT} aiProfile canary lwin communityRating updatedAt`,
-      populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }],
+      populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }],
     });
     if (!wine || wine.nonWine) return res.status(404).json({ error: 'Wine not found', code: 'not_found' });
 
@@ -490,7 +493,7 @@ router.get('/requests', async (req, res) => {
     }
     const wineIds = rows.filter((r) => r.status === 'resolved' && r.linkedWineDefinition).map((r) => r.linkedWineDefinition);
     const wines = wineIds.length
-      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').populate('classifications', 'name kind').populate('labelSweetness', 'name band scale regulated -_id').lean()
+      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').populate('classifications', 'name kind').populate('labelSweetness', 'name band scale regulated -_id').populate('sweetnessStyle.term', 'name band scale regulated -_id').lean()
       : [];
     const protocol = bridgeProtocol(req);
     const byId = new Map(wines.map((w) => [String(w._id), w]));

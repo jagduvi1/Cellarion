@@ -4,10 +4,11 @@
  * This file: the curated term rows (models/SweetnessTerm), an in-memory copy
  * the pickers, the MCP tool, the style guard and the identity keys read, the
  * resolver from a printed word to a row, the output shapes every wine read
- * uses, and the boot seed. The WRITE rule — reading a term off a name, moving
- * the word out of the name, refusing an unknown word — is
- * services/sweetnessWrite, which no write path calls yet: the one path that
- * sets a wine's term is a Registry Bridge copy (services/registryBridge).
+ * uses (the label term and the sweetness style), and the boot seed. The WRITE
+ * rule — reading a term off a name, moving the word out of the name, refusing
+ * an unknown word, ranking the sources of a style — is services/sweetnessWrite.
+ * The one path that writes either field is a Registry Bridge copy
+ * (services/registryBridge); the other write paths are not wired yet.
  *
  * Same cache shape as services/classificationOps (60 s TTL, invalidated by the
  * admin routes, pinned in tests, EMPTY without a database connection so unit
@@ -163,7 +164,11 @@ const ID_RX = /^[0-9a-f]{24}$/i;
  */
 function termRowOf(wd) {
   if (!wd || wd.labelSweetness === undefined) return undefined;
-  const t = wd.labelSweetness;
+  return refRow(wd.labelSweetness);
+}
+
+/** A term ref as a read left it — a populated row, or an id — to its row; null for none, else 'unresolved'. */
+function refRow(t) {
   if (t === null) return null;
   if (typeof t === 'object' && typeof t.name === 'string' && t.name) return t;
   const id = typeof t === 'string' ? t : (t && typeof t.toString === 'function' ? t.toString() : '');
@@ -253,6 +258,76 @@ function labelSweetnessFields(wd, { loaded = false } = {}) {
   return { label_sweetness: termOut(term), display_name: appendSweetnessTerm(wd.name, term ? termSpellings(term) : null) };
 }
 
+// ── The sweetness style (WineDefinition.sweetnessStyle) ─────────────────────
+// The term a wine is KNOWN by when its label prints none, named by the
+// producer or the trade (written by services/sweetnessWrite
+// assignSweetnessStyle). Descriptive, never identity: no key, slug, display
+// name, style guard or resolver reads it. Stored as { term, source, url }; it
+// leaves the server as { name, band, scale, regulated, source, sourceUrl } —
+// the label term's shape plus where the word comes from — on REST and the
+// Bridge, with `source_url` on MCP.
+
+/**
+ * The outgoing shape from whatever the read holds: the stored subdocument
+ * (its term populated, or an id the warm in-memory copy names) or the shape
+ * itself (an object a read already shaped). Null when there is none, or when
+ * nothing can name the term.
+ */
+function styleShape(s) {
+  if (!s || typeof s !== 'object') return null;
+  const shaped = s.term === undefined && typeof s.name === 'string';
+  const row = shaped ? s : refRow(s.term);
+  const term = row && row !== 'unresolved' ? termOut(row) : null;
+  const source = typeof s.source === 'string' && s.source ? s.source : null;
+  const url = shaped ? s.sourceUrl : s.url;
+  if (!term || !source || typeof url !== 'string' || !url) return null;
+  return { ...term, source, sourceUrl: url };
+}
+
+/**
+ * A wine's sweetness style as REST, the inventory and the Bridge (protocol 2)
+ * send it: { name, band, scale, regulated, source, sourceUrl } or null.
+ * Callers: services/integrationInventory, routes/bridgeV1, the model's toJSON,
+ * shapeSweetnessStyle below.
+ */
+function sweetnessStyleOut(wd) {
+  return wd ? styleShape(wd.sweetnessStyle) : null;
+}
+
+/**
+ * The same, in place, on a plain wine object about to be sent (a lean read, a
+ * toObject() copy): its sweetnessStyle becomes the outgoing shape, null when
+ * it has none. A wine without the key (a read that did not select it, a lean
+ * row that predates the field) keeps no key. A Mongoose document is left
+ * alone: its toJSON shapes it, and a save must still see the stored
+ * subdocument. Callers: the populate transform of the bottle reads' wine
+ * (config/constants) and utils/grapeDisplay.decorateGrapes, the copy most
+ * REST wine reads send. Returns the object.
+ */
+function shapeSweetnessStyle(wine) {
+  if (!wine || typeof wine !== 'object' || wine instanceof mongoose.Document) return wine;
+  if (wine.sweetnessStyle !== undefined) wine.sweetnessStyle = styleShape(wine.sweetnessStyle);
+  return wine;
+}
+
+/**
+ * The MCP field beside label_sweetness, under the same honesty rule as
+ * labelSweetnessFields: a read that selected the field and populated its term
+ * (`loaded`) → { sweetness_style: { name, band, scale, regulated, source,
+ * source_url } | null }, a row that predates the field reading null; a read
+ * that did not load it, or a term nothing can name → no key.
+ */
+function sweetnessStyleFields(wd, { loaded = false } = {}) {
+  if (!wd) return {};
+  const s = wd.sweetnessStyle;
+  if (s === undefined && !loaded) return {};
+  if (s && typeof s === 'object' && s.term !== undefined && refRow(s.term) === 'unresolved') return {};
+  const out = styleShape(s);
+  if (!out) return { sweetness_style: null };
+  const { sourceUrl, ...rest } = out;
+  return { sweetness_style: { ...rest, source_url: sourceUrl } };
+}
+
 /**
  * Seed the rows from data/sweetness-terms.json; returns { created, updated }.
  * A row that exists (same word, same scale) is brought up to date and keeps
@@ -310,5 +385,6 @@ module.exports = {
   loadTerms, invalidateSweetnessCache, primeSweetnessCache, cachedTerm, cachedTermName,
   resolveTerm, resolveLoaded,
   labelSweetnessOut, labelSweetnessFields, termNameForWine, wineDisplayName,
+  sweetnessStyleOut, shapeSweetnessStyle, sweetnessStyleFields,
   ensureSweetnessSeed,
 };

@@ -99,7 +99,7 @@ function accessibleCellars(userId) {
  * `classification` (the joined string) stays beside it for older clients.
  */
 const { classificationsOut } = require('../services/classificationOps');
-const { labelSweetnessOut, labelSweetnessFields, wineDisplayName } = require('../services/sweetnessOps');
+const { labelSweetnessOut, labelSweetnessFields, sweetnessStyleFields, wineDisplayName } = require('../services/sweetnessOps');
 
 function wineSummary(wd, { termLoaded = false } = {}) {
   if (!wd) return null;
@@ -114,6 +114,11 @@ function wineSummary(wd, { termLoaded = false } = {}) {
     // not load it carries neither key, so a missing key means "not on this
     // surface", never "no term" (services/sweetnessOps.labelSweetnessFields).
     ...labelSweetnessFields(wd, { loaded: termLoaded }),
+    // sweetness_style ({ name, band, scale, regulated, source, source_url } or
+    // null — the term the wine is KNOWN by when its label states none, named
+    // by the producer or the trade; descriptive, never identity), under the
+    // same rule: a caller that sets termLoaded selects and populates it too.
+    ...sweetnessStyleFields(wd, { loaded: termLoaded }),
     producer: wd.producer || null,
     type: wd.type || null,
     // 'other' = a drink that is not wine (cider, beer, spirits), kept in the
@@ -231,6 +236,7 @@ module.exports = {
   classificationsOut,
   labelSweetnessOut,
   labelSweetnessFields,
+  sweetnessStyleFields,
   wineDisplayName,
   FIELD_DESCRIPTIONS,
   ok,
