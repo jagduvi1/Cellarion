@@ -275,3 +275,19 @@ describe('getBottleDrinkStatus', () => {
     expect(getBottleDrinkStatus({}, nvProfile, CURRENT_YEAR - 3).status).toBe('peak');
   });
 });
+
+describe('getMaturityStatus: a relative (NV) window with no year to count from', () => {
+  const nvProfile = { status: 'reviewed', relative: true, earlyFrom: 0, earlyUntil: 2, peakFrom: 2, peakUntil: 4, lateFrom: 4, lateUntil: 6 };
+
+  test.each([['no anchor year', undefined], ['a null anchor year', null], ['an anchor year that is not a number', NaN]])(
+    'has no status with %s: its numbers are offsets, not calendar years',
+    (name, anchorYear) => {
+      expect(getMaturityStatus(nvProfile, anchorYear)).toBeNull();
+    },
+  );
+
+  test('an ordinary vintage window needs no anchor year', () => {
+    const year = new Date().getFullYear();
+    expect(getMaturityStatus({ status: 'reviewed', peakFrom: year - 1, peakUntil: year + 1 }).status).toBe('peak');
+  });
+});

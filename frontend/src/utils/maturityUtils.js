@@ -62,6 +62,8 @@ export function bottleAnchorYear(bottle) {
  * @returns {Array<{ label: string, cls: string, from: number|undefined, until: number|undefined, vintageInt: number }>}
  */
 export function getMaturityPhases(profile, labels, anchorYear) {
+  // An unanchored relative (NV) window has no calendar years to list.
+  if (profile?.relative && !Number.isFinite(anchorYear)) return [];
   const w = resolveWindow(profile, anchorYear);
   // The "years" column is measured from the anchor for relative (NV) windows,
   // and from the vintage year for normal vintage wines.

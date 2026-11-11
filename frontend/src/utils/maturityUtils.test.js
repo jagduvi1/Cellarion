@@ -310,3 +310,18 @@ describe('getPersonalWindowPhases', () => {
     expect(getPersonalWindowPhases({ from: null, to: null, peakFrom: null, peakUntil: null }, L, 2026)).toEqual([]);
   });
 });
+
+describe('getMaturityPhases: a relative (NV) window with no year to count from', () => {
+  const labels = { early: 'Early', peak: 'Peak', late: 'Late' };
+  const nvProfile = { relative: true, earlyFrom: 0, earlyUntil: 2, peakFrom: 2, peakUntil: 4 };
+
+  it('lists no phases: offsets are not calendar years', () => {
+    expect(getMaturityPhases(nvProfile, labels)).toEqual([]);
+    expect(getMaturityPhases(nvProfile, labels, null)).toEqual([]);
+  });
+
+  it('lists them in calendar years once the bottle gives the year', () => {
+    const phases = getMaturityPhases(nvProfile, labels, 2024);
+    expect(phases.map((p) => [p.cls, p.from, p.until])).toEqual([['early', 2024, 2026], ['peak', 2027, 2028]]);
+  });
+});
