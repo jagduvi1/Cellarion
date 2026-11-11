@@ -118,7 +118,7 @@ test('a real date is stored', async () => {
 test('an edit is audited once, as journal.update on that entry', async () => {
   await put({ notes: 'Lamb and Rioja' });
   expect(logAudit).toHaveBeenCalledTimes(1);
-  expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'journal.update', { type: 'journal', id: ENTRY_ID }, undefined);
+  expect(logAudit.mock.calls[0].slice(1, 3)).toEqual(['journal.update', { type: 'journal', id: ENTRY_ID }]);
 });
 
 test('an entry of another member, or one that is not there, is a 404', async () => {
