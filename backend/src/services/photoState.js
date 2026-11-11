@@ -36,7 +36,7 @@ const NOT_SCAN = { kind: { $ne: 'label-scan' } };
 const MAX_ROWS = 20;
 const MAX_SCANS = 4; // label-scan frames of one wine by one viewer
 
-// Same rule as routes/og.js and the frontend's getWineImageUrl: a stored image
+// Same rule as routes/og/wine.js and the frontend's getWineImageUrl: a stored image
 // is a full URL, an /api/ path, or a bare upload filename.
 const apiBase = () => (process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://cellarion.app').replace(/\/+$/, '');
 function absoluteImageUrl(path) {

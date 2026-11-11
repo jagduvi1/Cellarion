@@ -964,7 +964,7 @@ const boundPreviousSlugs = (list) => {
 /**
  * The filter for "the wine at this URL segment" — the CURRENT slug or any
  * superseded one. Every :idOrSlug lookup uses it (routes/wines.js public
- * detail / community-prices / discussions, routes/og.js) so a rename cannot
+ * detail / community-prices / discussions, routes/og/wine.js) so a rename cannot
  * 404 a link from one surface while another still resolves it.
  *
  * Returns a bare `$or`, which callers spread alongside their own scalar

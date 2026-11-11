@@ -112,7 +112,7 @@ export default function WineDetail() {
     wine.region?.name,
     wine.country?.name
   ].filter(Boolean).join(' · ');
-  // Same rule as the crawler page (backend og.js): the tasting prose makes the
+  // Same rule as the crawler page (backend og/wine.js): the tasting prose makes the
   // description this wine's own; cut on a word.
   const fullDesc = wine.aiProfile?.description
     ? `${fullTitle}. ${wine.aiProfile.description}`
