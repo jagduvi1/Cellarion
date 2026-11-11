@@ -74,9 +74,16 @@ function WineRequests() {
   };
 
   const compressImage = (file) => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
+      // A file the browser cannot decode (a HEIC on most desktops, a broken
+      // download) never loads: without this the preview stays "processing"
+      // and Submit stays disabled for good.
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('the photo could not be read'));
+      };
       img.onload = () => {
         const MAX = 900;
         let w = img.naturalWidth;
@@ -127,7 +134,11 @@ function WineRequests() {
       if (imageFile) {
         // The background-removed preview (or the photo itself), re-encoded to
         // fit the server's cap — a raw PNG preview often did not (utils/requestImage).
-        imageValue = await requestImageFor({ preview: imageBgRemoved, file: imageFile });
+        imageValue = await requestImageFor({ preview: imageBgRemoved, file: imageFile }).catch(() => undefined);
+        if (imageValue === undefined) {
+          alert(t('wineRequests.photoUnreadable'));
+          return;
+        }
         if (!imageValue) {
           alert(t('wineRequests.photoTooLarge'));
           return;
