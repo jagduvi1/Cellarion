@@ -8,5 +8,5 @@
   "backend/src/services/findOrCreateWine.test.js": 1575,
   "backend/src/services/userDataRegistry.js": 1505,
   "frontend/src/pages/AddBottle.js": 1952,
-  "frontend/src/pages/ImportBottles.js": 2897
+  "frontend/src/pages/ImportBottles.js": 2828
 }

@@ -47,84 +47,15 @@ import Modal from '../components/Modal';
 import './ImportBottles.css';
 import { backLabel } from '../utils/backLabel';
 import { formatVintage } from '../utils/vintage';
-
-const STEPS = ['upload', 'review', 'importing', 'done'];
-
-// Mirrors backend config/constants MAX_IMPORT_SIZE: /confirm hard-rejects
-// bigger batches in one request, while /validate runs in 25-row slices and
-// happily validates any size — so without an upfront warning a larger file
-// only fails at the very last click, after all the review work.
-const MAX_IMPORT_ROWS = 2000;
+import {
+  STEPS, MAX_IMPORT_ROWS, FORMAT_LABEL_KEYS, STATUS_LABEL_KEYS, STATUS_CLASSES, ENCODING_LABELS,
+  CT_TABLE_LABEL_KEYS, CT_PATTERN_LABEL_KEYS, TYPE_DOTS,
+} from './import/importConstants';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // Thrown by validateBatch once the page its match loop ran for is gone.
 class MatchAbandoned extends Error {}
-
-const FORMAT_LABEL_KEYS = {
-  cellarion: 'importBottles.formats.cellarion',
-  vivino: 'importBottles.formats.vivino',
-  cellartracker: 'importBottles.formats.cellartracker',
-  'oeno-export': 'importBottles.formats.oenoExport',
-  generic: 'importBottles.formats.generic',
-  receipt: 'importBottles.formats.receipt'
-};
-
-const STATUS_LABEL_KEYS = {
-  exact: 'importBottles.status.exact',
-  fuzzy: 'importBottles.status.fuzzy',
-  ai_match: 'importBottles.status.aiMatch',
-  ai_new: 'importBottles.status.aiNew',
-  no_match: 'importBottles.status.noMatch',
-  error: 'importBottles.status.error',
-  skipped: 'importBottles.status.skipped'
-};
-
-const STATUS_CLASSES = {
-  exact: 'status-exact',
-  fuzzy: 'status-fuzzy',
-  ai_match: 'status-ai',
-  ai_new: 'status-ai',
-  no_match: 'status-nomatch',
-  error: 'status-error',
-  skipped: 'status-skipped'
-};
-
-// Human-readable labels for the encodings decodeImportBuffer can detect
-const ENCODING_LABELS = {
-  'utf-8': 'UTF-8',
-  'utf-16le': 'UTF-16 LE',
-  'utf-16be': 'UTF-16 BE',
-  'windows-1252': 'Windows-1252'
-};
-
-// CellarTracker table names shown next to the detected format
-const CT_TABLE_LABEL_KEYS = {
-  list: 'importBottles.ctTables.list',
-  inventory: 'importBottles.ctTables.inventory',
-  bottles: 'importBottles.ctTables.bottles',
-  consumed: 'importBottles.ctTables.consumed',
-  purchase: 'importBottles.ctTables.purchase',
-  pending: 'importBottles.ctTables.pending'
-};
-
-// Pattern labels for CellarTracker Location/Bin auto-mapped racks
-const CT_PATTERN_LABEL_KEYS = {
-  'rowcol': 'importBottles.rackAutoMap.patternRowCol',
-  'rowcol-depth': 'importBottles.rackAutoMap.patternRowColDepth',
-  'letter-number': 'importBottles.rackAutoMap.patternLetterNumber',
-  'segments': 'importBottles.rackAutoMap.patternSegments',
-  'sequential': 'importBottles.rackAutoMap.patternSequential'
-};
-
-const TYPE_DOTS = {
-  red: '#8B2252',
-  white: '#F5E6C8',
-  'rosé': '#FFB6C1',
-  sparkling: '#FFD700',
-  dessert: '#DAA520',
-  fortified: '#8B4513'
-};
 
 function ImportBottles() {
   const { t } = useTranslation();
