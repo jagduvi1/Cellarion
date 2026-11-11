@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import { sommGetPendingWines, sommFixPendingWine } from '../api/somm';
 

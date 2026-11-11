@@ -204,14 +204,11 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
 }
 
 // ── Empty slot (ring + invisible click disc at cubby opening) ────────
-// Default (grid/hex/etc): position[2] is 0 and we offset to the cabinet
-// front face. For shelf racks, the caller passes an absolute z (the cubby
-// opening for that row) and useAbsoluteZ=true so we don't double-offset.
-function EmptySlot({ position, slotPosition, onClick, isBack, useAbsoluteZ = false }) {
+// position[2] is the z of the opening within the rack; each caller works it
+// out (the cubby opening of a shelf row, or the cabinet's front face).
+function EmptySlot({ position, slotPosition, onClick, isBack }) {
   useResetCursorOnUnmount();
-  const zBase = useAbsoluteZ
-    ? (position[2] || 0)
-    : RACK_DEPTH / 2 - 0.005 + (position[2] || 0);
+  const zBase = position[2] || 0;
   const ringR = isBack ? (BOTTLE_RADIUS - 0.005) * 0.7 : BOTTLE_RADIUS - 0.005;
   return (
     <group position={[position[0], position[1], zBase]}>
@@ -427,8 +424,7 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
   const backBottleZ  = -(halfDepth - 0.029);
   // Empty-slot ring positions sit at the cubby openings (front face for the
   // front row, back face for the back row) so users see where to drop a
-  // bottle. These are absolute z within the rack, used with EmptySlot's
-  // `useAbsoluteZ`.
+  // bottle. These are absolute z within the rack, as EmptySlot takes them.
   const frontEmptyZ = halfDepth - 0.005;
   const backEmptyZ  = -halfDepth + 0.005;
   // Per-bottle z step when a cubby holds more than one bottle (front-to-back).
@@ -598,7 +594,6 @@ function PullOutShelfRow({
             slotPosition={pos}
             onClick={onEmptySlotClick}
             isBack={isBack}
-            useAbsoluteZ
           />
         );
       })}
@@ -1147,7 +1142,6 @@ export default function RackMesh({
               slotPosition={pos}
               onClick={onEmptySlotClick}
               isBack={isBack}
-              useAbsoluteZ
             />
           );
         })

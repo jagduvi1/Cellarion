@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport, scanReceipt } from '../api/bottles';
@@ -61,7 +61,6 @@ function ImportBottles() {
   const { t } = useTranslation();
   const { id: cellarId } = useParams();
   const { apiFetch, user } = useAuth();
-  const navigate = useNavigate();
   // Step state
   const [step, setStep] = useState('upload');
   const [error, setError] = useState(null);

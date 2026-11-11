@@ -365,7 +365,7 @@ function AddBottle() {
   }, [scanResult]);
 
   const {
-    labelCam, labelScanning, labelFacing, setLabelFacing,
+    labelCam, labelScanning, setLabelFacing,
     labelVideoRef, labelCanvasRef,
     startCamera: startLabelCamera, startBackCamera: startBackLabelCamera,
     stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto

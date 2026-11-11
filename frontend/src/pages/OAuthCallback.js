@@ -26,7 +26,6 @@ const ERROR_MESSAGES = {
   // third-party cookie blocking. Retrying from the login page fixes all three.
   invalid_state: "We couldn't verify that sign-in. Please start again from the login page.",
   server_error: 'Something went wrong while signing you in. Please try again.',
-  google: 'Google sign-in failed. Please try again.'
 };
 
 function OAuthCallback() {

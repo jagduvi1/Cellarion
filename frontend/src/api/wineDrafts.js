@@ -5,8 +5,6 @@ import { JSON_HEADERS } from './apiConstants';
 
 export const listMyWineDrafts = (apiFetch) => apiFetch('/api/wine-drafts');
 
-export const getWineDraft = (apiFetch, id) => apiFetch(`/api/wine-drafts/${id}`);
-
 export const updateWineDraft = (apiFetch, id, patch) =>
   apiFetch(`/api/wine-drafts/${id}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify(patch) });
 
