@@ -46,7 +46,7 @@ jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/PersonalDataEntry', () => ({ find: jest.fn() }));
 // routes/cellars is heavy and only lends its image resolver (as in offline.test).
-jest.mock('./cellars', () => ({ attachBottleImageUrls: jest.fn() }));
+jest.mock('../services/bottleImageUrls', () => ({ attachBottleImageUrls: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
@@ -59,7 +59,7 @@ const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
-const { attachBottleImageUrls } = require('./cellars');
+const { attachBottleImageUrls } = require('../services/bottleImageUrls');
 const { bumpDataVersion } = require('../services/dataVersion');
 const inventoryRouter = require('./inventory');
 

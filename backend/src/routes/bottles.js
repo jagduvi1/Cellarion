@@ -42,6 +42,7 @@ const { moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
 const { TRASH_DAYS, trashBottle } = require('../services/bottleTrash');
 const { queryUserBottles } = require('../services/bottleListQuery');
+const { attachBottleImageUrls } = require('../services/bottleImageUrls');
 
 const router = express.Router();
 
@@ -107,11 +108,9 @@ router.get('/', async (req, res) => {
     // The user's own photos (chosen default, own uploads by bottle or wine) —
     // the same resolution every cellar list uses. Without it this list shows
     // registry images only, so bottles photographed by their owner render
-    // blank. Required lazily: routes/cellars is a
-    // router module and this keeps load order out of it. A failed photo
-    // lookup degrades to registry images; it never fails the list.
+    // blank. A failed photo lookup degrades to registry images; it never
+    // fails the list.
     try {
-      const { attachBottleImageUrls } = require('./cellars');
       bottles = await attachBottleImageUrls(bottles, req.user.id);
     } catch (err) {
       console.error('GET /api/bottles photo lookup failed:', err.message);

@@ -16,7 +16,7 @@ jest.mock('../services/offlineSnapshot', () => ({
   buildOfflineSnapshot: jest.fn(async () => ({ schema: 1, userId: 'u1', cellars: [], bottles: [], racks: [], wines: {} })),
 }));
 // routes/cellars is heavy and only lends its image-URL resolver here.
-jest.mock('./cellars', () => ({ attachBottleImageUrls: jest.fn() }));
+jest.mock('../services/bottleImageUrls', () => ({ attachBottleImageUrls: jest.fn() }));
 
 const express = require('express');
 const http = require('http');

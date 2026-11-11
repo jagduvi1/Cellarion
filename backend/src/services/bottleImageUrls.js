@@ -3,8 +3,7 @@
 // One function for the cellar page, the cross-cellar list, a vintage page,
 // the on-order list, GET /api/bottles, the offline snapshot and the
 // integration inventory, so a card shows the same picture wherever the bottle
-// is listed. routes/cellars.js re-exports it for the routes that reach it
-// through that router.
+// is listed.
 
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
