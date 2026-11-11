@@ -10,7 +10,12 @@ import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
 import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
 import RoomScene from '../components/room/RoomScene';
-import { getRackHeight, clampToRoom } from '../utils/roomConstants';
+import { getRackHeight } from '../utils/roomConstants';
+import {
+  DEFAULT_DIMENSIONS, dragRack, changeRoomDimension, rotateRacks, addRackToRoom, stackRackOnTarget,
+  unstackRack, linkRackToTarget, unlinkRack, removeRacksFromRoom, setPlacementField, nudgeRacks,
+  linkSelectedRacks, layoutForSave, autoLayoutFor, groupColors,
+} from '../utils/roomLayoutOps';
 import WineImage from '../components/WineImage';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { ConsumeModal } from '../components/ConsumeModal';
@@ -27,8 +32,6 @@ import { backLabel } from '../utils/backLabel';
 import { suspendBackToClose, pageEntryState } from '../utils/useBackToClose';
 import './CellarRoom.css';
 import { formatVintage } from '../utils/vintage';
-
-const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
 
 // True when a keyboard event originates from an editable field, so global
 // shortcuts (arrow-move, Ctrl+Z/Y) don't hijack typing in the room's inputs.
@@ -229,20 +232,7 @@ export default function CellarRoom() {
       } else {
         // No layout doc yet — auto-populate by placing all racks in a line,
         // clamped inside the room so none poke through the walls.
-        const autoPlace = (racksData.racks || []).map((r, i) => {
-          const clamped = clampToRoom(-3 + i * 1.5, -3, r, {}, DEFAULT_DIMENSIONS);
-          return {
-            rack: r._id,
-            position: { x: clamped.x, y: 0, z: clamped.z },
-            rotation: 0,
-            wall: 'north',
-          };
-        });
-        const autoLayout = {
-          cellar: id,
-          roomDimensions: DEFAULT_DIMENSIONS,
-          rackPlacements: autoPlace,
-        };
+        const autoLayout = autoLayoutFor(id, racksData.racks || []);
         setLayout(autoLayout);
         savedLayoutRef.current = JSON.stringify(autoLayout);
       }
@@ -259,45 +249,7 @@ export default function CellarRoom() {
     setSaving(true);
     setSaveError(null);
     try {
-      // Clamp a value to the schema range (a single out-of-range field would
-      // otherwise fail server validation and block the whole layout save).
-      const clamp = (v, lo, hi, fallback = 0) => {
-        const n = Number(v);
-        if (!Number.isFinite(n)) return fallback;
-        return Math.max(lo, Math.min(hi, n));
-      };
-
-      // Sanitize placements: ensure rack is a plain ID string, strip unknown
-      // fields, and clamp every numeric field to its CellarLayout schema range.
-      const cleanPlacements = layout.rackPlacements.map(rp => {
-        const clean = {
-          rack: rp.rack?._id || rp.rack,
-          position: {
-            x: clamp(rp.position?.x, -100, 100),
-            y: clamp(rp.position?.y, -10, 50),
-            z: clamp(rp.position?.z, -100, 100),
-          },
-          rotation: rp.rotation || 0,
-          wall: rp.wall || 'none',
-        };
-        if (rp.group) clean.group = String(rp.group).slice(0, 50);
-        if (rp.widthOverride) clean.widthOverride = clamp(rp.widthOverride, 0.1, 5, 1);
-        if (rp.depthOverride) clean.depthOverride = clamp(rp.depthOverride, 0.1, 2, 1);
-        if (rp.scaleOverride) clean.scaleOverride = clamp(rp.scaleOverride, 0.5, 5, 1);
-        return clean;
-      });
-
-      const cleanDims = {
-        width: clamp(layout.roomDimensions?.width, 2, 50, 10),
-        depth: clamp(layout.roomDimensions?.depth, 2, 50, 10),
-        height: clamp(layout.roomDimensions?.height, 2, 10, 3),
-      };
-
-      const res = await saveCellarLayout(apiFetch, {
-        cellar: id,
-        roomDimensions: cleanDims,
-        rackPlacements: cleanPlacements,
-      });
+      const res = await saveCellarLayout(apiFetch, { cellar: id, ...layoutForSave(layout) });
       if (res.ok) {
         const data = await res.json();
         setLayout(data.layout);
@@ -320,67 +272,11 @@ export default function CellarRoom() {
   const handleRackDragEnd = useCallback((rackId, newPosition) => {
     // Read current selection from ref to avoid stale closures
     const currentSelected = selectedRackIdsRef.current;
-    setLayoutWithHistory(prev => {
-      const draggedPlacement = prev.rackPlacements.find(
-        rp => (rp.rack === rackId || rp.rack?._id === rackId)
-      );
-      if (!draggedPlacement) return prev;
-
-      const group = draggedPlacement.group;
-      const oldX = draggedPlacement.position?.x || 0;
-      const oldZ = draggedPlacement.position?.z || 0;
-      const dx = newPosition.x - oldX;
-      const dz = newPosition.z - oldZ;
-      const dims = prev.roomDimensions || DEFAULT_DIMENSIONS;
-
-      return {
-        ...prev,
-        rackPlacements: prev.rackPlacements.map(rp => {
-          const rpId = rp.rack?._id || rp.rack;
-          if (rpId === rackId) {
-            return { ...rp, position: newPosition };
-          }
-          const isGroupMember = group && rp.group === group;
-          const isAlsoSelected = currentSelected.includes(rpId);
-          if (isGroupMember || isAlsoSelected) {
-            let nx = (rp.position?.x || 0) + dx;
-            let nz = (rp.position?.z || 0) + dz;
-            const rack = racks.find(r => r._id === rpId);
-            if (rack) {
-              const clamped = clampToRoom(nx, nz, rack, rp, dims);
-              nx = clamped.x;
-              nz = clamped.z;
-            }
-            return {
-              ...rp,
-              position: { x: nx, y: rp.position?.y || 0, z: nz },
-            };
-          }
-          return rp;
-        }),
-      };
-    });
+    setLayoutWithHistory(prev => dragRack(prev, { rackId, newPosition, currentSelected, racks }));
   }, [racks, setLayoutWithHistory]);
 
   const handleDimensionChange = useCallback((field, value) => {
-    setLayoutWithHistory(prev => {
-      // Clamp to the schema's per-field range (height caps at 10, width/depth
-      // at 50). Typed/pasted values bypass the input's HTML max, so without
-      // this an out-of-range height fails server validation and blocks the
-      // entire layout save.
-      const maxForField = field === 'height' ? 10 : 50;
-      const newDims = { ...prev.roomDimensions, [field]: Math.max(2, Math.min(maxForField, Number(value) || 2)) };
-      // Clamp all racks that would end up outside the new room boundaries
-      const clampedPlacements = prev.rackPlacements.map(rp => {
-        const rpId = rp.rack?._id || rp.rack;
-        const rack = racks.find(r => r._id === rpId);
-        if (!rack) return rp;
-        const clamped = clampToRoom(rp.position?.x || 0, rp.position?.z || 0, rack, rp, newDims);
-        if (clamped.x === (rp.position?.x || 0) && clamped.z === (rp.position?.z || 0)) return rp;
-        return { ...rp, position: { ...rp.position, x: clamped.x, z: clamped.z } };
-      });
-      return { ...prev, roomDimensions: newDims, rackPlacements: clampedPlacements };
-    });
+    setLayoutWithHistory(prev => changeRoomDimension(prev, { field, value, racks }));
   }, [racks, setLayoutWithHistory]);
 
   // Rotate selected rack(s) by 90 degrees
@@ -388,69 +284,12 @@ export default function CellarRoom() {
   // Multi-select: each selected rack rotates in place
   const handleRotateRack = useCallback(() => {
     if (selectedRackIds.length === 0) return;
-    setLayoutWithHistory(prev => {
-      if (selectedRackIds.length === 1) {
-        // Single selection: existing behavior with group orbital rotation
-        const sid = selectedRackIds[0];
-        const selectedPlacement = prev.rackPlacements.find(
-          rp => (rp.rack?._id || rp.rack) === sid
-        );
-        if (!selectedPlacement) return prev;
-        const group = selectedPlacement.group;
-        const pivotX = selectedPlacement.position?.x || 0;
-        const pivotZ = selectedPlacement.position?.z || 0;
-
-        return {
-          ...prev,
-          rackPlacements: prev.rackPlacements.map(rp => {
-            const rpId = rp.rack?._id || rp.rack;
-            if (rpId === sid) {
-              return { ...rp, rotation: ((rp.rotation || 0) + 90) % 360 };
-            }
-            if (group && rp.group === group) {
-              const dx = (rp.position?.x || 0) - pivotX;
-              const dz = (rp.position?.z || 0) - pivotZ;
-              return {
-                ...rp,
-                rotation: ((rp.rotation || 0) + 90) % 360,
-                position: { x: pivotX - dz, y: rp.position?.y || 0, z: pivotZ + dx },
-              };
-            }
-            return rp;
-          }),
-        };
-      }
-
-      // Multi-selection: rotate each selected rack in place
-      const ids = new Set(selectedRackIds);
-      return {
-        ...prev,
-        rackPlacements: prev.rackPlacements.map(rp => {
-          const rpId = rp.rack?._id || rp.rack;
-          if (ids.has(rpId)) {
-            return { ...rp, rotation: ((rp.rotation || 0) + 90) % 360 };
-          }
-          return rp;
-        }),
-      };
-    });
+    setLayoutWithHistory(prev => rotateRacks(prev, { selectedRackIds }));
   }, [selectedRackIds]);
 
   // Add a single rack to the room (placed at center)
   const handleAddRack = useCallback((rackId) => {
-    setLayoutWithHistory(prev => {
-      const alreadyPlaced = prev.rackPlacements.some(
-        rp => (rp.rack?._id || rp.rack) === rackId
-      );
-      if (alreadyPlaced) return prev;
-      return {
-        ...prev,
-        rackPlacements: [
-          ...prev.rackPlacements,
-          { rack: rackId, position: { x: 0, y: 0, z: 0 }, rotation: 0, wall: 'none' },
-        ],
-      };
-    });
+    setLayoutWithHistory(prev => addRackToRoom(prev, { rackId }));
   }, []);
 
   // Compute unplaced racks
@@ -491,31 +330,7 @@ export default function CellarRoom() {
 
     const group = selectedPlacement.group;
 
-    setLayoutWithHistory(prev => ({
-      ...prev,
-      rackPlacements: prev.rackPlacements.map(rp => {
-        const rpId = rp.rack?._id || rp.rack;
-        if (rpId === selectedRackId) {
-          return {
-            ...rp,
-            position: { x: targetX, y: targetY, z: targetZ },
-            rotation: targetPlacement.rotation || 0,
-          };
-        }
-        // Move group members by the same offset
-        if (group && rp.group === group) {
-          return {
-            ...rp,
-            position: {
-              x: (rp.position?.x || 0) + dx,
-              y: (rp.position?.y || 0) + dy,
-              z: (rp.position?.z || 0) + dz,
-            },
-          };
-        }
-        return rp;
-      }),
-    }));
+    setLayoutWithHistory(prev => stackRackOnTarget(prev, { selectedRackId, targetPlacement, targetX, targetY, targetZ, group, dx, dy, dz }));
 
     setInteractionMode(null);
     setSelectedRackIds([selectedRackId]);
@@ -525,90 +340,26 @@ export default function CellarRoom() {
   // If the rack is in a group, move all group members at the same y-level together.
   const handleUnstackRack = useCallback(() => {
     if (!selectedRackId) return;
-    setLayoutWithHistory(prev => {
-      const selectedPlacement = prev.rackPlacements.find(
-        rp => (rp.rack?._id || rp.rack) === selectedRackId
-      );
-      if (!selectedPlacement) return prev;
-      const oldY = selectedPlacement.position?.y || 0;
-      if (oldY === 0) return prev; // already on floor
-      const group = selectedPlacement.group;
-
-      return {
-        ...prev,
-        rackPlacements: prev.rackPlacements.map(rp => {
-          const rpId = rp.rack?._id || rp.rack;
-          const rpY = rp.position?.y || 0;
-          // Move the selected rack to floor
-          if (rpId === selectedRackId) {
-            return { ...rp, position: { ...rp.position, y: 0 } };
-          }
-          // Move group members at the same elevation by the same offset
-          if (group && rp.group === group && Math.abs(rpY - oldY) < 0.001) {
-            return { ...rp, position: { ...rp.position, y: 0 } };
-          }
-          return rp;
-        }),
-      };
-    });
+    setLayoutWithHistory(prev => unstackRack(prev, { selectedRackId }));
   }, [selectedRackId]);
 
   // Link: click-to-link — link the selected rack to a target rack
   const handleLinkToTarget = useCallback((targetRackId) => {
     if (!selectedRackId || targetRackId === selectedRackId) return;
-    setLayoutWithHistory(prev => {
-      const selectedPlacement = prev.rackPlacements.find(
-        rp => (rp.rack === selectedRackId || rp.rack?._id === selectedRackId)
-      );
-      const targetPlacement = prev.rackPlacements.find(
-        rp => (rp.rack === targetRackId || rp.rack?._id === targetRackId)
-      );
-      if (!selectedPlacement || !targetPlacement) return prev;
-
-      const groupId = selectedPlacement.group || targetPlacement.group || `g${Date.now().toString(36)}`;
-      const oldGroupA = selectedPlacement.group;
-      const oldGroupB = targetPlacement.group;
-
-      return {
-        ...prev,
-        rackPlacements: prev.rackPlacements.map(rp => {
-          const rpId = rp.rack?._id || rp.rack;
-          if (rpId === selectedRackId || rpId === targetRackId) {
-            return { ...rp, group: groupId };
-          }
-          if (oldGroupA && rp.group === oldGroupA) return { ...rp, group: groupId };
-          if (oldGroupB && rp.group === oldGroupB) return { ...rp, group: groupId };
-          return rp;
-        }),
-      };
-    });
+    setLayoutWithHistory(prev => linkRackToTarget(prev, { selectedRackId, targetRackId }));
     setInteractionMode(null);
   }, [selectedRackId]);
 
   // Unlink a rack from its group
   const handleUnlinkRack = useCallback(() => {
-    setLayoutWithHistory(prev => ({
-      ...prev,
-      rackPlacements: prev.rackPlacements.map(rp => {
-        const rpId = rp.rack?._id || rp.rack;
-        if (rpId === selectedRackId) {
-          return { ...rp, group: null };
-        }
-        return rp;
-      }),
-    }));
+    setLayoutWithHistory(prev => unlinkRack(prev, { selectedRackId }));
   }, [selectedRackId, setLayoutWithHistory]);
 
   // Remove rack from the room layout (does not delete the rack itself)
   const handleRemoveFromRoom = useCallback(() => {
     if (selectedRackIds.length === 0) return;
     const removeSet = new Set(selectedRackIds);
-    setLayoutWithHistory(prev => ({
-      ...prev,
-      rackPlacements: prev.rackPlacements.filter(
-        rp => !removeSet.has(rp.rack?._id || rp.rack)
-      ),
-    }));
+    setLayoutWithHistory(prev => removeRacksFromRoom(prev, { removeSet }));
     setSelectedRackIds([]);
     setInteractionMode(null);
   }, [selectedRackIds]);
@@ -618,75 +369,7 @@ export default function CellarRoom() {
   // don't float in the air or clip into the resized rack.
   const handlePlacementField = useCallback((field, value) => {
     if (!selectedRackId) return;
-    setLayoutWithHistory(prev => {
-      // First, apply the field change
-      const updatedPlacements = prev.rackPlacements.map(rp => {
-        const rpId = rp.rack?._id || rp.rack;
-        if (rpId === selectedRackId) {
-          const updated = { ...rp };
-          if (value === null || value === undefined || value === '') {
-            delete updated[field];
-          } else {
-            updated[field] = Number(value);
-          }
-          return updated;
-        }
-        return rp;
-      });
-
-      // If scaleOverride changed, reposition any racks stacked on top
-      if (field === 'scaleOverride') {
-        const changedRp = updatedPlacements.find(
-          rp => (rp.rack?._id || rp.rack) === selectedRackId
-        );
-        if (changedRp) {
-          const rackObj = racks.find(r => r._id === selectedRackId);
-          if (rackObj) {
-            const oldScale = prev.rackPlacements.find(
-              rp => (rp.rack?._id || rp.rack) === selectedRackId
-            )?.scaleOverride || 1;
-            const newScale = changedRp.scaleOverride || 1;
-            const oldTop = (changedRp.position?.y || 0) + getRackHeight(rackObj) * oldScale;
-            const newTop = (changedRp.position?.y || 0) + getRackHeight(rackObj) * newScale;
-            const dy = newTop - oldTop;
-
-            if (dy !== 0) {
-              // Shift every rack whose base y matches the old top of this rack
-              const EPSILON = 0.001;
-              for (let i = 0; i < updatedPlacements.length; i++) {
-                const rp = updatedPlacements[i];
-                const rpId = rp.rack?._id || rp.rack;
-                if (rpId === selectedRackId) continue;
-                const rpY = rp.position?.y || 0;
-                if (Math.abs(rpY - oldTop) < EPSILON) {
-                  updatedPlacements[i] = {
-                    ...rp,
-                    position: { ...rp.position, y: rpY + dy },
-                  };
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Clamp the changed rack if scale/width/depth change pushed it out of bounds
-      if (['scaleOverride', 'widthOverride', 'depthOverride'].includes(field)) {
-        const dims = prev.roomDimensions || DEFAULT_DIMENSIONS;
-        for (let i = 0; i < updatedPlacements.length; i++) {
-          const rp = updatedPlacements[i];
-          const rpId = rp.rack?._id || rp.rack;
-          const rack = racks.find(r => r._id === rpId);
-          if (!rack) continue;
-          const clamped = clampToRoom(rp.position?.x || 0, rp.position?.z || 0, rack, rp, dims);
-          if (clamped.x !== (rp.position?.x || 0) || clamped.z !== (rp.position?.z || 0)) {
-            updatedPlacements[i] = { ...rp, position: { ...rp.position, x: clamped.x, z: clamped.z } };
-          }
-        }
-      }
-
-      return { ...prev, rackPlacements: updatedPlacements };
-    });
+    setLayoutWithHistory(prev => setPlacementField(prev, { field, value, selectedRackId, racks }));
   }, [selectedRackId, racks, setLayoutWithHistory]);
 
   // Arrow key movement for selected rack(s) in edit mode
@@ -708,40 +391,7 @@ export default function CellarRoom() {
       }
       if (isTypingTarget(e)) return; // don't move racks while typing in a field
       e.preventDefault();
-      setLayoutWithHistory(prev => {
-        // Collect all IDs to move: selected + their group members
-        const moveIds = new Set(selectedRackIds);
-        selectedRackIds.forEach(id => {
-          const rp = prev.rackPlacements.find(p => (p.rack?._id || p.rack) === id);
-          if (rp?.group) {
-            prev.rackPlacements.forEach(p => {
-              if (p.group === rp.group) moveIds.add(p.rack?._id || p.rack);
-            });
-          }
-        });
-        const dims = prev.roomDimensions || DEFAULT_DIMENSIONS;
-        return {
-          ...prev,
-          rackPlacements: prev.rackPlacements.map(rp => {
-            const rpId = rp.rack?._id || rp.rack;
-            if (moveIds.has(rpId)) {
-              const rack = racks.find(r => r._id === rpId);
-              let nx = Math.round(((rp.position?.x || 0) + dx) * 20) / 20;
-              let nz = Math.round(((rp.position?.z || 0) + dz) * 20) / 20;
-              if (rack) {
-                const clamped = clampToRoom(nx, nz, rack, rp, dims);
-                nx = clamped.x;
-                nz = clamped.z;
-              }
-              return {
-                ...rp,
-                position: { x: nx, y: rp.position?.y || 0, z: nz },
-              };
-            }
-            return rp;
-          }),
-        };
-      });
+      setLayoutWithHistory(prev => nudgeRacks(prev, { selectedRackIds, dx, dz, racks }));
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -880,39 +530,11 @@ export default function CellarRoom() {
   // Link all selected racks into one group
   const handleLinkSelected = useCallback(() => {
     if (selectedRackIds.length < 2) return;
-    setLayoutWithHistory(prev => {
-      const existingGroups = new Set();
-      selectedRackIds.forEach(id => {
-        const rp = prev.rackPlacements.find(p => (p.rack?._id || p.rack) === id);
-        if (rp?.group) existingGroups.add(rp.group);
-      });
-      const groupId = existingGroups.size > 0
-        ? [...existingGroups][0]
-        : `g${Date.now().toString(36)}`;
-      const selectedSet = new Set(selectedRackIds);
-      return {
-        ...prev,
-        rackPlacements: prev.rackPlacements.map(rp => {
-          const rpId = rp.rack?._id || rp.rack;
-          if (selectedSet.has(rpId) || (rp.group && existingGroups.has(rp.group))) {
-            return { ...rp, group: groupId };
-          }
-          return rp;
-        }),
-      };
-    });
+    setLayoutWithHistory(prev => linkSelectedRacks(prev, { selectedRackIds }));
   }, [selectedRackIds]);
 
   // Compute group color map for visual indicators
-  const groupColorMap = useMemo(() => {
-    const map = {};
-    const palette = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C'];
-    const groups = [...new Set(
-      (layout?.rackPlacements || []).map(rp => rp.group).filter(Boolean)
-    )];
-    groups.forEach((g, i) => { map[g] = palette[i % palette.length]; });
-    return map;
-  }, [layout?.rackPlacements]);
+  const groupColorMap = useMemo(() => groupColors(layout?.rackPlacements), [layout?.rackPlacements]);
 
   const selectedRack = racks.find(r => r._id === selectedRackId);
   const canEdit = cellar?.userRole !== 'viewer';
