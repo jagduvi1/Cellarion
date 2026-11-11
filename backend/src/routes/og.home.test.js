@@ -1,7 +1,7 @@
 /**
  * GET /api/og/home — the landing page crawlers get instead of the SPA shell.
  *
- * The page is built from the LANDING copy in og.js and reads nothing from the
+ * The page is built from the LANDING copy in og/site.js and reads nothing from the
  * database. Pins what a search engine judges it by: the canonical address, the
  * language alternates, the four JSON-LD entities, and that the FAQ and the
  * feature list in the structured data are the ones a reader sees on the page.

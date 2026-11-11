@@ -15,7 +15,7 @@ const EXAMPLE_KEYS = ['ex1', 'ex2', 'ex3', 'ex4', 'ex5', 'ex6'];
  * someone who has never added a connector to an AI assistant. Cellar Chat
  * points here; the technical /connect-ai page (every client, raw protocol
  * details) links back for anyone new to it. Crawlers get the server-rendered
- * twin in backend/src/routes/og.js — keep the two in step.
+ * twin in backend/src/routes/og/site.js — keep the two in step.
  *
  * Facts about Claude's plans and menus were checked against Anthropic's help
  * centre on 2026-10-11 ("Get started with custom connectors using remote

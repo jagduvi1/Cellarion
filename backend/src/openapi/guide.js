@@ -1,7 +1,7 @@
 /**
  * The developer guide (Markdown) and the per-operation code samples of the
  * public API document (openapi/document.js). Redoc renders the guide before
- * the reference on cellarion.app/developers, and routes/og.js renders the
+ * the reference on cellarion.app/developers, and routes/og/site.js renders the
  * same text for crawlers, so the page, the raw document and the crawler copy
  * cannot disagree.
  *

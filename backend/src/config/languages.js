@@ -4,7 +4,7 @@
  * The app's own language list is derived automatically from the locale files in
  * the frontend (one directory per language, delivered by Weblate) together with
  * their completeness — see frontend/src/locales/coverage.js. The backend image
- * doesn't ship those files, so the crawler-rendered pages in routes/og.js need
+ * doesn't ship those files, so the crawler-rendered pages in routes/og/ need
  * their own copy of the answer.
  *
  * Keep this in step with the languages the app offers as finished, i.e. the

@@ -6,7 +6,7 @@
  *    `route` from here for its "Go to …" links. It matches a section to its
  *    own key by lowercasing the id and dropping everything but letters and
  *    digits, so `on-order` here is `onOrder` there.
- * 2. The crawler page /og/help (routes/og.js), which prints every section.
+ * 2. The crawler page /og/help (routes/og/site.js), which prints every section.
  *
  * It says what the Help page says (`help.sections.*` in
  * frontend/src/locales/en/translation.json), section for section; the words
