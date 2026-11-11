@@ -1,6 +1,6 @@
 /**
  * The server-rendered /developers page for crawlers and link previews
- * (routes/og.js → GET /api/og/developers; nginx sends bots there). People get
+ * (routes/og/site.js → GET /api/og/developers; nginx sends bots there). People get
  * the SPA page, where Redoc renders the same OpenAPI document. Both read one
  * source: the guide is the document's info.description and the reference is
  * its operations, so the crawler copy cannot drift from the page.
