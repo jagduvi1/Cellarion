@@ -618,24 +618,24 @@ router.get('/:id', async (req, res) => {
     // ?producer / ?bottleSize / ?purchaseYear — in-memory post-filters.
     const extraFilters = parseExtraBottleFilters(req.query);
 
-    const {
-      country,
-      region,
-      grapes,
-      type,
-      vintage,
-      appellation,
-      minRating,
-      maxRating,
-      ratingBand: ratingBandParam,
-      search,
-      maturity: maturityRaw,
-      sort = '-createdAt',
-      exclude
-    } = req.query;
-    // null when absent; a Set of statuses otherwise (multi-select,
-    // OR-combined). Coerced first: qs can hand us an array.
-    const maturityFilter = parseMaturityFilter(coerceStringQuery(maturityRaw));
+    // Every value is one plain string or absent: a repeated parameter arrives
+    // as an array and `?sort[$gt]=1` as an object, and neither may reach a
+    // string method or a query.
+    const one = (name) => coerceStringQuery(req.query[name]) || undefined;
+    const country = one('country');
+    const region = one('region');
+    const grapes = one('grapes');
+    const type = one('type');
+    const vintage = one('vintage');
+    const appellation = one('appellation');
+    const minRating = one('minRating');
+    const maxRating = one('maxRating');
+    const ratingBandParam = one('ratingBand');
+    const search = one('search');
+    const sort = one('sort') || '-createdAt';
+    const exclude = one('exclude');
+    // null when absent; a Set of statuses otherwise (multi-select, OR-combined).
+    const maturityFilter = parseMaturityFilter(coerceStringQuery(req.query.maturity));
 
     // Pagination — default 30, max 200; skip defaults to 0
     const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });

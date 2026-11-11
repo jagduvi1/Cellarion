@@ -25,7 +25,7 @@ const { conflictingStyleTerms } = require('../utils/styleTerms');
 // style guard reads it off a candidate, and a member read sends it, not an id.
 const WINE_READ_POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
 const { parsePagination } = require('../utils/pagination');
-const { isValidId } = require('../utils/validation');
+const { isValidId, coerceStringQuery } = require('../utils/validation');
 const { MEMBER_WINE_HIDDEN_FIELDS, MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require('../config/constants');
 // Read-surface decoration: each populated grape gains `displayName` — the
 // regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
@@ -355,10 +355,12 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const isPrivileged = req.user.roles.includes('admin') || req.user.roles.includes('somm');
 
-    const { country, region, grapes, type, search, sort = 'name' } = req.query;
+    const { country, region, grapes, type, search } = req.query;
+    const sort = coerceStringQuery(req.query.sort) || 'name';
 
-    // Coerce search to string (query params can be arrays if repeated)
-    const searchTerm = Array.isArray(search) ? search[0] : search;
+    // One search term: the first of a repeated parameter, and nothing for an
+    // operator-shaped one (`?search[$gt]=`).
+    const searchTerm = coerceStringQuery(Array.isArray(search) ? search[0] : search);
 
     if (!isPrivileged && !searchTerm) {
       return res.status(400).json({ error: 'A search term is required' });
