@@ -215,4 +215,12 @@ function BlogPost() {
   );
 }
 
-export default BlogPost;
+// One post's page, keyed by its address. Going from one post to another (Back
+// and Forward do it without leaving the app) starts a fresh page: no "not
+// found" and no thread list of the post before.
+function BlogPostPage() {
+  const { slug } = useParams();
+  return <BlogPost key={slug} />;
+}
+
+export default BlogPostPage;
