@@ -27,64 +27,28 @@ const PLANS = {
     label: 'Enthusiast',
     description: 'Full access to every feature — completely free.',
     price: 0,
-    featureList: [
-      'Unlimited cellars & shared members',
-      'Bottle tracking (vintages, ratings, notes)',
-      'All analytics & statistics',
-      'Aging & maturity profiles',
-      'Price evolution tracking',
-      'Wine list PDF generation',
-      'Smart restock alerts',
-      'Drink-window alerts',
-      'Rack management',
-      'Wine requests',
-      'Cellar Chat',
-    ],
   },
   supporter: {
     label: 'Supporter',
     description: 'Chip in to help fund development — no extra features, just our thanks.',
     price: 2,
     annualPrice: 24,
-    featureList: [
-      'Everything in Enthusiast (all features are free)',
-      'Support independent development',
-      'Our heartfelt thanks',
-    ],
   },
   patron: {
     label: 'Patron',
     description: 'Support Cellarion at a higher level — no extra features, just bigger thanks.',
     price: 5,
     annualPrice: 60,
-    featureList: [
-      'Everything in Enthusiast (all features are free)',
-      'Support independent development even more',
-      'Our heartfelt thanks',
-    ],
   },
   benefactor: {
     label: 'Benefactor',
     description: 'Cover a meaningful slice of the running costs — still no extra features.',
     price: 10,
     annualPrice: 120,
-    featureList: [
-      'Everything in Enthusiast (all features are free)',
-      'Cover a real share of the monthly bills',
-      'Our heartfelt thanks',
-    ],
   },
 };
 
 /** All valid plan names */
 const PLAN_NAMES = Object.keys(PLANS);
 
-/**
- * Returns the plan config for a given plan name.
- * Falls back to 'free' if the plan is unknown.
- */
-function getPlanConfig(plan) {
-  return PLANS[plan] || PLANS.free;
-}
-
-module.exports = { PLANS, PLAN_NAMES, getPlanConfig };
+module.exports = { PLANS, PLAN_NAMES };
