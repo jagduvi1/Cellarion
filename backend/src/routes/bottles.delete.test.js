@@ -18,8 +18,6 @@ process.env.JWT_SECRET = 'test-secret';
 jest.mock('../services/search', () => ({
   getIsAvailable: () => false,
   search: async () => ({ ids: [] }),
-  indexBottle: jest.fn(),
-  removeBottle: jest.fn(),
 }));
 jest.mock('../services/bottleLot', () => ({ findLotSiblingIds: jest.fn().mockResolvedValue([]) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));

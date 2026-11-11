@@ -24,7 +24,6 @@ jest.mock('../services/search', () => ({
   getIsAvailable: () => false,
   search: async () => ({ ids: [] }),
   indexWine: () => {},
-  bulkIndexBottles: jest.fn(),
 }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn() }));
 jest.mock('../services/aiProvider', () => ({ isConfigured: () => false }));

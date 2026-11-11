@@ -14,8 +14,8 @@ const jwt = require('jsonwebtoken');
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
 jest.mock('../services/search', () => ({
-  indexBottle: jest.fn(), removeBottle: jest.fn(), indexWine: jest.fn(),
-  bulkIndexBottles: jest.fn(), getIsAvailable: jest.fn(() => false),
+  indexWine: jest.fn(),
+  getIsAvailable: jest.fn(() => false),
 }));
 jest.mock('../services/bottleLot', () => ({ findLotSiblingIds: jest.fn().mockResolvedValue([]) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));

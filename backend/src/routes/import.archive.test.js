@@ -18,7 +18,7 @@ process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../services/search', () => ({
   getIsAvailable: () => false, search: async () => ({ ids: [] }),
-  indexWine: () => {}, bulkIndexBottles: jest.fn(),
+  indexWine: () => {},
 }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn() }));
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());

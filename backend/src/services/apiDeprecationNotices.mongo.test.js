@@ -18,7 +18,7 @@
 jest.mock('./mailgun', () => ({ sendApiDeprecationEmail: jest.fn(async () => {}), EMAIL_VERIFICATION_ENABLED: true }));
 // userDataRegistry pulls in services/search, whose meilisearch client is
 // ESM-only (Jest cannot load it); nothing here searches.
-jest.mock('./search', () => ({ removeBottles: jest.fn(), indexDiscussion: jest.fn() }));
+jest.mock('./search', () => ({ indexDiscussion: jest.fn() }));
 
 const mongoose = require('mongoose');
 const ApiToken = require('../models/ApiToken');

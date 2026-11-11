@@ -25,7 +25,7 @@ jest.mock('../utils/rackGeometry', () => ({
   validateCabinetConfig: jest.requireActual('../utils/rackGeometry').validateCabinetConfig,
 }));
 jest.mock('./bottleOps', () => ({ removeFromRacks: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('./search', () => ({ indexBottle: jest.fn() }));
+jest.mock('./search', () => ({}));
 
 const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');

@@ -19,7 +19,7 @@
 // the other import suites do. Nothing below touches any of it — this is a pure
 // function test.
 jest.mock('../services/search', () => ({
-  indexWine: jest.fn(), bulkIndexBottles: jest.fn(), getIsAvailable: jest.fn(() => false),
+  indexWine: jest.fn(), getIsAvailable: jest.fn(() => false),
 }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn(), findOrCreateRegion: jest.fn() }));

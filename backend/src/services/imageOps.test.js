@@ -23,7 +23,7 @@ jest.mock('../services/photoFormat', () => ({
 }));
 // attachOfficialWineImage lazy-requires search (ESM meilisearch — unparseable
 // by jest) — mock at top level like every other suite.
-jest.mock('../services/search', () => ({ indexWine: jest.fn(), indexBottle: jest.fn() }));
+jest.mock('../services/search', () => ({ indexWine: jest.fn() }));
 // The attach audit row has its own suite (imageOps.audit.test.js).
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 

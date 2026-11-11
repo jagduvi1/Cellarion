@@ -6,8 +6,8 @@
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../../services/search', () => ({
-  getIsAvailable: jest.fn(() => false), indexWine: jest.fn(), removeWine: jest.fn(), bulkIndexWines: jest.fn(),
-  bulkIndexBottles: jest.fn(), fullSync: jest.fn(), fullSyncBottles: jest.fn(), waitForTasks: jest.fn(),
+  getIsAvailable: jest.fn(() => false), indexWine: jest.fn(), removeWine: jest.fn(),
+  fullSync: jest.fn(), waitForTasks: jest.fn(),
 }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../models/Country', () => ({ exists: jest.fn(), findById: jest.fn() }));

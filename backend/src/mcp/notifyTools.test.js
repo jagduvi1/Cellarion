@@ -38,7 +38,7 @@ jest.mock('../services/climateHistory', () => ({
   collectClimateHistory: jest.fn(async () => ({ history: null, warnings: [] })),
   formatHistoryCapsule: jest.fn(() => null),
 }));
-jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), addBottle: jest.fn(), updateBottleFields: jest.fn(),

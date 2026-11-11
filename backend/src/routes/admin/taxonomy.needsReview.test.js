@@ -18,9 +18,9 @@
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../../services/search', () => ({
-  getIsAvailable: jest.fn(() => false), fullSync: jest.fn(), fullSyncBottles: jest.fn(),
-  indexWine: jest.fn(), removeWine: jest.fn(), bulkIndexWines: jest.fn(),
-  bulkIndexBottles: jest.fn(), waitForTasks: jest.fn(),
+  getIsAvailable: jest.fn(() => false), fullSync: jest.fn(),
+  indexWine: jest.fn(), removeWine: jest.fn(),
+  waitForTasks: jest.fn(),
 }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/taxonomyMerge', () => ({ mergeGrapes: jest.fn(), mergeRegions: jest.fn(), mergeCountries: jest.fn() }));

@@ -13,7 +13,7 @@
  *   Without that, a curated (or still-pending) wine is left pointing at a row
  *   that no longer exists, and the pending queue 404s on it forever.
  */
-jest.mock('./search', () => ({ removeBottles: jest.fn(), indexDiscussion: jest.fn() }));
+jest.mock('./search', () => ({ indexDiscussion: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({
   find: jest.fn(),
   deleteMany: jest.fn().mockResolvedValue({}),

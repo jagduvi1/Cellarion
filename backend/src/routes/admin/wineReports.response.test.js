@@ -14,7 +14,7 @@ process.env.JWT_SECRET = 'test-secret';
 jest.mock('../../models/WineReport', () => ({ findById: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../../models/Bottle', () => ({ distinct: jest.fn().mockResolvedValue([]) }));
-jest.mock('../../services/search', () => ({ indexWine: jest.fn(), bulkIndexBottles: jest.fn() }));
+jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
 jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));

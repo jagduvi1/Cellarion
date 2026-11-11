@@ -13,8 +13,8 @@
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
 jest.mock('../services/search', () => ({
-  indexBottle: jest.fn(), removeBottle: jest.fn(), indexWine: jest.fn(),
-  bulkIndexBottles: jest.fn(), getIsAvailable: jest.fn(() => false),
+  indexWine: jest.fn(),
+  getIsAvailable: jest.fn(() => false),
 }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/rackOps', () => ({ createCellar: jest.fn() }));

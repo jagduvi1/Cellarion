@@ -4,7 +4,7 @@
  * absent from a subject access request. The day the account was last used is
  * what the inactive-account rule reads, so the person is shown it too.
  */
-jest.mock('./search', () => ({ removeBottles: jest.fn(), indexDiscussion: jest.fn() }));
+jest.mock('./search', () => ({ indexDiscussion: jest.fn() }));
 
 const User = require('../models/User');
 const { REGISTRY } = require('./userDataRegistry');

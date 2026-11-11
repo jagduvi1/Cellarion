@@ -15,8 +15,8 @@ process.env.FRONTEND_URL = 'https://cellarion.test';
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/search', () => ({
   getIsAvailable: jest.fn(() => false), indexWine: jest.fn(), removeWine: jest.fn(),
-  bulkIndexWines: jest.fn(), bulkIndexBottles: jest.fn(), fullSync: jest.fn(),
-  fullSyncBottles: jest.fn(), waitForTasks: jest.fn(), indexDiscussion: jest.fn(),
+  fullSync: jest.fn(),
+  waitForTasks: jest.fn(), indexDiscussion: jest.fn(),
 }));
 jest.mock('../middleware/auth', () => ({
   ...jest.requireActual('../middleware/auth'),

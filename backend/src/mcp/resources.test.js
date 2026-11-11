@@ -39,7 +39,7 @@ jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 // The real slotLocation: get_bottle's placement reports shelf / row / col.
 jest.mock('../utils/rackGeometry', () => ({ ...jest.requireActual('../utils/rackGeometry'), getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({
-  getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(),
+  getIsAvailable: jest.fn(() => false), search: jest.fn(),
 }));
 jest.mock('../services/statsService', () => ({
   computeOverview: jest.fn(async () => ({

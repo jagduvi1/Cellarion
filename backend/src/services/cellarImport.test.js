@@ -5,9 +5,6 @@ jest.mock('./search', () => ({
   getIsAvailable: () => false,
   search: async () => ({ ids: [] }),
   indexWine: () => {},
-  indexBottle: async () => {},
-  bulkIndexBottles: () => {},
-  removeBottle: async () => {},
 }));
 
 // attachMaturity is the only DB-touching helper under test here; mock the model

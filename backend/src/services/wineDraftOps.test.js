@@ -31,7 +31,7 @@ jest.mock('./pendingWineOps', () => ({
 jest.mock('./wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('./findOrCreateWine', () => ({ findOrCreateWine: jest.fn(), findOrCreateRegion: jest.fn() }));
 jest.mock('./crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(async () => null) }));
-jest.mock('./search', () => ({ removeWine: jest.fn(), bulkIndexBottles: jest.fn(() => Promise.resolve()) }));
+jest.mock('./search', () => ({ removeWine: jest.fn() }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn(async () => {}) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn(async () => {}) }));
 // The admin merge's reference re-pointer — attach delegates to it (audit 2026-09-12).
