@@ -19,7 +19,7 @@ const chain = (result) => {
 jest.mock('../models/Cellar', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
-jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), searchBottles: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false) }));
 jest.mock('../services/photoState', () => ({
   photosForBottle: jest.fn(), photoPresence: jest.fn(async () => new Map()),
 }));

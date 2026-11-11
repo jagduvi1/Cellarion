@@ -20,7 +20,6 @@ jest.mock('../../services/search', () => ({
   getIsAvailable: jest.fn(() => false),
   indexWine: jest.fn(),
   removeWine: jest.fn(),
-  bulkIndexWines: jest.fn(),
   fullSync: jest.fn(),
   waitForTasks: jest.fn(),
 }));

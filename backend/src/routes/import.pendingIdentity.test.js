@@ -19,7 +19,6 @@ jest.mock('../services/search', () => ({
   getIsAvailable: () => false,
   search: async () => ({ ids: [] }),
   indexWine: () => {},
-  bulkIndexBottles: jest.fn(),
 }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));

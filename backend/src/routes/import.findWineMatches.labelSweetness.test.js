@@ -14,7 +14,7 @@
 process.env.JWT_SECRET = 'test-secret';
 process.env.ANTHROPIC_API_KEY = 'test-key';
 
-jest.mock('../services/search', () => ({ getIsAvailable: () => false, search: async () => ({ ids: [] }), indexWine: () => {}, bulkIndexBottles: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: () => false, search: async () => ({ ids: [] }), indexWine: () => {} }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());

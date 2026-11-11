@@ -35,7 +35,7 @@ jest.mock('../models/McpActionLog', () => ({
 }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({
-  getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(),
+  getIsAvailable: jest.fn(() => false), search: jest.fn(),
 }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));

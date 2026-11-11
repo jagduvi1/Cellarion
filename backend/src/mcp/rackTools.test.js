@@ -25,7 +25,7 @@ jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn
 // Real geometry (create_rack reports a cabinet's capacity through it); only
 // the max-position lookup is stubbed.
 jest.mock('../utils/rackGeometry', () => ({ ...jest.requireActual('../utils/rackGeometry'), getMaxPosition: jest.fn(() => 32) }));
-jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));

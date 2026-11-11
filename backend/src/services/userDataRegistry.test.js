@@ -9,7 +9,6 @@
 // services/search.js eagerly requires the ESM-only `meilisearch` package,
 // which Jest can't parse — mock it (same pattern as cellarImport.test.js).
 jest.mock('./search', () => ({
-  removeBottles: jest.fn(),
   indexDiscussion: jest.fn(),
 }));
 

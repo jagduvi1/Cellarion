@@ -23,7 +23,6 @@ jest.mock('../../models/Country', () => ({ findOne: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/search', () => ({
   indexWine: jest.fn().mockResolvedValue(undefined),
-  bulkIndexBottles: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../../services/embeddingJob', () => ({
   reembedActiveVintages: jest.fn().mockResolvedValue(undefined),

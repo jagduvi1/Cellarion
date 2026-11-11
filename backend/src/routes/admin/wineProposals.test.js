@@ -32,7 +32,7 @@ jest.mock('../../models/Grape', () => ({ find: jest.fn() }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
-jest.mock('../../services/search', () => ({ indexWine: jest.fn(), bulkIndexBottles: jest.fn() }));
+jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
 jest.mock('../../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/enrichmentJob', () => ({
   reenrichAfterRecordEdit: jest.fn(),

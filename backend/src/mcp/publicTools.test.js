@@ -37,7 +37,7 @@ jest.mock('../models/BlogPost', () => ({ find: jest.fn(), findOne: jest.fn(), co
 jest.mock('../models/Notification', () => ({ find: jest.fn(), countDocuments: jest.fn(), updateOne: jest.fn(), updateMany: jest.fn() }));
 jest.mock('../models/ClimateDevice', () => ({ find: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
-jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/vectorStore', () => ({ getVector: jest.fn(), search: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));

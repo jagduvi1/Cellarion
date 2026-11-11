@@ -17,7 +17,6 @@ process.env.JWT_SECRET = 'test-secret';
 jest.mock('../services/search', () => ({
   getIsAvailable: () => false,
   search: async () => ({ ids: [] }),
-  syncWine: async () => {},
 }));
 
 // Wrap the real service so parseCellarExport is a spy over the REAL parser:
