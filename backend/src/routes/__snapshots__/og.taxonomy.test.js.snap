@@ -1,0 +1,138 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`GET /api/og/countries/:slug renders the country; past five wines the answer ends "and many more." 1`] = `
+"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Italy — Cellarion</title>
+  <meta name="description" content="Explore wines from Italy. Browse producers, regions, and bottles tracked by Cellarion collectors worldwide." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Italy" />
+  <meta property="og:description" content="Explore wines from Italy. Browse producers, regions, and bottles tracked by Cellarion collectors worldwide." />
+  <meta property="og:url" content="{SITE}/countries/italy" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Italy" />
+  <meta name="twitter:description" content="Explore wines from Italy. Browse producers, regions, and bottles tracked by Cellarion collectors worldwide." />
+  <link rel="canonical" href="{SITE}/countries/italy" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":["CollectionPage","Country"],"name":"Italy","description":"Explore wines from Italy. Browse producers, regions, and bottles tracked by Cellarion collectors worldwide.","url":"{SITE}/countries/italy","isPartOf":{"@type":"WebSite","@id":"{SITE}/#website"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cellarion","item":"{SITE}"},{"@type":"ListItem","position":2,"name":"Italy","item":"{SITE}/countries/italy"}]},{"@type":"ItemList","name":"Wines — Italy","numberOfItems":6,"itemListElement":[{"@type":"ListItem","position":1,"url":"{SITE}/wines/wine-1","name":"Wine 1"},{"@type":"ListItem","position":2,"url":"{SITE}/wines/wine2","name":"Wine 2"},{"@type":"ListItem","position":3,"url":"{SITE}/wines/wine-3","name":"Wine 3"},{"@type":"ListItem","position":4,"url":"{SITE}/wines/wine-4","name":"Wine 4"},{"@type":"ListItem","position":5,"url":"{SITE}/wines/wine-5","name":"Wine 5"},{"@type":"ListItem","position":6,"url":"{SITE}/wines/wine-6","name":"Wine 6"}]},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What wines come from Italy?","acceptedAnswer":{"@type":"Answer","text":"Wine 1, Wine 2, Wine 3, Wine 4, Wine 5 and many more."}}]}]}</script>
+</head>
+<body>
+  <header>
+    <h1>Italy</h1>
+  </header>
+  <main>
+    
+    <h2>Wines</h2><ul><li><a href="{SITE}/wines/wine-1">Wine 1 — Producer 1</a></li><li><a href="{SITE}/wines/wine2">Wine 2</a></li><li><a href="{SITE}/wines/wine-3">Wine 3 — Producer 3</a></li><li><a href="{SITE}/wines/wine-4">Wine 4</a></li><li><a href="{SITE}/wines/wine-5">Wine 5 — Producer 5</a></li><li><a href="{SITE}/wines/wine-6">Wine 6</a></li></ul>
+    <section><h2>Frequently asked questions</h2><h3>What wines come from Italy?</h3><p>Wine 1, Wine 2, Wine 3, Wine 4, Wine 5 and many more.</p></section>
+  </main>
+  <footer>
+    <p>Discover, track, and manage your wine cellar with <a href="{SITE}">Cellarion</a>.</p>
+  </footer>
+</body>
+</html>"
+`;
+
+exports[`GET /api/og/grapes/:slug renders the grape with a question for each thing the record knows 1`] = `
+"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nebbiolo — Cellarion</title>
+  <meta name="description" content="Nebbiolo is a red wine grape originating in Piedmont. Discover Nebbiolo wines tracked on Cellarion." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Nebbiolo" />
+  <meta property="og:description" content="Nebbiolo is a red wine grape originating in Piedmont. Discover Nebbiolo wines tracked on Cellarion." />
+  <meta property="og:url" content="{SITE}/grapes/nebbiolo" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Nebbiolo" />
+  <meta name="twitter:description" content="Nebbiolo is a red wine grape originating in Piedmont. Discover Nebbiolo wines tracked on Cellarion." />
+  <link rel="canonical" href="{SITE}/grapes/nebbiolo" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":["CollectionPage","DefinedTerm"],"name":"Nebbiolo","description":"Nebbiolo is a red wine grape originating in Piedmont. Discover Nebbiolo wines tracked on Cellarion.","url":"{SITE}/grapes/nebbiolo","isPartOf":{"@type":"WebSite","@id":"{SITE}/#website"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cellarion","item":"{SITE}"},{"@type":"ListItem","position":2,"name":"Nebbiolo wines","item":"{SITE}/grapes/nebbiolo"}]},{"@type":"ItemList","name":"Wines — Nebbiolo","numberOfItems":3,"itemListElement":[{"@type":"ListItem","position":1,"url":"{SITE}/wines/wine-1","name":"Wine 1"},{"@type":"ListItem","position":2,"url":"{SITE}/wines/wine2","name":"Wine 2"},{"@type":"ListItem","position":3,"url":"{SITE}/wines/wine-3","name":"Wine 3"}]},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What are the characteristics of Nebbiolo?","acceptedAnswer":{"@type":"Answer","text":"high tannin, high acidity."}},{"@type":"Question","name":"How long does Nebbiolo age?","acceptedAnswer":{"@type":"Answer","text":"Ten to thirty years in a good vintage."}},{"@type":"Question","name":"What are the synonyms for Nebbiolo?","acceptedAnswer":{"@type":"Answer","text":"Nebbiolo is also known as Spanna, Chiavennasca."}},{"@type":"Question","name":"What wines are made from Nebbiolo?","acceptedAnswer":{"@type":"Answer","text":"Wine 1, Wine 2, Wine 3."}}]}]}</script>
+</head>
+<body>
+  <header>
+    <h1>Nebbiolo</h1>
+  </header>
+  <main>
+    
+    <h2>Wines</h2><ul><li><a href="{SITE}/wines/wine-1">Wine 1 — Producer 1</a></li><li><a href="{SITE}/wines/wine2">Wine 2</a></li><li><a href="{SITE}/wines/wine-3">Wine 3 — Producer 3</a></li></ul>
+    <section><h2>Frequently asked questions</h2><h3>What are the characteristics of Nebbiolo?</h3><p>high tannin, high acidity.</p><h3>How long does Nebbiolo age?</h3><p>Ten to thirty years in a good vintage.</p><h3>What are the synonyms for Nebbiolo?</h3><p>Nebbiolo is also known as Spanna, Chiavennasca.</p><h3>What wines are made from Nebbiolo?</h3><p>Wine 1, Wine 2, Wine 3.</p></section>
+  </main>
+  <footer>
+    <p>Discover, track, and manage your wine cellar with <a href="{SITE}">Cellarion</a>.</p>
+  </footer>
+</body>
+</html>"
+`;
+
+exports[`GET /api/og/regions/:slug renders the region with its wines, its country in the breadcrumb and three questions 1`] = `
+"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Barolo — Cellarion</title>
+  <meta name="description" content="Barolo lies in the Langhe hills of Piedmont. Nebbiolo is the only grape." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Barolo" />
+  <meta property="og:description" content="Barolo lies in the Langhe hills of Piedmont. Nebbiolo is the only grape." />
+  <meta property="og:url" content="{SITE}/regions/barolo" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Barolo" />
+  <meta name="twitter:description" content="Barolo lies in the Langhe hills of Piedmont. Nebbiolo is the only grape." />
+  <link rel="canonical" href="{SITE}/regions/barolo" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":["CollectionPage","Place"],"name":"Barolo","description":"Barolo lies in the Langhe hills of Piedmont. Nebbiolo is the only grape.","url":"{SITE}/regions/barolo","isPartOf":{"@type":"WebSite","@id":"{SITE}/#website"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cellarion","item":"{SITE}"},{"@type":"ListItem","position":2,"name":"Italy","item":"{SITE}/countries/italy"},{"@type":"ListItem","position":3,"name":"Barolo","item":"{SITE}/regions/barolo"}]},{"@type":"ItemList","name":"Wines — Barolo","numberOfItems":3,"itemListElement":[{"@type":"ListItem","position":1,"url":"{SITE}/wines/wine-1","name":"Wine 1"},{"@type":"ListItem","position":2,"url":"{SITE}/wines/wine2","name":"Wine 2"},{"@type":"ListItem","position":3,"url":"{SITE}/wines/wine-3","name":"Wine 3"}]},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What wines are produced in Barolo?","acceptedAnswer":{"@type":"Answer","text":"Wine 1, Wine 2, Wine 3."}},{"@type":"Question","name":"What grapes are typical in Barolo?","acceptedAnswer":{"@type":"Answer","text":"Nebbiolo."}},{"@type":"Question","name":"Where is Barolo?","acceptedAnswer":{"@type":"Answer","text":"Barolo is a wine region in Italy."}}]}]}</script>
+</head>
+<body>
+  <header>
+    <h1>Barolo</h1>
+  </header>
+  <main>
+    <p>Barolo lies in the Langhe hills of Piedmont.
+Nebbiolo is the only grape.</p>
+    <h2>Wines</h2><ul><li><a href="{SITE}/wines/wine-1">Wine 1 — Producer 1</a></li><li><a href="{SITE}/wines/wine2">Wine 2</a></li><li><a href="{SITE}/wines/wine-3">Wine 3 — Producer 3</a></li></ul>
+    <section><h2>Frequently asked questions</h2><h3>What wines are produced in Barolo?</h3><p>Wine 1, Wine 2, Wine 3.</p><h3>What grapes are typical in Barolo?</h3><p>Nebbiolo.</p><h3>Where is Barolo?</h3><p>Barolo is a wine region in Italy.</p></section>
+  </main>
+  <footer>
+    <p>Discover, track, and manage your wine cellar with <a href="{SITE}">Cellarion</a>.</p>
+  </footer>
+</body>
+</html>"
+`;
+
+exports[`GET /api/og/wine-types/:type renders the type page at /wines/type/<type> 1`] = `
+"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sparkling wines — Cellarion</title>
+  <meta name="description" content="Explore Sparkling wines tracked by Cellarion collectors. Browse producers and bottles from around the world." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Sparkling wines" />
+  <meta property="og:description" content="Explore Sparkling wines tracked by Cellarion collectors. Browse producers and bottles from around the world." />
+  <meta property="og:url" content="{SITE}/wines/type/sparkling" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Sparkling wines" />
+  <meta name="twitter:description" content="Explore Sparkling wines tracked by Cellarion collectors. Browse producers and bottles from around the world." />
+  <link rel="canonical" href="{SITE}/wines/type/sparkling" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":["CollectionPage","CollectionPage"],"name":"Sparkling wines","description":"Explore Sparkling wines tracked by Cellarion collectors. Browse producers and bottles from around the world.","url":"{SITE}/wines/type/sparkling","isPartOf":{"@type":"WebSite","@id":"{SITE}/#website"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cellarion","item":"{SITE}"},{"@type":"ListItem","position":2,"name":"Sparkling wines","item":"{SITE}/wines/type/sparkling"}]},{"@type":"ItemList","name":"Wines — Sparkling wines","numberOfItems":3,"itemListElement":[{"@type":"ListItem","position":1,"url":"{SITE}/wines/wine-1","name":"Wine 1"},{"@type":"ListItem","position":2,"url":"{SITE}/wines/wine2","name":"Wine 2"},{"@type":"ListItem","position":3,"url":"{SITE}/wines/wine-3","name":"Wine 3"}]},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What are some notable Sparkling wines?","acceptedAnswer":{"@type":"Answer","text":"Wine 1, Wine 2, Wine 3."}}]}]}</script>
+</head>
+<body>
+  <header>
+    <h1>Sparkling wines</h1>
+  </header>
+  <main>
+    
+    <h2>Wines</h2><ul><li><a href="{SITE}/wines/wine-1">Wine 1 — Producer 1</a></li><li><a href="{SITE}/wines/wine2">Wine 2</a></li><li><a href="{SITE}/wines/wine-3">Wine 3 — Producer 3</a></li></ul>
+    <section><h2>Frequently asked questions</h2><h3>What are some notable Sparkling wines?</h3><p>Wine 1, Wine 2, Wine 3.</p></section>
+  </main>
+  <footer>
+    <p>Discover, track, and manage your wine cellar with <a href="{SITE}">Cellarion</a>.</p>
+  </footer>
+</body>
+</html>"
+`;
