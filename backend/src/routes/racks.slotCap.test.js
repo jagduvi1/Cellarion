@@ -114,3 +114,61 @@ describe('MAX_RACK_SLOTS', () => {
     expect(doc.save).not.toHaveBeenCalled();
   });
 });
+
+// An update of a rack that is already modular sends `modules` without
+// `isModular`. The list is checked all the same.
+describe('a modules list is checked whenever one is sent', () => {
+  test('PUT with modules alone refuses a list past the cap and keeps the stored modules', async () => {
+    const doc = rackDoc();
+    Rack.findOne.mockResolvedValue(doc);
+    const { status, body } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { modules: HUGE });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/at most 10000 slots/);
+    expect(doc.modules).toBe(WALL);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a module of a type that does not exist', [{ type: 'pyramid', rows: 2, cols: 2 }], /Invalid module type: pyramid/],
+    ['a module that is null', [null], /Invalid module type/],
+    ['a module with rows out of bounds', [{ type: 'grid', rows: 0, cols: 4 }], /Module rows and cols must be whole numbers/],
+    ['an empty list', [], /at least one module/],
+    ['something that is not a list', 'six grids', /at least one module/],
+  ])('PUT with modules alone refuses %s', async (name, modules, message) => {
+    const doc = rackDoc();
+    Rack.findOne.mockResolvedValue(doc);
+    const { status, body } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { modules });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(message);
+    expect(doc.modules).toBe(WALL);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  test('PUT with modules alone stores an ordinary list', async () => {
+    const doc = rackDoc();
+    Rack.findOne.mockResolvedValue(doc);
+    const smaller = WALL.slice(0, 3);
+    const { status } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { modules: smaller });
+    expect(status).toBe(200);
+    expect(doc.modules).toEqual(smaller);
+    expect(doc.save).toHaveBeenCalled();
+  });
+
+  test('PUT that turns a rack non-modular is not held to the modular rules', async () => {
+    const doc = rackDoc();
+    Rack.findOne.mockResolvedValue(doc);
+    const { status } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { isModular: false, modules: [] });
+    expect(status).toBe(200);
+    expect(doc.isModular).toBe(false);
+  });
+
+  test.each([
+    ['a module that is null', [null], /Invalid module type/],
+    ['a module with cols out of bounds', [{ type: 'grid', rows: 4, cols: 5000 }], /Module rows and cols must be whole numbers/],
+  ])('POST refuses %s with a 400, before anything is saved', async (name, modules, message) => {
+    const { status, body } = await request(buildApp(), 'POST', '/api/racks', { cellar: CELLAR_ID, name: 'Wall', isModular: true, modules });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(message);
+    expect(Rack.__instances).toHaveLength(0);
+  });
+});
