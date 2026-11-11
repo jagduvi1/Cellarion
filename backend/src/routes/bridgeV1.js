@@ -555,4 +555,3 @@ router.post('/values', quota('contributions'), async (req, res) => {
 
 module.exports = router;
 module.exports.SEARCH_VISIBLE = SEARCH_VISIBLE;
-module.exports.BURST_PER_MINUTE = BURST_PER_MINUTE;

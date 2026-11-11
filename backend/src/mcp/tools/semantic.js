@@ -169,4 +169,4 @@ registerTool({
   },
 });
 
-module.exports = { takeEmbedSlot };
+module.exports = {};

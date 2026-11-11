@@ -71,4 +71,4 @@ function isCloudflareIP(ip) {
   return false;
 }
 
-module.exports = { isCloudflareIP, CLOUDFLARE_IPV4_RANGES, CLOUDFLARE_IPV6_RANGES };
+module.exports = { isCloudflareIP };

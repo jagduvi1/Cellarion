@@ -102,4 +102,4 @@ function findGrapeColourConflict(wine) {
   return null;
 }
 
-module.exports = { findGrapeColourConflict, WHITE_NAME_TERMS, COLOUR_TYPES };
+module.exports = { findGrapeColourConflict, COLOUR_TYPES };
