@@ -51,19 +51,27 @@ describe('plan distribution', () => {
   });
 });
 
-// Audit 2026-08-21 H-1. The shape of the CHURN query, pinned as data because
-// the wrong shape shipped and measured 7 where the truth was 3: Stripe
-// customers are created at checkout-session time, BEFORE payment, so keying
-// churn on stripeCustomerId counts abandoned checkouts as former supporters.
-describe('formerSupporters query shape (H-1)', () => {
+// The shape of the CHURN query, pinned as data: each of the two fields that
+// look like "was a supporter" overstates the number. planStartedAt is also
+// stamped when an admin sets a tier, so it counts accounts that were given one
+// and never paid; a Stripe customer is created when a checkout opens, BEFORE
+// payment, so it counts abandoned checkouts.
+describe('formerSupporters query shape', () => {
   const fs = require('fs');
   const src = fs.readFileSync(require.resolve('./globalStatsService'), 'utf8');
+  const churnQuery = src.match(/User\.countDocuments\(\{[^}]*firstPaidAt[^)]*\)/)?.[0] || '';
 
-  it('keys on planStartedAt, which is stamped only when a tier is granted', () => {
-    expect(src).toMatch(/plan:\s*'free',\s*planStartedAt:\s*\{\s*\$ne:\s*null\s*\}/);
+  it('counts accounts that paid (firstPaidAt) and hold no subscription now', () => {
+    expect(churnQuery).toMatch(/firstPaidAt:\s*\{\s*\$ne:\s*null\s*\},\s*stripeSubscriptionId:\s*null/);
   });
 
-  it('never again keys churn on stripeCustomerId', () => {
+  it('never keys churn on planStartedAt, which a tier given by hand stamps too', () => {
+    expect(churnQuery).not.toMatch(/planStartedAt/);
+    expect(src).not.toMatch(/plan:\s*'free',\s*planStartedAt/);
+  });
+
+  it('never keys churn on stripeCustomerId, which an abandoned checkout leaves behind', () => {
+    expect(churnQuery).not.toMatch(/stripeCustomerId/);
     expect(src).not.toMatch(/plan:\s*'free',\s*stripeCustomerId/);
   });
 });

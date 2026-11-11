@@ -9,7 +9,7 @@ jest.mock('../models/User', () => ({
 const User = require('../models/User');
 const { applyStripePlan } = require('./stripe');
 
-// applyStripePlan does `User.findById(id).select('plan planExpiresAt')`.
+// applyStripePlan does `User.findById(id).select('plan planExpiresAt firstPaidAt')`.
 const mockUser = (doc) =>
   User.findById.mockReturnValue({ select: jest.fn().mockResolvedValue(doc) });
 
@@ -65,6 +65,26 @@ describe('applyStripePlan', () => {
     mockUser({ plan: 'supporter', planExpiresAt: future() });
     await applyStripePlan('u1', 'patron', 'sub_123');
     expect(capturedUpdate().plan).toBe('patron');
+  });
+
+  test('stamps firstPaidAt the first time Stripe puts the account on a tier', async () => {
+    mockUser({ plan: 'free', planExpiresAt: null, firstPaidAt: null });
+    await applyStripePlan('u1', 'supporter', 'sub_123');
+    expect(capturedUpdate().firstPaidAt).toBeInstanceOf(Date);
+  });
+
+  test('never moves firstPaidAt: a renewal, a tier switch and a resubscription keep the first date', async () => {
+    mockUser({ plan: 'free', planExpiresAt: null, firstPaidAt: new Date('2025-02-01T09:00:00Z') });
+    await applyStripePlan('u1', 'patron', 'sub_456');
+    expect(capturedUpdate()).not.toHaveProperty('firstPaidAt');
+  });
+
+  test('stamps firstPaidAt even while a higher grant holds the plan back', async () => {
+    mockUser({ plan: 'patron', planExpiresAt: future(), firstPaidAt: null });
+    await applyStripePlan('u1', 'supporter', 'sub_123');
+    const update = capturedUpdate();
+    expect(update.plan).toBeUndefined();
+    expect(update.firstPaidAt).toBeInstanceOf(Date);
   });
 
   test('returns null and writes nothing when the user is gone', async () => {

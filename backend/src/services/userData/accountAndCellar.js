@@ -48,6 +48,9 @@ module.exports = [
           roles: u.roles,
           plan: u.plan,
           stripeSubscriptionId: u.stripeSubscriptionId || null,
+          // When the account first paid for support (kept after the
+          // subscription ends); null for an account that never did.
+          firstPaidAt: u.firstPaidAt || null,
           // When we sent the one-off supporter thank-you. Included because the
           // export is an explicit field pick, so anything omitted here is
           // simply absent from a subject access request — and "we emailed you

@@ -41,6 +41,16 @@ describe('toJSON', () => {
     expect(withSub.toJSON().hasStripeSubscription).toBe(true);
   });
 
+  it('keeps firstPaidAt (admin-stats bookkeeping) out of what the client receives', () => {
+    const user = new User({ username: 'e', email: 'e@cellarion.app', password: 'x', firstPaidAt: new Date('2025-02-01T09:00:00Z') });
+    expect(user.firstPaidAt).toEqual(new Date('2025-02-01T09:00:00Z'));
+    expect(user.toJSON().firstPaidAt).toBeUndefined();
+  });
+
+  it('firstPaidAt defaults to null (the account never paid)', () => {
+    expect(new User({ username: 'f', email: 'f@cellarion.app', password: 'x' }).firstPaidAt).toBeNull();
+  });
+
   it('keeps lastActiveAt (retention bookkeeping) out of what the client receives', () => {
     const user = new User({ username: 'c', email: 'c@cellarion.app', password: 'x', lastActiveAt: new Date('2026-10-31T00:00:00Z') });
     expect(user.lastActiveAt).toEqual(new Date('2026-10-31T00:00:00Z'));
