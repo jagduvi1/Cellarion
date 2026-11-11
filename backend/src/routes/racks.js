@@ -62,6 +62,22 @@ const MAX_RACK_SLOTS = 10000;
 const MAX_RACK_DIM = 20;
 const isRackDim = (v) => Number.isInteger(v) && v >= 1 && v <= MAX_RACK_DIM;
 
+// What is wrong with a modules list, as the 400's message, or null. One check
+// for create and for every update that sends a list: an update of a rack that
+// is already modular sends `modules` without `isModular`.
+function modulesProblem(modules) {
+  if (!Array.isArray(modules) || modules.length === 0) return 'Modular racks must have at least one module';
+  if (modules.length > MAX_MODULES) return `Maximum ${MAX_MODULES} modules allowed per rack`;
+  for (const m of modules) {
+    if (!m || !m.type || !RACK_TYPES.includes(m.type)) return `Invalid module type: ${m?.type}`;
+    if ((m.rows !== undefined && !isRackDim(m.rows)) || (m.cols !== undefined && !isRackDim(m.cols))) {
+      return `Module rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}`;
+    }
+  }
+  if (modularTotalSlots(modules) > MAX_RACK_SLOTS) return `A rack can hold at most ${MAX_RACK_SLOTS} slots in total`;
+  return null;
+}
+
 /**
  * Serialize rack doc(s) with a maturityStatus attached to every populated
  * slot bottle (same classification the cellar list attaches per bottle), so
@@ -176,20 +192,8 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
     // Modular racks are a REST-only route path (no MCP twin to drift against;
     // the read tools treat them specially).
     if (isModular && modules) {
-      if (!Array.isArray(modules) || modules.length === 0) {
-        return res.status(400).json({ error: 'Modular racks must have at least one module' });
-      }
-      if (modules.length > MAX_MODULES) {
-        return res.status(400).json({ error: `Maximum ${MAX_MODULES} modules allowed per rack` });
-      }
-      for (const m of modules) {
-        if (!m.type || !RACK_TYPES.includes(m.type)) {
-          return res.status(400).json({ error: `Invalid module type: ${m.type}` });
-        }
-      }
-      if (modularTotalSlots(modules) > MAX_RACK_SLOTS) {
-        return res.status(400).json({ error: `A rack can hold at most ${MAX_RACK_SLOTS} slots in total` });
-      }
+      const problem = modulesProblem(modules);
+      if (problem) return res.status(400).json({ error: problem });
       // Racks are owned by the cellar owner
       const rack = new Rack({
         cellar: req.cellar._id,
@@ -260,25 +264,12 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // Validate modular modules if provided
-    if (isModular && modules) {
-      if (!Array.isArray(modules) || modules.length === 0) {
-        return res.status(400).json({ error: 'Modular racks must have at least one module' });
-      }
-      if (modules.length > MAX_MODULES) {
-        return res.status(400).json({ error: `Maximum ${MAX_MODULES} modules allowed per rack` });
-      }
-      for (const m of modules) {
-        if (!m || !m.type || !RACK_TYPES.includes(m.type)) {
-          return res.status(400).json({ error: `Invalid module type: ${m?.type}` });
-        }
-        if ((m.rows !== undefined && !isRackDim(m.rows)) || (m.cols !== undefined && !isRackDim(m.cols))) {
-          return res.status(400).json({ error: `Module rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` });
-        }
-      }
-      if (modularTotalSlots(modules) > MAX_RACK_SLOTS) {
-        return res.status(400).json({ error: `A rack can hold at most ${MAX_RACK_SLOTS} slots in total` });
-      }
+    // A modules list is checked whenever one is sent for a rack that is, or is
+    // becoming, modular: `isModular` need not be in the request.
+    const willBeModular = isModular !== undefined ? !!isModular : !!rack.isModular;
+    if (modules !== undefined && willBeModular) {
+      const problem = modulesProblem(modules);
+      if (problem) return res.status(400).json({ error: problem });
     } else if (type && !RACK_TYPES.includes(type)) {
       return res.status(400).json({ error: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` });
     }
