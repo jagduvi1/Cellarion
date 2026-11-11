@@ -4,10 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import Youtube from '@tiptap/extension-youtube';
-import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import { getAdminBlogPost, createBlogPost, updateBlogPost } from '../api/blog';
@@ -38,13 +36,13 @@ function AdminBlogEditor() {
 
   const editor = useEditor({
     extensions: [
+      // StarterKit brings Link and Underline itself; they are configured here, once.
       StarterKit.configure({
-        heading: { levels: [2, 3, 4] }
+        heading: { levels: [2, 3, 4] },
+        link: { openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }
       }),
-      Link.configure({ openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
       Image.configure({ inline: false, allowBase64: false }),
       Youtube.configure({ width: 640, height: 360 }),
-      Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: t('blog.editor.contentPlaceholder') })
     ],

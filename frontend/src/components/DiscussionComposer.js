@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
-import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useTranslation } from 'react-i18next';
 import './DiscussionComposer.css';
@@ -31,19 +29,21 @@ export default function DiscussionComposer({
 
   const editor = useEditor({
     extensions: [
+      // StarterKit brings Link and Underline itself: they are configured
+      // here, once. Adding them again registers each twice, and which of the
+      // two Link set-ups then applies is not ours to say.
       StarterKit.configure({
         heading: false,
         codeBlock: false,
         code: false,
-        horizontalRule: false
-      }),
-      Underline,
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        HTMLAttributes: {
-          target: '_blank',
-          rel: 'noopener noreferrer nofollow'
+        horizontalRule: false,
+        link: {
+          openOnClick: false,
+          autolink: true,
+          HTMLAttributes: {
+            target: '_blank',
+            rel: 'noopener noreferrer nofollow'
+          }
         }
       }),
       Placeholder.configure({

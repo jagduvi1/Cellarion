@@ -69,6 +69,21 @@ describe('AdminBlogEditor', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  // StarterKit brings Link and Underline itself; adding them again registered
+  // each twice, and TipTap warns that the result is not defined.
+  test('every editor extension is registered once, and a link keeps the set-up of this editor', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ post: { ...POST, content: '<p>See <a href="https://example.com/x">the source</a> and <u>this</u>.</p>' } }) });
+    const { container } = render(<AdminBlogEditor />);
+
+    await waitFor(() => expect(container.querySelector('.ProseMirror a')).not.toBeNull());
+    expect(warn.mock.calls.map((c) => String(c[0])).filter((m) => /Duplicate extension names/.test(m))).toEqual([]);
+    const link = container.querySelector('.ProseMirror a');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(container.querySelector('.ProseMirror u')).not.toBeNull();
+  });
+
   test('an error response alerts once and returns to the list, instead of looping', async () => {
     apiFetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: 'Post not found' }) });
     render(<AdminBlogEditor />);
