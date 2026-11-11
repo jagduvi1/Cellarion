@@ -189,6 +189,19 @@ const COLLAPSIBLE_BLOCKS = [
   'vintage.tasting', 'vintage.record', 'vintage.personal', 'vintage.history', 'vintage.reviews',
 ];
 
+// ─── Label sweetness ─────────────────────────────────────────────────────────
+
+// Whether the label sweetness write rule (services/sweetnessWrite
+// assignSweetness) reads the sweetness word off a name being written and moves
+// it into the field ("Riesling Kabinett trocken" → "Riesling Kabinett" +
+// trocken). OFF: no term is ever read off a name and no name is changed; only
+// an explicit term sets one (the display name stays right, because
+// appendSweetnessTerm never repeats a word the name carries). Off while the
+// stored names still carry their words: on before those are migrated, new
+// names would lose the word and old ones keep it — a half-stripped registry.
+// Read at call time.
+const SWEETNESS_EXTRACT_FROM_NAME = false;
+
 module.exports = {
   CELLAR_SORTS,
   COLLAPSIBLE_BLOCKS,
@@ -216,4 +229,5 @@ module.exports = {
   DISCUSSIONS_PER_PAGE,
   DISCUSSIONS_MAX_PER_PAGE,
   DISCUSSION_MAX_LENGTHS,
+  SWEETNESS_EXTRACT_FROM_NAME,
 };

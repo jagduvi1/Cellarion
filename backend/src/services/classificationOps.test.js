@@ -156,6 +156,23 @@ describe('assignClassification — the write rule', () => {
     expect(bare.classification).toBe('VDP Erste Lage');
   });
 
+  test('the label sweetness words a typed value carried are reported when the stored value no longer holds them', async () => {
+    const wine = {};
+    expect((await ops.assignClassification(wine, { classification: 'Kabinett trocken' })).sweetness).toEqual(['trocken']);
+    expect(wine).toEqual({ classifications: ['k'], classification: 'Kabinett' });
+    expect((await ops.assignClassification({}, { classification: 'Qualitätswein, feinherb' })).sweetness).toEqual(['feinherb']);
+    expect((await ops.assignClassification({}, { classification: 'Spätlese fruchtsüß' })).sweetness).toEqual(['fruchtsüß']);
+    expect((await ops.assignClassification({}, { classification: 'Kabinett halbtrocken, Vin de France' })).sweetness).toEqual(['halbtrocken']);
+    // Kept as typed (no tier answers a member's value): the word stays in it, nothing is reported.
+    const kept = {};
+    expect((await ops.assignClassification(kept, { classification: 'Vin de France trocken' })).sweetness).toEqual([]);
+    expect(kept.classification).toBe('Vin de France trocken');
+    // Rows a picker chose, a value without a sweetness word, no input: none.
+    expect((await ops.assignClassification({}, { classifications: ['k'] })).sweetness).toEqual([]);
+    expect((await ops.assignClassification({}, { classification: 'Kabinett' })).sweetness).toEqual([]);
+    expect((await ops.assignClassification({}, {})).sweetness).toEqual([]);
+  });
+
   test('without a taxonomy every path keeps the cleaned string, strict included', async () => {
     ops.primeClassificationCache(null);
     const wine = {};

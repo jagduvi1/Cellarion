@@ -1,12 +1,13 @@
 /**
  * Label sweetness — the term table and its readers (GitHub discussion #1754).
  *
- * Part 1 (this file today): the curated term rows (models/SweetnessTerm), an
- * in-memory copy the pickers, the MCP tool, the style guard and the identity
- * keys read, the resolver from a printed word to a row, the output shapes
- * every wine read uses, and the boot seed. The WRITE rule — reading a term off
- * a name, moving the word out of the name, refusing an unknown word — follows
- * in part 2; no write path sets a term yet except the admin taxonomy screen.
+ * This file: the curated term rows (models/SweetnessTerm), an in-memory copy
+ * the pickers, the MCP tool, the style guard and the identity keys read, the
+ * resolver from a printed word to a row, the output shapes every wine read
+ * uses, and the boot seed. The WRITE rule — reading a term off a name, moving
+ * the word out of the name, refusing an unknown word — is
+ * services/sweetnessWrite, which no write path calls yet: the one path that
+ * sets a wine's term is a Registry Bridge copy (services/registryBridge).
  *
  * Same cache shape as services/classificationOps (60 s TTL, invalidated by the
  * admin routes, pinned in tests, EMPTY without a database connection so unit
