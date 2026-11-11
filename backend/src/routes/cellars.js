@@ -974,6 +974,8 @@ router.put('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, description } = req.body;
+    if (name != null && typeof name !== 'string') return res.status(400).json({ error: 'name must be text' });
+    if (description != null && typeof description !== 'string') return res.status(400).json({ error: 'description must be text' });
 
     const cellar = await Cellar.findOne({
       _id: req.params.id,

@@ -67,8 +67,8 @@ registerTool({
     vintage: z.string().min(1).max(10),
     price: z.number().min(0),
     currency: z.string().regex(/^[A-Za-z]{3}$/).optional().describe('Default USD'),
-    source: z.string().max(100).optional().describe('e.g. auction, retail, Systembolaget'),
-    somm_notes: z.string().max(2000).optional(),
+    source: z.string().max(priceOps.PRICE_SOURCE_MAX).optional().describe('e.g. auction, retail, Systembolaget'),
+    somm_notes: z.string().max(priceOps.PRICE_NOTES_MAX).optional(),
   },
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);

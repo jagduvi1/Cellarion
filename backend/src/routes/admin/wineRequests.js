@@ -413,7 +413,7 @@ router.put('/:id/reject', async (req, res) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { adminNotes } = req.body;
 
-    if (!adminNotes || !adminNotes.trim()) {
+    if (typeof adminNotes !== 'string' || !adminNotes.trim()) {
       return res.status(400).json({ error: 'Admin notes are required when rejecting a request' });
     }
 

@@ -205,6 +205,9 @@ router.post('/', async (req, res) => {
     // a 400 on notes/priority/vintage after the mint would leave the exact
     // orphan the mint-at-commit change exists to prevent.
     const safeVintage = vintage != null ? String(vintage) : '';
+    if (notes != null && typeof notes !== 'string') {
+      return res.status(400).json({ error: 'Notes must be text' });
+    }
     if (notes && notes.length > 2000) {
       return res.status(400).json({ error: 'Notes must be 2000 characters or less' });
     }

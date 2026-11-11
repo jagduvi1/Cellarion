@@ -398,3 +398,15 @@ describe('DELETE /api/cellars/:id/members/:userId', () => {
     expect(cellar.save).not.toHaveBeenCalled();
   });
 });
+
+describe('PUT /api/cellars/:id: a name or description that is not text', () => {
+  test.each([
+    ['a name that is a number', { name: 5 }, 'name must be text'],
+    ['a name that is an object', { name: { $gt: '' } }, 'name must be text'],
+    ['a description that is a list', { description: ['a'] }, 'description must be text'],
+  ])('%s is a 400 before the cellar is read', async (label, body, message) => {
+    const res = await request('PUT', `/api/cellars/${CELLAR_ID}`, { body });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(message);
+  });
+});

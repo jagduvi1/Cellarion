@@ -225,3 +225,15 @@ describe('POST /api/wishlist — private drafts are for bottles', () => {
     expect(findOrCreateWine).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/wishlist: notes that are not text', () => {
+  test.each([
+    ['a number', 5],
+    ['an object', { $gt: '' }],
+  ])('notes that are %s are a 400 and nothing is created', async (name, notes) => {
+    const { status, body } = await post({ wineDefinitionId: WINE_ID, notes });
+    expect(status).toBe(400);
+    expect(body.error).toBe('Notes must be text');
+    expect(WishlistItem.create).not.toHaveBeenCalled();
+  });
+});

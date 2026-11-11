@@ -165,3 +165,13 @@ test('a detach failure leaves the request PENDING so a retry re-runs the detach'
   expect(requestDoc.save).not.toHaveBeenCalled();
   expect(requestDoc.status).toBe('pending'); // retryable — the $unset is idempotent
 });
+
+test.each([
+  ['a number', 5],
+  ['an object', { $gt: '' }],
+  ['a list', ['spam']],
+])('admin notes that are %s are refused like missing ones, not answered with a 500', async (name, adminNotes) => {
+  const res = await reject({ adminNotes });
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toBe('Admin notes are required when rejecting a request');
+});
