@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { normalizeString, normalizeAppellation, normalizeAppellationKey, sanitizeTaxonomyName } = require('../../utils/normalize');
+const { normalizeString, normalizeAppellationKey, sanitizeTaxonomyName } = require('../../utils/normalize');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Grape = require('../../models/Grape');
@@ -26,6 +26,10 @@ const {
 } = require('../../services/taxonomyReview');
 const { validateGrapeRegionalNames, computeRegionalNameWarnings } = require('../../services/grapeRegionalNames');
 const { BOTTLE_SIZES } = require('../../config/bottleSizes');
+const {
+  needsHumanReview, wineCountsByRef, wineCountsByGrape, wineCountsByClassification,
+  wineCountsByAppellation, wineCountsBySweetnessTerm,
+} = require('../../services/taxonomyUsage');
 
 const router = express.Router();
 
@@ -37,97 +41,6 @@ router.use(requireAuth, requireRole('admin'));
 // immediately instead of after the TTL.
 const { clearTaxonomyListCache } = require('../taxonomy');
 
-// ── Usage counts for the admin lists ─────────────────────────────────────────
-// The taxonomy UI gained merge/delete power (strategy 2026-07-29 R5), and both
-// verbs need the same context to be used safely: how many wines actually
-// reference this doc. Delete already refuses non-zero usage server-side; the
-// count makes that visible BEFORE the click, and for merges it tells the admin
-// which of two spellings is the real one (merge the 1-wine typo into the
-// 300-wine canonical, never the reverse).
-
-/**
- * Does this user-minted taxonomy row actually need a human to look at it?
- *
- * Two separate facts, deliberately: `createdByUser` records that a user write
- * minted this document rather than a curator (services/findOrCreateWine), and
- * `reviewedAt` records whether a human has since looked. They were one boolean
- * named `pendingReview` until 2026-08-31, and that name is most of this story
- * — it promised an action for a field that only ever recorded an origin, so
- * every mint looked like a task and the pile only grew.
- *
- * Measured on production (2026-08-31): of 164 regions minted in one month, 161
- * were in genuine use and exactly one was junk. At a ~1% hit rate the sensible
- * response to any row is "approve without looking", which is the same as not
- * reading it — so nobody did, and the real defect hiding in there (the Loire
- * split across four documents) went unnoticed for weeks. Being flagged never
- * revealed it: all four were flagged, individually.
- *
- * So the screen asks a better question than "who made this?". A document
- * already carrying wines has been proven real by use, in a way an approval
- * click adds nothing to. What deserves a human is the one nobody uses: that is
- * where the junk was ("Wine of Hungary", 0 wines) and where a typo would sit.
- *
- * `createdByUser` is never cleared by anything. It stays as the record of where
- * the document came from — the curator has found that provenance useful, and
- * tidying a screen is no reason to delete it. Approving stamps `reviewedAt`
- * instead. Duplicates are a separate question with their own scan
- * (GET /regions/duplicate-candidates).
- *
- * @param {{createdByUser?: boolean, reviewedAt?: Date|null}} doc
- * @param {number} wineCount
- * @returns {boolean}
- */
-function needsHumanReview(doc, wineCount) {
-  return !!doc?.createdByUser && !doc?.reviewedAt && wineCount === 0;
-}
-
-/** Map<idString, wineCount> for a ref field ('country' | 'region'). */
-async function wineCountsByRef(field) {
-  const rows = await WineDefinition.aggregate([
-    // Quarantined rows don't count as "in use" — mirror taxonomyReview.js.
-    { $match: { [field]: { $ne: null }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
-    { $group: { _id: `$${field}`, n: { $sum: 1 } } },
-  ]);
-  return new Map(rows.map(r => [String(r._id), r.n]));
-}
-
-/** Map<grapeIdString, wineCount> (grapes is an array field). */
-async function wineCountsByGrape() {
-  const rows = await WineDefinition.aggregate([
-    { $match: { nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
-    { $unwind: '$grapes' },
-    { $group: { _id: '$grapes', n: { $sum: 1 } } },
-  ]);
-  return new Map(rows.map(r => [String(r._id), r.n]));
-}
-
-async function wineCountsByClassification() {
-  const rows = await WineDefinition.aggregate([
-    { $match: { nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
-    { $unwind: '$classifications' },
-    { $group: { _id: '$classifications', n: { $sum: 1 } } },
-  ]);
-  return new Map(rows.map(r => [String(r._id), r.n]));
-}
-
-/**
- * Map<normalizedAppellation, wineCount>. Wines store the appellation as free
- * text (not a ref — see routes/admin/import.js), so the join is by normalized
- * string: the same normalization both writers apply.
- */
-async function wineCountsByAppellation() {
-  const rows = await WineDefinition.aggregate([
-    { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
-    { $group: { _id: '$appellation', n: { $sum: 1 } } },
-  ]);
-  const map = new Map();
-  for (const r of rows) {
-    const key = normalizeAppellationKey(normalizeAppellation(r._id || '') || r._id || '');
-    if (!key) continue;
-    map.set(key, (map.get(key) || 0) + r.n);
-  }
-  return map;
-}
 router.use((req, res, next) => {
   if (req.method !== 'GET') {
     res.on('finish', () => {
@@ -839,7 +752,7 @@ router.get('/regions/duplicate-candidates', async (req, res) => {
     const counts = new Map(
       (await WineDefinition.aggregate([
         // Quarantined and pending-identity rows are not "in use" — the same
-        // exclusion wineCountsByRef() applies above, so this screen and the
+        // exclusion wineCountsByRef() applies (services/taxonomyUsage), so this screen and the
         // taxonomy list agree about the same region. It also decides the merge
         // TARGET below: without it, a document whose bulk is quarantined junk
         // could outrank the real region and pull its wines into itself.
@@ -1416,14 +1329,6 @@ router.post('/classifications/:id/approve', async (req, res) => {
 // identity keys and slugs are built from (utils/normalize sweetnessKeySegment),
 // so renaming it would move every one of their keys; a wrong word is a new
 // row, and the wines move to it one by one through the ordinary write paths.
-
-async function wineCountsBySweetnessTerm() {
-  const rows = await WineDefinition.aggregate([
-    { $match: { labelSweetness: { $ne: null } } },
-    { $group: { _id: '$labelSweetness', n: { $sum: 1 } } },
-  ]);
-  return new Map(rows.map((r) => [String(r._id), r.n]));
-}
 
 // GET /api/admin/taxonomy/sweetness-terms
 router.get('/sweetness-terms', async (req, res) => {

@@ -23,7 +23,7 @@ const { normalizeString } = require('../utils/normalize');
  *
  * Mirrors models/Grape: unique normalised name, synonyms with their
  * normalised copies, createdByUser + reviewedAt for the review queue
- * (routes/admin/taxonomy needsHumanReview), and an admin-managed life cycle:
+ * (services/taxonomyUsage needsHumanReview), and an admin-managed life cycle:
  * rows are added in the taxonomy screen, never by a deploy.
  */
 
