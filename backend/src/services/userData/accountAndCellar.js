@@ -348,7 +348,7 @@ module.exports = [
     model: RegistryDataValue, category: 'shared-content', userFields: ['suggestedBy', 'decidedBy'],
     purge: (ctx) => [
       // instanceHost can name a household; bridgeKey survives as an opaque
-      // grouping id (see the WineDefinition entry below for the reasoning).
+      // grouping id (see the WineDefinition entry in sharedRegistry.js for the reasoning).
       RegistryDataValue.updateMany({ suggestedBy: ctx.userId }, { $set: { suggestedBy: ctx.deletedUserId, instanceHost: null } }),
       RegistryDataValue.updateMany({ decidedBy: ctx.userId }, { $unset: { decidedBy: '' } }),
     ],
