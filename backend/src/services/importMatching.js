@@ -275,8 +275,19 @@ async function findWineMatches(item, viewer = {}) {
   // at the single place all three consumers get their matches, so the
   // >= EXACT_THRESHOLD gates and the client's preselection read one verdict.
   // colourConflict rides alongside for the same consumers (rowColourConflict).
+  //
+  // A tie goes to the entry that has been in the registry longer (an id
+  // begins with the time it was made). The first match is the wine an import
+  // row is linked to, and the order the candidates were found in is not the
+  // same from one call to the next: without this, the same row could land on
+  // either of two entries that score alike.
+  const olderFirst = (a, b) => {
+    const x = a.wine._id.toString();
+    const y = b.wine._id.toString();
+    return x < y ? -1 : x > y ? 1 : 0;
+  };
   const sorted = [...candidates.values()]
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => (b.score - a.score) || olderFirst(a, b))
     .slice(0, 5)
     .map((m) => ({
       ...m,
