@@ -915,7 +915,7 @@ function AddBottle() {
         bottleId: first._id,
         imageIds: uploadedImages.map(img => img._id)
       })
-    }).catch(err => {
+    }).then(res => { if (!res.ok) throw new Error(`the server answered ${res.status}`); }).catch(err => {
       imagesLinkedRef.current = false; // let a retry attempt the link again
       console.error('Failed to link images:', err);
     });
