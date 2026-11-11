@@ -147,3 +147,23 @@ test('verify-email: a token found on a system account is refused and nobody is s
   expect(system.save).not.toHaveBeenCalled();
   expect(issueTokens).not.toHaveBeenCalled();
 });
+
+// An address is stored trimmed and in lower case. One typed with a space after
+// it (a phone's autocomplete adds one) or with capitals is the same address.
+test('forgot-password: an address typed with a stray space and capitals finds the member', async () => {
+  const member = account('alice', 'alice@example.com');
+  mockByEmail.set('alice@example.com', member);
+  const res = await post('/forgot-password', { email: ' Alice@Example.com ' });
+  expect(res.status).toBe(200);
+  expect(member.setPasswordResetToken).toHaveBeenCalled();
+  expect(sendPasswordResetEmail).toHaveBeenCalledWith('alice@example.com', 'alice', 'reset-token');
+});
+
+test('resend-verification: an address typed with a stray space and capitals finds the member', async () => {
+  const member = account('alice', 'alice@example.com');
+  mockByEmail.set('alice@example.com', member);
+  const res = await post('/resend-verification', { email: 'Alice@Example.com ' });
+  expect(res.status).toBe(200);
+  expect(member.setEmailVerificationToken).toHaveBeenCalled();
+  expect(sendVerificationEmail).toHaveBeenCalledWith('alice@example.com', 'alice', 'verify-token');
+});

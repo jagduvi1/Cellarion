@@ -488,7 +488,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   const genericResponse = { message: 'If that email exists and is unverified, a new link has been sent.' };
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
 
     // A system account answers like an unknown address: its links would only
     // land in an outgoing-mail log, where whoever reads it could sign in as it.
@@ -803,7 +803,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
   }
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
 
     // A system account answers like an unknown address (see resend-verification).
     if (!user || isReservedUsername(user.username)) {
