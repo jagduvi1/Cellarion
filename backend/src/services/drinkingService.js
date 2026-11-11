@@ -284,5 +284,5 @@ async function scoreDishMatches(dish, ranked) {
 }
 
 module.exports = {
-  readyCandidates, serializeCandidates, scoreDishMatches, groupSameWine, READINESS_RANK, APPROACHING_YEARS,
+  readyCandidates, serializeCandidates, scoreDishMatches, groupSameWine, APPROACHING_YEARS,
 };

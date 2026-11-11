@@ -105,4 +105,4 @@ async function runAiCapAlertCheck(now = new Date()) {
   }
 }
 
-module.exports = { runAiCapAlertCheck, THRESHOLDS };
+module.exports = { runAiCapAlertCheck };

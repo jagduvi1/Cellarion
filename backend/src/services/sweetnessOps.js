@@ -285,7 +285,7 @@ async function ensureSweetnessSeed() {
 module.exports = {
   SCALES, BANDS, scaleForType,
   loadTerms, invalidateSweetnessCache, primeSweetnessCache, cachedTerm, cachedTermName,
-  resolveTerm, resolveLoaded, pickTerm,
-  termOut, termRowOf, labelSweetnessOut, labelSweetnessFields, termNameOf, termNameForWine, wineDisplayName,
-  seedSweetnessTerms, ensureSweetnessSeed,
+  resolveTerm, resolveLoaded,
+  labelSweetnessOut, labelSweetnessFields, termNameForWine, wineDisplayName,
+  ensureSweetnessSeed,
 };

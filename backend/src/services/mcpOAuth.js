@@ -171,8 +171,6 @@ async function revokeOAuthConnectionsForUser(userId) {
 
 module.exports = {
   ACCESS_TOKEN_TTL_SEC,
-  GRANTABLE_SCOPES,
-  SUPPORTED_SCOPES,
   issuer,
   resourceUrl,
   authServerMetadata,

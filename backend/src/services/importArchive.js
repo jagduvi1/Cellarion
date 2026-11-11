@@ -129,8 +129,5 @@ function writeImportArchive({ userId, cellarId, meta, items, outcomeOf, summary 
 
 module.exports = {
   summariseReasons,
-  ARCHIVE_ROW_CAP,
-  IMPORT_ARCHIVE_DAYS,
-  archiveRow,
   writeImportArchive,
 };

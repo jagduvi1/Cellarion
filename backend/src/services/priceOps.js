@@ -315,19 +315,14 @@ async function restoreDeclinedRequest(prev, actorId) {
 }
 
 module.exports = {
-  PRICE_STALE_MS,
   DECLINE_REASON_MIN,
   DECLINE_REASON_MAX,
   pairKey,
   wineLabel,
-  dropSkippedPairs,
-  latestPriceByPair,
   isStalePrice,
-  sortPriceQueue,
   actionablePriceRequests,
   parsePriceVintage,
   normalizeCurrency,
-  notifyPriceRequesters,
   addPriceSnapshot,
   validateDeclineReason,
   declinePriceRequest,

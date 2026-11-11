@@ -101,4 +101,4 @@ async function closePendingForWine(wineId, rejectReason, { wine = null, linkWine
   return result;
 }
 
-module.exports = { notifyProposer, closePendingForWine, FIELD_WORDS };
+module.exports = { notifyProposer, closePendingForWine };

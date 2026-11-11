@@ -118,4 +118,4 @@ function inferGrapeIds(name, appellation, surfaceForms) {
   return ids;
 }
 
-module.exports = { buildSurfaceForms, inferGrapeIds, MIN_FORM_LEN, MAX_INFERRED, APPELLATION_GRAPE };
+module.exports = { buildSurfaceForms, inferGrapeIds, MIN_FORM_LEN };

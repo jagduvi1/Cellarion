@@ -173,4 +173,4 @@ async function applyOtherCategoryAfterAdd({ wine, newWine, userId, req = null, v
   return r.ok ? { status: r.status, category: r.category, ...(r.holders !== undefined ? { holders: r.holders } : {}) } : null;
 }
 
-module.exports = { markNotWineByMember, applyOtherCategoryAfterAdd, holdsBottleOf, NOT_WINE_REASON };
+module.exports = { markNotWineByMember, applyOtherCategoryAfterAdd, holdsBottleOf };

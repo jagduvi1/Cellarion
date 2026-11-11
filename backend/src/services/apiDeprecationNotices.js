@@ -283,8 +283,5 @@ module.exports = {
   runDeprecationReminders,
   deprecatedUseView,
   dueReminder,
-  MARK_THROTTLE_MS,
-  RECENT_USE_MS,
   REMINDER_DAYS,
-  REMINDER_MIN_GAP_MS,
 };

@@ -138,8 +138,5 @@ async function createDemoAccountWithinCeiling() {
 module.exports = {
   createDemoAccount,
   createDemoAccountWithinCeiling,
-  countLiveDemos,
-  loadSnapshot,
   SNAPSHOT_PATH,
-  DEMO_EMAIL_DOMAIN,
 };

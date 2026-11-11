@@ -632,7 +632,6 @@ module.exports = {
   mapBottlesForExport,
   collectImageFiles,
   urlToArchivePath,
-  EXPORT_README,
   EXPORT_MAX,
   IMAGE_EXPORT_COOLDOWN_MS,
   claimImageExportAllowance,

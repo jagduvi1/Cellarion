@@ -740,7 +740,6 @@ async function removeKey(adminId, keyId, { removeValues = false, req } = {}) {
 }
 
 module.exports = {
-  RESERVED_NAMES,
   REVIEW_QUEUE_LIMIT,
   proposeKey,
   listAcceptedKeys,

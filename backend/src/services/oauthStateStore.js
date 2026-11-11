@@ -132,4 +132,4 @@ class CookieStateStore {
   }
 }
 
-module.exports = { CookieStateStore, DEFAULT_COOKIE_NAME, DEFAULT_TTL_MS };
+module.exports = { CookieStateStore, DEFAULT_COOKIE_NAME };

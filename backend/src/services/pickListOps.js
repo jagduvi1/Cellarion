@@ -332,5 +332,5 @@ async function getPickListView(userId, id) {
 
 module.exports = {
   listPickLists, createPickList, renamePickList, addToPickList, removeFromPickList,
-  setPicked, deletePickList, getPickListView, parseBottleIds,
+  setPicked, deletePickList, getPickListView,
 };

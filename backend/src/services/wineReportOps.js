@@ -122,4 +122,4 @@ async function closeWineReport({ reportId, actorId, outcome, response, req, via 
   return { ok: true, report };
 }
 
-module.exports = { closeWineReport, validateResponse, MAX_RESPONSE, OUTCOMES };
+module.exports = { closeWineReport, validateResponse, MAX_RESPONSE };

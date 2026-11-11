@@ -400,5 +400,5 @@ async function detectScanSuspectProducer(values) {
 module.exports = {
   scanCrossFieldChecks, detectCrossFieldForWines, detectCrossFieldForValues,
   detectBlockingProducerIssue, detectScanSuspectProducer,
-  detectCuveeNearMiss, CUVEE_NEAR_MISS, NEAR_MISS_MIN_SIMILARITY,
+  detectCuveeNearMiss, CUVEE_NEAR_MISS,
 };

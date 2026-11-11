@@ -185,5 +185,5 @@ async function deleteEntry(userId, entryId, req, opts = {}) {
 
 module.exports = {
   sanitizeEntry, validatePairingRefs, createEntry, deleteEntry,
-  OCCASIONS, MAX_PAIRINGS, MAX_PEOPLE, MAX_PHOTOS,
+  OCCASIONS, MAX_PAIRINGS, MAX_PEOPLE,
 };

@@ -50,4 +50,4 @@ async function scheduleAccountDeletion(user, req, auditDetail = {}) {
   return scheduledFor;
 }
 
-module.exports = { scheduleAccountDeletion, DELETION_GRACE_MS };
+module.exports = { scheduleAccountDeletion };
