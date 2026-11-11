@@ -16,6 +16,7 @@ import {
   unstackRack, linkRackToTarget, unlinkRack, removeRacksFromRoom, setPlacementField, nudgeRacks,
   linkSelectedRacks, layoutForSave, autoLayoutFor, groupColors,
 } from '../utils/roomLayoutOps';
+import useLayoutHistory from '../utils/useLayoutHistory';
 import WineImage from '../components/WineImage';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { ConsumeModal } from '../components/ConsumeModal';
@@ -54,7 +55,10 @@ export default function CellarRoom() {
 
   const [cellar, setCellar] = useState(null);
   const [racks, setRacks] = useState([]);
-  const [layout, setLayout] = useState(null);
+  // The layout and its undo / redo history (edit mode).
+  const {
+    layout, setLayout, setLayoutWithHistory, undo: doUndo, redo: doRedo, canUndo, canRedo, clearHistory,
+  } = useLayoutHistory();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -135,24 +139,8 @@ export default function CellarRoom() {
     };
   }, [lens, searchActive, roomSearch]);
 
-  // Undo / redo history for layout changes (edit mode)
-  const undoStackRef = useRef([]);
-  const redoStackRef = useRef([]);
-  const MAX_UNDO = 50;
-
   // Ref to the last-saved layout for unsaved-changes detection
   const savedLayoutRef = useRef(null);
-
-  // Wrapper: push current layout onto undo stack before mutating
-  const setLayoutWithHistory = useCallback((updater) => {
-    setLayout(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (next === prev) return prev; // no change — skip history
-      undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), prev];
-      redoStackRef.current = [];
-      return next;
-    });
-  }, []);
 
   // Derived: first selected rack for single-rack operations (backward compat)
   const selectedRackId = selectedRackIds[0] || null;
@@ -254,8 +242,7 @@ export default function CellarRoom() {
         const data = await res.json();
         setLayout(data.layout);
         savedLayoutRef.current = JSON.stringify(data.layout);
-        undoStackRef.current = [];
-        redoStackRef.current = [];
+        clearHistory();
       } else {
         const errData = await res.json().catch(() => ({}));
         setSaveError(messageForResponse(res, errData, undefined, t));
@@ -397,29 +384,8 @@ export default function CellarRoom() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isEditMode, selectedRackIds]);
 
-  // Undo/redo stack operations — shared by the Ctrl+Z/Y handler and the
-  // toolbar buttons so the two entry points can't drift.
-  const doUndo = useCallback(() => {
-    if (undoStackRef.current.length === 0) return;
-    setLayout(prev => {
-      redoStackRef.current = [...redoStackRef.current, prev];
-      const restored = undoStackRef.current[undoStackRef.current.length - 1];
-      undoStackRef.current = undoStackRef.current.slice(0, -1);
-      return restored;
-    });
-  }, []);
-
-  const doRedo = useCallback(() => {
-    if (redoStackRef.current.length === 0) return;
-    setLayout(prev => {
-      undoStackRef.current = [...undoStackRef.current, prev];
-      const restored = redoStackRef.current[redoStackRef.current.length - 1];
-      redoStackRef.current = redoStackRef.current.slice(0, -1);
-      return restored;
-    });
-  }, []);
-
-  // Undo (Ctrl+Z) / Redo (Ctrl+Y or Ctrl+Shift+Z)
+  // Undo (Ctrl+Z) / Redo (Ctrl+Y or Ctrl+Shift+Z): the same two functions the
+  // toolbar buttons call.
   useEffect(() => {
     const handleUndoRedo = (e) => {
       if (!isEditMode) return;
@@ -828,7 +794,7 @@ export default function CellarRoom() {
             <button
               className="btn btn-secondary btn-small"
               onClick={doUndo}
-              disabled={undoStackRef.current.length === 0}
+              disabled={!canUndo}
               title={t('room.undo', 'Undo (Ctrl+Z)')}
             >
               {t('room.undo', 'Undo')}
@@ -836,7 +802,7 @@ export default function CellarRoom() {
             <button
               className="btn btn-secondary btn-small"
               onClick={doRedo}
-              disabled={redoStackRef.current.length === 0}
+              disabled={!canRedo}
               title={t('room.redo', 'Redo (Ctrl+Y)')}
             >
               {t('room.redo', 'Redo')}
