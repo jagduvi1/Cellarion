@@ -54,8 +54,8 @@ export default function BottlePhotoSection({
       {/* The registry learns barcodes only from bottles added with one, so
           ask — once, quietly, at the one step every add path reaches. Below
           the fields and the photo, next to the other way to help: a
-          newcomer's first job here is the vintage (newcomer walkthrough
-          2026-10-15). The thanks lands where the scan was asked for. */}
+          newcomer's first job here is the vintage. The thanks lands where
+          the scan was asked for. */}
       {!foundByBarcode && (
         <div className="barcode-ask">
           {barcode ? (

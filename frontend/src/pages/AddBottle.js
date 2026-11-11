@@ -14,9 +14,10 @@ import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import SimilarWinesModal from '../components/SimilarWinesModal';
 import AddBottleCustomFields, { buildPersonalDataPayload } from '../components/bottle/AddBottleCustomFields';
-import { WINE_TYPES } from '../config/wineTypes';
-import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './AddBottle.css';
+import ScanWineCard from '../components/addBottle/ScanWineCard';
+import ManualWineForm from '../components/addBottle/ManualWineForm';
 import BottleCoreFields from '../components/addBottle/BottleCoreFields';
 import BottlePhotoSection from '../components/addBottle/BottlePhotoSection';
 import LabelCameraModal from '../components/addBottle/LabelCameraModal';
@@ -26,7 +27,7 @@ import { useBackToClose } from '../utils/useBackToClose';
 import { bottleNoticeName } from '../components/BottleUndoNotice';
 import { handOverBack } from '../hooks/useHandedOverState';
 import { afterPopupEntryGone, isOnPopupEntry } from '../utils/useBackToClose';
-import { formatVintage, parseVintageInput } from '../utils/vintage';
+import { parseVintageInput } from '../utils/vintage';
 
 // How this device last started adding a bottle: 'camera' (the label photo, the
 // default) or 'search' (typing the name). Per device on purpose — the same
@@ -1304,193 +1305,23 @@ function AddBottle() {
           )}
 
           {/* ── Scan result: unified wine card ──────────────────────────── */}
-          {scanResult && !showManualForm && (
-            <div className="scan-wine-card">
-              <div className={`scan-wine-image-wrap${scanMatchedWine?.image ? ' scan-wine-image-wrap--compare' : ''}`}>
-                <figure className="scan-wine-shot">
-                  {/* Wrapped so both shots have an identically sized slot: a
-                      failed image is hidden by WineImage's onError, and without
-                      a fixed box its column would collapse and knock the two
-                      captions off one baseline. */}
-                  <div className="scan-wine-shot-img-wrap">
-                    {labelImage
-                      ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
-                      : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'unknown'}`} />
-                    }
-                  </div>
-                  {scanMatchedWine?.image && (
-                    <figcaption className="scan-wine-shot-caption">{t('addBottle.scanYourPhoto')}</figcaption>
-                  )}
-                </figure>
-                {scanMatchedWine?.image && (
-                  <figure className="scan-wine-shot">
-                    <WineImage
-                      image={scanMatchedWine.image}
-                      alt={scanMatchedWine.name}
-                      className="scan-wine-label-img"
-                      wrapClass="scan-wine-shot-img-wrap"
-                      credit={scanMatchedWine.imageCredit}
-                      creditClass="wine-row-credit"
-                      wineType={swatchType(scanMatchedWine)}
-                      placeholder="wine-row-placeholder scan-wine-placeholder"
-                    />
-                    <figcaption className="scan-wine-shot-caption">{t('addBottle.scanRegistryPhoto')}</figcaption>
-                  </figure>
-                )}
-              </div>
-              <div className="scan-wine-body">
-                {/* NAMES the matched row (issue #1134). It used to read only
-                    "Already in the registry" while the card showed the scanned
-                    name — so a wine about to be filed under its neighbour in
-                    the same range looked perfect. The registry-photo compare
-                    beside it is the other half of the answer, and small
-                    estates have no photo, which left this badge as the only
-                    signal there was a match at all. */}
-                {scanMatchedWine && (
-                  <div className="ai-result-badge scan-wine-badge">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22"/><path d="M8 6a4 4 0 0 1 8 0"/><path d="M17 12H7"/></svg>
-                    {t('addBottle.scanRegistryMatch', {
-                      name: scanMatchedWine.name,
-                      percent: Math.round((scanResult.match?.confidence || 0) * 100),
-                    })}
-                  </div>
-                )}
-                <h2 className="scan-wine-name">{scanResult.extracted.name}</h2>
-                <p className="scan-wine-producer">{scanResult.extracted.producer}</p>
-                {scanResult.extracted.confidence != null && (
-                  <div style={{ marginBottom: '0.5rem' }}>
-                    <span className="scan-confidence">
-                      {Math.round(scanResult.extracted.confidence * 100)}% confident
-                    </span>
-                  </div>
-                )}
-                <div className="wine-meta" style={{ marginBottom: '0.5rem' }}>
-                  {scanResult.extracted.country && <span>{scanResult.extracted.country}</span>}
-                  {scanResult.extracted.region && <span>• {scanResult.extracted.region}</span>}
-                  {scanResult.extracted.appellation && <span>• {scanResult.extracted.appellation}</span>}
-                  <span className={`wine-type-pill ${scanResult.extracted.type || 'unknown'}`}>
-                    {scanResult.extracted.type || t('common.unknown')}
-                  </span>
-                </div>
-                {scanResult.extracted.grapes?.length > 0 && (
-                  <p className="wine-grapes">{scanResult.extracted.grapes.join(', ')}</p>
-                )}
-                {scanResult.extracted.vintage && (
-                  <p className="scan-vintage-note">
-                    {t('addBottle.scanVintageDetected', { year: formatVintage(scanResult.extracted.vintage, t) })}
-                  </p>
-                )}
-                <div className="scan-wine-actions">
-                  <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={handleConfirmScan}
-                    disabled={findingWine}
-                  >
-                    {findingWine ? t('addBottle.scanSaving') : t('addBottle.scanConfirmWine')}
-                  </button>
-                  <button type="button" className="btn-not-right" onClick={handleNotRightWine}>
-                    {t('addBottle.scanNotRight')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <ScanWineCard
+            scanResult={scanResult} showManualForm={showManualForm}
+            scanMatchedWine={scanMatchedWine} labelImage={labelImage} t={t}
+            handleConfirmScan={handleConfirmScan} findingWine={findingWine}
+            handleNotRightWine={handleNotRightWine}
+          />
 
           {/* ── Scan result: manual edit form (user said "not the right wine") ── */}
-          {/* Manual edit form. No longer gated on scanResult: the AI-suggestion
+          {/* Manual edit form. Not gated on scanResult: the AI-suggestion
               card reuses it for "Not the right wine" and for supplying a
               country the model didn't give. */}
-          {showManualForm && pendingWineData && (
-            <div className="scan-result-panel">
-              {labelImage && (
-                <div className="scan-manual-image-wrap">
-                  <img src={labelImage} alt="" className="scan-manual-label-img" />
-                </div>
-              )}
-              <div className="grid-2">
-                <div className="form-group">
-                  <label>{t('addBottle.scanWineName')} *</label>
-                  <input type="text" value={pendingWineData.name}
-                    onChange={e => setPendingWineData(p => ({ ...p, name: e.target.value }))} required />
-                </div>
-                <div className="form-group">
-                  {/* No `*` and no `required`: an unreadable producer must not
-                      block the add. The bottle saves; the wine goes to the
-                      sommelier queue and comes back completed. */}
-                  <label>{t('addBottle.scanProducer')}</label>
-                  <input type="text" value={pendingWineData.producer}
-                    placeholder={t('addBottle.scanProducerOptionalPlaceholder')}
-                    onChange={e => setPendingWineData(p => ({ ...p, producer: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label>{t('addBottle.scanCountry')} *</label>
-                  <input type="text" value={pendingWineData.country}
-                    onChange={e => setPendingWineData(p => ({ ...p, country: e.target.value }))} required />
-                </div>
-                <div className="form-group">
-                  <label>{t('addBottle.scanRegion')}</label>
-                  <input type="text" value={pendingWineData.region}
-                    onChange={e => setPendingWineData(p => ({ ...p, region: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label>{t('addBottle.scanAppellation')}</label>
-                  <input type="text" value={pendingWineData.appellation}
-                    onChange={e => setPendingWineData(p => ({ ...p, appellation: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label>{t('addBottle.scanType')}</label>
-                  <select value={pendingWineData.category === 'other' ? 'other' : pendingWineData.type}
-                    onChange={e => setPendingWineData(p => ({
-                      ...p,
-                      // "Other" is a category, not a wine type: the drink is
-                      // not wine, so it carries no type and never a colour.
-                      type: e.target.value === 'other' ? '' : e.target.value,
-                      category: e.target.value === 'other' ? 'other' : undefined,
-                      // A colour belongs to sparkling/dessert/fortified only.
-                      ...(isStyleType(e.target.value) ? {} : { colour: '' }),
-                    }))}>
-                    {/* Unknown is a real answer: the scan and the AI return
-                        null rather than defaulting to red, so
-                        the form must be able to carry that through instead of
-                        making the user pick a colour to get past it. */}
-                    <option value="">{t('common.unknown')}</option>
-                    {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
-                    <option value="other">{t('addBottle.typeOther', 'Other (not wine)')}</option>
-                  </select>
-                  {pendingWineData.category === 'other' && (
-                    <small className="form-hint">{t('addBottle.typeOtherHint', 'Cider, beer, spirits or anything else that is not wine. It stays in your cellar and never enters the shared wine registry.')}</small>
-                  )}
-                </div>
-                {/* Only where the type does not already say the colour. Left
-                    "not stated", a rosé name ("Brut Rosé") still fills it in. */}
-                {isStyleType(pendingWineData.type) && (
-                  <div className="form-group">
-                    <label htmlFor="new-wine-colour">{t('wineColour.label', 'Colour')}</label>
-                    <select id="new-wine-colour" value={pendingWineData.colour || ''}
-                      onChange={e => setPendingWineData(p => ({ ...p, colour: e.target.value }))}>
-                      <option value="">{t('wineColour.notStated', 'Not stated')}</option>
-                      {WINE_COLOURS.map(c => <option key={c} value={c}>{colourLabel(c, t)}</option>)}
-                    </select>
-                  </div>
-                )}
-                <div className="form-group form-group-full">
-                  <label>{t('addBottle.scanGrapes')}</label>
-                  <input type="text" value={pendingWineData.grapes}
-                    onChange={e => setPendingWineData(p => ({ ...p, grapes: e.target.value }))}
-                    placeholder={t('addBottle.scanGrapesPlaceholder')} />
-                </div>
-              </div>
-              <div className="scan-result-actions">
-                <button type="button" className="btn btn-success" onClick={handleConfirmManualWine} disabled={findingWine}>
-                  {findingWine ? t('addBottle.scanSaving') : t('addBottle.scanConfirmWine')}
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={handleScanReset}>
-                  {t('addBottle.scanSearchManually')}
-                </button>
-              </div>
-            </div>
-          )}
+          <ManualWineForm
+            showManualForm={showManualForm} pendingWineData={pendingWineData}
+            labelImage={labelImage} t={t} setPendingWineData={setPendingWineData}
+            handleConfirmManualWine={handleConfirmManualWine} findingWine={findingWine}
+            handleScanReset={handleScanReset}
+          />
 
           {/* ── Camera-first prompt ──────────────────────────────────────── */}
           {!scanResult && !showTextSearch && !showManualForm && !labelCam.open && (
