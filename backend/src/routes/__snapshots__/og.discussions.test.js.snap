@@ -22,7 +22,7 @@ exports[`GET /api/og/community/discussions lists the discussions with category, 
   <header><h1>Wine Discussions</h1></header>
   <main>
     <p>Public wine discussion forum: tasting notes, food pairing, cellar tips, and recommendations from Cellarion users.</p>
-    <ul><li><a href="{SITE}/community/discussions/what-to-pour-with-roast-lamb"><strong>What to pour with roast lamb</strong></a> — Food Pairing · 2 replies<br/><small>We are roasting a leg of lamb on Sunday.Rioja or a northern Rhône?</small></li><li><a href="{SITE}/community/discussions/aaaaaaaaaaaaaaaaaaaaaaaa"><strong>A single reply</strong></a> — Cellar Tips · 1 reply<br/><small>Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long t…</small></li><li><a href="{SITE}/community/discussions/an-unknown-category"><strong>An unknown category</strong></a> — off-topic · 0 replies<br/><small></small></li></ul>
+    <ul><li><a href="{SITE}/community/discussions/what-to-pour-with-roast-lamb"><strong>What to pour with roast lamb</strong></a> — Food Pairing · 2 replies<br/><small>We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?</small></li><li><a href="{SITE}/community/discussions/aaaaaaaaaaaaaaaaaaaaaaaa"><strong>A single reply</strong></a> — Cellar Tips · 1 reply<br/><small>Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long text. Long t…</small></li><li><a href="{SITE}/community/discussions/an-unknown-category"><strong>An unknown category</strong></a> — off-topic · 0 replies<br/><small></small></li></ul>
   </main>
   <footer>
     <p>Join the conversation on <a href="{SITE}">Cellarion</a> — track your cellar, get drink-window recommendations, and share notes with other wine drinkers.</p>
@@ -37,10 +37,10 @@ exports[`GET /api/og/community/discussions/:idOrSlug renders the thread: the pos
 <head>
   <meta charset="utf-8" />
   <title>What to pour with roast lamb — Cellarion</title>
-  <meta name="description" content="We are roasting a leg of lamb on Sunday.Rioja or a northern Rhône?" />
+  <meta name="description" content="We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="What to pour with roast lamb" />
-  <meta property="og:description" content="We are roasting a leg of lamb on Sunday.Rioja or a northern Rhône?" />
+  <meta property="og:description" content="We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?" />
   <meta property="og:url" content="{SITE}/community/discussions/what-to-pour-with-roast-lamb" />
   <meta property="og:site_name" content="Cellarion" />
   <meta property="og:image" content="{SITE}/cellarion-logo.jpg" />
@@ -48,9 +48,9 @@ exports[`GET /api/og/community/discussions/:idOrSlug renders the thread: the pos
   <meta property="article:modified_time" content="2026-02-03T18:45:00.000Z" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="What to pour with roast lamb" />
-  <meta name="twitter:description" content="We are roasting a leg of lamb on Sunday.Rioja or a northern Rhône?" />
+  <meta name="twitter:description" content="We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?" />
   <link rel="canonical" href="{SITE}/community/discussions/what-to-pour-with-roast-lamb" />
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"DiscussionForumPosting","headline":"What to pour with roast lamb","articleBody":"We are roasting a leg of lamb on Sunday.Rioja or a northern Rhône?","datePublished":"2026-02-01T09:00:00.000Z","dateModified":"2026-02-03T18:45:00.000Z","url":"{SITE}/community/discussions/what-to-pour-with-roast-lamb","mainEntityOfPage":{"@type":"WebPage","@id":"{SITE}/community/discussions/what-to-pour-with-roast-lamb"},"author":{"@type":"Person","name":"Lamb Fan"},"publisher":{"@type":"Organization","name":"Cellarion","url":"{SITE}","logo":{"@type":"ImageObject","url":"{SITE}/cellarion-logo.jpg"}},"interactionStatistic":{"@type":"InteractionCounter","interactionType":"https://schema.org/CommentAction","userInteractionCount":2},"comment":[{"@type":"Comment","text":"Rioja Reserva, every time.","datePublished":"2026-02-02T07:10:00.000Z","author":{"@type":"Person","name":"tempranillo"}},{"@type":"Comment","text":"Try a Cornas.","author":{"@type":"Person","name":"Anonymous"}}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"DiscussionForumPosting","headline":"What to pour with roast lamb","articleBody":"We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?","datePublished":"2026-02-01T09:00:00.000Z","dateModified":"2026-02-03T18:45:00.000Z","url":"{SITE}/community/discussions/what-to-pour-with-roast-lamb","mainEntityOfPage":{"@type":"WebPage","@id":"{SITE}/community/discussions/what-to-pour-with-roast-lamb"},"author":{"@type":"Person","name":"Lamb Fan"},"publisher":{"@type":"Organization","name":"Cellarion","url":"{SITE}","logo":{"@type":"ImageObject","url":"{SITE}/cellarion-logo.jpg"}},"interactionStatistic":{"@type":"InteractionCounter","interactionType":"https://schema.org/CommentAction","userInteractionCount":2},"comment":[{"@type":"Comment","text":"Rioja Reserva, every time.","datePublished":"2026-02-02T07:10:00.000Z","author":{"@type":"Person","name":"tempranillo"}},{"@type":"Comment","text":"Try a Cornas.","author":{"@type":"Person","name":"Anonymous"}}]}</script>
 </head>
 <body>
   <nav><a href="{SITE}/community/discussions">Discussions</a> / Food Pairing</nav>

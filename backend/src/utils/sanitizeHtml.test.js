@@ -1,4 +1,6 @@
-const { sanitizeForumHtml, visibleTextLength, sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml, ALLOWED_TAGS } = require('./sanitizeHtml');
+const {
+  sanitizeForumHtml, visibleTextLength, visibleText, sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml, ALLOWED_TAGS,
+} = require('./sanitizeHtml');
 
 describe('sanitizeForumHtml', () => {
   test('returns empty string for non-string input', () => {
@@ -124,6 +126,37 @@ describe('visibleTextLength', () => {
     expect(visibleTextLength('')).toBe(0);
     expect(visibleTextLength('<p></p>')).toBe(0);
     expect(visibleTextLength('<p>   </p>')).toBe(0);
+  });
+});
+
+describe('visibleText', () => {
+  test('returns an empty string for non-string input', () => {
+    expect(visibleText(null)).toBe('');
+    expect(visibleText(undefined)).toBe('');
+    expect(visibleText(42)).toBe('');
+  });
+
+  test('a paragraph break is a space: the last word of one does not join the first of the next', () => {
+    expect(visibleText('<p>We open it on Sunday</p><p>Rioja or Rhône?</p>')).toBe('We open it on Sunday Rioja or Rhône?');
+  });
+
+  test('line breaks, list items and quotes separate words too', () => {
+    expect(visibleText('Barolo<br>Barbaresco')).toBe('Barolo Barbaresco');
+    expect(visibleText('<ul><li>Barolo</li><li>Barbaresco</li></ul>')).toBe('Barolo Barbaresco');
+    expect(visibleText('<blockquote>Decant it</blockquote><p>Agreed</p>')).toBe('Decant it Agreed');
+  });
+
+  test('an inline tag does not split a word', () => {
+    expect(visibleText('<p><strong>Ba</strong>rolo, <em>please</em>.</p>')).toBe('Barolo, please.');
+    expect(visibleText('<p>See <a href="https://example.com">the list</a>.</p>')).toBe('See the list.');
+  });
+
+  test('runs of whitespace and of boundaries collapse to one space', () => {
+    expect(visibleText('<p>one</p>\n\n<p></p><br><br><p>  two  </p>')).toBe('one two');
+  });
+
+  test('entities stay as the body stores them', () => {
+    expect(visibleText('<p>Fish &amp; chips</p>')).toBe('Fish &amp; chips');
   });
 });
 

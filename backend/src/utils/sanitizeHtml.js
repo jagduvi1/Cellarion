@@ -1,4 +1,5 @@
 const sanitize = require('sanitize-html');
+const { stripHtml } = require('./sanitize');
 
 // Single source of truth for the allowlist. The frontend's render-time
 // sanitizer (DOMPurify) uses the same set of tags + attributes, so what the
@@ -57,6 +58,23 @@ function visibleTextLength(html) {
   const withSpaces = html.replace(BLOCK_BOUNDARY_RE, ' ');
   const text = sanitize(withSpaces, { allowedTags: [], allowedAttributes: {} });
   return text.replace(/\s+/g, ' ').trim().length;
+}
+
+/**
+ * The plain text of a forum body, as its words stand for a reader: a block or
+ * line boundary becomes a space, so `<p>one</p><p>two</p>` reads "one two" and
+ * not "onetwo". Inline tags are dropped without one ("<strong>Ba</strong>rolo"
+ * stays "Barolo"), and runs of whitespace collapse.
+ *
+ * For text that is shown or searched: the crawler pages' previews, meta
+ * description and JSON-LD (routes/og/discussions.js), the forum search index
+ * (services/search.js), and the quote and notification previews
+ * (routes/discussions.js). Entities stay as the body stores them; each caller
+ * escapes or renders the text the way it always has.
+ */
+function visibleText(html) {
+  if (typeof html !== 'string') return '';
+  return stripHtml(html.replace(BLOCK_BOUNDARY_RE, ' ')).replace(/\s+/g, ' ').trim();
 }
 
 // ── Blog content ─────────────────────────────────────────────────────────────
@@ -198,6 +216,7 @@ function extractHowToFromHtml(html) {
 module.exports = {
   sanitizeForumHtml,
   visibleTextLength,
+  visibleText,
   sanitizeBlogHtml,
   extractFaqFromHtml,
   extractHowToFromHtml,

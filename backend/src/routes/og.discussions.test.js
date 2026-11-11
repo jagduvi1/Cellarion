@@ -100,6 +100,13 @@ describe('GET /api/og/community/discussions', () => {
     expect(res.html).not.toContain('onerror');
     expect(res.html).toContain('<small>Smells of wet cardboard.</small>');
   });
+
+  test('the paragraphs of a post stay apart in its preview', async () => {
+    mockDiscussions = [discussion()];
+    const res = await pages.get('/community/discussions');
+
+    expect(res.html).toContain('<small>We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?</small>');
+  });
 });
 
 describe('GET /api/og/community/discussions/:idOrSlug', () => {
@@ -138,8 +145,18 @@ describe('GET /api/og/community/discussions/:idOrSlug', () => {
     expect(res.headers.get('cache-control')).toBe('public, max-age=600');
     expect(DiscussionReply.find).toHaveBeenCalledWith({ discussion: ID, isDeleted: { $ne: true } });
     expect(canonical(res.html)).toBe(`${SITE}/community/discussions/what-to-pour-with-roast-lamb`);
-    expect(metaDescription(res.html)).toBe('We are roasting a leg of lamb on Sunday.Rioja or a northern Rhône?');
     expect(forSnapshot(res.html)).toMatchSnapshot();
+  });
+
+  test('the paragraphs of a post and of a reply stay apart in the description and the JSON-LD', async () => {
+    mockDiscussion = discussion();
+    mockReplies = [{ body: '<ul><li>Barolo</li><li>Barbaresco</li></ul>', author: { username: 'nebbiolo' }, createdAt: null }];
+    const res = await pages.get('/community/discussions/what-to-pour-with-roast-lamb');
+    const posting = jsonLd(res.html);
+
+    expect(metaDescription(res.html)).toBe('We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?');
+    expect(posting.articleBody).toBe('We are roasting a leg of lamb on Sunday. Rioja or a northern Rhône?');
+    expect(posting.comment[0].text).toBe('Barolo Barbaresco');
   });
 
   test('a thread with no author, body, dates, wine or replies falls back to Anonymous and its title', async () => {
