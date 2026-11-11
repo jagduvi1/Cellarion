@@ -472,6 +472,7 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
 /** Build (but don't save) a Bottle from an export item — mirrors routes/import.js. */
 function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinitionId, pendingWineRequestId, defaultCurrency }) {
   const priceSetAt = (item.price != null && item.price !== '') ? new Date() : undefined;
+  const occasion = stripHtml(item.occasion);
 
   // Personal drink window (drinkFrom/drinkTo years) — sanitized exactly like
   // routes/import.js: invalid values are silently dropped so a bad imported year
@@ -511,7 +512,9 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     barcode: normalizeBarcode(item.barcode) || undefined,
     location: stripHtml(item.location),
     notes: stripHtml(item.notes),
-    occasion: stripHtml(item.occasion),
+    // Cut to what a bottle keeps, as the CSV import does: a longer one
+    // would fail the bottle's validation and lose the whole row.
+    occasion: typeof occasion === 'string' ? occasion.slice(0, 500) : occasion,
     drinkFrom,
     drinkTo,
     reservedFor,
