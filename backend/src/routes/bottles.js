@@ -647,8 +647,10 @@ router.put('/:id/consumed-rating', requireBottleAccess('editor'), async (req, re
     }
 
     if (note !== undefined) {
-      if (note.length > 1000) return res.status(400).json({ error: 'Note is too long (max 1000 characters)' });
-      bottle.consumedNote = stripHtml(note);
+      // null clears the note; anything else has to be text.
+      if (note !== null && typeof note !== 'string') return res.status(400).json({ error: 'Note must be text' });
+      if (note !== null && note.length > 1000) return res.status(400).json({ error: 'Note is too long (max 1000 characters)' });
+      bottle.consumedNote = note === null ? '' : stripHtml(note);
     }
 
     await bottle.save();
@@ -843,6 +845,10 @@ router.delete('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
     logAudit(req, 'bottle.pour_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
     res.json({ bottle });
   } catch (error) {
+    // Two undos at once: the second save finds the pours changed under it.
+    if (error.name === 'VersionError') {
+      return res.status(409).json({ error: 'This bottle was modified by another request. Please refresh and try again.' });
+    }
     console.error('Undo pour error:', error);
     res.status(500).json({ error: 'Failed to undo pour' });
   }
