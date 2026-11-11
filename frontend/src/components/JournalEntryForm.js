@@ -20,7 +20,7 @@ const withKey = (p) => ({ ...p, _key: p._key || p._id || `p${++pairingSeq}` });
 
 export default function JournalEntryForm({ existing, onClose, onSaved, prefilledBottle }) {
   const { t } = useTranslation();
-  const { apiFetch, user } = useAuth();
+  const { apiFetch } = useAuth();
   const isEdit = !!existing;
 
   // Default to the LOCAL date — toISOString() is UTC and puts evening

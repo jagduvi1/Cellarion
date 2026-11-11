@@ -3,7 +3,7 @@ import { OrbitControls } from '@react-three/drei';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import RackMesh from './RackMesh';
-import { getRackWorldDims, getRackHeight, clampToRoom, CELL_H, PANEL_THICK } from '../../utils/roomConstants';
+import { getRackWorldDims, getRackHeight, clampToRoom } from '../../utils/roomConstants';
 
 // ── Camera auto-focus helper (animates camera to a target position) ──
 function CameraFocus({ target, controlsRef }) {

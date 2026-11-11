@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
-import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useBackHere } from '../utils/useBackHere';
 import { useBackToClose } from '../utils/useBackToClose';
 import { useTranslation } from 'react-i18next';

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
@@ -31,8 +31,7 @@ import './Settings.css';
 
 function Settings() {
   const { t, i18n } = useTranslation();
-  const { user, apiFetch, updatePreferences, setUser, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user, apiFetch, updatePreferences, setUser } = useAuth();
   const appVersion = useVersion();
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
   // Matched to a locale this build actually has: a stored regional tag (pt-BR)
@@ -105,7 +104,6 @@ function Settings() {
   const pushDenied = getPushPermissionState() === 'denied';
 
   // Per-device push state
-  const [currentEndpoint, setCurrentEndpoint] = useState(null);
   const [deviceStatus, setDeviceStatus] = useState({ totalDevices: 0, thisDeviceRegistered: false });
   const [deviceLoading, setDeviceLoading] = useState(false);
   const [testSending, setTestSending] = useState(false);
@@ -123,7 +121,6 @@ function Settings() {
   // Fetch current device push status
   const refreshDeviceStatus = useCallback(async () => {
     const ep = await getCurrentEndpoint();
-    setCurrentEndpoint(ep);
     const status = await getDeviceStatus(apiFetch, ep);
     setDeviceStatus(status);
   }, [apiFetch]);
