@@ -221,6 +221,7 @@ function Settings() {
   // Deletion scheduled state
   const isDeletionScheduled = !!user?.deletionScheduledFor;
   const [cancelling, setCancelling] = useState(false);
+  const [cancelDeletionError, setCancelDeletionError] = useState(null);
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -345,15 +346,20 @@ function Settings() {
     }
   };
 
+  // A cancel that did not go through must say so: the notice above keeps
+  // counting down to the day the account is erased.
   const handleCancelDeletion = async () => {
     setCancelling(true);
+    setCancelDeletionError(null);
     try {
       const res = await apiFetch('/api/users/me/cancel-deletion', { method: 'POST' });
-      if (res.ok) {
-        setUser({ ...user, deletionScheduledFor: null, deletionRequestedAt: null });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw httpError(res, data, t('settings.danger.cancelFailed'));
       }
-    } catch {
-      // silent fail
+      setUser({ ...user, deletionScheduledFor: null, deletionRequestedAt: null });
+    } catch (err) {
+      setCancelDeletionError(friendlyError(err, t));
     } finally {
       setCancelling(false);
     }
@@ -953,6 +959,7 @@ function Settings() {
             >
               {cancelling ? t('settings.danger.cancelling', 'Cancelling...') : t('settings.danger.cancelDeletion', 'Cancel deletion')}
             </button>
+            {cancelDeletionError && <div className="alert alert-error" role="alert" style={{ marginTop: '0.75rem' }}>{cancelDeletionError}</div>}
           </div>
         ) : (
           <>

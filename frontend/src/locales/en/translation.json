@@ -684,6 +684,7 @@
       "scheduledFor": "Account deletion is scheduled for <strong>{{date}}</strong>. All your data will be permanently removed after this date.",
       "cancelling": "Cancelling...",
       "cancelDeletion": "Cancel deletion",
+      "cancelFailed": "The deletion could not be cancelled. Please try again.",
       "intro": "Permanently delete your account and all associated data — cellars, bottles, reviews, and settings. After requesting deletion, you have 7 days to change your mind before the deletion is permanent.",
       "deleteBtn": "Delete my account",
       "typeToConfirm": "Type <strong>DELETE</strong> to confirm:",
