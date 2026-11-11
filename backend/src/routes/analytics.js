@@ -20,10 +20,14 @@ const { runQuery, QueryError } = require('../services/analytics/queryEngine');
 const SavedDashboard = require('../models/SavedDashboard');
 const SavedView = require('../models/SavedView');
 const { logAudit } = require('../services/audit');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 
 router.use(requireAuth);
+// Every `:id` here names a saved dashboard or view. One that cannot be an id
+// is refused here, before a query turns it into a cast failure.
+router.param('id', (req, res, next, id) => (isValidId(id) ? next() : res.status(400).json({ error: 'Invalid ID' })));
 
 // ── Dashboards (#987, multi since the saved-views slice) ───────────────────
 // Several NAMED dashboards per user; widgets' stored queries are DATA — the
