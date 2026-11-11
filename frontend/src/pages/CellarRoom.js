@@ -33,6 +33,7 @@ import { backLabel } from '../utils/backLabel';
 import { suspendBackToClose, pageEntryState } from '../utils/useBackToClose';
 import './CellarRoom.css';
 import { formatVintage } from '../utils/vintage';
+import { canEditCellar } from '../utils/cellarRole';
 
 // True when a keyboard event originates from an editable field, so global
 // shortcuts (arrow-move, Ctrl+Z/Y) don't hijack typing in the room's inputs.
@@ -503,7 +504,7 @@ export default function CellarRoom() {
   const groupColorMap = useMemo(() => groupColors(layout?.rackPlacements), [layout?.rackPlacements]);
 
   const selectedRack = racks.find(r => r._id === selectedRackId);
-  const canEdit = cellar?.userRole !== 'viewer';
+  const canEdit = canEditCellar(cellar);
   const dims = layout?.roomDimensions || DEFAULT_DIMENSIONS;
   const placements = layout?.rackPlacements || [];
 

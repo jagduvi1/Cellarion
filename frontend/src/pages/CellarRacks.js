@@ -39,6 +39,7 @@ import BetaBadge from '../components/BetaBadge';
 import { useFeature } from '../utils/featureFlags';
 import { groupRacks, groupNames } from '../utils/rackGroups';
 import { friendlyError, messageForResponse } from '../utils/friendlyError';
+import { canEditCellar } from '../utils/cellarRole';
 import ActionNotice from '../components/ActionNotice';
 import './CellarRacks.css';
 
@@ -761,7 +762,7 @@ function CellarRacks() {
   if (error) return <div className="alert alert-error">{error}</div>;
 
   const rack = racks.find(r => r._id === selectedRackId) || racks[0];
-  const canEdit = cellar?.userRole !== 'viewer';
+  const canEdit = canEditCellar(cellar);
   // Shelves and wine cabinets drawn in 3D hide the lens toolbar (and the rack
   // header with its pencil lives only in the Compact view).
   const shelf3d = !!rack && (rack.type === 'shelf' || rack.type === 'cabinet') && !rack.isModular && viewMode === '3d';
