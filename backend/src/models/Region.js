@@ -99,7 +99,7 @@ const regionSchema = new mongoose.Schema({
   // has — which is the honest state for the great majority, and is not by
   // itself a problem: a region carrying 36 wines has been proven real by use
   // in a way an approval click adds nothing to. See needsHumanReview in
-  // routes/admin/taxonomy.js for what actually earns a curator's attention.
+  // services/taxonomyUsage.js for what actually earns a curator's attention.
   reviewedAt: { type: Date, default: null },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   // Public-facing URL slug and curator description for /regions/:slug pages.
