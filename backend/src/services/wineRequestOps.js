@@ -13,7 +13,15 @@
  * the hourly sync holds a loaded request for minutes while it copies wines,
  * and an admin deciding the same request meanwhile must not be overwritten.
  * The one that comes second gets null back and changes nothing more.
+ *
+ * One decision works on a request at a time. A decision first takes the
+ * request (claimRequest), and only the holder goes on: an admin's resolve
+ * creates the wine and its pictures BEFORE the status write, so two resolves
+ * that both passed the "is it pending?" look each created one. The admin
+ * routes take the request before they do anything; the bridge sync lets the
+ * two functions here take it.
  */
+const WineRequest = require('../models/WineRequest');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const { bumpDataVersion } = require('./dataVersion');
@@ -21,9 +29,53 @@ const { createNotification } = require('./notifications');
 const { stripHtml } = require('../utils/sanitize');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 
+// How long a claim holds. A resolve that creates a wine also cuts out and
+// stores its pictures; past this the claim is taken to be an abandoned one
+// (the process ended mid-decision) and the request can be decided again.
+const CLAIM_MS = 5 * 60 * 1000;
+
+/**
+ * Take a pending request for one decision. Callers: the admin resolve and
+ * reject routes (routes/admin/wineRequests.js), and the two functions below
+ * for a caller that has not taken it (the Registry Bridge request sync).
+ * Returns { request } — the request as stored, now held by the caller — or
+ * { refused: 'decided' } when it is no longer pending (or not there), or
+ * { refused: 'busy' } when another decision holds it.
+ */
+async function claimRequest(requestId) {
+  const now = new Date();
+  const request = await WineRequest.findOneAndUpdate(
+    { _id: requestId, status: 'pending', $or: [{ claimedAt: null }, { claimedAt: { $lt: new Date(now.getTime() - CLAIM_MS) } }] },
+    { $set: { claimedAt: now } },
+    { new: true }
+  );
+  if (request) return { request };
+  const pending = await WineRequest.exists({ _id: requestId, status: 'pending' });
+  return { refused: pending ? 'busy' : 'decided' };
+}
+
+/**
+ * Give a request back undecided: the decision was refused or failed. Only a
+ * pending request has a claim to clear. Callers: the admin routes.
+ */
+async function releaseRequestClaim(requestId) {
+  await WineRequest.updateOne({ _id: requestId, status: 'pending' }, { $set: { claimedAt: null } });
+}
+
+// True when the caller may go on with its decision: it already holds the
+// request, or takes it here.
+async function heldForDecision(wineRequest, holdsClaim) {
+  if (holdsClaim) return true;
+  const claim = await claimRequest(wineRequest._id);
+  return !claim.refused;
+}
+
 // Save only if the stored request is still pending (Mongoose adds `$where`
-// to the save's filter). False when someone else decided it first.
+// to the save's filter). False when someone else decided it first. The
+// decision is stored, so the claim goes with the same write.
 async function savePending(wineRequest) {
+  wineRequest.claimedAt = null;
+  wineRequest.markModified('claimedAt');
   wineRequest.$where = { status: 'pending' };
   try {
     await wineRequest.save();
@@ -60,9 +112,12 @@ function answeredByInstall(wineRequest, linkedWine = null) {
  * Mark the request resolved against `linkedWine`, then move the bottles that
  * waited on it onto the wine, stamp their photos with it, queue their
  * vintages for a drink window, and tell the requester.
- * Returns { backfilledCount }, or null when the request was no longer pending.
+ * Returns { backfilledCount }, or null when the request was no longer pending
+ * or another decision holds it. `holdsClaim`: the caller took the request
+ * with claimRequest; otherwise it is taken here.
  */
-async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = null, adminNotes = '' } = {}) {
+async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = null, adminNotes = '', holdsClaim = false } = {}) {
+  if (!(await heldForDecision(wineRequest, holdsClaim))) return null;
   wineRequest.status = 'resolved';
   wineRequest.resolvedBy = resolvedBy;
   wineRequest.resolvedAt = new Date();
@@ -129,10 +184,11 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
  * Mark the request rejected with `adminNotes` as the reason, after detaching
  * the bottles that waited on it, and tell the requester.
  * Returns { bottlesDetached }, or null when the request was no longer pending
- * (a resolve that won the race has already moved the bottles, so the detach
- * below found none).
+ * or another decision holds it (nothing is detached then). `holdsClaim`: as
+ * for completeRequestResolve.
  */
-async function completeRequestReject(wineRequest, { resolvedBy = null, adminNotes } = {}) {
+async function completeRequestReject(wineRequest, { resolvedBy = null, adminNotes, holdsClaim = false } = {}) {
+  if (!(await heldForDecision(wineRequest, holdsClaim))) return null;
   // Detach any bottles that were imported pending this request — the mirror
   // of resolve's backfill above. A rejected request can never become
   // resolvable again, and wineDefinition isn't user-updatable, so a bottle
@@ -174,4 +230,4 @@ async function completeRequestReject(wineRequest, { resolvedBy = null, adminNote
   return { bottlesDetached };
 }
 
-module.exports = { completeRequestResolve, completeRequestReject };
+module.exports = { claimRequest, releaseRequestClaim, completeRequestResolve, completeRequestReject };

@@ -13,7 +13,7 @@
 
 process.env.JWT_SECRET = 'test-secret';
 
-jest.mock('../../models/WineRequest', () => ({ findById: jest.fn() }));
+jest.mock('../../models/WineRequest', () => ({ findById: jest.fn(), findOneAndUpdate: jest.fn(), exists: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => {
   const ctor = jest.fn();
   ctor.findById = jest.fn();
@@ -24,7 +24,7 @@ jest.mock('../../models/Bottle', () => ({ distinct: jest.fn(), updateMany: jest.
 jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
-jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../../services/audit', () => ({ logAudit: jest.fn(), logger: { warn: jest.fn() } }));
 jest.mock('../../services/dataVersion', () => ({ bumpDataVersion: jest.fn(), bumpWineOwners: jest.fn() }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
@@ -64,9 +64,13 @@ beforeEach(() => {
     wineName: 'Barolo del Comune',
     user: '64b000000000000000000003',
     save: jest.fn().mockResolvedValue({}),
+    markModified: jest.fn(),
     populate: jest.fn().mockResolvedValue({}),
   };
   WineRequest.findById.mockResolvedValue(requestDoc);
+  // The decision takes the request before it does anything (services/wineRequestOps.claimRequest).
+  WineRequest.findOneAndUpdate.mockResolvedValue(requestDoc);
+  WineRequest.updateOne.mockResolvedValue({});
   Bottle.updateMany.mockResolvedValue({ modifiedCount: 0 });
   Bottle.distinct.mockResolvedValue([]);
 });
@@ -174,4 +178,24 @@ test.each([
   const res = await reject({ adminNotes });
   expect(res.status).toBe(400);
   expect((await res.json()).error).toBe('Admin notes are required when rejecting a request');
+});
+
+// A reject detaches the waiting bottles before it writes the status, so it
+// must not run beside a resolve that is at work on the same request.
+test('a reject while another decision holds the request: 409, and no bottle is detached', async () => {
+  WineRequest.findOneAndUpdate.mockResolvedValue(null);
+  WineRequest.exists.mockResolvedValue({ _id: REQUEST_ID });
+  const res = await reject();
+
+  expect(res.status).toBe(409);
+  expect((await res.json()).error).toMatch(/Someone else is deciding this wine request/);
+  expect(Bottle.updateMany).not.toHaveBeenCalled();
+  expect(requestDoc.save).not.toHaveBeenCalled();
+});
+
+test('a reject that goes through clears the claim with the decision', async () => {
+  const res = await reject();
+  expect(res.status).toBe(200);
+  expect(requestDoc.status).toBe('rejected');
+  expect(requestDoc.claimedAt).toBeNull();
 });

@@ -10,7 +10,7 @@
 
 process.env.JWT_SECRET = 'test-secret';
 
-jest.mock('../../models/WineRequest', () => ({ findById: jest.fn() }));
+jest.mock('../../models/WineRequest', () => ({ findById: jest.fn(), findOneAndUpdate: jest.fn(), exists: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => {
   const ctor = jest.fn();
   ctor.findById = jest.fn();
@@ -24,7 +24,7 @@ jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn(
 // normalizeAppellation output; the curated-registry test overrides it.
 jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
-jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../../services/audit', () => ({ logAudit: jest.fn(), logger: { warn: jest.fn() } }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
@@ -70,9 +70,13 @@ beforeEach(() => {
     user: '64b000000000000000000003',
     image: null,
     save: jest.fn().mockResolvedValue({}),
+    markModified: jest.fn(),
     populate: jest.fn().mockResolvedValue({}),
   };
   WineRequest.findById.mockResolvedValue(requestDoc);
+  // The decision takes the request before it does anything (services/wineRequestOps.claimRequest).
+  WineRequest.findOneAndUpdate.mockResolvedValue(requestDoc);
+  WineRequest.updateOne.mockResolvedValue({});
   WineDefinition.mockImplementation(function (doc) {
     Object.assign(this, doc);
     this._id = 'wine-new';
@@ -253,5 +257,62 @@ describe('an approval that creates the wine', () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/^Colour must be one of:/);
     expect(WineDefinition).not.toHaveBeenCalled();
+  });
+});
+
+// One decision at a time. Creating a wine comes long before the request's
+// status is written, so two resolves that both saw "pending" used to create
+// two wines. The request is taken first, and the second resolve stops there.
+describe('a resolve takes the request before it creates anything', () => {
+  const released = () => WineRequest.updateOne.mock.calls.filter(([, update]) => update && update.$set && update.$set.claimedAt === null);
+  const settle = () => new Promise((r) => setTimeout(r, 30)); // the release runs after the answer is sent
+
+  test('while another decision holds it: 409, and no wine is looked for or created', async () => {
+    WineRequest.findOneAndUpdate.mockResolvedValue(null);
+    WineRequest.exists.mockResolvedValue({ _id: REQUEST_ID });
+    const res = await resolve(CREATE_BODY);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/Someone else is deciding this wine request/);
+    expect(findOrCreateWine).not.toHaveBeenCalled();
+    expect(WineDefinition).not.toHaveBeenCalled();
+    expect(requestDoc.save).not.toHaveBeenCalled();
+    // it is not this resolve's to give back
+    await settle();
+    expect(released()).toHaveLength(0);
+  });
+
+  test('decided between the look and the take: 400 "already resolved", nothing created', async () => {
+    WineRequest.findOneAndUpdate.mockResolvedValue(null);
+    WineRequest.exists.mockResolvedValue(null);
+    const res = await resolve(CREATE_BODY);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Wine request has already been resolved');
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('the take comes before the duplicate probe and the new wine', async () => {
+    const res = await resolve(CREATE_BODY);
+    expect(res.status).toBe(200);
+    const claimAt = WineRequest.findOneAndUpdate.mock.invocationCallOrder[0];
+    expect(claimAt).toBeLessThan(findOrCreateWine.mock.invocationCallOrder[0]);
+    expect(claimAt).toBeLessThan(WineDefinition.mock.invocationCallOrder[0]);
+  });
+
+  test('a resolve that is refused gives the request back, so it can be decided again at once', async () => {
+    const res = await resolve({ adminNotes: '' }); // neither a wine to link nor one to create
+    expect(res.status).toBe(400);
+    await settle();
+    expect(released()).toEqual([[{ _id: REQUEST_ID, status: 'pending' }, { $set: { claimedAt: null } }]]);
+  });
+
+  test('a resolve that goes through gives nothing back: its own write clears the claim', async () => {
+    const res = await resolve(CREATE_BODY);
+    expect(res.status).toBe(200);
+    await settle();
+    expect(released()).toHaveLength(0);
+    expect(requestDoc.claimedAt).toBeNull();
+    expect(requestDoc.markModified).toHaveBeenCalledWith('claimedAt');
   });
 });

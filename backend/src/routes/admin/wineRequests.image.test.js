@@ -12,7 +12,7 @@
 
 process.env.JWT_SECRET = 'test-secret';
 
-jest.mock('../../models/WineRequest', () => ({ findById: jest.fn() }));
+jest.mock('../../models/WineRequest', () => ({ findById: jest.fn(), findOneAndUpdate: jest.fn(), exists: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => {
   const ctor = jest.fn();
   ctor.findById = jest.fn();
@@ -24,7 +24,7 @@ jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
-jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../../services/audit', () => ({ logAudit: jest.fn(), logger: { warn: jest.fn() } }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
@@ -82,9 +82,13 @@ beforeEach(() => {
     user: '64b000000000000000000003',
     image: null,
     save: jest.fn().mockResolvedValue({}),
+    markModified: jest.fn(),
     populate: jest.fn().mockResolvedValue({}),
   };
   WineRequest.findById.mockResolvedValue(requestDoc);
+  // The decision takes the request before it does anything (services/wineRequestOps.claimRequest).
+  WineRequest.findOneAndUpdate.mockResolvedValue(requestDoc);
+  WineRequest.updateOne.mockResolvedValue({});
   WineDefinition.mockImplementation(function (doc) {
     Object.assign(this, doc);
     this._id = 'wine-new';
