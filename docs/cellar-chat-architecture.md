@@ -47,8 +47,8 @@ User message
            │
            ▼
 ┌──────────────────────┐
-│   Claude (streaming) │  System prompt + conversation history
-│                      │  + enriched wine list → streamed response
+│   Claude             │  System prompt + conversation history
+│                      │  + enriched wine list → the answer
 └──────────────────────┘
 ```
 
@@ -100,33 +100,30 @@ This means Claude always has the full wine context even on follow-ups, without a
 
 ---
 
-## Streaming (SSE)
+## The answer
 
-The response is streamed via Server-Sent Events for real-time text display.
+`POST /api/chat` answers once, with JSON, when the model has finished. Nothing is streamed.
 
-### Event types
-
-| Event | Payload | When |
-|---|---|---|
-| `usage` | `{ used, limit }` | Immediately (before any processing) |
-| `meta` | `{ wines, expandedQuery, searchPerformed, wineContext }` | After search/enrichment, before Claude streams |
-| `delta` | `{ text }` | Each token from Claude |
-| `done` | `{ usage: { inputTokens, outputTokens } }` | Stream complete |
-| `error` | `{ error }` | On failure |
+| Field | Meaning |
+|---|---|
+| `answer` | The recommendation, as Markdown |
+| `wines` | The cellar wines the model was given: the wine cards under the answer |
+| `expandedQuery` | The search query the question was rewritten to, or `null` |
+| `searchPerformed` | Whether this turn searched the cellar again |
+| `wineContext` | The enriched wine list, to send back as `previousWines` on a follow-up |
+| `usage` | `{ inputTokens, outputTokens }` |
+| `used`, `limit`, `period` | The member's chat allowance after this question |
 
 ### Frontend handling
 
-- `fetch()` + `response.body.getReader()` reads the SSE stream
-- `meta` event populates wine cards and metadata immediately
-- `delta` events are batched with `requestAnimationFrame` to prevent excessive React re-renders
-- A final text sync after the stream ensures nothing is lost if rAF hasn't fired
+- The page shows a "thinking" bubble, posts the question with `apiFetch`, and replaces the bubble with the answer when the JSON arrives.
+- A 429 with `used` and `limit` in its body is the chat allowance: the composer locks. A 429 without them is the per-minute limiter: only the error shows.
 
 ### Backend implementation
 
-- `_prepareChatContext()` — shared pipeline for both `chat()` (non-streaming) and `chatStream()`
-- `chatStream()` uses Anthropic SDK's `client.messages.stream()` which emits `text` and `finalMessage` events
-- If the client disconnects mid-stream, the Claude stream is aborted to save tokens
-- Fallback model is attempted only if the primary fails before any tokens are emitted
+- `_prepareChatContext()` is the pipeline: expand the query, search, filter, enrich.
+- `chat()` calls the model once. If the primary model fails with a retryable error (429, 5xx, overloaded), the fallback model is tried once.
+- `services/aiProvider.js` still offers a streaming call with the same events for either provider; no route uses it.
 
 ---
 
@@ -183,11 +180,11 @@ Cleared on tab close (sessionStorage behavior) or when the user clicks "New chat
 
 | File | Role |
 |---|---|
-| `backend/src/services/aiChat.js` | Core RAG pipeline, streaming, expansion |
+| `backend/src/services/aiChat.js` | Core RAG pipeline, expansion |
 | `backend/src/routes/chat.js` | REST endpoints, validation, rate limiting |
 | `backend/src/config/aiConfig.js` | System prompt, model config, feature flags |
 | `backend/src/utils/maturityUtils.js` | Drink window classification + labels |
 | `backend/src/services/embedding.js` | Voyage AI embedding calls |
 | `backend/src/services/vectorStore.js` | Vector search: vectors stored on WineEmbedding rows in MongoDB, compared in memory |
-| `frontend/src/pages/CellarChat.js` | Chat UI, SSE client, session persistence |
+| `frontend/src/pages/CellarChat.js` | Chat UI, session persistence |
 | `frontend/src/pages/CellarChat.css` | Chat styles, markdown rendering |
