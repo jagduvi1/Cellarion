@@ -127,9 +127,8 @@ function BottleDetail() {
   const { isCollapsed, toggle: toggleBlock, expand: expandBlocks } = useCollapsedBlocks();
   const blockProps = (blockId, label) => ({ id: blockId, label, collapsed: isCollapsed(blockId), onToggle: () => toggleBlock(blockId) });
   // What the last draft publish / attach did; survives the refetch that
-  // unmounts the draft banner. Cleared when the page moves to another bottle.
+  // unmounts the draft banner.
   const [draftNotice, setDraftNotice] = useState(null);
-  useEffect(() => { setDraftNotice(null); }, [bottleId]);
   const [addMoreOpen, setAddMoreOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
@@ -162,9 +161,8 @@ function BottleDetail() {
   }, [bottleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBottle = async () => {
-    // A new bottle id on the same mounted page (a notification link from
-    // bottle A to bottle B) must not carry A's edit form or A's lot banner
-    // over (audit 2026-09-07).
+    // Every load starts from the view: the lot banner goes and an open edit
+    // form closes. (Another bottle is another page: see BottlePage below.)
     setLotMsg(null);
     setEditing(false);
     try {
@@ -184,30 +182,15 @@ function BottleDetail() {
         setRackInfo(data.rackInfo || null);
         setCellarHasRacks(!!data.cellarHasRacks);
         setLotSiblingIds(Array.isArray(data.lotSiblingIds) ? data.lotSiblingIds : []);
-        if (data.pendingImageUrl) {
-          const url = data.pendingImageUrl.startsWith('http')
-            ? data.pendingImageUrl
-            : `${API_URL}${data.pendingImageUrl}`;
-          setPendingImage(url);
-        }
-        if (data.defaultImageUrl) {
-          const url = data.defaultImageUrl.startsWith('http')
-            ? data.defaultImageUrl
-            : `${API_URL}${data.defaultImageUrl}`;
-          setDefaultImage(url);
-        }
-        if (data.vintageImageUrl) {
-          const url = data.vintageImageUrl.startsWith('http')
-            ? data.vintageImageUrl
-            : `${API_URL}${data.vintageImageUrl}`;
-          setVintageImage({ url, credit: data.vintageImageCredit || null });
-        }
-        if (data.otherVintageImageUrl) {
-          const url = data.otherVintageImageUrl.startsWith('http')
-            ? data.otherVintageImageUrl
-            : `${API_URL}${data.otherVintageImageUrl}`;
-          setOtherVintageImage(url);
-        }
+        // The photos are what THIS answer says, also when it says "none": a
+        // reload after the photo went must not keep showing it.
+        const absolute = (url) => (!url ? null : url.startsWith('http') ? url : `${API_URL}${url}`);
+        setPendingImage(absolute(data.pendingImageUrl));
+        setDefaultImage(absolute(data.defaultImageUrl));
+        setVintageImage(data.vintageImageUrl
+          ? { url: absolute(data.vintageImageUrl), credit: data.vintageImageCredit || null }
+          : null);
+        setOtherVintageImage(absolute(data.otherVintageImageUrl));
         // Fetch the sommelier maturity profile. NV bottles (non-vintage
         // Champagne / Cap Classique blends) get a profile too — somms can set a
         // drink window for them — so we fetch it for NV as well; only truly
@@ -713,7 +696,9 @@ function BottleDetail() {
           wine has an open inquiry addressed to the viewer). Demo visitors are
           excluded: their ephemeral accounts can never respond (requireNonDemo)
           and the shop-window must not dead-end into a 403. ── */}
-      {wine?._id && !user?.isDemo && <OwnerInquiryCard apiFetch={apiFetch} wineId={wine._id} />}
+      {/* Keyed by the wine: after "change wine" the question, the typed
+          answer and its "sent" belong to the wine before. */}
+      {wine?._id && !user?.isDemo && <OwnerInquiryCard key={wine._id} apiFetch={apiFetch} wineId={wine._id} />}
 
       {/* ── Consumption details (history bottles only) ── */}
       {isConsumed && (
@@ -784,7 +769,7 @@ function BottleDetail() {
           ephemeral accounts would orphan shared-visible rows. ── */}
       {!user?.isDemo && (
         <CollapsibleBlock {...blockProps('vintage.personal', t('personalData.title', 'Your wine data'))}>
-          <PersonalDataCard apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} wineId={wine?._id} vintage={bottle?.vintage} />
+          <PersonalDataCard key={wine?._id || 'no-wine'} apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} wineId={wine?._id} vintage={bottle?.vintage} />
         </CollapsibleBlock>
       )}
 
@@ -1049,5 +1034,12 @@ function BottleDetail() {
   );
 }
 
+// The page of one bottle, keyed by its address. A link from one bottle to
+// another (a notification, the search in the header, Back) starts a fresh
+// page: no photo, banner, open form or price history of the bottle before.
+function BottlePage() {
+  const { id, bottleId } = useParams();
+  return <BottleDetail key={`${id}/${bottleId}`} />;
+}
 
-export default BottleDetail;
+export default BottlePage;
