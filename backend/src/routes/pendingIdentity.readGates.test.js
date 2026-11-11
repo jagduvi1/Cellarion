@@ -9,7 +9,7 @@
  *        handed out the very pending ids the other holes then accepted.
  *   H-5  POST /api/discussions — discussions are optionalAuth, their wine is
  *        populated into the response, indexed into the anonymously-searchable
- *        discussion index, and rendered for CRAWLERS by routes/og.js. Refused
+ *        discussion index, and rendered for CRAWLERS by routes/og/discussions.js. Refused
  *        at WRITE time, which closes all three reads at once.
  *   H-5  Wine lists — a published list is served by routes/wineListPublic.js
  *        with NO auth at all. The owner's own pending rows DO render there

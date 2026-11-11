@@ -499,7 +499,7 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
       // ABSOLUTE pendingIdentity gate — not the creator-aware one. A discussion
       // is anonymously readable (optionalAuth), its wine is populated into the
       // response, baked into the anonymously-searchable discussion Meili index
-      // and rendered for CRAWLERS by routes/og.js. So even the row's own
+      // and rendered for CRAWLERS by routes/og/discussions.js. So even the row's own
       // creator must not be able to publish it: attaching is what would make a
       // hidden half-identified wine public (security audit). Refused at WRITE
       // time, which closes every downstream read path at once.
