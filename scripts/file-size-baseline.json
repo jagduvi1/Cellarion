@@ -9,7 +9,7 @@
   "backend/src/services/userDataRegistry.js": 1505,
   "frontend/src/pages/AddBottle.js": 2357,
   "frontend/src/pages/CellarDetail.js": 1532,
-  "frontend/src/pages/CellarRacks.js": 2060,
+  "frontend/src/pages/CellarRacks.js": 1824,
   "frontend/src/pages/CellarRoom.js": 1788,
   "frontend/src/pages/ImportBottles.js": 2897,
   "frontend/src/pages/SuperAdmin/TabAI.js": 1532,
