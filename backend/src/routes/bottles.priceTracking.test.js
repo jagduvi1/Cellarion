@@ -210,11 +210,30 @@ describe('POST request-price-tracking', () => {
     expect(existing.requesters[0].note).toBe('second note');
   });
 
-  test('two members creating the same request at once: the loser is told to retry', async () => {
-    PriceTrackingRequest.mockImplementationOnce(function (doc) {
-      Object.assign(this, doc);
-      this.save = jest.fn().mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 }));
-    });
+  const duplicateKey = () => Object.assign(new Error('E11000 duplicate key'), { code: 11000 });
+  const losesTheCreate = function (doc) {
+    Object.assign(this, doc);
+    this.save = jest.fn().mockRejectedValue(duplicateKey());
+  };
+
+  test('two members creating the same request at once: the one that loses the create joins the row the other made', async () => {
+    const theirs = stored([OTHER_ID]);
+    // first look: no row yet; second look, after the refused create: the other member's row
+    PriceTrackingRequest.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(theirs);
+    PriceTrackingRequest.mockImplementationOnce(losesTheCreate);
+    const { status, body } = await call('POST', { note: 'for the insurance list' });
+
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ requested: true, requesterCount: 2 });
+    expect(theirs.requesters.map((r) => String(r.user))).toEqual([OTHER_ID, USER_ID]);
+    expect(theirs.requesters[1].note).toBe('for the insurance list');
+    expect(theirs.save).toHaveBeenCalledTimes(1);
+    expect(logAudit).toHaveBeenCalledTimes(1);
+  });
+
+  test('losing the create twice in a row is handed back as a 409', async () => {
+    PriceTrackingRequest.findOne.mockResolvedValue(null);
+    PriceTrackingRequest.mockImplementationOnce(losesTheCreate).mockImplementationOnce(losesTheCreate);
     const { status, body } = await call('POST');
 
     expect(status).toBe(409);

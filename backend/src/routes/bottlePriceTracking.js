@@ -54,31 +54,45 @@ router.post('/:id/request-price-tracking', requireBottleAccess('viewer'), async 
     const now = new Date();
 
     // Find-or-create the singleton, then add/update this user in requesters.
-    let request = await PriceTrackingRequest.findOne({
-      wineDefinition: bottle.wineDefinition,
-      vintage: bottle.vintage
-    });
-
-    if (!request) {
-      request = new PriceTrackingRequest({
+    const joinOrCreate = async () => {
+      let found = await PriceTrackingRequest.findOne({
         wineDefinition: bottle.wineDefinition,
-        vintage: bottle.vintage,
-        requesters: [{ user: userId, requestedAt: now, note }],
-        firstRequestedAt: now,
-        lastRequestedAt: now
+        vintage: bottle.vintage
       });
-    } else {
-      const existing = request.requesters.find(r => r.user.toString() === userId);
-      if (existing) {
-        existing.requestedAt = now;
-        if (note !== undefined) existing.note = note;
-      } else {
-        request.requesters.push({ user: userId, requestedAt: now, note });
-      }
-      request.lastRequestedAt = now;
-    }
 
-    await request.save();
+      if (!found) {
+        found = new PriceTrackingRequest({
+          wineDefinition: bottle.wineDefinition,
+          vintage: bottle.vintage,
+          requesters: [{ user: userId, requestedAt: now, note }],
+          firstRequestedAt: now,
+          lastRequestedAt: now
+        });
+      } else {
+        const existing = found.requesters.find(r => r.user.toString() === userId);
+        if (existing) {
+          existing.requestedAt = now;
+          if (note !== undefined) existing.note = note;
+        } else {
+          found.requesters.push({ user: userId, requestedAt: now, note });
+        }
+        found.lastRequestedAt = now;
+      }
+
+      await found.save();
+      return found;
+    };
+
+    // Two first requests for the same wine and vintage at once: both find no
+    // row, both create one, and the unique index refuses the second. The row
+    // exists by then, so the second requester joins it on one more pass.
+    let request;
+    try {
+      request = await joinOrCreate();
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+      request = await joinOrCreate();
+    }
 
     logAudit(req, 'price.track_requested',
       { type: 'wineDefinition', id: bottle.wineDefinition },
@@ -92,7 +106,8 @@ router.post('/:id/request-price-tracking', requireBottleAccess('viewer'), async 
     });
   } catch (error) {
     if (error.code === 11000) {
-      // Duplicate key — concurrent create raced. Retry once.
+      // The second pass lost a create as well (the row was withdrawn and
+      // re-created in between): rare enough to hand back.
       return res.status(409).json({ error: 'Tracking request already exists — please retry.' });
     }
     console.error('Request price tracking error:', error);
