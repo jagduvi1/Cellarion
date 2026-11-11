@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import {
-  OFFLINE_MODE_RELEASED, isOfflineModeEnabled, isStandaloneApp, setOfflineModePreference,
-} from '../utils/offlineMode';
+import { isOfflineModeEnabled, isStandaloneApp, setOfflineModePreference } from '../utils/offlineMode';
 import { getOfflineStatus, subscribeOfflineStatus, clearOfflineData, refreshSnapshot } from '../utils/offlineSnapshot';
 import { getQueueStatus, subscribeQueueStatus } from '../utils/offlineQueue';
 
@@ -13,9 +11,9 @@ function formatBytes(n) {
 }
 
 /**
- * Settings → Offline mode (#1355). Until offline mode is released it is shown
- * to admins only, so it can be tried on a real phone against production while
- * nobody else sees it.
+ * Settings → Offline mode: the switch for this device (turning it off deletes
+ * the copy) and, while it is on, when the copy was saved, the space it takes
+ * and the changes waiting to be sent.
  */
 export default function OfflineSettings() {
   const { t } = useTranslation();
@@ -34,9 +32,6 @@ export default function OfflineSettings() {
     navigator.storage?.estimate?.().then((e) => { if (alive) setUsage(e?.usage ?? null); }).catch(() => {});
     return () => { alive = false; };
   }, [status.savedAt, enabled]);
-
-  const isAdmin = (user?.roles || []).includes('admin');
-  if (!OFFLINE_MODE_RELEASED && !isAdmin) return null;
 
   const userId = user ? String(user.id || user._id) : null;
   const waiting = queue.pending + queue.attention;
@@ -78,7 +73,6 @@ export default function OfflineSettings() {
     <div className="card settings-card">
       <h2 className="settings-section-title">
         {t('offline.settings.title', 'Offline mode')}
-        {!OFFLINE_MODE_RELEASED && <span className="settings-hint" style={{ marginLeft: '0.5rem' }}>{t('offline.settings.betaAdmin', '(beta — admins only)')}</span>}
       </h2>
       <p className="settings-hint">
         {t('offline.settings.intro', 'Keep a copy of your cellars, racks and bottles on this device, so you can browse them — and consume, open, place or move bottles — where there is no signal. Changes are sent when you are back online.')}

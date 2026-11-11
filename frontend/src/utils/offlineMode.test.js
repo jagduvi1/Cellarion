@@ -1,5 +1,4 @@
 import {
-  OFFLINE_MODE_RELEASED,
   needsOfflineChoice,
   isOfflineModeEnabled,
   setOfflineModePreference,
@@ -35,8 +34,7 @@ beforeEach(() => { vi.stubGlobal('localStorage', memoryStorage()); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('offline mode switch', () => {
-  it('is released: off by default in a plain browser tab', () => {
-    expect(OFFLINE_MODE_RELEASED).toBe(true);
+  it('is off by default in a plain browser tab', () => {
     expect(isOfflineModeEnabled()).toBe(false);
   });
 
