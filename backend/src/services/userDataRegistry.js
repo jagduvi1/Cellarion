@@ -421,7 +421,7 @@ const REGISTRY = [
     model: RegistryReadDay, category: 'personal-data', userFields: ['readerKey (user:<id>)'],
     purge: (ctx) => RegistryReadDay.deleteMany({ readerKey: `user:${ctx.userId}` }),
     exportFragment: async (ctx) => ({
-      registryReads: (await RegistryReadDay.find({ readerKey: `user:${ctx.userId}` }).select('day count wines').limit(EXPORT_MAX).lean())
+      registryReads: markTrunc(ctx, 'registryReads', await RegistryReadDay.find({ readerKey: `user:${ctx.userId}` }).select('day count wines').limit(EXPORT_MAX).lean())
         .map((r) => ({ day: r.day, reads: r.count, distinctWines: (r.wines || []).length })),
     }),
   },
@@ -443,7 +443,7 @@ const REGISTRY = [
     // data — hard delete, full export.
     model: SavedDashboard, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => SavedDashboard.deleteMany({ user: ctx.userId }),
-    exportFragment: async (ctx) => ({ analyticsDashboards: await SavedDashboard.find({ user: ctx.userId }).lean() }),
+    exportFragment: async (ctx) => ({ analyticsDashboards: markTrunc(ctx, 'analyticsDashboards', await SavedDashboard.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
     // Pick lists (forum request 2026-10-13): the user's own named lists of
@@ -922,7 +922,7 @@ const REGISTRY = [
     model: BridgeUsageDay, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => BridgeUsageDay.deleteMany({ user: ctx.userId }),
     exportFragment: async (ctx) => ({
-      bridgeUsage: (await BridgeUsageDay.find({ user: ctx.userId }).select('day searches fetches changeChecks contributions').limit(EXPORT_MAX).lean())
+      bridgeUsage: markTrunc(ctx, 'bridgeUsage', await BridgeUsageDay.find({ user: ctx.userId }).select('day searches fetches changeChecks contributions').limit(EXPORT_MAX).lean())
         .map(r => ({ day: r.day, searches: r.searches, fetches: r.fetches, changeChecks: r.changeChecks, contributions: r.contributions })),
     }),
   },
@@ -1171,14 +1171,14 @@ const REGISTRY = [
     exportFragment: async (ctx) => {
       const [sent, received] = await Promise.all([
         PendingShare.find({ invitedBy: ctx.userId }).limit(EXPORT_MAX).populate('cellar', 'name').lean(),
-        // GAP FIX: invites RECEIVED at the user's email were deleted but never
-        // exported. Guard against a missing email — find({ email: undefined })
-        // matches the WHOLE collection and would leak other users' invites.
+        // Guard against a missing email: find({ email: undefined }) matches the
+        // WHOLE collection and would leak other users' invites.
         ctx.userEmail
           ? PendingShare.find({ email: ctx.userEmail }).limit(EXPORT_MAX).populate('cellar', 'name').lean()
           : [],
       ]);
       markTrunc(ctx, 'pendingSharesSent', sent);
+      markTrunc(ctx, 'pendingSharesReceived', received);
       return {
         pendingCellarInvites: sent.map(ps => ({ invitedEmail: ps.email, cellarName: ps.cellar?.name, role: ps.role, createdAt: ps.createdAt })),
         pendingCellarInvitesReceived: received.map(ps => ({ cellarName: ps.cellar?.name, role: ps.role, createdAt: ps.createdAt })),
