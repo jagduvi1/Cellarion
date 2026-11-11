@@ -9,12 +9,7 @@ import { track } from '../utils/track';
 import useLabelScanner from '../hooks/useLabelScanner';
 import useTapToFocus from '../hooks/useTapToFocus';
 import useBarcodeWatch from '../hooks/useBarcodeWatch';
-import { CURRENCIES } from '../config/currencies';
-import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
-import { validatePriceSanity } from '../utils/priceValidation';
 import { validateDrinkWindowFields, DRINK_YEAR_MIN, DRINK_YEAR_MAX } from '../utils/drinkStatus';
-import ImageUpload from '../components/ImageUpload';
-import ImageGallery from '../components/ImageGallery';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import SimilarWinesModal from '../components/SimilarWinesModal';
@@ -22,6 +17,8 @@ import AddBottleCustomFields, { buildPersonalDataPayload } from '../components/b
 import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddBottle.css';
+import BottleCoreFields from '../components/addBottle/BottleCoreFields';
+import BottlePhotoSection from '../components/addBottle/BottlePhotoSection';
 import LabelCameraModal from '../components/addBottle/LabelCameraModal';
 import AddBottleDialogs from '../components/addBottle/AddBottleDialogs';
 import { backLabel } from '../utils/backLabel';
@@ -29,7 +26,7 @@ import { useBackToClose } from '../utils/useBackToClose';
 import { bottleNoticeName } from '../components/BottleUndoNotice';
 import { handOverBack } from '../hooks/useHandedOverState';
 import { afterPopupEntryGone, isOnPopupEntry } from '../utils/useBackToClose';
-import { formatVintage, parseVintageInput, vintageInputProps } from '../utils/vintage';
+import { formatVintage, parseVintageInput } from '../utils/vintage';
 
 // How this device last started adding a bottle: 'camera' (the label photo, the
 // default) or 'search' (typing the name). Per device on purpose — the same
@@ -1768,161 +1765,18 @@ function AddBottle() {
 
           <form onSubmit={handleSubmit}>
             {/* ── Core fields ── */}
-            <div className="grid-2" style={{ marginTop: '1.25rem' }}>
-              <div className="form-group">
-                <label>{t('common.vintage')} *</label>
-                <input
-                  type="text"
-                  value={bottleData.vintage}
-                  onChange={(e) => setBottleData({ ...bottleData, vintage: e.target.value })}
-                  placeholder={t('addBottle.vintagePlaceholder')}
-                  {...vintageInputProps(t)}
-                  title={t('addBottle.vintagePattern')}
-                  required
-                  autoFocus
-                />
-              </div>
-
-              <div className="form-group">
-                <label>{t('addBottle.numberOfBottles')}</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={numBottles}
-                  onChange={(e) => setNumBottles(Math.max(1, parseInt(e.target.value) || 1))}
-                  onFocus={(e) => e.target.select()}
-                  min="1"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>{t('common.price')}</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={bottleData.price}
-                  onChange={(e) => setBottleData({ ...bottleData, price: e.target.value })}
-                  placeholder="0.00"
-                />
-                {(() => {
-                  const warns = validatePriceSanity({
-                    price: parseFloat(bottleData.price),
-                    currency: bottleData.currency || 'USD',
-                  });
-                  if (warns.length === 0) return null;
-                  return (
-                    <ul className="price-warnings">
-                      {warns.map(w => (
-                        <li key={w.code} className={`price-warning price-warning--${w.severity}`}>
-                          {t(`addBottle.priceWarning.${w.code}`, w.context)}
-                        </li>
-                      ))}
-                    </ul>
-                  );
-                })()}
-              </div>
-
-              <div className="form-group">
-                <label>{t('common.currency')}</label>
-                {/* Each option carries its code as value, and the list is
-                    never translated: browser page translation rewrote the
-                    option TEXT "EUR" as "EURO", and an option without a value
-                    sends its text (2026-10-13). */}
-                <select
-                  translate="no"
-                  value={bottleData.currency}
-                  onChange={(e) => setBottleData({ ...bottleData, currency: e.target.value })}
-                >
-                  {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>{t('addBottle.bottleSize')}</label>
-                <select
-                  value={bottleData.bottleSize}
-                  onChange={(e) => setBottleData({ ...bottleData, bottleSize: e.target.value })}
-                >
-                  {BOTTLE_SIZES.map((s) => (
-                    <option key={s.code} value={s.code}>{bottleSizeLabel(s.code, t)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>{t('addBottle.ratingLabel')}</label>
-                <RatingInput
-                  value={bottleData.rating}
-                  scale={bottleData.ratingScale}
-                  onChange={v => setBottleData({ ...bottleData, rating: v ?? '' })}
-                  onScaleChange={s => setBottleData({ ...bottleData, ratingScale: s, rating: '' })}
-                  allowScaleOverride
-                />
-              </div>
-            </div>
+            <BottleCoreFields
+              t={t} bottleData={bottleData} setBottleData={setBottleData} numBottles={numBottles}
+              setNumBottles={setNumBottles}
+            />
 
             {/* ── Bottle photo — compact section ── */}
-            <div className="photo-section">
-              <div className="photo-section-header">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="photo-section-icon">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                  <circle cx="12" cy="13" r="4"/>
-                </svg>
-                <span className="photo-section-title">{t('addBottle.bottlePhotos')}</span>
-              </div>
-              {/* What the registry already holds for this wine. Shown BEFORE the
-                  uploader so a user who would have re-photographed a wine we can
-                  already illustrate can see that first. The prompt is softened,
-                  never removed: ~89% of the registry's official images started
-                  as a user's bottle photo, and most wines still have none. */}
-              {selectedWineId && (
-                // The wrapper's margin is applied only when something rendered:
-                // ImageGallery returns null while loading and when empty, and
-                // most wines have no photo, so an unconditional class left a
-                // gap in the common case. Keyed so a wine switch remounts.
-                <div className={registryHasPhotos ? 'photo-existing' : undefined}>
-                  <ImageGallery
-                    key={selectedWineId}
-                    wineDefinitionId={selectedWineId}
-                    size="small"
-                    onLoaded={(count) => setWineImageCounts(prev => ({ ...prev, [selectedWineId]: count }))}
-                  />
-                </div>
-              )}
-              {photoPromptReady && (
-                <p className="photo-section-lead">
-                  {registryHasPhotos ? t('addBottle.photosExisting') : t('addBottle.photosNone')}
-                </p>
-              )}
-              <ImageUpload
-                wineDefinitionId={selectedWine?._id}
-                onUploadComplete={(img) => setUploadedImages(prev => [...prev, img])}
-              />
-              <p className="photo-section-notice">{t('addBottle.photosNotice')}</p>
-            </div>
-
-            {/* The registry learns barcodes only from bottles added with one, so
-                ask — once, quietly, at the one step every add path reaches. Below
-                the fields and the photo, next to the other way to help: a
-                newcomer's first job here is the vintage (newcomer walkthrough
-                2026-10-15). The thanks lands where the scan was asked for. */}
-            {!foundByBarcode && (
-              <div className="barcode-ask">
-                {barcode ? (
-                  <p className="selected-wine-barcode-note">
-                    {t('addBottle.barcodeThanks', 'Thank you — the barcode is saved with this bottle, so the next member who scans it finds this wine straight away.')}
-                  </p>
-                ) : (
-                  <div className="barcode-help">
-                    <p>{t('addBottle.barcodeHelp', "Help the community: we're building Cellarion's barcode list together, and it's still small. Scan the barcode on this bottle, and the next member who scans it will find this wine straight away.")}</p>
-                    <button type="button" className="btn btn-ghost btn-small" onClick={startBarcodeScan}>
-                      {t('addBottle.barcodeHelpBtn', 'Scan barcode')}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            <BottlePhotoSection
+              t={t} selectedWineId={selectedWineId} registryHasPhotos={registryHasPhotos}
+              setWineImageCounts={setWineImageCounts} photoPromptReady={photoPromptReady}
+              selectedWine={selectedWine} setUploadedImages={setUploadedImages}
+              foundByBarcode={foundByBarcode} barcode={barcode} startBarcodeScan={startBarcodeScan}
+            />
 
             {/* ── More details toggle ── */}
             <button

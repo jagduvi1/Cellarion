@@ -7,6 +7,6 @@
   "backend/src/services/enrichmentJob.test.js": 1514,
   "backend/src/services/findOrCreateWine.test.js": 1575,
   "backend/src/services/userDataRegistry.js": 1505,
-  "frontend/src/pages/AddBottle.js": 2267,
+  "frontend/src/pages/AddBottle.js": 2121,
   "frontend/src/pages/ImportBottles.js": 2897
 }
