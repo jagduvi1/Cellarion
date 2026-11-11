@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
  * Written by the decline flow (POST /api/somm/prices/requests/:id/decline and
  * the reject_price_request MCP tool): declining a PriceTrackingRequest deletes
  * the request and records a skip, whose `reason` is what the requester was
- * told. routes/bottles.js consults it to refuse re-requests for the pair.
+ * told. routes/bottlePriceTracking.js consults it to refuse re-requests for the pair.
  */
 const priceTrackingSkipSchema = new mongoose.Schema({
   wineDefinition: {

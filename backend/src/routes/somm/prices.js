@@ -278,7 +278,7 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
  * requester's notification.
  *
  * Removes the request and records a PriceTrackingSkip for the pair, which
- * (a) keeps the pair out of the queue and (b) makes routes/bottles.js refuse
+ * (a) keeps the pair out of the queue and (b) makes routes/bottlePriceTracking.js refuse
  * future tracking requests for the same wine+vintage while the skip stands.
  * (There is no reason-less delete: junk requests need a decline path the
  * requester learns from.)
