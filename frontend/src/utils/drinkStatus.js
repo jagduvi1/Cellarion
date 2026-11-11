@@ -16,6 +16,10 @@ const CURRENT_YEAR = new Date().getFullYear();
  */
 export function getMaturityStatus(profile, anchorYear, year = CURRENT_YEAR) {
   if (!profile || profile.status !== 'reviewed') return null;
+  // A relative (NV) window counts years from the bottle's own purchase year.
+  // Without that year its numbers are offsets, never calendar years: no
+  // status, as the server answers (backend utils/maturityUtils.resolveWindowForBottle).
+  if (profile.relative && !Number.isFinite(anchorYear)) return null;
   const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = resolveWindow(profile, anchorYear);
 
   // Need at least one window boundary to classify
