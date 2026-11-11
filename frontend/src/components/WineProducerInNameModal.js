@@ -181,8 +181,15 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
         if (!includeVerified) resolvedDelta.current = Math.max(0, resolvedDelta.current - 1);
         fetchPage(page);
         onChanged?.();
+      } else {
+        // The row has left the list, so the refusal goes to the top of the
+        // dialog; the Undo banner stays for another try.
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || t('common.actionFailed', { status: res.status }));
       }
-    } catch { /* the banner stays; the admin can retry */ } finally {
+    } catch {
+      setError(t('common.networkError'));
+    } finally {
       setPending(null);
     }
   };
