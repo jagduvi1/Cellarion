@@ -173,6 +173,13 @@ describe('assignClassification — the write rule', () => {
     expect((await ops.assignClassification({}, {})).sweetness).toEqual([]);
   });
 
+  test('feinfruchtig rides along with a tier like feinherb: stripped from it and reported', async () => {
+    expect(ops.stripNoise('Kabinett feinfruchtig')).toBe('kabinett');
+    const wine = {};
+    expect((await ops.assignClassification(wine, { classification: 'Kabinett feinfruchtig' })).sweetness).toEqual(['feinfruchtig']);
+    expect(wine).toEqual({ classifications: ['k'], classification: 'Kabinett' });
+  });
+
   test('without a taxonomy every path keeps the cleaned string, strict included', async () => {
     ops.primeClassificationCache(null);
     const wine = {};
