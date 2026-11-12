@@ -3,7 +3,7 @@
   "name": "app.cellarion/wine-registry",
   "title": "Cellarion Wine Registry",
   "description": "Public wine registry and guides: search wines, grapes, regions, appellations. No account.",
-  "version": "1.297.2",
+  "version": "1.298.0",
   "websiteUrl": "https://cellarion.app",
   "repository": {
     "url": "https://github.com/jagduvi1/Cellarion",

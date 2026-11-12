@@ -3,7 +3,7 @@
   "name": "app.cellarion/cellarion",
   "title": "Cellarion",
   "description": "Wine cellar manager: bottles, racks, drink windows, pairings and a shared wine registry.",
-  "version": "1.297.2",
+  "version": "1.298.0",
   "websiteUrl": "https://cellarion.app",
   "repository": {
     "url": "https://github.com/jagduvi1/Cellarion",
