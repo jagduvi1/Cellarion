@@ -15,6 +15,7 @@
  */
 const mongoose = require('mongoose');
 const SweetnessTerm = require('../models/SweetnessTerm');
+const { logger } = require('./audit');
 const { normalizeSweetnessTerm, appendSweetnessTerm } = require('../utils/normalize');
 
 const { SCALES, BANDS } = SweetnessTerm;
@@ -69,8 +70,18 @@ async function loadTerms() {
   return cache;
 }
 
-/** Admin taxonomy writes call this so the next read sees the change. */
-function invalidateSweetnessCache() { cache = null; }
+/**
+ * Admin taxonomy writes call this so the next read sees the change. The copy
+ * is expired, never dropped: the synchronous readers (the display name and
+ * the slug's spellings, the style guard) keep the last table — a cold copy
+ * would make them forget every synonym — until the reload, started here.
+ */
+function invalidateSweetnessCache() {
+  if (!cache) return;
+  cache = { ...cache, at: 0, pinned: false };
+  if (mongoose.connection.readyState !== 1) return;
+  loadTerms().catch((err) => logger.warn({ err: err.message }, 'sweetness term table reload failed'));
+}
 
 /** Tests: a fixed table, no database. Pass null to clear. */
 function primeSweetnessCache(rows) { cache = rows ? indexTerms(rows, { pinned: true }) : null; }

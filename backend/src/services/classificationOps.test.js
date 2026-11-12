@@ -270,9 +270,18 @@ describe('detectFromName — a tier the name states, where the word is a tier', 
 describe('assignClassification — the sweetness words, in the term table\'s fold', () => {
   beforeEach(() => ops.primeClassificationCache(ROWS));
 
-  test('"su" is no süß; süß, süss and fruchtsüß are', async () => {
+  test('"su" is no süß; süß and fruchtsüß are', async () => {
     expect((await ops.assignClassification({}, { classification: 'Kabinett su' })).sweetness).toEqual([]);
     expect((await ops.assignClassification({}, { classification: 'Kabinett süß' })).sweetness).toEqual(['süß']);
     expect((await ops.assignClassification({}, { classification: 'Spätlese fruchtsüß' })).sweetness).toEqual(['fruchtsüß']);
+  });
+
+  // The noise strip folds the way normalizeString does, where "süss" is not
+  // "süß": the value is kept as typed and no word is reported. What is stored
+  // is the classification's business and is not changed here.
+  test('"süss" typed with a double s: the value is kept as typed, and no word is reported', async () => {
+    const r = await ops.assignClassification({}, { classification: 'Kabinett süss' });
+    expect(r.sweetness).toEqual([]);
+    expect(r.classification).toBe('Kabinett süss');
   });
 });

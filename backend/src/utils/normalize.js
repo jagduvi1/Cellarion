@@ -499,27 +499,67 @@ const stripSweetnessKeySegment = (key) => {
   return at === -1 ? s : s.slice(0, at);
 };
 
-// The two folds a spelling is compared in: as the term table keys it (a dash
-// dropped: "Extra-Brut" → "extrabrut") and with every dash read as a space
-// ("extra brut"), so a name written one way carries a term spelt the other.
-const DASH_RX = /[\p{Pd}−]/gu;
-const sweetnessFolds = (s) => {
-  const raw = String(s == null ? '' : s);
-  return [...new Set([normalizeSweetnessTerm(raw), normalizeSweetnessTerm(raw.replace(DASH_RX, ' '))])].filter(Boolean);
-};
+// How a NAME is read for a sweetness term — shared by the write rule
+// (services/sweetnessWrite), which reads the term, and the display name and
+// slug below, which must count as carried every spelling the rule reads.
+//
+// The spellings the style guard knows for the same word, name side only:
+// "Süß" typed without the umlaut is "Suess", which the fold leaves alone, and
+// one import wrote "Riesling Troken". utils/styleTerms reads names through the
+// same map; the producer-field rules there must NOT gain these (Suess is a
+// real surname).
+const SWEETNESS_ALIASES = new Map([
+  ['suess', 'suss'],
+  ['fruchtsuess', 'fruchtsuss'],
+  ['troken', 'trocken'],
+]);
+// A word of a name: letters (with their marks) and digits. Everything else —
+// spaces, commas, hyphens, apostrophes, brackets — stands between words.
+const SWEETNESS_WORD_RX = /[\p{L}\p{M}\p{N}]+/gu;
+// What may stand between the words of ONE term: spaces and every dash
+// ("Brut Nature", "Extra-Brut", "Demi–Sec"), the minus sign, the soft hyphen
+// and the zero-width characters a pasted label carries. A comma or a slash
+// ends a term.
+const SWEETNESS_TERM_GAP_RX = /^[\s\p{Pd}\u2212\u00AD\u200B-\u200D]+$/u;
+
+/**
+ * The words of a name, each with its key in the term table's fold and the
+ * aliases above applied: [{ text, start, end, key }]. A word the fold empties
+ * (another script, "Ø") has the key ''.
+ */
+function sweetnessWords(text) {
+  return [...String(text == null ? '' : text).matchAll(SWEETNESS_WORD_RX)].map((m) => {
+    const key = normalizeSweetnessTerm(m[0]);
+    return { text: m[0], start: m.index, end: m.index + m[0].length, key: SWEETNESS_ALIASES.get(key) || key };
+  });
+}
+
+/**
+ * The keys words[i .. i+len) of `text` read as, or null when they cannot be
+ * one term (a gap that is not a term gap, a word the fold empties): the span
+ * folded whole ("Extra-Brut" → "extrabrut") and word by word ("extra brut").
+ */
+function sweetnessSpanKeys(text, words, i, len) {
+  const span = words.slice(i, i + len);
+  if (span.length !== len || span.some((w) => !w.key)) return null;
+  for (let n = 1; n < len; n += 1) {
+    if (!SWEETNESS_TERM_GAP_RX.test(text.slice(span[n - 1].end, span[n].start))) return null;
+  }
+  return [normalizeSweetnessTerm(text.slice(span[0].start, span[len - 1].end)), span.map((w) => w.key).join(' ')];
+}
 
 /**
  * The name as the label reads it: the name, then the term — unless the name
  * already carries the term as whole words in ANY of its spellings (a wine
  * marked sweetnessInName, "Brut Premier"; "Champagne Extra-Brut" with the
- * term Extra Brut; "Cava Brut Natur" with Brut Nature), so nothing is ever
- * doubled. `term` is the word to show, or every spelling of the term — a list
- * whose first entry is shown, or a row { name, synonyms }. A word inside a
- * dashed compound counts as carried ("Demi-Sec" carries "sec"); the write rule
- * refuses that pair as a contradiction, so no stored wine has it. Every text
- * surface shows this (services/sweetnessOps.wineDisplayName); the slug is
- * built from it, which is why a migrated wine's URL does not move when the
- * word leaves its name. A wine without a term keeps its name exactly.
+ * term Extra Brut; "Cava Brut Natur" with Brut Nature; "Riesling Suess" with
+ * süß), read the way the write rule reads a name, so nothing is ever doubled.
+ * `term` is the word to show, or every spelling of the term — a list whose
+ * first entry is shown, or a row { name, synonyms }. A word inside a dashed
+ * compound counts as carried ("Demi-Sec" carries "sec"). Every text surface
+ * shows this (services/sweetnessOps.wineDisplayName); the slug is built from
+ * it, which is why a migrated wine's URL does not move when the word leaves
+ * its name. A wine without a term keeps its name exactly (trimmed).
  */
 const appendSweetnessTerm = (name, term) => {
   const n = String(name == null ? '' : name).trim();
@@ -529,9 +569,23 @@ const appendSweetnessTerm = (name, term) => {
   const t = spellings[0] || '';
   if (!t) return n;
   if (!n) return t;
-  const nameFolds = sweetnessFolds(n).map((f) => ` ${f} `);
-  const carried = spellings.some((s) => sweetnessFolds(s).some((f) => nameFolds.some((nf) => nf.includes(` ${f} `))));
-  return carried ? n : `${n} ${t}`;
+  const keys = new Set();
+  let maxWords = 1;
+  for (const s of spellings) {
+    const words = sweetnessWords(s);
+    maxWords = Math.max(maxWords, words.length);
+    keys.add(normalizeSweetnessTerm(s));
+    keys.add(words.map((w) => w.key).join(' '));
+  }
+  keys.delete('');
+  const words = sweetnessWords(n);
+  for (let len = 1; len <= Math.min(maxWords, words.length); len += 1) {
+    for (let i = 0; i + len <= words.length; i += 1) {
+      const spanKeys = sweetnessSpanKeys(n, words, i, len);
+      if (spanKeys && spanKeys.some((k) => keys.has(k))) return n;
+    }
+  }
+  return `${n} ${t}`;
 };
 
 // DRAFT namespace (a wine created privately and published later). Same
@@ -1320,6 +1374,10 @@ module.exports = {
   normalizeSweetnessTerm,
   sweetnessKeySegment,
   stripSweetnessKeySegment,
+  SWEETNESS_ALIASES,
+  SWEETNESS_TERM_GAP_RX,
+  sweetnessWords,
+  sweetnessSpanKeys,
   appendSweetnessTerm,
   MAX_STAR_GRADE,
   sanitizeTaxonomyName,

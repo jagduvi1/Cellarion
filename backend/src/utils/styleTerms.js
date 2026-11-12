@@ -36,7 +36,7 @@
  * reject; where one side is silent it is silence, not disagreement.
  */
 
-const { normalizeString, spellStarGrades, MAX_STAR_GRADE } = require('./normalize');
+const { normalizeString, spellStarGrades, MAX_STAR_GRADE, SWEETNESS_ALIASES } = require('./normalize');
 
 // Sweetness / dryness across label languages, pre-normalized (normalizeString
 // folds "Roșu" → 'rosu', "off-dry" → 'offdry'; ß is not decomposable and is
@@ -87,21 +87,14 @@ const PRADIKAT_ALIASES = new Map([
 
 // The sweetness twin of PRADIKAT_ALIASES, for the same keyboard: "Süß" typed
 // without the umlaut is "Suess", which normalizeString leaves alone — without
-// this the guard silently fails open for the standard ue-transliteration
-// (found by the post-release audit, verified by execution). NAME side only,
-// like the Prädikat map (the label sweetness write rule, services/
-// sweetnessWrite, reads names through it too): the producer-field rules in crossFieldChecks read
-// SWEETNESS_WORDS directly and must NOT gain 'suess' — Suess is a real
-// surname, and flagging every "Weingut Suess" as a style-term producer is
-// the 'dry'/'sweet' problem over again.
-const SWEETNESS_ALIASES = new Map([
-  ['suess', 'suss'],
-  ['fruchtsuess', 'fruchtsuss'],
-  // Same file as the Prädikat typo above: it wrote the wine's own name
-  // "Riesling Troken". Name side only, like every entry here — SWEETNESS_WORDS
-  // itself must not gain it, for the 'Weingut Suess' reason given above.
-  ['troken', 'trocken'],
-]);
+// this the guard silently fails open for the standard ue-transliteration.
+// "Troken" comes from the same cellar export as the Prädikat typo above.
+// NAME side only, like the Prädikat map: the producer-field rules in
+// crossFieldChecks read SWEETNESS_WORDS directly and must NOT gain 'suess' —
+// Suess is a real surname, and flagging every "Weingut Suess" as a style-term
+// producer is the 'dry'/'sweet' problem over again. The map lives in
+// utils/normalize (SWEETNESS_ALIASES), where the label sweetness write rule
+// and the display name read names through it too.
 
 // Style words that are also ordinary name words. "Dry Creek Zinfandel" states
 // no sweetness, and "Sweet Cheeks Pinot" is a winery. Excluded from the NAME

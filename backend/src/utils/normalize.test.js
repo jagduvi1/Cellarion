@@ -994,6 +994,20 @@ describe('appendSweetnessTerm — every spelling of the term counts as carried',
     expect(slug(name, 'Example Estate', term)).toBe(slug(name, 'Example Estate'));
   });
 
+  test.each([
+    // Spellings the write rule reads as the term (utils/normalize SWEETNESS_ALIASES).
+    ['Riesling Suess', { name: 'süß', synonyms: [] }],
+    ['Riesling Troken', { name: 'trocken', synonyms: [] }],
+    // Every character the rule reads between the words of one term.
+    ['Cava Brut' + String.fromCharCode(0xAD) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+    ['Cava Brut' + String.fromCharCode(0x200B) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+    ['Cava Brut' + String.fromCharCode(0x2212) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+    ['Cava Brut' + String.fromCharCode(0x2013) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+  ])('%j carries the term the rule reads in it', (name, term) => {
+    expect(append(name, term)).toBe(name);
+    expect(slug(name, 'Example Estate', term)).toBe(slug(name, 'Example Estate'));
+  });
+
   test('a term the name does not carry is shown after it, as the first spelling', () => {
     expect(append('Riesling Kabinett', { name: 'trocken', synonyms: [] })).toBe('Riesling Kabinett trocken');
     expect(append('Riesling Kabinett', ['trocken', 'troken'])).toBe('Riesling Kabinett trocken');
@@ -1001,7 +1015,7 @@ describe('appendSweetnessTerm — every spelling of the term counts as carried',
   });
 
   test('a wine without a term keeps its name and its slug byte for byte', () => {
-    for (const name of ['Riesling Kabinett', 'Champagne Extra-Brut', 'Cava Brut Natur', '  Rosé  ', 'Château X Grand Vin']) {
+    for (const name of ['Riesling Kabinett', 'Champagne Extra-Brut', 'Cava Brut Natur', '  Rosé  ', 'Château X Grand Vin', 'Cuvée  Double  Space']) {
       for (const none of [null, undefined, '', [], { name: '' }]) {
         expect(append(name, none)).toBe(name.trim());
         expect(slug(name, 'Example Estate', none)).toBe(slug(name, 'Example Estate'));
@@ -1012,8 +1026,8 @@ describe('appendSweetnessTerm — every spelling of the term counts as carried',
 
 describe('a wine without a term keys and slugs as it always has', () => {
   const { generateWineSlug: slug, generateWineKey: key } = require('./normalize');
-  // Written down from the code before every spelling of a term was read: these
-  // must never move.
+  // Literal keys and slugs, the same as main's: a wine without a term must
+  // never move.
   test.each([
     ['Riesling Kabinett', 'Example Estate', 'example-estate-riesling-kabinett', 'example estate:riesling kabinett:mosel'],
     ['Champagne Extra-Brut', 'Example Estate', 'example-estate-champagne-extrabrut', 'example estate:champagne extrabrut:mosel'],

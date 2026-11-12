@@ -15,42 +15,52 @@
  * Kept apart from sweetnessOps because every read surface imports that module
  * and none of them needs this one: the rule has its own vocabulary (the
  * ambiguity kinds, the review markers, the switch), and a reader looking for
- * what happens when a term is written finds all of it here.
+ * what happens when a term is written finds all of it here. How a name is
+ * split into words, and which characters join the words of one term, is
+ * utils/normalize (sweetnessWords): the display name and the slug read names
+ * the same way, so they never repeat a term the rule reads in a name.
  *
  * No write path calls the rule yet.
  */
 const mongoose = require('mongoose');
 const constants = require('../config/constants');
-const { normalizeSweetnessTerm } = require('../utils/normalize');
-const { NAME_AMBIGUOUS_WORDS, SWEETNESS_ALIASES, statedStyle, sweetByLawPradikat } = require('../utils/styleTerms');
+const Region = require('../models/Region');
+const { normalizeSweetnessTerm, sweetnessWords, sweetnessSpanKeys, SWEETNESS_TERM_GAP_RX } = require('../utils/normalize');
+const { NAME_AMBIGUOUS_WORDS, statedStyle, sweetByLawPradikat } = require('../utils/styleTerms');
 const { loadTerms, resolveLoaded, scaleForType } = require('./sweetnessOps');
 
-// A word of a name: letters (with their marks) and digits. Everything else —
-// spaces, commas, hyphens, apostrophes, brackets — stands between words.
-const WORD_RX = /[\p{L}\p{M}\p{N}]+/gu;
-// What may stand between the words of ONE term in a name: spaces and every
-// dash ("Brut Nature", "Extra-Brut", "Demi–Sec"), the soft hyphen and the
-// zero-width joiners a pasted label carries. A comma or a slash ends a term.
-const TERM_GAP_RX = /^[\s\p{Pd}−­​-‍]+$/u;
 // Glue that makes one word of two ("Demi/Sec", "Brut.Rosé", "L'Extra Brut"):
 // a term attached to a neighbour by it is not read.
 const GLUE_RX = /^[/.'’`´]+$/u;
-const isDash = (ch) => /^[\p{Pd}−]$/u.test(ch || '');
 const isSpace = (ch) => /^\s$/u.test(ch || '');
-// The separators a cut may leave dangling. Attached ones sit against the word
-// before them ("Riesling, trocken" → "Riesling,"); spaced ones stand between
-// two spaces ("Riesling - trocken"), and only those are a separator — a dash
-// glued to a word is part of it ("-S-").
+const isWordChar = (ch) => /^[\p{L}\p{M}\p{N}]$/u.test(ch || '');
+const hasWordChar = (s) => /[\p{L}\p{M}\p{N}]/u.test(s);
+// A dash, the minus sign, the soft hyphen or a zero-width character: what
+// glues a term to a neighbour ("Riesling-trocken", "Pinot-Brut-Rosé").
+const isJoiner = (ch) => /^[\p{Pd}\u2212\u00AD\u200B-\u200D]$/u.test(ch || '');
+const allOf = (s, test) => s.length > 0 && [...s].every(test);
+// Punctuation that sits against the word before it ("Riesling trocken." →
+// "Riesling."): left touching a term, it stays on the word before.
 const ATTACHED_SEPS = new Set([',', ';', ':', '.']);
-const SPACED_SEPS = new Set(['-', '‐', '‑', '‒', '–', '—', '―', '−', '/', '|', '·']);
+// A separator token standing between two spaces ("Riesling - trocken"): left
+// at an edge of the name by the cut, it goes with the term.
+const SPACED_SEPS = new Set(['-', '\u2010', '\u2011', '\u2012', '\u2013', '\u2014', '\u2015', '\u2212', '/', '|', '·']);
+// What the neighbour of a term at an edge of the name may lose: a comma,
+// colon, semicolon or dash that only parted it from the term ("Riesling,
+// trocken", "Riesling- trocken"). Never a period: "R.D.", "b.A." and "N.V."
+// end in one.
+const EDGE_SEPS = new Set([',', ';', ':']);
+const isEdgeSep = (ch) => EDGE_SEPS.has(ch) || isJoiner(ch);
 // Brackets and quotes whose pair the cut empties ("Riesling (trocken)").
 const PAIRS = { '(': ')', '[': ']', '"': '"', '“': '”', '„': '“', '«': '»', '»': '«' };
 const OPENERS = new Set(Object.keys(PAIRS));
 const CLOSERS = new Set(Object.values(PAIRS));
 // Words that change the term beside them: "Semi-Secco" is not secco, "halb
 // trocken" not trocken, "Ultra Brut" not Brut, "Brut Zéro Dosage" not Brut.
-// A hit next to one is not read.
+// A hit next to one is not read, nor a hit two words before "dosage" ("Brut
+// Sans Dosage"; "Brut Sans Année" is Brut).
 const MODIFIERS = new Set(['semi', 'demi', 'halb', 'half', 'meio', 'medio', 'extra', 'ultra', 'zero', 'nature', 'dosage']);
+const DOSAGE = 'dosage';
 const ID_RX = /^[0-9a-f]{24}$/i;
 // A name longer than this is not read for a term: no label prints one, and
 // the reading must stay cheap on whatever a caller hands in.
@@ -61,9 +71,9 @@ const NAME_MAX = 300;
 const DETAIL_MAX = 300;
 const ECHO_MAX = 60;
 const clip = (s) => String(s).slice(0, DETAIL_MAX);
-/** A caller's word as one short, quoted line: no line breaks, no markup. */
+/** A caller's word as one short, quoted line: no line breaks, no markup, no inner double quote. */
 function quote(s) {
-  const flat = String(s == null ? '' : s).replace(/[\p{C}\s]+/gu, ' ').replace(/[<>]/g, '').trim();
+  const flat = String(s == null ? '' : s).replace(/[\p{C}\s]+/gu, ' ').replace(/[<>]/g, '').replace(/"/g, "'").trim();
   return `"${flat.length > ECHO_MAX ? `${flat.slice(0, ECHO_MAX - 1)}…` : flat}"`;
 }
 const echo = (s) => quote(s).slice(1, -1);
@@ -86,6 +96,12 @@ const idOf = (v) => (v && typeof v === 'object' && v._id ? v._id : v);
 const sameId = (a, b) => a != null && b != null && String(idOf(a)) === String(idOf(b));
 const scaleWords = (scale) => (scale === 'sparkling' ? 'a sparkling wine' : 'a still wine');
 const isDoc = (target) => target instanceof mongoose.Document;
+/** A table row handed to a caller: a copy, its lists too, so the cached table cannot be changed through it. */
+const copyRow = (row) => (row ? {
+  ...row,
+  ...(Array.isArray(row.synonyms) ? { synonyms: [...row.synonyms] } : {}),
+  ...(Array.isArray(row.normalizedSynonyms) ? { normalizedSynonyms: [...row.normalizedSynonyms] } : {}),
+} : row);
 
 /**
  * A term as a caller may send it: a string (the word as printed, or a term
@@ -96,6 +112,30 @@ function wordOf(value) {
   if (typeof value === 'string') return { word: value.trim() };
   if (value instanceof mongoose.Types.ObjectId) return { word: String(value) };
   return { word: '[not a word]', invalid: true };
+}
+
+/** Two term rows — or a row and a populated ref read without its id — are the same term. */
+function sameTerm(a, b) {
+  if (!a || !b) return false;
+  if (a._id != null && b._id != null) return String(a._id) === String(b._id);
+  return a.scale === b.scale && normalizeSweetnessTerm(a.name) === normalizeSweetnessTerm(b.name);
+}
+
+/**
+ * A stored term ref, however it was loaded — an id (string or ObjectId), or a
+ * populated row with its id or without it (the write tools load the term as
+ * 'name band scale regulated -_id'; then it is found by name and scale) — as a
+ * row of the loaded table. Null for none; the ref itself for a populated row
+ * the table does not hold; 'unresolved' for an id the table does not hold.
+ */
+function storedRow(terms, ref) {
+  if (ref == null) return null;
+  if (typeof ref === 'object' && !(ref instanceof mongoose.Types.ObjectId) && typeof ref.name === 'string' && ref.name) {
+    const byId = ref._id != null ? terms.byId.get(String(ref._id)) : null;
+    return byId || (terms.byKey.get(normalizeSweetnessTerm(ref.name)) || [])
+      .find((r) => r.name === ref.name && (!ref.scale || r.scale === ref.scale)) || ref;
+  }
+  return terms.byId.get(String(idOf(ref))) || 'unresolved';
 }
 
 // ── The term table, read for names ───────────────────────────────────────────
@@ -118,9 +158,7 @@ function scaleIndex(terms, scale) {
   let maxWords = 1;
   for (const row of terms.byId.values()) {
     if (scale && row.scale !== scale) continue;
-    for (const s of [row.name, ...(row.synonyms || [])]) {
-      maxWords = Math.max(maxWords, (String(s || '').match(WORD_RX) || []).length);
-    }
+    for (const s of [row.name, ...(row.synonyms || [])]) maxWords = Math.max(maxWords, sweetnessWords(s).length);
   }
   const single = [...keys.entries()]
     .filter(([k]) => !k.includes(' ') && k.length >= 3)
@@ -132,37 +170,24 @@ function scaleIndex(terms, scale) {
 }
 
 /**
- * The words of a name, each with its key in the table's fold — through the
- * spellings the style guard already knows ("Suess" is süß, the observed
- * "Troken" is trocken: utils/styleTerms SWEETNESS_ALIASES).
- */
-function wordsOf(text) {
-  return [...text.matchAll(WORD_RX)].map((m) => {
-    const key = normalizeSweetnessTerm(m[0]);
-    return { text: m[0], start: m.index, end: m.index + m[0].length, key: SWEETNESS_ALIASES.get(key) || key };
-  });
-}
-
-/**
  * The spellings of the scale's terms that stand in the name as words of their
  * own, longest first, never overlapping. A span of several words counts only
- * when spaces or dashes join them, and matches its spelling either way it is
- * folded ("Extra-Brut" → "extrabrut", or word by word → "extra brut"). A word
- * the fold empties (another script, "Ø") is never part of a span.
+ * when term gaps join them (utils/normalize sweetnessSpanKeys: spaces, dashes,
+ * the soft hyphen, zero-width characters), and matches its spelling either
+ * way it is folded ("Extra-Brut" → "extrabrut", or word by word → "extra
+ * brut"). A word the fold empties (another script, "Ø") is never part of one.
  */
 function standaloneHits(text, words, index) {
   const taken = new Array(words.length).fill(false);
   const hits = [];
   for (let len = Math.min(index.maxWords, words.length); len >= 1; len -= 1) {
     for (let i = 0; i + len <= words.length; i += 1) {
-      const span = words.slice(i, i + len);
-      if (span.some((w, n) => taken[i + n] || !w.key)) continue;
-      if (span.slice(1).some((w, n) => !TERM_GAP_RX.test(text.slice(span[n].end, w.start)))) continue;
-      const first = span[0]; const last = span[len - 1];
-      const spellings = [normalizeSweetnessTerm(text.slice(first.start, last.end)), span.map((w) => w.key).join(' ')];
-      const key = spellings.find((k) => k && index.keys.has(k));
+      if (taken.slice(i, i + len).some(Boolean)) continue;
+      const keys = sweetnessSpanKeys(text, words, i, len);
+      const key = keys && keys.find((k) => k && index.keys.has(k));
       if (!key) continue;
       for (let n = 0; n < len; n += 1) taken[i + n] = true;
+      const first = words[i]; const last = words[i + len - 1];
       hits.push({ firstWord: i, lastWord: i + len - 1, start: first.start, end: last.end, text: text.slice(first.start, last.end), key });
     }
   }
@@ -185,94 +210,178 @@ function insideWord(words, index) {
 
 const ambiguity = (kind, detail) => ({ reason: 'name_ambiguous', kind, detail: clip(detail) });
 
+/**
+ * The wine's appellation, region and producer as word keys (" arroyo seco "),
+ * so a place written with a dash or a double space still counts. Takes a
+ * string, or a list of strings or { name } objects.
+ */
+function placeKeysOf(places) {
+  const keys = [];
+  for (const p of Array.isArray(places) ? places : [places]) {
+    const text = typeof p === 'string' ? p : (p && typeof p === 'object' && typeof p.name === 'string' ? p.name : '');
+    const words = sweetnessWords(text).map((w) => w.key).filter(Boolean);
+    if (words.length) keys.push(` ${words.join(' ')} `);
+  }
+  return keys;
+}
+
 /** What stands between two words of the name (or the name's edge). */
 const gapBefore = (text, words, hit) => text.slice(hit.firstWord > 0 ? words[hit.firstWord - 1].end : 0, hit.start);
 const gapAfter = (text, words, hit) => text.slice(hit.end, hit.lastWord + 1 < words.length ? words[hit.lastWord + 1].start : text.length);
 
 /** Why a hit, read in its neighbourhood, is not the label term — or null. */
-function neighbourhoodDoubt(text, words, hit, placeFolds) {
+function neighbourhoodDoubt(text, words, hit, placeKeys) {
   const before = hit.firstWord > 0 ? words[hit.firstWord - 1] : null;
   const after = hit.lastWord + 1 < words.length ? words[hit.lastWord + 1] : null;
   const gapB = gapBefore(text, words, hit);
   const gapA = gapAfter(text, words, hit);
-  const joined = (gap) => gap && TERM_GAP_RX.test(gap);
-  if ((before && MODIFIERS.has(before.key) && joined(gapB)) || (after && MODIFIERS.has(after.key) && joined(gapA))) {
-    return ambiguity('modifier', `${quote(hit.text)} stands beside ${quote((before && MODIFIERS.has(before.key) ? before : after).text)}, which changes it; not read as the label sweetness`);
+  const joined = (gap) => gap && SWEETNESS_TERM_GAP_RX.test(gap);
+  const next = after && hit.lastWord + 2 < words.length ? words[hit.lastWord + 2] : null;
+  const modifier = (before && MODIFIERS.has(before.key) && joined(gapB) && before)
+    || (after && MODIFIERS.has(after.key) && joined(gapA) && after)
+    || (next && next.key === DOSAGE && joined(gapA) && joined(text.slice(after.end, next.start)) && next);
+  if (modifier) {
+    return ambiguity('modifier', `${quote(hit.text)} stands beside ${quote(modifier.text)}, which changes it; not read as the label sweetness`);
   }
   if ((before && GLUE_RX.test(gapB)) || (after && GLUE_RX.test(gapA))) {
     return ambiguity('glued_word', `${quote(hit.text)} is joined to the next word; not read as the label sweetness`);
   }
-  const fold = ` ${normalizeSweetnessTerm(hit.text)} `;
-  if (placeFolds.some((p) => p.includes(fold))) {
+  const own = ` ${words.slice(hit.firstWord, hit.lastWord + 1).map((w) => w.key).join(' ')} `;
+  if (placeKeys.some((p) => p.includes(own))) {
     return ambiguity('place_word', `${quote(hit.text)} is also part of the wine's appellation, region or producer; not read as the label sweetness`);
   }
   return null;
 }
 
-/** The end of `s` without trailing space and dangling separators (linear). */
-function stripTrailingSeps(s) {
+/** Where the whitespace-delimited token ending at `to` starts. */
+function tokenStart(s, to) { let i = to; while (i > 0 && !isSpace(s[i - 1])) i -= 1; return i; }
+/** Where the whitespace-delimited token starting at `from` ends. */
+function tokenEnd(s, from) { let i = from; while (i < s.length && !isSpace(s[i])) i += 1; return i; }
+
+/** The last word of `s` without the separators that only parted it from a term after it. */
+function dropTrailingSeps(s) {
+  const from = tokenStart(s, s.length);
+  if (isJoiner(s[from])) return s; // "-S-": a dash that opens the word is the word's own
   let i = s.length;
-  for (;;) {
-    while (i > 0 && isSpace(s[i - 1])) i -= 1;
-    if (i > 0 && ATTACHED_SEPS.has(s[i - 1])) { i -= 1; continue; }
-    let j = i;
-    while (j > 0 && SPACED_SEPS.has(s[j - 1])) j -= 1;
-    if (j < i && (j === 0 || isSpace(s[j - 1]))) { i = j; continue; }
-    return s.slice(0, i);
-  }
+  while (i > from && isEdgeSep(s[i - 1])) i -= 1;
+  return i < s.length && hasWordChar(s.slice(from, i)) ? s.slice(0, i) : s;
 }
 
-/** The start of `s` without leading space and dangling separators (linear). */
-function stripLeadingSeps(s) {
+/** The first word of `s` without the separators that only parted it from a term before it. */
+function dropLeadingSeps(s) {
+  const to = tokenEnd(s, 0);
+  if (isJoiner(s[to - 1])) return s;
   let i = 0;
-  for (;;) {
-    while (i < s.length && isSpace(s[i])) i += 1;
-    if (i < s.length && ATTACHED_SEPS.has(s[i])) { i += 1; continue; }
-    let j = i;
-    while (j < s.length && SPACED_SEPS.has(s[j])) j += 1;
-    if (j > i && (j === s.length || isSpace(s[j]))) { i = j; continue; }
-    return s.slice(i);
-  }
+  while (i < to && isEdgeSep(s[i])) i += 1;
+  return i > 0 && hasWordChar(s.slice(i, to)) ? s.slice(i) : s;
 }
 
 /**
- * Cut [start, end) out of a name and tidy what the cut leaves: the space, a
- * dangling separator, an emptied bracket or quote pair. A dash that glues the
- * word to a neighbour goes with it ("Riesling-trocken" → "Riesling"); a dash
- * glued inside another word stays ("-S-"). Linear in the length of the name:
- * no pattern that backtracks over a long run of spaces.
+ * Cut [start, end) — the term — out of a name. Every letter and digit
+ * outside the term stays, in order, and so does every other character except
+ * these, which go with the term: the spaces beside it; one dash directly
+ * against it ("Riesling-trocken" → "Riesling"; between two words it glued,
+ * one stays: "Pinot-Brut-Rosé" → "Pinot-Rosé"); a bracket or quote pair it fills; a
+ * separator token it would leave at an edge of the name ("Riesling -
+ * trocken") or doubled ("Cuvée & Brut & Rosé" → "Cuvée & Rosé"); a comma,
+ * colon, semicolon or dash that parted the term at an edge from its neighbour
+ * ("Riesling, trocken"); and a period after the term that the word before
+ * already ends in ("N.V. Brut." → "N.V."). An opening quote before the term
+ * moves to the next word, closing punctuation after it to the word before
+ * ("Riesling trocken." → "Riesling."); a quote that belongs to a neighbour
+ * keeps its space ('Sekt "Alte Reben" Brut Rosé'). Returns null for any other
+ * shape — the caller reads nothing (untidy_cut). Linear in the length of the
+ * name: index loops, no pattern that backtracks.
  */
 function cutSpan(text, start, end) {
-  if (start > 1 && isDash(text[start - 1]) && !isSpace(text[start - 2])) start -= 1;
-  else if (end + 1 < text.length && isDash(text[end]) && !isSpace(text[end + 1])) end += 1;
-  let left = text.slice(0, start).trimEnd();
-  let right = text.slice(end).trimStart();
-  const open = left.slice(-1);
-  if (OPENERS.has(open) && right[0] === PAIRS[open]) {
-    left = left.slice(0, -1).trimEnd();
-    right = right.slice(1).trimStart();
+  // The punctuation touching the term, with no space between.
+  let a = start; while (a > 0 && !isSpace(text[a - 1]) && !isWordChar(text[a - 1])) a -= 1;
+  let b = end; while (b < text.length && !isSpace(text[b]) && !isWordChar(text[b])) b += 1;
+  let touchL = text.slice(a, start);
+  let touchR = text.slice(end, b);
+  const gluedL = a > 0 && !isSpace(text[a - 1]);
+  const gluedR = b < text.length && !isSpace(text[b]);
+  let pl = touchL.length; let pr = 0;
+  while (pl > 0 && pr < touchR.length && PAIRS[touchL[pl - 1]] === touchR[pr]) { pl -= 1; pr += 1; }
+  touchL = touchL.slice(0, pl); touchR = touchR.slice(pr);
+  // One dash directly against the term; one behind an emptied pair, or two,
+  // may be a neighbour's own ("-S-") and is left to the untidy rule below.
+  const joinL = pr === 0 && touchL.length === 1 && isJoiner(touchL);
+  const joinR = pr === 0 && touchR.length === 1 && isJoiner(touchR);
+  const joint = joinL && joinR && gluedL && gluedR ? touchR : '';
+  if (joinL) touchL = '';
+  if (joinR) touchR = '';
+  if (touchL && (gluedL || !allOf(touchL, (c) => OPENERS.has(c)))) return null;
+  if (touchR && (gluedR || !allOf(touchR, (c) => CLOSERS.has(c) || ATTACHED_SEPS.has(c)))) return null;
+
+  // At most one separator token on each side, between the term and its neighbour.
+  const sepEndingAt = (to) => { const from = tokenStart(text, to); const tok = text.slice(from, to); return tok && !hasWordChar(tok) ? from : -1; };
+  const sepStartingAt = (from) => { const to = tokenEnd(text, from); const tok = text.slice(from, to); return tok && !hasWordChar(tok) ? to : -1; };
+  let l = a; while (l > 0 && isSpace(text[l - 1])) l -= 1;
+  let sepL = '';
+  const fromL = sepEndingAt(l);
+  if (fromL >= 0) {
+    sepL = text.slice(fromL, l);
+    l = fromL; while (l > 0 && isSpace(text[l - 1])) l -= 1;
+    if (sepEndingAt(l) >= 0) return null;
   }
-  if (OPENERS.has(left.slice(-1))) return left + stripLeadingSeps(right);
-  if (CLOSERS.has(right[0])) return stripTrailingSeps(left) + right;
-  if (!right) return stripTrailingSeps(left);
-  if (!left) return stripLeadingSeps(right);
-  const rightBare = stripLeadingSeps(right);
-  if (rightBare !== right && /[,;:/|·\p{Pd}−]$/u.test(left)) return `${left} ${rightBare}`;
-  if (ATTACHED_SEPS.has(right[0])) return `${left}${right}`;
-  return `${left} ${right}`;
+  let r = b; while (r < text.length && isSpace(text[r])) r += 1;
+  let sepR = '';
+  const toR = sepStartingAt(r);
+  if (toR >= 0) {
+    sepR = text.slice(r, toR);
+    r = toR; while (r < text.length && isSpace(text[r])) r += 1;
+    if (sepStartingAt(r) >= 0) return null;
+  }
+  let left = text.slice(0, l);
+  let right = text.slice(r);
+
+  const spaced = (sep) => allOf(sep, (c) => SPACED_SEPS.has(c));
+  if ((sepL && !left) || (sepR && !right)) return null;
+  if (sepL && !right) { if (!spaced(sepL)) return null; sepL = ''; }
+  if (sepR && !left) { if (!spaced(sepR)) return null; sepR = ''; }
+  if (sepL && sepR) { if (sepL !== sepR) return null; sepR = ''; }
+  if (!right) left = dropTrailingSeps(left);
+  if (!left) right = dropLeadingSeps(right);
+
+  // A separator after the term inside a bracket opened before it parted the
+  // term from the next item: "Rosé (Brut, Magnum)" → "Rosé (Magnum)".
+  if (touchL && allOf(touchR, (c) => ATTACHED_SEPS.has(c))) touchR = '';
+  if (touchR) {
+    if (!left) {
+      if (!allOf(touchR, (c) => ATTACHED_SEPS.has(c))) return null;
+    } else {
+      // ...and one before a bracket the term closes: "(Magnum, Brut)" → "(Magnum)".
+      if (CLOSERS.has(touchR[0]) && !sepL) left = dropTrailingSeps(left);
+      if (sepL) return null;
+      const last = left[left.length - 1];
+      if (!isWordChar(last) && !CLOSERS.has(last)) {
+        if (last !== touchR[0]) return null;
+        touchR = touchR.slice(1);
+      }
+      left += touchR;
+    }
+  }
+  if (touchL) {
+    if (!right || sepR) return null;
+    right = touchL + right;
+  }
+  if (!left || !right) return left || right;
+  if (sepL || sepR) return `${left} ${sepL || sepR} ${right}`;
+  return joint ? `${left}${joint}${right}` : `${left} ${right}`;
 }
 
-/** A word made of punctuation only — what a cut must not leave at an edge of the name. */
-const bareToken = (t) => t && !/[\p{L}\p{N}]/u.test(t) && !OPENERS.has(t) && !CLOSERS.has(t);
+const untidy = (hit) => ambiguity('untidy_cut', `taking ${quote(hit.text)} out would leave the name untidy; nothing read`);
 
 /**
  * Read the label sweetness word out of a wine NAME, on a table the caller
  * loaded (sync). Returns { name, term, ambiguous }:
  *
- *   term       the row the name states as a word of its own, or null;
- *   name       the name without that word (separators tidied), or the name
- *              unchanged when nothing was read, or when no letter would be
- *              left ("Brut", "Brut 2012": the word is what calls the wine);
+ *   term       a copy of the row the name states as a word of its own, or null;
+ *   name       the name without that word (cutSpan says what goes with it),
+ *              or the name unchanged when nothing was read, or when no letter
+ *              would be left ("Brut", "Brut 2012": the word is what calls the
+ *              wine);
  *   ambiguous  null, or { reason: 'name_ambiguous', kind, detail } when the
  *              name holds a term that is NOT read — kind:
  *                english_word  only the English "dry" / "sweet" (Dry Creek,
@@ -284,12 +393,12 @@ const bareToken = (t) => t && !/[\p{L}\p{N}]/u.test(t) && !OPENERS.has(t) && !CL
  *                              anywhere, the dosage words leave every
  *                              sparkling name;
  *                modifier      beside a word that changes it ("Semi-Secco",
- *                              "halb trocken", "Brut Zéro Dosage");
+ *                              "halb trocken", "Brut Sans Dosage");
  *                glued_word    joined to a neighbour by / . or ' ("Demi/Sec");
  *                place_word    the word also stands in the wine's appellation,
  *                              region or producer ("Arroyo Seco");
- *                untidy_cut    the cut would leave punctuation at an edge of
- *                              the name ("Brut & Rosé");
+ *                untidy_cut    the cut cannot tidy what it would leave ("Brut
+ *                              & Rosé"): nothing is removed;
  *                inside_word   a term inside a longer word ("Prosecco");
  *                no_scale      the wine has no type, so the scale is unknown;
  *                too_long      a name over 300 characters is not read.
@@ -297,9 +406,11 @@ const bareToken = (t) => t && !/[\p{L}\p{N}]/u.test(t) && !OPENERS.has(t) && !CL
  * `scale` is the wine's (sweetnessOps.scaleForType): false (fortified, not a
  * wine) reads nothing. `keep` is the wine's sweetnessInName: the word IS the
  * name, so nothing is removed and nothing is read from it. `places` are the
- * wine's appellation, region and producer as text. Matching is by whole
- * words, names and synonyms, casing, ß and accents folded the way the table
- * folds them (normalizeSweetnessTerm). The switch is not read here.
+ * wine's appellation, region and producer as text (a string, or a list of
+ * strings or { name } objects). Matching is by whole words, names and
+ * synonyms, casing, ß and accents folded the way the table folds them
+ * (normalizeSweetnessTerm), through the alias spellings. The switch is not
+ * read here.
  */
 function extractLoaded(terms, name, { scale = null, keep = false, countryId = null, places = [] } = {}) {
   const text = typeof name === 'string' ? name : '';
@@ -307,7 +418,7 @@ function extractLoaded(terms, name, { scale = null, keep = false, countryId = nu
   if (scale === false || keep || !text.trim() || !terms || terms.empty) return none;
   if (text.length > NAME_MAX) return { ...none, ambiguous: ambiguity('too_long', `the name is over ${NAME_MAX} characters; not read`) };
   const index = scaleIndex(terms, scale);
-  const words = wordsOf(text);
+  const words = sweetnessWords(text);
   const all = standaloneHits(text, words, index);
   if (!all.length) return { ...none, ambiguous: insideWord(words, index) };
   // The English words are ordinary name words beside a real term, and only a
@@ -324,20 +435,15 @@ function extractLoaded(terms, name, { scale = null, keep = false, countryId = nu
     return { ...none, ambiguous: ambiguity('two_terms', `the name states a sweetness term more than once (${hits.slice(0, 3).map((h) => quote(h.text)).join(', ')}); nothing read`) };
   }
   const hit = hits[0];
-  const placeFolds = (Array.isArray(places) ? places : [])
-    .filter((p) => typeof p === 'string' && p.trim())
-    .map((p) => ` ${normalizeSweetnessTerm(p)} `);
-  const doubt = neighbourhoodDoubt(text, words, hit, placeFolds);
+  const doubt = neighbourhoodDoubt(text, words, hit, placeKeysOf(places));
   if (doubt) return { ...none, ambiguous: doubt };
   if (scale === 'still' && hit.lastWord !== words.length - 1) {
     return { ...none, ambiguous: ambiguity('not_at_end', `${quote(hit.text)} is not the last word of the name; not read as the label sweetness`) };
   }
-  const out = cutSpan(text, hit.start, hit.end).trim();
-  const edges = out.split(/\s+/);
-  if (bareToken(edges[0]) || bareToken(edges[edges.length - 1])) {
-    return { ...none, ambiguous: ambiguity('untidy_cut', `taking ${quote(hit.text)} out would leave punctuation at the edge of the name; nothing read`) };
-  }
-  return { name: /\p{L}/u.test(out) ? out : text, term: hit.row, ambiguous: null };
+  const cut = cutSpan(text, hit.start, hit.end);
+  if (cut === null) return { ...none, ambiguous: untidy(hit) };
+  const out = cut.trim();
+  return { name: /\p{L}/u.test(out) ? out : text, term: copyRow(hit.row), ambiguous: null };
 }
 
 /**
@@ -377,18 +483,39 @@ function termFor(terms, word, { scale, countryId }) {
   return scale ? { otherScale: scales.find((s) => s !== scale) || scales[0] } : { bothScales: true };
 }
 
-/** Every term the name states as words of its own, the English words included. */
-function nameHits(terms, name, { scale, keep, countryId }) {
+/**
+ * Every term the name states as words of its own, the English words included,
+ * each with `doubt`: why the reader itself would not read it (a modifier, a
+ * glued word, a place word, a cut it cannot tidy), or null.
+ */
+function nameHits(terms, name, { scale, keep, countryId, places = [] }) {
   if (keep || !scale || terms.empty) return [];
   const text = typeof name === 'string' ? name : '';
   if (text.length > NAME_MAX) return [];
-  return standaloneHits(text, wordsOf(text), scaleIndex(terms, scale))
-    .map((h) => ({ ...h, row: resolveLoaded(terms, h.key, { scale, countryId }) }));
+  const words = sweetnessWords(text);
+  const placeKeys = placeKeysOf(places);
+  return standaloneHits(text, words, scaleIndex(terms, scale)).map((h) => ({
+    ...h,
+    row: resolveLoaded(terms, h.key, { scale, countryId }),
+    doubt: neighbourhoodDoubt(text, words, h, placeKeys) || (cutSpan(text, h.start, h.end) === null ? untidy(h) : null),
+  }));
 }
 
-/** The terms the name states as words of its own (the English words aside). */
+/** The terms the name states as words of its own (the English words aside), each with its doubt. */
 function nameTerms(terms, name, opts) {
   return nameHits(terms, name, opts).filter((h) => !NAME_AMBIGUOUS_WORDS.has(h.key));
+}
+
+/**
+ * The name's word held against a term: { clash } for the first word that
+ * states another term and that the reader stands by, else { doubted } for one
+ * it doubts (reported, never a contradiction), else {}.
+ */
+function nameAgainst(terms, name, row, opts) {
+  const other = nameTerms(terms, name, opts).filter((h) => h.row && !sameTerm(h.row, row));
+  const clash = other.find((h) => !h.doubt);
+  if (clash) return { clash };
+  return other.length ? { doubted: other[0].doubt } : {};
 }
 
 /** Why this term cannot sit on a wine whose Prädikat is sweet by law, or null. */
@@ -420,11 +547,24 @@ function sets(target, field, value) {
   return value !== undefined && value !== target[field];
 }
 
-/** The wine's appellation, region and producer, as text a name word is checked against. */
-function placesOf(target) {
-  const region = target.region && typeof target.region === 'object' && typeof target.region.name === 'string' ? target.region.name : null;
-  return [target.appellation, region, target.producer].filter((p) => typeof p === 'string' && p.trim());
+/**
+ * The wine's appellation, region and producer, as text a name word is checked
+ * against. A region loaded as an id only is read by its name (one lookup,
+ * only with a database connection).
+ */
+async function placesOf(target) {
+  const region = target.region;
+  let regionName = region && typeof region === 'object' && typeof region.name === 'string' ? region.name : null;
+  if (!regionName && region != null && mongoose.connection.readyState === 1 && ID_RX.test(String(idOf(region)))) {
+    const row = await Region.findById(String(idOf(region))).select('name').lean();
+    regionName = row && typeof row.name === 'string' ? row.name : null;
+  }
+  return [target.appellation, regionName, target.producer].filter((p) => typeof p === 'string' && p.trim());
 }
+
+// A stored term the table cannot name (a populated row it does not hold):
+// never equal to any row's id.
+const UNNAMED_TERM = '[a term this table does not hold]';
 
 /**
  * THE write rule for a wine's label sweetness. Sets `labelSweetness` (a term
@@ -438,7 +578,9 @@ function placesOf(target) {
  * pass them when the same write sets them, and call the rule BEFORE assigning
  * them (a value equal to the target's own is not a change). `type: null`
  * means "no type". `strict` (a curator at a form or tool) refuses what
- * lenient (a member, a scan, an import, a peer) drops and marks.
+ * lenient (a member, a scan, an import, a peer) drops and marks. The stored
+ * term is recognised however the target was loaded: an id, or a populated
+ * row with or without its id (storedRow).
  *
  *   explicit term  resolved on the wine's scale (and country). Unknown word:
  *                  strict → refused with the known terms, lenient → dropped,
@@ -447,11 +589,16 @@ function placesOf(target) {
  *                  refused, lenient → dropped. A different term in the name,
  *                  or a dry-side term on a Prädikat sweet by law: strict →
  *                  refused (term_contradiction), lenient → nothing written,
- *                  marker term_contradiction. Else written; with the switch
- *                  on, the same word leaves the name.
+ *                  marker term_contradiction. A word in the name the reader
+ *                  itself doubts (beside a modifier, glued, a place word, a
+ *                  cut it cannot tidy) is no contradiction: the term is
+ *                  written and the doubt reported in `ambiguous`. Else
+ *                  written; with the switch on, the same word leaves the name.
  *   a new type     the stored term moves to the same word on the new scale
- *                  (trocken → the Sekt "Trocken"); when that scale has no
- *                  such word, or the wine is now fortified: strict → refused
+ *                  (trocken → the Sekt "Trocken"), held against the name like
+ *                  an explicit term (strict → refused, lenient → not moved,
+ *                  marker term_contradiction); when that scale has no such
+ *                  word, or the wine is now fortified: strict → refused
  *                  (type_mismatch), lenient → kept and marked type_mismatch.
  *   no term given  switch off: nothing more. Switch on, and the write sets
  *                  the name or the type: the name's word moves into the field
@@ -492,7 +639,15 @@ async function assignSweetness(target, { labelSweetness, name, type, countryId =
   const keep = target.sweetnessInName === true;
   const cid = idOf(countryId) || idOf(target.country) || null;
   const wineLike = { name: currentName, classifications: target.classifications, classification: target.classification };
-  const places = placesOf(target);
+  const places = await placesOf(target);
+  const readOpts = { keep, countryId: cid, places };
+  /** The id of the term the target holds now (UNNAMED_TERM when the table cannot name it), or null. */
+  const storedId = () => {
+    const held = storedRow(terms, target.labelSweetness);
+    if (held == null) return null;
+    if (held === 'unresolved') return String(idOf(target.labelSweetness));
+    return held._id != null ? String(held._id) : UNNAMED_TERM;
+  };
 
   // A contradiction: refused on the strict path, marked on the lenient one.
   const contradiction = (word, detail) => {
@@ -502,15 +657,15 @@ async function assignSweetness(target, { labelSweetness, name, type, countryId =
   };
   const moveWordOutOfName = (row) => {
     if (!extract) return;
-    const read = extractLoaded(terms, currentName, { scale, keep, countryId: cid, places });
+    const read = extractLoaded(terms, currentName, { scale, ...readOpts });
     result.ambiguous = read.ambiguous;
     if (read.term && sameId(read.term._id, row._id) && read.name !== currentName) {
       target.name = read.name; result.name = read.name; result.changed = true;
     }
   };
   const writeTerm = (row) => {
-    if (!sameId(target.labelSweetness, row._id)) { target.labelSweetness = row._id; result.changed = true; }
-    result.term = { ...row };
+    if (!sameId(storedId(), row._id)) { target.labelSweetness = row._id; result.changed = true; }
+    result.term = copyRow(row);
   };
 
   if (labelSweetness !== undefined) {
@@ -551,44 +706,55 @@ async function assignSweetness(target, { labelSweetness, name, type, countryId =
     }
     const row = found.row;
     // The name is read on the term's own scale when the wine has no type.
-    const inName = nameTerms(terms, currentName, { scale: scale || row.scale, keep, countryId: cid })
-      .find((h) => h.row && !sameId(h.row._id, row._id));
-    if (inName) return contradiction(word, `the name states ${quote(inName.text)}, the term given is ${quote(row.name)}`);
+    const inName = nameAgainst(terms, currentName, row, { scale: scale || row.scale, ...readOpts });
+    if (inName.clash) return contradiction(word, `the name states ${quote(inName.clash.text)}, the term given is ${quote(row.name)}`);
     const byLaw = pradikatContradiction(row, wineLike);
     if (byLaw) return contradiction(word, byLaw);
     writeTerm(row);
     moveWordOutOfName(row);
+    if (!result.ambiguous && inName.doubted) result.ambiguous = inName.doubted;
     return result;
   }
 
-  // A new type: the stored term follows it to the same word on the new scale.
-  // Decided here, written last, so a refusal below leaves the wine untouched.
+  // A new type: the stored term follows it to the same word on the new scale,
+  // held against the name like an explicit term. Decided here, written last,
+  // so a refusal below leaves the wine untouched.
   let moved = null;
   if (typeSet && target.labelSweetness != null && !terms.empty) {
-    const storedRow = terms.byId.get(String(idOf(target.labelSweetness)));
-    if (storedRow && scale !== null && storedRow.scale !== scale) {
-      moved = scale === false ? null : resolveLoaded(terms, storedRow.name, { scale, countryId: cid });
+    const heldRow = storedRow(terms, target.labelSweetness);
+    const storedTerm = heldRow && heldRow !== 'unresolved' && heldRow.scale ? heldRow : null;
+    if (storedTerm && scale !== null && storedTerm.scale !== scale) {
+      moved = scale === false ? null : resolveLoaded(terms, storedTerm.name, { scale, countryId: cid });
       if (!moved) {
         const detail = scale === false
-          ? `the wine is now ${nonWine ? 'not a wine' : 'fortified'}, and keeps the term ${quote(storedRow.name)}`
-          : `the term ${quote(storedRow.name)} is for ${scaleWords(storedRow.scale)}; the wine is now ${scaleWords(scale)}`;
-        if (strict) return refuse('type_mismatch', storedRow.name, `The type was not changed: ${detail}. Clear or change the term first.`);
+          ? `the wine is now ${nonWine ? 'not a wine' : 'fortified'}, and keeps the term ${quote(storedTerm.name)}`
+          : `the term ${quote(storedTerm.name)} is for ${scaleWords(storedTerm.scale)}; the wine is now ${scaleWords(scale)}`;
+        if (strict) return refuse('type_mismatch', storedTerm.name, `The type was not changed: ${detail}. Clear or change the term first.`);
         return mark(target, result, 'type_mismatch', detail);
       }
+      const inName = nameAgainst(terms, currentName, moved, { scale, ...readOpts });
+      const why = inName.clash
+        ? `the name states ${quote(inName.clash.text)}, the term moved to the new type is ${quote(moved.name)}`
+        : pradikatContradiction(moved, wineLike);
+      if (why) {
+        if (strict) return refuse('term_contradiction', '', `The type was not changed: ${why}.`);
+        return mark(target, result, 'term_contradiction', why);
+      }
+      if (inName.doubted) result.ambiguous = inName.doubted;
     }
   }
-  const storedNow = moved ? moved._id : target.labelSweetness;
+  const storedNow = moved ? String(moved._id) : storedId();
   const finish = () => { if (moved) writeTerm(moved); return result; };
 
   // No term given: only the switch reads one off a name, and only off a name
   // (or a scale) this write sets — a write that touches neither leaves the
   // name to the migration and the curators.
   if (!extract || scale === false || (!nameSet && !typeSet)) return finish();
-  const read = extractLoaded(terms, currentName, { scale, keep, countryId: cid, places });
+  const read = extractLoaded(terms, currentName, { scale, ...readOpts });
   if (read.ambiguous) {
     result.ambiguous = read.ambiguous;
     // Settled: every term the name states is the one the record holds.
-    const named = nameHits(terms, currentName, { scale, keep, countryId: cid });
+    const named = nameHits(terms, currentName, { scale, ...readOpts });
     const settled = storedNow != null && named.length > 0 && named.every((h) => h.row && sameId(h.row._id, storedNow));
     if (settled || !MARKED_AMBIGUITIES.has(read.ambiguous.kind)) return finish();
     finish();
@@ -598,7 +764,8 @@ async function assignSweetness(target, { labelSweetness, name, type, countryId =
   // Lenient: the new type's move still applies; only the name word stays put.
   const held = (detail) => { if (!strict) finish(); return contradiction('', detail); };
   if (storedNow != null && !sameId(storedNow, read.term._id)) {
-    const storedName = (terms.byId.get(String(idOf(storedNow))) || {}).name || 'another term';
+    const heldRow = moved || storedRow(terms, target.labelSweetness);
+    const storedName = heldRow && heldRow !== 'unresolved' ? heldRow.name : 'another term';
     return held(`the name states ${quote(read.term.name)}, the record states ${quote(storedName)}`);
   }
   const byLaw = pradikatContradiction(read.term, wineLike);
@@ -610,4 +777,6 @@ async function assignSweetness(target, { labelSweetness, name, type, countryId =
 
 module.exports = {
   extractFromName, extractLoaded, assignSweetness,
+  // Tests: the cut on names longer than the reader accepts, for its time bound.
+  __testing: { cutSpan },
 };

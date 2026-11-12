@@ -226,4 +226,16 @@ describe('the display name knows every spelling of the term', () => {
     expect(ops.wineDisplayName(wine)).toBe(name);
     expect(ops.labelSweetnessFields(wine, { loaded: true }).display_name).toBe(name);
   });
+
+  test('an admin term write expires the in-memory copy but keeps it: the synonyms are not forgotten before the reload', () => {
+    const wine = { name: 'Cava Brut Natur', labelSweetness: apiRow('Brut Nature', 'sparkling') };
+    ops.invalidateSweetnessCache();
+    expect(ops.wineDisplayName(wine)).toBe('Cava Brut Natur');
+    expect(ops.cachedTermName(SEED.find((r) => r.name === 'Brut Nature')._id)).toBe('Brut Nature');
+  });
+
+  test('the alias spellings the rule reads are carried too ("Suess" is süß)', () => {
+    expect(ops.wineDisplayName({ name: 'Riesling Suess', labelSweetness: apiRow('süß', 'still') })).toBe('Riesling Suess');
+    expect(ops.wineDisplayName({ name: 'Riesling Troken', labelSweetness: apiRow('trocken', 'still') })).toBe('Riesling Troken');
+  });
 });
