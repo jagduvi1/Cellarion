@@ -18,6 +18,7 @@ const mongoose = require('mongoose');
 const SweetnessTerm = require('../models/SweetnessTerm');
 const { logger } = require('./audit');
 const { normalizeSweetnessTerm, appendSweetnessTerm } = require('../utils/normalize');
+const { styleShape } = require('../utils/sweetnessStyle');
 
 const { SCALES, BANDS } = SweetnessTerm;
 
@@ -262,69 +263,62 @@ function labelSweetnessFields(wd, { loaded = false } = {}) {
 // The term a wine is KNOWN by when its label prints none, named by the
 // producer or the trade (written by services/sweetnessWrite
 // assignSweetnessStyle). Descriptive, never identity: no key, slug, display
-// name, style guard or resolver reads it. Stored as { term, source, url }; it
-// leaves the server as { name, band, scale, regulated, source, sourceUrl } —
-// the label term's shape plus where the word comes from — on REST and the
-// Bridge, with `source_url` on MCP.
-
-/**
- * The outgoing shape from whatever the read holds: the stored subdocument
- * (its term populated, or an id the warm in-memory copy names) or the shape
- * itself (an object a read already shaped). Null when there is none, or when
- * nothing can name the term.
- */
-function styleShape(s) {
-  if (!s || typeof s !== 'object') return null;
-  const shaped = s.term === undefined && typeof s.name === 'string';
-  const row = shaped ? s : refRow(s.term);
-  const term = row && row !== 'unresolved' ? termOut(row) : null;
-  const source = typeof s.source === 'string' && s.source ? s.source : null;
-  const url = shaped ? s.sourceUrl : s.url;
-  if (!term || !source || typeof url !== 'string' || !url) return null;
-  return { ...term, source, sourceUrl: url };
-}
+// name, style guard or resolver reads it. Stored as { term, source, url } and
+// never read unless asked for (the path is select: false); it leaves the
+// server as { name, band, scale, regulated, source, sourceUrl } — the label
+// term's shape plus where the word comes from — on REST and the Bridge, with
+// `source_url` on MCP, through one pure shape (utils/sweetnessStyle
+// styleShape): no style → null; a style this read cannot vouch for (its term
+// not populated, or gone) → no key at all, never null and never the stored
+// shape. Every read that asks for the field populates its term.
 
 /**
  * A wine's sweetness style as REST, the inventory and the Bridge (protocol 2)
- * send it: { name, band, scale, regulated, source, sourceUrl } or null.
- * Callers: services/integrationInventory, routes/bridgeV1, the model's toJSON,
- * shapeSweetnessStyle below.
+ * send it: { name, band, scale, regulated, source, sourceUrl }, null for none,
+ * or undefined when the key must be left out. Callers:
+ * services/integrationInventory, routes/bridgeV1.
  */
 function sweetnessStyleOut(wd) {
-  return wd ? styleShape(wd.sweetnessStyle) : null;
+  if (!wd) return null;
+  const out = styleShape(wd.sweetnessStyle);
+  if (out.state === 'unresolved') return undefined;
+  return out.state === 'shaped' ? out.value : null;
 }
 
 /**
  * The same, in place, on a plain wine object about to be sent (a lean read, a
- * toObject() copy): its sweetnessStyle becomes the outgoing shape, null when
- * it has none. A wine without the key (a read that did not select it, a lean
- * row that predates the field) keeps no key. A Mongoose document is left
- * alone: its toJSON shapes it, and a save must still see the stored
- * subdocument. Callers: the populate transform of the bottle reads' wine
- * (config/constants) and utils/grapeDisplay.decorateGrapes, the copy most
- * REST wine reads send. Returns the object.
+ * toObject() copy): its sweetnessStyle becomes the outgoing shape, null for
+ * none, and the key goes when this read cannot vouch for the style. A wine
+ * without the key (a read that did not ask for it, a lean row that predates
+ * the field) keeps no key. A Mongoose document is left alone: its toJSON
+ * shapes it, and a save must still see the stored subdocument. Callers: the
+ * populate transform of the bottle reads' wine (config/constants) and
+ * utils/grapeDisplay.decorateGrapes. Returns the object.
  */
 function shapeSweetnessStyle(wine) {
   if (!wine || typeof wine !== 'object' || wine instanceof mongoose.Document) return wine;
-  if (wine.sweetnessStyle !== undefined) wine.sweetnessStyle = styleShape(wine.sweetnessStyle);
+  if (!Object.prototype.hasOwnProperty.call(wine, 'sweetnessStyle')) return wine;
+  const out = styleShape(wine.sweetnessStyle);
+  if (out.state === 'unresolved') delete wine.sweetnessStyle;
+  else wine.sweetnessStyle = out.state === 'shaped' ? out.value : null;
   return wine;
 }
 
 /**
- * The MCP field beside label_sweetness, under the same honesty rule as
- * labelSweetnessFields: a read that selected the field and populated its term
- * (`loaded`) → { sweetness_style: { name, band, scale, regulated, source,
- * source_url } | null }, a row that predates the field reading null; a read
- * that did not load it, or a term nothing can name → no key.
+ * The MCP field beside label_sweetness, emitted honestly or not at all: a
+ * read that asked for the field and populated its term (`loaded`) →
+ * { sweetness_style: { name, band, scale, regulated, source, source_url } |
+ * null }, a row that predates the field reading null; a read that did not
+ * ask for it (a document says so itself), or a style this read cannot vouch
+ * for → no key.
  */
 function sweetnessStyleFields(wd, { loaded = false } = {}) {
-  if (!wd) return {};
-  const s = wd.sweetnessStyle;
-  if (s === undefined && !loaded) return {};
-  if (s && typeof s === 'object' && s.term !== undefined && refRow(s.term) === 'unresolved') return {};
-  const out = styleShape(s);
-  if (!out) return { sweetness_style: null };
-  const { sourceUrl, ...rest } = out;
+  if (!wd || !loaded) return {};
+  if (typeof wd.isSelected === 'function' && !wd.isNew && !wd.isSelected('sweetnessStyle')) return {};
+  const out = styleShape(wd.sweetnessStyle);
+  if (out.state === 'unresolved') return {};
+  if (out.state === 'none') return { sweetness_style: null };
+  const { sourceUrl, ...rest } = out.value;
   return { sweetness_style: { ...rest, source_url: sourceUrl } };
 }
 

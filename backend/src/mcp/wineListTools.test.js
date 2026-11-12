@@ -69,13 +69,16 @@ const makeList = (over = {}) => ({
   ...over,
 });
 
+// A wine lookup: it asks for the sweetness style, then populates.
+const wineQuery = (doc) => { const q = { select: jest.fn(() => q), populate: jest.fn(() => Promise.resolve(doc)) }; return q; };
+
 beforeEach(() => {
   jest.clearAllMocks();
   McpActionLog.create.mockResolvedValue({});
   McpActionLog.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
   // findOne through the owner rule (ownerWineFilter above): the caller's own
   // pending rows resolve, a stranger's hidden row reads as not_found.
-  WineDefinition.findOne.mockReturnValue({ populate: jest.fn(() => Promise.resolve({ _id: WINE, name: 'Barolo Riserva', producer: 'Rinaldi' })) });
+  WineDefinition.findOne.mockReturnValue(wineQuery({ _id: WINE, name: 'Barolo Riserva', producer: 'Rinaldi' }));
 });
 
 describe('registration + scopes', () => {
@@ -161,7 +164,7 @@ describe('list_wine_lists / get_wine_list', () => {
 describe('add_to_list', () => {
   test('unknown wine → not_found', async () => {
     WineList.findOne.mockResolvedValue(makeList());
-    WineDefinition.findOne.mockReturnValue({ populate: jest.fn(() => Promise.resolve(null)) });
+    WineDefinition.findOne.mockReturnValue(wineQuery(null));
     const res = await tool('add_to_list').handler({ list_id: LIST, wine_id: WINE }, CTX);
     expect(parse(res).error.code).toBe('not_found');
   });

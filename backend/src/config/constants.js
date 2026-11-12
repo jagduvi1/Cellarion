@@ -44,12 +44,14 @@ const MEMBER_WINE_EXCLUDE = excludeFields(MEMBER_WINE_HIDDEN_FIELDS);
 // it from the payload afterwards.
 const MEMBER_WINE_EXCLUDE_KEEP_CREATOR = excludeFields(MEMBER_WINE_HIDDEN_FIELDS.filter((f) => f !== 'createdBy'));
 
-// The sweetness style's term (WineDefinition.sweetnessStyle), populated with
-// the label term's own fields, beside labelSweetness in the bottle reads below.
-const SWEETNESS_STYLE_POPULATE = { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' };
-// The wine of a LEAN bottle read leaves the server with its sweetness style
-// in the outgoing shape, the one a document's toJSON gives
-// (services/sweetnessOps.shapeSweetnessStyle; a document is left alone).
+// The bottle reads below ask for the wine's sweetness style (the path is
+// select: false on the model: a read that does not ask never sees it),
+// populate its term with the label term's own fields — and its id, which a
+// save of the populated wine still needs — and send it in the outgoing shape:
+// a document through its toJSON, a lean read through this transform
+// (services/sweetnessOps.shapeSweetnessStyle leaves a document alone).
+const WITH_SWEETNESS_STYLE = '+sweetnessStyle';
+const SWEETNESS_STYLE_POPULATE = { path: 'sweetnessStyle.term', select: 'name band scale regulated' };
 const shapeLeanWine = (wine) => require('../services/sweetnessOps').shapeSweetnessStyle(wine);
 
 // The wine of ONE bottle, as the bottle page and every bottle write answer
@@ -58,7 +60,7 @@ const shapeLeanWine = (wine) => require('../services/sweetnessOps').shapeSweetne
 // included, so they follow the same list as the bottle lists.
 const winePopulate = (select) => [
   {
-    path: 'wineDefinition', select,
+    path: 'wineDefinition', select: `${select} ${WITH_SWEETNESS_STYLE}`,
     populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }, SWEETNESS_STYLE_POPULATE],
     transform: shapeLeanWine,
   },
@@ -80,7 +82,7 @@ const WINE_LIST_SELECT = `-aiProfile -lwin -productNumberShort ${MEMBER_WINE_EXC
 const WINE_POPULATE_LIST = [
   {
     path: 'wineDefinition',
-    select: WINE_LIST_SELECT,
+    select: `${WINE_LIST_SELECT} ${WITH_SWEETNESS_STYLE}`,
     // The label sweetness term as the API shape ({ name, band, scale,
     // regulated }) — a card shows it beside the name once the word has left it.
     populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, SWEETNESS_STYLE_POPULATE],
@@ -98,7 +100,7 @@ const WINE_POPULATE_LIST = [
 const WINE_POPULATE_CARDS = [
   {
     path: 'wineDefinition',
-    select: WINE_LIST_SELECT,
+    select: `${WINE_LIST_SELECT} ${WITH_SWEETNESS_STYLE}`,
     populate: [
       { path: 'country', select: 'name slug code' },
       { path: 'region', select: 'name slug country' },

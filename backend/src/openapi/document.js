@@ -181,7 +181,7 @@ const schemas = {
   },
   InventoryWine: {
     type: 'object',
-    required: ['name', 'displayName', 'producer', 'type', 'colour', 'country', 'region', 'appellation', 'classification', 'labelSweetness', 'sweetnessStyle', 'grapes', 'image', 'profile'],
+    required: ['name', 'displayName', 'producer', 'type', 'colour', 'country', 'region', 'appellation', 'classification', 'labelSweetness', 'grapes', 'image', 'profile'],
     properties: {
       name: { type: ['string', 'null'] },
       displayName: { type: ['string', 'null'], description: 'The name as the label reads it: `name` followed by the label sweetness term when the wine has one ("Riesling Kabinett Trocken"). What to print when one line must carry the whole identity.' },
@@ -200,13 +200,13 @@ const schemas = {
           properties: {
             name: { type: 'string', description: 'The term as the label prints it (trocken, Brut Nature, amabile).' },
             band: { type: 'string', enum: ['dry', 'off-dry', 'medium-sweet', 'sweet', 'brut-nature', 'extra-brut', 'brut', 'extra-dry', 'sec', 'demi-sec', 'doux'], description: 'The term\'s place on one shared ladder: the four still-wine bands, or the seven sparkling (dosage) bands. Values may be added, never renamed or removed.' },
-            scale: { type: 'string', enum: ['still', 'sparkling'] },
+            scale: { type: 'string', enum: ['still', 'sparkling'], description: 'Values may be added, never renamed or removed.' },
             regulated: { type: 'boolean', description: 'True for a term with a legal definition (EU 2019/33); false for a customary word such as feinherb.' },
           },
         }],
         description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from `profile.sweetness`, the tasting estimate.',
       },
-      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade, or null. Descriptive, not part of the wine\'s identity.' },
+      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade, or null when it has none. Descriptive, not part of the wine\'s identity. Absent when this server cannot read the term (a term row that was removed): never null for that.' },
       grapes: { type: 'array', items: { type: 'string' }, description: 'Display names, as on the label.' },
       image: { type: ['string', 'null'], description: 'A thumbnail path on this server (see Images), or null.' },
       profile: {
@@ -222,7 +222,7 @@ const schemas = {
     properties: {
       name: { type: 'string', description: 'The term as the source names it (feinherb, fruchtsüß).' },
       band: { type: 'string', enum: ['dry', 'off-dry', 'medium-sweet', 'sweet', 'brut-nature', 'extra-brut', 'brut', 'extra-dry', 'sec', 'demi-sec', 'doux'], description: 'The term\'s place on the shared ladder, as for `labelSweetness`. Values may be added, never renamed or removed.' },
-      scale: { type: 'string', enum: ['still', 'sparkling'] },
+      scale: { type: 'string', enum: ['still', 'sparkling'], description: 'Values may be added, never renamed or removed.' },
       regulated: { type: 'boolean', description: 'True for a term with a legal definition (EU 2019/33), which only the producer names as a style; false for a customary word such as feinherb.' },
       source: { type: 'string', enum: ['producer', 'trade'], description: 'Who names the term: the producer (its own wording) or the trade (a merchant, a critic, a wine database). Values may be added, never renamed or removed.' },
       sourceUrl: { type: 'string', format: 'uri', description: 'The page that names the term for this wine.' },
@@ -364,13 +364,13 @@ const schemas = {
           properties: {
             name: { type: 'string', description: 'The term as the label prints it (trocken, Brut Nature, amabile).' },
             band: { type: 'string', enum: ['dry', 'off-dry', 'medium-sweet', 'sweet', 'brut-nature', 'extra-brut', 'brut', 'extra-dry', 'sec', 'demi-sec', 'doux'], description: 'The term\'s place on one shared ladder: the four still-wine bands, or the seven sparkling (dosage) bands. Values may be added, never renamed or removed.' },
-            scale: { type: 'string', enum: ['still', 'sparkling'] },
+            scale: { type: 'string', enum: ['still', 'sparkling'], description: 'Values may be added, never renamed or removed.' },
             regulated: { type: 'boolean', description: 'True for a term with a legal definition (EU 2019/33); false for a customary word such as feinherb.' },
           },
         }],
         description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from the tasting profile\'s sweetness estimate.',
       },
-      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade, or null. Descriptive, not part of the wine\'s identity.' },
+      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade, or null when it has none. Descriptive, not part of the wine\'s identity. Absent when this server cannot read the term (a term row that was removed): never null for that.' },
       grapes: { type: 'array', items: ref('Grape') },
       image: { type: ['string', 'null'], description: 'The registry image URL, or null.' },
       nonWine: { type: 'boolean', description: 'True for a drink that is not wine (cider, beer, spirits): the Other category, kept in the holder\'s cellar outside the shared wine registry; its type is then null.' },

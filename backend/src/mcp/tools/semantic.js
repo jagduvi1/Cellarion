@@ -155,13 +155,13 @@ registerTool({
     // semantic search, as it does out of keyword search (audit 2026-10-14).
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, nonWine: { $ne: true } })
       .select('name producer slug country region appellation classification labelSweetness sweetnessStyle grapes type colour communityRating')
-      .populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }])
+      .populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }])
       .lean();
     const byId = new Map(docs.map((d) => [String(d._id), d]));
     const data = ranked
       .filter(([id]) => byId.has(id))
       .map(([id, m]) => ({
-        ...wineSummary(byId.get(id), { termLoaded: true }),
+        ...wineSummary(byId.get(id), { termLoaded: true, styleLoaded: true }),
         similarity: Math.round(m.score * 1000) / 1000,
         embedded_vintage: m.vintage,
       }));

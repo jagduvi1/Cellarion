@@ -126,7 +126,40 @@ describe('adoptWine', () => {
     const r = await bridge.adoptWine(RID, USER);
     expect(r.wine.labelSweetness).toBe('sw-trocken');
     expect(r.wine.sweetnessStyle).toBeUndefined();
-    expect(r.wine.sweetnessReview).toMatchObject({ reason: 'term_contradiction' });
+    expect(r.wine.sweetnessReview).toMatchObject({ reason: 'style_contradiction' });
+  });
+
+  test.each([
+    ['a source that is a property of every object', { source: 'constructor' }],
+    ['a link the URL parser would forgive', { sourceUrl: 'https:merchant.example' }],
+    ['a link with credentials', { sourceUrl: 'https://login:secret@merchant.example/x' }],
+    ['a term id from another server', { name: 'a'.repeat(24) }],
+    ['a name that is no string', { name: { toString: null } }],
+  ])('%s never fails the adoption and stores nothing', async (label, over) => {
+    client.fetchWine.mockResolvedValue(registryWine({ sweetnessStyle: wireStyle(over) }));
+    const r = await bridge.adoptWine(RID, USER);
+    expect(r.ok).toBe(true);
+    expect(r.wine.save).toHaveBeenCalled();
+    expect(r.wine.sweetnessStyle).toBeUndefined();
+  });
+
+  test('the row another adoption minted under the same key gets the registry style too', async () => {
+    WineDefinition.mockImplementationOnce(function (doc) {
+      Object.assign(this, doc);
+      this._id = 'new1';
+      this.save = jest.fn().mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 }));
+      this.populate = jest.fn().mockResolvedValue(this);
+    });
+    const minted = { _id: 'x2', name: 'Riesling Kabinett', registryId: null, labelSweetness: null, sweetnessStyle: null, save: jest.fn().mockResolvedValue(undefined), populate: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findOne
+      .mockReturnValueOnce(lookup(null))     // by registryId
+      .mockReturnValueOnce(lookup(null))     // the key: nothing yet
+      .mockReturnValueOnce(lookup(minted));  // after E11000
+    client.fetchWine.mockResolvedValue(registryWine({ sweetnessStyle: wireStyle() }));
+    const r = await bridge.adoptWine(RID, USER);
+    expect(r.wine).toBe(minted);
+    expect(minted.sweetnessStyle).toEqual({ term: 'sw-feinherb', source: 'trade', url: TRADE_URL });
+    expect(minted.save).toHaveBeenCalled();
   });
 
   test('a local wine typed before the Bridge keeps its own producer style; the registry\'s trade word does not replace it', async () => {
@@ -180,7 +213,7 @@ describe('refreshHeld — the hourly sync of a copy', () => {
     expect(local.sweetnessStyle).toEqual({ term: 'sw-feinherb', source: 'trade', url: TRADE_URL });
   });
 
-  test('a null clears the style of a copy nobody edited here, and of no other', async () => {
+  test('a null clears the style of a copy whose last change was the previous sync, and keeps it on one edited since', async () => {
     held(); changed();
     client.fetchWine.mockResolvedValue(registryWine({ sweetnessStyle: null }));
     const untouched = copy({ sweetnessStyle: { term: 'sw-feinherb', source: 'trade', url: TRADE_URL } });
@@ -198,5 +231,16 @@ describe('refreshHeld — the hourly sync of a copy', () => {
     WineDefinition.findById.mockResolvedValue(edited);
     await bridge.refreshHeld({ now: new Date('2026-09-08') });
     expect(edited.sweetnessStyle).toEqual({ term: 'sw-feinherb', source: 'trade', url: TRADE_URL });
+  });
+
+  test('an identity that collides with another row on refresh: the old identity stays, the style still arrives', async () => {
+    held(); changed();
+    client.fetchWine.mockResolvedValue(registryWine({ sweetnessStyle: wireStyle() }));
+    const local = copy({ save: jest.fn().mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 })) });
+    const fresh = copy();
+    WineDefinition.findById.mockResolvedValueOnce(local).mockResolvedValueOnce(fresh);
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    expect(fresh.sweetnessStyle).toEqual({ term: 'sw-feinherb', source: 'trade', url: TRADE_URL });
+    expect(fresh.save).toHaveBeenCalled();
   });
 });

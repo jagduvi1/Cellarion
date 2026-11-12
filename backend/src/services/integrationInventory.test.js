@@ -152,6 +152,13 @@ describe('assembleInventory — the contract', () => {
     });
   });
 
+  test('a style whose term cannot be read is left out — never null, never the stored shape', () => {
+    const dangling = { ...WINE, _id: 'w3', sweetnessStyle: { term: 'f'.repeat(24), source: 'trade', url: 'https://merchant.example/x' } };
+    const s = inv({ bottles: [bottle({ wineDefinition: dangling })] });
+    expect(s.wines.w3).not.toHaveProperty('sweetnessStyle');
+    expect(JSON.stringify(s.wines.w3)).not.toMatch(/merchant.example/);
+  });
+
   test('a bottle waiting on a wine request: wine null, pending set', () => {
     const [b] = inv({ bottles: [bottle({ wineDefinition: null, pendingWineRequest: { _id: 'q1', wineName: 'Mystery', producer: 'Someone' } })] }).bottles;
     expect(b.wine).toBeNull();
@@ -408,7 +415,7 @@ describe('buildInventory — what is loaded', () => {
       { path: 'region', select: 'name' },
       { path: 'grapes', select: 'name regionalNames' },
       { path: 'labelSweetness', select: 'name band scale regulated -_id' },
-      { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' },
+      { path: 'sweetnessStyle.term', select: 'name band scale regulated' },
     ]);
     expect(wine.select.split(' ')).toEqual(expect.arrayContaining(['labelSweetness', 'sweetnessStyle']));
   });

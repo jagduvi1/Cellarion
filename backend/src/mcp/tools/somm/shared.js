@@ -57,7 +57,7 @@ const grapesLite = (grapes) => {
  * visible only on a later get_wine, and read as "populated by an unidentified
  * path during curation".
  */
-const wineLite = (wd, { termLoaded = false } = {}) => (wd ? {
+const wineLite = (wd, { termLoaded = false, styleLoaded = false } = {}) => (wd ? {
   wine_id: wd._id,
   name: wd.name,
   producer: wd.producer || null,
@@ -66,8 +66,8 @@ const wineLite = (wd, { termLoaded = false } = {}) => (wd ? {
   region: wd.region?.name || null,
   appellation: wd.appellation || null,
   ...(labelSweetnessFields(wd, { loaded: termLoaded })),
-  // The sweetness style beside it, under the same rule.
-  ...(sweetnessStyleFields(wd, { loaded: termLoaded })),
+  // The sweetness style beside it, when the read asked for it.
+  ...(sweetnessStyleFields(wd, { loaded: styleLoaded })),
   ...(grapesLite(wd.grapes)),
   ...(provenanceLite(wd.identityProvenance)),
 } : null);

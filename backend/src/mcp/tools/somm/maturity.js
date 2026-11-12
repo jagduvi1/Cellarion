@@ -85,12 +85,12 @@ registerTool({
         // grapes populated to NAMES, not just selected as ids: the queue row
         // is where the curator decides whether a wine needs work, and grapes
         // invisible here read as a phantom writer filling them in later.
-        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance labelSweetness sweetnessStyle', populate: ['country', 'region', { path: 'grapes', select: 'name' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }] })
+        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance labelSweetness sweetnessStyle', populate: ['country', 'region', { path: 'grapes', select: 'name' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }] })
         .lean(),
     ]);
     const data = profiles.map((p) => ({
       profile_id: p._id,
-      wine: wineLite(p.wineDefinition, { termLoaded: true }),
+      wine: wineLite(p.wineDefinition, { termLoaded: true, styleLoaded: true }),
       vintage: p.vintage,
       status: p.status,
       relative_nv: !!p.relative,

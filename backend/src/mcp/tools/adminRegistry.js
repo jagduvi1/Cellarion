@@ -62,7 +62,7 @@ registerTool({
     let created = false;
     if (args.existing_wine_id) {
       if (!isValidId(args.existing_wine_id)) return fail('invalid_input', 'existing_wine_id must be a 24-hex Mongo id.');
-      wineDoc = await WineDefinition.findById(args.existing_wine_id).populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }]);
+      wineDoc = await WineDefinition.findById(args.existing_wine_id).select('+sweetnessStyle').populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }]);
       // A user's private draft is not registry content, not even to an admin.
       if (!wineDoc || wineDoc.draft === true) return fail('not_found', 'No registry wine with that id.');
     } else {
@@ -142,7 +142,7 @@ registerTool({
       `${created ? 'Created registry wine' : 'Registry wine already existed'}: ${wineDoc.name} — ${wineDoc.producer}` +
       `${imageInfo ? ' (official image set, background removal in progress)' : ''}`,
       {
-        wine: wineSummary(wineDoc, { termLoaded: true }),
+        wine: wineSummary(wineDoc, { termLoaded: true, styleLoaded: true }),
         wine_id: wineDoc._id,
         created,
         ...(imageInfo ? { official_image: imageInfo } : {}),

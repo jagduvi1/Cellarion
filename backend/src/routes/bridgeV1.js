@@ -51,7 +51,7 @@ const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
 const IDENTITY_SELECT = 'name producer slug country region appellation classification classifications labelSweetness sweetnessInName sweetnessStyle grapes type colour image imageCredit';
 // Every identity read populates the same taxonomy rows.
-const BRIDGE_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }];
+const BRIDGE_POPULATE = ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }];
 
 // Protocol version, negotiated by request header (`X-Cellarion-Bridge-Protocol`).
 // v1 — no header, every install before label sweetness — gets the name AS THE
@@ -309,7 +309,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
     const wine = await findVisibleWine(req.params.id, {
       userId: null, roles: [], lean: true, noDrafts: true,
       select: `${IDENTITY_SELECT} aiProfile canary lwin communityRating updatedAt`,
-      populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }],
+      populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }],
     });
     if (!wine || wine.nonWine) return res.status(404).json({ error: 'Wine not found', code: 'not_found' });
 
@@ -493,7 +493,7 @@ router.get('/requests', async (req, res) => {
     }
     const wineIds = rows.filter((r) => r.status === 'resolved' && r.linkedWineDefinition).map((r) => r.linkedWineDefinition);
     const wines = wineIds.length
-      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').populate('classifications', 'name kind').populate('labelSweetness', 'name band scale regulated -_id').populate('sweetnessStyle.term', 'name band scale regulated -_id').lean()
+      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').populate('classifications', 'name kind').populate('labelSweetness', 'name band scale regulated -_id').populate('sweetnessStyle.term', 'name band scale regulated').lean()
       : [];
     const protocol = bridgeProtocol(req);
     const byId = new Map(wines.map((w) => [String(w._id), w]));

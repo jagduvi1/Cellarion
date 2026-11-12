@@ -85,10 +85,10 @@ async function planItem(item, userId, roles) {
     // add_bottle: own pending row yes, a stranger's no. planItem is the
     // preview AND the plan the commit executes, so gating here gates both.
     const wine = await findVisibleWine(item.wine_id, {
-      userId, roles, populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }],
+      userId, roles, select: '+sweetnessStyle', populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }],
     });
     if (!wine) return { status: 'invalid', error: `no registry wine ${item.wine_id}` };
-    return { status: 'ready', wine_id: String(wine._id), wine: wineSummary(wine, { termLoaded: true }) };
+    return { status: 'ready', wine_id: String(wine._id), wine: wineSummary(wine, { termLoaded: true, styleLoaded: true }) };
   }
 
   if (!item.new_wine.type && item.new_wine.category !== 'other') {
@@ -238,7 +238,7 @@ registerTool({
         let wineDoc;
         if (p.status === 'ready') {
           // The term populated, so the summary can state it (or its absence).
-          wineDoc = await WineDefinition.findById(p.wine_id).populate([{ path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated -_id' }]);
+          wineDoc = await WineDefinition.findById(p.wine_id).populate({ path: 'labelSweetness', select: 'name band scale regulated -_id' });
           if (!wineDoc) { failures.push({ index: i, error: 'wine disappeared' }); continue; }
         } else {
           // Soft-zone stays live at apply time UNLESS the user explicitly

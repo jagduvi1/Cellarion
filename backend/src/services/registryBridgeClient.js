@@ -87,6 +87,10 @@ async function request(path, { method = 'GET', body, timeoutMs = TIMEOUT_MS } = 
         // is NOT requested yet. Until this install can show a term beside a
         // name, a bare name would lose the word; on v1 the registry sends the
         // name as the label reads it, which every screen here shows as it is.
+        // TODO before this sends the protocol 2 header: decide whether a copy
+        // untouched here follows a registry correction of its sweetness style
+        // (services/registryBridge applyRegistryStyle runs the write rule, where
+        // an equal source never replaces a stored style).
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(c.instanceHost ? { 'X-Cellarion-Instance': c.instanceHost } : {}),
       },

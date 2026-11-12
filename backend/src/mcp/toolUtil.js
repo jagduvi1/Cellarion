@@ -101,7 +101,7 @@ function accessibleCellars(userId) {
 const { classificationsOut } = require('../services/classificationOps');
 const { labelSweetnessOut, labelSweetnessFields, sweetnessStyleFields, wineDisplayName } = require('../services/sweetnessOps');
 
-function wineSummary(wd, { termLoaded = false } = {}) {
+function wineSummary(wd, { termLoaded = false, styleLoaded = false } = {}) {
   if (!wd) return null;
   return {
     wine_id: wd._id,
@@ -116,9 +116,10 @@ function wineSummary(wd, { termLoaded = false } = {}) {
     ...labelSweetnessFields(wd, { loaded: termLoaded }),
     // sweetness_style ({ name, band, scale, regulated, source, source_url } or
     // null — the term the wine is KNOWN by when its label states none, named
-    // by the producer or the trade; descriptive, never identity), under the
-    // same rule: a caller that sets termLoaded selects and populates it too.
-    ...sweetnessStyleFields(wd, { loaded: termLoaded }),
+    // by the producer or the trade; descriptive, never identity) only when the
+    // caller asked for the field and populated its term (styleLoaded): the
+    // path is select: false, so a read that did not ask carries no key.
+    ...sweetnessStyleFields(wd, { loaded: styleLoaded }),
     producer: wd.producer || null,
     type: wd.type || null,
     // 'other' = a drink that is not wine (cider, beer, spirits), kept in the

@@ -45,7 +45,7 @@ describe('wineLite', () => {
     const row = wineLite({
       _id: 'w1', name: 'Riesling', producer: 'Weingut X', type: 'white', country: { name: 'Germany' },
       grapes: [{ name: 'Riesling' }], identityProvenance: { grapes: 'model' },
-    }, { termLoaded: true });
+    }, { termLoaded: true, styleLoaded: true });
     expect(row).toEqual({
       wine_id: 'w1', name: 'Riesling', producer: 'Weingut X', type: 'white', country: 'Germany', region: null, appellation: null,
       label_sweetness: { name: 'trocken' }, display_name: 'Riesling trocken', sweetness_style: null,

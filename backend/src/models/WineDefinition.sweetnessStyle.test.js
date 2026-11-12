@@ -87,6 +87,11 @@ describe('what may be stored', () => {
       { ...STYLE, source: 'critic' },
       { ...STYLE, url: 'javascript:alert(1)' },
       { ...STYLE, url: `https://merchant.example/${'x'.repeat(500)}` },
+      // The link checks the write rule makes (utils/sweetnessStyle), here too.
+      { ...STYLE, url: 'https:merchant.example' },
+      { ...STYLE, url: 'https://login:secret@merchant.example/x' },
+      { ...STYLE, url: 'https://merchant.example' }, // not the normalised form the rule stores
+      { ...STYLE, source: 'constructor' },
       { source: 'trade', url: STYLE.url },
       { term: TERM, source: 'trade' },
     ];
@@ -98,28 +103,56 @@ describe('what may be stored', () => {
 });
 
 describe('the review marker', () => {
-  test('a write to the style settles a pending sweetness question, as a write to the label term does', async () => {
-    const doc = loaded({ sweetnessReview: { reason: 'term_contradiction', detail: 'x', since: new Date() } });
-    doc.sweetnessStyle = STYLE;
-    await doc.validate();
-    expect(doc.sweetnessReview).toBeNull();
+  test('a write to the style settles a question about the style, and no other', async () => {
+    const styleQuestion = loaded({ sweetnessReview: { reason: 'style_contradiction', detail: 'x', since: new Date() } });
+    styleQuestion.sweetnessStyle = STYLE;
+    await styleQuestion.validate();
+    expect(styleQuestion.sweetnessReview).toBeNull();
+    // A pending question about the NAME stays: the style does not settle it.
+    const nameQuestion = loaded({ name: 'Dolce Vita Bianco', sweetnessReview: { reason: 'name_ambiguous', detail: 'y', since: new Date() } });
+    nameQuestion.sweetnessStyle = STYLE;
+    await nameQuestion.validate();
+    expect(nameQuestion.sweetnessReview.reason).toBe('name_ambiguous');
   });
 
   test('a marker set in the same write stays', async () => {
     const doc = loaded();
     doc.sweetnessStyle = STYLE;
-    doc.sweetnessReview = { reason: 'term_contradiction', detail: 'y', since: new Date() };
+    doc.sweetnessReview = { reason: 'style_contradiction', detail: 'y', since: new Date() };
     await doc.validate();
-    expect(doc.sweetnessReview.reason).toBe('term_contradiction');
+    expect(doc.sweetnessReview.reason).toBe('style_contradiction');
   });
 });
 
-describe('the outgoing shape', () => {
-  test('a document sent as it is (toJSON) carries { name, band, scale, regulated, source, sourceUrl }; toObject keeps the stored shape', () => {
+describe('the outgoing shape, and deny by default', () => {
+  const POPULATED_TERM = { _id: TERM, name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false };
+
+  test('the path is select: false: a read that does not ask for it never sees it', () => {
+    expect(WineDefinition.schema.path('sweetnessStyle').options.select).toBe(false);
+  });
+
+  test('a document sent as it is (toJSON) carries { name, band, scale, regulated, source, sourceUrl } once its term is populated', () => {
     const doc = fresh({ sweetnessStyle: STYLE });
+    doc.sweetnessStyle.term = new SweetnessTerm(POPULATED_TERM);
     expect(doc.toJSON().sweetnessStyle).toEqual({ name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: STYLE.url });
-    expect(JSON.parse(JSON.stringify(doc)).sweetnessStyle).toMatchObject({ name: 'feinherb', sourceUrl: STYLE.url });
     expect(doc.toObject().sweetnessStyle).toMatchObject({ source: 'trade', url: STYLE.url });
     expect(fresh().toJSON().sweetnessStyle).toBeNull();
+  });
+
+  test('its term not populated, with the term copy warm or cold: no throw, and no key — never null, never an id', () => {
+    for (const warm of [true, false]) {
+      if (!warm) ops.primeSweetnessCache(null);
+      const doc = fresh({ sweetnessStyle: STYLE });
+      let json;
+      expect(() => { json = JSON.parse(JSON.stringify(doc)); }).not.toThrow();
+      expect(json).not.toHaveProperty('sweetnessStyle');
+    }
+  });
+
+  test('a stored source or link the rules refuse is never sent', () => {
+    const doc = fresh({ sweetnessStyle: STYLE });
+    doc.sweetnessStyle.term = new SweetnessTerm(POPULATED_TERM);
+    doc.sweetnessStyle.url = 'javascript:alert(1)';
+    expect(doc.toJSON()).not.toHaveProperty('sweetnessStyle');
   });
 });

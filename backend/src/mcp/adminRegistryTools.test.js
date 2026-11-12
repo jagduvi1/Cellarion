@@ -153,7 +153,8 @@ describe('official image + credit', () => {
   });
 
   test('existing_wine_id sets the image WITHOUT creating anything', async () => {
-    WineDefinition.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue({ ...WINE, populate: undefined }) });
+    const q = { select: jest.fn(() => q), populate: jest.fn().mockResolvedValue({ ...WINE, populate: undefined }) };
+    WineDefinition.findById.mockReturnValue(q);
     safeFetchImage.mockResolvedValue({ buffer: Buffer.from('img') });
     attachOfficialWineImage.mockResolvedValue({ image: { _id: oid('9'), status: 'approved' } });
     const res = await tool('admin_add_registry_wine').handler({

@@ -230,20 +230,31 @@ function sweetnessFields(w, s) {
  * The registry's sweetness style (protocol v2) onto a copy, through the write
  * rule (services/sweetnessWrite assignSweetnessStyle, lenient). Only when the
  * registry SAYS something — the key present, the colour rule — so an older
- * registry never clears a style held here. The term is matched by word on
- * this table and never minted from the wire (an unknown one is dropped); a
- * style the copy holds yields only to a stronger source. A null clears it only
- * where `mayClear`: a new copy, or one not edited here since the last sync.
- * Kept out of identityFields: the style is not identity. Returns the rule's
- * verdict, or null when the registry said nothing usable.
+ * registry never clears a style held here. The term is matched by WORD on this
+ * table (a 24-hex "word" is an id from another server and is ignored) and
+ * never minted from the wire; a style the copy holds yields only to a stronger
+ * source. A null clears it only where `mayClear` (a new copy; on a refresh,
+ * a copy whose last change was the previous sync). Kept out of identityFields:
+ * the style is not identity. Never fails the adoption or the refresh: the rule
+ * and the model check the source and the link alike, and anything the rule
+ * throws leaves the style as it was. Returns the rule's verdict, or null.
  */
 async function applyRegistryStyle(wine, w, { mayClear }) {
   if (!w || !Object.prototype.hasOwnProperty.call(w, 'sweetnessStyle')) return null;
   const s = w.sweetnessStyle;
-  if (s === null) return mayClear ? assignSweetnessStyle(wine, { term: null }) : null;
-  if (!s || typeof s !== 'object' || typeof s.name !== 'string' || !s.name.trim()) return null;
-  return assignSweetnessStyle(wine, { term: s.name, source: s.source, url: s.sourceUrl });
+  try {
+    if (s === null) return mayClear ? await assignSweetnessStyle(wine, { term: null }) : null;
+    if (!s || typeof s !== 'object' || typeof s.name !== 'string' || !s.name.trim() || /^[0-9a-f]{24}$/i.test(s.name.trim())) return null;
+    return await assignSweetnessStyle(wine, { term: s.name, source: s.source, url: s.sourceUrl });
+  } catch (err) {
+    console.warn('[bridge] sweetness style not applied:', err.message);
+    return null;
+  }
 }
+
+// The sweetness style is select: false on the model; a copy the style is
+// applied to is loaded with it. On a query only (a test may hand a value).
+const withStyle = (q) => (q && typeof q.select === 'function' ? q.select('+sweetnessStyle') : q);
 
 /** The word the dedup key carries for a copy: the resolved term's, else none (the name keeps an unknown word). */
 const sweetnessKeyWord = (tax) => (tax && tax.sweetness && tax.sweetness.row ? tax.sweetness.row.name : null);
@@ -407,10 +418,10 @@ async function adoptWine(registryId, userId) {
   // The exact key first. Then — a copy made before the Bridge carried terms,
   // or typed by hand, may hold the word IN ITS NAME with no term — the
   // display-name key, so that row is linked, not twinned.
-  let wine = await WineDefinition.findOne({ normalizedKey });
+  let wine = await withStyle(WineDefinition.findOne({ normalizedKey }));
   if (!wine && tax.sweetness && tax.sweetness.word) {
     const shown = generateWineKey(appendSweetnessTerm(w.name, tax.sweetness.word), w.producer || '', w.appellation || '');
-    if (shown !== normalizedKey) wine = await WineDefinition.findOne({ normalizedKey: shown });
+    if (shown !== normalizedKey) wine = await withStyle(WineDefinition.findOne({ normalizedKey: shown }));
   }
   // A row already linked to a DIFFERENT registry wine is never re-pointed:
   // two registry identities on one local row is a merge question for a person.
@@ -455,10 +466,16 @@ async function adoptWine(registryId, userId) {
       if (err && err.code === 11000) {
         // Minted concurrently under the same key: take that row instead —
         // unless it is linked to ANOTHER registry wine, the same rule as above.
-        wine = await WineDefinition.findOne({ normalizedKey });
+        wine = await withStyle(WineDefinition.findOne({ normalizedKey }));
         if (!wine) throw err;
         if (wine.registryId && String(wine.registryId) !== String(w.id)) return { ok: false, code: 'conflict' };
-        if (!wine.registryId) { wine.registryId = String(w.id); wine.registrySyncedAt = now; await wine.save(); }
+        if (!wine.registryId) {
+          wine.registryId = String(w.id); wine.registrySyncedAt = now;
+          // The row the other writer minted keeps a style of its own unless
+          // the registry's is stronger, as a linked local row does above.
+          await applyRegistryStyle(wine, w, { mayClear: false });
+          await wine.save();
+        }
       } else {
         throw err;
       }
@@ -486,7 +503,7 @@ async function registrySearch(q, { limit = 10 } = {}) {
 
 /** One changed wine → the local copy, keeping local identity edits. */
 async function applyRegistryUpdate(local, w) {
-  const wine = await WineDefinition.findById(local._id);
+  const wine = await withStyle(WineDefinition.findById(local._id));
   if (!wine) return false;
   const prevSync = wine.registrySyncedAt || null;
   const untouchedLocally = !wine.registrySyncedAt || !wine.updatedAt || wine.updatedAt.getTime() <= wine.registrySyncedAt.getTime() + EDIT_SLACK_MS;
@@ -518,8 +535,8 @@ async function applyRegistryUpdate(local, w) {
     wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null;
   }
   // Descriptive, so applied on an edited copy too: the rule keeps a style
-  // held here unless the registry's source is stronger; only an untouched
-  // copy follows the registry to "none".
+  // held here unless the registry's source is stronger; only a copy whose
+  // last change was the previous sync follows the registry to "none".
   await applyRegistryStyle(wine, w, { mayClear: untouchedLocally });
   if (profile && !curatedHere) wine.aiProfile = profile;
   // The stamp is taken HERE, immediately before the save, and reused for the
@@ -535,9 +552,11 @@ async function applyRegistryUpdate(local, w) {
     if (err && err.code === 11000) {
       // The registry's identity now collides with another local row: keep
       // the copy's old identity, take the rest.
-      const fresh = await WineDefinition.findById(local._id);
+      const fresh = await withStyle(WineDefinition.findById(local._id));
       if (!fresh) return false;
       if (profile && !curatedHere) fresh.aiProfile = profile;
+      // The style is not identity: it arrives even when the identity cannot.
+      await applyRegistryStyle(fresh, w, { mayClear: untouchedLocally });
       fresh.registrySyncedAt = stamp;
       await fresh.save();
     } else {
