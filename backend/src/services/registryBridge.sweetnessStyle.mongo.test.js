@@ -54,12 +54,12 @@ describeWithMongo('a Bridge copy and its sweetness style (real MongoDB)', () => 
     await ops.ensureSweetnessSeed();
     ops.primeSweetnessCache(null);
     feinherb = await SweetnessTerm.findOne({ name: 'feinherb', scale: 'still' }).lean();
-  });
+  }, 60000);
 
   afterAll(async () => {
     await mongoose.connection.db.dropDatabase();
     await mongoose.disconnect();
-  });
+  }, 60000);
 
   beforeEach(() => { jest.clearAllMocks(); bridge._reset(); client.isEnabled.mockReturnValue(true); });
 

@@ -91,9 +91,10 @@ describeWithMongo('the sweetness style on every surface (real MongoDB)', () => {
     server = http.createServer(require('../app')).listen(0);
     require('../mcp/tools');
     ({ allTools } = require('../mcp/registry'));
-    await WineDefinition.init();
+    // search_registry falls back to the wine text index (no Meilisearch here).
+    await WineDefinition.collection.createIndex({ name: 'text', producer: 'text' });
     base = `http://127.0.0.1:${server.address().port}`;
-  }, 60000);
+  }, 180000);
 
   afterAll(async () => {
     if (server) await new Promise((r) => server.close(r));
