@@ -15,7 +15,7 @@ const OWN_PHOTO_CANDIDATES = 50;
 const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { CONSUMED_STATUSES, ORDERED_STATUS, WINE_POPULATE } = require('../config/constants');
+const { CONSUMED_STATUSES, ORDERED_STATUS, WINE_POPULATE, WINE_POPULATE_KEEP_CREATOR } = require('../config/constants');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
@@ -358,7 +358,7 @@ router.use(require('./bottlesBulk'));
 router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
   try {
     const { bottle, cellar, cellarRole: role } = req;
-    await bottle.populate(WINE_POPULATE);
+    await bottle.populate(WINE_POPULATE_KEEP_CREATOR);
 
     // Join the historical rate snapshot for the date this price was entered.
     // Exposed as priceCurrencyRates so the frontend needs no changes.
@@ -376,6 +376,8 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
           expiresAt: bottleObj.wineDefinition.draftExpiresAt || null,
         };
       }
+      // Loaded for the line above only; who contributed a wine is not sent.
+      delete bottleObj.wineDefinition.createdBy;
     }
     if (bottle.priceSetAt) {
       const date = bottle.priceSetAt.toISOString().slice(0, 10);
