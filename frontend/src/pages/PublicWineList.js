@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import WineListMenu from '../components/WineListMenu';
-import SITE_URL from '../config/siteUrl';
+import { HOSTED_ORIGIN } from '../utils/mcpConnect';
 import { track } from '../utils/track';
 import './PublicWineList.css';
 
@@ -19,10 +19,11 @@ const STRINGS = {
   it: { pdf: 'Scarica PDF', notFound: 'Questa carta dei vini non è disponibile.', madeWith: 'Creata con Cellarion', cta: 'Crea la tua cantina — gratis' },
 };
 
-// The footer link back to Cellarion. Tagged so a signup that starts here is
+// The footer link back to Cellarion: the hosted site, also on a list a
+// self-hosted install shares. Tagged so a signup that starts here is
 // counted as "shared-list" on the admin stats (utils/signupSource), the same
 // channel a visitor who lands on a list and signs up in-app is filed under.
-const MADE_WITH_URL = `${SITE_URL.replace(/\/$/, '')}/?utm_source=shared-list&utm_medium=referral`;
+const MADE_WITH_URL = `${HOSTED_ORIGIN}/?utm_source=shared-list&utm_medium=referral`;
 
 function PublicWineList() {
   const { token } = useParams();
