@@ -21,28 +21,14 @@ const NOT_IN_CELLAR_STATUSES = [...CONSUMED_STATUSES, ORDERED_STATUS];
 // Milliseconds in a single day — used for drink-window calculations
 const MS_PER_DAY = 86400000;
 
-// Standard Mongoose populate shape for WineDefinition — used across bottles, cellars, stats.
-// Array form also populates pendingWineRequest so pending bottles show their requested name.
-// The label-scan evidence fields are EXCLUDED here for the same reason
-// GET /api/wines/:id and the wishlist $unset exclude them (v1.109.0 LOW-3):
-// since v1.111.0 every scan-originated mint carries them for its 7-day
-// correction window, and a bottle payload of a SHARED published wine must not
-// hand any owner the pointers plus the "front said X, back said Y" label text
-// (release-audit M-4). Curation reads them through its own gated surfaces.
-const SCAN_EVIDENCE_EXCLUDE = '-scanImage -scanImageBack -scanFieldConflicts';
-
-const WINE_POPULATE = [
-  { path: 'wineDefinition', select: SCAN_EVIDENCE_EXCLUDE, populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }] },
-  { path: 'pendingWineRequest', select: 'wineName producer' }
-];
-
 // The registry fields a member (anyone but admin/somm) never receives from a
 // wine read: the label-scan evidence, the dedup keys, the verification record,
 // the identity provenance, the canary flag, and who contributed the row and
 // how (createdBy, contribution, createdVia — the registry never shows who
 // contributed). Curators read them through their own surfaces. Every member
 // wine read builds on this one list: GET /api/wines and /:id, the wishlist
-// list, the barcode lookup, the wine-request list and WINE_LIST_SELECT.
+// list, the barcode lookup, the wine-request list, WINE_LIST_SELECT and the
+// bottle answers (WINE_POPULATE).
 const MEMBER_WINE_HIDDEN_FIELDS = [
   'scanImage', 'scanImageBack', 'scanFieldConflicts', 'normalizedKey', 'canonicalKey',
   'verifiedChecks', 'identityProvenance', 'productNumber', 'previousSlugs', 'canary',
@@ -57,6 +43,20 @@ const MEMBER_WINE_EXCLUDE = excludeFields(MEMBER_WINE_HIDDEN_FIELDS);
 // loaded document: createdBy stays loaded for the gate, and the route deletes
 // it from the payload afterwards.
 const MEMBER_WINE_EXCLUDE_KEEP_CREATOR = excludeFields(MEMBER_WINE_HIDDEN_FIELDS.filter((f) => f !== 'createdBy'));
+
+// The wine of ONE bottle, as the bottle page and every bottle write answer
+// send it: the whole record with its profile, minus the member-hidden fields
+// above. Anyone with access to the cellar reads these answers, a viewer
+// included, so they follow the same list as the bottle lists.
+const winePopulate = (select) => [
+  { path: 'wineDefinition', select, populate: ['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, { path: 'labelSweetness', select: 'name band scale regulated -_id' }] },
+  { path: 'pendingWineRequest', select: 'wineName producer' }
+];
+const WINE_POPULATE = winePopulate(MEMBER_WINE_EXCLUDE);
+// The same, for the one read that must know whose private draft the wine is
+// (GET /api/bottles/:id): createdBy is loaded, and the route removes it from
+// the answer once it has said "mine" or not.
+const WINE_POPULATE_KEEP_CREATOR = winePopulate(MEMBER_WINE_EXCLUDE_KEEP_CREATOR);
 
 // List/stats variant of WINE_POPULATE: excludes the heavy fields no list view
 // or aggregate reads (aiProfile alone is several KB of prose per wine). A page
@@ -199,6 +199,7 @@ module.exports = {
   SUPPORT_CATEGORIES,
   MS_PER_DAY,
   WINE_POPULATE,
+  WINE_POPULATE_KEEP_CREATOR,
   WINE_POPULATE_LIST,
   WINE_POPULATE_CARDS,
   WINE_LIST_SELECT,
