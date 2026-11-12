@@ -51,10 +51,37 @@ const SPACED_SEPS = new Set(['-', '\u2010', '\u2011', '\u2012', '\u2013', '\u201
 // end in one.
 const EDGE_SEPS = new Set([',', ';', ':']);
 const isEdgeSep = (ch) => EDGE_SEPS.has(ch) || isJoiner(ch);
-// Brackets and quotes whose pair the cut empties ("Riesling (trocken)").
-const PAIRS = { '(': ')', '[': ']', '"': '"', '“': '”', '„': '“', '«': '»', '»': '«' };
+// Brackets and quotes whose pair the cut empties ("Riesling (trocken)"), each
+// opener with the closers that end it ("„…“" and "„…”" are both written).
+const PAIRS = { '(': ')', '[': ']', '"': '"', '“': '”', '„': '“”', '«': '»', '»': '«', '‹': '›', '›': '‹' };
 const OPENERS = new Set(Object.keys(PAIRS));
-const CLOSERS = new Set(Object.values(PAIRS));
+const CLOSERS = new Set(Object.values(PAIRS).join(''));
+const closes = (open, close) => !!open && !!close && (PAIRS[open] || '').includes(close);
+// A bracket that never closes, or never opens, standing against a neighbour
+// the cut leaves behind ("Cuvée( Brut )Rosé"): no tidy cut leaves one there.
+const HARD_OPENERS = new Set(['(', '[', '{', '„']);
+const HARD_CLOSERS = new Set([')', ']', '}']);
+// What a tidy cut never adds to a name (counted against the name it was
+// given): an empty pair, a bracket with a space on its inner side, a
+// separator beside a comma, closing and opening punctuation glued together,
+// doubled punctuation. Each pattern scans in linear time.
+const CUT_FAULTS = [
+  /\(\s*\)|\[\s*\]|«\s*»|„\s*[“”]|“\s*”|‹\s*›|"\s*"(?![\p{L}\p{N}])/gu,
+  /[(\[«„‹]\s|\s[)\]»›]/gu,
+  /[,;:]\s+[-\u2010-\u2015\u2212/|·&+]+(?=\s|$)|(?:^|\s)[-\u2010-\u2015\u2212/|·&+]+\s+[,;:]/gu,
+  /["”“»)\]]["“„«(\[]/gu,
+  /[,;:][,;:.]|\.[,;:]/gu,
+];
+const countOf = (text, rx) => { rx.lastIndex = 0; let n = 0; while (rx.exec(text)) n += 1; return n; };
+const charCount = (text, ch) => { let n = 0; for (const c of text) if (c === ch) n += 1; return n; };
+/** Whether a cut made the name untidier than it was: a fault it did not have, or brackets it left unbalanced. */
+function cutLeftAFault(text, out) {
+  if (CUT_FAULTS.some((rx) => countOf(out, rx) > countOf(text, rx))) return true;
+  for (const [o, c] of [['(', ')'], ['[', ']'], ['«', '»']]) {
+    if (charCount(out, o) - charCount(out, c) !== charCount(text, o) - charCount(text, c)) return true;
+  }
+  return charCount(out, '"') % 2 !== charCount(text, '"') % 2;
+}
 // Words that change the term beside them: "Semi-Secco" is not secco, "halb
 // trocken" not trocken, "Ultra Brut" not Brut, "Brut Zéro Dosage" not Brut.
 // A hit next to one is not read, nor a hit two words before "dosage" ("Brut
@@ -219,7 +246,7 @@ function placeKeysOf(places) {
   const keys = [];
   for (const p of Array.isArray(places) ? places : [places]) {
     const text = typeof p === 'string' ? p : (p && typeof p === 'object' && typeof p.name === 'string' ? p.name : '');
-    const words = sweetnessWords(text).map((w) => w.key).filter(Boolean);
+    const words = sweetnessWords(text).map((w) => w.fold).filter(Boolean);
     if (words.length) keys.push(` ${words.join(' ')} `);
   }
   return keys;
@@ -237,9 +264,9 @@ function neighbourhoodDoubt(text, words, hit, placeKeys) {
   const gapA = gapAfter(text, words, hit);
   const joined = (gap) => gap && SWEETNESS_TERM_GAP_RX.test(gap);
   const next = after && hit.lastWord + 2 < words.length ? words[hit.lastWord + 2] : null;
-  const modifier = (before && MODIFIERS.has(before.key) && joined(gapB) && before)
-    || (after && MODIFIERS.has(after.key) && joined(gapA) && after)
-    || (next && next.key === DOSAGE && joined(gapA) && joined(text.slice(after.end, next.start)) && next);
+  const modifier = (before && MODIFIERS.has(before.fold) && joined(gapB) && before)
+    || (after && MODIFIERS.has(after.fold) && joined(gapA) && after)
+    || (next && next.fold === DOSAGE && joined(gapA) && joined(text.slice(after.end, next.start)) && next);
   if (modifier) {
     return ambiguity('modifier', `${quote(hit.text)} stands beside ${quote(modifier.text)}, which changes it; not read as the label sweetness`);
   }
@@ -281,17 +308,21 @@ function dropLeadingSeps(s) {
  * outside the term stays, in order, and so does every other character except
  * these, which go with the term: the spaces beside it; one dash directly
  * against it ("Riesling-trocken" → "Riesling"; between two words it glued,
- * one stays: "Pinot-Brut-Rosé" → "Pinot-Rosé"); a bracket or quote pair it fills; a
- * separator token it would leave at an edge of the name ("Riesling -
- * trocken") or doubled ("Cuvée & Brut & Rosé" → "Cuvée & Rosé"); a comma,
- * colon, semicolon or dash that parted the term at an edge from its neighbour
- * ("Riesling, trocken"); and a period after the term that the word before
- * already ends in ("N.V. Brut." → "N.V."). An opening quote before the term
- * moves to the next word, closing punctuation after it to the word before
- * ("Riesling trocken." → "Riesling."); a quote that belongs to a neighbour
- * keeps its space ('Sekt "Alte Reben" Brut Rosé'). Returns null for any other
- * shape — the caller reads nothing (untidy_cut). Linear in the length of the
- * name: index loops, no pattern that backtracks.
+ * one stays: "Pinot-Brut-Rosé" → "Pinot-Rosé"); a bracket or quote pair it
+ * fills, with the punctuation inside it ('Cuvée "Brut," Rosé' → "Cuvée Rosé";
+ * "Riesling ( trocken )" → "Riesling"); a separator token it would leave at an
+ * edge of the name ("Riesling - trocken"), double ("Cuvée & Brut & Rosé" →
+ * "Cuvée & Rosé"), or leave beside a comma ("Cuvée, Brut - Rosé" → "Cuvée,
+ * Rosé"); a comma, colon, semicolon or dash that parted the term at an edge
+ * from its neighbour ("Riesling, trocken", "Riesling,trocken"); and a period
+ * after the term that the word before already ends in ("N.V. Brut." →
+ * "N.V."). An opening quote before the term moves to the next word, closing
+ * punctuation after it to the word before ("Riesling trocken." →
+ * "Riesling."); a quote that belongs to a neighbour keeps its space
+ * ('Sekt "Alte Reben" Brut Rosé'). Returns null for any other shape, and for
+ * any result untidier than the name it was given (cutLeftAFault) — the caller
+ * reads nothing (untidy_cut). Linear in the length of the name: index loops,
+ * and patterns that do not backtrack.
  */
 function cutSpan(text, start, end) {
   // The punctuation touching the term, with no space between.
@@ -301,14 +332,29 @@ function cutSpan(text, start, end) {
   let touchR = text.slice(end, b);
   const gluedL = a > 0 && !isSpace(text[a - 1]);
   const gluedR = b < text.length && !isSpace(text[b]);
+  // Pairs the term fills, with the punctuation between the term and the closer.
   let pl = touchL.length; let pr = 0;
-  while (pl > 0 && pr < touchR.length && PAIRS[touchL[pl - 1]] === touchR[pr]) { pl -= 1; pr += 1; }
+  for (;;) {
+    let k = pr;
+    while (k < touchR.length && ATTACHED_SEPS.has(touchR[k])) k += 1;
+    if (pl === 0 || k >= touchR.length || !closes(touchL[pl - 1], touchR[k])) break;
+    pl -= 1; pr = k + 1;
+  }
   touchL = touchL.slice(0, pl); touchR = touchR.slice(pr);
+  // An opener left before the term and a closer after it do not belong together.
+  if ([...touchL].some((c) => OPENERS.has(c)) && [...touchR].some((c) => CLOSERS.has(c))) return null;
+  const atStart = !touchL && !text.slice(0, a).trim();
+  const atEnd = !touchR && !text.slice(b).trim();
   // One dash directly against the term; one behind an emptied pair, or two,
-  // may be a neighbour's own ("-S-") and is left to the untidy rule below.
-  const joinL = pr === 0 && touchL.length === 1 && isJoiner(touchL);
-  const joinR = pr === 0 && touchR.length === 1 && isJoiner(touchR);
-  const joint = joinL && joinR && gluedL && gluedR ? touchR : '';
+  // may be a neighbour's own ("-S-") and is left to the untidy rule below. A
+  // comma, colon or semicolon glued between the term and a word at an edge
+  // only parted the two; between two words, one of two stays.
+  const single = (t, test) => pr === 0 && t.length === 1 && test(t);
+  const joinL = single(touchL, isJoiner) || (gluedL && atEnd && single(touchL, (c) => EDGE_SEPS.has(c)));
+  const joinR = single(touchR, isJoiner) || (gluedR && atStart && single(touchR, (c) => EDGE_SEPS.has(c)));
+  let joint = '';
+  if (single(touchL, isJoiner) && single(touchR, isJoiner) && gluedL && gluedR) joint = touchR;
+  else if (gluedL && gluedR && touchL === touchR && single(touchL, (c) => EDGE_SEPS.has(c))) { joint = touchR; touchL = ''; touchR = ''; }
   if (joinL) touchL = '';
   if (joinR) touchR = '';
   if (touchL && (gluedL || !allOf(touchL, (c) => OPENERS.has(c)))) return null;
@@ -336,6 +382,11 @@ function cutSpan(text, start, end) {
   let left = text.slice(0, l);
   let right = text.slice(r);
 
+  // A pair standing apart around the term ("Riesling « trocken »") is emptied;
+  // any other bracket or quote in a separator token is not a separator.
+  if (!touchL && !touchR && sepL.length === 1 && sepR.length === 1 && closes(sepL, sepR)) { sepL = ''; sepR = ''; }
+  const bracketish = (sep) => [...sep].some((c) => OPENERS.has(c) || CLOSERS.has(c));
+  if (bracketish(sepL) || bracketish(sepR)) return null;
   const spaced = (sep) => allOf(sep, (c) => SPACED_SEPS.has(c));
   if ((sepL && !left) || (sepR && !right)) return null;
   if (sepL && !right) { if (!spaced(sepL)) return null; sepL = ''; }
@@ -345,13 +396,20 @@ function cutSpan(text, start, end) {
   if (!left) right = dropLeadingSeps(right);
 
   // A separator after the term inside a bracket opened before it parted the
-  // term from the next item: "Rosé (Brut, Magnum)" → "Rosé (Magnum)".
+  // term from the next item: "Rosé (Brut, Magnum)" → "Rosé (Magnum)",
+  // "Cuvée (Brut - Rosé)" → "Cuvée (Rosé)".
   if (touchL && allOf(touchR, (c) => ATTACHED_SEPS.has(c))) touchR = '';
+  if (touchL && sepR && spaced(sepR) && isWordChar(right[0])) sepR = '';
+  // A comma after the term beside a spaced separator before it: the separator
+  // already parts the two neighbours ("Cuvée - Brut, Rosé" → "Cuvée - Rosé").
+  if (sepL && allOf(touchR, (c) => EDGE_SEPS.has(c))) touchR = '';
   if (touchR) {
     if (!left) {
       if (!allOf(touchR, (c) => ATTACHED_SEPS.has(c))) return null;
     } else {
-      // ...and one before a bracket the term closes: "(Magnum, Brut)" → "(Magnum)".
+      // ...and one before a bracket the term closes: "(Magnum, Brut)" → "(Magnum)",
+      // "(Rosé - Brut) Cuvée" → "(Rosé) Cuvée".
+      if (CLOSERS.has(touchR[0]) && sepL && spaced(sepL) && isWordChar(left[left.length - 1])) sepL = '';
       if (CLOSERS.has(touchR[0]) && !sepL) left = dropTrailingSeps(left);
       if (sepL) return null;
       const last = left[left.length - 1];
@@ -364,11 +422,20 @@ function cutSpan(text, start, end) {
   }
   if (touchL) {
     if (!right || sepR) return null;
-    right = touchL + right;
+    // The closer of that opener, after a space: the pair held only the term.
+    if (touchL.length === 1 && closes(touchL, right[0])) right = right.slice(1).trimStart();
+    else right = touchL + right;
   }
-  if (!left || !right) return left || right;
-  if (sepL || sepR) return `${left} ${sepL || sepR} ${right}`;
-  return joint ? `${left}${joint}${right}` : `${left} ${right}`;
+  if (left && HARD_OPENERS.has(left[left.length - 1])) return null;
+  if (right && HARD_CLOSERS.has(right[0])) return null;
+  let out;
+  if (!left || !right) out = left || right;
+  else if (sepL || sepR) {
+    // A kept separator beside a comma, colon or semicolon says the same twice.
+    const sep = sepL || sepR;
+    out = EDGE_SEPS.has(left[left.length - 1]) || EDGE_SEPS.has(right[0]) ? `${left} ${right}` : `${left} ${sep} ${right}`;
+  } else out = joint ? `${left}${joint}${right}` : `${left} ${right}`;
+  return cutLeftAFault(text, out) ? null : out;
 }
 
 const untidy = (hit) => ambiguity('untidy_cut', `taking ${quote(hit.text)} out would leave the name untidy; nothing read`);
@@ -761,15 +828,13 @@ async function assignSweetness(target, { labelSweetness, name, type, countryId =
     return mark(target, result, 'name_ambiguous', read.ambiguous.detail);
   }
   if (!read.term) return finish();
-  // Lenient: the new type's move still applies; only the name word stays put.
-  const held = (detail) => { if (!strict) finish(); return contradiction('', detail); };
   if (storedNow != null && !sameId(storedNow, read.term._id)) {
-    const heldRow = moved || storedRow(terms, target.labelSweetness);
+    const heldRow = storedRow(terms, target.labelSweetness);
     const storedName = heldRow && heldRow !== 'unresolved' ? heldRow.name : 'another term';
-    return held(`the name states ${quote(read.term.name)}, the record states ${quote(storedName)}`);
+    return contradiction('', `the name states ${quote(read.term.name)}, the record states ${quote(storedName)}`);
   }
   const byLaw = pradikatContradiction(read.term, wineLike);
-  if (byLaw) return held(byLaw);
+  if (byLaw) return contradiction('', byLaw);
   writeTerm(read.term);
   if (read.name !== currentName) { target.name = read.name; result.name = read.name; result.changed = true; }
   return result;

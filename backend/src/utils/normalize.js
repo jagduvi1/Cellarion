@@ -524,15 +524,21 @@ const SWEETNESS_TERM_GAP_RX = /^[\s\p{Pd}\u2212\u00AD\u200B-\u200D]+$/u;
 
 /**
  * The words of a name, each with its key in the term table's fold and the
- * aliases above applied: [{ text, start, end, key }]. A word the fold empties
- * (another script, "Ø") has the key ''.
+ * aliases above applied: [{ text, start, end, key, fold }]. A word holding a
+ * letter the fold drops (another script, "Ø") has the key '', so it is never
+ * part of a term, even when its other letters spell one ("甲州Brut",
+ * "ØBrut"); `fold` is its fold all the same, for a reader that only asks
+ * what the word says ("ØExtra" still says "extra" beside a term).
  */
 function sweetnessWords(text) {
   return [...String(text == null ? '' : text).matchAll(SWEETNESS_WORD_RX)].map((m) => {
-    const key = normalizeSweetnessTerm(m[0]);
-    return { text: m[0], start: m.index, end: m.index + m[0].length, key: SWEETNESS_ALIASES.get(key) || key };
+    const folded = normalizeSweetnessTerm(m[0]);
+    const fold = SWEETNESS_ALIASES.get(folded) || folded;
+    return { text: m[0], start: m.index, end: m.index + m[0].length, key: foldDropsALetter(m[0]) ? '' : fold, fold };
   });
 }
+/** Whether the term fold drops a letter of this word (only a letter outside ASCII can be dropped). */
+const foldDropsALetter = (word) => [...word].some((c) => c.charCodeAt(0) > 127 && /\p{L}/u.test(c) && !normalizeSweetnessTerm(c));
 
 /**
  * The keys words[i .. i+len) of `text` read as, or null when they cannot be
@@ -553,7 +559,11 @@ function sweetnessSpanKeys(text, words, i, len) {
  * already carries the term as whole words in ANY of its spellings (a wine
  * marked sweetnessInName, "Brut Premier"; "Champagne Extra-Brut" with the
  * term Extra Brut; "Cava Brut Natur" with Brut Nature; "Riesling Suess" with
- * süß), read the way the write rule reads a name, so nothing is ever doubled.
+ * süß), so nothing is ever doubled. Two readings, in this order: the folded
+ * name holds a spelling as whole words ("Riesling Halb-Trocken" folds to
+ * "riesling halbtrocken"), the test this function always made; then the
+ * name read the way the write rule reads it. The second only finds more that
+ * is carried, so a term is appended only where it always was.
  * `term` is the word to show, or every spelling of the term — a list whose
  * first entry is shown, or a row { name, synonyms }. A word inside a dashed
  * compound counts as carried ("Demi-Sec" carries "sec"). Every text surface
@@ -569,6 +579,12 @@ const appendSweetnessTerm = (name, term) => {
   const t = spellings[0] || '';
   if (!t) return n;
   if (!n) return t;
+  // The whole-name test first, as it always read: a spelling the folded name
+  // holds as whole words ("Riesling Halb-Trocken" folds to "riesling
+  // halbtrocken"). So nothing is appended where it never was; the reader
+  // below only finds more that is already carried.
+  const folded = ` ${normalizeSweetnessTerm(n)} `;
+  if (spellings.some((s) => { const k = normalizeSweetnessTerm(s); return k && folded.includes(` ${k} `); })) return n;
   const keys = new Set();
   let maxWords = 1;
   for (const s of spellings) {

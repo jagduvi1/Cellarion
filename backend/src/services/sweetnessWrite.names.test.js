@@ -65,6 +65,20 @@ describe('every dash joins the words of one term', () => {
   });
 });
 
+describe('a word of two scripts is one word, never part of a term', () => {
+  test.each([
+    ['Cuvée 甲州Brut Rosé', P],
+    ['Cuvée ØBrut Rosé', P],
+    ['Riesling 辛口trocken', S],
+  ])('%s keeps every letter, nothing read', (name, scale) => {
+    expect(read(name, scale)).toMatchObject({ name, term: null });
+  });
+
+  test('what such a word says still counts beside a term: "ØExtra Brut" is not Brut', () => {
+    expect(read('Cuvée ØExtra Brut', P)).toMatchObject({ name: 'Cuvée ØExtra Brut', term: null, ambiguous: { kind: 'modifier' } });
+  });
+});
+
 describe('a word that changes the term beside it', () => {
   test.each([
     ['Lambrusco Semi-Secco', P],
@@ -169,6 +183,28 @@ describe('what a cut leaves', () => {
     // A comma inside a bracket parted the term from the next item.
     ['Rosé (Brut, Magnum)', P, 'Rosé (Magnum)'],
     ['Rosé (Magnum, Brut)', P, 'Rosé (Magnum)'],
+    // A comma on the word before says what a separator after would say twice.
+    ['Cuvée, Brut - Rosé', P, 'Cuvée, Rosé'],
+    ['Cuvée; Brut – Rosé', P, 'Cuvée; Rosé'],
+    ['Cuvée (Magnum), Brut / Rosé', P, 'Cuvée (Magnum), Rosé'],
+    // A pair holding the term and its punctuation goes whole; „…” is a pair too.
+    ['Cuvée "Brut," Rosé', P, 'Cuvée Rosé'],
+    ['Cuvée (Brut.) Rosé', P, 'Cuvée Rosé'],
+    ['Cuvée „Brut” Rosé', P, 'Cuvée Rosé'],
+    // A pair standing apart around the term is emptied too.
+    ['Cuvée " Brut " Rosé', P, 'Cuvée Rosé'],
+    ['Riesling « trocken »', S, 'Riesling'],
+    ['Riesling ( trocken )', S, 'Riesling'],
+    ['Cuvée "Brut "Rosé', P, 'Cuvée Rosé'],
+    ['"Brut "(Magnum)', P, '(Magnum)'],
+    // A comma or colon glued between the term and its only neighbour; of two, one stays.
+    ['Riesling,trocken', S, 'Riesling'],
+    ['Riesling:trocken', S, 'Riesling'],
+    ['Cuvée,Brut,Rosé', P, 'Cuvée,Rosé'],
+    // A separator inside a bracket, or beside a comma, parted the term from one neighbour only.
+    ['Cuvée - Brut, Rosé', P, 'Cuvée - Rosé'],
+    ['Cuvée (Brut - Rosé)', P, 'Cuvée (Rosé)'],
+    ['(Rosé - Brut) Cuvée', P, '(Rosé) Cuvée'],
   ])('%s → %s', (name, scale, kept) => {
     expect(read(name, scale).name).toBe(kept);
   });
@@ -176,8 +212,11 @@ describe('what a cut leaves', () => {
   test.each([
     ['Brut & Rosé', P],
     ['Sekt (Brut', P],
-    ['Cuvée,Brut,Rosé', P],
     ['Riesling . trocken', S],
+    ['Cuvée( Brut )Rosé', P],
+    ['Cuvée »Brut) Rosé', P],
+    ['Cuvée (Brut« Rosé', P],
+    ['Cuvée "Brut - ""Rosé"', P],
     ['Cuvée - Brut / Rosé', P],
   ])('%s: a cut it cannot tidy reads nothing and removes nothing', (name, scale) => {
     expect(read(name, scale)).toMatchObject({ name, term: null, ambiguous: { kind: 'untidy_cut' } });

@@ -1024,6 +1024,71 @@ describe('appendSweetnessTerm — every spelling of the term counts as carried',
   });
 });
 
+describe('appendSweetnessTerm appends a term only where it always did', () => {
+  const { appendSweetnessTerm: append, normalizeSweetnessTerm: fold } = require('./normalize');
+  const seed = require('../data/sweetness-terms.json');
+  // The function as main has it: the oracle. Where it does not append, the
+  // display name and the slug must not either; where it does, they may leave
+  // the term off when the name carries it another way (a dash, a synonym).
+  const mainAppend = (name, term) => {
+    const n = String(name == null ? '' : name).trim();
+    const t = String(term == null ? '' : term).trim();
+    if (!t) return n;
+    if (!n) return t;
+    return ` ${fold(n)} `.includes(` ${fold(t)} `) ? n : `${n} ${t}`;
+  };
+  const GAPS = ['-', '/', '.', ', ', ' ', '\u2013', '\u00AD', '\u200B', ''];
+  const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  /** A spelling written another way: split inside a word, words joined differently, letters dotted, capitals. */
+  function* variants(spelling) {
+    const words = spelling.split(/[\s-]+/).filter(Boolean);
+    for (const g of GAPS) {
+      yield words.map(cap).join(g);
+      yield words.join(g).toUpperCase();
+      for (const w of words) {
+        if (w.length < 4) continue;
+        for (const at of [2, Math.floor(w.length / 2), w.length - 2]) {
+          yield words.map((x) => (x === w ? `${cap(w.slice(0, at))}${g}${cap(w.slice(at))}` : x)).join(' ');
+        }
+      }
+    }
+    yield [...spelling.replace(/\s+/g, '')].join('.').toUpperCase() + '.';
+  }
+
+  test('over every seed spelling written many ways: never appended where main does not append', () => {
+    let checked = 0;
+    for (const row of seed) {
+      const rowArg = { name: row.name, synonyms: row.synonyms || [] };
+      for (const spelling of [row.name, ...(row.synonyms || [])]) {
+        for (const v of variants(spelling)) {
+          for (const name of [`Riesling ${v}`, `${v} Rosé 2019`, v]) {
+            for (const term of [rowArg, row.name, [row.name, ...(row.synonyms || [])]]) {
+              checked += 1;
+              const main = mainAppend(name, typeof term === 'string' ? term : row.name);
+              if (main === name.trim()) expect([name, append(name, term)]).toEqual([name, name.trim()]);
+            }
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(10000);
+  });
+
+  test.each([
+    ['Riesling Halb-Trocken', 'halbtrocken'],
+    ['Riesling Fein-Herb', 'feinherb'],
+    ['Riesling Frucht-Süß', 'fruchtsüß'],
+    ['Müller-Thurgau halb-trocken', 'halbtrocken'],
+    ['Vouvray Demi/Sec', 'demi-sec'],
+    ['Vouvray Demi.Sec', 'demi-sec'],
+    ['Cava Brut, Nature', 'Brut Nature'],
+    ['Côtes S.E.C.', 'sec'],
+  ])('%s with the term %s stays as it is', (name, term) => {
+    expect(mainAppend(name, term)).toBe(name);
+    expect(append(name, { name: term, synonyms: [] })).toBe(name);
+  });
+});
+
 describe('a wine without a term keys and slugs as it always has', () => {
   const { generateWineSlug: slug, generateWineKey: key } = require('./normalize');
   // Literal keys and slugs, the same as main's: a wine without a term must
