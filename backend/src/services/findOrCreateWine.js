@@ -48,7 +48,8 @@ const SIMILARITY_THRESHOLD = 0.95;
 const SOFT_ZONE_MIN = 0.85;
 const SOFT_ZONE_TOP_N = 5;
 // labelSweetness rides along so the style guard reads a candidate's recorded
-// term, not only its name (utils/styleTerms.styleOf).
+// term, not only its name (utils/styleTerms.styleOf). The sweetness style is
+// not read here (the guard never reads it, and nothing here asks for it).
 const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }];
 
 // ── Pending identity ─────────────────────────────────────────────────────────

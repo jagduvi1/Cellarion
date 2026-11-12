@@ -308,7 +308,8 @@ async function buildBottleDetail(userId, bottleId) {
     data: {
       bottle_id: b._id,
       wine: wd ? {
-        ...wineSummary(wd, { termLoaded: true }),
+        // WINE_POPULATE asked for the style and shaped it (config/constants).
+        ...wineSummary(wd, { termLoaded: true, styleLoaded: 'shaped' }),
         classification: wd.classification || null,
         classifications: classificationsOut(wd),
         // Skeleton subdocs (0 reviews / never-enriched all-null profile) are

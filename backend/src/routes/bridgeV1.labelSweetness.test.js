@@ -121,3 +121,35 @@ test('every identity read populates the term', async () => {
   const populate = WineDefinition.find.mock.results[0].value.populate;
   expect(populate).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ path: 'labelSweetness' })]));
 });
+
+// The sweetness style: the term a wine is KNOWN by when its label states
+// none, named by the producer or the trade. Descriptive, so it travels beside
+// the identity on v2 only — by word and scale with its source and link — and
+// a v1 peer never sees it, in a field or in the name.
+const STYLE = { term: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false }, source: 'trade', url: 'https://merchant.example/riesling-kabinett' };
+
+test('the sweetness style on v2: its own field, by word and scale with source and link; null when none; never in the name', async () => {
+  WineDefinition.find.mockReturnValue(chain([wine({ labelSweetness: null, sweetnessStyle: STYLE }), wine({ _id: 'b'.repeat(24), name: 'Salmos', labelSweetness: null, sweetnessStyle: null })]));
+  const body = await (await call('/api/bridge/v1/search?q=kabinett', V2)).json();
+  expect(body.wines[0]).toMatchObject({
+    name: 'Riesling Kabinett',
+    sweetnessStyle: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: STYLE.url },
+  });
+  expect(body.wines[1].sweetnessStyle).toBeNull();
+});
+
+test('a v1 peer never sees the sweetness style: no key, and the name is the label\'s', async () => {
+  WineDefinition.find.mockReturnValue(chain([wine({ labelSweetness: null, sweetnessStyle: STYLE })]));
+  const body = await (await call('/api/bridge/v1/search?q=kabinett')).json();
+  expect(body.wines[0]).not.toHaveProperty('sweetnessStyle');
+  expect(body.wines[0].name).toBe('Riesling Kabinett');
+});
+
+test('every identity read selects the style and populates its term', async () => {
+  WineDefinition.find.mockReturnValue(chain([wine()]));
+  await call('/api/bridge/v1/search?q=kabinett', V2);
+  const c = WineDefinition.find.mock.results[0].value;
+  const selected = c.select.mock.calls[0][0];
+  expect(typeof selected === 'string' ? selected.split(' ') : Object.keys(selected)).toContain('sweetnessStyle');
+  expect(c.populate).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ path: 'sweetnessStyle.term' })]));
+});

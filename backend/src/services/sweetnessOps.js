@@ -4,10 +4,11 @@
  * This file: the curated term rows (models/SweetnessTerm), an in-memory copy
  * the pickers, the MCP tool, the style guard and the identity keys read, the
  * resolver from a printed word to a row, the output shapes every wine read
- * uses, and the boot seed. The WRITE rule — reading a term off a name, moving
- * the word out of the name, refusing an unknown word — is
- * services/sweetnessWrite, which no write path calls yet: the one path that
- * sets a wine's term is a Registry Bridge copy (services/registryBridge).
+ * uses (the label term and the sweetness style), and the boot seed. The WRITE
+ * rule — reading a term off a name, moving the word out of the name, refusing
+ * an unknown word, ranking the sources of a style — is services/sweetnessWrite.
+ * The one path that writes either field is a Registry Bridge copy
+ * (services/registryBridge); the other write paths are not wired yet.
  *
  * Same cache shape as services/classificationOps (60 s TTL, invalidated by the
  * admin routes, pinned in tests, EMPTY without a database connection so unit
@@ -17,6 +18,7 @@ const mongoose = require('mongoose');
 const SweetnessTerm = require('../models/SweetnessTerm');
 const { logger } = require('./audit');
 const { normalizeSweetnessTerm, appendSweetnessTerm } = require('../utils/normalize');
+const { styleShape } = require('../utils/sweetnessStyle');
 
 const { SCALES, BANDS } = SweetnessTerm;
 
@@ -163,7 +165,11 @@ const ID_RX = /^[0-9a-f]{24}$/i;
  */
 function termRowOf(wd) {
   if (!wd || wd.labelSweetness === undefined) return undefined;
-  const t = wd.labelSweetness;
+  return refRow(wd.labelSweetness);
+}
+
+/** A term ref as a read left it — a populated row, or an id — to its row; null for none, else 'unresolved'. */
+function refRow(t) {
   if (t === null) return null;
   if (typeof t === 'object' && typeof t.name === 'string' && t.name) return t;
   const id = typeof t === 'string' ? t : (t && typeof t.toString === 'function' ? t.toString() : '');
@@ -253,6 +259,58 @@ function labelSweetnessFields(wd, { loaded = false } = {}) {
   return { label_sweetness: termOut(term), display_name: appendSweetnessTerm(wd.name, term ? termSpellings(term) : null) };
 }
 
+// ── The sweetness style (WineDefinition.sweetnessStyle) ─────────────────────
+// The term a wine is KNOWN by when its label prints none, named by the
+// producer or the trade (written by services/sweetnessWrite
+// assignSweetnessStyle). Descriptive, never identity: no key, slug, display
+// name, style guard or resolver reads it. Stored as { term, source, url } and
+// never read unless asked for (the path is select: false); it leaves the
+// server as { name, band, scale, regulated, source, sourceUrl } — the label
+// term's shape plus where the word comes from — on REST and the Bridge, with
+// `source_url` on MCP, through one pure shape (utils/sweetnessStyle
+// styleShape). A read that asks for the field (and populates its term) sends
+// null for a wine without a style, a row that predates the field included; a
+// style it cannot vouch for (its term not populated, or gone; a source or link
+// the rules refuse) → no key at all, never null and never the stored shape. A
+// read that does not ask sends no key.
+
+/**
+ * A wine's sweetness style as REST, the inventory and the Bridge (protocol 2)
+ * send it: { name, band, scale, regulated, source, sourceUrl }, null for none,
+ * or undefined when the key must be left out. Callers:
+ * services/integrationInventory, routes/bridgeV1.
+ */
+function sweetnessStyleOut(wd) {
+  if (!wd) return null;
+  const out = styleShape(wd.sweetnessStyle);
+  if (out.state === 'unresolved') return undefined;
+  return out.state === 'shaped' ? out.value : null;
+}
+
+/**
+ * The MCP field beside label_sweetness, by the same rule as REST: a read that
+ * ASKED for the field answers { sweetness_style: { name, band, scale,
+ * regulated, source, source_url } | null } — null for a wine without a style,
+ * a row that predates the field included; a read that did not ask, and a
+ * style this read cannot vouch for, carry no key. `loaded`:
+ *   false     the read did not ask (a document also says so itself);
+ *   true      it asked and populated the term, and nothing has shaped the
+ *             wine since: a missing key is a row without the field → null;
+ *   'shaped'  it asked, and a shaper already gave the outgoing shape (the
+ *             bottle reads' populate transform; decorateGrapes with
+ *             styleAsked): a missing key is a style it could not vouch for.
+ */
+function sweetnessStyleFields(wd, { loaded = false } = {}) {
+  if (!wd || !loaded) return {};
+  if (typeof wd.isSelected === 'function' && !wd.isNew && !wd.isSelected('sweetnessStyle')) return {};
+  if (loaded === 'shaped' && wd.sweetnessStyle === undefined) return {};
+  const out = styleShape(wd.sweetnessStyle);
+  if (out.state === 'unresolved') return {};
+  if (out.state === 'none') return { sweetness_style: null };
+  const { sourceUrl, ...rest } = out.value;
+  return { sweetness_style: { ...rest, source_url: sourceUrl } };
+}
+
 /**
  * Seed the rows from data/sweetness-terms.json; returns { created, updated }.
  * A row that exists (same word, same scale) is brought up to date and keeps
@@ -310,5 +368,6 @@ module.exports = {
   loadTerms, invalidateSweetnessCache, primeSweetnessCache, cachedTerm, cachedTermName,
   resolveTerm, resolveLoaded,
   labelSweetnessOut, labelSweetnessFields, termNameForWine, wineDisplayName,
+  sweetnessStyleOut, sweetnessStyleFields,
   ensureSweetnessSeed,
 };

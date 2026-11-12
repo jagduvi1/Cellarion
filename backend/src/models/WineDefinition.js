@@ -6,6 +6,40 @@ require('./SweetnessTerm'); // the same for labelSweetness (the key/slug hook re
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 const { isStyleType, inferColourFromName } = require('../utils/wineColour');
 
+const { SWEETNESS_STYLE_SOURCES, STYLE_URL_MAX, isStoredStyleUrl, styleShape } = require('../utils/sweetnessStyle');
+
+// The sweetness style: the term a wine is KNOWN by when its label prints none
+// ("feinherb" for a wine whose label says nothing), named by the producer or
+// the trade, with the http(s) page that names it. DESCRIPTIVE, never identity:
+// not in normalizedKey, canonicalKey, the slug or the display name, and not
+// read by the style guard (utils/styleTerms) or the resolver — two records
+// never split or link over it. The label's own term (labelSweetness) always
+// wins. Written only through services/sweetnessWrite assignSweetnessStyle,
+// which holds the rules (a regulated term only from the producer; producer
+// beats trade); the source and the link are checked here exactly as there
+// (utils/sweetnessStyle), so the rule never accepts what a save refuses.
+//
+// Deny by default: the path is `select: false`, so a read that does not ask
+// for it ('+sweetnessStyle', or the field in an inclusive select) never sees
+// it, and no read can send the stored shape { term, source, url } by
+// accident. A read that asks for it populates the term and sends the outgoing
+// shape (utils/sweetnessStyle styleShape): the toJSON transform on the wine
+// below for a document sent as it is, utils/sweetnessStyle
+// shapeSweetnessStyle for a plain copy.
+const sweetnessStyleSchema = new mongoose.Schema({
+  term: { type: mongoose.Schema.Types.ObjectId, ref: 'SweetnessTerm', required: true },
+  source: { type: String, enum: SWEETNESS_STYLE_SOURCES, required: true },
+  url: {
+    type: String,
+    required: true,
+    maxlength: STYLE_URL_MAX,
+    validate: {
+      validator: isStoredStyleUrl,
+      message: 'sweetnessStyle.url must be a normalised http:// or https:// link with a host and no credentials',
+    },
+  },
+}, { _id: false });
+
 const wineDefinitionSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -88,10 +122,13 @@ const wineDefinitionSchema = new mongoose.Schema({
   // A row a curator should look at: the sweetness the record states and the
   // name disagree, a scan/import/Bridge peer sent a word the term table lacks,
   // a sparkling term on a still wine … `reason` is a code (unknown_term,
-  // term_contradiction, type_mismatch, name_ambiguous, in_classification),
+  // term_contradiction, type_mismatch, name_ambiguous, in_classification,
+  // style_contradiction),
   // `detail` a short human line. Null when nothing is pending. Cleared by the
   // pre-validate hook whenever name, labelSweetness, sweetnessInName or type
-  // changes — any of them may settle the question. Never holds a person.
+  // changes — any of them may settle the question — and, for the style's own
+  // reason (style_contradiction), when sweetnessStyle changes. Never holds a
+  // person.
   sweetnessReview: {
     type: {
       reason: { type: String, trim: true, maxlength: 40 },
@@ -99,6 +136,16 @@ const wineDefinitionSchema = new mongoose.Schema({
       since: { type: Date },
     },
     default: null
+  },
+  // The sweetness term this wine is KNOWN by when its label prints none,
+  // named by the producer (its own wording) or the trade (a merchant, a
+  // critic, a wine database), with the page that names it. See
+  // sweetnessStyleSchema above.
+  // No default: a new wine without a style has no key, and a read that asks
+  // for the field answers null for one (see the init hook below).
+  sweetnessStyle: {
+    type: sweetnessStyleSchema,
+    select: false
   },
   lwin: {
     lwin7: {
@@ -691,6 +738,9 @@ wineDefinitionSchema.index({ classifications: 1 });
 // and the curator's review queue — partial, so the ordinary registry pays
 // nothing for a marker almost no row carries.
 wineDefinitionSchema.index({ labelSweetness: 1 });
+// "Every wine that names this term as its style": the admin term guards and
+// the usage counts. Partial, so wines without a style cost nothing.
+wineDefinitionSchema.index({ 'sweetnessStyle.term': 1 }, { partialFilterExpression: { 'sweetnessStyle.term': { $exists: true } } });
 wineDefinitionSchema.index({ 'sweetnessReview.reason': 1 }, { partialFilterExpression: { 'sweetnessReview.reason': { $exists: true } } });
 
 // The legacy classification string follows the taxonomy rows: whenever the
@@ -858,10 +908,12 @@ wineDefinitionSchema.pre('validate', function(next) {
   }
   // A sweetness question is settled by a write to any of the fields it is
   // about; a stale marker would send a curator to a row somebody already fixed.
-  if (!this.isNew && this.sweetnessReview && (
+  // A style write settles only a question about the style.
+  if (!this.isNew && this.sweetnessReview && !this.isModified('sweetnessReview') && (
     this.isModified('name') || this.isModified('labelSweetness') ||
-    this.isModified('sweetnessInName') || this.isModified('type')
-  ) && !this.isModified('sweetnessReview')) {
+    this.isModified('sweetnessInName') || this.isModified('type') ||
+    (this.isModified('sweetnessStyle') && this.sweetnessReview.reason === 'style_contradiction')
+  )) {
     this.sweetnessReview = null;
   }
   // !isNew: on a create both fields count as "modified" and the defaults are
@@ -1123,4 +1175,42 @@ wineDefinitionSchema.post('save', async function (doc) {
   await stampPromotedScanRetention(doc);
 });
 
-module.exports = mongoose.model('WineDefinition', wineDefinitionSchema);
+// A wine loaded by a read that ASKED for its sweetness style ('+sweetnessStyle',
+// or the field in an inclusive or a populate select) answers null for a row
+// that predates the field, like a wine without a style; a read that did not
+// ask, and a new wine, carry no key. Set on the raw row before init, so the
+// document is not modified by it and a save writes nothing for it.
+wineDefinitionSchema.pre('init', function (raw) {
+  if (raw && typeof raw === 'object' && raw.sweetnessStyle === undefined && this.isSelected('sweetnessStyle')) raw.sweetnessStyle = null;
+});
+
+// A style whose term row is gone populates as null. Put the stored id back
+// before validating, so a save of that wine does not fail on the style it
+// never touched; reads already leave such a style out.
+wineDefinitionSchema.pre('validate', function () {
+  if (this.sweetnessStyle && this.sweetnessStyle.term == null && this.populated('sweetnessStyle.term')) {
+    this.depopulate('sweetnessStyle.term');
+  }
+});
+
+// A wine document sent as it is (res.json) carries its sweetness style in the
+// outgoing shape, or no key when this read cannot vouch for it (its term not
+// populated, or gone): utils/sweetnessStyle styleShape, pure, so the answer
+// never depends on a cache. On the wine, not on the style's sub-schema: a
+// sub-schema transform that drops the value makes Mongoose throw. toObject()
+// keeps the stored shape for code inside the server.
+wineDefinitionSchema.set('toJSON', {
+  transform(doc, ret) {
+    if (ret && Object.prototype.hasOwnProperty.call(ret, 'sweetnessStyle')) {
+      const out = styleShape(ret.sweetnessStyle);
+      if (out.state === 'unresolved') delete ret.sweetnessStyle;
+      else ret.sweetnessStyle = out.state === 'shaped' ? out.value : null;
+    }
+    return ret;
+  },
+});
+
+const WineDefinition = mongoose.model('WineDefinition', wineDefinitionSchema);
+WineDefinition.SWEETNESS_STYLE_SOURCES = SWEETNESS_STYLE_SOURCES;
+
+module.exports = WineDefinition;

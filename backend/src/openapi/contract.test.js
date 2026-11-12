@@ -79,6 +79,8 @@ const NOT_EXERCISED = {
 const NOT_EXERCISED_ANY_429 = (key) => key.endsWith(' 429');
 
 const ID_ZERO = '0123456789abcdef01234567';
+// The red fixture wine's sweetness style, as every documented read sends it.
+const STYLE = { name: 'dry', band: 'dry', scale: 'still', regulated: true, source: 'producer', sourceUrl: 'https://www.example.com/chateau-exemple/wines' };
 
 let world;
 let server;
@@ -176,6 +178,9 @@ describeWithMongo('public API contract', () => {
     expect(placed.personal).toEqual([expect.objectContaining({ key: 'Closure', value: 'cork', level: 'bottle', by: 'alice' })]);
     const wine = first.body.wines[String(world.wines.red._id)];
     expect(wine.profile).not.toHaveProperty('description');
+    // The sweetness style in its documented shape, never the stored one.
+    expect(wine.sweetnessStyle).toEqual(STYLE);
+    expect(first.body.wines[String(world.wines.white._id)].sweetnessStyle).toBeNull();
 
     await expectContract('getInventory', 304, { token: 'read', headers: { 'If-None-Match': first.headers.etag } });
     await expectContract('getInventory', 401, { token: 'revoked' });
@@ -239,6 +244,13 @@ describeWithMongo('public API contract', () => {
 
     const one = await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('b1') } });
     expect(one.body.rackInfo).toMatchObject({ position: 5 });
+    // The sweetness style in its documented shape on the list (a lean read) and
+    // the detail (a toObject() copy) alike.
+    expect(one.body.bottle.wineDefinition.sweetnessStyle).toEqual(STYLE);
+    const all = await expectContract('listBottles', 200, { token: 'read' });
+    const listed = all.body.bottles.items.find((x) => x._id === b('b1'));
+    expect(listed.wineDefinition.sweetnessStyle).toEqual(STYLE);
+    expect(all.body.bottles.items.find((x) => x._id === b('b3')).wineDefinition.sweetnessStyle).toBeNull();
     await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('b4') } });
     const cleared = await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('cleared') } });
     expect(cleared.body.bottle).toMatchObject({ location: null, notes: null, purchaseLocation: null });

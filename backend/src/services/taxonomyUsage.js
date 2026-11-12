@@ -87,13 +87,25 @@ async function wineCountsByAppellation() {
   return map;
 }
 
-/** Map<sweetnessTermIdString, wineCount>: the sweetness-term list. */
+/**
+ * Map<sweetnessTermIdString, wineCount>: the sweetness-term list. A wine
+ * counts for the term it carries as its label term and for the one it is
+ * known by as its style (WineDefinition.sweetnessStyle).
+ */
 async function wineCountsBySweetnessTerm() {
-  const rows = await WineDefinition.aggregate([
-    { $match: { labelSweetness: { $ne: null } } },
-    { $group: { _id: '$labelSweetness', n: { $sum: 1 } } },
+  const [labels, styles] = await Promise.all([
+    WineDefinition.aggregate([
+      { $match: { labelSweetness: { $ne: null } } },
+      { $group: { _id: '$labelSweetness', n: { $sum: 1 } } },
+    ]),
+    WineDefinition.aggregate([
+      { $match: { 'sweetnessStyle.term': { $exists: true, $ne: null } } },
+      { $group: { _id: '$sweetnessStyle.term', n: { $sum: 1 } } },
+    ]),
   ]);
-  return new Map(rows.map((r) => [String(r._id), r.n]));
+  const map = new Map();
+  for (const r of [...labels, ...styles]) map.set(String(r._id), (map.get(String(r._id)) || 0) + r.n);
+  return map;
 }
 
 module.exports = {

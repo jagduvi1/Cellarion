@@ -6,11 +6,11 @@
  */
 jest.mock('../../../config/aiConfig', () => ({ get: jest.fn(() => ({})) }));
 jest.mock('../../../services/enrichmentJob', () => ({ identityDataSufficient: jest.fn(() => true) }));
-jest.mock('../../toolUtil', () => ({ labelSweetnessFields: jest.fn(() => ({})) }));
+jest.mock('../../toolUtil', () => ({ labelSweetnessFields: jest.fn(() => ({})), sweetnessStyleFields: jest.fn(() => ({})) }));
 
 const aiConfig = require('../../../config/aiConfig');
 const { identityDataSufficient } = require('../../../services/enrichmentJob');
-const { labelSweetnessFields } = require('../../toolUtil');
+const { labelSweetnessFields, sweetnessStyleFields } = require('../../toolUtil');
 const { wineLite, grapesLite, provenanceLite, profileLite } = require('./shared');
 
 beforeEach(() => {
@@ -18,6 +18,7 @@ beforeEach(() => {
   aiConfig.get.mockReturnValue({});
   identityDataSufficient.mockReturnValue(true);
   labelSweetnessFields.mockReturnValue({});
+  sweetnessStyleFields.mockReturnValue({});
 });
 
 describe('grapesLite and provenanceLite', () => {
@@ -40,16 +41,18 @@ describe('wineLite', () => {
   test('null in, null out; identity fields read with nulls, grapes and provenance only when known, the term through labelSweetnessFields', () => {
     expect(wineLite(null)).toBeNull();
     labelSweetnessFields.mockReturnValue({ label_sweetness: { name: 'trocken' }, display_name: 'Riesling trocken' });
+    sweetnessStyleFields.mockReturnValue({ sweetness_style: null });
     const row = wineLite({
       _id: 'w1', name: 'Riesling', producer: 'Weingut X', type: 'white', country: { name: 'Germany' },
       grapes: [{ name: 'Riesling' }], identityProvenance: { grapes: 'model' },
-    }, { termLoaded: true });
+    }, { termLoaded: true, styleLoaded: true });
     expect(row).toEqual({
       wine_id: 'w1', name: 'Riesling', producer: 'Weingut X', type: 'white', country: 'Germany', region: null, appellation: null,
-      label_sweetness: { name: 'trocken' }, display_name: 'Riesling trocken',
+      label_sweetness: { name: 'trocken' }, display_name: 'Riesling trocken', sweetness_style: null,
       grapes: ['Riesling'], inferred_fields: ['grapes'],
     });
     expect(labelSweetnessFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'w1' }), { loaded: true });
+    expect(sweetnessStyleFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'w1' }), { loaded: true });
   });
 });
 

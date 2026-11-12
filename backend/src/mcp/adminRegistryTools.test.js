@@ -152,8 +152,19 @@ describe('official image + credit', () => {
       expect.objectContaining({ via: 'mcp', credit: 'Photo: Systembolaget' }));
   });
 
+  test('the answer about a created wine carries no sweetness_style key; one read by its id carries the style', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: WINE, created: true });
+    const created = parse(await tool('admin_add_registry_wine').handler({ name: 'Barolo', producer: 'Bartolo Mascarello', country: 'Italy', type: 'red' }, ADMIN_CTX));
+    expect(created.data.wine).not.toHaveProperty('sweetness_style');
+    const q = { select: jest.fn(() => q), populate: jest.fn().mockResolvedValue({ ...WINE, populate: undefined }) };
+    WineDefinition.findById.mockReturnValue(q);
+    const existing = parse(await tool('admin_add_registry_wine').handler({ name: 'x', producer: 'x', country: 'x', type: 'red', existing_wine_id: String(WINE._id) }, ADMIN_CTX));
+    expect(existing.data.wine).toHaveProperty('sweetness_style', null);
+  });
+
   test('existing_wine_id sets the image WITHOUT creating anything', async () => {
-    WineDefinition.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue({ ...WINE, populate: undefined }) });
+    const q = { select: jest.fn(() => q), populate: jest.fn().mockResolvedValue({ ...WINE, populate: undefined }) };
+    WineDefinition.findById.mockReturnValue(q);
     safeFetchImage.mockResolvedValue({ buffer: Buffer.from('img') });
     attachOfficialWineImage.mockResolvedValue({ image: { _id: oid('9'), status: 'approved' } });
     const res = await tool('admin_add_registry_wine').handler({

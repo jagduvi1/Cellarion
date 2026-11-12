@@ -67,7 +67,8 @@ test('GET /sweetness-terms lists rows with their wine count, the review flag, th
     row({ createdByUser: false, reviewedAt: new Date() }),
     { _id: '64b0000000000000000000d2', name: 'Honigsüß', scale: 'still', band: 'sweet', createdByUser: true, reviewedAt: null },
   ] }) });
-  WineDefinition.aggregate.mockResolvedValue([{ _id: ID, n: 7 }]);
+  // Wines carrying the term as their label term (5), and as their style (2).
+  WineDefinition.aggregate.mockResolvedValueOnce([{ _id: ID, n: 5 }]).mockResolvedValueOnce([{ _id: ID, n: 2 }]);
   const res = await call('GET', '/sweetness-terms');
   expect(res.status).toBe(200);
   const body = await res.json();

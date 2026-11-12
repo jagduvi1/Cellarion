@@ -129,6 +129,7 @@ describe('assembleInventory — the contract', () => {
       appellation: 'Pauillac',
       classification: null,
       labelSweetness: null,
+      sweetnessStyle: null,
       grapes: ['Cabernet Sauvignon', 'Tinta Pauillac'],
       image: '/api/uploads/thumbs/processed/w1.webp.webp',
       profile: {
@@ -136,6 +137,26 @@ describe('assembleInventory — the contract', () => {
         flavors: ['blackcurrant', 'cedar'], foodPairings: ['lamb'],
       },
     });
+  });
+
+  test('a wine with a sweetness style sends it in its documented shape, beside the label term and out of the name', () => {
+    const styled = {
+      ...WINE, _id: 'w2', name: 'Riesling Kabinett', labelSweetness: null,
+      sweetnessStyle: { term: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false }, source: 'trade', url: 'https://merchant.example/kabinett' },
+    };
+    const s = inv({ bottles: [bottle({ wineDefinition: styled })] });
+    expect(s.wines.w2).toMatchObject({
+      displayName: 'Riesling Kabinett',
+      labelSweetness: null,
+      sweetnessStyle: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: 'https://merchant.example/kabinett' },
+    });
+  });
+
+  test('a style whose term cannot be read is left out — never null, never the stored shape', () => {
+    const dangling = { ...WINE, _id: 'w3', sweetnessStyle: { term: 'f'.repeat(24), source: 'trade', url: 'https://merchant.example/x' } };
+    const s = inv({ bottles: [bottle({ wineDefinition: dangling })] });
+    expect(s.wines.w3).not.toHaveProperty('sweetnessStyle');
+    expect(JSON.stringify(s.wines.w3)).not.toMatch(/merchant.example/);
   });
 
   test('a bottle waiting on a wine request: wine null, pending set', () => {
@@ -394,7 +415,9 @@ describe('buildInventory — what is loaded', () => {
       { path: 'region', select: 'name' },
       { path: 'grapes', select: 'name regionalNames' },
       { path: 'labelSweetness', select: 'name band scale regulated -_id' },
+      { path: 'sweetnessStyle.term', select: 'name band scale regulated' },
     ]);
+    expect(wine.select.split(' ')).toEqual(expect.arrayContaining(['labelSweetness', 'sweetnessStyle']));
   });
 
   test('no cellars → an empty inventory without further queries', async () => {

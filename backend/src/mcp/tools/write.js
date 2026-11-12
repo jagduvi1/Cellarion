@@ -177,7 +177,8 @@ registerTool({
       // id gets — security audit M-4.
       wineDoc = await findVisibleWine(args.wine_id, {
         userId: ctx.user.id, roles: ctx.user.roles,
-        populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }],
+        select: '+sweetnessStyle',
+        populate: ['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }],
       });
       if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
     } else {
@@ -276,7 +277,9 @@ registerTool({
       summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${bottle.status === ORDERED_STATUS ? ' — on order, not in the cellar until it arrives (mark_arrived)' : ''}${wineDraft ? (wineCreated ? ' (private draft wine — only you can see it; publish_wine when the record is complete)' : ' (on your private draft wine)') : wineCreated ? (pendingIdentity ? ' (registry wine filed for sommelier completion — no producer)' : ' (new registry wine created)') : ''}`,
       data: {
         bottle_id: bottle._id,
-        wine: { ...wineSummary(wineDoc, { termLoaded: true }) },
+        // Only a wine read by its id asked for the style; a wine this call
+        // found or created (findOrCreateWine) did not, so it carries no key.
+        wine: { ...wineSummary(wineDoc, { termLoaded: true, styleLoaded: !!args.wine_id }) },
         wine_created: wineCreated,
         ...(notWine ? { not_wine: notWine, note: notWine.status === 'applied' ? 'The record was already in the registry as wine; on your word it is now in the Other category.' : notWine.status === 'filed' ? `The record was already in the registry as wine and ${notWine.holders} members hold it, so a curator will decide on the Other category; the bottle is saved.` : 'A curator proposal to move this record to Other is already waiting; the bottle is saved.' } : {}),
         // Say it plainly: the bottle is saved and usable, but the wine is not

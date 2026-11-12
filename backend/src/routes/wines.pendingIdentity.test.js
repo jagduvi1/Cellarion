@@ -130,7 +130,8 @@ describe('GET /api/wines/:id — a member never receives who contributed the row
     const query = populateChain(PUBLISHED);
     WineDefinition.findById.mockReturnValue(query);
     expect((await getWine(tokenFor(STRANGER, [role]))).status).toBe(200);
-    expect(query.select.mock.calls[0][0]).toBe('-scanImage -scanImageBack -scanFieldConflicts');
+    // The scan evidence dropped; the sweetness style (select: false) asked for.
+    expect(query.select.mock.calls[0][0]).toBe('-scanImage -scanImageBack -scanFieldConflicts +sweetnessStyle');
   });
 });
 

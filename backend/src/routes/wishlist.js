@@ -102,8 +102,10 @@ router.get('/', async (req, res) => {
       // (config/constants). None of these is ever part of a wishlist answer:
       // createdBy and contribution name the contributing member, normalizedKey
       // carries a pending row's creator id verbatim, and the scan pointers and
-      // front/back disagreements are CURATION evidence.
-      { $unset: MEMBER_WINE_HIDDEN_FIELDS.map((f) => `wineDefinition.${f}`) }
+      // front/back disagreements are CURATION evidence. The sweetness style
+      // goes too: a $lookup ignores the model's select: false, and this list
+      // does not send it in its outgoing shape.
+      { $unset: [...MEMBER_WINE_HIDDEN_FIELDS, 'sweetnessStyle'].map((f) => `wineDefinition.${f}`) }
     ];
 
     // Free-text search on wine name or producer. Guard the type: an object/array
