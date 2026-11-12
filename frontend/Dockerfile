@@ -17,8 +17,8 @@ ARG APP_VERSION=
 # injects the tracker script. Empty values are a no-op (no script, no CSP impact).
 ARG VITE_UMAMI_URL=
 ARG VITE_UMAMI_WEBSITE_ID=
-# Public site URL baked into canonical/SEO meta tags (config/siteUrl.js).
-# Empty falls back to https://cellarion.app — self-hosters set their own domain.
+# Pins the address in share links and canonical/SEO meta tags (config/siteUrl.js).
+# Empty: the address the app is opened at, so one image serves every install.
 ARG VITE_SITE_URL=
 ENV VITE_UMAMI_URL=$VITE_UMAMI_URL \
     VITE_UMAMI_WEBSITE_ID=$VITE_UMAMI_WEBSITE_ID \
