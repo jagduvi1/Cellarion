@@ -2,6 +2,7 @@
   { "name": "trocken", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
   { "name": "halbtrocken", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
   { "name": "feinherb", "scale": "still", "band": "off-dry", "system": "Customary (de)", "regulated": false, "synonyms": [] },
+  { "name": "feinfruchtig", "scale": "still", "band": "off-dry", "system": "Customary (de)", "regulated": false, "synonyms": [] },
   { "name": "lieblich", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
   { "name": "fruchtsüß", "scale": "still", "band": "medium-sweet", "system": "Customary (de)", "regulated": false, "synonyms": [] },
   { "name": "süß", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (de)", "synonyms": [] },
@@ -9,6 +10,7 @@
 
   { "name": "sec", "scale": "still", "band": "dry", "system": "EU 2019/33 Annex III A (fr, ro)", "synonyms": [] },
   { "name": "demi-sec", "scale": "still", "band": "off-dry", "system": "EU 2019/33 Annex III A (fr, ro)", "synonyms": ["demi sec"] },
+  { "name": "tendre", "scale": "still", "band": "off-dry", "system": "Customary (fr)", "regulated": false, "synonyms": [] },
   { "name": "moelleux", "scale": "still", "band": "medium-sweet", "system": "EU 2019/33 Annex III A (fr)", "synonyms": [] },
   { "name": "doux", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (fr)", "synonyms": [] },
   { "name": "liquoreux", "scale": "still", "band": "sweet", "system": "Customary (fr)", "regulated": false, "synonyms": [] },

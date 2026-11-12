@@ -52,7 +52,7 @@ function splitClassificationString(value) {
 // either: the value stated the wine's label sweetness, so assignClassification
 // reports them (`sweetness`) for the caller to hand to the label sweetness
 // write rule (services/sweetnessWrite).
-const SWEETNESS_NOISE = ['trocken', 'halbtrocken', 'feinherb', 'lieblich', 'fruchtsüß', 'süß', 'edelsüß'];
+const SWEETNESS_NOISE = ['trocken', 'halbtrocken', 'feinherb', 'feinfruchtig', 'lieblich', 'fruchtsüß', 'süß', 'edelsüß'];
 
 // Words that ride along in a legacy value without being a tier: the German
 // and Austrian legal category the tier sits in, sweetness, bottling notes,
