@@ -117,8 +117,11 @@ function wineSummary(wd, { termLoaded = false, styleLoaded = false } = {}) {
     // sweetness_style ({ name, band, scale, regulated, source, source_url } or
     // null — the term the wine is KNOWN by when its label states none, named
     // by the producer or the trade; descriptive, never identity) only when the
-    // caller asked for the field and populated its term (styleLoaded): the
-    // path is select: false, so a read that did not ask carries no key.
+    // caller asked for the field and populated its term (styleLoaded: true,
+    // or 'shaped' when a shaper already gave the outgoing shape — see
+    // services/sweetnessOps.sweetnessStyleFields): the path is select: false,
+    // so a read that did not ask carries no key, and neither does a style this
+    // read cannot vouch for.
     ...sweetnessStyleFields(wd, { loaded: styleLoaded }),
     producer: wd.producer || null,
     type: wd.type || null,

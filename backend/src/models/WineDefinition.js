@@ -24,7 +24,7 @@ const { SWEETNESS_STYLE_SOURCES, STYLE_URL_MAX, isStoredStyleUrl, styleShape } =
 // it, and no read can send the stored shape { term, source, url } by
 // accident. A read that asks for it populates the term and sends the outgoing
 // shape (utils/sweetnessStyle styleShape): the toJSON transform on the wine
-// below for a document sent as it is, services/sweetnessOps
+// below for a document sent as it is, utils/sweetnessStyle
 // shapeSweetnessStyle for a plain copy.
 const sweetnessStyleSchema = new mongoose.Schema({
   term: { type: mongoose.Schema.Types.ObjectId, ref: 'SweetnessTerm', required: true },
@@ -141,9 +141,10 @@ const wineDefinitionSchema = new mongoose.Schema({
   // named by the producer (its own wording) or the trade (a merchant, a
   // critic, a wine database), with the page that names it. See
   // sweetnessStyleSchema above.
+  // No default: a new wine without a style has no key, and a read that asks
+  // for the field answers null for one (see the init hook below).
   sweetnessStyle: {
     type: sweetnessStyleSchema,
-    default: null,
     select: false
   },
   lwin: {
@@ -1174,12 +1175,30 @@ wineDefinitionSchema.post('save', async function (doc) {
   await stampPromotedScanRetention(doc);
 });
 
+// A wine loaded by a read that ASKED for its sweetness style ('+sweetnessStyle',
+// or the field in an inclusive or a populate select) answers null for a row
+// that predates the field, like a wine without a style; a read that did not
+// ask, and a new wine, carry no key. Set on the raw row before init, so the
+// document is not modified by it and a save writes nothing for it.
+wineDefinitionSchema.pre('init', function (raw) {
+  if (raw && typeof raw === 'object' && raw.sweetnessStyle === undefined && this.isSelected('sweetnessStyle')) raw.sweetnessStyle = null;
+});
+
+// A style whose term row is gone populates as null. Put the stored id back
+// before validating, so a save of that wine does not fail on the style it
+// never touched; reads already leave such a style out.
+wineDefinitionSchema.pre('validate', function () {
+  if (this.sweetnessStyle && this.sweetnessStyle.term == null && this.populated('sweetnessStyle.term')) {
+    this.depopulate('sweetnessStyle.term');
+  }
+});
+
 // A wine document sent as it is (res.json) carries its sweetness style in the
 // outgoing shape, or no key when this read cannot vouch for it (its term not
 // populated, or gone): utils/sweetnessStyle styleShape, pure, so the answer
-// never depends on a cache. On the wine, not on the style's sub-schema, where
-// a transform that drops the value made Mongoose throw. toObject() keeps the
-// stored shape for code inside the server.
+// never depends on a cache. On the wine, not on the style's sub-schema: a
+// sub-schema transform that drops the value makes Mongoose throw. toObject()
+// keeps the stored shape for code inside the server.
 wineDefinitionSchema.set('toJSON', {
   transform(doc, ret) {
     if (ret && Object.prototype.hasOwnProperty.call(ret, 'sweetnessStyle')) {

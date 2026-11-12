@@ -268,9 +268,11 @@ function labelSweetnessFields(wd, { loaded = false } = {}) {
 // server as { name, band, scale, regulated, source, sourceUrl } — the label
 // term's shape plus where the word comes from — on REST and the Bridge, with
 // `source_url` on MCP, through one pure shape (utils/sweetnessStyle
-// styleShape): no style → null; a style this read cannot vouch for (its term
-// not populated, or gone) → no key at all, never null and never the stored
-// shape. Every read that asks for the field populates its term.
+// styleShape). A read that asks for the field (and populates its term) sends
+// null for a wine without a style, a row that predates the field included; a
+// style it cannot vouch for (its term not populated, or gone; a source or link
+// the rules refuse) → no key at all, never null and never the stored shape. A
+// read that does not ask sends no key.
 
 /**
  * A wine's sweetness style as REST, the inventory and the Bridge (protocol 2)
@@ -286,35 +288,22 @@ function sweetnessStyleOut(wd) {
 }
 
 /**
- * The same, in place, on a plain wine object about to be sent (a lean read, a
- * toObject() copy): its sweetnessStyle becomes the outgoing shape, null for
- * none, and the key goes when this read cannot vouch for the style. A wine
- * without the key (a read that did not ask for it, a lean row that predates
- * the field) keeps no key. A Mongoose document is left alone: its toJSON
- * shapes it, and a save must still see the stored subdocument. Callers: the
- * populate transform of the bottle reads' wine (config/constants) and
- * utils/grapeDisplay.decorateGrapes. Returns the object.
- */
-function shapeSweetnessStyle(wine) {
-  if (!wine || typeof wine !== 'object' || wine instanceof mongoose.Document) return wine;
-  if (!Object.prototype.hasOwnProperty.call(wine, 'sweetnessStyle')) return wine;
-  const out = styleShape(wine.sweetnessStyle);
-  if (out.state === 'unresolved') delete wine.sweetnessStyle;
-  else wine.sweetnessStyle = out.state === 'shaped' ? out.value : null;
-  return wine;
-}
-
-/**
- * The MCP field beside label_sweetness, emitted honestly or not at all: a
- * read that asked for the field and populated its term (`loaded`) →
- * { sweetness_style: { name, band, scale, regulated, source, source_url } |
- * null }, a row that predates the field reading null; a read that did not
- * ask for it (a document says so itself), or a style this read cannot vouch
- * for → no key.
+ * The MCP field beside label_sweetness, by the same rule as REST: a read that
+ * ASKED for the field answers { sweetness_style: { name, band, scale,
+ * regulated, source, source_url } | null } — null for a wine without a style,
+ * a row that predates the field included; a read that did not ask, and a
+ * style this read cannot vouch for, carry no key. `loaded`:
+ *   false     the read did not ask (a document also says so itself);
+ *   true      it asked and populated the term, and nothing has shaped the
+ *             wine since: a missing key is a row without the field → null;
+ *   'shaped'  it asked, and a shaper already gave the outgoing shape (the
+ *             bottle reads' populate transform; decorateGrapes with
+ *             styleAsked): a missing key is a style it could not vouch for.
  */
 function sweetnessStyleFields(wd, { loaded = false } = {}) {
   if (!wd || !loaded) return {};
   if (typeof wd.isSelected === 'function' && !wd.isNew && !wd.isSelected('sweetnessStyle')) return {};
+  if (loaded === 'shaped' && wd.sweetnessStyle === undefined) return {};
   const out = styleShape(wd.sweetnessStyle);
   if (out.state === 'unresolved') return {};
   if (out.state === 'none') return { sweetness_style: null };
@@ -379,6 +368,6 @@ module.exports = {
   loadTerms, invalidateSweetnessCache, primeSweetnessCache, cachedTerm, cachedTermName,
   resolveTerm, resolveLoaded,
   labelSweetnessOut, labelSweetnessFields, termNameForWine, wineDisplayName,
-  sweetnessStyleOut, shapeSweetnessStyle, sweetnessStyleFields,
+  sweetnessStyleOut, sweetnessStyleFields,
   ensureSweetnessSeed,
 };

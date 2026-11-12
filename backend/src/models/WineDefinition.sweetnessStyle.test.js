@@ -78,8 +78,19 @@ describe('never identity', () => {
 });
 
 describe('what may be stored', () => {
-  test('null by default', () => {
-    expect(fresh().sweetnessStyle).toBeNull();
+  test('no default: a new wine without a style has no key, in the document or in its answer', () => {
+    expect(fresh().sweetnessStyle).toBeUndefined();
+    expect(fresh().toJSON()).not.toHaveProperty('sweetnessStyle');
+  });
+
+  test('a read that asked for the field answers null for a row that predates it; one that did not ask has no key', () => {
+    const row = { _id: oid(), name: 'Riesling', producer: 'Weingut Beispiel', country: COUNTRY, createdBy: CREATOR, normalizedKey: 'k' };
+    const asked = WineDefinition.hydrate({ ...row }, { name: 1, producer: 1, sweetnessStyle: 1 });
+    expect(asked.sweetnessStyle).toBeNull();
+    expect(asked.toJSON().sweetnessStyle).toBeNull();
+    expect(asked.isModified('sweetnessStyle')).toBe(false);
+    const notAsked = WineDefinition.hydrate({ ...row }, { sweetnessStyle: 0 });
+    expect(notAsked.toJSON()).not.toHaveProperty('sweetnessStyle');
   });
 
   test('a known source and an http(s) link are required; the term is required', async () => {
@@ -91,6 +102,8 @@ describe('what may be stored', () => {
       { ...STYLE, url: 'https:merchant.example' },
       { ...STYLE, url: 'https://login:secret@merchant.example/x' },
       { ...STYLE, url: 'https://merchant.example' }, // not the normalised form the rule stores
+      { ...STYLE, url: 'https://./' },
+      { ...STYLE, url: 'https://a..b/' },
       { ...STYLE, source: 'constructor' },
       { source: 'trade', url: STYLE.url },
       { term: TERM, source: 'trade' },
@@ -136,7 +149,7 @@ describe('the outgoing shape, and deny by default', () => {
     doc.sweetnessStyle.term = new SweetnessTerm(POPULATED_TERM);
     expect(doc.toJSON().sweetnessStyle).toEqual({ name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: STYLE.url });
     expect(doc.toObject().sweetnessStyle).toMatchObject({ source: 'trade', url: STYLE.url });
-    expect(fresh().toJSON().sweetnessStyle).toBeNull();
+    expect(fresh({ sweetnessStyle: null }).toJSON().sweetnessStyle).toBeNull();
   });
 
   test('its term not populated, with the term copy warm or cold: no throw, and no key — never null, never an id', () => {

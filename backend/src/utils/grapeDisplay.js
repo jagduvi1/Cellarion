@@ -17,6 +17,7 @@
  * shown; the mapping applies only when the name says the regional form or
  * names no variety at all.
  */
+const { shapeSweetnessStyle } = require('./sweetnessStyle');
 const { normalizeString } = require('./normalize');
 
 /**
@@ -121,21 +122,22 @@ function resolveGrapeDisplayName(grape, { countryId, regionId, wineName } = {}) 
  * unchanged, and grapes that are bare ObjectIds (caller didn't populate) are
  * left as-is rather than decorated with garbage.
  *
- * Most REST wine reads send this copy (the bottle and wine pages, the public
- * page, scan and search results), and toObject() keeps the stored
+ * Most REST wine reads send this copy, and toObject() keeps the stored
  * subdocuments, so the copy also carries the sweetness style in its outgoing
- * shape (services/sweetnessOps.shapeSweetnessStyle) — the one a document sent
- * as it is gets from the model's toJSON.
+ * shape when the read loaded it (utils/sweetnessStyle shapeSweetnessStyle) —
+ * the one a document sent as it is gets from the model's toJSON. The reads
+ * that load it: the bottle page, the wine page and the public wine page; scan
+ * and search results do not. `styleAsked`: a lean read that asked for the
+ * field, so a row that predates it answers null (a document already does).
  *
  * @param {object} wine – wine doc/lean object with populated `grapes` and
  *                        `country`/`region` as ids or populated docs
  * @returns {object} the decorated copy (or the input when falsy)
  */
-function decorateGrapes(wine) {
+function decorateGrapes(wine, { styleAsked = false } = {}) {
   if (!wine) return wine;
   const out = typeof wine.toObject === 'function' ? wine.toObject() : { ...wine };
-  // Lazy: the service loads the term model; this util must stay requirable alone.
-  require('../services/sweetnessOps').shapeSweetnessStyle(out);
+  shapeSweetnessStyle(out, { asked: styleAsked });
   if (!Array.isArray(out.grapes) || out.grapes.length === 0) return out;
   const ctx = { countryId: out.country, regionId: out.region, wineName: out.name };
   out.grapes = out.grapes.map((g) => {

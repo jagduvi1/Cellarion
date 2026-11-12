@@ -18,11 +18,12 @@
  *
  * Kept apart from sweetnessOps because every read surface imports that module
  * and none of them needs this one: the rule has its own vocabulary (the
- * ambiguity kinds, the review markers, the switch, the verdicts), and a reader looking for
- * what happens when a term is written finds all of it here. How a name is
- * split into words, and which characters join the words of one term, is
- * utils/normalize (sweetnessWords): the display name and the slug read names
- * the same way, so they never repeat a term the rule reads in a name.
+ * ambiguity kinds, the review markers, the switch, the verdicts), and a
+ * reader looking for what happens when a term is written finds all of it
+ * here. How a name is split into words, and which characters join the words
+ * of one term, is utils/normalize (sweetnessWords): the display name and the
+ * slug read names the same way, so they never repeat a term the rule reads in
+ * a name.
  *
  * The Registry Bridge copy calls assignSweetnessStyle (services/registryBridge).
  * No other write path calls either rule yet.
@@ -901,7 +902,8 @@ function heldStyle(terms, s) {
  *                 name — is on the same band: the style is cleared
  *   held          lenient only: a different band from the label's term or the
  *                 name's word, or a dry-side style on a Prädikat sweet by
- *                 law; nothing written, marker style_contradiction
+ *                 law; nothing written, marker style_contradiction — unless
+ *                 a marker with another reason is pending, which stays
  *   cleared       null or '' given: the style removed
  *   dropped       invalid input on the lenient path (reason as below), or no
  *                 term table at all (reason no_table, either path)
@@ -923,9 +925,14 @@ async function assignSweetnessStyle(target, { term, source, url, type, countryId
   const invalid = (reason, message) => (strict
     ? { ok: false, code: 'invalid_input', reason, message }
     : done('dropped', { reason, message }));
-  const held = (detail) => (strict
-    ? { ok: false, code: 'invalid_input', reason: 'term_contradiction', message: `The style was not written: ${detail}.` }
-    : mark(target, done('held', { reason: 'style_contradiction' }), 'style_contradiction', detail));
+  // A pending marker with another reason (a question about the name or the
+  // label) is the curator's open question: a held style never replaces it.
+  const held = (detail) => {
+    if (strict) return { ok: false, code: 'invalid_input', reason: 'term_contradiction', message: `The style was not written: ${detail}.` };
+    const pending = target.sweetnessReview;
+    if (pending && pending.reason && pending.reason !== 'style_contradiction') return done('held', { reason: 'style_contradiction' });
+    return mark(target, done('held', { reason: 'style_contradiction' }), 'style_contradiction', detail);
+  };
   const clear = (verdict) => {
     const had = target.sweetnessStyle != null;
     if (had) target.sweetnessStyle = null;
@@ -971,7 +978,10 @@ async function assignSweetnessStyle(target, { term, source, url, type, countryId
     if (sameTerm(label, row) || label.band === row.band) return clear('redundant');
     return held(`the label states ${quote(label.name)}, the style named is ${quote(row.name)}`);
   }
-  const inName = nameTerms(terms, target.name, { scale, keep: target.sweetnessInName === true, countryId: cid });
+  // A word the reader itself doubts (a modifier, a glued word, a place word)
+  // is not the label's statement, as for an explicit label term.
+  const inName = nameTerms(terms, target.name, { scale, keep: target.sweetnessInName === true, countryId: cid, places: await placesOf(target) })
+    .filter((h) => !h.doubt);
   if (inName.length) {
     const other = inName.find((h) => !h.row || h.row.band !== row.band);
     if (!other) return clear('redundant');

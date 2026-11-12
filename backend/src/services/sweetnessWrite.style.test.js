@@ -214,6 +214,25 @@ describe('the label wins', () => {
     const sweet = wine({ name: 'Riesling Trockenbeerenauslese', type: 'dessert' });
     expect((await assignSweetnessStyle(sweet, { term: 'edelsüß', source: 'trade', url: TRADE_URL })).verdict).toBe('applied');
   });
+
+  test('a held style never replaces a pending marker with another reason; its own reason it renews', async () => {
+    const since = new Date('2020-01-01');
+    const w = wine({ labelSweetness: id('halbtrocken'), sweetnessReview: { reason: 'name_ambiguous', detail: 'a question about the name', since } });
+    const r = await assignSweetnessStyle(w, { term: 'lieblich', source: 'producer', url: PRODUCER_URL });
+    expect(r).toMatchObject({ ok: true, verdict: 'held', changed: false, review: null });
+    expect(w.sweetnessReview).toEqual({ reason: 'name_ambiguous', detail: 'a question about the name', since });
+    expect(w.sweetnessStyle).toBeNull();
+    const own = wine({ labelSweetness: id('halbtrocken'), sweetnessReview: { reason: 'style_contradiction', detail: 'old', since } });
+    const again = await assignSweetnessStyle(own, { term: 'lieblich', source: 'producer', url: PRODUCER_URL });
+    expect(again).toMatchObject({ verdict: 'held', review: { reason: 'style_contradiction', since } });
+  });
+
+  test('a word in the name the reader itself doubts holds nothing: a modifier, a place word', async () => {
+    const halb = wine({ name: 'Riesling halb trocken' });
+    expect((await assignSweetnessStyle(halb, { term: 'feinherb', source: 'trade', url: TRADE_URL })).verdict).toBe('applied');
+    const place = wine({ name: 'Chardonnay Arroyo Seco', appellation: 'Arroyo Seco', type: 'white' });
+    expect((await assignSweetnessStyle(place, { term: 'feinherb', source: 'trade', url: TRADE_URL })).verdict).toBe('applied');
+  });
 });
 
 describe('a stored style yields only to a stronger source', () => {

@@ -1,11 +1,13 @@
 /**
  * The sweetness style's shared rules (WineDefinition.sweetnessStyle): who may
  * name one, which links are accepted, and the one shape it leaves the server
- * in. A util without dependencies, because the model, the write rule
- * (services/sweetnessWrite) and every reader must agree on each of them: a
- * value the rule accepts and the model refuses fails a save, and a value one
- * reader sends differently from another is two APIs.
+ * in. A util (it needs mongoose only to tell a document from a plain copy),
+ * because the model, the write rule (services/sweetnessWrite) and every
+ * reader must agree on each of them: a value the rule accepts and the model
+ * refuses fails a save, and a value one reader sends differently from another
+ * is two APIs.
  */
+const mongoose = require('mongoose');
 
 // Who may name a wine's sweetness style.
 const SWEETNESS_STYLE_SOURCES = Object.freeze(['producer', 'trade']);
@@ -20,10 +22,10 @@ const STYLE_URL_MAX = 500;
 const LINK_START_RX = /^https?:\/\/[^\s/\\?#@]/i;
 
 /**
- * A link as a style may store it: http or https, with a host, no credentials,
- * nothing that is not printable, normalised by the URL parser (what is
- * stored) and at most STYLE_URL_MAX characters after that. Returns
- * { ok: true, href } or { ok: false }.
+ * A link as a style may store it: http or https, with a host of whole labels
+ * (not ".", not "a..b"), no credentials, nothing that is not printable,
+ * normalised by the URL parser (what is stored) and at most STYLE_URL_MAX
+ * characters after that. Returns { ok: true, href } or { ok: false }.
  */
 function normalizeStyleUrl(value) {
   if (typeof value !== 'string') return { ok: false };
@@ -31,7 +33,7 @@ function normalizeStyleUrl(value) {
   if (!raw || raw.length > STYLE_URL_MAX * 4 || /[\p{C}\s]/u.test(raw) || !LINK_START_RX.test(raw)) return { ok: false };
   let parsed;
   try { parsed = new URL(raw); } catch { return { ok: false }; }
-  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) return { ok: false };
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !hasWholeLabels(parsed.hostname)) return { ok: false };
   if (parsed.username || parsed.password) return { ok: false };
   const href = parsed.href;
   if (href.length > STYLE_URL_MAX) return { ok: false };
@@ -42,6 +44,14 @@ function normalizeStyleUrl(value) {
 function isStoredStyleUrl(value) {
   const r = normalizeStyleUrl(value);
   return r.ok && r.href === value;
+}
+
+/** A host the parser kept: an IP literal, or dot-separated labels with none empty (one trailing dot allowed). */
+function hasWholeLabels(hostname) {
+  if (!hostname) return false;
+  if (hostname.startsWith('[')) return hostname.endsWith(']');
+  const labels = (hostname.endsWith('.') ? hostname.slice(0, -1) : hostname).split('.');
+  return labels.every((l) => l.length > 0);
 }
 
 const isSource = (s) => typeof s === 'string' && SWEETNESS_STYLE_SOURCES.includes(s);
@@ -75,4 +85,36 @@ function styleShape(s) {
   };
 }
 
-module.exports = { SWEETNESS_STYLE_SOURCES, STYLE_URL_MAX, normalizeStyleUrl, isStoredStyleUrl, styleShape };
+// The plain wine objects shapeSweetnessStyle has shaped (see there).
+const shapedWines = new WeakSet();
+
+/**
+ * The same, in place, on a plain wine object about to be sent (a lean read, a
+ * toObject() copy): its sweetnessStyle becomes the outgoing shape, null for
+ * none, and the key goes when this read cannot vouch for the style. `asked`:
+ * the read asked for the field, so a row that predates it (no key at all)
+ * answers null like a wine without a style — the bottle reads' populate
+ * transform (config/constants) passes it. Without `asked` a missing key stays
+ * missing: a read that did not ask sends none. A Mongoose document is left
+ * alone: its toJSON shapes it, and a save must still see the stored
+ * subdocument. Callers: config/constants (the bottle reads' populate
+ * transform), utils/grapeDisplay.decorateGrapes. Returns the object.
+ */
+function shapeSweetnessStyle(wine, { asked = false } = {}) {
+  if (!wine || typeof wine !== 'object' || wine instanceof mongoose.Document) return wine;
+  // Once per object: a lean populate hands the SAME wine object to every
+  // bottle of that wine, and a second pass must not read the key the first
+  // one dropped as "a row without the field" and answer null.
+  if (shapedWines.has(wine)) return wine;
+  shapedWines.add(wine);
+  if (!Object.prototype.hasOwnProperty.call(wine, 'sweetnessStyle')) {
+    if (asked) wine.sweetnessStyle = null;
+    return wine;
+  }
+  const out = styleShape(wine.sweetnessStyle);
+  if (out.state === 'unresolved') delete wine.sweetnessStyle;
+  else wine.sweetnessStyle = out.state === 'shaped' ? out.value : null;
+  return wine;
+}
+
+module.exports = { SWEETNESS_STYLE_SOURCES, STYLE_URL_MAX, normalizeStyleUrl, isStoredStyleUrl, styleShape, shapeSweetnessStyle };

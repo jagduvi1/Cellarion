@@ -206,7 +206,7 @@ const schemas = {
         }],
         description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from `profile.sweetness`, the tasting estimate.',
       },
-      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade, or null when it has none. Descriptive, not part of the wine\'s identity. Absent when this server cannot read the term (a term row that was removed): never null for that.' },
+      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade. Null when the wine has none, including a wine recorded before the field existed. Absent when this server cannot vouch for the style (its term row was removed, or a stored source or link fails the rules): never null for that. Descriptive, not part of the wine\'s identity.' },
       grapes: { type: 'array', items: { type: 'string' }, description: 'Display names, as on the label.' },
       image: { type: ['string', 'null'], description: 'A thumbnail path on this server (see Images), or null.' },
       profile: {
@@ -370,7 +370,7 @@ const schemas = {
         }],
         description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from the tasting profile\'s sweetness estimate.',
       },
-      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade, or null when it has none. Descriptive, not part of the wine\'s identity. Absent when this server cannot read the term (a term row that was removed): never null for that.' },
+      sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade. Null when the wine has none, including a wine recorded before the field existed. Absent when this server cannot vouch for the style (its term row was removed, or a stored source or link fails the rules): never null for that. Descriptive, not part of the wine\'s identity.' },
       grapes: { type: 'array', items: ref('Grape') },
       image: { type: ['string', 'null'], description: 'The registry image URL, or null.' },
       nonWine: { type: 'boolean', description: 'True for a drink that is not wine (cider, beer, spirits): the Other category, kept in the holder\'s cellar outside the shared wine registry; its type is then null.' },

@@ -201,7 +201,7 @@ describe('a slim copy', () => {
       // The sweetness style's term beside it.
       { path: 'sweetnessStyle.term', select: 'name band scale regulated' },
     ]);
-    // A lean read sends the style in its outgoing shape (sweetnessOps.shapeSweetnessStyle).
+    // A lean read sends the style in its outgoing shape (utils/sweetnessStyle shapeSweetnessStyle).
     expect(typeof wine.transform).toBe('function');
     // Everything the cellar list excludes from a wine stays excluded.
     expect(wine.select).toMatch(/-aiProfile/);

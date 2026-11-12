@@ -3,6 +3,8 @@
  * Import from here instead of re-declaring in each file.
  */
 
+const { shapeSweetnessStyle } = require('../utils/sweetnessStyle');
+
 // Bottle statuses that indicate the bottle has been removed from the active cellar
 const CONSUMED_STATUSES = ['drank', 'gifted', 'sold', 'other'];
 
@@ -49,10 +51,11 @@ const MEMBER_WINE_EXCLUDE_KEEP_CREATOR = excludeFields(MEMBER_WINE_HIDDEN_FIELDS
 // populate its term with the label term's own fields — and its id, which a
 // save of the populated wine still needs — and send it in the outgoing shape:
 // a document through its toJSON, a lean read through this transform
-// (services/sweetnessOps.shapeSweetnessStyle leaves a document alone).
+// (utils/sweetnessStyle shapeSweetnessStyle leaves a document alone). These
+// reads ask for the field, so a row that predates it answers null.
 const WITH_SWEETNESS_STYLE = '+sweetnessStyle';
 const SWEETNESS_STYLE_POPULATE = { path: 'sweetnessStyle.term', select: 'name band scale regulated' };
-const shapeLeanWine = (wine) => require('../services/sweetnessOps').shapeSweetnessStyle(wine);
+const shapeLeanWine = (wine) => shapeSweetnessStyle(wine, { asked: true });
 
 // The wine of ONE bottle, as the bottle page and every bottle write answer
 // send it: the whole record with its profile, minus the member-hidden fields

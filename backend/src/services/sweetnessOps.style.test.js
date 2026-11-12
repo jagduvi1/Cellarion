@@ -17,7 +17,7 @@ const mongoose = require('mongoose');
 const ops = require('./sweetnessOps');
 const WineDefinition = require('../models/WineDefinition');
 const { decorateGrapes } = require('../utils/grapeDisplay');
-const { styleShape } = require('../utils/sweetnessStyle');
+const { styleShape, shapeSweetnessStyle, normalizeStyleUrl } = require('../utils/sweetnessStyle');
 
 const ID = (c) => c.repeat(24);
 const FEINHERB = { _id: ID('5'), name: 'feinherb', scale: 'still', band: 'off-dry', regulated: false, country: null, synonyms: [] };
@@ -51,6 +51,8 @@ describe('the one shape', () => {
       { ...POPULATED, url: 'https://merchant.example/x\ny' },
       { ...POPULATED, url: '' },
       { ...SHAPE, sourceUrl: 'data:text/html,x' },
+      { ...POPULATED, url: 'https://./' },
+      { ...POPULATED, url: 'https://a..b/' },
       'feinherb',
     ]) expect(styleShape(bad)).toEqual({ state: 'unresolved' });
   });
@@ -68,16 +70,30 @@ describe('sweetnessStyleOut', () => {
 
 describe('shapeSweetnessStyle', () => {
   test('a plain wine gets the outgoing shape; an unvouched style loses its key; a wine without the key keeps none', () => {
-    expect(ops.shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: POPULATED })).toEqual({ name: 'Riesling', sweetnessStyle: SHAPE });
-    expect(ops.shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: null })).toEqual({ name: 'Riesling', sweetnessStyle: null });
-    expect(ops.shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: UNPOPULATED })).toEqual({ name: 'Riesling' });
-    expect(ops.shapeSweetnessStyle({ name: 'Riesling' })).toEqual({ name: 'Riesling' });
-    expect(ops.shapeSweetnessStyle(null)).toBeNull();
+    expect(shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: POPULATED })).toEqual({ name: 'Riesling', sweetnessStyle: SHAPE });
+    expect(shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: null })).toEqual({ name: 'Riesling', sweetnessStyle: null });
+    expect(shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: UNPOPULATED })).toEqual({ name: 'Riesling' });
+    expect(shapeSweetnessStyle({ name: 'Riesling' })).toEqual({ name: 'Riesling' });
+    expect(shapeSweetnessStyle(null)).toBeNull();
+  });
+
+  test("a read that ASKED for the field (the bottle reads' populate transform): a row without the key answers null", () => {
+    expect(shapeSweetnessStyle({ name: 'Riesling' }, { asked: true })).toEqual({ name: 'Riesling', sweetnessStyle: null });
+    expect(shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: UNPOPULATED }, { asked: true })).toEqual({ name: 'Riesling' });
+    expect(decorateGrapes({ name: 'Riesling', grapes: [] }, { styleAsked: true }).sweetnessStyle).toBeNull();
+    expect(decorateGrapes({ name: 'Riesling', grapes: [] })).not.toHaveProperty('sweetnessStyle');
+  });
+
+  test('the same wine object shaped again (a lean populate hands one object to every bottle of the wine): an unvouched style stays without a key', () => {
+    const shared = { name: 'Riesling', sweetnessStyle: UNPOPULATED };
+    shapeSweetnessStyle(shared, { asked: true });
+    shapeSweetnessStyle(shared, { asked: true });
+    expect(shared).not.toHaveProperty('sweetnessStyle');
   });
 
   test('a Mongoose document is left alone: a save must still see the stored subdocument', () => {
     const doc = new WineDefinition({ name: 'Riesling', producer: 'Weingut Beispiel', sweetnessStyle: UNPOPULATED });
-    expect(ops.shapeSweetnessStyle(doc)).toBe(doc);
+    expect(shapeSweetnessStyle(doc)).toBe(doc);
     expect(String(doc.sweetnessStyle.term)).toBe(ID('5'));
     expect(doc.sweetnessStyle.url).toBe(URL);
   });
@@ -106,5 +122,20 @@ describe('the MCP field', () => {
     const partial = WineDefinition.hydrate({ _id: ID('9'), name: 'Riesling', producer: 'Weingut Beispiel' }, { name: 1, producer: 1 });
     expect(ops.sweetnessStyleFields(partial, { loaded: true })).toEqual({});
     expect(ops.sweetnessStyleFields(null, { loaded: true })).toEqual({});
+  });
+
+  test("after a shaper ('shaped'): a missing key is a style the read could not vouch for — no key, never null", () => {
+    const shaped = shapeSweetnessStyle({ name: 'Riesling', sweetnessStyle: UNPOPULATED }, { asked: true });
+    expect(ops.sweetnessStyleFields(shaped, { loaded: 'shaped' })).toEqual({});
+    expect(ops.sweetnessStyleFields(shapeSweetnessStyle({ name: 'Riesling' }, { asked: true }), { loaded: 'shaped' })).toEqual({ sweetness_style: null });
+    expect(ops.sweetnessStyleFields(shapeSweetnessStyle({ sweetnessStyle: POPULATED }, { asked: true }), { loaded: 'shaped' })).toEqual({ sweetness_style: { ...rest, source_url: sourceUrl } });
+  });
+});
+
+describe('the link check', () => {
+  test('a host of whole labels only: "https://." and "https://a..b" are no links', () => {
+    for (const bad of ['https://.', 'https://./x', 'https://a..b/', 'https://.example/']) expect(normalizeStyleUrl(bad)).toEqual({ ok: false });
+    expect(normalizeStyleUrl('https://merchant.example./x')).toMatchObject({ ok: true });
+    expect(normalizeStyleUrl('https://[::1]/x')).toMatchObject({ ok: true });
   });
 });

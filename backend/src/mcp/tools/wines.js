@@ -161,7 +161,9 @@ registerTool({
     // Grapes surface as the regionally correct label for THIS wine's place
     // ("Tinta Roriz" on a Douro Port) — storage stays canonical, and the
     // grapes field keeps its array-of-strings shape.
-    const w = decorateGrapes(raw);
+    // The read asked for the style (SAFE_SELECT): a row without one answers
+    // null, and one this read cannot vouch for leaves no key.
+    const w = decorateGrapes(raw, { styleAsked: true });
     const gate = await gateMcpRead(ctx, w._id);
     if (!gate.allowed) return fail('rate_limited', CAP_MESSAGE);
     const profile = hasContent(w.aiProfile) ? w.aiProfile : null;
@@ -174,7 +176,7 @@ registerTool({
       ? undefined
       : await require('../../services/wineProposalOps').pendingForWine(w._id, ctx.user.id);
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
-      ...wineSummary(w, { termLoaded: true, styleLoaded: true }),
+      ...wineSummary(w, { termLoaded: true, styleLoaded: 'shaped' }),
       classification: w.classification || null,
       classifications: classificationsOut(w),
       lwin7: w.lwin?.lwin7 || null,
