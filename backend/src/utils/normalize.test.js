@@ -979,3 +979,51 @@ describe('draftWineKey', () => {
     expect(draftWineKey('Kaefferkopf', undefined, U1)).toBe(`draft~${U1}::kaefferkopf:`);
   });
 });
+
+describe('appendSweetnessTerm — every spelling of the term counts as carried', () => {
+  const { appendSweetnessTerm: append, generateWineSlug: slug } = require('./normalize');
+  test.each([
+    ['Champagne Extra-Brut', { name: 'Extra Brut', synonyms: ['Extra-Brut'] }],
+    ['Champagne Extra-Brut', ['Extra Brut']],
+    ['Vouvray Demi Sec', { name: 'demi-sec', synonyms: ['demi sec'] }],
+    ['Vouvray Demi Sec', ['demi-sec']],
+    ['Cava Brut Natur', { name: 'Brut Nature', synonyms: ['Brut Natur'] }],
+    ['Riesling Medium', { name: 'medium sweet', synonyms: ['medium', 'medium-sweet'] }],
+  ])('%s is not doubled', (name, term) => {
+    expect(append(name, term)).toBe(name);
+    expect(slug(name, 'Example Estate', term)).toBe(slug(name, 'Example Estate'));
+  });
+
+  test('a term the name does not carry is shown after it, as the first spelling', () => {
+    expect(append('Riesling Kabinett', { name: 'trocken', synonyms: [] })).toBe('Riesling Kabinett trocken');
+    expect(append('Riesling Kabinett', ['trocken', 'troken'])).toBe('Riesling Kabinett trocken');
+    expect(append('Riesling Kabinett', 'trocken')).toBe('Riesling Kabinett trocken');
+  });
+
+  test('a wine without a term keeps its name and its slug byte for byte', () => {
+    for (const name of ['Riesling Kabinett', 'Champagne Extra-Brut', 'Cava Brut Natur', '  Rosé  ', 'Château X Grand Vin']) {
+      for (const none of [null, undefined, '', [], { name: '' }]) {
+        expect(append(name, none)).toBe(name.trim());
+        expect(slug(name, 'Example Estate', none)).toBe(slug(name, 'Example Estate'));
+      }
+    }
+  });
+});
+
+describe('a wine without a term keys and slugs as it always has', () => {
+  const { generateWineSlug: slug, generateWineKey: key } = require('./normalize');
+  // Written down from the code before every spelling of a term was read: these
+  // must never move.
+  test.each([
+    ['Riesling Kabinett', 'Example Estate', 'example-estate-riesling-kabinett', 'example estate:riesling kabinett:mosel'],
+    ['Champagne Extra-Brut', 'Example Estate', 'example-estate-champagne-extrabrut', 'example estate:champagne extrabrut:mosel'],
+    ['Cava Brut Natur', '', 'cava-brut-natur', ':cava brut natur:mosel'],
+    ['  Rosé  ', 'Example Estate', 'example-estate-rose', 'example estate:rose:mosel'],
+    ['Vouvray Demi Sec', 'Example Estate', 'example-estate-vouvray-demi-sec', 'example estate:vouvray demi sec:mosel'],
+    ['Brut Premier', 'Example Estate', 'example-estate-brut-premier', 'example estate:brut premier:mosel'],
+    ['Auslese***', 'Example Estate', 'example-estate-auslese', 'example estate:auslese 3star:mosel'],
+  ])('%s by %s', (name, producer, expectedSlug, expectedKey) => {
+    expect(slug(name, producer)).toBe(expectedSlug);
+    expect(key(name, producer, 'Mosel')).toBe(expectedKey);
+  });
+});

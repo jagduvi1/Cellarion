@@ -89,7 +89,8 @@ const PRADIKAT_ALIASES = new Map([
 // without the umlaut is "Suess", which normalizeString leaves alone — without
 // this the guard silently fails open for the standard ue-transliteration
 // (found by the post-release audit, verified by execution). NAME side only,
-// like the Prädikat map: the producer-field rules in crossFieldChecks read
+// like the Prädikat map (the label sweetness write rule, services/
+// sweetnessWrite, reads names through it too): the producer-field rules in crossFieldChecks read
 // SWEETNESS_WORDS directly and must NOT gain 'suess' — Suess is a real
 // surname, and flagging every "Weingut Suess" as a style-term producer is
 // the 'dry'/'sweet' problem over again.
@@ -361,6 +362,7 @@ function conflictingStyleTerms(wineA, wineB) {
 
 module.exports = {
   SWEETNESS_WORDS,
+  SWEETNESS_ALIASES,
   NAME_AMBIGUOUS_WORDS,
   statedStyle,
   styleOf,

@@ -28,7 +28,7 @@
  */
 const mongoose = require('mongoose');
 const Classification = require('../models/Classification');
-const { normalizeString, normalizeClassification } = require('../utils/normalize');
+const { normalizeString, normalizeClassification, normalizeSweetnessTerm } = require('../utils/normalize');
 
 const KIND_ORDER = { vineyard_rank: 0, ripeness: 1, ageing: 2, other: 3 };
 
@@ -67,13 +67,14 @@ const NOISE = [
 ];
 const NOISE_KEYS = [...new Set(NOISE.map(normalizeString).filter(Boolean))].sort((a, b) => b.length - a.length);
 const NOISE_RX = NOISE_KEYS.map((k) => new RegExp(`(^|\\s)${escapeRx(k)}(?=\\s|$)`, 'g'));
-// Each sweetness word with the key the noise strip matches it by (the same
-// normalizeString fold, ß dropped: "süß" → "su").
-const SWEETNESS_NOISE_RX = SWEETNESS_NOISE.map((word) => ({ word, rx: new RegExp(`(^|\\s)${escapeRx(normalizeString(word))}(?=\\s|$)`) }));
+// Each sweetness word with its key in the term table's fold (ß as ss: "süß"
+// → "suss"). The noise strip's own fold drops ß ("süß" → "su"), and in it
+// "Kabinett su" would read as stating "süß".
+const SWEETNESS_NOISE_RX = SWEETNESS_NOISE.map((word) => ({ word, rx: new RegExp(`(^|\\s)${escapeRx(normalizeSweetnessTerm(word))}(?=\\s|$)`) }));
 
 /** The sweetness words a value carries as words of their own, in list order. */
 function sweetnessWordsIn(value) {
-  const key = normalizeString(value == null ? '' : String(value));
+  const key = normalizeSweetnessTerm(value == null ? '' : String(value));
   return key ? SWEETNESS_NOISE_RX.filter(({ rx }) => rx.test(key)).map(({ word }) => word) : [];
 }
 

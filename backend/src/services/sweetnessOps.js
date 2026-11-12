@@ -171,14 +171,9 @@ function labelSweetnessOut(wd) {
   return row && row !== 'unresolved' ? termOut(row) : null;
 }
 
-/** The term's name, or null — the form the display name and the identity keys read. */
-function termNameOf(wd) {
-  const row = termRowOf(wd);
-  return row && row !== 'unresolved' ? row.name : null;
-}
-
 /**
- * The same, for a caller that may do I/O and holds an unpopulated ref: the
+ * The term's name, or null — the form the identity keys read — for a caller
+ * that may do I/O and holds an unpopulated ref: the
  * populated row's or the warm copy's name at once, else one load of the term
  * table. For the key a writer builds beside the hook (a reserved key in a
  * rename plan, a clash check) — never a bare key over a termed wine.
@@ -204,7 +199,23 @@ async function termNameForWine(wd) {
  */
 function wineDisplayName(wd) {
   if (!wd) return '';
-  return appendSweetnessTerm(wd.name, termNameOf(wd));
+  const row = termRowOf(wd);
+  return appendSweetnessTerm(wd.name, row && row !== 'unresolved' ? termSpellings(row) : null);
+}
+
+/**
+ * Every spelling of a term row — its name first, then its synonyms — for the
+ * "does the name already carry it" test of the display name. A row read in
+ * the API shape has no synonyms: the warm in-memory copy supplies them (by
+ * id, else by word and scale), and a cold one leaves the name alone.
+ */
+function termSpellings(row) {
+  if (!row || typeof row.name !== 'string' || !row.name) return null;
+  if (Array.isArray(row.synonyms)) return [row.name, ...row.synonyms];
+  const known = (cache && row._id != null && cache.byId.get(String(row._id)))
+    || (cache && (cache.byKey.get(normalizeSweetnessTerm(row.name)) || [])
+      .find((r) => r.name === row.name && (!row.scale || r.scale === row.scale)));
+  return known ? [row.name, ...(known.synonyms || [])] : [row.name];
 }
 
 /**
@@ -228,7 +239,7 @@ function labelSweetnessFields(wd, { loaded = false } = {}) {
   if (row === 'unresolved') return {};
   if (row === undefined && !loaded) return {};
   const term = row || null;
-  return { label_sweetness: termOut(term), display_name: appendSweetnessTerm(wd.name, term ? term.name : null) };
+  return { label_sweetness: termOut(term), display_name: appendSweetnessTerm(wd.name, term ? termSpellings(term) : null) };
 }
 
 /**

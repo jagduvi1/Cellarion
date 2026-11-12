@@ -499,19 +499,38 @@ const stripSweetnessKeySegment = (key) => {
   return at === -1 ? s : s.slice(0, at);
 };
 
+// The two folds a spelling is compared in: as the term table keys it (a dash
+// dropped: "Extra-Brut" → "extrabrut") and with every dash read as a space
+// ("extra brut"), so a name written one way carries a term spelt the other.
+const DASH_RX = /[\p{Pd}−]/gu;
+const sweetnessFolds = (s) => {
+  const raw = String(s == null ? '' : s);
+  return [...new Set([normalizeSweetnessTerm(raw), normalizeSweetnessTerm(raw.replace(DASH_RX, ' '))])].filter(Boolean);
+};
+
 /**
  * The name as the label reads it: the name, then the term — unless the name
- * already carries the word as a whole token (a wine marked sweetnessInName,
- * "Brut Premier"), so nothing is ever doubled. Every text surface shows this
- * (services/sweetnessOps.wineDisplayName); the slug is built from it, which
- * is why a migrated wine's URL does not move when the word leaves its name.
+ * already carries the term as whole words in ANY of its spellings (a wine
+ * marked sweetnessInName, "Brut Premier"; "Champagne Extra-Brut" with the
+ * term Extra Brut; "Cava Brut Natur" with Brut Nature), so nothing is ever
+ * doubled. `term` is the word to show, or every spelling of the term — a list
+ * whose first entry is shown, or a row { name, synonyms }. A word inside a
+ * dashed compound counts as carried ("Demi-Sec" carries "sec"); the write rule
+ * refuses that pair as a contradiction, so no stored wine has it. Every text
+ * surface shows this (services/sweetnessOps.wineDisplayName); the slug is
+ * built from it, which is why a migrated wine's URL does not move when the
+ * word leaves its name. A wine without a term keeps its name exactly.
  */
 const appendSweetnessTerm = (name, term) => {
   const n = String(name == null ? '' : name).trim();
-  const t = String(term == null ? '' : term).trim();
+  const listed = Array.isArray(term) ? term
+    : (term && typeof term === 'object' ? [term.name, ...(Array.isArray(term.synonyms) ? term.synonyms : [])] : [term]);
+  const spellings = listed.map((s) => String(s == null ? '' : s).trim()).filter(Boolean);
+  const t = spellings[0] || '';
   if (!t) return n;
   if (!n) return t;
-  const carried = ` ${normalizeSweetnessTerm(n)} `.includes(` ${normalizeSweetnessTerm(t)} `);
+  const nameFolds = sweetnessFolds(n).map((f) => ` ${f} `);
+  const carried = spellings.some((s) => sweetnessFolds(s).some((f) => nameFolds.some((nf) => nf.includes(` ${f} `))));
   return carried ? n : `${n} ${t}`;
 };
 
@@ -1277,8 +1296,9 @@ const slugify = (str) => {
  * not "cloudy-bay-cloudy-bay-sauvignon-blanc").
  *
  * Built from the DISPLAY name — the name followed by the label sweetness term
- * when the wine has one (appendSweetnessTerm) — so "Riesling Kabinett" with
- * the term trocken keeps the URL it had while the word was in its name.
+ * when the wine has one (appendSweetnessTerm, which takes `sweetness` as the
+ * word or every spelling of the term) — so "Riesling Kabinett" with the term
+ * trocken keeps the URL it had while the word was in its name.
  */
 const generateWineSlug = (name, producer, sweetness = null) => {
   const shown = appendSweetnessTerm(name, sweetness);

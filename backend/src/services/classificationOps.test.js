@@ -266,3 +266,13 @@ describe('detectFromName — a tier the name states, where the word is a tier', 
     expect(d('Barolo Riserva', null)).toEqual([]);
   });
 });
+
+describe('assignClassification — the sweetness words, in the term table\'s fold', () => {
+  beforeEach(() => ops.primeClassificationCache(ROWS));
+
+  test('"su" is no süß; süß, süss and fruchtsüß are', async () => {
+    expect((await ops.assignClassification({}, { classification: 'Kabinett su' })).sweetness).toEqual([]);
+    expect((await ops.assignClassification({}, { classification: 'Kabinett süß' })).sweetness).toEqual(['süß']);
+    expect((await ops.assignClassification({}, { classification: 'Spätlese fruchtsüß' })).sweetness).toEqual(['fruchtsüß']);
+  });
+});

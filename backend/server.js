@@ -218,8 +218,12 @@ connectDB().then(async () => {
   // The label sweetness terms (src/data/sweetness-terms.json) on a registry
   // that has none yet — the same rule as the classification seed above.
   try {
-    const terms = await require('./src/services/sweetnessOps').ensureSweetnessSeed();
+    const sweetnessOps = require('./src/services/sweetnessOps');
+    const terms = await sweetnessOps.ensureSweetnessSeed();
     if (terms.seeded) console.log(`[seed] sweetness terms: ${terms.created} rows`);
+    // Warm from the first request: the display name reads a term's other
+    // spellings from the in-memory copy (sweetnessOps termSpellings).
+    await sweetnessOps.loadTerms();
   } catch (err) {
     console.error('[seed] sweetness terms failed (will retry next boot):', err.message);
   }
