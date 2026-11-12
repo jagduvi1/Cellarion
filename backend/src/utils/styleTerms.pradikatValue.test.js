@@ -126,3 +126,25 @@ describe('Prädikate that CAN be dry are never refused', () => {
     expect(pradikatContradictsName('Trockenbeerenauslese', 'Riesling Trockenbeerenauslese')).toBeNull();
   });
 });
+
+const { sweetByLawPradikat } = require('./styleTerms');
+
+/**
+ * The label sweetness write rule holds a dry-side TERM against the tier, so
+ * the tier must be found wherever the wine states it: the name, a ripeness
+ * classification row, the classification string.
+ */
+describe('the Prädikat a wine states that is sweet by law', () => {
+  test('from the name, a ripeness row or the classification string', () => {
+    expect(sweetByLawPradikat('Riesling Trockenbeerenauslese')).toBe('trockenbeerenauslese');
+    expect(sweetByLawPradikat({ name: 'Riesling', classifications: [{ name: 'Eiswein', kind: 'ripeness' }] })).toBe('eiswein');
+    expect(sweetByLawPradikat({ name: 'Ruster', classification: 'Ausbruch' })).toBe('ausbruch');
+  });
+
+  test('a tier that may be dry, a row of another kind, or nothing at all is null', () => {
+    expect(sweetByLawPradikat('Riesling Spätlese')).toBeNull();
+    expect(sweetByLawPradikat({ name: 'Riesling', classifications: [{ name: 'Eiswein', kind: 'other' }, 'ffffffffffffffffffffffff'] })).toBeNull();
+    expect(sweetByLawPradikat({ name: 'Riesling', classification: 'Auslese' })).toBeNull();
+    expect(sweetByLawPradikat(null)).toBeNull();
+  });
+});

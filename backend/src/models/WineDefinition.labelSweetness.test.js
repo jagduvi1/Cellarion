@@ -230,3 +230,25 @@ describe('the review marker', () => {
     expect(doc2.sweetnessReview).toMatchObject({ reason: 'type_mismatch' });
   });
 });
+
+describe('the slug reads every spelling of the term', () => {
+  const spelled = (row) => jest.spyOn(SweetnessTerm, 'findById').mockReturnValue({ select: () => ({ lean: async () => row }) });
+
+  test('a name that carries the term in another spelling keeps its slug when the term is set', async () => {
+    spelled({ name: 'Extra Brut', synonyms: ['Extra-Brut'] });
+    const doc = loaded({ name: 'Champagne Extra-Brut', slug: 'weingut-keller-champagne-extrabrut' });
+    doc.labelSweetness = oid();
+    await doc.validate();
+    expect(doc.$locals.sweetnessSpellings).toEqual(['Extra Brut', 'Extra-Brut']);
+    expect(WineDefinition.shouldRegenerateSlug(doc)).toBe(false);
+  });
+
+  test('a populated term read without its synonyms is read once for them, so the slug never depends on the load', async () => {
+    const read = spelled({ name: 'Brut Nature', synonyms: ['Brut Natur'] });
+    const doc = loaded({ name: 'Cava Brut Natur', slug: 'weingut-keller-cava-brut-natur' });
+    doc.labelSweetness = { _id: oid(), name: 'Brut Nature', band: 'brut-nature', scale: 'sparkling', regulated: true };
+    await doc.validate();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(WineDefinition.shouldRegenerateSlug(doc)).toBe(false);
+  });
+});

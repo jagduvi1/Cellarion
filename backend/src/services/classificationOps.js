@@ -28,7 +28,7 @@
  */
 const mongoose = require('mongoose');
 const Classification = require('../models/Classification');
-const { normalizeString, normalizeClassification } = require('../utils/normalize');
+const { normalizeString, normalizeClassification, normalizeSweetnessTerm } = require('../utils/normalize');
 
 const KIND_ORDER = { vineyard_rank: 0, ripeness: 1, ageing: 2, other: 3 };
 
@@ -47,6 +47,13 @@ function splitClassificationString(value) {
   return parts.filter((p) => { const k = normalizeString(p); if (!k || seen.has(k)) return false; seen.add(k); return true; });
 }
 
+// The label sweetness words that ride along in a legacy value ("Kabinett
+// trocken"). Not a tier, so stripped like the noise below — but not noise
+// either: the value stated the wine's label sweetness, so assignClassification
+// reports them (`sweetness`) for the caller to hand to the label sweetness
+// write rule (services/sweetnessWrite).
+const SWEETNESS_NOISE = ['trocken', 'halbtrocken', 'feinherb', 'lieblich', 'fruchtsüß', 'süß', 'edelsüß'];
+
 // Words that ride along in a legacy value without being a tier: the German
 // and Austrian legal category the tier sits in, sweetness, bottling notes,
 // the year of the Médoc classification, a Burgundy monopole mark. They are
@@ -55,11 +62,21 @@ function splitClassificationString(value) {
 const NOISE = [
   'deutscher prädikatswein', 'deutscher qualitätswein', 'qualitätswein aus österreich', 'qualitätswein aus deutschland',
   'österreichischer qualitätswein', 'prädikatswein', 'qualitätswein', 'qba', 'qmp', 'deutscher', 'österreichischer',
-  'trocken', 'halbtrocken', 'feinherb', 'lieblich', 'fruchtsüß', 'süß', 'edelsüß', 'gutsabfüllung', 'erzeugerabfüllung',
+  ...SWEETNESS_NOISE, 'gutsabfüllung', 'erzeugerabfüllung',
   'monopole', 'en 1855', '1855',
 ];
 const NOISE_KEYS = [...new Set(NOISE.map(normalizeString).filter(Boolean))].sort((a, b) => b.length - a.length);
 const NOISE_RX = NOISE_KEYS.map((k) => new RegExp(`(^|\\s)${escapeRx(k)}(?=\\s|$)`, 'g'));
+// Each sweetness word with its key in the term table's fold (ß as ss: "süß"
+// → "suss"). The noise strip's own fold drops ß ("süß" → "su"), and in it
+// "Kabinett su" would read as stating "süß".
+const SWEETNESS_NOISE_RX = SWEETNESS_NOISE.map((word) => ({ word, rx: new RegExp(`(^|\\s)${escapeRx(normalizeSweetnessTerm(word))}(?=\\s|$)`) }));
+
+/** The sweetness words a value carries as words of their own, in list order. */
+function sweetnessWordsIn(value) {
+  const key = normalizeSweetnessTerm(value == null ? '' : String(value));
+  return key ? SWEETNESS_NOISE_RX.filter(({ rx }) => rx.test(key)).map(({ word }) => word) : [];
+}
 
 /** The normalised value with the ride-along words removed; '' when nothing else was there. */
 function stripNoise(value) {
@@ -198,13 +215,16 @@ function knownTiersHint(tax, countryId, limit = 30) {
  *     member wrote is lost and the review list still finds it.
  * With no taxonomy loaded (no connection, no seed) every path keeps strings.
  *
- * Returns { ok, changed, rows, unresolved, dropped, classification,
- * classifications } — `changed` false when neither input was given.
+ * Returns { ok, changed, rows, unresolved, dropped, sweetness, classification,
+ * classifications } — `changed` false when neither input was given;
+ * `sweetness` the label sweetness words (SWEETNESS_NOISE, as listed there)
+ * the typed value carried and the stored classification no longer does,
+ * [] when none: the caller may hand one to the label sweetness write rule.
  */
 async function assignClassification(target, { classification, classifications, countryId = null, strict = false } = {}) {
   const tax = await loadTaxonomy();
   const cid = countryId || (target && target.country && (target.country._id || target.country)) || null;
-  let rows = []; let unresolved = []; let dropped = []; let legacy = null;
+  let rows = []; let unresolved = []; let dropped = []; let legacy = null; let parts = [];
   if (Array.isArray(classifications)) {
     const taken = new Set();
     for (const c of classifications) {
@@ -219,11 +239,12 @@ async function assignClassification(target, { classification, classifications, c
     const str = classification == null ? '' : String(classification).trim().replace(/\s+/g, ' ');
     legacy = str ? normalizeClassification(str) : null;
     if (legacy) {
-      const res = resolveLoaded(tax, splitClassificationString(legacy), cid);
+      parts = splitClassificationString(legacy);
+      const res = resolveLoaded(tax, parts, cid);
       rows = res.rows; unresolved = res.unresolved; dropped = res.dropped;
     }
   } else {
-    return { ok: true, changed: false, rows: [], unresolved: [], dropped: [] };
+    return { ok: true, changed: false, rows: [], unresolved: [], dropped: [], sweetness: [] };
   }
   if (unresolved.length && strict && !tax.empty) {
     const list = unresolved.map((u) => `"${u}"`).join(', ');
@@ -237,9 +258,12 @@ async function assignClassification(target, { classification, classifications, c
   rows.sort(byKind); // stored in the order the string shows them
   const ids = rows.map((r) => r._id);
   const string = rows.length ? classificationString(rows) : (unresolved.length ? legacy : null);
+  // A value kept as typed still carries its words; otherwise they left with
+  // the noise, and the caller is told which.
+  const sweetness = string === legacy ? [] : [...new Set(parts.flatMap(sweetnessWordsIn))];
   target.classifications = ids;
   target.classification = string;
-  return { ok: true, changed: true, rows, unresolved, dropped, classifications: ids, classification: string };
+  return { ok: true, changed: true, rows, unresolved, dropped, sweetness, classifications: ids, classification: string };
 }
 
 // ── Rule-based detection from the wine name ────────────────────────────────

@@ -499,20 +499,109 @@ const stripSweetnessKeySegment = (key) => {
   return at === -1 ? s : s.slice(0, at);
 };
 
+// How a NAME is read for a sweetness term — shared by the write rule
+// (services/sweetnessWrite), which reads the term, and the display name and
+// slug below, which must count as carried every spelling the rule reads.
+//
+// The spellings the style guard knows for the same word, name side only:
+// "Süß" typed without the umlaut is "Suess", which the fold leaves alone, and
+// one import wrote "Riesling Troken". utils/styleTerms reads names through the
+// same map; the producer-field rules there must NOT gain these (Suess is a
+// real surname).
+const SWEETNESS_ALIASES = new Map([
+  ['suess', 'suss'],
+  ['fruchtsuess', 'fruchtsuss'],
+  ['troken', 'trocken'],
+]);
+// A word of a name: letters (with their marks) and digits. Everything else —
+// spaces, commas, hyphens, apostrophes, brackets — stands between words.
+const SWEETNESS_WORD_RX = /[\p{L}\p{M}\p{N}]+/gu;
+// What may stand between the words of ONE term: spaces and every dash
+// ("Brut Nature", "Extra-Brut", "Demi–Sec"), the minus sign, the soft hyphen
+// and the zero-width characters a pasted label carries. A comma or a slash
+// ends a term.
+const SWEETNESS_TERM_GAP_RX = /^[\s\p{Pd}\u2212\u00AD\u200B-\u200D]+$/u;
+
+/**
+ * The words of a name, each with its key in the term table's fold and the
+ * aliases above applied: [{ text, start, end, key, fold }]. A word holding a
+ * letter the fold drops (another script, "Ø") has the key '', so it is never
+ * part of a term, even when its other letters spell one ("甲州Brut",
+ * "ØBrut"); `fold` is its fold all the same, for a reader that only asks
+ * what the word says ("ØExtra" still says "extra" beside a term).
+ */
+function sweetnessWords(text) {
+  return [...String(text == null ? '' : text).matchAll(SWEETNESS_WORD_RX)].map((m) => {
+    const folded = normalizeSweetnessTerm(m[0]);
+    const fold = SWEETNESS_ALIASES.get(folded) || folded;
+    return { text: m[0], start: m.index, end: m.index + m[0].length, key: foldDropsALetter(m[0]) ? '' : fold, fold };
+  });
+}
+/** Whether the term fold drops a letter of this word (only a letter outside ASCII can be dropped). */
+const foldDropsALetter = (word) => [...word].some((c) => c.charCodeAt(0) > 127 && /\p{L}/u.test(c) && !normalizeSweetnessTerm(c));
+
+/**
+ * The keys words[i .. i+len) of `text` read as, or null when they cannot be
+ * one term (a gap that is not a term gap, a word the fold empties): the span
+ * folded whole ("Extra-Brut" → "extrabrut") and word by word ("extra brut").
+ */
+function sweetnessSpanKeys(text, words, i, len) {
+  const span = words.slice(i, i + len);
+  if (span.length !== len || span.some((w) => !w.key)) return null;
+  for (let n = 1; n < len; n += 1) {
+    if (!SWEETNESS_TERM_GAP_RX.test(text.slice(span[n - 1].end, span[n].start))) return null;
+  }
+  return [normalizeSweetnessTerm(text.slice(span[0].start, span[len - 1].end)), span.map((w) => w.key).join(' ')];
+}
+
 /**
  * The name as the label reads it: the name, then the term — unless the name
- * already carries the word as a whole token (a wine marked sweetnessInName,
- * "Brut Premier"), so nothing is ever doubled. Every text surface shows this
- * (services/sweetnessOps.wineDisplayName); the slug is built from it, which
- * is why a migrated wine's URL does not move when the word leaves its name.
+ * already carries the term as whole words in ANY of its spellings (a wine
+ * marked sweetnessInName, "Brut Premier"; "Champagne Extra-Brut" with the
+ * term Extra Brut; "Cava Brut Natur" with Brut Nature; "Riesling Suess" with
+ * süß), so nothing is ever doubled. Two readings, in this order: the folded
+ * name holds a spelling as whole words ("Riesling Halb-Trocken" folds to
+ * "riesling halbtrocken"), the test this function always made; then the
+ * name read the way the write rule reads it. The second only finds more that
+ * is carried, so a term is appended only where it always was.
+ * `term` is the word to show, or every spelling of the term — a list whose
+ * first entry is shown, or a row { name, synonyms }. A word inside a dashed
+ * compound counts as carried ("Demi-Sec" carries "sec"). Every text surface
+ * shows this (services/sweetnessOps.wineDisplayName); the slug is built from
+ * it, which is why a migrated wine's URL does not move when the word leaves
+ * its name. A wine without a term keeps its name exactly (trimmed).
  */
 const appendSweetnessTerm = (name, term) => {
   const n = String(name == null ? '' : name).trim();
-  const t = String(term == null ? '' : term).trim();
+  const listed = Array.isArray(term) ? term
+    : (term && typeof term === 'object' ? [term.name, ...(Array.isArray(term.synonyms) ? term.synonyms : [])] : [term]);
+  const spellings = listed.map((s) => String(s == null ? '' : s).trim()).filter(Boolean);
+  const t = spellings[0] || '';
   if (!t) return n;
   if (!n) return t;
-  const carried = ` ${normalizeSweetnessTerm(n)} `.includes(` ${normalizeSweetnessTerm(t)} `);
-  return carried ? n : `${n} ${t}`;
+  // The whole-name test first, as it always read: a spelling the folded name
+  // holds as whole words ("Riesling Halb-Trocken" folds to "riesling
+  // halbtrocken"). So nothing is appended where it never was; the reader
+  // below only finds more that is already carried.
+  const folded = ` ${normalizeSweetnessTerm(n)} `;
+  if (spellings.some((s) => { const k = normalizeSweetnessTerm(s); return k && folded.includes(` ${k} `); })) return n;
+  const keys = new Set();
+  let maxWords = 1;
+  for (const s of spellings) {
+    const words = sweetnessWords(s);
+    maxWords = Math.max(maxWords, words.length);
+    keys.add(normalizeSweetnessTerm(s));
+    keys.add(words.map((w) => w.key).join(' '));
+  }
+  keys.delete('');
+  const words = sweetnessWords(n);
+  for (let len = 1; len <= Math.min(maxWords, words.length); len += 1) {
+    for (let i = 0; i + len <= words.length; i += 1) {
+      const spanKeys = sweetnessSpanKeys(n, words, i, len);
+      if (spanKeys && spanKeys.some((k) => keys.has(k))) return n;
+    }
+  }
+  return `${n} ${t}`;
 };
 
 // DRAFT namespace (a wine created privately and published later). Same
@@ -1277,8 +1366,9 @@ const slugify = (str) => {
  * not "cloudy-bay-cloudy-bay-sauvignon-blanc").
  *
  * Built from the DISPLAY name — the name followed by the label sweetness term
- * when the wine has one (appendSweetnessTerm) — so "Riesling Kabinett" with
- * the term trocken keeps the URL it had while the word was in its name.
+ * when the wine has one (appendSweetnessTerm, which takes `sweetness` as the
+ * word or every spelling of the term) — so "Riesling Kabinett" with the term
+ * trocken keeps the URL it had while the word was in its name.
  */
 const generateWineSlug = (name, producer, sweetness = null) => {
   const shown = appendSweetnessTerm(name, sweetness);
@@ -1300,6 +1390,10 @@ module.exports = {
   normalizeSweetnessTerm,
   sweetnessKeySegment,
   stripSweetnessKeySegment,
+  SWEETNESS_ALIASES,
+  SWEETNESS_TERM_GAP_RX,
+  sweetnessWords,
+  sweetnessSpanKeys,
   appendSweetnessTerm,
   MAX_STAR_GRADE,
   sanitizeTaxonomyName,

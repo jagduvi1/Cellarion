@@ -51,8 +51,8 @@
   { "name": "sött", "scale": "still", "band": "sweet", "system": "EU 2019/33 Annex III A (sv)", "synonyms": [] },
 
   { "name": "Brut Nature", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B", "synonyms": ["Brut Natur"] },
-  { "name": "Pas Dosé", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (fr)", "synonyms": [] },
-  { "name": "Dosage Zéro", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (fr, it)", "synonyms": ["Dosaggio Zero"] },
+  { "name": "Pas Dosé", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (fr)", "synonyms": ["Non Dosé"] },
+  { "name": "Dosage Zéro", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (fr, it)", "synonyms": ["Dosaggio Zero", "Zéro Dosage"] },
   { "name": "Naturherb", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (de)", "synonyms": [] },
   { "name": "Bruto Natural", "scale": "sparkling", "band": "brut-nature", "system": "EU 2019/33 Annex III B (pt)", "synonyms": [] },
 

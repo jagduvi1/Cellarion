@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification, isProductionMethodOnly, sweetnessKeySegment, stripSweetnessKeySegment } = require('../utils/normalize');
+const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification, isProductionMethodOnly, sweetnessKeySegment, stripSweetnessKeySegment, normalizeSweetnessTerm } = require('../utils/normalize');
 require('./Classification'); // registers the model the classifications ref and the save hook use
 require('./SweetnessTerm'); // the same for labelSweetness (the key/slug hook reads the term's word)
 const { computeCanonicalKey } = require('../utils/wineIdentity');
@@ -740,7 +740,11 @@ wineDefinitionSchema.pre('save', function(next) {
 // server. Resolved here, in its own async hook that runs before the sync one,
 // because that one must not do I/O. One read, only on a wine that has a term —
 // the common wine without one costs nothing. Kept in $locals (per-save
-// bookkeeping, never stored); a populated ref needs no read at all.
+// bookkeeping, never stored): the word for the keys, and every spelling of the
+// term for the slug (the display name it is built from does not repeat a term
+// the name already carries in another spelling). A populated ref that carries
+// its synonyms needs no read; one populated without them (the API shape) is
+// read once, so the slug never depends on how the wine was loaded.
 wineDefinitionSchema.pre('validate', async function() {
   let t = this.labelSweetness;
   // A PARTIAL load (a script's select list without the field) reads the ref
@@ -752,10 +756,19 @@ wineDefinitionSchema.pre('validate', async function() {
     const row = await this.constructor.findById(this._id).select('labelSweetness').lean();
     t = row ? row.labelSweetness : null;
   }
-  if (!t) { this.$locals.sweetnessName = null; return; }
-  if (typeof t === 'object' && typeof t.name === 'string') { this.$locals.sweetnessName = t.name; return; }
-  const row = await mongoose.model('SweetnessTerm').findById(t).select('name').lean();
+  if (!t) { this.$locals.sweetnessName = null; this.$locals.sweetnessSpellings = null; return; }
+  const Term = mongoose.model('SweetnessTerm');
+  let row = null;
+  if (typeof t === 'object' && typeof t.name === 'string') {
+    if (Array.isArray(t.synonyms)) row = t;
+    else if (t._id) row = await Term.findById(t._id).select('name synonyms').lean();
+    else row = await Term.findOne({ normalizedName: normalizeSweetnessTerm(t.name), ...(t.scale ? { scale: t.scale } : {}) }).select('name synonyms').lean();
+    if (!row) row = { name: t.name, synonyms: [] };
+  } else {
+    row = await Term.findById(t).select('name synonyms').lean();
+  }
   this.$locals.sweetnessName = row ? row.name : null;
+  this.$locals.sweetnessSpellings = row ? [row.name, ...(Array.isArray(row.synonyms) ? row.synonyms : [])] : null;
 });
 
 // Keep canonicalKey in sync with the identity fields, and drop the human-review
@@ -1034,7 +1047,7 @@ wineDefinitionSchema.statics.shouldRegenerateSlug = function (doc) {
   // The slug is built from the DISPLAY name — name plus the label sweetness
   // term (resolved into $locals by the pre-validate hook) — so a word moving
   // from the name into the field leaves the URL exactly where it was.
-  const base = generateWineSlug(doc.name, doc.producer, doc.$locals.sweetnessName || null);
+  const base = generateWineSlug(doc.name, doc.producer, doc.$locals.sweetnessSpellings || doc.$locals.sweetnessName || null);
   if (!base || doc.slug === base) return false;
   if (doc.slug.startsWith(`${base}-`)) {
     // …but only a DISAMBIGUATOR counts as "the same base" — "-2" or the random
@@ -1052,7 +1065,7 @@ wineDefinitionSchema.statics.shouldRegenerateSlug = function (doc) {
 wineDefinitionSchema.pre('save', async function(next) {
   if (this.constructor.shouldRegenerateSlug(this)) {
     const outgoing = this.slug;
-    const base = generateWineSlug(this.name, this.producer, this.$locals.sweetnessName || null);
+    const base = generateWineSlug(this.name, this.producer, this.$locals.sweetnessSpellings || this.$locals.sweetnessName || null);
     this.slug = await this.constructor.findFreeSlug(base);
     const kept = (this.previousSlugs || []).filter((s) => s !== outgoing && s !== this.slug);
     // Oldest first, newest-kept last, bounded — and the ORIGINAL slug survives
@@ -1061,7 +1074,7 @@ wineDefinitionSchema.pre('save', async function(next) {
     return next();
   }
   if (!this.constructor.shouldAssignSlug(this)) return next();
-  const base = generateWineSlug(this.name, this.producer, this.$locals.sweetnessName || null);
+  const base = generateWineSlug(this.name, this.producer, this.$locals.sweetnessSpellings || this.$locals.sweetnessName || null);
   if (!base) return next();
   this.slug = await this.constructor.findFreeSlug(base);
   next();

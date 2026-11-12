@@ -36,7 +36,7 @@
  * reject; where one side is silent it is silence, not disagreement.
  */
 
-const { normalizeString, spellStarGrades, MAX_STAR_GRADE } = require('./normalize');
+const { normalizeString, spellStarGrades, MAX_STAR_GRADE, SWEETNESS_ALIASES } = require('./normalize');
 
 // Sweetness / dryness across label languages, pre-normalized (normalizeString
 // folds "Roșu" → 'rosu', "off-dry" → 'offdry'; ß is not decomposable and is
@@ -87,25 +87,20 @@ const PRADIKAT_ALIASES = new Map([
 
 // The sweetness twin of PRADIKAT_ALIASES, for the same keyboard: "Süß" typed
 // without the umlaut is "Suess", which normalizeString leaves alone — without
-// this the guard silently fails open for the standard ue-transliteration
-// (found by the post-release audit, verified by execution). NAME side only,
-// like the Prädikat map: the producer-field rules in crossFieldChecks read
-// SWEETNESS_WORDS directly and must NOT gain 'suess' — Suess is a real
-// surname, and flagging every "Weingut Suess" as a style-term producer is
-// the 'dry'/'sweet' problem over again.
-const SWEETNESS_ALIASES = new Map([
-  ['suess', 'suss'],
-  ['fruchtsuess', 'fruchtsuss'],
-  // Same file as the Prädikat typo above: it wrote the wine's own name
-  // "Riesling Troken". Name side only, like every entry here — SWEETNESS_WORDS
-  // itself must not gain it, for the 'Weingut Suess' reason given above.
-  ['troken', 'trocken'],
-]);
+// this the guard silently fails open for the standard ue-transliteration.
+// "Troken" comes from the same cellar export as the Prädikat typo above.
+// NAME side only, like the Prädikat map: the producer-field rules in
+// crossFieldChecks read SWEETNESS_WORDS directly and must NOT gain 'suess' —
+// Suess is a real surname, and flagging every "Weingut Suess" as a style-term
+// producer is the 'dry'/'sweet' problem over again. The map lives in
+// utils/normalize (SWEETNESS_ALIASES), where the label sweetness write rule
+// and the display name read names through it too.
 
 // Style words that are also ordinary name words. "Dry Creek Zinfandel" states
 // no sweetness, and "Sweet Cheeks Pinot" is a winery. Excluded from the NAME
-// guard only — they stay in SWEETNESS_WORDS, where the producer-field rules
-// read a whole-string match and cannot be fooled this way.
+// guard, and never taken out of a name by the label sweetness write rule
+// (services/sweetnessWrite) — they stay in SWEETNESS_WORDS, where the
+// producer-field rules read a whole-string match and cannot be fooled this way.
 const NAME_AMBIGUOUS_WORDS = new Set(['dry', 'sweet']);
 
 // Two-word spellings that normalize to two tokens while their hyphenated form
@@ -233,6 +228,34 @@ function pradikatContradictsName(pradikat, wineName) {
 }
 
 
+// The Prädikat tiers a wine's classification rows of kind `ripeness` state.
+const ripenessTiers = (rows) => {
+  const tiers = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row && typeof row === 'object' && row.kind === 'ripeness' && typeof row.name === 'string') {
+      for (const t of statedStyle(row.name).pradikat) tiers.add(t);
+    }
+  }
+  return tiers;
+};
+
+/**
+ * The Prädikat a wine states that is sweet BY LAW (ALWAYS_SWEET_PRADIKAT) —
+ * in its name, its ripeness classification rows or its classification
+ * string — or null. The label sweetness write rule (services/sweetnessWrite)
+ * holds a dry-side TERM against it, as pradikatContradictsName holds a dry
+ * name. Accepts a bare name too.
+ *
+ * @param {string|{name?:string, classifications?:any[], classification?:string}} wineLike
+ * @returns {string|null} the tier, normalised ("trockenbeerenauslese")
+ */
+function sweetByLawPradikat(wineLike) {
+  const w = wineLike == null || typeof wineLike === 'string' ? { name: wineLike } : wineLike;
+  const tiers = new Set([...statedStyle(w.name).pradikat, ...ripenessTiers(w.classifications)]);
+  if (typeof w.classification === 'string') for (const t of statedStyle(w.classification).pradikat) tiers.add(t);
+  return [...tiers].sort().find((t) => ALWAYS_SWEET_PRADIKAT.has(t)) || null;
+}
+
 const subset = (a, b) => [...a].every((x) => b.has(x));
 
 // Both sides state something, and neither statement contains the other. A
@@ -281,12 +304,7 @@ function styleOf(wineLike) {
     return { ...statedStyle(wineLike), term: null, termName: null };
   }
   const fromName = statedStyle(wineLike.name);
-  const pradikat = new Set(fromName.pradikat);
-  for (const row of Array.isArray(wineLike.classifications) ? wineLike.classifications : []) {
-    if (row && typeof row === 'object' && row.kind === 'ripeness' && typeof row.name === 'string') {
-      for (const t of statedStyle(row.name).pradikat) pradikat.add(t);
-    }
-  }
+  const pradikat = new Set([...fromName.pradikat, ...ripenessTiers(wineLike.classifications)]);
   const termName = fieldTerm(wineLike);
   if (!termName) return { pradikat, sweetness: fromName.sweetness, grade: fromName.grade, term: null, termName: null };
   // The field is an explicit statement, so a word the NAME tokenizer would
@@ -337,12 +355,15 @@ function conflictingStyleTerms(wineA, wineB) {
 
 module.exports = {
   SWEETNESS_WORDS,
+  SWEETNESS_ALIASES,
+  NAME_AMBIGUOUS_WORDS,
   statedStyle,
   styleOf,
   sweetnessStated,
   conflictingStyleTerms,
   pradikatContradictsName,
   pradikatOnlyValue,
+  sweetByLawPradikat,
 };
 
 /**

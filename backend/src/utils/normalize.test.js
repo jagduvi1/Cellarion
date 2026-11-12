@@ -979,3 +979,130 @@ describe('draftWineKey', () => {
     expect(draftWineKey('Kaefferkopf', undefined, U1)).toBe(`draft~${U1}::kaefferkopf:`);
   });
 });
+
+describe('appendSweetnessTerm — every spelling of the term counts as carried', () => {
+  const { appendSweetnessTerm: append, generateWineSlug: slug } = require('./normalize');
+  test.each([
+    ['Champagne Extra-Brut', { name: 'Extra Brut', synonyms: ['Extra-Brut'] }],
+    ['Champagne Extra-Brut', ['Extra Brut']],
+    ['Vouvray Demi Sec', { name: 'demi-sec', synonyms: ['demi sec'] }],
+    ['Vouvray Demi Sec', ['demi-sec']],
+    ['Cava Brut Natur', { name: 'Brut Nature', synonyms: ['Brut Natur'] }],
+    ['Riesling Medium', { name: 'medium sweet', synonyms: ['medium', 'medium-sweet'] }],
+  ])('%s is not doubled', (name, term) => {
+    expect(append(name, term)).toBe(name);
+    expect(slug(name, 'Example Estate', term)).toBe(slug(name, 'Example Estate'));
+  });
+
+  test.each([
+    // Spellings the write rule reads as the term (utils/normalize SWEETNESS_ALIASES).
+    ['Riesling Suess', { name: 'süß', synonyms: [] }],
+    ['Riesling Troken', { name: 'trocken', synonyms: [] }],
+    // Every character the rule reads between the words of one term.
+    ['Cava Brut' + String.fromCharCode(0xAD) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+    ['Cava Brut' + String.fromCharCode(0x200B) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+    ['Cava Brut' + String.fromCharCode(0x2212) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+    ['Cava Brut' + String.fromCharCode(0x2013) + 'Nature', { name: 'Brut Nature', synonyms: [] }],
+  ])('%j carries the term the rule reads in it', (name, term) => {
+    expect(append(name, term)).toBe(name);
+    expect(slug(name, 'Example Estate', term)).toBe(slug(name, 'Example Estate'));
+  });
+
+  test('a term the name does not carry is shown after it, as the first spelling', () => {
+    expect(append('Riesling Kabinett', { name: 'trocken', synonyms: [] })).toBe('Riesling Kabinett trocken');
+    expect(append('Riesling Kabinett', ['trocken', 'troken'])).toBe('Riesling Kabinett trocken');
+    expect(append('Riesling Kabinett', 'trocken')).toBe('Riesling Kabinett trocken');
+  });
+
+  test('a wine without a term keeps its name and its slug byte for byte', () => {
+    for (const name of ['Riesling Kabinett', 'Champagne Extra-Brut', 'Cava Brut Natur', '  Rosé  ', 'Château X Grand Vin', 'Cuvée  Double  Space']) {
+      for (const none of [null, undefined, '', [], { name: '' }]) {
+        expect(append(name, none)).toBe(name.trim());
+        expect(slug(name, 'Example Estate', none)).toBe(slug(name, 'Example Estate'));
+      }
+    }
+  });
+});
+
+describe('appendSweetnessTerm appends a term only where it always did', () => {
+  const { appendSweetnessTerm: append, normalizeSweetnessTerm: fold } = require('./normalize');
+  const seed = require('../data/sweetness-terms.json');
+  // The function as main has it: the oracle. Where it does not append, the
+  // display name and the slug must not either; where it does, they may leave
+  // the term off when the name carries it another way (a dash, a synonym).
+  const mainAppend = (name, term) => {
+    const n = String(name == null ? '' : name).trim();
+    const t = String(term == null ? '' : term).trim();
+    if (!t) return n;
+    if (!n) return t;
+    return ` ${fold(n)} `.includes(` ${fold(t)} `) ? n : `${n} ${t}`;
+  };
+  const GAPS = ['-', '/', '.', ', ', ' ', '\u2013', '\u00AD', '\u200B', ''];
+  const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  /** A spelling written another way: split inside a word, words joined differently, letters dotted, capitals. */
+  function* variants(spelling) {
+    const words = spelling.split(/[\s-]+/).filter(Boolean);
+    for (const g of GAPS) {
+      yield words.map(cap).join(g);
+      yield words.join(g).toUpperCase();
+      for (const w of words) {
+        if (w.length < 4) continue;
+        for (const at of [2, Math.floor(w.length / 2), w.length - 2]) {
+          yield words.map((x) => (x === w ? `${cap(w.slice(0, at))}${g}${cap(w.slice(at))}` : x)).join(' ');
+        }
+      }
+    }
+    yield [...spelling.replace(/\s+/g, '')].join('.').toUpperCase() + '.';
+  }
+
+  test('over every seed spelling written many ways: never appended where main does not append', () => {
+    let checked = 0;
+    for (const row of seed) {
+      const rowArg = { name: row.name, synonyms: row.synonyms || [] };
+      for (const spelling of [row.name, ...(row.synonyms || [])]) {
+        for (const v of variants(spelling)) {
+          for (const name of [`Riesling ${v}`, `${v} Rosé 2019`, v]) {
+            for (const term of [rowArg, row.name, [row.name, ...(row.synonyms || [])]]) {
+              checked += 1;
+              const main = mainAppend(name, typeof term === 'string' ? term : row.name);
+              if (main === name.trim()) expect([name, append(name, term)]).toEqual([name, name.trim()]);
+            }
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(10000);
+  });
+
+  test.each([
+    ['Riesling Halb-Trocken', 'halbtrocken'],
+    ['Riesling Fein-Herb', 'feinherb'],
+    ['Riesling Frucht-Süß', 'fruchtsüß'],
+    ['Müller-Thurgau halb-trocken', 'halbtrocken'],
+    ['Vouvray Demi/Sec', 'demi-sec'],
+    ['Vouvray Demi.Sec', 'demi-sec'],
+    ['Cava Brut, Nature', 'Brut Nature'],
+    ['Côtes S.E.C.', 'sec'],
+  ])('%s with the term %s stays as it is', (name, term) => {
+    expect(mainAppend(name, term)).toBe(name);
+    expect(append(name, { name: term, synonyms: [] })).toBe(name);
+  });
+});
+
+describe('a wine without a term keys and slugs as it always has', () => {
+  const { generateWineSlug: slug, generateWineKey: key } = require('./normalize');
+  // Literal keys and slugs, the same as main's: a wine without a term must
+  // never move.
+  test.each([
+    ['Riesling Kabinett', 'Example Estate', 'example-estate-riesling-kabinett', 'example estate:riesling kabinett:mosel'],
+    ['Champagne Extra-Brut', 'Example Estate', 'example-estate-champagne-extrabrut', 'example estate:champagne extrabrut:mosel'],
+    ['Cava Brut Natur', '', 'cava-brut-natur', ':cava brut natur:mosel'],
+    ['  Rosé  ', 'Example Estate', 'example-estate-rose', 'example estate:rose:mosel'],
+    ['Vouvray Demi Sec', 'Example Estate', 'example-estate-vouvray-demi-sec', 'example estate:vouvray demi sec:mosel'],
+    ['Brut Premier', 'Example Estate', 'example-estate-brut-premier', 'example estate:brut premier:mosel'],
+    ['Auslese***', 'Example Estate', 'example-estate-auslese', 'example estate:auslese 3star:mosel'],
+  ])('%s by %s', (name, producer, expectedSlug, expectedKey) => {
+    expect(slug(name, producer)).toBe(expectedSlug);
+    expect(key(name, producer, 'Mosel')).toBe(expectedKey);
+  });
+});
