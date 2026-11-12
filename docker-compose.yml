@@ -8,7 +8,7 @@ services:
     # Digest-pinned (security audit L-11): mongo:7 is a moving minor tag.
     # Dependabot's docker-compose ecosystem bumps this; the tag is kept for
     # readability.
-    image: mongo:7@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4
+    image: mongo:7@sha256:9896df581dfd0718b7abe112f4c37598d0986c54060e4ec1384997e6503c8c71
     container_name: cellarion-mongo
     restart: unless-stopped
     security_opt:
