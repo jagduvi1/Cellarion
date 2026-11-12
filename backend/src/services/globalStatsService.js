@@ -666,17 +666,15 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     // support rather than the account.
     User.countDocuments({ ...userMatch, plan: { $ne: 'free' }, planStartedAt: { $gte: since30 } }),
     User.countDocuments({ ...userMatch, plan: { $ne: 'free' }, planStartedAt: { $gte: since90 } }),
-    // Churn: a user on `free` whose planStartedAt is stamped had a tier
-    // GRANTED at some point — that stamp is written only when support actually
-    // starts, and it survives the downgrade.
-    //
-    // ⚠️ NOT stripeCustomerId, which this shipped as for a few hours
-    // (audit 2026-08-21 H-1). Stripe customers are created at CHECKOUT-SESSION
-    // time, before any payment — so that shape counted abandoned checkouts as
-    // churned supporters. Measured on prod the day it shipped: the card said 7
-    // former supporters and only 3 had ever paid. An overstated churn number
-    // points the admin at a retention problem that does not exist.
-    User.countDocuments({ ...userMatch, plan: 'free', planStartedAt: { $ne: null } }),
+    // Churn: paid through Stripe at least once (firstPaidAt) and holds no
+    // subscription now. The two fields that look like "was a supporter" both
+    // overstate it, and an overstated churn number points the admin at a
+    // retention problem that does not exist:
+    //   • planStartedAt is also stamped when an admin sets a tier, so it
+    //     counts accounts that were given one and never paid.
+    //   • stripeCustomerId is created when a checkout OPENS, before any
+    //     payment, so it counts abandoned checkouts.
+    User.countDocuments({ ...userMatch, firstPaidAt: { $ne: null }, stripeSubscriptionId: null }),
   ]);
 
   // ── Maturity (drink-window phase distribution) ──────────────────────────
@@ -979,19 +977,13 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       expiringIn7d,
       expiringIn30d,
       withStripeCustomer,
-      // Supporter signal the page was missing entirely (2026-08-21). The plan
-      // distribution showed who pays TODAY and nothing else, so the two
-      // questions worth asking had no answer: is anyone new, and did anyone
-      // leave.
+      // The plan distribution shows who is on a tier TODAY and nothing else;
+      // these three answer the two questions it cannot: is anyone new, and did
+      // anyone leave.
       //
-      // formerSupporters is the churn number, and it is only visible because a
-      // Stripe customer record outlives the subscription: 12 customers against
-      // 4 paying users is 8 people who supported and stopped. Nothing else on
-      // this page could have told you that.
-      //
-      // ⚠️ It is a FLOOR, not a count. A supporter who never reached Stripe
-      // (comped, or granted by hand) leaves no customer record, and one who
-      // resubscribes is counted as current, not as having churned.
+      // formerSupporters counts people who PAID and stopped. A tier given by
+      // hand is not support that ended, so it is not counted, and someone who
+      // resubscribes is current again, not former.
       newSupporters30d,
       newSupporters90d,
       formerSupporters,

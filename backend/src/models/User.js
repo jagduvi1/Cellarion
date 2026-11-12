@@ -107,6 +107,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // When this account first paid for support: stamped the first time a Stripe
+  // subscription puts it on a tier (routes/stripe.js applyStripePlan) and never
+  // cleared. A tier set by an admin stamps planStartedAt but never this, so it
+  // is what tells a supporter who paid from an account that was only given a
+  // tier (Admin → Statistics → Former supporters).
+  firstPaidAt: {
+    type: Date,
+    default: null
+  },
   // Set the first time this account is thanked for supporting the project, and
   // never cleared. It is the ONLY thing that stops a second send: the plan
   // webhook fires on renewals, payment-method changes and tier switches, so
@@ -714,6 +723,7 @@ userSchema.methods.toJSON = function() {
   delete obj.stripeCustomerId;
   // Admin-stats bookkeeping; the app never needs it (data minimisation).
   delete obj.signupSource;
+  delete obj.firstPaidAt;
   // Retention bookkeeping, same reasoning (the export carries it).
   delete obj.lastActiveAt;
   delete obj.inactivityNotice;
