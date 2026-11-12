@@ -42,13 +42,13 @@ describeWithMongo('the label sweetness write rule on real documents (real MongoD
     ops.primeSweetnessCache(null);
     await Region.collection.insertOne({ _id: REGION, name: 'Arroyo Seco', normalizedName: 'arroyo seco', country: COUNTRY });
     term = async (name, scale) => SweetnessTerm.findOne({ name, scale }).lean();
-  });
+  }, 60000);
 
   afterAll(async () => {
     constants.SWEETNESS_EXTRACT_FROM_NAME = false;
     await mongoose.connection.db.dropDatabase();
     await mongoose.disconnect();
-  });
+  }, 60000);
 
   afterEach(() => { constants.SWEETNESS_EXTRACT_FROM_NAME = false; });
 
