@@ -125,10 +125,13 @@ function resolveGrapeDisplayName(grape, { countryId, regionId, wineName } = {}) 
  * Most REST wine reads send this copy, and toObject() keeps the stored
  * subdocuments, so the copy also carries the sweetness style in its outgoing
  * shape when the read loaded it (utils/sweetnessStyle shapeSweetnessStyle) —
- * the one a document sent as it is gets from the model's toJSON. The reads
- * that load it: the bottle page, the wine page and the public wine page; scan
- * and search results do not. `styleAsked`: a lean read that asked for the
- * field, so a row that predates it answers null (a document already does).
+ * the one a document sent as it is gets from the model's toJSON. Among the
+ * reads that come through here, the bottle page, the bottle list, the wine
+ * page, the public wine page, the inventory and MCP get_wine load it; scan and
+ * search results do not. `styleAsked`: a lean read that asked for the field,
+ * so a row that predates it answers null (a document already does). For a
+ * raw row only: a copy of a wine already shaped, shaped again as asked, would
+ * read a dropped style as none.
  *
  * @param {object} wine – wine doc/lean object with populated `grapes` and
  *                        `country`/`region` as ids or populated docs

@@ -142,7 +142,8 @@ registerTool({
       `${created ? 'Created registry wine' : 'Registry wine already existed'}: ${wineDoc.name} — ${wineDoc.producer}` +
       `${imageInfo ? ' (official image set, background removal in progress)' : ''}`,
       {
-        wine: wineSummary(wineDoc, { termLoaded: true, styleLoaded: true }),
+        // Only an existing wine read by its id asked for the style; a created one carries no key.
+        wine: wineSummary(wineDoc, { termLoaded: true, styleLoaded: !!args.existing_wine_id }),
         wine_id: wineDoc._id,
         created,
         ...(imageInfo ? { official_image: imageInfo } : {}),

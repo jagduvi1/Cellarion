@@ -90,6 +90,19 @@ describe('search_registry', () => {
   });
 });
 
+describe('add_bottle with new_wine', () => {
+  test('a wine this call found or created was not read with the style: no sweetness_style key', async () => {
+    resolveCellarAccess.mockResolvedValue({ cellar: { _id: CELLAR, name: 'Home' }, role: 'owner' });
+    addBottle.mockResolvedValue({ bottle: { _id: 'b1', vintage: '2019', status: 'active' } });
+    const { findOrCreateWine } = require('../services/findOrCreateWine');
+    for (const created of [true, false]) {
+      findOrCreateWine.mockResolvedValue({ wine: legacy(), created });
+      const body = parse(await tool('add_bottle').handler({ cellar_id: CELLAR, new_wine: { name: 'Riesling Kabinett', producer: 'Weingut Beispiel', country: 'Germany', type: 'white' }, confirm_new_wine: true, vintage: '2019' }, CTX));
+      expect(body.data.wine).not.toHaveProperty('sweetness_style');
+    }
+  });
+});
+
 describe('add_bottle with wine_id', () => {
   test('the lookup populates the style\'s term and the summary carries it', async () => {
     resolveCellarAccess.mockResolvedValue({ cellar: { _id: CELLAR, name: 'Home' }, role: 'owner' });

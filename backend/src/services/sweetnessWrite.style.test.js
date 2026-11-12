@@ -227,6 +227,16 @@ describe('the label wins', () => {
     expect(again).toMatchObject({ verdict: 'held', review: { reason: 'style_contradiction', since } });
   });
 
+  test('a document loaded without its review marker is refused: a held style must not overwrite a marker it cannot see', async () => {
+    const doc = WineDefinition.hydrate(
+      { _id: hex(77), name: 'Riesling Kabinett', producer: 'Weingut Beispiel', type: 'white', labelSweetness: id('halbtrocken'), sweetnessStyle: null },
+      { name: 1, producer: 1, type: 1, labelSweetness: 1, sweetnessStyle: 1 },
+    );
+    const r = await assignSweetnessStyle(doc, { term: 'lieblich', source: 'producer', url: PRODUCER_URL });
+    expect(r).toMatchObject({ ok: false, reason: 'not_loaded' });
+    expect(doc.isModified('sweetnessReview')).toBe(false);
+  });
+
   test('a word in the name the reader itself doubts holds nothing: a modifier, a place word', async () => {
     const halb = wine({ name: 'Riesling halb trocken' });
     expect((await assignSweetnessStyle(halb, { term: 'feinherb', source: 'trade', url: TRADE_URL })).verdict).toBe('applied');

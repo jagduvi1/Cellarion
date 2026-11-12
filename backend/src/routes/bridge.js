@@ -39,7 +39,11 @@ router.post('/adopt', requireAuth, requireNonDemo, async (req, res) => {
     if (r.created) {
       logAudit(req, 'wine.adopt_registry', { type: 'wine', id: r.wine._id }, { registryId: String(registryId), name: r.wine.name, producer: r.wine.producer });
     }
-    res.status(r.created ? 201 : 200).json({ wine: decorateGrapes(r.wine), created: r.created });
+    // An answer about the copy, like a creation answer: no sweetness style,
+    // whether or not the copy was loaded with it (GET /api/wines/:id has it).
+    const wine = decorateGrapes(r.wine);
+    delete wine.sweetnessStyle;
+    res.status(r.created ? 201 : 200).json({ wine, created: r.created });
   } catch (error) {
     console.error('Bridge adopt error:', error);
     res.status(500).json({ error: 'Failed to copy the wine from the shared registry' });

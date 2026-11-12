@@ -10,8 +10,8 @@
  * whose term this read cannot name is left out (never null, never a bare id),
  * and none of it may break a response: serialising a wine whose term is not
  * populated while the term table's in-memory copy is cold, or whose term row
- * is gone, once answered 500 — also on a bottle update that had already been
- * saved. A read that asks for the field answers null for a wine without a
+ * is gone, must answer 200 — on a bottle update too, after its save. A read
+ * that asks for the field answers null for a wine without a
  * style, a row that predates the field included, the bottle list and the
  * single bottle alike; a creation answer carries no key. The MCP reads follow
  * the same rule. A wine loaded with the style's populate must still save,

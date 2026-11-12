@@ -910,12 +910,13 @@ function heldStyle(terms, s) {
  * or { ok: false, code: 'invalid_input', reason, message } with reason ∈
  * no_scale | unknown_term | type_mismatch | bad_source | url_required |
  * bad_url | regulated_needs_producer | term_contradiction (strict) |
- * not_loaded (a document loaded without labelSweetness or sweetnessStyle,
+ * not_loaded (a document loaded without labelSweetness, sweetnessStyle or
+ * sweetnessReview, which a held style must not overwrite unseen,
  * either path). Reason codes for the caller, not an HTTP body.
  */
 async function assignSweetnessStyle(target, { term, source, url, type, countryId = null, strict = false } = {}) {
   if (isDoc(target) && !target.isNew) {
-    const missing = ['labelSweetness', 'sweetnessStyle'].find((f) => !target.isSelected(f) && !target.isModified(f));
+    const missing = ['labelSweetness', 'sweetnessStyle', 'sweetnessReview'].find((f) => !target.isSelected(f) && !target.isModified(f));
     if (missing) return { ok: false, code: 'invalid_input', reason: 'not_loaded', message: `The wine was loaded without ${missing}; load it before writing the style.` };
   }
   const terms = await loadTerms();

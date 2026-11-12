@@ -54,6 +54,17 @@ describe('GET /api/bridge/status', () => {
   });
 });
 
+describe('POST /api/bridge/adopt — the answer about the copy', () => {
+  test('never carries the sweetness style, whether the copy was loaded with it or not', async () => {
+    for (const sweetnessStyle of [null, { term: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false }, source: 'trade', url: 'https://merchant.example/x' }]) {
+      bridge.adoptWine.mockResolvedValue({ ok: true, created: false, wine: { _id: 'l1', name: 'Salmos', producer: 'Torres', grapes: [], sweetnessStyle } });
+      const res = await call('POST', '/api/bridge/adopt', { registryId: RID });
+      expect(res.status).toBe(200);
+      expect((await res.json()).wine).not.toHaveProperty('sweetnessStyle');
+    }
+  });
+});
+
 describe('POST /api/bridge/adopt', () => {
   test('a created copy is 201, audited, and returned decorated for the picker', async () => {
     bridge.adoptWine.mockResolvedValue({ ok: true, created: true, wine: { _id: 'l1', name: 'Salmos', producer: 'Torres', grapes: [] } });
