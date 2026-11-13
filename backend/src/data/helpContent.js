@@ -37,7 +37,7 @@ const sections = [
     details: [
       'Create a cellar: on My Cellars, tap "+ New Cellar" and type a name.',
       'Each cellar is a separate bottle collection.',
-      'Open a cellar to see its bottles. Search by name, producer, grape or region, narrow the list with Filters, and sort it by date added, name, vintage, price, number of bottles or maturity.',
+      'Open a cellar to see its bottles. Search by name, producer, grape or region, narrow the list with Filters, and sort it by date added, name, vintage, price, number of bottles or maturity. The search also finds a bottle by its extra facts: the values on its wine record and the wine data shown on the bottle.',
       'The strip at the top of a cellar switches between its views: Bottles, Overview, Racks, Room View, History and Cellar Book. Overview shows the number of bottles and wines, the total value and the average price.',
       'The ⋮ menu at the top right holds the cellar\'s actions: Edit Cellar, Set Color, Share, Wine Lists, Import Bottles, Export, Audit Log, Recently deleted and Delete Cellar. Some are for the cellar\'s owner only.',
     ],

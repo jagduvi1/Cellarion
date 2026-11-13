@@ -37,7 +37,9 @@ registerTool({
   description:
     'Searches the bottles in the cellars the user owns (pass cellar_id to search one specific cellar, including shared ' +
     'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | on_order | all), ' +
-    'vintage, wine type, reserved (only/exclude "spoken for" bottles). Paginated and bounded; every item includes its ' +
+    'vintage, wine type, reserved (only/exclude "spoken for" bottles). The query also reads each bottle\'s extra facts: ' +
+    'the text and list values (never the field names) of its wine\'s published public data and of the personal data ' +
+    'entries shown on the bottle. Paginated and bounded; every item includes its ' +
     'rating, so filter by rating yourself from the results, and has_photo (own or published photo, or a registry ' +
     'image — get_bottle → photos has the detail). wine carries grapes, region and country. maturity is the drink ' +
     'window that governs each active bottle — the user\'s own when set (source "own"), else the curated sommelier ' +
