@@ -73,11 +73,77 @@ describe('discovery documents', () => {
     expect(m.token_endpoint_auth_methods_supported).toContain('none'); // public clients
   });
 
+  test('AS metadata lists the three client authentication methods for /token and /revoke', () => {
+    const m = oauth.authServerMetadata();
+    const methods = ['none', 'client_secret_post', 'client_secret_basic'];
+    expect(m.token_endpoint_auth_methods_supported).toEqual(methods);
+    // An absent revocation list reads as client_secret_basic only (RFC 8414 §2).
+    expect(m.revocation_endpoint_auth_methods_supported).toEqual(methods);
+    expect(oauth.CLIENT_AUTH_METHODS).toEqual(methods);
+  });
+
   test('PRM resource is the MCP URL and points at the AS', () => {
     const m = oauth.protectedResourceMetadata();
     expect(m.resource).toBe('https://cellarion.app/api/mcp');
     expect(m.authorization_servers).toEqual(['https://cellarion.app']);
     expect(m.bearer_methods_supported).toEqual(['header']);
+  });
+});
+
+describe('parseClientBasicAuth — client credentials in an HTTP Basic header (RFC 6749 §2.3.1)', () => {
+  const form = (s) => encodeURIComponent(s).replace(/%20/g, '+');
+  const basic = (raw) => `Basic ${Buffer.from(raw, 'utf8').toString('base64')}`;
+  const MALFORMED = { malformed: true };
+
+  test('no header, or another scheme, is not a Basic attempt', () => {
+    expect(oauth.parseClientBasicAuth(undefined)).toBeNull();
+    expect(oauth.parseClientBasicAuth('')).toBeNull();
+    expect(oauth.parseClientBasicAuth('Bearer cel_abc')).toBeNull();
+    expect(oauth.parseClientBasicAuth('Basicx abc')).toBeNull();
+  });
+
+  test('reads the id and secret, the scheme in any case', () => {
+    expect(oauth.parseClientBasicAuth(basic('mcpc_abc:s3cret'))).toEqual({ clientId: 'mcpc_abc', clientSecret: 's3cret' });
+    expect(oauth.parseClientBasicAuth(basic('mcpc_abc:s3cret').replace('Basic', 'bAsIc'))).toEqual({ clientId: 'mcpc_abc', clientSecret: 's3cret' });
+  });
+
+  test('each part is form-urlencoded before joining and decoded after splitting on the FIRST colon', () => {
+    const id = 'id:with colon+plus';
+    const secret = 'p@ss: w%rd/+=é';
+    expect(oauth.parseClientBasicAuth(basic(`${form(id)}:${form(secret)}`))).toEqual({ clientId: id, clientSecret: secret });
+    // A secret sent with a raw colon still splits at the first one.
+    expect(oauth.parseClientBasicAuth(basic('mcpc_abc:a:b'))).toEqual({ clientId: 'mcpc_abc', clientSecret: 'a:b' });
+  });
+
+  test('an empty secret is read as empty (a public client)', () => {
+    expect(oauth.parseClientBasicAuth(basic('mcpc_abc:'))).toEqual({ clientId: 'mcpc_abc', clientSecret: '' });
+  });
+
+  test.each([
+    ['no credentials', 'Basic'],
+    ['only spaces after the scheme', 'Basic    '],
+    ['not base64', 'Basic !!!not*base64!!!'],
+    // 'YTp=' decodes to "a:" (Node drops the stray bits) but is not the
+    // base64 of anything: read leniently it would be client "a", no secret.
+    ['base64 that does not round-trip', 'Basic YTp='],
+    ['no colon', basic('mcpc_abc')],
+    ['an empty id', basic(':s3cret')],
+    ['broken percent-encoding in the id', basic('%zz:s3cret')],
+    ['broken percent-encoding in the secret', basic('mcpc_abc:%E0%A4%A')],
+  ])('%s → malformed', (_label, header) => {
+    expect(oauth.parseClientBasicAuth(header)).toEqual(MALFORMED);
+  });
+
+  test('a header over the bound is malformed without being decoded', () => {
+    const fromSpy = jest.spyOn(Buffer, 'from');
+    try {
+      const header = basic(`mcpc_abc:${'x'.repeat(oauth.MAX_BASIC_AUTH_HEADER_LEN)}`);
+      fromSpy.mockClear();
+      expect(oauth.parseClientBasicAuth(header)).toEqual(MALFORMED);
+      expect(fromSpy).not.toHaveBeenCalled();
+    } finally {
+      fromSpy.mockRestore();
+    }
   });
 });
 
