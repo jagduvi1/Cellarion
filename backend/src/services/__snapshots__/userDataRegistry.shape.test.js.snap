@@ -13,7 +13,7 @@ exports[`the user-data registry lists its entries in this order, with these fiel
   "WishlistItem [personal-data] user | purge, export",
   "RegistryReadDay [personal-data] readerKey (user:<id>) | purge, export",
   "PersonalDataKey [personal-data] user | purge, export",
-  "PersonalDataEntry [personal-data] author | purge, export",
+  "PersonalDataEntry [personal-data] author | prePurge, purge, postPurge, export",
   "SavedDashboard [personal-data] user | purge, export",
   "PickList [personal-data] user | purge, export",
   "SavedView [personal-data] user | purge, export",

@@ -25,6 +25,8 @@ const RegistryReadDay = require('../../models/RegistryReadDay');
 const { deleteLogoFilesFor } = require('../wineListLogos');
 const { unlinkImageFiles } = require('../imageProcessor');
 const { EXPORT_MAX, markTrunc } = require('./shared');
+const { personalDataViewerOwners } = require('../personalData');
+const { bumpDataVersion } = require('../dataVersion');
 
 module.exports = [
   // ── The account itself ──────────────────────────────────────────────────
@@ -312,7 +314,17 @@ module.exports = [
     // multi-party thread to preserve — erasure removes the author's entries
     // even where cellar co-members could see them (issue #986 requirement).
     model: PersonalDataEntry, category: 'personal-data', userFields: ['author'],
+    // The owners whose cached cellar data (the cellar search's documents) can
+    // hold these entries are read BEFORE the batch, which also removes the
+    // author's memberships, and moved AFTER it, so the next search no longer
+    // finds an erased entry. Moving them first would let a search in between
+    // cache the entries again under the new version.
+    prePurge: async (ctx) => {
+      const bottleIds = await PersonalDataEntry.distinct('bottle', { author: ctx.userId, bottle: { $ne: null } });
+      ctx.personalDataViewers = await personalDataViewerOwners(ctx.userId, { bottleIds, wineLevel: true });
+    },
     purge: (ctx) => PersonalDataEntry.deleteMany({ author: ctx.userId }),
+    postPurge: (ctx) => { for (const owner of ctx.personalDataViewers || []) bumpDataVersion(owner); },
     exportFragment: async (ctx) => ({ personalDataEntries: markTrunc(ctx, 'personalDataEntries', await PersonalDataEntry.find({ author: ctx.userId }).populate('key', 'name type unit').limit(EXPORT_MAX).lean()) }),
   },
   {

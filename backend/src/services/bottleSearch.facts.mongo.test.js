@@ -115,7 +115,7 @@ describeWithMongo('the cellar search reads a bottle\'s extra facts (real MongoDB
     const value = (wine, k, v, extra = {}) => RegistryDataValue.create({
       wineDefinition: wine._id, key: k._id, value: v, status: 'published', suggestedBy: admin._id, ...extra,
     });
-    await value(estate, keys.owner, 'Vignobles Jean-Louis Trocard');
+    await value(estate, keys.owner, 'Vignobles Henri-Paul Montaubrac');
     await value(estate, keys.closure, 'Screw cap');
     await value(estate, keys.abv, 13.5);
     await value(estate, keys.vines, 45);
@@ -180,8 +180,8 @@ describeWithMongo('the cellar search reads a bottle\'s extra facts (real MongoDB
 
   describe('public registry values', () => {
     test('a published text value finds every bottle of its wine; the name and producer hold no such word', async () => {
-      expect(await found('trocard')).toEqual(ESTATE_HERE());
-      expect(await found('jean louis trocard')).toEqual(ESTATE_HERE());
+      expect(await found('montaubrac')).toEqual(ESTATE_HERE());
+      expect(await found('henri paul montaubrac')).toEqual(ESTATE_HERE());
     });
 
     test('an enum value is found; a decimal, integer, boolean or date value is not', async () => {
@@ -215,12 +215,12 @@ describeWithMongo('the cellar search reads a bottle\'s extra facts (real MongoDB
       );
       expect(out.get(id(b19))).toEqual([
         { key: 'Closure', type: 'enum', value: 'Screw cap' },
-        { key: 'Estate owner', type: 'text', value: 'Vignobles Jean-Louis Trocard' },
+        { key: 'Estate owner', type: 'text', value: 'Vignobles Henri-Paul Montaubrac' },
         { key: 'Harvest note', type: 'text', value: 'Frostbitten' },
         { key: 'Vintage story', type: 'text', value: 'Hailstorm summer' },
       ]);
-      expect(out.get(id(b20)).map((v) => v.value)).toEqual(['Screw cap', 'Vignobles Jean-Louis Trocard', 'Steady ripening']);
-      expect(out.get(id(bNone)).map((v) => v.value)).toEqual(['Screw cap', 'Vignobles Jean-Louis Trocard', 'Steady ripening']);
+      expect(out.get(id(b20)).map((v) => v.value)).toEqual(['Screw cap', 'Vignobles Henri-Paul Montaubrac', 'Steady ripening']);
+      expect(out.get(id(bNone)).map((v) => v.value)).toEqual(['Screw cap', 'Vignobles Henri-Paul Montaubrac', 'Steady ripening']);
       // The wine with only a suggested, a rejected and an empty value.
       expect(out.get(id(bPlain))).toEqual([{ key: 'Estate owner', type: 'text', value: '' }]);
       expect(out.get('no-wine')).toEqual([]);
@@ -266,7 +266,7 @@ describeWithMongo('the cellar search reads a bottle\'s extra facts (real MongoDB
   });
 
   test('key names are never searched', async () => {
-    expect(await found('trocard')).toEqual(ESTATE_HERE()); // the value is
+    expect(await found('montaubrac')).toEqual(ESTATE_HERE()); // the value is
     for (const name of ['estate owner', 'vintage story', 'closure', 'bought from', 'tasting group', 'occasion']) {
       expect(await found(name)).toEqual([]);
     }
@@ -274,18 +274,18 @@ describeWithMongo('the cellar search reads a bottle\'s extra facts (real MongoDB
 
   test('a facts match ranks below the wine\'s own fields and above the notes', async () => {
     const named = await WineDefinition.create({
-      name: 'Trocard Réserve', producer: 'Maison Autre', type: 'red', country: estate.country,
-      normalizedKey: 'trocard reserve|maison autre|', createdBy: owner._id,
+      name: 'Montaubrac Réserve', producer: 'Maison Autre', type: 'red', country: estate.country,
+      normalizedKey: 'montaubrac reserve|maison autre|', createdBy: owner._id,
     });
     const byName = await Bottle.create({ user: owner._id, cellar: home._id, wineDefinition: named._id, vintage: '2018' });
-    const byNotes = await Bottle.create({ user: owner._id, cellar: home._id, wineDefinition: plain._id, vintage: '2018', notes: 'Trocard told us to wait' });
+    const byNotes = await Bottle.create({ user: owner._id, cellar: home._id, wineDefinition: plain._id, vintage: '2018', notes: 'Montaubrac told us to wait' });
     try {
-      const res = await bottleSearch.searchBottles('trocard', { cellarId: id(home), limit: 100, sort: '-createdAt' });
+      const res = await bottleSearch.searchBottles('montaubrac', { cellarId: id(home), limit: 100, sort: '-createdAt' });
       expect(res.ids[0]).toBe(id(byName));
       expect(res.ids[res.ids.length - 1]).toBe(id(byNotes));
       expect([...res.ids.slice(1, -1)].sort()).toEqual(ESTATE_HERE());
       // One typo still finds the fact.
-      expect([...(await found('trocrad'))]).toEqual(ids(b19, b20, bNV, bNone, byName, byNotes));
+      expect([...(await found('montuabrac'))]).toEqual(ids(b19, b20, bNV, bNone, byName, byNotes));
     } finally {
       await Bottle.deleteMany({ _id: { $in: [byName._id, byNotes._id] } });
       await WineDefinition.deleteOne({ _id: named._id });
@@ -294,7 +294,7 @@ describeWithMongo('the cellar search reads a bottle\'s extra facts (real MongoDB
 
   test('the MCP tool search_bottles finds a bottle by a fact', async () => {
     const tool = allTools().find((t) => t.name === 'search_bottles');
-    const res = await tool.handler({ query: 'trocard', cellar_id: id(home), status: 'active', limit: 50, offset: 0 }, { user: { id: String(owner._id) }, scopes: ['read'] });
+    const res = await tool.handler({ query: 'montaubrac', cellar_id: id(home), status: 'active', limit: 50, offset: 0 }, { user: { id: String(owner._id) }, scopes: ['read'] });
     const body = JSON.parse(res.content[0].text);
     expect(body.data.map((b) => String(b.bottle_id)).sort()).toEqual(ESTATE_HERE());
   });
@@ -334,4 +334,71 @@ describeWithMongo('the cellar search reads a bottle\'s extra facts (real MongoDB
       expect(await found('marlowe', { version })).toEqual(ids(bPlain));
     });
   });
+
+  test('a wine still pending identity gives no registry values to the search, for anyone', async () => {
+    const pendingWine = await WineDefinition.create({
+      name: 'Unidentified red', producer: 'Maison Inconnue', type: 'red', country: estate.country,
+      normalizedKey: 'unidentified red|maison inconnue|', createdBy: owner._id,
+    });
+    await WineDefinition.collection.updateOne({ _id: pendingWine._id }, { $set: { pendingIdentity: true } });
+    const bp = await Bottle.create({ user: owner._id, cellar: home._id, wineDefinition: pendingWine._id, vintage: '2021' });
+    await RegistryDataValue.create({
+      wineDefinition: pendingWine._id, key: keys.owner._id, value: 'Hiddenfield Estates', status: 'published', suggestedBy: admin._id,
+    });
+    expect(await found('hiddenfield')).toEqual([]);
+    await WineDefinition.collection.updateOne({ _id: pendingWine._id }, { $set: { pendingIdentity: false } });
+    expect(await found('hiddenfield')).toEqual(ids(bp));
+  });
+
+  test('a bottle stored without a vintage reads NV-scoped wine-level entries, as its page does', async () => {
+    const r = await personalData.createEntry(owner._id, bNV, {
+      level: 'wine', vintageScoped: true, newKey: { name: 'Bottling mark', type: 'text' }, value: 'Nonvintage cuvee',
+    });
+    expect(r.ok).toBe(true);
+    expect(await found('nonvintage')).toEqual(ids(bNV, bNone));
+  });
+
+  test('the registry values are read through the per-slot index, and without it while it does not exist yet', async () => {
+    const INDEX = { wineDefinition: 1, key: 1, vintage: 1, status: 1 };
+    const plan = await RegistryDataValue.find({ wineDefinition: { $in: [estate._id] }, status: 'published' }).hint(INDEX).explain();
+    expect(JSON.stringify(plan)).toContain('wineDefinition_1_key_1_vintage_1_status_1');
+
+    const asked = [{ _id: b20._id, wineDefinition: String(estate._id), vintage: '2020' }];
+    const hint = jest.spyOn(mongoose.Query.prototype, 'hint');
+    let hinted;
+    try {
+      hinted = await registryDataOps.publishedValuesForBottles(asked, { types: ['text', 'enum'] });
+      expect(hint).toHaveBeenCalledWith(INDEX);
+    } finally {
+      hint.mockRestore();
+    }
+    await RegistryDataValue.collection.dropIndex('wineDefinition_1_key_1_vintage_1_status_1');
+    try {
+      const unhinted = await registryDataOps.publishedValuesForBottles(asked, { types: ['text', 'enum'] });
+      expect(unhinted.get(id(b20))).toEqual(hinted.get(id(b20)));
+      expect(hinted.get(id(b20)).length).toBeGreaterThan(0);
+    } finally {
+      await RegistryDataValue.syncIndexes();
+    }
+  });
+
+  // Last: it erases a member.
+  test('an erased member\'s entries stop matching at once: the purge moves the owner\'s version after it deletes', async () => {
+    const leaver = await User.create({ username: 'leaver', email: 'leaver@facts.test', password: PASSWORD });
+    await Cellar.updateOne({ _id: home._id }, { $push: { members: { user: leaver._id, role: 'editor' } } });
+    const a = await personalData.createEntry(leaver._id, b19, { level: 'bottle', newKey: { name: 'Leaver note', type: 'text' }, value: 'Wintergreen' });
+    const b = await personalData.createEntry(leaver._id, b20, { level: 'wine', newKey: { name: 'Leaver club', type: 'text' }, value: 'Saltmarsh' });
+    expect(a.ok && b.ok).toBe(true);
+    const before = versionOf(owner);
+    expect(await found('wintergreen', { version: before })).toEqual(ids(b19));
+    expect(await found('saltmarsh', { version: before })).toEqual(ESTATE_HERE());
+
+    const { purgeUserData } = require('./userDataRegistry');
+    await purgeUserData(leaver._id, 'leaver@facts.test');
+
+    const after = versionOf(owner);
+    expect(after).not.toBe(before);
+    expect(await found('wintergreen', { version: after })).toEqual([]);
+    expect(await found('saltmarsh', { version: after })).toEqual([]);
+  }, 60000);
 });

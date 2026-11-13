@@ -26,6 +26,10 @@ const { createNotification } = require('./notifications');
 const { awardValue, SUPERSEDED_REASON } = require('./suggestionCred');
 const { matchKeyByName } = require('../utils/registryKeyName');
 
+// The one-row-per-slot index of models/RegistryDataValue (partial on
+// suggested + published, so a query for published rows may use it).
+const VALUES_BY_WINE_INDEX = { wineDefinition: 1, key: 1, vintage: 1, status: 1 };
+
 // Names that would shadow first-class record fields — a key called
 // "producer" or "region" must never exist beside the real thing.
 const RESERVED_NAMES = [
@@ -399,11 +403,22 @@ async function publishedValuesForBottles(bottles, { types } = {}) {
   const keys = (await acceptedKeys()).filter((k) => !types || types.includes(k.type));
   if (wineIds.length === 0 || keys.length === 0) return out;
 
-  const rows = await RegistryDataValue.find({
+  const query = () => RegistryDataValue.find({
     wineDefinition: { $in: wineIds },
     key: { $in: keys.map((k) => k._id) },
     status: 'published',
   }).select('wineDefinition key vintage value').lean();
+  // The planner can prefer the review queue's { status, createdAt } index and
+  // read every published value in the registry; the per-slot index reads only
+  // these wines'. A hint naming an index that does not exist yet (an install
+  // still building it at boot) is an error, so that one case runs unhinted.
+  let rows;
+  try {
+    rows = await query().hint(VALUES_BY_WINE_INDEX);
+  } catch (err) {
+    if (!/hint/i.test(String(err && err.message))) throw err;
+    rows = await query();
+  }
   const rowsOf = new Map(); // `${wine}:${key}` → that key's published rows on that wine
   for (const r of rows) {
     const slot = `${r.wineDefinition}:${r.key}`;
