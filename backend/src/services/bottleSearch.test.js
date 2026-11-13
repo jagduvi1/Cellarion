@@ -6,14 +6,22 @@
  * same order in 99.9%. These tests pin the behaviour that comparison measured.
  *
  * The models are mocked: Bottle.find / WineDefinition.find return the fixture
- * rows, and the tests read back what was asked of them.
+ * rows, and the tests read back what was asked of them. So are the two
+ * readers of a bottle's extra facts; bottleSearch.facts.mongo.test.js runs
+ * the real ones on MongoDB.
  */
 
 jest.mock('../models/Bottle', () => ({ find: jest.fn(), aggregate: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
+jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
+jest.mock('./registryDataOps', () => ({ publishedValuesForBottles: jest.fn() }));
+jest.mock('./personalData', () => ({ listForBottles: jest.fn() }));
 
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
+const Cellar = require('../models/Cellar');
+const { publishedValuesForBottles } = require('./registryDataOps');
+const { listForBottles } = require('./personalData');
 const { searchBottles, bottleFacets, _internal } = require('./bottleSearch');
 
 const oid = (n) => String(n).padStart(24, '0');
@@ -49,7 +57,7 @@ const WINES = [MARGAUX, PALMER, BAROLO, CHABLIS, PORT, RESERVA];
 
 const at = (day) => new Date(Date.UTC(2026, 0, day));
 const bottle = (n, w, extra = {}) => ({
-  _id: oid(n), wineDefinition: w ? w._id : null, vintage: '2015', price: 0, rating: 0, createdAt: at(n), ...extra,
+  _id: oid(n), cellar: CELLAR, wineDefinition: w ? w._id : null, vintage: '2015', price: 0, rating: 0, createdAt: at(n), ...extra,
 });
 const BOTTLES = [
   bottle(201, MARGAUX, { vintage: '2015', price: 900 }),
@@ -87,6 +95,17 @@ function load(bottles = BOTTLES, wines = WINES) {
   });
 }
 
+// The extra facts each reader answers, by bottle number: { 204: [{ key, type, value }] }.
+let cellarRows;
+function facts({ published = {}, personal = {} } = {}) {
+  const byBottle = (given) => async (bottles) => new Map(bottles.map((b) => [b._id, given[Number(b._id)] || []]));
+  publishedValuesForBottles.mockImplementation(byBottle(published));
+  listForBottles.mockImplementation(byBottle(personal));
+  cellarRows = [{ _id: CELLAR, user: oid(77), members: [] }];
+  Cellar.find.mockImplementation(() => ({ select: jest.fn(() => ({ lean: jest.fn().mockResolvedValue(cellarRows) })) }));
+}
+const fact = (value, type = 'text', key = 'Estate owner') => ({ key, type, value });
+
 const idsOf = (res) => res.ids.map((id) => Number(id));
 const search = (query, opts = {}) => searchBottles(query, { cellarId: CELLAR, limit: 1000, ...opts });
 
@@ -95,6 +114,7 @@ beforeEach(() => {
   lastBottleQuery = undefined;
   lastSelect = undefined;
   load();
+  facts();
 });
 
 describe('scope — never unscoped (security audit 2026-09-02, D10-5)', () => {
@@ -584,5 +604,186 @@ describe('kept documents', () => {
     load([bottle(301, MARGAUX, { notes: 'a b '.repeat(1250), location: 'x'.repeat(500) })]);
     await search('a', { version: 'v', cellarId: oid(21) });
     expect(_internal.keptBytes()).toBe(long);
+  });
+});
+
+// ── A bottle's extra facts ──────────────────────────────────────────────────
+// The published registry values of its wine and the personal data entries its
+// page shows (the readers' own rules run on MongoDB in
+// bottleSearch.facts.mongo.test.js). Their values are searched like any text.
+
+describe('extra facts', () => {
+  afterEach(() => {
+    _internal.forgetAllDocs();
+    _internal.setDocsMaxBytes();
+    jest.restoreAllMocks();
+  });
+
+  const TROCARD = 'Vignobles Jean-Louis Trocard';
+
+  test('a fact value finds its bottle; a key name finds nothing', async () => {
+    facts({
+      published: { 204: [fact(TROCARD)] },
+      personal: { 205: [fact('Riverside', 'text', 'Cork supplier')] },
+    });
+    expect(idsOf(await search('trocard'))).toEqual([204]);
+    expect(idsOf(await search('riverside'))).toEqual([205]);
+    expect((await search('estate owner')).total).toBe(0);
+    expect((await search('cork supplier')).total).toBe(0);
+  });
+
+  test('text and list values are searched; a number, a yes/no or a date never is', async () => {
+    facts({
+      published: { 201: [fact(13, 'decimal', 'ABV'), fact(1987, 'integer', 'Planted'), fact('Screw cap', 'enum', 'Closure')] },
+      personal: { 202: [fact(true, 'boolean', 'Organic'), fact('1987-05-01', 'date', 'Bottled'), fact('Magnum', 'enum', 'Format')] },
+    });
+    expect(idsOf(await search('screw cap'))).toEqual([201]);
+    expect(idsOf(await search('magnum'))).toEqual([202]);
+    expect((await search('13')).total).toBe(0);
+    expect((await search('1987')).total).toBe(0);
+    expect((await search('true')).total).toBe(0);
+  });
+
+  test('empty, blank or missing values match nothing and break nothing', async () => {
+    facts({
+      published: { 201: [fact(''), fact('   '), fact(null), fact(undefined, 'enum')] },
+      personal: { 202: [{ key: 'Gone', type: null, value: 'orphan' }] },
+    });
+    expect((await search('orphan')).total).toBe(0);
+    expect(_internal.factsText([fact(''), fact('  '), fact(null)])).toBe('');
+  });
+
+  test('ranking: a wine-name match first, then a fact, then the notes', async () => {
+    const named = wine(801, { name: 'Trocard Réserve', producer: 'Maison A', type: 'red' });
+    const owned = wine(802, { name: 'Clos Exemple', producer: 'Domaine B', type: 'red' });
+    const noted = wine(803, { name: 'Cuvée Simple', producer: 'Maison C', type: 'red' });
+    load([
+      bottle(801, named), bottle(802, owned),
+      bottle(803, noted, { notes: 'Bought from Trocard at the cellar door' }),
+    ], [named, owned, noted]);
+    facts({ published: { 802: [fact(TROCARD)] } });
+    // The field ranks before the requested sort, whichever way it runs.
+    expect(idsOf(await search('trocard', { sort: 'createdAt' }))).toEqual([801, 802, 803]);
+    expect(idsOf(await search('trocard', { sort: '-createdAt' }))).toEqual([801, 802, 803]);
+    // The typo budget applies to a fact as to any field.
+    expect(idsOf(await search('trocrad', { sort: '-createdAt' }))).toEqual([801, 802, 803]);
+    expect(_internal.FIELDS.indexOf('facts')).toBe(_internal.FIELDS.indexOf('notes') - 1);
+  });
+
+  test('words of two facts are never near each other', () => {
+    expect(_internal.tokenize(_internal.factsText([fact('Jean Louis'), fact('Trocard')])).positions).toEqual([0, 1, 9]);
+  });
+
+  test('the readers are asked about every bottle in scope, with its cellar, wine and vintage; of a cellar only its people are loaded', async () => {
+    await search('trocard');
+    expect(publishedValuesForBottles).toHaveBeenCalledTimes(1);
+    const [bottles, opts] = publishedValuesForBottles.mock.calls[0];
+    expect(opts).toEqual({ types: ['text', 'enum'] });
+    expect(bottles).toHaveLength(BOTTLES.length);
+    expect(bottles[0]).toEqual({ _id: oid(201), cellar: CELLAR, wineDefinition: MARGAUX._id, vintage: '2015' });
+    expect(Cellar.find).toHaveBeenCalledWith({ _id: { $in: [CELLAR] } });
+    expect(Cellar.find.mock.results[0].value.select).toHaveBeenCalledWith('user members.user');
+    expect(listForBottles).toHaveBeenCalledWith(bottles, cellarRows);
+    expect(lastSelect).toMatch(/\bcellar\b/);
+  });
+
+  test('a filter-only request never loads the facts, kept or not; the first text search loads them once', async () => {
+    await search('', { type: 'red' });
+    await search('', { type: 'red', version: 'o:1' });
+    expect(publishedValuesForBottles).not.toHaveBeenCalled();
+    expect(listForBottles).not.toHaveBeenCalled();
+    expect(Cellar.find).not.toHaveBeenCalled();
+
+    facts({ published: { 204: [fact(TROCARD)] } });
+    expect(idsOf(await search('trocard', { version: 'o:1' }))).toEqual([204]);
+    expect(idsOf(await search('barolo trocard', { version: 'o:1' }))).toEqual([204]);
+    expect(Bottle.find).toHaveBeenCalledTimes(2); // the request kept nothing, then the kept scope once
+    expect(publishedValuesForBottles).toHaveBeenCalledTimes(1);
+    expect(listForBottles).toHaveBeenCalledTimes(1);
+  });
+
+  test('two text searches on kept documents at once load the facts once', async () => {
+    await search('', { version: 'o:1' });
+    facts({ published: { 204: [fact(TROCARD)] } });
+    const [a, b] = await Promise.all([search('trocard', { version: 'o:1' }), search('trocard', { version: 'o:1' })]);
+    expect(idsOf(a)).toEqual([204]);
+    expect(idsOf(b)).toEqual([204]);
+    expect(publishedValuesForBottles).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failed facts load fails that search and is not remembered: the next one loads them', async () => {
+    await search('', { version: 'o:1' });
+    publishedValuesForBottles.mockRejectedValueOnce(new Error('registry read failed'));
+    await expect(search('trocard', { version: 'o:1' })).rejects.toThrow('registry read failed');
+    facts({ published: { 204: [fact(TROCARD)] } });
+    expect(idsOf(await search('trocard', { version: 'o:1' }))).toEqual([204]);
+    expect(Bottle.find).toHaveBeenCalledTimes(1);
+  });
+
+  test('a new personal entry is found on the next request — its write moves the version', async () => {
+    expect((await search('riverside', { version: 'o:1' })).total).toBe(0);
+    facts({ personal: { 205: [fact('Riverside', 'text', 'Bought from')] } });
+    // While the version holds, the kept documents answer…
+    expect((await search('riverside', { version: 'o:1' })).total).toBe(0);
+    // …and the write moved it (personalData.bumpPersonalDataViewers).
+    expect(idsOf(await search('riverside', { version: 'o:2' }))).toEqual([205]);
+  });
+
+  test('a registry value published meanwhile moves no version: kept documents find it once they expire', async () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    expect((await search('trocard', { version: 'o:1' })).total).toBe(0);
+    facts({ published: { 204: [fact(TROCARD)] } });
+    // Without a version nothing is kept: read at once.
+    expect(idsOf(await search('trocard'))).toEqual([204]);
+    clock.mockReturnValue(now + _internal.DOCS_TTL_MS - 1);
+    expect((await search('trocard', { version: 'o:1' })).total).toBe(0);
+    clock.mockReturnValue(now + _internal.DOCS_TTL_MS);
+    expect(idsOf(await search('trocard', { version: 'o:1' }))).toEqual([204]);
+  });
+
+  test('facts are charged like any text, also when they arrive on kept documents', async () => {
+    load([bottle(301, MARGAUX)]);
+    facts({ published: { 301: [fact('x'.repeat(1000))] } });
+    const plain = _internal.docBytes(_internal.buildSearchDoc(bottle(301, MARGAUX), MARGAUX));
+    await search('', { version: 'v', cellarId: oid(31) });
+    expect(_internal.keptBytes()).toBe(plain);
+    await search('margaux', { version: 'v', cellarId: oid(31) });
+    expect(_internal.keptBytes()).toBe(plain + 16 * 1000);
+
+    // Kept with its facts at once when the first request has text.
+    _internal.forgetAllDocs();
+    await search('margaux', { version: 'v', cellarId: oid(33) });
+    expect(_internal.keptBytes()).toBe(plain + 16 * 1000);
+
+    // A scope its facts push over the bound is let go.
+    _internal.forgetAllDocs();
+    _internal.setDocsMaxBytes(plain + 100);
+    await search('', { version: 'v', cellarId: oid(32) });
+    expect(_internal.keptScopes()).toBe(1);
+    expect(idsOf(await search('xxxx', { version: 'v', cellarId: oid(32) }))).toEqual([301]);
+    expect(_internal.keptScopes()).toBe(0);
+    expect(_internal.keptBytes()).toBe(0);
+  });
+
+  test('a bottle\'s facts are read up to the length its notes may have', () => {
+    const many = Array.from({ length: 30 }, (_, i) => fact(`${i}`.padEnd(500, 'z')));
+    expect(_internal.factsText(many)).toHaveLength(_internal.MAX_FACTS_CHARS);
+    expect(_internal.MAX_FACTS_CHARS).toBe(5000);
+  });
+
+  test('50 bottles with a 5,000-character fact against a 4,999-character query cost milliseconds', async () => {
+    const wines = Array.from({ length: 50 }, (_, i) => wine(600 + i, { name: 'Cuvée', producer: 'P', type: 'red' }));
+    load(wines.map((w, i) => bottle(700 + i, w)), wines);
+    const published = {};
+    wines.forEach((_, i) => { published[700 + i] = [fact(`k${i}${'q'.repeat(4998)}`)]; });
+    facts({ published });
+    const started = process.hrtime.bigint();
+    const res = await search('q'.repeat(4999));
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    expect(res.total).toBe(0);
+    expect(ms).toBeLessThan(1000);
+    // The long values are read all the same: a word is read up to 32 characters.
+    expect(idsOf(await search(`k7${'q'.repeat(30)}`))).toEqual([707]);
   });
 });

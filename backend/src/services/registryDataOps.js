@@ -382,6 +382,48 @@ async function dataForWine(wineId, userId = null, { roles, vintage, locale } = {
   };
 }
 
+/**
+ * The published value of every accepted key each bottle sees, for many bottles
+ * in one query: dataForWine's rule (the value for the bottle's vintage wins
+ * over the wine-wide default), keys narrowed to `types` when given. Caller:
+ * services/bottleSearch (cellar page, history, multi-cellar view, MCP
+ * search_bottles). Returns bottle id → [{ key, type, value }] in key name
+ * order; [] when it sees none.
+ */
+async function publishedValuesForBottles(bottles, { types } = {}) {
+  const out = new Map();
+  if (!Array.isArray(bottles) || bottles.length === 0) return out;
+  for (const b of bottles) out.set(String(b._id), []);
+  const wineOf = (b) => (b.wineDefinition ? String(b.wineDefinition._id || b.wineDefinition) : null);
+  const wineIds = [...new Set(bottles.map(wineOf).filter(Boolean))];
+  const keys = (await acceptedKeys()).filter((k) => !types || types.includes(k.type));
+  if (wineIds.length === 0 || keys.length === 0) return out;
+
+  const rows = await RegistryDataValue.find({
+    wineDefinition: { $in: wineIds },
+    key: { $in: keys.map((k) => k._id) },
+    status: 'published',
+  }).select('wineDefinition key vintage value').lean();
+  const rowsOf = new Map(); // `${wine}:${key}` → that key's published rows on that wine
+  for (const r of rows) {
+    const slot = `${r.wineDefinition}:${r.key}`;
+    if (!rowsOf.has(slot)) rowsOf.set(slot, []);
+    rowsOf.get(slot).push(r);
+  }
+  for (const b of bottles) {
+    const wid = wineOf(b);
+    if (!wid) continue;
+    const asked = normaliseVintage(b.vintage);
+    const vintage = asked.ok ? asked.value : null;
+    const list = out.get(String(b._id));
+    for (const k of keys) {
+      const { row } = resolveForVintage(rowsOf.get(`${wid}:${k._id}`) || [], vintage);
+      if (row) list.push({ key: k.name, type: k.type, value: row.value });
+    }
+  }
+  return out;
+}
+
 /* ── Admin operations ────────────────────────────────────────────────── */
 
 // Review pages and the MCP review tool work oldest-first in bounded pages —
@@ -746,6 +788,7 @@ module.exports = {
   findAcceptedKeyByName,
   suggestValue,
   dataForWine,
+  publishedValuesForBottles,
   listReviewQueues,
   decideKey,
   decideValue,

@@ -3794,7 +3794,7 @@
         "summary": "Create cellars to organize your wine collection.",
         "d1": "Create a cellar: on My Cellars, tap \"+ New Cellar\" and type a name.",
         "d2": "Each cellar is a separate bottle collection.",
-        "d3": "Open a cellar to see its bottles. Search by name, producer, grape or region, narrow the list with Filters, and sort it by date added, name, vintage, price, number of bottles or maturity.",
+        "d3": "Open a cellar to see its bottles. Search by name, producer, grape or region, narrow the list with Filters, and sort it by date added, name, vintage, price, number of bottles or maturity. The search also finds a bottle by the values in its Wine record and in Your wine data.",
         "d4": "The strip at the top of a cellar switches between its views: Bottles, Overview, Racks, Room View, History and Cellar Book. Overview shows the number of bottles and wines, the total value and the average price.",
         "d5": "The ⋮ menu at the top right holds the cellar's actions: Edit Cellar, Set Color, Share, Wine Lists, Import Bottles, Export, Audit Log, Recently deleted and Delete Cellar. Some are for the cellar's owner only."
       },

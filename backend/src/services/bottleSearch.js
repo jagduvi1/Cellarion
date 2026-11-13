@@ -28,17 +28,26 @@
  * page with no search, from one grouping query (bottleFacets). Unlike the
  * index, every facet value is returned — Meilisearch stopped at 100 per facet.
  *
+ * Besides the wine and the bottle's own text, a bottle is found by its extra
+ * facts (attachFacts): the published registry values of its wine and the
+ * personal data entries its page shows — their values, never their key names.
+ *
  * Meilisearch still serves the shared wine registry and the forum
  * (services/search).
  */
 const mongoose = require('mongoose');
 const Bottle = require('../models/Bottle');
+const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../config/constants');
 const { grapeSearchNames } = require('../utils/grapeDisplay');
+const { publishedValuesForBottles } = require('./registryDataOps');
+const { listForBottles } = require('./personalData');
 
 // Searchable fields, most important first — the order is the field ranking.
-const FIELDS = ['wineName', 'producer', 'appellation', 'countryName', 'regionName', 'grapeNames', 'type', 'notes', 'location', 'vintage'];
+// `facts` sits below the wine's own fields and above the notes: a curated
+// fact says more about the bottle than free text does.
+const FIELDS = ['wineName', 'producer', 'appellation', 'countryName', 'regionName', 'grapeNames', 'type', 'facts', 'notes', 'location', 'vintage'];
 const FACETS = ['type', 'countryName', 'regionName', 'appellation', 'vintage', 'countryId', 'regionId', 'grapeIds'];
 // 'other' = the non-wine category (WineDefinition.nonWine): a cider in the
 // cellar is filtered and counted as Other, never as the type it was typed with.
@@ -56,6 +65,12 @@ const MAX_TYPO_WORD_CHARS = 24;  // longer words match exactly or as a prefix on
 const NEAR = 3;                  // words further apart than this count as not near
 const FAR = NEAR + 1;            // proximity cost of words not near, or in different fields
 const MAX_OCCURRENCES = 16;      // per query word per bottle — enough to rank, bounded on long notes
+// Only text and list facts are searched: a number, a yes/no or a date would
+// answer queries it has nothing to do with (an ABV of 13 for "13").
+const FACT_TYPES = ['text', 'enum'];
+// A bottle's facts are read up to the length its notes may have (Bottle.notes),
+// however many entries the cellar's members write on it.
+const MAX_FACTS_CHARS = 5000;
 
 const isObjectId = (v) => /^[a-f0-9]{24}$/i.test(String(v));
 
@@ -373,6 +388,7 @@ function buildSearchDoc(bottle, wine) {
     regionName: populatedName(w.region),
     grapeNames: grapeSearchNames(w).join(', '),
     type: w.nonWine === true ? 'other' : (w.type || ''),
+    facts: '', // attachFacts fills it when a request has text to match
     notes: bottle.notes || '',
     location: bottle.location || '',
     vintage,
@@ -551,6 +567,46 @@ async function loadWines(ids) {
   return new Map(wines.map((w) => [String(w._id), w]));
 }
 
+/**
+ * The searchable text of a bottle's facts: each text or list value once,
+ * apart by "; " — a hard separator, so words of two facts are never near
+ * each other — up to MAX_FACTS_CHARS.
+ */
+function factsText(facts) {
+  const values = new Set();
+  for (const { type, value } of facts) {
+    if (!FACT_TYPES.includes(type) || typeof value !== 'string') continue;
+    const v = value.trim();
+    if (v) values.add(v);
+  }
+  const text = [...values].join('; ');
+  return text.length > MAX_FACTS_CHARS ? text.slice(0, MAX_FACTS_CHARS) : text;
+}
+
+/**
+ * Put each bottle's extra facts on its document: the published registry
+ * values of its wine for its vintage (registryDataOps), then the personal
+ * data entries its bottle page shows (personalData.listForBottles — the same
+ * rule, so a shared cellar's members find each other's entries exactly where
+ * they see them).
+ */
+async function attachFacts(docs, scope) {
+  if (docs.length === 0) return;
+  const bottles = docs.map((d) => ({
+    _id: d.id, cellar: d.cellar, wineDefinition: d.hit.wineDefinition, vintage: d.hit.vintage,
+  }));
+  const [published, cellars] = await Promise.all([
+    publishedValuesForBottles(bottles, { types: FACT_TYPES }),
+    // Who counts as a member is all listForBottles reads of a cellar.
+    Cellar.find({ _id: { $in: scope } }).select('user members.user').lean(),
+  ]);
+  const personal = await listForBottles(bottles, cellars);
+  for (const doc of docs) {
+    doc.values.facts = factsText([...(published.get(doc.id) || []), ...(personal.get(doc.id) || [])]);
+    doc.fields = null;
+  }
+}
+
 // ── The scope's documents, kept between requests ────────────────────────────
 // Typing a search and scrolling through its hits ask about the same cellar
 // several times a minute, and loading its bottles and wines and splitting
@@ -561,6 +617,12 @@ async function loadWines(ids) {
 // built documents are reused while it still matches, for at most DOCS_TTL_MS:
 // changes that bypass the audit (a registry wine renamed) wait that long. One
 // Node process, like the other read caches.
+//
+// The extra facts follow the same rule. A personal data entry written, changed
+// or deleted moves the version of the owners of the cellars it shows in
+// (personalData.bumpPersonalDataViewers), so the next search reads it. A
+// registry value published by a curator moves no member's version: a search
+// finds it within DOCS_TTL_MS.
 const DOCS_TTL_MS = 60 * 1000;
 // Kept across scopes up to DOCS_MAX_BYTES, least recently used going first.
 // A document is charged for its text, which is what its split words weigh:
@@ -572,7 +634,7 @@ const DOC_BYTES_BASE = 4096;
 const DOC_BYTES_PER_CHAR = 16;
 const DEFAULT_DOCS_MAX_BYTES = 40 * 1024 * 1024;
 let DOCS_MAX_BYTES = DEFAULT_DOCS_MAX_BYTES;
-const docsCache = new Map(); // key -> { version, at, docs, wines, bytes }
+const docsCache = new Map(); // key -> { version, at, docs, wines, facts, bytes }
 let bytesKept = 0;
 
 function docBytes(doc) {
@@ -581,6 +643,8 @@ function docBytes(doc) {
   return DOC_BYTES_BASE + DOC_BYTES_PER_CHAR * chars;
 }
 
+const scopeBytes = (docs) => docs.reduce((sum, doc) => sum + docBytes(doc), 0);
+
 function forget(key) {
   const entry = docsCache.get(key);
   if (!entry) return;
@@ -588,10 +652,41 @@ function forget(key) {
   bytesKept -= entry.bytes;
 }
 
+function keepWithinBound() {
+  for (const oldest of docsCache.keys()) {
+    if (bytesKept <= DOCS_MAX_BYTES) break;
+    forget(oldest);
+  }
+}
+
+/**
+ * The scope's facts, loaded once per entry and only by a request with text to
+ * match: a filter-only request never loads them, also when its documents are
+ * kept. Kept documents are charged again for the text they gained. A failed
+ * load is not remembered — the next request tries again.
+ */
+function withFacts(entry, scope, key) {
+  if (!entry.facts) {
+    entry.facts = attachFacts(entry.docs, scope).then(() => {
+      if (!key || docsCache.get(key) !== entry) return;
+      const bytes = scopeBytes(entry.docs);
+      bytesKept += bytes - entry.bytes;
+      entry.bytes = bytes;
+      if (bytes > DOCS_MAX_BYTES) forget(key);
+      else keepWithinBound();
+    }, (err) => {
+      entry.facts = null;
+      throw err;
+    });
+  }
+  return entry.facts;
+}
+
 /**
  * The scope's search documents and wines. Without a `version`: loaded for
- * this request only — notes and location only when there is text to match.
- * With one: everything, kept for the next request with the same version.
+ * this request only — notes, location and facts only when there is text to
+ * match. With one: kept for the next request with the same version, with
+ * notes and location; facts from the first request with text (withFacts).
  */
 async function loadScope(scope, statusFilter, { withText, version }) {
   const key = version === undefined ? null : `${statusFilter}|${[...scope].sort().join(',')}`;
@@ -604,12 +699,13 @@ async function loadScope(scope, statusFilter, { withText, version }) {
     if (kept && kept.version === version && Date.now() - kept.at < DOCS_TTL_MS) {
       docsCache.delete(key); // most recently used goes last
       docsCache.set(key, kept);
+      if (withText) await withFacts(kept, scope, key);
       return kept;
     }
   }
   const full = !!key || withText;
   const bottles = await Bottle.find({ cellar: { $in: scope }, ...statusMatch(statusFilter) })
-    .select(`_id wineDefinition vintage price rating createdAt bottleSize${full ? ' notes location' : ''}`)
+    .select(`_id wineDefinition vintage price rating createdAt bottleSize${full ? ' cellar notes location' : ''}`)
     .lean();
   const wines = await loadWines(bottles.map((b) => b.wineDefinition));
   const docs = bottles.map((b) => {
@@ -618,19 +714,20 @@ async function loadScope(scope, statusFilter, { withText, version }) {
     // What paging and grouping need, per hit (withHits). The wine as a
     // populate would resolve it: a dangling reference is none.
     doc.hit = { id: doc.id, wineDefinition: wine ? String(wine._id) : null, vintage: b.vintage, bottleSize: b.bottleSize };
+    // Whose members' personal entries show on it (attachFacts).
+    if (full) doc.cellar = b.cellar ? String(b.cellar) : null;
     return doc;
   });
-  const entry = { version, at: Date.now(), docs, wines };
+  const entry = { version, at: Date.now(), docs, wines, facts: null };
+  // Before it is charged and kept, so the charge holds the facts' text.
+  if (withText) await withFacts(entry, scope, null);
   if (key) {
-    entry.bytes = docs.reduce((sum, doc) => sum + docBytes(doc), 0);
+    entry.bytes = scopeBytes(docs);
     if (entry.bytes <= DOCS_MAX_BYTES) {
       forget(key);
       docsCache.set(key, entry);
       bytesKept += entry.bytes;
-      for (const oldest of docsCache.keys()) {
-        if (bytesKept <= DOCS_MAX_BYTES) break;
-        forget(oldest);
-      }
+      keepWithinBound();
     }
   }
   return entry;
@@ -815,7 +912,7 @@ module.exports = {
     fold, toWords, tokenize, editDistance, matchWord, parseQuery, rankDocument, buildSearchDoc, countFacets, underBaseLabels,
     sortKey, parseSort, compareHits, typoBudget, FIELDS, DOCS_TTL_MS,
     MAX_QUERY_CHARS, MAX_WORD_CHARS, MAX_TYPO_WORD_CHARS,
-    docBytes,
+    docBytes, factsText, FACT_TYPES, MAX_FACTS_CHARS,
     forgetAllDocs: () => { docsCache.clear(); bytesKept = 0; },
     setDocsMaxBytes: (n = DEFAULT_DOCS_MAX_BYTES) => { DOCS_MAX_BYTES = n; },
     keptScopes: () => docsCache.size,
