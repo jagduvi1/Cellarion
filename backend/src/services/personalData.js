@@ -251,23 +251,35 @@ async function listForBottles(bottles, cellars) {
 async function bumpPersonalDataViewers(authorId, { cellarIds = [], bottleIds = [], wineLevel = false } = {}) {
   try {
     bumpDataVersion(authorId);
-    const cellars = new Set(cellarIds.map(idStr).filter(Boolean));
-    const bottleList = bottleIds.filter(Boolean);
-    if (bottleList.length) {
-      for (const c of await Bottle.distinct('cellar', { _id: { $in: bottleList } })) if (c) cellars.add(String(c));
-    }
-    const owners = new Set();
-    if (cellars.size) {
-      for (const o of await Cellar.distinct('user', { _id: { $in: [...cellars] } })) if (o) owners.add(String(o));
-    }
-    if (wineLevel) {
-      for (const o of await Cellar.distinct('user', { 'members.user': authorId, deletedAt: null })) if (o) owners.add(String(o));
-    }
-    owners.delete(String(authorId));
-    for (const o of owners) bumpDataVersion(o);
+    for (const o of await personalDataViewerOwners(authorId, { cellarIds, bottleIds, wineLevel })) bumpDataVersion(o);
   } catch (err) {
     console.error('Personal data version bump failed:', err.message);
   }
+}
+
+/**
+ * The owners, other than the author, of the cellars an author's entries show
+ * in: the cellars of the given bottles and cellars, and with `wineLevel` every
+ * cellar the author is a member of. Their data version is what keeps cached
+ * cellar data (the cellar search's documents) current. Callers:
+ * bumpPersonalDataViewers, and the account purge (userData/accountAndCellar),
+ * which reads it before the memberships are gone. Returns a Set of user ids.
+ */
+async function personalDataViewerOwners(authorId, { cellarIds = [], bottleIds = [], wineLevel = false } = {}) {
+  const cellars = new Set(cellarIds.map(idStr).filter(Boolean));
+  const bottleList = bottleIds.filter(Boolean);
+  if (bottleList.length) {
+    for (const c of await Bottle.distinct('cellar', { _id: { $in: bottleList } })) if (c) cellars.add(String(c));
+  }
+  const owners = new Set();
+  if (cellars.size) {
+    for (const o of await Cellar.distinct('user', { _id: { $in: [...cellars] } })) if (o) owners.add(String(o));
+  }
+  if (wineLevel) {
+    for (const o of await Cellar.distinct('user', { 'members.user': authorId, deletedAt: null })) if (o) owners.add(String(o));
+  }
+  owners.delete(String(authorId));
+  return owners;
 }
 
 /** bumpPersonalDataViewers' audience for one stored entry (or its raw target refs). */
@@ -666,6 +678,7 @@ module.exports = {
   listForBottle,
   listForBottles,
   bumpPersonalDataViewers,
+  personalDataViewerOwners,
   bumpKeyViewers,
   createEntry,
   updateEntry,

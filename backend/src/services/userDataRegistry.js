@@ -27,6 +27,8 @@
  *   userFields   field paths that link to User (documentation + test reference)
  *   purge(ctx)   returns a Mongoose op promise or array of them (run in the
  *                deletion Promise.all), or null when intentionally not purged
+ *   prePurge(ctx)   optional op run BEFORE the batch (sees the data as it was;
+ *                may leave what postPurge needs on ctx)
  *   postPurge(ctx)  optional op run AFTER the batch (sees the batch's results)
  *   note         why purge/export is null, when applicable
  *   exportFragment(ctx)  async fn returning a plain object merged (deep) into
@@ -152,12 +154,17 @@ function deepMerge(target, source) {
 
 /**
  * Permanently erase all data linked to a user. Runs every registry entry's
- * purge op in one Promise.all, then the post-batch cleanups.
+ * prePurge in turn, then every purge op in one Promise.all, then the post-batch
+ * cleanups.
  */
 async function purgeUserData(userId, userEmail) {
   const cellarIds = await Cellar.distinct('_id', { user: userId });
   const deletedUserId = await getOrCreateDeletedUser();
   const ctx = { userId, userEmail, cellarIds, deletedUserId };
+
+  for (const entry of REGISTRY) {
+    if (entry.prePurge) await entry.prePurge(ctx);
+  }
 
   const ops = [];
   for (const entry of REGISTRY) {

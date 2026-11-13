@@ -68,9 +68,12 @@ const MAX_OCCURRENCES = 16;      // per query word per bottle — enough to rank
 // Only text and list facts are searched: a number, a yes/no or a date would
 // answer queries it has nothing to do with (an ABV of 13 for "13").
 const FACT_TYPES = ['text', 'enum'];
-// A bottle's facts are read up to the length its notes may have (Bottle.notes),
-// however many entries the cellar's members write on it.
-const MAX_FACTS_CHARS = 5000;
+// A bottle's facts are read up to this length, however many entries the
+// cellar's members write on it. Any cellar role may write an entry (notes need
+// an editor), and facts are charged to the kept documents like notes: at the
+// notes' 5,000 a viewer's long entries could push a large cellar out of
+// DOCS_MAX_BYTES and make every keystroke reload it.
+const MAX_FACTS_CHARS = 1000;
 
 const isObjectId = (v) => /^[a-f0-9]{24}$/i.test(String(v));
 
@@ -558,7 +561,8 @@ async function loadWines(ids) {
   const unique = [...new Set(ids.filter(Boolean).map(String))];
   if (unique.length === 0) return new Map();
   const wines = await WineDefinition.find({ _id: { $in: unique } })
-    .select('name producer appellation type nonWine country region grapes')
+    // pendingIdentity: such a wine's registry values are not searched (attachFacts).
+    .select('name producer appellation type nonWine pendingIdentity country region grapes')
     .populate('country', 'name')
     .populate('region', 'name')
     // regionalNames feed grapeSearchNames (regional display names match too).
@@ -568,9 +572,10 @@ async function loadWines(ids) {
 }
 
 /**
- * The searchable text of a bottle's facts: each text or list value once,
- * apart by "; " — a hard separator, so words of two facts are never near
- * each other — up to MAX_FACTS_CHARS.
+ * The searchable text of a bottle's facts: each text or list value once, in
+ * the order given (what comes last is what the cap cuts), apart by "; " — a
+ * hard separator, so words of two facts are never near each other — up to
+ * MAX_FACTS_CHARS.
  */
 function factsText(facts) {
   const values = new Set();
@@ -588,21 +593,34 @@ function factsText(facts) {
  * values of its wine for its vintage (registryDataOps), then the personal
  * data entries its bottle page shows (personalData.listForBottles — the same
  * rule, so a shared cellar's members find each other's entries exactly where
- * they see them).
+ * they see them). The registry values come first, then the newest entries,
+ * so a cut drops the oldest entries.
+ *
+ * A wine still pending identity contributes no registry values: its wine
+ * record is open only to its creator and curators (dataForWine), and the kept
+ * documents are shared by everyone who searches the cellar.
  */
-async function attachFacts(docs, scope) {
+async function attachFacts(docs, scope, wines) {
   if (docs.length === 0) return;
   const bottles = docs.map((d) => ({
-    _id: d.id, cellar: d.cellar, wineDefinition: d.hit.wineDefinition, vintage: d.hit.vintage,
+    _id: d.id,
+    cellar: d.cellar,
+    wineDefinition: d.hit.wineDefinition,
+    // A row stored without a vintage reads as the schema default, as the
+    // bottle page reads it (Bottle.vintage defaults to 'NV').
+    vintage: d.hit.vintage === undefined ? 'NV' : d.hit.vintage,
   }));
+  // A skip guard: a private draft is pending identity too, so it is skipped as well.
+  const pending = (b) => !!b.wineDefinition && wines?.get(b.wineDefinition)?.pendingIdentity === true;
   const [published, cellars] = await Promise.all([
-    publishedValuesForBottles(bottles, { types: FACT_TYPES }),
+    publishedValuesForBottles(bottles.filter((b) => !pending(b)), { types: FACT_TYPES }),
     // Who counts as a member is all listForBottles reads of a cellar.
     Cellar.find({ _id: { $in: scope } }).select('user members.user').lean(),
   ]);
   const personal = await listForBottles(bottles, cellars);
   for (const doc of docs) {
-    doc.values.facts = factsText([...(published.get(doc.id) || []), ...(personal.get(doc.id) || [])]);
+    const newestFirst = [...(personal.get(doc.id) || [])].reverse();
+    doc.values.facts = factsText([...(published.get(doc.id) || []), ...newestFirst]);
     doc.fields = null;
   }
 }
@@ -619,10 +637,10 @@ async function attachFacts(docs, scope) {
 // Node process, like the other read caches.
 //
 // The extra facts follow the same rule. A personal data entry written, changed
-// or deleted moves the version of the owners of the cellars it shows in
-// (personalData.bumpPersonalDataViewers), so the next search reads it. A
-// registry value published by a curator moves no member's version: a search
-// finds it within DOCS_TTL_MS.
+// or deleted, also by an account erasure, moves the version of the owners of
+// the cellars it shows in (personalData.personalDataViewerOwners), so the next
+// search reads it. A registry value published by a curator moves no member's
+// version: a search finds it within DOCS_TTL_MS.
 const DOCS_TTL_MS = 60 * 1000;
 // Kept across scopes up to DOCS_MAX_BYTES, least recently used going first.
 // A document is charged for its text, which is what its split words weigh:
@@ -667,7 +685,7 @@ function keepWithinBound() {
  */
 function withFacts(entry, scope, key) {
   if (!entry.facts) {
-    entry.facts = attachFacts(entry.docs, scope).then(() => {
+    entry.facts = attachFacts(entry.docs, scope, entry.wines).then(() => {
       if (!key || docsCache.get(key) !== entry) return;
       const bytes = scopeBytes(entry.docs);
       bytesKept += bytes - entry.bytes;

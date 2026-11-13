@@ -19,11 +19,12 @@ jest.mock('./search', () => ({
 const { REGISTRY, EXCLUDED } = require('./userDataRegistry');
 
 const CATEGORIES = ['personal-data', 'shared-content', 'creator-ref', 'via-cellar'];
-const KNOWN_KEYS = ['model', 'category', 'userFields', 'purge', 'postPurge', 'note', 'exportFragment'];
+const KNOWN_KEYS = ['model', 'category', 'userFields', 'prePurge', 'purge', 'postPurge', 'note', 'exportFragment'];
 
 // One line per entry: "Model [category] fields… | hooks".
 const lineOf = (entry) => {
   const hooks = [
+    typeof entry.prePurge === 'function' ? 'prePurge' : null,
     typeof entry.purge === 'function' ? 'purge' : 'no purge',
     typeof entry.postPurge === 'function' ? 'postPurge' : null,
     typeof entry.exportFragment === 'function' ? 'export' : 'no export',
