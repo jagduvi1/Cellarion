@@ -458,7 +458,15 @@ app.use((err, req, res, next) => {
   // request PII — onto the un-TTL'd stdout stream that audit.js is careful to
   // keep PII out of. Log only the method/path/status + pino's err serializer
   // (type/message/stack), never req.body/headers.
-  logger.error({ err, method: req.method, path: req.path, status: err.status || err.statusCode || 500 }, 'Unhandled request error');
+  //
+  // A body that failed to parse IS the request's content (a password at
+  // sign-in, a client secret or refresh token at the OAuth token endpoint):
+  // the body parser hands it back on the error as `body`, and the parse
+  // error's message quotes a piece of it. Neither is logged.
+  const logged = err && err.type === 'entity.parse.failed'
+    ? { type: err.name, parser: err.type, message: 'request body could not be parsed' }
+    : err;
+  logger.error({ err: logged, method: req.method, path: req.path, status: err.status || err.statusCode || 500 }, 'Unhandled request error');
   // If the response has already started (e.g. an SSE/stream route threw mid-
   // flight), we can't set a status/body — hand off to Express's default handler
   // which closes the connection.
