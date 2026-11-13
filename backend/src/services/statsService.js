@@ -289,9 +289,16 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       historyRatings.sum += own; historyRatings.count++;
     }
 
+    // Held from the purchase, else from the day the bottle was added. A bottle
+    // drunk more than a day BEFORE that (a drinking history logged after the
+    // fact, from another app) has no known holding time and stays out of the
+    // chart; the one day of slack keeps a same-day add-and-drink, whose
+    // date-only consumedAt is noon UTC, in the first bucket.
     const anchor = b.purchaseDate || b.createdAt;
-    if (b.consumedAt && anchor) {
-      const daysHeld = (new Date(b.consumedAt) - new Date(anchor)) / MS_PER_DAY;
+    const daysHeld = b.consumedAt && anchor
+      ? (new Date(b.consumedAt) - new Date(anchor)) / MS_PER_DAY
+      : null;
+    if (daysHeld !== null && daysHeld >= -1) {
       const bucket = daysHeld < 365 ? '<1yr' : daysHeld < 730 ? '1–2yr' : daysHeld < 1825 ? '2–5yr' : daysHeld < 3650 ? '5–10yr' : '10+yr';
       holdingBuckets[bucket].count++;
       if (b.consumedRating) {

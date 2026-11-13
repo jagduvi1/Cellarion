@@ -15,6 +15,12 @@ try {
 
 const SIMILARITY_THRESHOLD = 0.78;
 const TOP_K = 10;
+// A drink logged after the fact for a day longer ago than this gets no
+// restock suggestion: the notification says "you just finished", and a
+// drinking history typed in from another app (dozens of bottles from past
+// years) would otherwise send one for each of them.
+const RECENT_DRINK_DAYS = 30;
+const RECENT_DRINK_MS = RECENT_DRINK_DAYS * 24 * 60 * 60 * 1000;
 
 /**
  * Background check after a bottle is consumed.
@@ -46,6 +52,7 @@ async function runCheck(userId, bottleId, cellarId, { storedVectorOnly = false }
       .lean();
 
     if (!bottle?.wineDefinition) return;
+    if (bottle.consumedAt && Date.now() - new Date(bottle.consumedAt).getTime() > RECENT_DRINK_MS) return;
 
     const wine = bottle.wineDefinition;
     const vintage = bottle.vintage || 'NV';

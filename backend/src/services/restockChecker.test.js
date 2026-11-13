@@ -176,3 +176,31 @@ test('checks run one at a time, however many are started at once (a bulk "mark a
   expect(vectorStore.getVector).toHaveBeenCalledTimes(12);
   expect(most).toBe(1);
 });
+
+describe('a drink logged after the fact', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const nothingSimilarLeft = () => vectorStore.search
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([{ wineDefinitionId: 'wBarbaresco', vintage: '2016', score: 0.86 }]);
+
+  test('drunk more than 30 days ago (a history typed in from another app) → no alert, no notification, no lookup', async () => {
+    Bottle.findById.mockReturnValue(lean({
+      _id: 'b1', vintage: '2016', wineDefinition: WINE, consumedAt: new Date(Date.now() - 40 * DAY),
+    }));
+    nothingSimilarLeft();
+    await checkRestockGap('u1', 'b1', 'c1');
+    expect(vectorStore.getVector).not.toHaveBeenCalled();
+    expect(RestockAlert.create).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('drunk last week and logged today → the suggestion still comes', async () => {
+    Bottle.findById.mockReturnValue(lean({
+      _id: 'b1', vintage: '2016', wineDefinition: WINE, consumedAt: new Date(Date.now() - 7 * DAY),
+    }));
+    nothingSimilarLeft();
+    await checkRestockGap('u1', 'b1', 'c1');
+    expect(RestockAlert.create).toHaveBeenCalled();
+    expect(createNotification).toHaveBeenCalledWith('u1', 'restock_alert', 'Restock Suggestion', expect.any(String), '/restock');
+  });
+});
