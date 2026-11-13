@@ -71,8 +71,8 @@ const oauthLimiter = rateLimit({
 });
 const eventBus = require('../services/eventBus');
 const {
-  issuer, resourceUrl, verifyPkce, grantedScopes, redirectUriRegistered,
-  rotateCredentials, tokenResponse,
+  CLIENT_AUTH_METHODS, issuer, resourceUrl, verifyPkce, grantedScopes, redirectUriRegistered,
+  parseClientBasicAuth, rotateCredentials, tokenResponse,
 } = require('../services/mcpOAuth');
 
 // The OAuth 2.1 authorization server for the MCP connector (plan §2.4 Phase B).
@@ -126,6 +126,13 @@ function oauthError(res, status, error, description) {
   res.setHeader('Cache-Control', 'no-store');
   return res.status(status).json({ error, error_description: description });
 }
+// A client that tried the Authorization header and failed is answered 401
+// with a challenge for the scheme it used (RFC 6749 §5.2).
+const BASIC_CHALLENGE = 'Basic realm="Cellarion"';
+function invalidClient(res, viaHeader) {
+  if (viaHeader) res.setHeader('WWW-Authenticate', BASIC_CHALLENGE);
+  return oauthError(res, 401, 'invalid_client', 'client authentication failed');
+}
 // Errors that happen AFTER redirect_uri is validated go back to the client as
 // query params on the redirect (RFC 6749 §4.1.2.1), preserving state.
 function redirectError(res, redirectUri, error, description, state) {
@@ -159,14 +166,15 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (!redirectUris.every(isValidRedirectUri)) {
       return oauthError(res, 400, 'invalid_redirect_uri', 'redirect_uris must all be https, or http on a loopback host');
     }
-    // Only the two methods the token endpoint actually implements, and that the
-    // AS metadata advertises. `client_secret_basic` is deliberately NOT accepted
-    // — authenticateClient reads the secret from the body only, so a basic
-    // client could never authenticate; rejecting it at registration is honest
-    // instead of handing out a client_id that can never get a token.
+    // Only the methods the token endpoint implements and the AS metadata
+    // advertises. Either secret method makes a confidential client, issued a
+    // secret below. Absent stays 'none' (a public client) rather than RFC 7591
+    // §2's default client_secret_basic: a client that names no method and then
+    // sends no secret must still get its token.
     const authMethod = body.token_endpoint_auth_method || 'none';
-    if (!['none', 'client_secret_post'].includes(authMethod)) {
-      return oauthError(res, 400, 'invalid_client_metadata', 'token_endpoint_auth_method must be "none" or "client_secret_post"');
+    if (!CLIENT_AUTH_METHODS.includes(authMethod)) {
+      return oauthError(res, 400, 'invalid_client_metadata',
+        `token_endpoint_auth_method must be one of ${CLIENT_AUTH_METHODS.map((m) => `"${m}"`).join(', ')}`);
     }
 
     const clientId = OAuthClient.generateClientId();
@@ -339,25 +347,49 @@ router.post('/approve', oauthLimiter, requireAuth, requireNonDemo, async (req, r
 });
 
 /**
- * Authenticate the client at the token/revoke endpoints. Public clients present
- * only client_id; confidential clients also present client_secret. Returns the
- * OAuthClient doc, or null (caller returns invalid_client).
+ * Authenticate the client at the token/revoke endpoints (RFC 6749 §2.3.1).
+ * The client id comes from an `Authorization: Basic` header or the body; when
+ * both carry one they must agree. A public client ('none') presents only its
+ * id. A confidential client also presents its secret, in the header or the
+ * body, whichever secret method it registered: RFC 6749 lets the server accept
+ * both, the secret is the same either way, and a client that registered one
+ * method and sends the other is not left without a token. A header secret and
+ * a body secret that differ are refused.
+ *
+ * Returns { client, viaHeader }: client is the OAuthClient doc, or null (the
+ * caller answers invalid_client); viaHeader says the client tried the
+ * Authorization header, which makes that refusal carry a challenge.
  */
 async function authenticateClient(req) {
-  const clientId = req.body.client_id;
-  if (!clientId || typeof clientId !== 'string') return null;
+  const basic = parseClientBasicAuth(req.get('authorization'));
+  const viaHeader = basic !== null;
+  const refused = { client: null, viaHeader };
+  if (basic?.malformed) return refused;
+
+  // A JSON body can carry an object here (app.js parses JSON on this prefix).
+  const { client_id: bodyId, client_secret: bodySecret } = req.body || {};
+  if ((bodyId !== undefined && typeof bodyId !== 'string')
+    || (bodySecret !== undefined && typeof bodySecret !== 'string')) return refused;
+
+  if (basic && bodyId && bodyId !== basic.clientId) return refused;
+  const clientId = basic ? basic.clientId : bodyId;
+  // Only a non-empty string reaches the query, never an operator object.
+  if (typeof clientId !== 'string' || !clientId) return refused;
+  const headerSecret = basic ? basic.clientSecret : '';
+  if (headerSecret && bodySecret && headerSecret !== bodySecret) return refused;
+  const secret = headerSecret || bodySecret || '';
+
   const client = await OAuthClient.findOne({ clientId });
-  if (!client) return null;
-  if (client.tokenEndpointAuthMethod === 'none') return client; // public — client_id is enough
-  const secret = req.body.client_secret;
-  if (typeof secret !== 'string' || !client.clientSecretHash) return null;
+  if (!client) return refused;
+  if (client.tokenEndpointAuthMethod === 'none') return { client, viaHeader }; // public — client_id is enough
+  if (!secret || !client.clientSecretHash) return refused;
   // Constant-time compare, same as verifyPkce. (Both sides are SHA-256 hex, so
   // a timing leak would only be over the hash — but keep one habit for every
   // credential comparison rather than reasoning about which ones are safe.)
   const a = Buffer.from(OAuthClient.hashSecret(secret));
   const b = Buffer.from(client.clientSecretHash);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  return client;
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return refused;
+  return { client, viaHeader };
 }
 
 // ── POST /token — code exchange + refresh rotation ───────────────────────────
@@ -367,19 +399,31 @@ router.post('/token', oauthLimiter, async (req, res) => {
   // half (usage check 2026-10-09). Request strings ride as log ARGUMENTS,
   // never inside the format string.
   const grantType = typeof req.body?.grant_type === 'string' ? req.body.grant_type : undefined;
-  const refuse = (client, status, error, description) => {
+  // Whether the client sent its credentials in the Authorization header. The
+  // log records that it did, never the header or the secret in it.
+  let viaHeader = false;
+  const logRefusal = (client, status, error) => {
     console.warn('[oauth] token request refused', {
       status,
       error,
       grant: grantType ? grantType.slice(0, 40) : null,
       client: client?.clientName || client?.clientId || null,
+      basicAuth: viaHeader,
       userAgent: String(req.get('user-agent') || '').slice(0, 80),
     });
+  };
+  const refuse = (client, status, error, description) => {
+    logRefusal(client, status, error);
     return oauthError(res, status, error, description);
   };
   try {
-    const client = await authenticateClient(req);
-    if (!client) return refuse(null, 401, 'invalid_client', 'client authentication failed');
+    const auth = await authenticateClient(req);
+    viaHeader = auth.viaHeader;
+    const { client } = auth;
+    if (!client) {
+      logRefusal(null, 401, 'invalid_client');
+      return invalidClient(res, viaHeader);
+    }
 
     if (grantType === 'authorization_code') {
       const { code, code_verifier, redirect_uri, resource } = req.body;
@@ -513,8 +557,8 @@ router.post('/token', oauthLimiter, async (req, res) => {
 // ── POST /revoke — RFC 7009 ──────────────────────────────────────────────────
 router.post('/revoke', oauthLimiter, async (req, res) => {
   try {
-    const client = await authenticateClient(req);
-    if (!client) return oauthError(res, 401, 'invalid_client', 'client authentication failed');
+    const { client, viaHeader } = await authenticateClient(req);
+    if (!client) return invalidClient(res, viaHeader);
     const { token } = req.body;
     // typeof for the same JSON-content-type reason as /token (L-2). RFC 7009
     // §2.2 says an unknown/invalid token is still a 200, so a malformed one

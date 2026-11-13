@@ -79,8 +79,8 @@ beforeEach(() => jest.clearAllMocks());
 const jsonPost = (path, body, headers = {}) => fetch(`${base}/api/mcp/oauth${path}`, {
   method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
 });
-const formPost = (path, obj) => fetch(`${base}/api/mcp/oauth${path}`, {
-  method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+const formPost = (path, obj, headers = {}) => fetch(`${base}/api/mcp/oauth${path}`, {
+  method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
   body: new URLSearchParams(obj).toString(),
 });
 
@@ -586,5 +586,315 @@ describe('POST /token — the grace window never hides a theft for good (release
     expect(r.status).toBe(400);
     expect(save).toHaveBeenCalled(); // revokedAt set
     expect(ApiToken.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// RFC 6749 §2.3.1: a client issued a secret may authenticate with HTTP Basic.
+// Gemini's custom connector registers with client_secret_basic and then sends
+// its credentials in the Authorization header, not the body.
+describe('client_secret_basic — client credentials in the Authorization header', () => {
+  const GEMINI_REDIRECT = 'https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-test';
+  const BASIC_SECRET = crypto.randomBytes(32).toString('hex');
+  const POST_SECRET = crypto.randomBytes(32).toString('hex');
+  const BASIC_CLIENT = {
+    _id: 'c2', clientId: 'mcpc_basic', clientName: 'Gemini', redirectUris: [GEMINI_REDIRECT],
+    tokenEndpointAuthMethod: 'client_secret_basic', clientSecretHash: sha256(BASIC_SECRET),
+  };
+  const POST_CLIENT = {
+    _id: 'c3', clientId: 'mcpc_post', clientName: 'Poster', redirectUris: [REDIRECT],
+    tokenEndpointAuthMethod: 'client_secret_post', clientSecretHash: sha256(POST_SECRET),
+  };
+  // Each part is application/x-www-form-urlencoded before joining (RFC 6749 §2.3.1).
+  const form = (s) => encodeURIComponent(s).replace(/%20/g, '+');
+  const basicAuth = (id, secret) => `Basic ${Buffer.from(`${form(id)}:${form(secret)}`, 'utf8').toString('base64')}`;
+  const b64 = (raw) => `Basic ${Buffer.from(raw, 'utf8').toString('base64')}`;
+  const CHALLENGE_HEADER = 'Basic realm="Cellarion"';
+  const codeDoc = (client = BASIC_CLIENT, over = {}) => ({
+    clientId: client.clientId, redirectUri: client.redirectUris[0], codeChallenge: CHALLENGE,
+    scopes: ['read'], resource: RESOURCE, user: USER, ...over,
+  });
+  const exchange = (client = BASIC_CLIENT, extra = {}) => ({
+    grant_type: 'authorization_code', code: 'rawcode', code_verifier: VERIFIER, redirect_uri: client.redirectUris[0], ...extra,
+  });
+  const issuable = (client = BASIC_CLIENT) => {
+    OAuthClient.findOne.mockResolvedValue(client);
+    OAuthAuthCode.findOneAndUpdate.mockResolvedValue(codeDoc(client));
+    ApiToken.countDocuments.mockResolvedValue(0);
+    ApiToken.create.mockResolvedValue({ _id: 't1' });
+  };
+  const expectRefused = async (r, { challenge }) => {
+    expect(r.status).toBe(401);
+    expect((await r.json()).error).toBe('invalid_client');
+    expect(r.headers.get('www-authenticate')).toBe(challenge ? CHALLENGE_HEADER : null);
+  };
+
+  let errorSpy;
+  beforeEach(() => { errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {}); });
+  afterEach(() => {
+    // No path in this block may end in the 500 catch.
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  describe('POST /register', () => {
+    test('client_secret_basic → 201 with a secret shown once; the method and only the hash are stored', async () => {
+      OAuthClient.create.mockImplementation(async (doc) => ({ _id: 'c2', createdAt: new Date(), ...doc }));
+      const r = await jsonPost('/register', { redirect_uris: [GEMINI_REDIRECT], token_endpoint_auth_method: 'client_secret_basic' });
+      expect(r.status).toBe(201);
+      expect(r.headers.get('cache-control')).toBe('no-store');
+      const b = await r.json();
+      expect(b.client_id).toMatch(/^mcpc_/);
+      expect(b.client_secret).toMatch(/^[a-f0-9]{64}$/);
+      expect(b.client_secret_expires_at).toBe(0);
+      expect(b.token_endpoint_auth_method).toBe('client_secret_basic');
+      const created = OAuthClient.create.mock.calls[0][0];
+      expect(created.tokenEndpointAuthMethod).toBe('client_secret_basic');
+      expect(created.clientSecretHash).toBe(sha256(b.client_secret));
+      expect(JSON.stringify(created)).not.toContain(b.client_secret);
+      // Still reaped after 30 days if it never completes an exchange.
+      expect(created.expiresAt.getTime()).toBeGreaterThan(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    });
+
+    test('client_secret_post still registers with a secret; an unsupported method is still refused', async () => {
+      OAuthClient.create.mockImplementation(async (doc) => ({ _id: 'c3', createdAt: new Date(), ...doc }));
+      const ok = await jsonPost('/register', { redirect_uris: [REDIRECT], token_endpoint_auth_method: 'client_secret_post' });
+      expect(ok.status).toBe(201);
+      expect((await ok.json()).client_secret).toMatch(/^[a-f0-9]{64}$/);
+      OAuthClient.create.mockClear();
+      const bad = await jsonPost('/register', { redirect_uris: [REDIRECT], token_endpoint_auth_method: 'private_key_jwt' });
+      expect(bad.status).toBe(400);
+      expect((await bad.json()).error).toBe('invalid_client_metadata');
+      expect(OAuthClient.create).not.toHaveBeenCalled();
+    });
+
+    test('a basic client is held to the same redirect rules', async () => {
+      const r = await jsonPost('/register', { redirect_uris: ['http://evil.example/cb'], token_endpoint_auth_method: 'client_secret_basic' });
+      expect(r.status).toBe(400);
+      expect((await r.json()).error).toBe('invalid_redirect_uri');
+      expect(OAuthClient.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /token', () => {
+    test('a Basic header alone (no client_id in the body) + PKCE → tokens', async () => {
+      issuable();
+      const r = await formPost('/token', exchange(), { Authorization: basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET) });
+      expect(r.status).toBe(200);
+      const b = await r.json();
+      expect(b.access_token).toMatch(/^cel_/);
+      expect(b.refresh_token).toBeTruthy();
+      expect(OAuthClient.findOne).toHaveBeenCalledWith({ clientId: BASIC_CLIENT.clientId });
+      expect(ApiToken.create.mock.calls[0][0]).toMatchObject({ oauthClientId: BASIC_CLIENT.clientId, user: USER });
+    });
+
+    test('an id and a secret that need form-encoding are decoded after the split', async () => {
+      const id = 'mcpc_needs:enc oding+';
+      const secret = 'p@ss: w%rd/+=é';
+      const client = { ...BASIC_CLIENT, clientId: id, clientSecretHash: sha256(secret) };
+      issuable(client);
+      const r = await formPost('/token', exchange(client), { Authorization: basicAuth(id, secret) });
+      expect(r.status).toBe(200);
+      expect(OAuthClient.findOne).toHaveBeenCalledWith({ clientId: id });
+    });
+
+    test('the same id in the header and the body is fine', async () => {
+      issuable();
+      const r = await formPost('/token', exchange(BASIC_CLIENT, { client_id: BASIC_CLIENT.clientId }),
+        { Authorization: basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET) });
+      expect(r.status).toBe(200);
+    });
+
+    test('a confidential client may use either method: basic-registered with the secret in the body → tokens', async () => {
+      issuable();
+      const r = await formPost('/token', exchange(BASIC_CLIENT, { client_id: BASIC_CLIENT.clientId, client_secret: BASIC_SECRET }));
+      expect(r.status).toBe(200);
+    });
+
+    test('… and post-registered with a Basic header → tokens', async () => {
+      issuable(POST_CLIENT);
+      const r = await formPost('/token', exchange(POST_CLIENT), { Authorization: basicAuth(POST_CLIENT.clientId, POST_SECRET) });
+      expect(r.status).toBe(200);
+    });
+
+    test('a wrong secret in the header → 401 invalid_client with a Basic challenge; no code is claimed', async () => {
+      issuable();
+      const r = await formPost('/token', exchange(), { Authorization: basicAuth(BASIC_CLIENT.clientId, 'not-the-secret') });
+      await expectRefused(r, { challenge: true });
+      expect(OAuthAuthCode.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(ApiToken.create).not.toHaveBeenCalled();
+    });
+
+    test('a wrong secret in the body → 401 without a challenge', async () => {
+      issuable();
+      const r = await formPost('/token', exchange(BASIC_CLIENT, { client_id: BASIC_CLIENT.clientId, client_secret: 'not-the-secret' }));
+      await expectRefused(r, { challenge: false });
+      expect(ApiToken.create).not.toHaveBeenCalled();
+    });
+
+    test('a confidential client without its secret is refused: header with an empty secret, or the id alone in the body', async () => {
+      issuable();
+      await expectRefused(await formPost('/token', exchange(), { Authorization: basicAuth(BASIC_CLIENT.clientId, '') }), { challenge: true });
+      await expectRefused(await formPost('/token', exchange(BASIC_CLIENT, { client_id: BASIC_CLIENT.clientId })), { challenge: false });
+      expect(ApiToken.create).not.toHaveBeenCalled();
+    });
+
+    test('a header id that differs from the body id is refused before any lookup', async () => {
+      issuable();
+      const r = await formPost('/token', exchange(BASIC_CLIENT, { client_id: POST_CLIENT.clientId }),
+        { Authorization: basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET) });
+      await expectRefused(r, { challenge: true });
+      expect(OAuthClient.findOne).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['the header right, the body wrong', BASIC_SECRET, 'not-the-secret'],
+      ['the header wrong, the body right', 'not-the-secret', BASIC_SECRET],
+    ])('a header secret that differs from the body secret is refused (%s)', async (_l, headerSecret, bodySecret) => {
+      issuable();
+      const r = await formPost('/token', exchange(BASIC_CLIENT, { client_secret: bodySecret }),
+        { Authorization: basicAuth(BASIC_CLIENT.clientId, headerSecret) });
+      await expectRefused(r, { challenge: true });
+      expect(OAuthClient.findOne).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['not base64', 'Basic %%%not-base64%%%'],
+      ['no colon', b64('mcpc_basic')],
+      ['an empty id', b64(`:${BASIC_SECRET}`)],
+      ['broken percent-encoding', b64(`mcpc_basic:%zz${BASIC_SECRET}`)],
+      // 7,700 bytes → a header of 10,274 characters, inside Node's 16 kB limit.
+      ['a 10 kB header', b64(`mcpc_basic:${'s'.repeat(7689)}`)],
+      ['the scheme alone', 'Basic'],
+    ])('a malformed header (%s) → 401 invalid_client, never a 500', async (_l, header) => {
+      issuable();
+      // Valid credentials in the body beside it do not rescue a broken header.
+      const r = await formPost('/token', exchange(BASIC_CLIENT, { client_id: BASIC_CLIENT.clientId, client_secret: BASIC_SECRET }),
+        { Authorization: header });
+      await expectRefused(r, { challenge: true });
+      expect(OAuthClient.findOne).not.toHaveBeenCalled();
+    });
+
+    test('PKCE is still required for a Basic client: no verifier → invalid_request, a wrong one → invalid_grant', async () => {
+      issuable();
+      const auth = { Authorization: basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET) };
+      const missing = await formPost('/token', exchange(BASIC_CLIENT, { code_verifier: '' }), auth);
+      expect(missing.status).toBe(400);
+      expect((await missing.json()).error).toBe('invalid_request');
+      const wrong = await formPost('/token', exchange(BASIC_CLIENT, { code_verifier: 'a'.repeat(43) }), auth);
+      expect(wrong.status).toBe(400);
+      expect((await wrong.json()).error).toBe('invalid_grant');
+      expect(ApiToken.create).not.toHaveBeenCalled();
+    });
+
+    test('a Basic client cannot refresh another client\'s connection', async () => {
+      OAuthClient.findOne.mockResolvedValue(BASIC_CLIENT);
+      ApiToken.findOne.mockResolvedValue({ _id: 't1', oauthClientId: CLIENT.clientId, refreshTokenHash: sha256('r') });
+      const r = await formPost('/token', { grant_type: 'refresh_token', refresh_token: 'r' },
+        { Authorization: basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET) });
+      expect(r.status).toBe(400);
+      expect((await r.json()).error).toBe('invalid_grant');
+      expect(ApiToken.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /revoke', () => {
+    test('a Basic header authenticates the revocation of the client\'s own token', async () => {
+      OAuthClient.findOne.mockResolvedValue(BASIC_CLIENT);
+      const save = jest.fn().mockResolvedValue();
+      ApiToken.findOne.mockResolvedValue({ _id: 't1', save });
+      const r = await formPost('/revoke', { token: 'cel_whatever' }, { Authorization: basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET) });
+      expect(r.status).toBe(200);
+      expect(save).toHaveBeenCalled();
+      expect(ApiToken.findOne.mock.calls[0][0]).toMatchObject({ oauthClientId: BASIC_CLIENT.clientId, origin: 'oauth' });
+    });
+
+    test('a wrong secret in the header → 401 with a Basic challenge; nothing is looked up', async () => {
+      OAuthClient.findOne.mockResolvedValue(BASIC_CLIENT);
+      const r = await formPost('/revoke', { token: 'cel_whatever' }, { Authorization: basicAuth(BASIC_CLIENT.clientId, 'not-the-secret') });
+      await expectRefused(r, { challenge: true });
+      expect(ApiToken.findOne).not.toHaveBeenCalled();
+    });
+
+    test('a malformed header → 401 with a Basic challenge', async () => {
+      OAuthClient.findOne.mockResolvedValue(BASIC_CLIENT);
+      const r = await formPost('/revoke', { token: 'cel_whatever' }, { Authorization: 'Basic %%%' });
+      await expectRefused(r, { challenge: true });
+      expect(OAuthClient.findOne).not.toHaveBeenCalled();
+    });
+
+    test('a header secret that differs from the body secret is refused', async () => {
+      OAuthClient.findOne.mockResolvedValue(BASIC_CLIENT);
+      const r = await formPost('/revoke', { token: 'cel_whatever', client_secret: 'not-the-secret' },
+        { Authorization: basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET) });
+      await expectRefused(r, { challenge: true });
+      expect(ApiToken.findOne).not.toHaveBeenCalled();
+    });
+
+    test('a wrong secret in the body → 401 without a challenge', async () => {
+      OAuthClient.findOne.mockResolvedValue(BASIC_CLIENT);
+      const r = await formPost('/revoke', { token: 'cel_whatever', client_id: BASIC_CLIENT.clientId, client_secret: 'not-the-secret' });
+      await expectRefused(r, { challenge: false });
+    });
+  });
+
+  describe('public clients', () => {
+    test('a Basic header with the id and an empty secret → tokens', async () => {
+      issuable(CLIENT);
+      const r = await formPost('/token', exchange(CLIENT), { Authorization: basicAuth(CLIENT.clientId, '') });
+      expect(r.status).toBe(200);
+      expect(OAuthClient.findOne).toHaveBeenCalledWith({ clientId: CLIENT.clientId });
+    });
+
+    test('no header: the body client_id alone → tokens', async () => {
+      issuable(CLIENT);
+      const r = await formPost('/token', exchange(CLIENT, { client_id: CLIENT.clientId }));
+      expect(r.status).toBe(200);
+      expect(r.headers.get('www-authenticate')).toBeNull();
+    });
+
+    test('an Authorization header of another scheme is not client authentication: it is ignored', async () => {
+      issuable(CLIENT);
+      const r = await formPost('/token', exchange(CLIENT, { client_id: CLIENT.clientId }), { Authorization: 'Bearer cel_unrelated' });
+      expect(r.status).toBe(200);
+    });
+
+    test('an unknown client id in a Basic header → 401 with a challenge', async () => {
+      OAuthClient.findOne.mockResolvedValue(null);
+      await expectRefused(await formPost('/token', exchange(CLIENT), { Authorization: basicAuth('mcpc_nobody', '') }), { challenge: true });
+    });
+  });
+
+  describe('the refusal log', () => {
+    let warn;
+    beforeEach(() => { warn = jest.spyOn(console, 'warn').mockImplementation(() => {}); });
+    afterEach(() => { warn.mockRestore(); });
+    const refusals = () => warn.mock.calls.filter((c) => String(c[0]).includes('token request refused'));
+
+    test('a refused Basic attempt is logged without the header, the base64 or either secret', async () => {
+      issuable();
+      const presented = 'wrong-secret-value';
+      const header = basicAuth(BASIC_CLIENT.clientId, presented);
+      await formPost('/token', exchange(BASIC_CLIENT, { client_id: BASIC_CLIENT.clientId }), { Authorization: header });
+      const lines = refusals();
+      expect(lines).toHaveLength(1);
+      expect(lines[0][1]).toMatchObject({ status: 401, error: 'invalid_client', client: null, basicAuth: true });
+      const logged = JSON.stringify(warn.mock.calls);
+      for (const secretish of [presented, BASIC_SECRET, header, header.slice('Basic '.length), 'Basic ']) {
+        expect(logged).not.toContain(secretish);
+      }
+    });
+
+    test('a refusal after a good Basic authentication names the client, never the secret', async () => {
+      issuable();
+      OAuthAuthCode.findOneAndUpdate.mockResolvedValue(null); // the code is spent
+      const header = basicAuth(BASIC_CLIENT.clientId, BASIC_SECRET);
+      await formPost('/token', exchange(), { Authorization: header });
+      const lines = refusals();
+      expect(lines).toHaveLength(1);
+      expect(lines[0][1]).toMatchObject({ status: 400, error: 'invalid_grant', client: 'Gemini', basicAuth: true });
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).not.toContain(BASIC_SECRET);
+      expect(logged).not.toContain(header.slice('Basic '.length));
+    });
   });
 });
