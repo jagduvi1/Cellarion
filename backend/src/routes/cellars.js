@@ -13,6 +13,7 @@ const { listOpenBottles } = require('../services/openBottleList');
 const { createNotification } = require('../services/notifications');
 const { transferCellarOwnership } = require('../services/cellarTransfer');
 const { filterByRating } = require('../utils/ratingUtils');
+const { activeAiTextLanguage, displayProfile } = require('../utils/profileLanguage');
 const {
   classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter,
   buildMaturitySortKeys, compareMaturitySortKeys,
@@ -484,9 +485,15 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
     // prose out (WINE_LIST_SELECT), so it is read once here: the display
     // fields only, as the bottle page shows them. A held profile stores no
     // description and no descriptors, so it stays silent here too.
+    // While a language is set (utils/profileLanguage) the translated prose
+    // and what decides its freshness are read too; the page shows the copy
+    // while it is fresh, an API token never receives it.
     try {
-      const profiled = await WineDefinition.findById(wine._id).select(VINTAGE_PROFILE_SELECT).lean();
-      wine = { ...wine, aiProfile: profiled?.aiProfile || null };
+      const select = activeAiTextLanguage()
+        ? `${VINTAGE_PROFILE_SELECT} aiProfile.generatedAt aiProfile.localized`
+        : VINTAGE_PROFILE_SELECT;
+      const profiled = await WineDefinition.findById(wine._id).select(select).lean();
+      wine = { ...wine, aiProfile: displayProfile(profiled?.aiProfile || null, { token: !!req.apiToken }) };
     } catch (err) {
       // Auxiliary, like the rack slots below: never 500 the page over it.
       console.error('Vintage page profile lookup failed:', err.message);

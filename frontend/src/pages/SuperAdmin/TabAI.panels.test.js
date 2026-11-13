@@ -67,6 +67,7 @@ test('every panel of the tab, in order', async () => {
       "Price Suggest — AI Prompt",
       "Wine Enrichment — AI Model",
       "Wine Enrichment — AI Prompt",
+      "Language for AI-written wine texts",
       "Cellar Chat — Daily Limit",
       "Enrichment — Publication Gate",
       "Enrichment — Web-Search Rescue (pilot)",

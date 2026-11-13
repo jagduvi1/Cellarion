@@ -117,3 +117,64 @@ test('a real wine page carries no robots header', async () => {
   const { robots } = await get();
   expect(robots).toBeNull();
 });
+
+// The translated prose (utils/profileLanguage, SuperAdmin → AI): shown on the
+// wine page while it is fresh — the description for everyone, the lists on
+// the member tier that has them — and never in a language no longer set or
+// for English text it was not made from.
+describe('the translated copy of the prose', () => {
+  const aiConfig = require('../config/aiConfig');
+  const AT = new Date('2026-11-13T10:00:00Z');
+  const COPY = { lang: 'de', description: 'Dunkle Kirsche, Teer und Rosen.', flavors: ['Kirsche', 'Teer'], foodPairings: ['Schmorbraten'], generatedAt: AT };
+  const serve = (profile) => WineDefinition.findOne.mockReturnValue({
+    populate: () => ({ select: () => Promise.resolve({ ...WINE, aiProfile: profile }) }),
+  });
+  afterEach(() => aiConfig.set({}));
+
+  test('a member gets the fresh copy beside the English, which stays as it is', async () => {
+    aiConfig.set({ aiTextLanguage: 'de' });
+    serve({ ...PROFILE, generatedAt: AT, localized: COPY });
+    const { body } = await get({ authorization: `Bearer ${memberToken()}` });
+    expect(body.wine.aiProfile.description).toBe(PROFILE.description);
+    expect(body.wine.aiProfile.flavors).toEqual(PROFILE.flavors);
+    expect(body.wine.aiProfile.localized).toEqual({ ...COPY, generatedAt: AT.toISOString() });
+  });
+
+  test('a visitor gets the translated description only, as the tier gives the English', async () => {
+    aiConfig.set({ aiTextLanguage: 'de' });
+    serve({ ...PROFILE, generatedAt: AT, localized: COPY });
+    const { body } = await get();
+    expect(body.wine.aiProfile).toEqual({
+      description: PROFILE.description, style: 'full-bodied, firm tannin, high acidity, dry', source: 'curator',
+      localized: { lang: 'de', description: COPY.description },
+    });
+  });
+
+  test('stale by language: the setting changed (or is off) since the copy was written', async () => {
+    serve({ ...PROFILE, generatedAt: AT, localized: COPY });
+    for (const setting of [{ aiTextLanguage: 'fr' }, {}]) {
+      aiConfig.set(setting);
+      const member = await get({ authorization: `Bearer ${memberToken()}` });
+      expect(member.body.wine.aiProfile).toEqual({ ...PROFILE, generatedAt: AT.toISOString() });
+      const visitor = await get();
+      expect(visitor.body.wine.aiProfile).not.toHaveProperty('localized');
+    }
+  });
+
+  test('stale by a newer English text: the profile was written again after the copy', async () => {
+    aiConfig.set({ aiTextLanguage: 'de' });
+    serve({ ...PROFILE, generatedAt: new Date('2026-11-14T08:00:00Z'), localized: COPY });
+    const { body } = await get({ authorization: `Bearer ${memberToken()}` });
+    expect(body.wine.aiProfile).not.toHaveProperty('localized');
+    expect(body.wine.aiProfile.description).toBe(PROFILE.description);
+  });
+
+  test('with no copy stored the answer is the one it always was, setting on or off', async () => {
+    for (const setting of [{}, { aiTextLanguage: 'de' }]) {
+      aiConfig.set(setting);
+      serve(PROFILE);
+      const { body } = await get({ authorization: `Bearer ${memberToken()}` });
+      expect(body.wine.aiProfile).toEqual(PROFILE);
+    }
+  });
+});

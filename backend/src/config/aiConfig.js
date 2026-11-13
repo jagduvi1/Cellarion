@@ -21,6 +21,7 @@
  */
 
 const crypto = require('crypto');
+const { aiTextLanguageOf } = require('../utils/profileLanguage');
 
 const DEFAULT_LABEL_SCAN_PROMPT =
 `You are a master sommelier with encyclopedic wine knowledge. Examine this wine bottle and identify the wine.
@@ -486,6 +487,11 @@ const defaults = {
   // prompt the model reads is the same whether it is on or off (SuperAdmin →
   // AI, no deploy needed). See services/labelScan.systemBlock.
   promptCaching: true,
+  // aiTextLanguage — the language for the AI-written wine texts — has no
+  // default on purpose: off is the ABSENT key, so a save of any other AI
+  // setting persists the document it always did. A code from
+  // utils/profileLanguage AI_TEXT_LANGUAGES turns it on
+  // (PATCH /api/superadmin/ai/text-language).
 };
 
 const ENRICHMENT_ON_ADD_MODES = ['always', 'sufficient', 'off'];
@@ -583,6 +589,9 @@ async function load() {
           ? doc.value.sommPriceSuggestEnabled : defaults.sommPriceSuggestEnabled,
         promptCaching: typeof doc.value.promptCaching === 'boolean'
           ? doc.value.promptCaching : defaults.promptCaching,
+        // Only a shipped language survives the load; anything else is off,
+        // which is no key (see defaults).
+        ...(aiTextLanguageOf(doc.value) ? { aiTextLanguage: aiTextLanguageOf(doc.value) } : {}),
       };
 
       // Stored copies of retired defaults (see RETIRED_DEFAULT_PROMPT_HASHES):

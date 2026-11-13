@@ -61,6 +61,27 @@ test('adding/removing the review fields produces byte-identical text', () => {
   expect(buildEmbeddingText(withoutReview, '2019')).toBe(buildEmbeddingText(FULL_WINE, '2019'));
 });
 
+// The translated copy of the prose (utils/profileLanguage) is for the member
+// screens only: the vector is built from the English, so a wine with a German
+// copy embeds — and hashes — exactly like the same wine without one.
+test('a translated copy of the prose never reaches the text: byte-identical, none of its words', () => {
+  const withCopy = {
+    ...FULL_WINE,
+    aiProfile: {
+      ...FULL_WINE.aiProfile,
+      description: 'Silky and bright.',
+      generatedAt: new Date('2026-11-13T10:00:00Z'),
+      localized: {
+        lang: 'de', description: 'Seidig und frisch.', flavors: ['dunkle Kirsche', 'Thymian'],
+        foodPairings: ['Entenbrust'], generatedAt: new Date('2026-11-13T10:00:00Z'),
+      },
+    },
+  };
+  const text = buildEmbeddingText(withCopy, '2019');
+  expect(text).toBe(GOLDEN);
+  expect(text).not.toMatch(/Kirsche|Thymian|Entenbrust|Seidig/);
+});
+
 test('the text never mentions the review fields by name', () => {
   const text = buildEmbeddingText(FULL_WINE, '2019');
   expect(text).not.toMatch(/verified/i);

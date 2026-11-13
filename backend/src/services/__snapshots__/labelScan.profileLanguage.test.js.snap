@@ -1,0 +1,381 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`with no language, the profile call is the call it always was curatorFacts: byte-identical to the recorded request, whichever way the language is off 1`] = `
+{
+  "client": {
+    "feature": "wine_profile",
+    "maxRetries": 4,
+  },
+  "params": {
+    "max_tokens": 1400,
+    "messages": [
+      {
+        "content": "You are a master sommelier writing a concise tasting/style profile for a wine, to help match it against other wines and to show to the wine's owner.
+
+Wine: Cannubi Boschis
+Producer: Luciano Sandrone
+Vintage: NV
+Country: Italy
+Region: Piedmont
+Appellation: Barolo
+Classification: 
+Type: red
+Grapes: Nebbiolo
+
+Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"body":"light|medium|full","tannin":"low|medium|high","acidity":"low|medium|high","sweetness":"dry|off-dry|sweet","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerUnknown":false,"producerNote":null}
+
+Rules:
+- body/tannin/acidity/sweetness: exactly one of the listed values, or the JSON value null when the axis does not apply (e.g. tannin for a white wine is usually "low" or null). null is the unquoted JSON literal — NEVER the quoted string "null".
+- flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
+- foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
+- description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
+- A region's dominant or most famous style is NOT evidence about this producer. When you know THIS producer's style, describe it — even where it contradicts the regional norm; many estates exist precisely to break it. When you do not know the producer, describe grape-and-appellation typicity at the modest end, never the region's flagship or most commercial expression. Where a region has two established house styles (e.g. oxidative vs topped-up whites in the Jura), describe what is common to both rather than asserting one, and lower confidence.
+- The Type field is authoritative, not a hint. Many estates bottle several colours/styles under one name (a red and a white "Château X"): describe ONLY the bottling that matches Type. If you mainly know a different colour's bottling from this estate, do not describe that one — infer the Type-matching wine from its grapes, region and classification instead, and lower confidence accordingly. If Type contradicts everything you know about the wine (you are certain no such bottling exists), return {"error":"unknown"} rather than describing the other colour.
+- confidence: score how TRUE what you wrote is, given the data — NOT whether you recognise this specific bottling. 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5-0.6 = a correct appellation/grape-level profile for a data-rich record (producer unfamiliar is FINE — knowing Pommard well while never having heard of the grower merits 0.5-0.6, not 0.3), 0.3 = rough inference from thin data. Never discount an otherwise-true regional estimate merely because the producer is small.
+- producerSuspect: true ONLY when the Producer value is not a winery at all — a cuvée range or brand line belonging to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. This is a judgement about the FIELD being wrong, never about the limits of your own knowledge. Not knowing a winery is not a reason to set it.
+- producerSuspect requires EVIDENCE, not unfamiliarity: set it only when you can NAME in producerNote what the value actually is — the house behind the brand line, the place or label term it duplicates, or the CLASS of thing it is when you can tell WHAT it is without knowing whose ("this reads as a brand or bottling line, not a winery" is valid evidence). If you cannot say what it is instead — not even its class — the most you may claim is producerUnknown. House-word constructions — "Vignoble X", "Cave de X", "Les Vignerons de X", "Weingut X", "Quinta do X" — are ordinary producer-name patterns and never by themselves grounds for suspicion.
+- The producerNote must never dress a guess as a finding (curator audit 2026-08-19: every note naming the actual entity was right, every "appears to be a negociant/private-label/generic brand" note was wrong). If you can name the specific other entity — the real house, the co-op, the non-winery body — name it. If you cannot, write "cannot verify this producer" and STOP: no negociant/private-label/generic/novelty speculation, no "appears to be" class guesses. A curator triaging at speed trusts specific-sounding language, so an unspecific claim in specific costume misleads exactly the people the note exists to help.
+- producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF — the house is not one you can identify at all. Most of the world's small estates fall here and that is NORMAL, not a defect in the record: set the flag, lower your confidence, and describe the wine from its grapes, region and type. Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented or unverifiable — the flags and the prose must agree.
+- Knowing the house but not this specific bottling or cuvée is NOT producerUnknown — leave both flags false. Describe from the house's known style plus the grapes and appellation, record the unverified bottling in producerNote if worth noting, and let confidence carry that uncertainty (0.5–0.6 is typical). A known producer's cuvée you cannot verify in detail is an honest, publishable estimate, not a reason to withhold.
+- Both flags can be false (you know the house), and producerUnknown can be true on its own. Setting producerSuspect is a claim that the record is WRONG and holds the profile back from the wine's owner, so use it only when you would stand behind that claim.
+- When producerUnknown is true, do not write about the producer as an entity — its history, family, size, philosophy or reputation are things you have just said you do not know. Describe the wine.
+- NEVER assert in the prose a fact the record above leaves blank. If Region is blank, do not name a region or say where the fruit comes from — the Country is all you have been told. If Grapes is empty, do not name grape varieties. If Classification is blank, do not describe a quality tier or ranking. Those fields are blank because nobody could verify them, and a sentence that quietly fills the gap turns an unverified guess into something a curator reads as established fact and repeats in a published note. The one exception is an appellation that legally defines its own grapes (Barolo is Nebbiolo): attribute that to the appellation's rules, never to this bottling as if you had checked it.
+- A description built only from what you were given is the correct output, even when that is little. "A dry red from Australia, medium-bodied and approachable" is a good answer for a record with no region and no grapes. Padding it with invented specifics is not.
+- producerNote: when either flag is true, one short plain-text sentence saying why — the real producer if you are confident of it (e.g. "Arcane is a range of Xavier Vignon"), or simply that the producer is unknown to you. Never guess a specific house you are unsure of. Otherwise null.
+- Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.
+
+Curator-supplied facts about this wine (authoritative — a human sommelier researched them; trust them over your own recall, describe accordingly, and let them raise your confidence): Single-vineyard Barolo from the Cannubi hill.",
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "thinking": {
+      "type": "disabled",
+    },
+  },
+}
+`;
+
+exports[`with no language, the profile call is the call it always was everything: byte-identical to the recorded request, whichever way the language is off 1`] = `
+{
+  "client": {
+    "feature": "wine_profile",
+    "maxRetries": 4,
+  },
+  "params": {
+    "max_tokens": 2400,
+    "messages": [
+      {
+        "content": "You are a master sommelier writing a concise tasting/style profile for a wine, to help match it against other wines and to show to the wine's owner.
+
+Wine: Old Vine Red
+Producer: Small Estate
+Vintage: NV
+Country: Australia
+Region: 
+Appellation: 
+Classification: 
+Type: red
+Grapes: 
+
+Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"body":"light|medium|full","tannin":"low|medium|high","acidity":"low|medium|high","sweetness":"dry|off-dry|sweet","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerUnknown":false,"producerNote":null}
+
+Rules:
+- body/tannin/acidity/sweetness: exactly one of the listed values, or the JSON value null when the axis does not apply (e.g. tannin for a white wine is usually "low" or null). null is the unquoted JSON literal — NEVER the quoted string "null".
+- flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
+- foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
+- description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
+- A region's dominant or most famous style is NOT evidence about this producer. When you know THIS producer's style, describe it — even where it contradicts the regional norm; many estates exist precisely to break it. When you do not know the producer, describe grape-and-appellation typicity at the modest end, never the region's flagship or most commercial expression. Where a region has two established house styles (e.g. oxidative vs topped-up whites in the Jura), describe what is common to both rather than asserting one, and lower confidence.
+- The Type field is authoritative, not a hint. Many estates bottle several colours/styles under one name (a red and a white "Château X"): describe ONLY the bottling that matches Type. If you mainly know a different colour's bottling from this estate, do not describe that one — infer the Type-matching wine from its grapes, region and classification instead, and lower confidence accordingly. If Type contradicts everything you know about the wine (you are certain no such bottling exists), return {"error":"unknown"} rather than describing the other colour.
+- confidence: score how TRUE what you wrote is, given the data — NOT whether you recognise this specific bottling. 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5-0.6 = a correct appellation/grape-level profile for a data-rich record (producer unfamiliar is FINE — knowing Pommard well while never having heard of the grower merits 0.5-0.6, not 0.3), 0.3 = rough inference from thin data. Never discount an otherwise-true regional estimate merely because the producer is small.
+- producerSuspect: true ONLY when the Producer value is not a winery at all — a cuvée range or brand line belonging to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. This is a judgement about the FIELD being wrong, never about the limits of your own knowledge. Not knowing a winery is not a reason to set it.
+- producerSuspect requires EVIDENCE, not unfamiliarity: set it only when you can NAME in producerNote what the value actually is — the house behind the brand line, the place or label term it duplicates, or the CLASS of thing it is when you can tell WHAT it is without knowing whose ("this reads as a brand or bottling line, not a winery" is valid evidence). If you cannot say what it is instead — not even its class — the most you may claim is producerUnknown. House-word constructions — "Vignoble X", "Cave de X", "Les Vignerons de X", "Weingut X", "Quinta do X" — are ordinary producer-name patterns and never by themselves grounds for suspicion.
+- The producerNote must never dress a guess as a finding (curator audit 2026-08-19: every note naming the actual entity was right, every "appears to be a negociant/private-label/generic brand" note was wrong). If you can name the specific other entity — the real house, the co-op, the non-winery body — name it. If you cannot, write "cannot verify this producer" and STOP: no negociant/private-label/generic/novelty speculation, no "appears to be" class guesses. A curator triaging at speed trusts specific-sounding language, so an unspecific claim in specific costume misleads exactly the people the note exists to help.
+- producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF — the house is not one you can identify at all. Most of the world's small estates fall here and that is NORMAL, not a defect in the record: set the flag, lower your confidence, and describe the wine from its grapes, region and type. Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented or unverifiable — the flags and the prose must agree.
+- Knowing the house but not this specific bottling or cuvée is NOT producerUnknown — leave both flags false. Describe from the house's known style plus the grapes and appellation, record the unverified bottling in producerNote if worth noting, and let confidence carry that uncertainty (0.5–0.6 is typical). A known producer's cuvée you cannot verify in detail is an honest, publishable estimate, not a reason to withhold.
+- Both flags can be false (you know the house), and producerUnknown can be true on its own. Setting producerSuspect is a claim that the record is WRONG and holds the profile back from the wine's owner, so use it only when you would stand behind that claim.
+- When producerUnknown is true, do not write about the producer as an entity — its history, family, size, philosophy or reputation are things you have just said you do not know. Describe the wine.
+- NEVER assert in the prose a fact the record above leaves blank. If Region is blank, do not name a region or say where the fruit comes from — the Country is all you have been told. If Grapes is empty, do not name grape varieties. If Classification is blank, do not describe a quality tier or ranking. Those fields are blank because nobody could verify them, and a sentence that quietly fills the gap turns an unverified guess into something a curator reads as established fact and repeats in a published note. The one exception is an appellation that legally defines its own grapes (Barolo is Nebbiolo): attribute that to the appellation's rules, never to this bottling as if you had checked it.
+- A description built only from what you were given is the correct output, even when that is little. "A dry red from Australia, medium-bodied and approachable" is a good answer for a record with no region and no grapes. Padding it with invented specifics is not.
+- producerNote: when either flag is true, one short plain-text sentence saying why — the real producer if you are confident of it (e.g. "Arcane is a range of Xavier Vignon"), or simply that the producer is unknown to you. Never guess a specific house you are unsure of. Otherwise null.
+- Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.
+
+Curator-supplied facts about this wine (authoritative — a human sommelier researched them; trust them over your own recall, describe accordingly, and let them raise your confidence): A co-operative bottling.
+
+This record carries no region and no appellation, and no grape varieties. Do not state any region, appellation or grape variety as a fact about THIS wine. Either write style-only prose with no geographic or varietal claims, or name explicitly what is unknown ("the region could not be identified") — naming places in order to say the answer is open is welcome; asserting one is not.
+
+Rewrite without the region.
+
+You may use web_search (at most 2 searches) to look up this producer and this wine before answering — the producer is likely a small estate; one search usually settles the region, style and grapes. Base the profile on what you find, cite nothing inside the JSON, raise confidence to match verified facts, and still return ONLY the raw JSON object exactly as specified above.",
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "thinking": {
+      "type": "disabled",
+    },
+    "tools": [
+      {
+        "max_uses": 2,
+        "name": "web_search",
+        "type": "web_search_20250305",
+      },
+    ],
+  },
+}
+`;
+
+exports[`with no language, the profile call is the call it always was placeless: byte-identical to the recorded request, whichever way the language is off 1`] = `
+{
+  "client": {
+    "feature": "wine_profile",
+    "maxRetries": 4,
+  },
+  "params": {
+    "max_tokens": 1400,
+    "messages": [
+      {
+        "content": "You are a master sommelier writing a concise tasting/style profile for a wine, to help match it against other wines and to show to the wine's owner.
+
+Wine: Old Vine Red
+Producer: Small Estate
+Vintage: NV
+Country: Australia
+Region: 
+Appellation: 
+Classification: 
+Type: red
+Grapes: 
+
+Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"body":"light|medium|full","tannin":"low|medium|high","acidity":"low|medium|high","sweetness":"dry|off-dry|sweet","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerUnknown":false,"producerNote":null}
+
+Rules:
+- body/tannin/acidity/sweetness: exactly one of the listed values, or the JSON value null when the axis does not apply (e.g. tannin for a white wine is usually "low" or null). null is the unquoted JSON literal — NEVER the quoted string "null".
+- flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
+- foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
+- description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
+- A region's dominant or most famous style is NOT evidence about this producer. When you know THIS producer's style, describe it — even where it contradicts the regional norm; many estates exist precisely to break it. When you do not know the producer, describe grape-and-appellation typicity at the modest end, never the region's flagship or most commercial expression. Where a region has two established house styles (e.g. oxidative vs topped-up whites in the Jura), describe what is common to both rather than asserting one, and lower confidence.
+- The Type field is authoritative, not a hint. Many estates bottle several colours/styles under one name (a red and a white "Château X"): describe ONLY the bottling that matches Type. If you mainly know a different colour's bottling from this estate, do not describe that one — infer the Type-matching wine from its grapes, region and classification instead, and lower confidence accordingly. If Type contradicts everything you know about the wine (you are certain no such bottling exists), return {"error":"unknown"} rather than describing the other colour.
+- confidence: score how TRUE what you wrote is, given the data — NOT whether you recognise this specific bottling. 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5-0.6 = a correct appellation/grape-level profile for a data-rich record (producer unfamiliar is FINE — knowing Pommard well while never having heard of the grower merits 0.5-0.6, not 0.3), 0.3 = rough inference from thin data. Never discount an otherwise-true regional estimate merely because the producer is small.
+- producerSuspect: true ONLY when the Producer value is not a winery at all — a cuvée range or brand line belonging to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. This is a judgement about the FIELD being wrong, never about the limits of your own knowledge. Not knowing a winery is not a reason to set it.
+- producerSuspect requires EVIDENCE, not unfamiliarity: set it only when you can NAME in producerNote what the value actually is — the house behind the brand line, the place or label term it duplicates, or the CLASS of thing it is when you can tell WHAT it is without knowing whose ("this reads as a brand or bottling line, not a winery" is valid evidence). If you cannot say what it is instead — not even its class — the most you may claim is producerUnknown. House-word constructions — "Vignoble X", "Cave de X", "Les Vignerons de X", "Weingut X", "Quinta do X" — are ordinary producer-name patterns and never by themselves grounds for suspicion.
+- The producerNote must never dress a guess as a finding (curator audit 2026-08-19: every note naming the actual entity was right, every "appears to be a negociant/private-label/generic brand" note was wrong). If you can name the specific other entity — the real house, the co-op, the non-winery body — name it. If you cannot, write "cannot verify this producer" and STOP: no negociant/private-label/generic/novelty speculation, no "appears to be" class guesses. A curator triaging at speed trusts specific-sounding language, so an unspecific claim in specific costume misleads exactly the people the note exists to help.
+- producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF — the house is not one you can identify at all. Most of the world's small estates fall here and that is NORMAL, not a defect in the record: set the flag, lower your confidence, and describe the wine from its grapes, region and type. Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented or unverifiable — the flags and the prose must agree.
+- Knowing the house but not this specific bottling or cuvée is NOT producerUnknown — leave both flags false. Describe from the house's known style plus the grapes and appellation, record the unverified bottling in producerNote if worth noting, and let confidence carry that uncertainty (0.5–0.6 is typical). A known producer's cuvée you cannot verify in detail is an honest, publishable estimate, not a reason to withhold.
+- Both flags can be false (you know the house), and producerUnknown can be true on its own. Setting producerSuspect is a claim that the record is WRONG and holds the profile back from the wine's owner, so use it only when you would stand behind that claim.
+- When producerUnknown is true, do not write about the producer as an entity — its history, family, size, philosophy or reputation are things you have just said you do not know. Describe the wine.
+- NEVER assert in the prose a fact the record above leaves blank. If Region is blank, do not name a region or say where the fruit comes from — the Country is all you have been told. If Grapes is empty, do not name grape varieties. If Classification is blank, do not describe a quality tier or ranking. Those fields are blank because nobody could verify them, and a sentence that quietly fills the gap turns an unverified guess into something a curator reads as established fact and repeats in a published note. The one exception is an appellation that legally defines its own grapes (Barolo is Nebbiolo): attribute that to the appellation's rules, never to this bottling as if you had checked it.
+- A description built only from what you were given is the correct output, even when that is little. "A dry red from Australia, medium-bodied and approachable" is a good answer for a record with no region and no grapes. Padding it with invented specifics is not.
+- producerNote: when either flag is true, one short plain-text sentence saying why — the real producer if you are confident of it (e.g. "Arcane is a range of Xavier Vignon"), or simply that the producer is unknown to you. Never guess a specific house you are unsure of. Otherwise null.
+- Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.
+
+This record carries no region and no appellation, and no grape varieties. Do not state any region, appellation or grape variety as a fact about THIS wine. Either write style-only prose with no geographic or varietal claims, or name explicitly what is unknown ("the region could not be identified") — naming places in order to say the answer is open is welcome; asserting one is not.",
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "thinking": {
+      "type": "disabled",
+    },
+  },
+}
+`;
+
+exports[`with no language, the profile call is the call it always was plain: byte-identical to the recorded request, whichever way the language is off 1`] = `
+{
+  "client": {
+    "feature": "wine_profile",
+    "maxRetries": 4,
+  },
+  "params": {
+    "max_tokens": 1400,
+    "messages": [
+      {
+        "content": "You are a master sommelier writing a concise tasting/style profile for a wine, to help match it against other wines and to show to the wine's owner.
+
+Wine: Cannubi Boschis
+Producer: Luciano Sandrone
+Vintage: NV
+Country: Italy
+Region: Piedmont
+Appellation: Barolo
+Classification: 
+Type: red
+Grapes: Nebbiolo
+
+Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"body":"light|medium|full","tannin":"low|medium|high","acidity":"low|medium|high","sweetness":"dry|off-dry|sweet","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerUnknown":false,"producerNote":null}
+
+Rules:
+- body/tannin/acidity/sweetness: exactly one of the listed values, or the JSON value null when the axis does not apply (e.g. tannin for a white wine is usually "low" or null). null is the unquoted JSON literal — NEVER the quoted string "null".
+- flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
+- foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
+- description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
+- A region's dominant or most famous style is NOT evidence about this producer. When you know THIS producer's style, describe it — even where it contradicts the regional norm; many estates exist precisely to break it. When you do not know the producer, describe grape-and-appellation typicity at the modest end, never the region's flagship or most commercial expression. Where a region has two established house styles (e.g. oxidative vs topped-up whites in the Jura), describe what is common to both rather than asserting one, and lower confidence.
+- The Type field is authoritative, not a hint. Many estates bottle several colours/styles under one name (a red and a white "Château X"): describe ONLY the bottling that matches Type. If you mainly know a different colour's bottling from this estate, do not describe that one — infer the Type-matching wine from its grapes, region and classification instead, and lower confidence accordingly. If Type contradicts everything you know about the wine (you are certain no such bottling exists), return {"error":"unknown"} rather than describing the other colour.
+- confidence: score how TRUE what you wrote is, given the data — NOT whether you recognise this specific bottling. 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5-0.6 = a correct appellation/grape-level profile for a data-rich record (producer unfamiliar is FINE — knowing Pommard well while never having heard of the grower merits 0.5-0.6, not 0.3), 0.3 = rough inference from thin data. Never discount an otherwise-true regional estimate merely because the producer is small.
+- producerSuspect: true ONLY when the Producer value is not a winery at all — a cuvée range or brand line belonging to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. This is a judgement about the FIELD being wrong, never about the limits of your own knowledge. Not knowing a winery is not a reason to set it.
+- producerSuspect requires EVIDENCE, not unfamiliarity: set it only when you can NAME in producerNote what the value actually is — the house behind the brand line, the place or label term it duplicates, or the CLASS of thing it is when you can tell WHAT it is without knowing whose ("this reads as a brand or bottling line, not a winery" is valid evidence). If you cannot say what it is instead — not even its class — the most you may claim is producerUnknown. House-word constructions — "Vignoble X", "Cave de X", "Les Vignerons de X", "Weingut X", "Quinta do X" — are ordinary producer-name patterns and never by themselves grounds for suspicion.
+- The producerNote must never dress a guess as a finding (curator audit 2026-08-19: every note naming the actual entity was right, every "appears to be a negociant/private-label/generic brand" note was wrong). If you can name the specific other entity — the real house, the co-op, the non-winery body — name it. If you cannot, write "cannot verify this producer" and STOP: no negociant/private-label/generic/novelty speculation, no "appears to be" class guesses. A curator triaging at speed trusts specific-sounding language, so an unspecific claim in specific costume misleads exactly the people the note exists to help.
+- producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF — the house is not one you can identify at all. Most of the world's small estates fall here and that is NORMAL, not a defect in the record: set the flag, lower your confidence, and describe the wine from its grapes, region and type. Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented or unverifiable — the flags and the prose must agree.
+- Knowing the house but not this specific bottling or cuvée is NOT producerUnknown — leave both flags false. Describe from the house's known style plus the grapes and appellation, record the unverified bottling in producerNote if worth noting, and let confidence carry that uncertainty (0.5–0.6 is typical). A known producer's cuvée you cannot verify in detail is an honest, publishable estimate, not a reason to withhold.
+- Both flags can be false (you know the house), and producerUnknown can be true on its own. Setting producerSuspect is a claim that the record is WRONG and holds the profile back from the wine's owner, so use it only when you would stand behind that claim.
+- When producerUnknown is true, do not write about the producer as an entity — its history, family, size, philosophy or reputation are things you have just said you do not know. Describe the wine.
+- NEVER assert in the prose a fact the record above leaves blank. If Region is blank, do not name a region or say where the fruit comes from — the Country is all you have been told. If Grapes is empty, do not name grape varieties. If Classification is blank, do not describe a quality tier or ranking. Those fields are blank because nobody could verify them, and a sentence that quietly fills the gap turns an unverified guess into something a curator reads as established fact and repeats in a published note. The one exception is an appellation that legally defines its own grapes (Barolo is Nebbiolo): attribute that to the appellation's rules, never to this bottling as if you had checked it.
+- A description built only from what you were given is the correct output, even when that is little. "A dry red from Australia, medium-bodied and approachable" is a good answer for a record with no region and no grapes. Padding it with invented specifics is not.
+- producerNote: when either flag is true, one short plain-text sentence saying why — the real producer if you are confident of it (e.g. "Arcane is a range of Xavier Vignon"), or simply that the producer is unknown to you. Never guess a specific house you are unsure of. Otherwise null.
+- Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.",
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "thinking": {
+      "type": "disabled",
+    },
+  },
+}
+`;
+
+exports[`with no language, the profile call is the call it always was retry: byte-identical to the recorded request, whichever way the language is off 1`] = `
+{
+  "client": {
+    "feature": "wine_profile",
+    "maxRetries": 4,
+  },
+  "params": {
+    "max_tokens": 1400,
+    "messages": [
+      {
+        "content": "You are a master sommelier writing a concise tasting/style profile for a wine, to help match it against other wines and to show to the wine's owner.
+
+Wine: Old Vine Red
+Producer: Small Estate
+Vintage: NV
+Country: Australia
+Region: 
+Appellation: 
+Classification: 
+Type: red
+Grapes: 
+
+Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"body":"light|medium|full","tannin":"low|medium|high","acidity":"low|medium|high","sweetness":"dry|off-dry|sweet","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerUnknown":false,"producerNote":null}
+
+Rules:
+- body/tannin/acidity/sweetness: exactly one of the listed values, or the JSON value null when the axis does not apply (e.g. tannin for a white wine is usually "low" or null). null is the unquoted JSON literal — NEVER the quoted string "null".
+- flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
+- foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
+- description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
+- A region's dominant or most famous style is NOT evidence about this producer. When you know THIS producer's style, describe it — even where it contradicts the regional norm; many estates exist precisely to break it. When you do not know the producer, describe grape-and-appellation typicity at the modest end, never the region's flagship or most commercial expression. Where a region has two established house styles (e.g. oxidative vs topped-up whites in the Jura), describe what is common to both rather than asserting one, and lower confidence.
+- The Type field is authoritative, not a hint. Many estates bottle several colours/styles under one name (a red and a white "Château X"): describe ONLY the bottling that matches Type. If you mainly know a different colour's bottling from this estate, do not describe that one — infer the Type-matching wine from its grapes, region and classification instead, and lower confidence accordingly. If Type contradicts everything you know about the wine (you are certain no such bottling exists), return {"error":"unknown"} rather than describing the other colour.
+- confidence: score how TRUE what you wrote is, given the data — NOT whether you recognise this specific bottling. 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5-0.6 = a correct appellation/grape-level profile for a data-rich record (producer unfamiliar is FINE — knowing Pommard well while never having heard of the grower merits 0.5-0.6, not 0.3), 0.3 = rough inference from thin data. Never discount an otherwise-true regional estimate merely because the producer is small.
+- producerSuspect: true ONLY when the Producer value is not a winery at all — a cuvée range or brand line belonging to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. This is a judgement about the FIELD being wrong, never about the limits of your own knowledge. Not knowing a winery is not a reason to set it.
+- producerSuspect requires EVIDENCE, not unfamiliarity: set it only when you can NAME in producerNote what the value actually is — the house behind the brand line, the place or label term it duplicates, or the CLASS of thing it is when you can tell WHAT it is without knowing whose ("this reads as a brand or bottling line, not a winery" is valid evidence). If you cannot say what it is instead — not even its class — the most you may claim is producerUnknown. House-word constructions — "Vignoble X", "Cave de X", "Les Vignerons de X", "Weingut X", "Quinta do X" — are ordinary producer-name patterns and never by themselves grounds for suspicion.
+- The producerNote must never dress a guess as a finding (curator audit 2026-08-19: every note naming the actual entity was right, every "appears to be a negociant/private-label/generic brand" note was wrong). If you can name the specific other entity — the real house, the co-op, the non-winery body — name it. If you cannot, write "cannot verify this producer" and STOP: no negociant/private-label/generic/novelty speculation, no "appears to be" class guesses. A curator triaging at speed trusts specific-sounding language, so an unspecific claim in specific costume misleads exactly the people the note exists to help.
+- producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF — the house is not one you can identify at all. Most of the world's small estates fall here and that is NORMAL, not a defect in the record: set the flag, lower your confidence, and describe the wine from its grapes, region and type. Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented or unverifiable — the flags and the prose must agree.
+- Knowing the house but not this specific bottling or cuvée is NOT producerUnknown — leave both flags false. Describe from the house's known style plus the grapes and appellation, record the unverified bottling in producerNote if worth noting, and let confidence carry that uncertainty (0.5–0.6 is typical). A known producer's cuvée you cannot verify in detail is an honest, publishable estimate, not a reason to withhold.
+- Both flags can be false (you know the house), and producerUnknown can be true on its own. Setting producerSuspect is a claim that the record is WRONG and holds the profile back from the wine's owner, so use it only when you would stand behind that claim.
+- When producerUnknown is true, do not write about the producer as an entity — its history, family, size, philosophy or reputation are things you have just said you do not know. Describe the wine.
+- NEVER assert in the prose a fact the record above leaves blank. If Region is blank, do not name a region or say where the fruit comes from — the Country is all you have been told. If Grapes is empty, do not name grape varieties. If Classification is blank, do not describe a quality tier or ranking. Those fields are blank because nobody could verify them, and a sentence that quietly fills the gap turns an unverified guess into something a curator reads as established fact and repeats in a published note. The one exception is an appellation that legally defines its own grapes (Barolo is Nebbiolo): attribute that to the appellation's rules, never to this bottling as if you had checked it.
+- A description built only from what you were given is the correct output, even when that is little. "A dry red from Australia, medium-bodied and approachable" is a good answer for a record with no region and no grapes. Padding it with invented specifics is not.
+- producerNote: when either flag is true, one short plain-text sentence saying why — the real producer if you are confident of it (e.g. "Arcane is a range of Xavier Vignon"), or simply that the producer is unknown to you. Never guess a specific house you are unsure of. Otherwise null.
+- Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.
+
+This record carries no region and no appellation, and no grape varieties. Do not state any region, appellation or grape variety as a fact about THIS wine. Either write style-only prose with no geographic or varietal claims, or name explicitly what is unknown ("the region could not be identified") — naming places in order to say the answer is open is welcome; asserting one is not.
+
+Your previous draft stated the following as facts about this wine: Barossa Valley.",
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "thinking": {
+      "type": "disabled",
+    },
+  },
+}
+`;
+
+exports[`with no language, the profile call is the call it always was search: byte-identical to the recorded request, whichever way the language is off 1`] = `
+{
+  "client": {
+    "feature": "wine_profile",
+    "maxRetries": 4,
+  },
+  "params": {
+    "max_tokens": 2400,
+    "messages": [
+      {
+        "content": "You are a master sommelier writing a concise tasting/style profile for a wine, to help match it against other wines and to show to the wine's owner.
+
+Wine: Cannubi Boschis
+Producer: Luciano Sandrone
+Vintage: NV
+Country: Italy
+Region: Piedmont
+Appellation: Barolo
+Classification: 
+Type: red
+Grapes: Nebbiolo
+
+Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"body":"light|medium|full","tannin":"low|medium|high","acidity":"low|medium|high","sweetness":"dry|off-dry|sweet","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerUnknown":false,"producerNote":null}
+
+Rules:
+- body/tannin/acidity/sweetness: exactly one of the listed values, or the JSON value null when the axis does not apply (e.g. tannin for a white wine is usually "low" or null). null is the unquoted JSON literal — NEVER the quoted string "null".
+- flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
+- foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
+- description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
+- A region's dominant or most famous style is NOT evidence about this producer. When you know THIS producer's style, describe it — even where it contradicts the regional norm; many estates exist precisely to break it. When you do not know the producer, describe grape-and-appellation typicity at the modest end, never the region's flagship or most commercial expression. Where a region has two established house styles (e.g. oxidative vs topped-up whites in the Jura), describe what is common to both rather than asserting one, and lower confidence.
+- The Type field is authoritative, not a hint. Many estates bottle several colours/styles under one name (a red and a white "Château X"): describe ONLY the bottling that matches Type. If you mainly know a different colour's bottling from this estate, do not describe that one — infer the Type-matching wine from its grapes, region and classification instead, and lower confidence accordingly. If Type contradicts everything you know about the wine (you are certain no such bottling exists), return {"error":"unknown"} rather than describing the other colour.
+- confidence: score how TRUE what you wrote is, given the data — NOT whether you recognise this specific bottling. 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5-0.6 = a correct appellation/grape-level profile for a data-rich record (producer unfamiliar is FINE — knowing Pommard well while never having heard of the grower merits 0.5-0.6, not 0.3), 0.3 = rough inference from thin data. Never discount an otherwise-true regional estimate merely because the producer is small.
+- producerSuspect: true ONLY when the Producer value is not a winery at all — a cuvée range or brand line belonging to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. This is a judgement about the FIELD being wrong, never about the limits of your own knowledge. Not knowing a winery is not a reason to set it.
+- producerSuspect requires EVIDENCE, not unfamiliarity: set it only when you can NAME in producerNote what the value actually is — the house behind the brand line, the place or label term it duplicates, or the CLASS of thing it is when you can tell WHAT it is without knowing whose ("this reads as a brand or bottling line, not a winery" is valid evidence). If you cannot say what it is instead — not even its class — the most you may claim is producerUnknown. House-word constructions — "Vignoble X", "Cave de X", "Les Vignerons de X", "Weingut X", "Quinta do X" — are ordinary producer-name patterns and never by themselves grounds for suspicion.
+- The producerNote must never dress a guess as a finding (curator audit 2026-08-19: every note naming the actual entity was right, every "appears to be a negociant/private-label/generic brand" note was wrong). If you can name the specific other entity — the real house, the co-op, the non-winery body — name it. If you cannot, write "cannot verify this producer" and STOP: no negociant/private-label/generic/novelty speculation, no "appears to be" class guesses. A curator triaging at speed trusts specific-sounding language, so an unspecific claim in specific costume misleads exactly the people the note exists to help.
+- producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF — the house is not one you can identify at all. Most of the world's small estates fall here and that is NORMAL, not a defect in the record: set the flag, lower your confidence, and describe the wine from its grapes, region and type. Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented or unverifiable — the flags and the prose must agree.
+- Knowing the house but not this specific bottling or cuvée is NOT producerUnknown — leave both flags false. Describe from the house's known style plus the grapes and appellation, record the unverified bottling in producerNote if worth noting, and let confidence carry that uncertainty (0.5–0.6 is typical). A known producer's cuvée you cannot verify in detail is an honest, publishable estimate, not a reason to withhold.
+- Both flags can be false (you know the house), and producerUnknown can be true on its own. Setting producerSuspect is a claim that the record is WRONG and holds the profile back from the wine's owner, so use it only when you would stand behind that claim.
+- When producerUnknown is true, do not write about the producer as an entity — its history, family, size, philosophy or reputation are things you have just said you do not know. Describe the wine.
+- NEVER assert in the prose a fact the record above leaves blank. If Region is blank, do not name a region or say where the fruit comes from — the Country is all you have been told. If Grapes is empty, do not name grape varieties. If Classification is blank, do not describe a quality tier or ranking. Those fields are blank because nobody could verify them, and a sentence that quietly fills the gap turns an unverified guess into something a curator reads as established fact and repeats in a published note. The one exception is an appellation that legally defines its own grapes (Barolo is Nebbiolo): attribute that to the appellation's rules, never to this bottling as if you had checked it.
+- A description built only from what you were given is the correct output, even when that is little. "A dry red from Australia, medium-bodied and approachable" is a good answer for a record with no region and no grapes. Padding it with invented specifics is not.
+- producerNote: when either flag is true, one short plain-text sentence saying why — the real producer if you are confident of it (e.g. "Arcane is a range of Xavier Vignon"), or simply that the producer is unknown to you. Never guess a specific house you are unsure of. Otherwise null.
+- Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.
+
+You may use web_search (at most 2 searches) to look up this producer and this wine before answering — the producer is likely a small estate; one search usually settles the region, style and grapes. Base the profile on what you find, cite nothing inside the JSON, raise confidence to match verified facts, and still return ONLY the raw JSON object exactly as specified above.",
+        "role": "user",
+      },
+    ],
+    "model": "claude-sonnet-5",
+    "thinking": {
+      "type": "disabled",
+    },
+    "tools": [
+      {
+        "max_uses": 2,
+        "name": "web_search",
+        "type": "web_search_20250305",
+      },
+    ],
+  },
+}
+`;

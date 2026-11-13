@@ -254,3 +254,45 @@ describe('GET /api/cellars/:id/vintages/:wineId/:vintage', () => {
     expect(body.placesKnown).toBe(false);
   });
 });
+
+// The translated copy of the prose (utils/profileLanguage, SuperAdmin → AI):
+// read only while a language is set — off, the lookup is the one it always
+// was — and shown while it is fresh.
+describe('the vintage page and the translated copy of the prose', () => {
+  const aiConfig = require('../config/aiConfig');
+  const AT = new Date('2026-11-13T10:00:00Z');
+  const ENGLISH = { description: 'Cassis and cedar.', body: 'full', flavors: ['cassis'], source: 'curator', generatedAt: AT };
+  const COPY = { lang: 'fr', description: 'Cassis et cèdre.', flavors: ['cassis'], foodPairings: [], generatedAt: AT };
+  const serve = (aiProfile) => {
+    profileSelect = jest.fn(() => ({ lean: async () => ({ _id: WINE, aiProfile }) }));
+    WineDefinition.findById.mockReturnValue({ select: profileSelect });
+  };
+  afterEach(() => aiConfig.set({}));
+
+  test('off: the select is the display fields only, as before, and no copy is sent', async () => {
+    serve({ ...ENGLISH, localized: COPY });
+    const { body } = await request(url());
+    expect(profileSelect.mock.calls[0][0]).toBe('aiProfile.description aiProfile.body aiProfile.tannin aiProfile.acidity aiProfile.sweetness aiProfile.flavors aiProfile.foodPairings aiProfile.source');
+    expect(body.wine.aiProfile).not.toHaveProperty('localized');
+  });
+
+  test('on: the copy and its generatedAt are read, and a fresh copy is sent beside the English', async () => {
+    aiConfig.set({ aiTextLanguage: 'fr' });
+    serve({ ...ENGLISH, localized: COPY });
+    const { body } = await request(url());
+    expect(profileSelect.mock.calls[0][0].split(' ')).toEqual(expect.arrayContaining(['aiProfile.generatedAt', 'aiProfile.localized']));
+    expect(body.wine.aiProfile.description).toBe('Cassis and cedar.');
+    expect(body.wine.aiProfile.localized).toEqual({ ...COPY, generatedAt: AT.toISOString() });
+  });
+
+  test('on: a stale copy (another language, or older than the English) is not sent', async () => {
+    aiConfig.set({ aiTextLanguage: 'de' });
+    serve({ ...ENGLISH, localized: COPY });
+    let { body } = await request(url());
+    expect(body.wine.aiProfile).not.toHaveProperty('localized');
+    aiConfig.set({ aiTextLanguage: 'fr' });
+    serve({ ...ENGLISH, generatedAt: new Date('2026-11-14T08:00:00Z'), localized: COPY });
+    ({ body } = await request(url()));
+    expect(body.wine.aiProfile).not.toHaveProperty('localized');
+  });
+});

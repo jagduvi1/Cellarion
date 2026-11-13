@@ -29,6 +29,8 @@ const { parsePagination } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/sanitize');
 const { redactUrlCredentials } = require('../utils/redactUrl');
 const { coerceStringQuery } = require('../utils/validation');
+const asyncHandler = require('../utils/asyncHandler');
+const { AI_TEXT_LANGUAGES, normalizeAiTextLanguage } = require('../utils/profileLanguage');
 const { PROMPT_MAX_LENGTHS, CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 
 const router = express.Router();
@@ -394,6 +396,8 @@ router.get('/ai', async (req, res) => {
       config: cfg,
       // Each editable prompt's cap, for the page's character counters.
       promptLimits: PROMPT_MAX_LENGTHS,
+      // The codes the AI-text language select offers (utils/profileLanguage).
+      aiTextLanguages: Object.keys(AI_TEXT_LANGUAGES),
       job: jobStatus,
       enrichmentJob: enrichStatus,
       enrichment: { totalWines, enrichedWines },
@@ -563,6 +567,32 @@ router.patch('/ai/prompt-caching', async (req, res) => {
     res.status(500).json({ error: 'Failed to save prompt caching' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/text-language  { language: '' | 'de' | … }
+// The language for the AI-written wine texts (utils/profileLanguage): a
+// shipped language code, or ''/'en' for off. Off is stored as NO key, so the
+// document is the one it was before the setting existed. Only the tasting
+// profile's prose is translated, into a copy beside the English; existing
+// wines keep English until their profile is written again. Audit-logged like
+// the feature flags: it changes what the AI writes into every new profile.
+// ---------------------------------------------------------------------------
+router.patch('/ai/text-language', asyncHandler(async (req, res) => {
+  const raw = req.body ? req.body.language : undefined;
+  if (typeof raw !== 'string') {
+    return res.status(400).json({ error: 'language must be a string' });
+  }
+  const language = normalizeAiTextLanguage(raw);
+  if (!language && !['', 'en'].includes(raw.trim().toLowerCase())) {
+    return res.status(400).json({ error: `language must be one of: ${['', ...Object.keys(AI_TEXT_LANGUAGES)].map((c) => `'${c}'`).join(', ')}` });
+  }
+  const { aiTextLanguage: before, ...rest } = aiConfig.getRaw();
+  const updated = language ? { ...rest, aiTextLanguage: language } : rest;
+  await updateSiteConfig('aiConfig', aiConfig.stripDefaultPrompts(updated), req.user.id);
+  aiConfig.set(updated);
+  logAudit(req, 'superadmin.ai_text_language', { type: 'aiConfig' }, { from: before || null, to: language || null });
+  res.json({ aiTextLanguage: language });
+}));
 
 // ---------------------------------------------------------------------------
 // GET /api/superadmin/ai/costs?days=30

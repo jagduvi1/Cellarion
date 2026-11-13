@@ -2,6 +2,7 @@ const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif
 const aiConfig = require('../config/aiConfig');
 const { extractFirstJsonObject } = require('../utils/jsonExtract');
 const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
+const { languageDirective, LOCALIZED_EXTRA_TOKENS } = require('../utils/profileLanguage');
 
 const aiProvider = require('./aiProvider');
 
@@ -791,8 +792,13 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
  *            description, confidence }
  * Used by the enrichment job to populate WineDefinition.aiProfile, which then
  * feeds both the embedding text and the bottle-page display.
+ *
+ * `language` (a code from utils/profileLanguage, passed by enrichmentJob while
+ * SuperAdmin → AI sets one) also asks for data.localized: the description,
+ * flavors and foodPairings translated. Without one — off, English or an
+ * unknown code — the request is the one it always was.
  */
-async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext, allowSearch, retryDirective }) {
+async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext, allowSearch, retryDirective, language }) {
   if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
@@ -870,6 +876,13 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     prompt += '\n\n' + String(retryDirective).replace(/\p{C}/gu, ' ').slice(0, 600);
   }
 
+  // The translated copy of the prose (utils/profileLanguage): a fixed
+  // paragraph naming the language from the code table, never text from the
+  // setting. Before the search paragraph, whose "exactly as specified above"
+  // then covers the extra key too. '' when no language is asked for.
+  const translation = languageDirective(language);
+  prompt += translation;
+
   // Web-search rescue (pilot 2026-08-19): the retry path for would-hold rows.
   // The instruction keeps the output contract intact — searched or not, the
   // answer is the bare JSON object.
@@ -880,7 +893,7 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   return callClaudeJson({
     client,
     model: aiConfig.get().enrichmentModel,
-    maxTokens: allowSearch ? 2400 : 1400,
+    maxTokens: (allowSearch ? 2400 : 1400) + (translation ? LOCALIZED_EXTRA_TOKENS : 0),
     ...(allowSearch ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }] } : {}),
     prompt,
     validate: (parsed) => {

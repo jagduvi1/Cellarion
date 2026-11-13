@@ -22,6 +22,7 @@
 
 const { stripMarkdown } = require('../utils/stripMarkdown');
 const { WINE_COLOURS, stateColour } = require('../utils/wineColour');
+const { proseSignature, dropLocalizedIfProseChanged } = require('../utils/profileLanguage');
 
 // Mirrors the value sets the enrichment prompt is told to emit
 // (config/aiConfig.js) — an editable field must not accept a value the
@@ -326,9 +327,13 @@ function snapshotProfile(wine) {
 function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
   if (!wine.aiProfile) wine.aiProfile = {};
   const profileEntries = Object.entries(clean).filter(([f]) => EDITABLE_FIELDS.includes(f));
+  const proseBefore = proseSignature(wine.aiProfile);
   for (const [field, value] of profileEntries) {
     wine.aiProfile[field] = value;
   }
+  // A curator write keeps generatedAt, so a translated copy of the old prose
+  // would still look fresh: it goes when the prose changed.
+  dropLocalizedIfProseChanged(wine.aiProfile, proseBefore);
   if (clean.type !== undefined) wine.type = clean.type;
   // stateColour, not a bare assignment: an explicit "none" sent with a retype
   // must not be re-inferred from the name by the model hook.
@@ -365,9 +370,13 @@ function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
  *  must not null a wine's type or re-hold / un-hold a wine. */
 function restoreProfile(wine, snap) {
   if (!wine.aiProfile) wine.aiProfile = {};
+  const proseBefore = proseSignature(wine.aiProfile);
   for (const f of EDITABLE_FIELDS) {
     wine.aiProfile[f] = Array.isArray(snap[f]) ? [...snap[f]] : (snap[f] ?? null);
   }
+  // Same rule as applyProfilePatch: restored prose is not the prose a stored
+  // translation was made from.
+  dropLocalizedIfProseChanged(wine.aiProfile, proseBefore);
   wine.aiProfile.source = snap.source || 'ai';
   wine.aiProfile.verifiedBy = snap.verifiedBy || null;
   wine.aiProfile.verifiedAt = snap.verifiedAt || null;
