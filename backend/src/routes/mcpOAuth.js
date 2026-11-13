@@ -373,7 +373,8 @@ async function authenticateClient(req) {
 
   if (basic && bodyId && bodyId !== basic.clientId) return refused;
   const clientId = basic ? basic.clientId : bodyId;
-  if (!clientId) return refused;
+  // Only a non-empty string reaches the query, never an operator object.
+  if (typeof clientId !== 'string' || !clientId) return refused;
   const headerSecret = basic ? basic.clientSecret : '';
   if (headerSecret && bodySecret && headerSecret !== bodySecret) return refused;
   const secret = headerSecret || bodySecret || '';
