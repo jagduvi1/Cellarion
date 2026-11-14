@@ -160,8 +160,9 @@ function cleanConfidence(raw) {
  * by the same rules and bounds as the English fields it translates, as the
  * `{ localized }` to spread into the stored profile — or `{}`: no language
  * set, no block, or a block that is not a whole translation (no usable
- * description, or an empty list where the English has one). Half a
- * translation is no translation: the page then shows the English throughout.
+ * description, or a list that does not match the English item for item in
+ * number). Half a translation is no translation: the page then shows the
+ * English throughout.
  * Never fails the profile.
  */
 function localizedEntry(language, data, generatedAt) {
@@ -174,7 +175,7 @@ function localizedEntry(language, data, generatedAt) {
   for (const field of ['flavors', 'foodPairings']) {
     const english = cleanStringList(data[field], field);
     const translated = cleanStringList(raw[field], field);
-    if (english.length && !translated.length) return {};
+    if (english.length && translated.length !== english.length) return {};
     lists[field] = english.length ? translated : [];
   }
   return { localized: { lang: language, description, ...lists, generatedAt } };
