@@ -29,6 +29,7 @@ const aiProvider = require('./aiProvider');
 const { embedSinglePair } = require('./embeddingJob');
 const { isValidId } = require('../utils/validation');
 const { PROFILE_ENUMS, LIST_FIELDS, DESCRIPTION_MAX } = require('./wineProfileOps');
+const { aiTextLanguageOf } = require('../utils/profileLanguage');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 
@@ -152,6 +153,31 @@ function cleanConfidence(raw) {
       : (typeof raw === 'string' && raw.trim() !== '') ? Number(raw)
         : NaN;
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : null;
+}
+
+/**
+ * The model's translated copy of the prose (utils/profileLanguage), cleaned
+ * by the same rules and bounds as the English fields it translates, as the
+ * `{ localized }` to spread into the stored profile — or `{}`: no language
+ * set, no block, or a block that is not a whole translation (no usable
+ * description, or an empty list where the English has one). Half a
+ * translation is no translation: the page then shows the English throughout.
+ * Never fails the profile.
+ */
+function localizedEntry(language, data, generatedAt) {
+  if (!language) return {};
+  const raw = data && data.localized;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const description = cleanProse(raw.description);
+  if (!description) return {};
+  const lists = {};
+  for (const field of ['flavors', 'foodPairings']) {
+    const english = cleanStringList(data[field], field);
+    const translated = cleanStringList(raw[field], field);
+    if (english.length && !translated.length) return {};
+    lists[field] = english.length ? translated : [];
+  }
+  return { localized: { lang: language, description, ...lists, generatedAt } };
 }
 
 // ── In-memory job state ────────────────────────────────────────────────────
@@ -492,11 +518,17 @@ async function runJob(cfg) {
  *   pollute the admin job status.
  */
 async function enrichWine(wine, model, { publishSuspect = false, curatorContext = null } = {}) {
+  // The language for the translated copy (SuperAdmin → AI), read once so every
+  // attempt below asks for the language the stored copy is labelled with.
+  // Off: no key at all, so each call is the call it always was.
+  const language = aiTextLanguageOf(aiConfig.get());
+  const asked = language ? { language } : {};
   const { data, debugReason } = await suggestProfile({
     name: wine.name,
     producer: wine.producer,
     vintage: 'NV', // vintage-neutral profile
     curatorContext,
+    ...asked,
     country: wine.country?.name,
     region: wine.region?.name,
     appellation: wine.appellation,
@@ -700,6 +732,7 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
       producer: wine.producer,
       vintage: 'NV',
       curatorContext,
+      ...asked,
       allowSearch: true,
       country: wine.country?.name,
       region: wine.region?.name,
@@ -752,6 +785,7 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
         producer: wine.producer,
         vintage: 'NV',
         curatorContext,
+        ...asked,
         retryDirective:
           `Your previous draft stated the following as facts about this wine: ${asserted}. ` +
           'This record does not carry them, so they are unverified. Rewrite the description without asserting ' +
@@ -879,6 +913,9 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
           description: a.description,
           ...a.meta,
           heldAt: null,
+          // The translated prose from the same answer, beside the English —
+          // never in place of it. Nothing while no language is set.
+          ...localizedEntry(language, a.data, now),
         },
         updatedAt: now,
         // Fresh content is unreviewed content: a stamp from before this

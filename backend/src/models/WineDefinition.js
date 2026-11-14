@@ -7,6 +7,7 @@ const { computeCanonicalKey } = require('../utils/wineIdentity');
 const { isStyleType, inferColourFromName } = require('../utils/wineColour');
 
 const { SWEETNESS_STYLE_SOURCES, STYLE_URL_MAX, isStoredStyleUrl, styleShape } = require('../utils/sweetnessStyle');
+const { dropStaleLocalized } = require('../utils/profileLanguage');
 
 // The sweetness style: the term a wine is KNOWN by when its label prints none
 // ("feinherb" for a wine whose label says nothing), named by the producer or
@@ -320,6 +321,23 @@ const wineDefinitionSchema = new mongoose.Schema({
     source:       { type: String, default: 'ai', enum: ['ai', 'curator'] },
     verifiedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     verifiedAt:   { type: Date, default: null },
+    // description, flavors and foodPairings translated into the language set
+    // in SuperAdmin → AI (utils/profileLanguage), from the same model answer
+    // as the English (enrichmentJob). Beside the English, never in its place:
+    // the embedding text, search, matching, curation, MCP, the token API and
+    // the Bridge read only the fields above. Shown on the member screens only
+    // while `lang` is the language set and `generatedAt` equals the profile's
+    // own. No default: a wine without a translation stores no key.
+    localized: {
+      type: new mongoose.Schema({
+        lang:         { type: String, trim: true },
+        description:  { type: String, trim: true },
+        flavors:      { type: [String] },
+        foodPairings: { type: [String] },
+        generatedAt:  { type: Date },
+      }, { _id: false }),
+      default: undefined,
+    },
   },
   // When an admin last reviewed this wine in the low-confidence queue and
   // judged its data correct. The clearance is SELF-INVALIDATING by comparison,
@@ -1199,6 +1217,9 @@ wineDefinitionSchema.pre('validate', function () {
 // never depends on a cache. On the wine, not on the style's sub-schema: a
 // sub-schema transform that drops the value makes Mongoose throw. toObject()
 // keeps the stored shape for code inside the server.
+// The same send carries a translated profile copy only while it is fresh
+// (utils/profileLanguage): a bottle answer must not show a copy in a
+// language no longer set.
 wineDefinitionSchema.set('toJSON', {
   transform(doc, ret) {
     if (ret && Object.prototype.hasOwnProperty.call(ret, 'sweetnessStyle')) {
@@ -1206,6 +1227,7 @@ wineDefinitionSchema.set('toJSON', {
       if (out.state === 'unresolved') delete ret.sweetnessStyle;
       else ret.sweetnessStyle = out.state === 'shaped' ? out.value : null;
     }
+    if (ret) dropStaleLocalized(ret.aiProfile);
     return ret;
   },
 });

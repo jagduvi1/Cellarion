@@ -493,3 +493,42 @@ describe('privilege parity & bounds', () => {
     expect(t.handler).toHaveBeenCalledTimes(MAX_CALLS_PER_REQUEST);
   });
 });
+
+// The translated copy of the prose (utils/profileLanguage, SuperAdmin → AI) is
+// for the member screens only: MCP reads the English profile, the same with or
+// without a copy stored — whether the copy is fresh or not.
+describe('tasting_profile is the English profile, never its translation', () => {
+  const AT = new Date('2026-11-13T10:00:00Z');
+  const ENGLISH = {
+    body: 'full', tannin: 'high', acidity: 'high', sweetness: 'dry', flavors: ['tar', 'rose'],
+    foodPairings: ['braised beef'], description: 'Firm and fragrant.', source: 'ai', generatedAt: AT,
+  };
+  const COPY = { lang: 'de', description: 'Fest und duftig.', flavors: ['Teer'], foodPairings: ['Schmorbraten'], generatedAt: AT };
+  const aiConfig = require('../config/aiConfig');
+  beforeEach(() => aiConfig.set({ aiTextLanguage: 'de' })); // the copy is fresh
+  afterEach(() => aiConfig.set({}));
+
+  test('get_wine', async () => {
+    WineDefinition.findOne.mockReturnValue(chain({
+      _id: oid('f'), name: 'Cannubi Boschis', producer: 'Luciano Sandrone', type: 'red', grapes: [],
+      aiProfile: { ...ENGLISH, localized: COPY },
+    }));
+    const res = await tool('get_wine').handler({ wine_id: oid('f') }, CTX);
+    const profile = parse(res).data.tasting_profile;
+    expect(profile).toEqual(JSON.parse(JSON.stringify(ENGLISH)));
+    expect(res.content[0].text).not.toMatch(/localized|Fest und duftig|Schmorbraten/);
+  });
+
+  test('get_bottle', async () => {
+    const cellarId = new mongoose.Types.ObjectId(oid('c'));
+    Bottle.findById.mockReturnValue(chain({
+      _id: oid('d'), cellar: cellarId, vintage: '2015', status: 'active', pours: [],
+      wineDefinition: { _id: oid('f'), name: 'Cannubi Boschis', producer: 'Luciano Sandrone', grapes: [], aiProfile: { ...ENGLISH, localized: COPY } },
+    }));
+    Cellar.findById.mockReturnValue(chain({ _id: cellarId, user: ME, members: [], deletedAt: null, name: 'Mine' }));
+    Rack.findOne.mockReturnValue(chain(null));
+    const res = await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX);
+    expect(parse(res).data.wine.tasting_profile).toEqual(JSON.parse(JSON.stringify(ENGLISH)));
+    expect(res.content[0].text).not.toMatch(/localized|Fest und duftig|Schmorbraten/);
+  });
+});

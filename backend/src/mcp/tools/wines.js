@@ -12,6 +12,7 @@ const { logAction } = require('../actionLedger');
 const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { publicProfileSummary } = require('../../services/registryTiering');
+const { withoutLocalized } = require('../../utils/profileLanguage');
 const { gateMcpRead, CAP_MESSAGE } = require('../../services/registryReadTracker');
 const { absoluteImageUrl, isInlineImage } = require('../../services/photoState');
 const { findOwnHiddenWineIds, isOwnHiddenWine } = require('../../services/ownHiddenWines');
@@ -166,7 +167,10 @@ registerTool({
     const w = decorateGrapes(raw, { styleAsked: true });
     const gate = await gateMcpRead(ctx, w._id);
     if (!gate.allowed) return fail('rate_limited', CAP_MESSAGE);
-    const profile = hasContent(w.aiProfile) ? w.aiProfile : null;
+    // The English profile only: a translated copy (utils/profileLanguage) is
+    // for the member screens, never for MCP.
+    const canonical = withoutLocalized(w.aiProfile);
+    const profile = hasContent(canonical) ? canonical : null;
     // The one-pending-per-wine rule must be discoverable without composing a
     // correction and having it refused. Signed-in callers see the queue state (fields + whether it is theirs; never whose
     // otherwise, never the proposed values). Omitted for the anonymous

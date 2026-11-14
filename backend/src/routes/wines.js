@@ -32,6 +32,7 @@ const { MEMBER_WINE_HIDDEN_FIELDS, MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require(
 // regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
 // while `name` stays canonical. Storage/filters/stats are untouched.
 const { decorateGrapes } = require('../utils/grapeDisplay');
+const { displayProfile } = require('../utils/profileLanguage');
 const { wineVisibilityFilter, isCurator: isCuratorRole } = require('../services/wineVisibility');
 const { normalizeBarcode } = require('../utils/barcode');
 const { lookupBarcode } = require('../services/barcodeLookup');
@@ -1121,8 +1122,14 @@ router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res
     // A public-demo session is signed in but is not a member: the full tier
     // and the drink windows are for real accounts.
     const member = !!req.user && !req.user.isDemo;
-    const payload = tierWinePayload(decorateGrapes(wine), { full: member });
+    const decorated = decorateGrapes(wine);
+    const payload = tierWinePayload(decorated, { full: member });
     delete payload.canary;
+    // The translated prose while it is fresh (utils/profileLanguage): the
+    // description for everyone, the lists only on the member tier that has
+    // them. The page's meta description stays the English one, as on the
+    // crawler page (og/wine.js).
+    payload.aiProfile = displayProfile(payload.aiProfile, { stored: decorated.aiProfile, proseOnly: !member, token: !!req.apiToken });
     // Wine-level serving advice for everyone: the temperature (the
     // sommelier's or the style's) and the air trait. Not tiered — it is not
     // the drink-window data members pay attention for — and composed from the

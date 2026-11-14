@@ -172,6 +172,20 @@ describe('adoptWine', () => {
     expect(WineDefinition.mock.calls[0][0]).not.toHaveProperty('colour');
   });
 
+  // A translated copy of the prose (utils/profileLanguage) is never sent by
+  // the registry; if one ever arrived it must not land here either — the
+  // copied profile is the registry's English fields only.
+  test('a translated copy in a registry answer is not copied', async () => {
+    const english = registryWine().profile;
+    client.fetchWine.mockResolvedValue(registryWine({
+      profile: { ...english, localized: { lang: 'de', description: 'Ein dichter Priorat.', flavors: ['Pflaume'], foodPairings: ['Lamm'], generatedAt: english.generatedAt } },
+    }));
+    await bridge.adoptWine(RID, USER);
+    const { aiProfile } = WineDefinition.mock.calls[0][0];
+    expect(aiProfile).not.toHaveProperty('localized');
+    expect(aiProfile.description).toBe('A dense Priorat.');
+  });
+
   test('copies a registry wine as a local wine: computed dedup key, bridge provenance, profile, windows, values, local index', async () => {
     client.fetchWine.mockResolvedValue(registryWine());
     const r = await bridge.adoptWine(RID, USER);

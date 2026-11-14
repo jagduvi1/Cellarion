@@ -7,6 +7,7 @@ import {
   MaturitySuggestPromptNvPanel, PriceSuggestModelPanel, PriceSuggestPromptPanel, EnrichmentModelPanel,
   EnrichmentPromptPanel, EnrichmentGatePanel, EnrichmentOnAddPanel, EnrichmentSearchPanel, PromptCachingPanel,
 } from './ai/configPanels';
+import AiTextLanguagePanel from './ai/AiTextLanguagePanel';
 import { superadminAiCostsPath } from '../../api/admin';
 
 // Re-exported: its suite reaches it through this file.
@@ -829,6 +830,7 @@ export default function TabAI() {
       <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} maxChars={promptLimits.priceSuggestPrompt} apiFetch={apiFetch} />
       <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} maxChars={promptLimits.enrichmentPrompt} apiFetch={apiFetch} />
+      <AiTextLanguagePanel current={config.aiTextLanguage || ''} languages={data.aiTextLanguages} apiFetch={apiFetch} />
       <ChatLimitPanel limit={config.chatDailyLimit ?? 50} apiFetch={apiFetch} />
       <EnrichmentGatePanel floor={config.enrichmentHoldConfidenceFloor ?? 0.4} unknownBar={config.enrichmentHoldUnknownConfidenceBar ?? 0.55} apiFetch={apiFetch} />
       <EnrichmentSearchPanel enabled={config.enrichmentSearchEnabled ?? true} dailyCap={config.enrichmentSearchDailyCap ?? 5} apiFetch={apiFetch} />

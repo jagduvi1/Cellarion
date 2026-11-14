@@ -187,6 +187,30 @@ describe('GET /wines/:id', () => {
     expect(createNotifications).not.toHaveBeenCalled();
   });
 
+  // The translated copy of the prose (utils/profileLanguage) belongs to the
+  // member screens of the instance that wrote it: the Bridge sends the
+  // English profile only, even while the copy is fresh there.
+  test('a translated copy of the prose never travels: the profile is the English one', async () => {
+    const aiConfig = require('../config/aiConfig');
+    aiConfig.set({ aiTextLanguage: 'de' });
+    try {
+      const at = new Date('2026-11-13T10:00:00Z');
+      const base = wine().aiProfile;
+      findVisibleWine.mockResolvedValue(wine({ aiProfile: { ...base, generatedAt: at, localized: { lang: 'de', description: 'Ein dichter Priorat.', flavors: ['Pflaume'], foodPairings: ['Lamm'], generatedAt: at } } }));
+      WineVintageProfile.find.mockReturnValue(chain([]));
+      dataForWine.mockResolvedValue({ ok: true, fields: [] });
+      const res = await call('GET', `/api/bridge/v1/wines/${ID}`);
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      const { wine: w } = JSON.parse(text);
+      expect(w.profile).not.toHaveProperty('localized');
+      expect(w.profile.description).toBe('A dense Priorat.');
+      expect(text).not.toMatch(/localized|Ein dichter Priorat|Pflaume/);
+    } finally {
+      aiConfig.set({});
+    }
+  });
+
   test('a canary fetched through a key is served, audited and reported to the admins at once', async () => {
     findVisibleWine.mockResolvedValue(wine({ canary: true }));
     WineVintageProfile.find.mockReturnValue(chain([]));

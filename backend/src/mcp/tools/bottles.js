@@ -21,8 +21,16 @@ const {
 } = require('../toolUtil');
 const { photosForBottle, photoPresence } = require('../../services/photoState');
 const { servingAdvice, servingSentence } = require('../../utils/servingUtils');
+const { withoutLocalized } = require('../../utils/profileLanguage');
 const { openQuestionForRecipient } = require('../../services/ownerInquiryOps');
 const bottleSearch = require('../../services/bottleSearch');
+
+// The English profile only, or null for an empty one: a translated copy
+// (utils/profileLanguage) is for the member screens, never for MCP.
+const englishProfile = (ap) => {
+  const canonical = withoutLocalized(ap);
+  return hasContent(canonical) ? canonical : null;
+};
 
 function statusToMongo(status) {
   if (status === 'all') return {};
@@ -317,7 +325,7 @@ async function buildBottleDetail(userId, bottleId) {
         // Skeleton subdocs (0 reviews / never-enriched all-null profile) are
         // materialized by Mongoose defaults — return null, not empty shells.
         community_rating: wd.communityRating?.reviewCount ? wd.communityRating : null,
-        tasting_profile: hasContent(wd.aiProfile) ? wd.aiProfile : null,
+        tasting_profile: englishProfile(wd.aiProfile),
         // Serving temperature and air, composed for THIS bottle's phase today
         // from the sommelier's trait (or the style's default): the advice
         // changes as the vintage ages, the record does not.

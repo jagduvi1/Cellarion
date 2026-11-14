@@ -32,6 +32,7 @@ import { WhenToDrinkCard, WhereFromCard, MoreWinesCard } from '../components/Win
 import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
+import { profileText } from '../utils/profileText';
 import './WineDetail.css';
 
 // Lazy like BottleDetail: the report modal is a rare interaction and must not
@@ -113,7 +114,8 @@ export default function WineDetail() {
     wine.country?.name
   ].filter(Boolean).join(' · ');
   // Same rule as the crawler page (backend og/wine.js): the tasting prose makes the
-  // description this wine's own; cut on a word.
+  // description this wine's own; cut on a word. The English prose, as there —
+  // a translated copy is for the card below.
   const fullDesc = wine.aiProfile?.description
     ? `${fullTitle}. ${wine.aiProfile.description}`
     : `${fullTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
@@ -135,6 +137,11 @@ export default function WineDetail() {
   const placeLink = (entry, label) => (entry?.path
     ? <Link to={entry.path} className="wd-detail-link">{label}</Link>
     : label);
+
+  // The card's prose: the translated copy while the server sent a fresh one
+  // (SuperAdmin → AI), else the English (utils/profileText).
+  const proseText = profileText(wine.aiProfile);
+  const proseLang = proseText.lang || undefined;
 
   const ratingScale = user?.preferences?.ratingScale || '5';
   const hasRating = wine.communityRating?.reviewCount > 0;
@@ -284,7 +291,7 @@ export default function WineDetail() {
               ap.acidity && `${ap.acidity} acidity`,
               ap.sweetness,
             ].filter(Boolean);
-            const flavours = ap.flavors || [];
+            const flavours = proseText.flavors;
             return (
               <>
                 {structure.length > 0 && (
@@ -298,7 +305,7 @@ export default function WineDetail() {
                 {flavours.length > 0 && (
                   <div className="bd-ai-group">
                     <span className="bd-ai-group-label">{t('wineDetail.flavours', 'Flavours')}</span>
-                    <div className="bd-ai-chips">
+                    <div className="bd-ai-chips" lang={proseLang}>
                       {flavours.map((f, i) => <span key={`f${i}`} className="bd-ai-chip">{f}</span>)}
                     </div>
                   </div>
@@ -307,14 +314,14 @@ export default function WineDetail() {
             );
           })()}
 
-          <div className="bd-ai-prose">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]} disallowedElements={['img']} unwrapDisallowed>{wine.aiProfile.description}</ReactMarkdown>
+          <div className="bd-ai-prose" lang={proseLang}>
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]} disallowedElements={['img']} unwrapDisallowed>{proseText.description}</ReactMarkdown>
           </div>
 
-          {wine.aiProfile.foodPairings?.length > 0 && (
+          {proseText.foodPairings.length > 0 && (
             <div className="bd-ai-pairings">
               <span className="bd-ai-pairings__label">{t('wineDetail.pairsWith', 'Pairs with')}:</span>
-              {wine.aiProfile.foodPairings.join(' · ')}
+              {proseLang ? <span lang={proseLang}>{proseText.foodPairings.join(' · ')}</span> : proseText.foodPairings.join(' · ')}
             </div>
           )}
           <ServingLine serving={wine.serving} user={user} t={t} />

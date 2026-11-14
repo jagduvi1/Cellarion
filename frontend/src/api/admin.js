@@ -400,6 +400,15 @@ export const superadminSetPromptCaching = (apiFetch, enabled) =>
     body: JSON.stringify({ enabled: !!enabled }),
   });
 
+// The language for the AI-written wine texts: a code GET /api/superadmin/ai
+// lists in aiTextLanguages, or '' for off (English only).
+export const superadminSetAiTextLanguage = (apiFetch, language) =>
+  apiFetch('/api/superadmin/ai/text-language', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ language }),
+  });
+
 // ── MCP (usage overview + kill switches) ─────────────────────────────────────
 export const adminGetMcpUsage = (apiFetch, days = 30) =>
   apiFetch(`/api/admin/mcp/usage?days=${days}`);

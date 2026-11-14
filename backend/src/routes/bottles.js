@@ -26,6 +26,7 @@ const personalData = require('../services/personalData');
 // regionally correct label for the bottle's wine (Tinta Roriz on a Douro
 // Port) — while `name` stays canonical for storage/filters/stats.
 const { decorateGrapes } = require('../utils/grapeDisplay');
+const { displayProfile } = require('../utils/profileLanguage');
 const mongoose = require('mongoose');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
 // shared service so the REST routes and the MCP tools can never drift (§7).
@@ -378,6 +379,9 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       }
       // Loaded for the line above only; who contributed a wine is not sent.
       delete bottleObj.wineDefinition.createdBy;
+      // The bottle page shows the translated prose while it is fresh; an API
+      // token reads the English profile only (utils/profileLanguage).
+      bottleObj.wineDefinition.aiProfile = displayProfile(bottleObj.wineDefinition.aiProfile, { token: !!req.apiToken });
     }
     if (bottle.priceSetAt) {
       const date = bottle.priceSetAt.toISOString().slice(0, 10);
