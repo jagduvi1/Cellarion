@@ -10,7 +10,9 @@
  * canonical key collapses the three variance axes that mint duplicates:
  * producer spelling variants ("Felton Road Wines Ltd" ≡ "Felton Road"),
  * producer-in-name embeds ("Felton Road Block 3 Pinot Noir" ≡ "Block 3 Pinot
- * Noir"), and appellation tier suffixes ("Barolo DOCG" ≡ "Barolo").
+ * Noir"), and appellation tier suffixes ("Barolo DOCG" ≡ "Barolo"). Like
+ * normalizedKey it reads a Champagne cru form ("Champagne Grand Cru") as
+ * Champagne (utils/champagneCru).
  *
  * It is deliberately NON-unique: findOrCreateWine uses it as the first lookup
  * (a canonical duplicate can't be minted, because the lookup finds the
@@ -24,6 +26,7 @@
 
 const { normalizeString, normalizeWineName, normalizeProducerKey, normalizeAppellation, isProductionMethodOnly, sweetnessKeySegment } = require('./normalize');
 const { canonicalizeWineName } = require('./producerPrefix');
+const { withoutChampagneCru } = require('./champagneCru');
 
 // An all-stopword producer ("Domaine", "Cantina") has an EMPTY comparison key
 // — falling back to the raw normalized string keeps such producers distinct
@@ -44,9 +47,10 @@ function computeCanonicalKey(name, producer, appellation = '', { sweetness = nul
   const nameKey = normalizeWineName(canonicalizeWineName(name || '', producer || ''));
   // A production method on its own ("Méthode Traditionnelle") is no
   // appellation: it keys as none, the way generateWineKey and the model hook
-  // treat it.
+  // treat it. A Champagne cru form keys as Champagne, once the mark is
+  // stripped ("Champagne Grand Cru AOC").
   const appellationKey = isProductionMethodOnly(appellation) ? '' : normalizeString(
-    normalizeAppellation(typeof appellation === 'string' ? appellation : '') || ''
+    withoutChampagneCru(normalizeAppellation(typeof appellation === 'string' ? appellation : '') || '')
   );
   return `${producerSegment(producer)}:${nameKey}:${appellationKey}${sweetnessKeySegment(sweetness)}`;
 }

@@ -35,6 +35,7 @@ const { isLabelVariant, grapeTokenSet } = require('./labelVariantMatch');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
 const { resolveCanonicalAppellation, candidateKeys } = require('./appellationResolve');
 const { conflictingStyleTerms, sweetnessStated, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
+const { splitChampagneCru } = require('../utils/champagneCru');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -488,6 +489,22 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
         provenance = { ...provenance, appellation: provenance.region };
       }
     }
+  }
+
+  // Champagne: Premier Cru and Grand Cru rate the village, so a cru form
+  // ("Champagne Grand Cru") is the appellation Champagne plus a tier
+  // (utils/champagneCru). Split BEFORE matching, like the Prädikat above: the
+  // keys, the scorer and the region canon below all read "Champagne", and an
+  // add typed with the cru lands on the wine stored without it.
+  const champagne = splitChampagneCru(trimmedAppellation, classification);
+  if (champagne.cru) {
+    // A tier read out of the appellation carries the appellation's
+    // provenance, unless the caller stated a classification of its own.
+    if (provenance && provenance.appellation && !(typeof classification === 'string' && classification.trim())) {
+      provenance = { ...provenance, classification: provenance.appellation };
+    }
+    trimmedAppellation = champagne.appellation;
+    classification = champagne.classification;
   }
 
   // Different-country guard for every non-exact auto-link below: an identical
