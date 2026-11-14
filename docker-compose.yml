@@ -48,7 +48,7 @@ services:
     # Digest-pinned (security audit L-11) to the multi-arch index digest, so
     # amd64 and arm64 hosts both pull. Dependabot's docker-compose ecosystem
     # bumps the tag and digest together.
-    image: getmeili/meilisearch:v1.56.1@sha256:b7ba431bf6f9b26cc86132798f3640964147a699cf23f026b74c6c05dbb1d60d
+    image: getmeili/meilisearch:v1.56.2@sha256:9600db22be3fcbf3d506176d3a73dd70a65c5719d9aa1d2837355b75afb8f4fb
     container_name: cellarion-meilisearch
     restart: unless-stopped
     security_opt:
@@ -292,7 +292,7 @@ services:
     # Digest-pinned (security audit L-11): `:postgresql-latest` is a fully
     # moving tag — the worst supply-chain case. Dependabot's docker-compose
     # ecosystem bumps it.
-    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:b64f40400d77bcadd39cf5c62a1e368c99524ca442024f96e1133355a19a5dbc
     container_name: cellarion-umami
     restart: unless-stopped
     # Opt-in: only starts with `docker compose --profile analytics up`. It is
