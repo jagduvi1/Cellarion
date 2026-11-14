@@ -123,6 +123,8 @@ describe('on: the translated prose is stored beside the English', () => {
     setLanguage('de');
     suggestProfile.mockResolvedValue(answer({
       ...ENGLISH,
+      // As many English flavours as the copy keeps, so only the cleaning differs.
+      flavors: Array.from({ length: 12 }, (_, i) => `f${i}`),
       localized: {
         description: `**Fest** und duftig. ${'x'.repeat(1200)}`,
         flavors: ['Teer', 'null', 'Rose', 'R'.repeat(80), ...Array.from({ length: 12 }, (_, i) => `F${i}`)],
@@ -150,6 +152,8 @@ describe('on: the translated prose is stored beside the English', () => {
     ['flavours missing where the English has them', { description: GERMAN.description, foodPairings: GERMAN.foodPairings }],
     ['pairings not a list', { ...GERMAN, foodPairings: 'Schmorbraten' }],
     ['only placeholders in a list', { ...GERMAN, flavors: ['null', 'n/a'] }],
+    ['fewer flavours than the English', { ...GERMAN, flavors: ['Teer'] }],
+    ['more pairings than the English', { ...GERMAN, foodPairings: ['Schmorbraten', 'Wild'] }],
   ])('%s: no copy is stored, and the profile publishes as usual', async (_, localized) => {
     setLanguage('de');
     suggestProfile.mockResolvedValue(answer({ ...ENGLISH, localized }));
