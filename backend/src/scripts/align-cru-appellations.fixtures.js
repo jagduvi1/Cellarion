@@ -82,7 +82,8 @@ async function seedCruFixture() {
   wine('chablis', 'Domaine Isnardy', 'Cuvée Ivoire', 'Chablis Grand Cru', { region: burgundy._id, type: 'white' });
   wine('gevreyPremier', 'Domaine Jourdel', 'Cuvée Jardin', 'Gevrey-Chambertin Premier Cru', { region: burgundy._id, ...tiers(premierCru) });
   wine('musignyCanonical', 'Domaine Kerlanec', 'Cuvée Kiosque', 'Musigny Grand Cru', { region: burgundy._id });
-  // A pending row keeps its per-creator key namespace.
+  // A pending row keeps its per-creator key namespace (a private draft's
+  // `draft~` key has its last segment replaced the same way).
   wine('pendingMusigny', '', 'Cuvée Lumière', 'Musigny', {
     pendingIdentity: true, createdBy: member._id,
     normalizedKey: `${pendingProducerKey(member._id)}:${normalizeWineName('Cuvée Lumière')}:musigny`,
