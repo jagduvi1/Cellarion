@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,25 +7,53 @@ import { toggleLike, deleteReview } from '../api/reviews';
 import CellarCredBadge from './CellarCredBadge';
 import Modal from './Modal';
 import timeAgo from '../utils/timeAgo';
+import { lazy } from '../utils/lazyWithReload';
 import './ReviewCard.css';
 import { formatVintage } from '../utils/vintage';
 
+const ReviewForm = lazy(() => import('./ReviewForm'));
+
+/**
+ * One review: author, rating, the wine (optional), the tasting notes and the
+ * like / edit / delete actions. The overall impression is clamped to three
+ * lines until "Show more"; the author gets Edit when the list passes
+ * `onUpdate` (called with the saved review) and Delete when it passes
+ * `onDelete` (called with the review id).
+ */
 export default function ReviewCard({ review, showWine = true, onUpdate, onDelete }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const [liked, setLiked] = useState(review.liked || false);
   const [likesCount, setLikesCount] = useState(review.likesCount || 0);
   const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
+  const overallRef = useRef(null);
 
   const author = review.author || {};
   const wine = review.wineDefinition || {};
   const tasting = review.tasting || {};
   const hasTasting = tasting.aroma || tasting.palate || tasting.finish || tasting.overall;
+  const hasDetails = !!(tasting.aroma || tasting.palate || tasting.finish);
   const authorName = author.displayName || author.username || 'Unknown';
   const isOwnReview = user && author._id === user.id;
+
+  // Whether the clamped overall text hides anything. Measured only while it is
+  // clamped: expanded it always fits, and "Show less" must stay. Re-measured
+  // when the card's width changes (a phone turned, a sidebar opened).
+  useLayoutEffect(() => {
+    const el = overallRef.current;
+    if (!el || expanded) return undefined;
+    const measure = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [tasting.overall, expanded]);
 
   const handleLike = async () => {
     const prevLiked = liked;
@@ -80,7 +108,7 @@ export default function ReviewCard({ review, showWine = true, onUpdate, onDelete
             <span className="review-card__vintage">{formatVintage(review.vintage, t)}</span>
           )}
           {review.visibility === 'private' && (
-            <span className="review-card__private-badge">Private</span>
+            <span className="review-card__private-badge">{t('reviews.privateBadge', 'Private')}</span>
           )}
           <span className="review-card__time" title={new Date(review.createdAt).toLocaleDateString()}>
             {timeAgo(review.createdAt)}
@@ -107,21 +135,23 @@ export default function ReviewCard({ review, showWine = true, onUpdate, onDelete
       {hasTasting && (
         <div className={`review-card__tasting ${expanded ? 'expanded' : ''}`}>
           {tasting.overall && (
-            <p className="review-card__overall">{tasting.overall}</p>
+            <p className="review-card__overall" ref={overallRef}>{tasting.overall}</p>
           )}
-          {expanded && (
+          {expanded && hasDetails && (
             <div className="review-card__details">
-              {tasting.aroma && <p><strong>Aroma:</strong> {tasting.aroma}</p>}
-              {tasting.palate && <p><strong>Palate:</strong> {tasting.palate}</p>}
-              {tasting.finish && <p><strong>Finish:</strong> {tasting.finish}</p>}
+              {tasting.aroma && <p><strong>{t('reviews.cardAroma', 'Aroma:')}</strong> {tasting.aroma}</p>}
+              {tasting.palate && <p><strong>{t('reviews.cardPalate', 'Palate:')}</strong> {tasting.palate}</p>}
+              {tasting.finish && <p><strong>{t('reviews.cardFinish', 'Finish:')}</strong> {tasting.finish}</p>}
             </div>
           )}
-          {(tasting.aroma || tasting.palate || tasting.finish) && (
+          {(hasDetails || clamped) && (
             <button
+              type="button"
               className="review-card__expand-btn"
+              aria-expanded={expanded}
               onClick={() => setExpanded(!expanded)}
             >
-              {expanded ? 'Show less' : 'Show more'}
+              {expanded ? t('reviews.showLess', 'Show less') : t('reviews.showMore', 'Show more')}
             </button>
           )}
         </div>
@@ -139,6 +169,20 @@ export default function ReviewCard({ review, showWine = true, onUpdate, onDelete
           </svg>
           <span>{likesCount}</span>
         </button>
+        {isOwnReview && onUpdate && (
+          <button
+            type="button"
+            className="review-card__edit-btn"
+            onClick={() => setEditing(true)}
+            title={t('reviews.editReview', 'Edit review')}
+            aria-label={t('reviews.editReview', 'Edit review')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </button>
+        )}
         {isOwnReview && onDelete && (
           <button
             className="review-card__delete-btn"
@@ -184,6 +228,16 @@ export default function ReviewCard({ review, showWine = true, onUpdate, onDelete
             </button>
           </div>
         </Modal>
+      )}
+
+      {editing && (
+        <Suspense fallback={null}>
+          <ReviewForm
+            existingReview={review}
+            onClose={() => setEditing(false)}
+            onSaved={(saved) => { if (saved) onUpdate(saved); }}
+          />
+        </Suspense>
       )}
     </div>
   );

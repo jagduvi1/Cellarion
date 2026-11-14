@@ -160,6 +160,29 @@
   transition: all var(--transition-fast);
 }
 
+/* Edit sits beside Delete at the right-hand end of the footer. */
+.review-card__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.review-card__edit-btn:hover {
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+.review-card__edit-btn + .review-card__delete-btn {
+  margin-left: 0;
+}
+
 .review-card__delete-btn:hover {
   background: var(--color-bg);
   color: var(--color-danger);

@@ -97,7 +97,7 @@ export default function WineReviewsCard({ wine, vintage, communityRating }) {
         </div>
         {reviews.length > 0 ? (
           reviews.map((review) => (
-            <ReviewCard key={review._id} review={review} showWine={false} onDelete={changed} />
+            <ReviewCard key={review._id} review={review} showWine={false} onUpdate={changed} onDelete={changed} />
           ))
         ) : (
           <p className="bd-reviews__empty">{t('reviews.noReviews', 'No reviews yet. Be the first to review this wine!')}</p>
