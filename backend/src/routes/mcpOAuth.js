@@ -93,12 +93,15 @@ const {
 // urlencoded parser here; /register (json) is already parsed globally.
 router.use(express.urlencoded({ extended: false }));
 
-const MAX_REDIRECT_URIS = 5;
-// Per-URI length cap (security audit 2026-09-02 D16-2): the count was capped
-// but each entry was stored verbatim, so one anonymous registration could park
-// ~2 MB of redirect URIs in Mongo for 30 days, 200 times an hour per address.
-// 2048 is the same bound accountOps applies to URLs; no real client is near it.
+// Registration is anonymous and a client is kept for 30 days, so what one
+// registration may store is bounded three ways: the count, each URI's length
+// (2048, the bound accountOps applies to URLs) and the sum of the lengths.
+// The count leaves room for real clients: Gemini's custom connector registers
+// six callbacks (production, sandbox and test hosts, each with /r/ and /a/).
+// The sum keeps the stored worst case at five full-length URIs.
+const MAX_REDIRECT_URIS = 10;
 const MAX_REDIRECT_URI_LEN = 2048;
+const MAX_REDIRECT_URIS_TOTAL_LEN = 5 * MAX_REDIRECT_URI_LEN;
 const MAX_OAUTH_CONNECTIONS_PER_USER = 20; // Claude + ChatGPT + Desktop + … — generous, but bounded.
 // A refresh token that was just rotated away is honoured once more for this
 // long after the rotation (OAUTH_REFRESH_GRACE_S seconds; 0 = never). A
@@ -162,6 +165,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     }
     if (!redirectUris.every((u) => typeof u === 'string' && u.length <= MAX_REDIRECT_URI_LEN)) {
       return oauthError(res, 400, 'invalid_redirect_uri', `each redirect_uri must be a string of at most ${MAX_REDIRECT_URI_LEN} characters`);
+    }
+    if (redirectUris.reduce((sum, u) => sum + u.length, 0) > MAX_REDIRECT_URIS_TOTAL_LEN) {
+      return oauthError(res, 400, 'invalid_redirect_uri', `redirect_uris may hold at most ${MAX_REDIRECT_URIS_TOTAL_LEN} characters in all`);
     }
     if (!redirectUris.every(isValidRedirectUri)) {
       return oauthError(res, 400, 'invalid_redirect_uri', 'redirect_uris must all be https, or http on a loopback host');
