@@ -66,7 +66,7 @@ export default function AiTextLanguagePanel({ current, languages, apiFetch }) {
           {t('adminAiLanguage.intro', 'The AI can also write each wine\'s tasting note, flavours and food pairings in one of the app\'s languages. The English text stays as it is: search, matching and similar wines read it, and the Registry Bridge shares it. The wine, bottle and vintage pages show the translation.')}
         </div>
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          {t('adminAiLanguage.help', 'Only new AI texts are written in this language. Existing wines, and wines from the Registry Bridge, keep their English text until their profile is written again.')}
+          {t('adminAiLanguage.help', 'Only new AI texts are written in this language. Existing wines keep their English text until their profile is written again. Wines from the Registry Bridge and profiles written by a curator always stay in English: this install never rewrites them.')}
         </div>
         <div className="sa-kv">
           <div className="sa-kv-row">
