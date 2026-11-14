@@ -844,12 +844,14 @@ wineDefinitionSchema.pre('validate', async function() {
 // Cru") is stored as "Champagne" on every save-based write, and the cru joins
 // the wine's tiers through the classification write rule. The key builders
 // read a cru form as Champagne too, so a lookup lands on the row this stores.
-// An async hook of its own, like the one above: the write rule reads the
-// classification taxonomy. Atomic writes skip it:
-// scripts/align-cru-appellations.js is the backfill.
+// A save that re-keys a row stored with a cru form moves it as well: an edit
+// form re-sends the unchanged appellation beside a new name, and the key it
+// writes already reads Champagne. An async hook of its own, like the one
+// above: the write rule reads the classification taxonomy. Atomic writes skip
+// it: scripts/align-cru-appellations.js is the backfill.
 const { champagneCruOf } = require('../utils/champagneCru');
 wineDefinitionSchema.pre('validate', async function() {
-  if (!this.isModified('appellation') || !champagneCruOf(this.appellation)) return;
+  if (!(this.isModified('appellation') || this.isModified('normalizedKey')) || !champagneCruOf(this.appellation)) return;
   await require('../services/classificationOps').moveChampagneCru(this);
 });
 

@@ -345,6 +345,16 @@ describeWithMongo('a Champagne cru typed into the appellation, on every write pa
       expect(clash.status).toBe(400);
       expect((await raw(other._id)).appellation).toBe('Coteaux Champenois');
 
+      // A row stored before the rule: the form re-sends its cru form unchanged beside a new name.
+      const e = fresh();
+      const before = await stored(e, { appellation: 'Coteaux Champenois', classification: 'Old Vines' });
+      await db.collection('winedefinitions').updateOne({ _id: before._id }, { $set: {
+        appellation: 'Champagne Grand Cru', normalizedKey: `${generateWineKey(e.name, e.producer, '')}champagne grand cru`,
+      } });
+      const renamed = await call(`/api/admin/wines/${before._id}`, { token: tokens.admin, method: 'PUT', body: { ...e, name: `${e.name} Millésime`, appellation: 'Champagne Grand Cru' } });
+      expect(renamed.status).toBe(200);
+      await expectChampagne(before._id, ['Grand Cru', 'Old Vines'], { key: generateWineKey(`${e.name} Millésime`, e.producer, 'Champagne') });
+
       const c = fresh();
       const cognac = await stored(c, { appellation: 'Cognac' });
       for (const [appellation, segment] of [['Grande Champagne', 'grande champagne'], ['Fine Champagne', 'fine champagne'], ['Champagne Grand Cru (Bouzy)', 'champagne grand cru bouzy']]) {

@@ -100,6 +100,19 @@ describe('with the classification taxonomy loaded', () => {
     }
   });
 
+  test('a save that re-keys a row stored with a cru form moves it, keeping its tiers', async () => {
+    const doc = await savedWine({ classification: 'Old Vines', classifications: [rowId('Old Vines')] });
+    // As a row written before the rule reads: set and marked clean.
+    doc.appellation = 'Champagne Premier Cru';
+    doc.unmarkModified('appellation');
+    doc.name = 'Blanc de Blancs Millésime';
+    doc.normalizedKey = 'maison exemple:blanc de blancs millesime:champagne';
+    await doc.validate();
+    expect(doc.appellation).toBe('Champagne');
+    expect(doc.classification).toBe('Premier Cru, Old Vines');
+    expect(doc.canonicalKey).toBe(computeCanonicalKey('Blanc de Blancs Millésime', 'Maison Exemple', 'Champagne'));
+  });
+
   test('a row stored with a cru form is left as it is by a save that does not touch the appellation', async () => {
     const doc = await savedWine();
     // As a row written before the rule reads: set and marked clean.
