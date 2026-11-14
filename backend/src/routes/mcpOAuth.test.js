@@ -116,6 +116,41 @@ describe('POST /register (DCR)', () => {
     expect(r.status).toBe(400);
   });
 
+  test("Gemini's custom connector registers its six callbacks", async () => {
+    OAuthClient.create.mockImplementation(async (doc) => ({ _id: 'c1', createdAt: new Date(), ...doc }));
+    const connector = 'user_bound_custom-mcp-1234567890-cellarion';
+    const geminiCallbacks = ['oauth-redirect-sandbox', 'oauth-redirect-test', 'oauth-redirect']
+      .flatMap((host) => ['r', 'a'].map((p) => `https://${host}.googleusercontent.com/${p}/${connector}`));
+    const r = await jsonPost('/register', {
+      redirect_uris: geminiCallbacks,
+      client_name: 'Google',
+      token_endpoint_auth_method: 'client_secret_post',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+    });
+    expect(r.status).toBe(201);
+    expect((await r.json()).redirect_uris).toEqual(geminiCallbacks);
+    expect(OAuthClient.create.mock.calls[0][0].redirectUris).toEqual(geminiCallbacks);
+  });
+
+  test('more than ten redirect_uris are refused before anything is stored', async () => {
+    const uris = Array.from({ length: 11 }, (_, i) => `https://a.example/cb${i}`);
+    const r = await jsonPost('/register', { redirect_uris: uris });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('invalid_redirect_uri');
+    expect(OAuthClient.create).not.toHaveBeenCalled();
+  });
+
+  test('redirect_uris whose lengths add up past the total are refused, each within its own cap', async () => {
+    const uris = Array.from({ length: 6 }, (_, i) => `https://a.example/${i}${'x'.repeat(1990)}`);
+    const r = await jsonPost('/register', { redirect_uris: uris });
+    expect(r.status).toBe(400);
+    const body = await r.json();
+    expect(body.error).toBe('invalid_redirect_uri');
+    expect(body.error_description).toMatch(/10240/);
+    expect(OAuthClient.create).not.toHaveBeenCalled();
+  });
+
   test('a new client is registered with a never-used TTL (expiresAt in the future)', async () => {
     OAuthClient.create.mockResolvedValue({ _id: 'c1', clientId: 'mcpc_x', clientName: null, createdAt: new Date(), grantTypes: [], responseTypes: [] });
     await jsonPost('/register', { redirect_uris: [REDIRECT] });
