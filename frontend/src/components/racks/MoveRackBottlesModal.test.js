@@ -9,7 +9,6 @@ vi.mock('react-i18next', () => {
   };
   return { useTranslation: () => ({ t }) };
 });
-vi.mock('../BetaBadge', () => ({ default: () => null }));
 
 const { default: MoveRackBottlesModal, freeSlotsOf } = await import('./MoveRackBottlesModal');
 

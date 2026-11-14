@@ -33,35 +33,6 @@ const STATES = Object.freeze(['off', 'beta', 'everyone']);
 // frontend (earlyAccess.features.<key>.name). `since` is the day the flag
 // entered the code — the "in beta since" date until a super admin moves it.
 const FEATURES = Object.freeze([
-  // The "Move bottles to another rack" action in a rack's tools menu. The
-  // move itself (POST /api/racks/:id/move-bottles) works for everyone; the
-  // flag only decides who sees the button.
-  Object.freeze({
-    key: 'rackMoveBottles',
-    title: "Move a rack's bottles to another rack",
-    defaultState: 'beta',
-    since: '2026-10-12',
-  }),
-  // The "Bottles lie head to tail" choice for a one-deep wine cabinet. The
-  // option itself (typeConfig.headToTail) is stored and drawn for everyone;
-  // the flag only decides who sees the checkbox.
-  Object.freeze({
-    key: 'cabinetHeadToTail',
-    title: 'Wine cabinet bottles head to tail',
-    defaultState: 'beta',
-    since: '2026-10-12',
-  }),
-  // Per shelf, how a wine cabinet's bottles lie: one across the front of the
-  // others, or all across (a bottom bin) — plus the Kingsbottle Atelier Duo
-  // preset that uses it. The setting (typeConfig.shelfSideways) is stored and
-  // drawn for everyone; the flag only decides who sees the controls and the
-  // preset.
-  Object.freeze({
-    key: 'cabinetSideways',
-    title: 'Wine cabinet bottles lying sideways',
-    defaultState: 'beta',
-    since: '2026-10-13',
-  }),
   // Pick lists: named lists of bottles to fetch, each shown with its cellar,
   // rack and slot (/api/pick-lists, model PickList). The lists and the API
   // work for everyone; the flag only decides who sees the screens (the "Pick
@@ -72,16 +43,6 @@ const FEATURES = Object.freeze([
     title: 'Pick lists',
     defaultState: 'beta',
     since: '2026-10-13',
-  }),
-  // "Move" in a rack slot's pop-up, then a tap on the slot it goes to — the
-  // way to move a bottle on a phone, where dragging is off. It uses the
-  // same move and place requests as the drag; the flag only decides who sees
-  // the button.
-  Object.freeze({
-    key: 'rackSlotMove',
-    title: 'Move a bottle by tapping (phones)',
-    defaultState: 'beta',
-    since: '2026-10-17',
   }),
   // The drink window drawn as one timeline — the phases as a bar with a
   // marker on this year — in place of the status badge above the phase

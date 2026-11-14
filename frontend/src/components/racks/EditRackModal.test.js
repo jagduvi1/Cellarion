@@ -4,8 +4,6 @@ vi.mock('react-i18next', () => {
   const t = (key, fallback) => (typeof fallback === 'string' ? fallback : key);
   return { useTranslation: () => ({ t }) };
 });
-vi.mock('../../utils/featureFlags', () => ({ useFeature: () => true }));
-vi.mock('../BetaBadge', () => ({ default: () => null }));
 
 const EditRackModal = (await import('./EditRackModal')).default;
 

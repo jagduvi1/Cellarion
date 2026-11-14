@@ -35,8 +35,6 @@ import MoveRackBottlesModal from '../components/racks/MoveRackBottlesModal';
 import NfcLinkModal from '../components/racks/NfcLinkModal';
 import NewRackForm from '../components/racks/NewRackForm';
 import { EmptySlotContent, DisabledSlotContent, FilledSlotContent } from '../components/racks/SlotPopupContent';
-import BetaBadge from '../components/BetaBadge';
-import { useFeature } from '../utils/featureFlags';
 import { groupRacks, groupNames } from '../utils/rackGroups';
 import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import { canEditCellar } from '../utils/cellarRole';
@@ -199,13 +197,10 @@ function CellarRacks() {
   // Rack tools (⋮) dropdown in the lens toolbar
   const [toolsOpen, setToolsOpen] = useState(false);
 
-  // Early access: "Move bottles to another rack" (MoveRackBottlesModal). Holds
-  // the SOURCE rack's id while open — pinned, because reloading the racks
-  // after the move can change which rack the page has selected (a ?highlight
-  // follows its bottle into the target).
-  const moveRackOn = useFeature('rackMoveBottles');
-  // Early access: "Move" in a slot's pop-up, then a tap on the slot it goes to.
-  const slotMoveOn = useFeature('rackSlotMove');
+  // "Move bottles to another rack" (MoveRackBottlesModal). Holds the SOURCE
+  // rack's id while open — pinned, because reloading the racks after the move
+  // can change which rack the page has selected (a ?highlight follows its
+  // bottle into the target).
   const [moveOpen, setMoveOpen] = useState(null);
 
   // Zone editor modal
@@ -703,8 +698,8 @@ function CellarRacks() {
     }
   };
 
-  // Every bottle of one rack into another, in order (early access
-  // 'rackMoveBottles'). Both racks change, so reload them all.
+  // Every bottle of one rack into another, in order. Both racks change, so
+  // reload them all.
   const handleMoveBottles = async (rackId, toRackId) => {
     try {
       const res = await moveRackBottles(apiFetch, rackId, toRackId);
@@ -798,7 +793,7 @@ function CellarRacks() {
                 {t('arrange.openBtn', 'Organize…')}
               </button>
             )}
-            {moveRackOn && rack.slots.length > 0 && (
+            {rack.slots.length > 0 && (
               <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setMoveOpen(rack._id); }}>
                 {t('racks.moveBottles.menuItem', 'Move bottles to another rack…')}
               </button>
@@ -1025,7 +1020,6 @@ function CellarRacks() {
               {t('common.cancel')}
             </button>
           </span>
-          <BetaBadge feature="rackSlotMove" note={t('racks.moveMode.betaNote', 'Moving a bottle by tapping is in early access.')} />
         </div>
       )}
 
@@ -1133,9 +1127,7 @@ function CellarRacks() {
               </div>
               {canEdit && (
                 <p className="rack-drag-hint">
-                  {slotMoveOn
-                    ? t('rackLens.dragHintMove', 'Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them — or tap the bottle and choose Move.')
-                    : t('rackLens.dragHint', 'Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.')}
+                  {t('rackLens.dragHintMove', 'Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them — or tap the bottle and choose Move.')}
                 </p>
               )}
             </>
@@ -1277,11 +1269,11 @@ function CellarRacks() {
                   canEdit={canEdit}
                   onPour={() => handlePour(activePopup.rackId, (activePopup.slot.bottle?._id || activePopup.slot.bottle).toString())}
                   onRemoveFromRack={() => handleRemoveFromRack(activePopup.rackId, activePopup.position)}
-                  onMove={slotMoveOn ? () => {
+                  onMove={() => {
                     setMoving({ rackId: activePopup.rackId, position: activePopup.position, bottle: activePopup.slot.bottle });
                     setActivePopup(null);
                     setActionError(null);
-                  } : undefined}
+                  }}
                   onConsume={() => {
                     setConsumeModal({
                       bottleId: activePopup.slot.bottle._id,
@@ -1358,7 +1350,7 @@ function CellarRacks() {
         />
       )}
 
-      {/* Early access: move every bottle to another rack */}
+      {/* Move every bottle to another rack */}
       {moveOpen && (() => {
         const source = racks.find(r => r._id === moveOpen);
         return source ? (

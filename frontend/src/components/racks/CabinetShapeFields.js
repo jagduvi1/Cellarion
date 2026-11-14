@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CABINET_PRESETS, CABINET_PRESET_GROUPS, CABINET_MAX_ROWS_PER_SHELF, fitShelfRows, cabinetCapacity } from '../../utils/cabinetPresets';
 import { cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways } from '../../utils/rackLayouts';
-import { useFeature } from '../../utils/featureFlags';
 import IntegerField from '../IntegerField';
 
 // The shape of a wine cabinet in the new-rack form: preset, rows of bottles
@@ -29,13 +28,8 @@ export default function CabinetShapeFields({ newRack, setNewRack }) {
   const alternate = newRack.typeConfig?.alternate === true;
   const allAlternate = shelfAlt.length > 0 && shelfAlt.every(Boolean);
   const stagger = allAlternate || newRack.typeConfig?.stagger !== false;
-  const headToTailOn = useFeature('cabinetHeadToTail');
   const headToTail = !twoDeep && newRack.typeConfig?.headToTail === true;
-  // How each shelf's bottles lie (early access, 'cabinetSideways'): the
-  // per-shelf choice and the presets built on it show only with the flag.
-  const sidewaysOn = useFeature('cabinetSideways');
   const shelfSide = cabinetShelfSideways(newRack.rows, newRack.typeConfig);
-  const presetShown = (p) => !p.feature || (p.feature === 'cabinetSideways' && sidewaysOn);
   const preset = CABINET_PRESETS.find((p) => p.key === presetKey);
   // The shelves / bottles-across inputs live in the parent form, so editing
   // them must drop the preset label: the shape is no longer that model.
@@ -92,9 +86,9 @@ export default function CabinetShapeFields({ newRack, setNewRack }) {
         <label>{t('racks.cabinetPresetLabel', 'Start from')}</label>
         <select value={presetKey} onChange={(e) => applyPreset(e.target.value)}>
           <option value="custom">{t('racks.cabinetPresetCustom', 'Custom shape')}</option>
-          {CABINET_PRESET_GROUPS.filter((group) => CABINET_PRESETS.some((p) => p.group === group && presetShown(p))).map((group) => (
+          {CABINET_PRESET_GROUPS.filter((group) => CABINET_PRESETS.some((p) => p.group === group)).map((group) => (
             <optgroup key={group} label={t(`racks.cabinetPresetGroup_${group}`, group)}>
-              {CABINET_PRESETS.filter((p) => p.group === group && presetShown(p)).map((p) => (
+              {CABINET_PRESETS.filter((p) => p.group === group).map((p) => (
                 <option key={p.key} value={p.key}>{t(`racks.cabinetPreset_${p.key}`, p.key)}</option>
               ))}
             </optgroup>
@@ -143,26 +137,24 @@ export default function CabinetShapeFields({ newRack, setNewRack }) {
                 />
                 <span>{t('racks.cabinetShelfAlternateShort', '6 / 5 alternating')}</span>
               </label>
-              {sidewaysOn && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <span>{t('racks.cabinetShelfSidewaysShort', 'bottles lie')}</span>
-                  <select
-                    value={shelfSide[i]}
-                    onChange={(e) => setSide(i, e.target.value)}
-                    aria-label={`${t('racks.cabinetShelfN', { n: i + 1 })} ${t('racks.cabinetShelfSidewaysShort', 'bottles lie')}`}
-                  >
-                    <option value="">{t('racks.cabinetSidewaysNone', 'front to back')}</option>
-                    <option value="front">{t('racks.cabinetSidewaysFront', 'one across the front')}</option>
-                    <option value="all">{t('racks.cabinetSidewaysAll', 'all across')}</option>
-                  </select>
-                </label>
-              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <span>{t('racks.cabinetShelfSidewaysShort', 'bottles lie')}</span>
+                <select
+                  value={shelfSide[i]}
+                  onChange={(e) => setSide(i, e.target.value)}
+                  aria-label={`${t('racks.cabinetShelfN', { n: i + 1 })} ${t('racks.cabinetShelfSidewaysShort', 'bottles lie')}`}
+                >
+                  <option value="">{t('racks.cabinetSidewaysNone', 'front to back')}</option>
+                  <option value="front">{t('racks.cabinetSidewaysFront', 'one across the front')}</option>
+                  <option value="all">{t('racks.cabinetSidewaysAll', 'all across')}</option>
+                </select>
+              </label>
             </div>
           ))}
         </div>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
           {t('racks.cabinetShelfRowsHelp', 'Rows: 1 = a sliding shelf with a single row, more = a stacking bay. Across: a shelf narrower than the cabinet is drawn centred. Alternating: the rows of that shelf go full width, one fewer, full width … (6 in front of 5, then 5 in front of 6). The maker\'s presets fill this in; change any shelf to match how you load yours.')}
-          {sidewaysOn ? ` ${t('racks.cabinetSidewaysHelp', 'Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). On a shelf stacked in levels of a one-deep cabinet, the level above a bottle lying across rests on the bottles behind it, so it holds one fewer. Otherwise the number of bottles and the slot numbers stay the same.')}` : ''}
+          {` ${t('racks.cabinetSidewaysHelp', 'Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). On a shelf stacked in levels of a one-deep cabinet, the level above a bottle lying across rests on the bottles behind it, so it holds one fewer. Otherwise the number of bottles and the slot numbers stay the same.')}`}
         </small>
       </div>
 
@@ -214,24 +206,22 @@ export default function CabinetShapeFields({ newRack, setNewRack }) {
         </small>
       </div>
 
-      {headToTailOn && (
-        <div className="form-group">
-          <label>
-            <input
-              type="checkbox"
-              checked={headToTail}
-              disabled={twoDeep}
-              onChange={(e) => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, headToTail: e.target.checked } })}
-            />
-            {' '}{t('racks.cabinetHeadToTailLabel', 'Bottles lie head to tail')}
-          </label>
-          <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-            {twoDeep
-              ? t('racks.cabinetHeadToTailNeedsSingle', 'Head to tail is for bottles that lie one deep: untick Two deep first.')
-              : t('racks.cabinetHeadToTailHelp', 'For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.')}
-          </small>
-        </div>
-      )}
+      <div className="form-group">
+        <label>
+          <input
+            type="checkbox"
+            checked={headToTail}
+            disabled={twoDeep}
+            onChange={(e) => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, headToTail: e.target.checked } })}
+          />
+          {' '}{t('racks.cabinetHeadToTailLabel', 'Bottles lie head to tail')}
+        </label>
+        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+          {twoDeep
+            ? t('racks.cabinetHeadToTailNeedsSingle', 'Head to tail is for bottles that lie one deep: untick Two deep first.')
+            : t('racks.cabinetHeadToTailHelp', 'For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.')}
+        </small>
+      </div>
     </>
   );
 }

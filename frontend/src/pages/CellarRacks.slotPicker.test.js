@@ -15,7 +15,6 @@ vi.mock('react-i18next', () => {
 });
 vi.mock('../components/CellarNav', () => ({ default: () => null }));
 vi.mock('../components/WineImage', () => ({ default: () => null }));
-vi.mock('../utils/featureFlags', () => ({ useFeature: () => false }));
 // The drawn rack is beside the point here: one button per position, wired to
 // the page's own slot handler.
 vi.mock('../components/racks/RackRenderer', () => ({

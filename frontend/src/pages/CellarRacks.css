@@ -732,7 +732,7 @@
   margin: 0 0 0.5rem;
 }
 
-/* Move bottles to another rack (early access). */
+/* Move bottles to another rack. */
 .move-rack-choices {
   border: none;
   margin: 0 0 0.75rem;
@@ -1239,8 +1239,8 @@
 .edit-rack-form input[type="checkbox"] { width: auto; margin: 0; }
 .edit-rack-form .edit-rack-option-help { display: block; margin: -0.5rem 0 0.75rem; }
 .edit-rack-form .help-text { font-size: 0.78rem; color: var(--color-text-muted); }
-/* How each shelf's bottles lie (early access 'cabinetSideways'): one compact
-   line per shelf, two columns where the dialog is wide enough. */
+/* How each shelf's bottles lie: one compact line per shelf, two columns
+   where the dialog is wide enough. */
 .edit-rack-form .edit-rack-sideways { border: 0; padding: 0; margin: 0 0 0.75rem; }
 .edit-rack-form .edit-rack-sideways legend { font-size: 0.85rem; color: var(--color-text-secondary); padding: 0; margin-bottom: 0.35rem; }
 .edit-rack-form .edit-rack-sideways-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.82rem; padding: 0.15rem 0; }

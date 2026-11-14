@@ -6,8 +6,6 @@ import RackRenderer from './RackRenderer';
 import RackTypeSelector, { TYPE_DIMENSIONS } from './RackTypeSelector';
 import CabinetShapeFields from './CabinetShapeFields';
 import IntegerField from '../IntegerField';
-import BetaBadge from '../BetaBadge';
-import { useFeature } from '../../utils/featureFlags';
 // Lazy: ShelfView3D pulls in three.js; the form loads it only when its 3D
 // preview is shown.
 const ShelfView3D = lazy(() => import('./ShelfView3D'));
@@ -40,8 +38,6 @@ const PREVIEW_FILL_MAX = 180;
  */
 export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, groups = [] }) {
   const { t } = useTranslation();
-  const headToTailOn = useFeature('cabinetHeadToTail');
-  const sidewaysOn = useFeature('cabinetSideways');
   const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
   const [showPreview, setShowPreview] = useState(false);
   // Which preview to draw. A cabinet or an open shelf is about its SHAPE, so
@@ -89,7 +85,6 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
   };
 
   return (
-    <>
     <form className="card new-rack-form" onSubmit={onSubmit}>
       <h3>{t('racks.newRackTitle')}</h3>
 
@@ -328,14 +323,5 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         </div>
       )}
     </form>
-    {/* Outside the form: the feedback dialog has a form of its own, and a
-        submit inside this one would create the rack. */}
-    {newRack.type === 'cabinet' && headToTailOn && (
-      <BetaBadge feature="cabinetHeadToTail" note={t('racks.cabinetHeadToTailBeta', 'Bottles head to tail is in early access.')} />
-    )}
-    {newRack.type === 'cabinet' && sidewaysOn && (
-      <BetaBadge feature="cabinetSideways" note={t('racks.cabinetSidewaysBeta', 'Bottles lying sideways is in early access.')} />
-    )}
-    </>
   );
 }

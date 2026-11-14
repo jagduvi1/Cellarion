@@ -3295,7 +3295,6 @@
     "undoError": "En flytt misslyckades under ångringen — hyllan kan ha ändrats. Stäng och kontrollera hyllan."
   },
   "rackLens": {
-    "dragHint": "Tips: dra en flaska till en tom plats för att flytta den, eller släpp den på en annan flaska för att byta plats.",
     "searchPlaceholder": "Sök i hyllorna…",
     "colorBy": "Färglägg efter",
     "lensType": "Vintyp",

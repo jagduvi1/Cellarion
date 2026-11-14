@@ -127,7 +127,7 @@ describe('overview', () => {
       key: 'pickLists', title: 'Pick lists', state: 'beta', feedback: { total: 3, open: 1 },
     }));
     expect(o.features).toContainEqual(expect.objectContaining({
-      key: 'rackMoveBottles', state: 'beta', feedback: { total: 0, open: 0 },
+      key: 'maturityTimeline', state: 'beta', feedback: { total: 0, open: 0 },
     }));
     expect(User.countDocuments).toHaveBeenCalledWith({ 'preferences.earlyAccess': true, isDemo: { $ne: true } });
   });
