@@ -3,6 +3,7 @@ import { BOTTLE_SIZES, bottleSizeLabel } from '../../config/bottleSizes';
 import { validatePriceSanity } from '../../utils/priceValidation';
 import RatingInput from '../RatingInput';
 import { vintageInputProps } from '../../utils/vintage';
+import IntegerField from '../IntegerField';
 
 /**
  * The fields every bottle has: vintage, size, how many, price and currency,
@@ -30,13 +31,11 @@ export default function BottleCoreFields({
 
         <div className="form-group">
           <label>{t('addBottle.numberOfBottles')}</label>
-          <input
-            type="number"
-            inputMode="numeric"
+          <IntegerField
             value={numBottles}
-            onChange={(e) => setNumBottles(Math.max(1, parseInt(e.target.value) || 1))}
+            onCommit={setNumBottles}
             onFocus={(e) => e.target.select()}
-            min="1"
+            min={1}
             required
           />
         </div>

@@ -5,6 +5,7 @@ import { getTotalSlots } from '../../utils/rackLayouts';
 import RackRenderer from './RackRenderer';
 import RackTypeSelector, { TYPE_DIMENSIONS } from './RackTypeSelector';
 import CabinetShapeFields from './CabinetShapeFields';
+import IntegerField from '../IntegerField';
 import BetaBadge from '../BetaBadge';
 import { useFeature } from '../../utils/featureFlags';
 // Lazy: ShelfView3D pulls in three.js; the form loads it only when its 3D
@@ -125,12 +126,10 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         {dims.showRows && (
           <div className="form-group">
             <label>{t(dims.rowLabel || 'racks.rowsLabel')}</label>
-            <input
-              type="number"
-              inputMode="numeric"
+            <IntegerField
               min={1} max={20}
               value={newRack.rows}
-              onChange={e => setNewRack({ ...newRack, rows: parseInt(e.target.value) || dims.defaultRows })}
+              onCommit={rows => setNewRack({ ...newRack, rows })}
             />
           </div>
         )}
@@ -138,12 +137,10 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         {dims.showCols && (
           <div className="form-group">
             <label>{t(dims.colLabel || 'racks.colsLabel')}</label>
-            <input
-              type="number"
-              inputMode="numeric"
+            <IntegerField
               min={1} max={20}
               value={newRack.cols}
-              onChange={e => setNewRack({ ...newRack, cols: parseInt(e.target.value) || dims.defaultCols })}
+              onCommit={cols => setNewRack({ ...newRack, cols })}
             />
           </div>
         )}
@@ -216,28 +213,18 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
           <>
             <div className="form-group">
               <label>{t('racks.moduleRowsLabel')}</label>
-              <input
-                type="number"
-                inputMode="numeric"
+              <IntegerField
                 min={1} max={10}
                 value={newRack.typeConfig?.moduleRows || 2}
-                onChange={e => setNewRack({
-                  ...newRack,
-                  typeConfig: { ...newRack.typeConfig, moduleRows: parseInt(e.target.value) || 2 }
-                })}
+                onCommit={moduleRows => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, moduleRows } })}
               />
             </div>
             <div className="form-group">
               <label>{t('racks.moduleColsLabel')}</label>
-              <input
-                type="number"
-                inputMode="numeric"
+              <IntegerField
                 min={1} max={10}
                 value={newRack.typeConfig?.moduleCols || 2}
-                onChange={e => setNewRack({
-                  ...newRack,
-                  typeConfig: { ...newRack.typeConfig, moduleCols: parseInt(e.target.value) || 2 }
-                })}
+                onCommit={moduleCols => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, moduleCols } })}
               />
             </div>
           </>
@@ -250,15 +237,10 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         {dims.showBottlesPerCell && (
           <div className="form-group">
             <label>{t('racks.bottlesPerCellLabel', 'Bottles per cell')}</label>
-            <input
-              type="number"
-              inputMode="numeric"
+            <IntegerField
               min={1} max={20}
               value={newRack.typeConfig?.bottlesPerCell || 1}
-              onChange={e => setNewRack({
-                ...newRack,
-                typeConfig: { ...newRack.typeConfig, bottlesPerCell: parseInt(e.target.value) || 1 }
-              })}
+              onCommit={bottlesPerCell => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, bottlesPerCell } })}
             />
           </div>
         )}
@@ -266,15 +248,10 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         {dims.showBackCols && (
           <div className="form-group">
             <label>{t('racks.backColsLabel', 'Back row bottles (per shelf)')}</label>
-            <input
-              type="number"
-              inputMode="numeric"
+            <IntegerField
               min={0} max={20}
               value={newRack.typeConfig?.backCols ?? 0}
-              onChange={e => setNewRack({
-                ...newRack,
-                typeConfig: { ...newRack.typeConfig, backCols: Math.max(0, parseInt(e.target.value) || 0) }
-              })}
+              onCommit={backCols => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, backCols } })}
             />
           </div>
         )}
@@ -282,15 +259,10 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         {dims.showBottlesPerSection && (
           <div className="form-group">
             <label>{t('racks.bottlesPerSectionLabel', 'Bottles per section')}</label>
-            <input
-              type="number"
-              inputMode="numeric"
+            <IntegerField
               min={1} max={30}
               value={newRack.typeConfig?.bottlesPerSection || 10}
-              onChange={e => setNewRack({
-                ...newRack,
-                typeConfig: { ...newRack.typeConfig, bottlesPerSection: parseInt(e.target.value) || 10 }
-              })}
+              onCommit={bottlesPerSection => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, bottlesPerSection } })}
             />
           </div>
         )}

@@ -36,6 +36,7 @@ import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import AnchorPicker from './import/AnchorPicker';
 import CurrencyPicker from './import/CurrencyPicker';
+import IntegerField from '../components/IntegerField';
 import {
   listImportSessions,
   createImportSession,
@@ -1699,11 +1700,10 @@ function ImportBottles() {
                     {dims.showRows && (
                       <label className="rack-config-field">
                         <span>{dims.rowLabel === 'racks.heightLabel' ? t('importBottles.rack.height') : dims.rowLabel === 'racks.shelvesLabel' ? t('importBottles.rack.shelves') : t('importBottles.rack.rows')}</span>
-                        <input
-                          type="number" min="1" max="20"
+                        <IntegerField
+                          min={1} max={20}
                           value={cfg.rows}
-                          onChange={(e) => {
-                            const newRows = parseInt(e.target.value, 10) || 1;
+                          onCommit={(newRows) => {
                             if (cfg.type !== 'cabinet') { updateCfg({ rows: newRows }); return; }
                             // Cabinet: keep the per-shelf list the length of the
                             // shelf count. Extra shelves are 1-row shelves added at
@@ -1725,10 +1725,10 @@ function ImportBottles() {
                     {dims.showCols && (
                       <label className="rack-config-field">
                         <span>{dims.colLabel === 'racks.baseWidthLabel' ? t('importBottles.rack.baseWidth') : dims.colLabel === 'racks.bottlesAcrossLabel' ? t('importBottles.rack.bottlesAcross') : t('importBottles.rack.cols')}</span>
-                        <input
-                          type="number" min="1" max="20"
+                        <IntegerField
+                          min={1} max={20}
                           value={cfg.cols}
-                          onChange={(e) => updateCfg({ cols: parseInt(e.target.value, 10) || 1 })}
+                          onCommit={(cols) => updateCfg({ cols })}
                         />
                       </label>
                     )}
