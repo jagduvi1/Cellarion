@@ -201,6 +201,7 @@ function ReviewFeed() {
               key={review._id}
               review={review}
               showWine
+              onUpdate={saved => setReviews(prev => prev.map(r => (r._id === saved._id ? { ...r, ...saved } : r)))}
               onDelete={id => setReviews(prev => prev.filter(r => r._id !== id))}
             />
           ))}
