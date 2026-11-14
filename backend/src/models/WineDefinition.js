@@ -839,6 +839,20 @@ wineDefinitionSchema.pre('validate', async function() {
   this.$locals.sweetnessSpellings = row ? [row.name, ...(Array.isArray(row.synonyms) ? row.synonyms : [])] : null;
 });
 
+// Champagne's Premier Cru and Grand Cru rate the village, not the appellation
+// (docs/wine-fields.md): a cru form set as the appellation ("Champagne Grand
+// Cru") is stored as "Champagne" on every save-based write, and the cru joins
+// the wine's tiers through the classification write rule. The key builders
+// read a cru form as Champagne too, so a lookup lands on the row this stores.
+// An async hook of its own, like the one above: the write rule reads the
+// classification taxonomy. Atomic writes skip it:
+// scripts/align-cru-appellations.js is the backfill.
+const { champagneCruOf } = require('../utils/champagneCru');
+wineDefinitionSchema.pre('validate', async function() {
+  if (!this.isModified('appellation') || !champagneCruOf(this.appellation)) return;
+  await require('../services/classificationOps').moveChampagneCru(this);
+});
+
 // Keep canonicalKey in sync with the identity fields, and drop the human-review
 // record when the reviewed strings change. pre-validate (not pre-save) so plain
 // doc.validate() computes it too. Covers every save-based write path (create,

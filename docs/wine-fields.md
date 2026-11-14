@@ -38,7 +38,7 @@ The name is what distinguishes the bottle within the producer's range, without t
 The appellation is the appellation **as the register names it, without the regulatory mark**.
 
 - **The mark goes.** "Barolo DOCG" → "Barolo"; "DOCa Rioja" → "Rioja"; "Chianti Denominazione di Origine Controllata" → "Chianti". This is stripped automatically on write, as a prefix, a suffix or a spelled-out phrase.
-- **Tier words that are part of the legal name stay.** "Chablis Premier Cru", "Saint-Émilion Grand Cru", "Alsace Grand Cru", "Gevrey-Chambertin Premier Cru" are the appellations themselves. The registry holds several hundred of these and they are correct. Do not move Premier Cru or Grand Cru out of the appellation in these regions.
+- **Tier words that are part of the legal name stay.** "Chablis Premier Cru", "Saint-Émilion Grand Cru", "Alsace Grand Cru", "Gevrey-Chambertin Premier Cru" are the appellations themselves. The registry holds several hundred of these and they are correct. Do not move Premier Cru or Grand Cru out of the appellation in these regions. A Côte d'Or grand-cru vineyard is an appellation in its own right and is stored the same way, with "Grand Cru" as the label prints it ("Corton Grand Cru", "Musigny Grand Cru"); the bare register name ("Corton") is an accepted spelling that resolves to it.
 - **Champagne is the exception.** There, Premier Cru and Grand Cru rate the village, not the appellation: the appellation stays "Champagne" and the cru goes in `classification`.
 - **Some marks are the official form.** "Kamptal DAC", "VQA Ontario" and "Wine of Origin Western Cape" keep their mark, because that is how the register names them. Only the trailing forms "Ontario VQA" and "Swartland WO" are stripped.
 - **A bare Prädikat is not an appellation.** "Spätlese" alone in the appellation field is moved to `classification` automatically.
@@ -128,7 +128,7 @@ The sweetness or dosage term **the label states**, named as the registry's term 
 | Giacomo Borgogno, Barolo Riserva DOCG | Barolo Riserva | Barolo | Riserva |
 | Alpha Zeta, Amarone della Valpolicella DOCG | Amarone della Valpolicella | Amarone della Valpolicella | *(empty)* |
 | Joseph Drouhin, Chablis Premier Cru "Vaillons" | Vaillons | Chablis Premier Cru | *(empty)* |
-| Domaine Faiveley, Corton Grand Cru "Clos des Cortons" | Clos des Cortons | Corton | *(empty)* |
+| Domaine Faiveley, Corton Grand Cru "Clos des Cortons" | Clos des Cortons | Corton Grand Cru | *(empty)* |
 | Pierre Gimonnet, Cuis 1er Cru Blanc de Blancs, Champagne | Cuis 1er Cru Blanc de Blancs | Champagne | Premier Cru |
 | Dr. Loosen, Wehlener Sonnenuhr Riesling Spätlese | Wehlener Sonnenuhr Riesling Spätlese | Mosel | Spätlese |
 | Hugel, Riesling Vendange Tardive, Alsace | Riesling Vendange Tardive | Alsace | Vendange Tardive |
@@ -140,7 +140,7 @@ Notes on the examples:
 - **Lynch-Bages:** "en 1855" is a ride-along word, and "Grand Cru Classé en 1855" is one of the tier's spellings, so it is stored as "Grand Cru Classé".
 - **Figeac:** "Grand Cru" is part of the appellation; "Premier Grand Cru Classé" is the tier on top of it. They are not the same thing.
 - **Gimonnet:** in Champagne the cru is a classification, not part of the appellation. The tier is printed as part of the name, so it is in both, and "1er Cru" is stored as "Premier Cru".
-- **Corton:** Burgundy grand-cru vineyards are appellations in their own right, so the appellation is "Corton" and the grand-cru status follows from it.
+- **Corton:** the vineyard is an appellation in its own right. It is stored with "Grand Cru" as the label prints it, "Corton Grand Cru", like "Chablis Grand Cru"; the bare register name "Corton" is an accepted spelling that resolves to it. The grand-cru status is in the appellation, so classification stays empty.
 - **Hugel:** in Alsace the late-harvest designation is a classification, while "Alsace Grand Cru" would stay in the appellation.
 - **Pongrácz:** the method is neither name nor appellation, so the appellation is the origin, "Western Cape".
 - **Amarone:** the DOCG follows from the appellation, so classification stays empty. This is the case that started this page.
@@ -164,6 +164,8 @@ Notes on the examples:
 | Prompts ask for a tier on top of the appellation, never the mark | `backend/src/config/aiConfig.js` (label scan, back label, import lookup, text search, valuation) | #1701 |
 | One field description for `appellation`, `region` and `classification` in every MCP tool that takes them, pointing at `list_classifications` | `FIELD_DESCRIPTIONS` in `backend/src/mcp/toolUtil.js`, `backend/src/mcp/tools/classifications.js` | #1701, #1741 |
 | Production method out of the appellation: the prompts leave it out, a value that is only a method is stored and keyed as none | `backend/src/config/aiConfig.js`, `isProductionMethodOnly` in `backend/src/utils/normalize.js`, the `WineDefinition` pre-validate hook, `backend/src/scripts/clear-method-appellations.js` for existing rows | #1815 |
+| A Champagne cru typed as the appellation ("Champagne Grand Cru", "Champagne Premier Cru", "Champagne 1er Cru") is stored and keyed as "Champagne", and the cru joins the wine's tiers | `champagneCruOf` in `backend/src/utils/champagneCru.js`, read by the key builders in `utils/normalize.js` and `utils/wineIdentity.js`; `moveChampagneCru` in `backend/src/services/classificationOps.js`, run by the `WineDefinition` pre-validate hook; the mint and the registry import split the value themselves | PR_NUMBER |
+| Move the existing Champagne rows to "Champagne" and take the two cru entries off the curated appellation list; give each Côte d'Or grand-cru vineyard its one curated entry and spelling (dry run by default) | `backend/src/scripts/align-cru-appellations.js` | PR_NUMBER |
 | The sweetness term list, the field, and the term in the keys and the style guard | `backend/src/models/SweetnessTerm.js`, seeded from `backend/src/data/sweetness-terms.json`; `labelSweetness` on `WineDefinition`; Admin → Taxonomy → Sweetness terms; `list_sweetness_terms` | #1790 |
 | Move a sweetness word out of the name into `labelSweetness` | — | Open: comes with the next part of #1754 |
 

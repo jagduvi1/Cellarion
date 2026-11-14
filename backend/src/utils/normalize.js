@@ -1,6 +1,7 @@
 // Normalization utilities for deduplication and fuzzy matching
 
 const { RECOGNIZED_COUNTRY_NAMES } = require('../data/countryNames');
+const { withoutChampagneCru } = require('./champagneCru');
 
 /**
  * Wine-domain stop words that don't add meaningful distinction
@@ -464,9 +465,11 @@ const normalizeProducerKey = (producer) => {
 const PENDING_KEY_PREFIX = 'pending~';
 const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
 // The appellation segment of every identity key: a production method on its
-// own is no appellation, so it keys as none (isProductionMethodOnly above).
+// own is no appellation, so it keys as none (isProductionMethodOnly above),
+// and a Champagne cru form ("Champagne Grand Cru") keys as Champagne, the
+// appellation stored for it (utils/champagneCru).
 const appellationKeySegment = (appellation) =>
-  (isProductionMethodOnly(appellation) ? '' : normalizeString(appellation));
+  (isProductionMethodOnly(appellation) ? '' : normalizeString(withoutChampagneCru(appellation)));
 const pendingWineKey = (name, userId, appellation = '', { sweetness = null } = {}) =>
   `${pendingProducerKey(userId)}:${normalizeWineName(name)}:${appellationKeySegment(appellation)}${sweetnessKeySegment(sweetness)}`;
 

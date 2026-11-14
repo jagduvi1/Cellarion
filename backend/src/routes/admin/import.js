@@ -7,6 +7,7 @@ const { loadTaxonomy, resolveLoaded, splitClassificationString, classificationSt
 const { STYLE_TYPES, isStyleType, inferColourFromName } = require('../../utils/wineColour');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
+const { splitChampagneCru } = require('../../utils/champagneCru');
 const WineDefinition = require('../../models/WineDefinition');
 const Country = require('../../models/Country');
 const Appellation = require('../../models/Appellation');
@@ -533,6 +534,16 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         // appellation strings across hundreds of thousands of rows.
         const preResolveAppellation = mapped.appellation;
         mapped.appellation = await resolveImportAppellation(mapped.appellation, appellationSpellingCache);
+        // The model hook's Champagne rule, for this bulkWrite path: a cru form
+        // is stored as "Champagne" and the cru joins the row's classification
+        // (utils/champagneCru). After the resolver, so the spelling it hands
+        // back is the one judged, and before the appellation is looked up or
+        // minted as a curated one below.
+        const champagne = splitChampagneCru(mapped.appellation, mapped.classification);
+        if (champagne.cru) {
+          mapped.appellation = champagne.appellation;
+          mapped.classification = champagne.classification;
+        }
 
         const countryId = await getOrCreateCountry(mapped.country, userId, countryCache);
         // Producer spelling AFTER country resolution — the wider (decoration)

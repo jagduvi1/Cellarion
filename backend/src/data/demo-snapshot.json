@@ -3307,7 +3307,7 @@
           "vintage": "2016",
           "country": "France",
           "region": "Champagne",
-          "appellation": "Champagne Grand Cru",
+          "appellation": "Champagne",
           "type": "sparkling",
           "grapes": [
             "Chardonnay"
@@ -3336,7 +3336,7 @@
           "vintage": "2016",
           "country": "France",
           "region": "Champagne",
-          "appellation": "Champagne Grand Cru",
+          "appellation": "Champagne",
           "type": "sparkling",
           "grapes": [
             "Chardonnay"
@@ -3597,7 +3597,7 @@
           "vintage": "2019",
           "country": "France",
           "region": "Champagne",
-          "appellation": "Champagne 1er Cru",
+          "appellation": "Champagne",
           "type": "sparkling",
           "grapes": [
             "Chardonnay"
@@ -6047,7 +6047,7 @@
           "vintage": "2012",
           "country": "France",
           "region": "Champagne",
-          "appellation": "Champagne Grand Cru",
+          "appellation": "Champagne",
           "type": "sparkling",
           "grapes": [
             "Chardonnay"
@@ -7215,7 +7215,7 @@
           "vintage": "2012",
           "country": "France",
           "region": "Champagne",
-          "appellation": "Champagne Grand Cru",
+          "appellation": "Champagne",
           "type": "sparkling",
           "grapes": [
             "Chardonnay"

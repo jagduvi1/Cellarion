@@ -13,6 +13,10 @@
  *     classification calls it with the string a form, a scan, an import or
  *     an API client sent (or the rows a picker chose) and it sets both the
  *     rows and the derived string on the wine
+ *   - addClassificationTier: one more tier on top of the ones a wine carries,
+ *     through the write rule
+ *   - moveChampagneCru: a cru typed into the appellation ("Champagne Grand
+ *     Cru") → appellation "Champagne", the cru added to the tiers
  *   - classificationString: the array → the derived legacy string every
  *     reader still shows
  *   - detectFromName: the tiers a wine's NAME states, by the country whose
@@ -29,6 +33,7 @@
 const mongoose = require('mongoose');
 const Classification = require('../models/Classification');
 const { normalizeString, normalizeClassification, normalizeSweetnessTerm } = require('../utils/normalize');
+const { CHAMPAGNE, champagneCruOf } = require('../utils/champagneCru');
 
 const KIND_ORDER = { vineyard_rank: 0, ripeness: 1, ageing: 2, other: 3 };
 
@@ -266,6 +271,40 @@ async function assignClassification(target, { classification, classifications, c
   return { ok: true, changed: true, rows, unresolved, dropped, sweetness, classifications: ids, classification: string };
 }
 
+/**
+ * Add one tier to the tiers `target` already carries, through
+ * assignClassification (lenient; the wine's own country settles a word two
+ * systems share). Rows the wine holds are passed by id, so none is re-read
+ * from its name; a wine that holds only text, or a server with no taxonomy
+ * loaded, gets the tier appended to its string. Returns what
+ * assignClassification returns.
+ */
+async function addClassificationTier(target, tierName) {
+  const tax = await loadTaxonomy();
+  const held = (Array.isArray(target.classifications) ? target.classifications : [])
+    .map((c) => (c && c._id) || c).filter(Boolean);
+  if (held.length && !tax.empty) return assignClassification(target, { classifications: [...held, tierName] });
+  const text = typeof target.classification === 'string' ? target.classification.trim() : '';
+  return assignClassification(target, { classification: text ? `${text}, ${tierName}` : tierName });
+}
+
+/**
+ * The Champagne write rule (docs/wine-fields.md): Premier Cru and Grand Cru
+ * rate the village, so a cru form in the appellation ("Champagne Grand Cru")
+ * becomes appellation "Champagne" and the cru joins the tiers `target`
+ * already carries. Any other appellation is left alone. Callers: the
+ * WineDefinition pre-validate hook (every save-based write, REST and MCP
+ * alike) and scripts/align-cru-appellations.js for the rows stored before
+ * the rule. Returns { moved, cru }.
+ */
+async function moveChampagneCru(target) {
+  const cru = champagneCruOf(target && target.appellation);
+  if (!cru) return { moved: false, cru: null };
+  target.appellation = CHAMPAGNE;
+  await addClassificationTier(target, cru);
+  return { moved: true, cru };
+}
+
 // ── Rule-based detection from the wine name ────────────────────────────────
 // Only where the word is a legal or customary tier in that country. Burgundy,
 // Alsace and Saint-Émilion keep "Premier Cru" / "Grand Cru" in the
@@ -402,6 +441,7 @@ async function ensureClassificationSeed() {
 
 module.exports = {
   splitClassificationString, stripNoise, resolveClassifications, resolveLoaded, loadTaxonomy,
-  assignClassification, classificationString, classificationsOut, detectFromName, seedClassifications,
+  assignClassification, addClassificationTier, moveChampagneCru,
+  classificationString, classificationsOut, detectFromName, seedClassifications,
   ensureClassificationSeed, invalidateClassificationCache, primeClassificationCache, KIND_ORDER,
 };
