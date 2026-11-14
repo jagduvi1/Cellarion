@@ -131,4 +131,53 @@ async function seedCruFixture() {
   return { ids, admin, member, france, italy, burgundy, champagne, tiers: { grandCru, premierCru, oldVines } };
 }
 
-module.exports = { seedCruFixture };
+/**
+ * The Champagne rows a person must settle, in a registry of their own: a twin
+ * that lacks the cru, two cru levels under one name (both moved in one run,
+ * and one against a stored "Champagne" row), a classification the rebuild
+ * would cut short, and a copy adopted through the Registry Bridge. Used by
+ * the second block of align-cru-appellations.mongo.test.js.
+ */
+async function seedCruPersonFixture() {
+  const db = mongoose.connection.db;
+  const admin = await User.create({ username: 'curator', email: 'curator@contract.test', password: 'Contract-Test-Passw0rd!', roles: ['user', 'admin'] });
+  const france = await Country.create({ name: 'France', normalizedName: 'france', createdBy: admin._id });
+  const champagne = await Region.create({ name: 'Champagne', normalizedName: 'champagne', country: france._id, createdBy: admin._id });
+  await seedClassifications();
+  const grandCru = await Classification.findOne({ name: 'Grand Cru' }).lean();
+  for (const name of ['Champagne', 'Champagne Grand Cru', 'Champagne Premier Cru']) {
+    await Appellation.create({ name, normalizedName: normalizeAppellationKey(name), country: france._id, region: champagne._id, createdBy: admin._id });
+  }
+
+  const ids = {};
+  const wines = [];
+  const wine = (key, producer, name, appellation, over = {}) => {
+    const _id = oid();
+    ids[key] = _id;
+    wines.push({
+      _id, name, producer, country: france._id, region: champagne._id, appellation, type: 'sparkling', grapes: [],
+      classification: null, classifications: [], createdBy: admin._id, createdAt: new Date(), updatedAt: new Date(),
+      ...keysBefore(name, producer, appellation), ...over,
+    });
+  };
+  // A twin stored as plain "Champagne" with no cru: merging into it loses the cru.
+  wine('lostCruSource', 'Maison Abeline', 'Cuvée Aube', 'Champagne Grand Cru');
+  wine('lostCruKeeper', 'Maison Abeline', 'Cuvée Aube', 'Champagne');
+  // A Grand Cru and a Premier Cru bottling under one name, both on a cru form.
+  wine('levelsGrand', 'Maison Bellecour', 'Brut Réserve', 'Champagne Grand Cru');
+  wine('levelsPremier', 'Maison Bellecour', 'Brut Réserve', 'Champagne Premier Cru');
+  // A Premier Cru whose twin is stored as "Champagne" with the Grand Cru tier.
+  wine('levelsAgainstStored', 'Maison Cordelier', 'Cuvée Cime', 'Champagne Premier Cru');
+  wine('levelsStored', 'Maison Cordelier', 'Cuvée Cime', 'Champagne', { classification: classificationString([grandCru]), classifications: [grandCru._id] });
+  // A dosage typed into the classification: no tier the list knows.
+  wine('textDropped', 'Maison Dorval', 'Cuvée Dune', 'Champagne Grand Cru', { classification: 'Extra Brut' });
+  // A copy adopted from the shared registry, last synced long ago.
+  wine('bridgeCopy', 'Maison Estrel', 'Cuvée Écrin', 'Champagne Grand Cru', {
+    registryId: oid(), registrySyncedAt: new Date('2026-01-01T00:00:00Z'), updatedAt: new Date('2026-01-01T00:00:00Z'),
+  });
+
+  await db.collection('winedefinitions').insertMany(wines);
+  return { ids, admin, france, champagne, tiers: { grandCru } };
+}
+
+module.exports = { seedCruFixture, seedCruPersonFixture };
