@@ -8,7 +8,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key) => key }) }));
 let api;
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch: api, user: { preferences: { ratingScale: '5' } } }) }));
-vi.mock('../ReviewCard', () => ({ default: ({ review }) => <div data-testid="review">{review._id}</div> }));
+vi.mock('../ReviewCard', () => ({
+  default: ({ review, onUpdate }) => (
+    <div data-testid="review">{review._id}{onUpdate && <button type="button" onClick={() => onUpdate(review)}>edit-{review._id}</button>}</div>
+  ),
+}));
 vi.mock('../ReviewForm', () => ({
   default: ({ defaultVintage, onSaved, onClose }) => (
     <button type="button" onClick={() => { onSaved(); onClose(); }}>review-form:{defaultVintage}</button>
@@ -76,4 +80,19 @@ test('a slow answer for the last wine never lands over the current one', async (
   await new Promise((r) => setTimeout(r, 20));
   expect(screen.getAllByTestId('review')).toHaveLength(1);
   expect(screen.getByTestId('review')).toHaveTextContent('new');
+});
+
+test('editing a review on a later page reloads that page, not the first', async () => {
+  api = vi.fn(async () => ({ ok: true, json: async () => ({ reviews: [{ _id: 'r1' }], total: 25, pages: 3 }) }));
+  render(<WineReviewsCard wine={WINE} vintage="2015" communityRating={{ reviewCount: 4, averageNormalized: 80 }} />);
+  await screen.findByTestId('review');
+  fireEvent.click(screen.getByText('common.next'));
+  await waitFor(() => expect(api).toHaveBeenCalledTimes(2));
+  expect(queryOf(api.mock.calls[1]).get('page')).toBe('2');
+  await screen.findByText('2 / 3');
+
+  fireEvent.click(screen.getByText('edit-r1'));
+  await waitFor(() => expect(api).toHaveBeenCalledTimes(3));
+  expect(queryOf(api.mock.calls[2]).get('page')).toBe('2');
+  expect(screen.queryByText('(4)')).toBeNull();
 });

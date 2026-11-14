@@ -67,6 +67,8 @@ export default function WineReviewsCard({ wine, vintage, communityRating }) {
   // After a review is saved or deleted: refetch the list and drop the (now
   // stale) community aggregate.
   const changed = () => { load(1); setRating(null); };
+  // An edit keeps the list on its page, so the edited review stays in view.
+  const edited = () => { load(page); setRating(null); };
 
   if (!wine) return null;
   const scale = user?.preferences?.ratingScale || '5';
@@ -97,7 +99,7 @@ export default function WineReviewsCard({ wine, vintage, communityRating }) {
         </div>
         {reviews.length > 0 ? (
           reviews.map((review) => (
-            <ReviewCard key={review._id} review={review} showWine={false} onUpdate={changed} onDelete={changed} />
+            <ReviewCard key={review._id} review={review} showWine={false} onUpdate={edited} onDelete={changed} />
           ))
         ) : (
           <p className="bd-reviews__empty">{t('reviews.noReviews', 'No reviews yet. Be the first to review this wine!')}</p>

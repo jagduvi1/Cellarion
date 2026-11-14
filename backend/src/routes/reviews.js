@@ -13,6 +13,7 @@ const { logAudit } = require('../services/audit');
 const { updateWineCommunityRating } = require('../services/reviewAggregation');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
+const asyncHandler = require('../utils/asyncHandler');
 const { REVIEWS_PER_PAGE, REVIEWS_MAX_PER_PAGE, REVIEW_MAX_LENGTHS } = require('../config/constants');
 
 const router = express.Router();
@@ -168,9 +169,10 @@ router.get('/wine/:wineId', async (req, res) => {
   }
 });
 
-// GET /api/reviews/user/:userId - Reviews by a user
-router.get('/user/:userId', async (req, res) => {
-  try {
+// GET /api/reviews/user/:userId - Reviews by a user. The author is populated as
+// on the other review lists: the card links the name and offers Edit and Delete
+// only when author._id is the viewer.
+router.get('/user/:userId', asyncHandler(async (req, res) => {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: REVIEWS_PER_PAGE, maxLimit: REVIEWS_MAX_PER_PAGE });
 
@@ -193,6 +195,7 @@ router.get('/user/:userId', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
+        .populate('author', 'username displayName plan contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(filter)
     ]);
@@ -208,11 +211,7 @@ router.get('/user/:userId', async (req, res) => {
     }));
 
     res.json({ reviews: enriched, total, page, pages: Math.ceil(total / limit) });
-  } catch (err) {
-    console.error('Get user reviews error:', err);
-    res.status(500).json({ error: 'Failed to get reviews' });
-  }
-});
+}));
 
 // GET /api/reviews/feed - Reviews from followed users
 router.get('/feed', async (req, res) => {
