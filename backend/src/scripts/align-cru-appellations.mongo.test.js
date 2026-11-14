@@ -30,7 +30,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const mongoose = require('mongoose');
-const { seedCruFixture } = require('./align-cru-appellations.fixtures');
+const { seedCruFixture, seedCruPersonFixture } = require('./align-cru-appellations.fixtures');
 const { alignCruAppellations, VINEYARDS, canonicalName } = require('./align-cru-appellations');
 const { resolveCanonicalAppellation } = require('../services/appellationResolve');
 const Appellation = require('../models/Appellation');
@@ -204,9 +204,9 @@ describeWithMongo('align-cru-appellations (real MongoDB)', () => {
       expect((await wine('twinChampagne')).appellation).toBe('Champagne');
       const champagne = report.mergeCandidates.find((m) => m.family === 'champagne');
       expect(champagne).toEqual({
-        family: 'champagne', wouldBe: 'Champagne',
-        wine: { id: String(fx.ids.twinCru), producer: 'Maison Urbanet', name: 'Cuvée Ultime', appellation: 'Champagne Grand Cru', bottles: 2 },
-        twin: { id: String(fx.ids.twinChampagne), producer: 'Maison Urbanet', name: 'Cuvée Ultime', appellation: 'Champagne', bottles: 1 },
+        family: 'champagne', wouldBe: 'Champagne', note: null,
+        wine: { id: String(fx.ids.twinCru), producer: 'Maison Urbanet', name: 'Cuvée Ultime', appellation: 'Champagne Grand Cru', classification: null, bottles: 2 },
+        twin: { id: String(fx.ids.twinChampagne), producer: 'Maison Urbanet', name: 'Cuvée Ultime', appellation: 'Champagne', classification: 'Grand Cru', bottles: 1 },
       });
       const burgundy = report.mergeCandidates.find((m) => m.family === 'burgundy');
       expect(burgundy).toMatchObject({
@@ -280,6 +280,119 @@ describeWithMongo('align-cru-appellations (real MongoDB)', () => {
       expect(after.list.removed).toEqual(['Champagne Grand Cru']);
       expect(after.champagne).toEqual([]);
       expect(await listNames()).not.toContain('Champagne Grand Cru');
+    });
+  });
+});
+
+// What the report must hand a person before --apply and before any merge:
+// a merge that would lose the cru, two cru levels under one name, a
+// classification the rebuild would cut short; and what --apply leaves behind
+// (an audit row per change, an adopted Bridge copy not stamped as edited).
+const URI_PERSON = BASE_URI ? (() => { const u = new URL(BASE_URI); u.pathname = '/cellarion_contract_cruscript_person'; return u.toString(); })() : null;
+
+describeWithMongo('align-cru-appellations: what a person settles (real MongoDB)', () => {
+  let fx; let db;
+  const quiet = () => {};
+  const wine = (key) => db.collection('winedefinitions').findOne({ _id: fx.ids[key] });
+  const needs = (report, kind) => report.needsAPerson.filter((n) => n.kind === kind).map((n) => n.text).join('\n');
+
+  beforeAll(async () => {
+    await mongoose.connect(URI_PERSON);
+    if (!mongoose.connection.db.databaseName.startsWith('cellarion_contract')) throw new Error('refusing to use a database not named cellarion_contract*');
+    await mongoose.connection.db.dropDatabase();
+    db = mongoose.connection.db;
+    await db.collection('winedefinitions').createIndex({ normalizedKey: 1 }, { unique: true });
+    fx = await seedCruPersonFixture();
+  }, 120000);
+
+  afterAll(async () => {
+    await mongoose.connection.db.dropDatabase();
+    await mongoose.disconnect();
+  }, 60000);
+
+  describe('dry run', () => {
+    let report; let lines;
+    beforeAll(async () => {
+      lines = [];
+      report = await alignCruAppellations({ apply: false, log: (l) => lines.push(l) });
+    }, 120000);
+
+    test('a merge candidate whose keeper lacks the cru says so, with both rows\' classification', () => {
+      const m = report.mergeCandidates.find((c) => c.wine.id === String(fx.ids.lostCruSource));
+      expect(m).toMatchObject({
+        family: 'champagne',
+        note: 'the keeper has no Grand Cru: add it after merging, or merge the other way and run again',
+        wine: { appellation: 'Champagne Grand Cru', classification: null },
+        twin: { id: String(fx.ids.lostCruKeeper), appellation: 'Champagne', classification: null },
+      });
+      const text = lines.join('\n');
+      expect(text).toMatch(/Cuvée Aube".*on "Champagne Grand Cru", classification \(none\)/);
+      expect(text).toMatch(/the keeper has no Grand Cru: add it after merging/);
+    });
+
+    test('two cru levels under one name are for a person, never a merge candidate, and neither row moves', async () => {
+      const ids = report.mergeCandidates.flatMap((c) => [c.wine.id, c.twin.id]);
+      for (const key of ['levelsGrand', 'levelsPremier', 'levelsAgainstStored', 'levelsStored']) expect(ids).not.toContain(String(fx.ids[key]));
+      const champagneIds = report.champagne.map((c) => c.id);
+      for (const key of ['levelsGrand', 'levelsPremier', 'levelsAgainstStored']) expect(champagneIds).not.toContain(String(fx.ids[key]));
+      const text = needs(report, 'cru_levels');
+      expect(text).toMatch(/Maison Bellecour "Brut Réserve".*"Champagne Grand Cru" and Maison Bellecour "Brut Réserve".*"Champagne Premier Cru".*two cru levels under one name/);
+      expect(text).toMatch(/Maison Cordelier "Cuvée Cime".*"Champagne Premier Cru" would take the key of .*"Champagne", classification "Grand Cru": two cru levels \(Premier Cru, Grand Cru\)/);
+      expect(report.needsAPerson.filter((n) => n.kind === 'cru_levels')).toHaveLength(2);
+    });
+
+    test('a classification the rebuild would cut short is for a person, and the row stays as typed', () => {
+      expect(report.champagne.map((c) => c.id)).not.toContain(String(fx.ids.textDropped));
+      expect(needs(report, 'classification')).toMatch(/Maison Dorval "Cuvée Dune".*classification "Extra Brut" into "Grand Cru" and drop "Extra Brut"/);
+    });
+
+    test('the cru entries stay on the list while a row is still on them', () => {
+      expect(report.list.removed).toEqual([]);
+      expect(report.list.kept.map((k) => k.name).sort()).toEqual(['Champagne Grand Cru', 'Champagne Premier Cru']);
+    });
+
+    test('a dry run writes no audit row', async () => {
+      expect(await db.collection('auditlogs').countDocuments({})).toBe(0);
+    });
+  });
+
+  describe('--apply', () => {
+    let report;
+    beforeAll(async () => {
+      report = await alignCruAppellations({ apply: true, log: quiet });
+    }, 120000);
+
+    test('the rows for a person are untouched', async () => {
+      for (const [key, appellation, classification] of [
+        ['lostCruSource', 'Champagne Grand Cru', null], ['levelsGrand', 'Champagne Grand Cru', null], ['levelsPremier', 'Champagne Premier Cru', null],
+        ['levelsAgainstStored', 'Champagne Premier Cru', null], ['textDropped', 'Champagne Grand Cru', 'Extra Brut'],
+      ]) {
+        expect(await wine(key)).toMatchObject({ appellation, classification });
+      }
+    });
+
+    test('a copy adopted through the Registry Bridge moves without a new updatedAt', async () => {
+      const copy = await wine('bridgeCopy');
+      expect(copy).toMatchObject({ appellation: 'Champagne', classification: 'Grand Cru' });
+      expect(copy.updatedAt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+      expect(report.champagne.map((c) => c.id)).toEqual([String(fx.ids.bridgeCopy)]);
+    });
+
+    test('every wine and list entry it changes gets an audit row, with an ObjectId resource', async () => {
+      const rows = await db.collection('auditlogs').find({}).toArray();
+      const wineRows = rows.filter((r) => r.action === 'admin.wine.update');
+      expect(wineRows).toHaveLength(1);
+      expect(wineRows[0].resource).toMatchObject({ type: 'wine', id: fx.ids.bridgeCopy });
+      expect(wineRows[0].detail).toMatchObject({
+        appellation: { from: 'Champagne Grand Cru', to: 'Champagne' },
+        classification: { from: null, to: 'Grand Cru' },
+        via: 'scripts/align-cru-appellations',
+      });
+      expect(wineRows[0].actor).toMatchObject({ userId: null, role: 'system' });
+      const created = rows.filter((r) => r.action === 'admin.taxonomy.create');
+      expect(created).toHaveLength(report.list.created.length);
+      expect(created.every((r) => r.resource.type === 'appellation' && r.resource.id instanceof mongoose.mongo.ObjectId)).toBe(true);
+      expect(rows).toHaveLength(report.changes);
     });
   });
 });

@@ -32,7 +32,13 @@
  *   3. Champagne wines on "Champagne Grand Cru", "Champagne Premier Cru" or
  *      "Champagne 1er Cru" get "Champagne", and the cru joins their tiers
  *      through the classification write rule
- *      (services/classificationOps moveChampagneCru).
+ *      (services/classificationOps moveChampagneCru). Two kinds of row are
+ *      left as typed and listed for a person instead: one whose
+ *      classification would lose a word to the rebuild (text the taxonomy
+ *      does not know, such as a dosage, is dropped once one part resolves),
+ *      and rows that would share one key under "Champagne" while stating
+ *      different cru levels (a Grand Cru and a Premier Cru bottling under
+ *      one name are two wines: rename, do not merge).
  *   4. "Champagne Grand Cru" and "Champagne Premier Cru" leave the curated
  *      list once no wine is left on them.
  *
@@ -42,7 +48,9 @@
  * sweetness suffix. A key that ends in neither the old nor the new segment
  * (written by an older rule) is left as it is. normalizedKey is UNIQUE: a row
  * whose new key another wine already holds is a real twin. It is NOT written;
- * the pair is listed under "merge candidates". This script never merges and
+ * the pair is listed under "merge candidates" with both rows' classification,
+ * and a Champagne line says when the keeper lacks the cru, which a merge
+ * (services/wineMergeOps) does not carry over. This script never merges and
  * never deletes a wine.
  *
  * A value that names a village beside the cru ("Champagne Grand Cru (Bouzy)")
@@ -59,8 +67,11 @@
  *
  * Dry-run by default. On --apply: appends each row's old values to an NDJSON
  * backup before writing it (scripts/lib/backupLog: --backup-dir=<dir> or
- * SCRIPT_BACKUP_DIR, default the OS temp dir). A second --apply run changes
- * nothing.
+ * SCRIPT_BACKUP_DIR, default the OS temp dir), and writes an audit row per
+ * wine and per list entry it changes, as the admin routes do. A copy adopted
+ * through the Registry Bridge (registryId) is written without a new updatedAt,
+ * so the Bridge does not read it as edited here (services/taxonomyMerge,
+ * OWN_ROWS / ADOPTED_ROWS). A second --apply run changes nothing.
  *
  * Usage:
  *   node src/scripts/align-cru-appellations.js            # dry run
@@ -78,7 +89,8 @@ const User = require('../models/User');
 const { normalizeString, normalizeAppellation, normalizeAppellationKey, stripSweetnessKeySegment } = require('../utils/normalize');
 const { CHAMPAGNE, champagneCruOf } = require('../utils/champagneCru');
 const { candidateKeys } = require('../services/appellationResolve');
-const { moveChampagneCru } = require('../services/classificationOps');
+const { moveChampagneCru, resolveClassifications, splitClassificationString, loadTaxonomy } = require('../services/classificationOps');
+const { logAudit } = require('../services/audit');
 const { profileInputsSnapshot } = require('../services/enrichmentJob');
 const searchService = require('../services/search');
 const { initSearch } = require('./lib/scriptSearch');
@@ -172,7 +184,10 @@ function withAppellationSegment(key, from, to) {
  * segment. Pure, so the test pins the decision without a DB.
  */
 function planWineMove(row, { appellation, classification }) {
-  const $set = { appellation, updatedAt: new Date() };
+  const $set = { appellation };
+  // updatedAt only on a row this install owns: on a Registry Bridge copy it
+  // reads as "edited here" and the next registry refresh would be skipped.
+  if (!row.registryId) $set.updatedAt = new Date();
   const after = { ...row, appellation };
   if (classification) {
     $set.classification = classification.classification;
@@ -205,6 +220,54 @@ const looksLikeChampagneCru = (appellation) =>
 
 const idOf = (v) => String((v && v._id) || v || '');
 const label = (w) => `${w.producer || '(no producer)'} "${w.name}"`;
+const shownClassification = (c) => (c ? `"${c}"` : '(none)');
+
+// A cru level as a classification part or tier name states it.
+const CRU_LEVELS = new Map([['grand cru', 'Grand Cru'], ['premier cru', 'Premier Cru'], ['1er cru', 'Premier Cru']]);
+
+/**
+ * The Champagne cru levels a wine states: in a cru-form appellation, in its
+ * classification text, or in the tiers it holds. Read for a twin, whose cru
+ * decides whether a merge keeps it.
+ */
+async function cruLevelsOf(wine) {
+  const levels = new Set();
+  const fromAppellation = champagneCruOf(normalizeAppellation(wine.appellation || '') || wine.appellation || '');
+  if (fromAppellation) levels.add(fromAppellation);
+  for (const part of splitClassificationString(wine.classification)) {
+    const level = CRU_LEVELS.get(normalizeString(part));
+    if (level) levels.add(level);
+  }
+  if ((wine.classifications || []).length) {
+    const tax = await loadTaxonomy();
+    for (const id of wine.classifications) {
+      const row = tax.byId.get(idOf(id));
+      const level = row && CRU_LEVELS.get(normalizeString(row.name));
+      if (level) levels.add(level);
+    }
+  }
+  return levels;
+}
+
+/**
+ * What adding the cru would lose from a wine's classification: a text part
+ * that survives neither as written nor as a tier the wine keeps (once one
+ * part resolves, the rebuild keeps only what resolves), and a held tier that
+ * is not kept. [] when nothing is lost.
+ */
+async function lostClassificationParts(before, after, countryId) {
+  const keptIds = new Set((after.classifications || []).map(idOf));
+  const keptText = new Set(splitClassificationString(after.classification).map(normalizeString));
+  const lost = [];
+  for (const part of splitClassificationString(before.classification)) {
+    if (keptText.has(normalizeString(part))) continue;
+    const { rows } = await resolveClassifications([part], { countryId });
+    if (rows.length && keptIds.has(idOf(rows[0]._id))) continue;
+    lost.push(part);
+  }
+  for (const id of (before.classifications || []).map(idOf)) if (id && !keptIds.has(id)) lost.push(id);
+  return lost;
+}
 
 /** Every curated appellation with its keys, computed here: a stored key from an older fold is not trusted. */
 async function loadList() {
@@ -298,7 +361,7 @@ async function bottleCount(wineId) {
 }
 
 // What planWineMove and profileInputsSnapshot read, and what the report shows.
-const WINE_FIELDS = 'name producer country region appellation classification classifications type grapes normalizedKey canonicalKey aiProfile.inputsSnapshot';
+const WINE_FIELDS = 'name producer country region appellation classification classifications type grapes normalizedKey canonicalKey registryId aiProfile.inputsSnapshot';
 
 /**
  * The whole run against the open connection. `apply` false writes nothing.
@@ -314,6 +377,9 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
     burgundy: [], champagne: [], mergeCandidates: [], needsAPerson: [], changes: 0,
   };
   const claimed = new Map(); // a key a row of this run moves to → that row
+  // An audit row per change, awaited: logAudit persists in the background and
+  // the CLI disconnects when the run returns. Never called on a dry run.
+  const audit = (action, resource, detail) => logAudit(null, action, resource, { ...detail, via: 'scripts/align-cru-appellations' });
 
   const france = await Country.findOne({ normalizedName: 'france' }).select('_id').lean();
   const burgundy = france
@@ -346,6 +412,7 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
         if (apply) {
           backup.append({ kind: 'appellation', removed: true, ...d });
           await Appellation.deleteOne({ _id: d._id });
+          await audit('admin.taxonomy.delete', { type: 'appellation', id: d._id }, { name: d.name, foldedInto: p.name });
         }
       }
       if (p.create) {
@@ -353,7 +420,8 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
         report.list.created.push(p.name);
         report.changes += 1;
         if (apply) {
-          await new Appellation({ name: p.name, normalizedName: p.key, country: france._id, region: p.region, synonyms: p.synonyms, createdBy: admin._id }).save();
+          const created = await new Appellation({ name: p.name, normalizedName: p.key, country: france._id, region: p.region, synonyms: p.synonyms, createdBy: admin._id }).save();
+          await audit('admin.taxonomy.create', { type: 'appellation', id: created._id }, { name: p.name, synonyms: p.synonyms });
         }
         continue;
       }
@@ -368,6 +436,7 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
           doc.normalizedName = p.key;
           doc.synonyms = p.synonyms;
           await doc.save();
+          await audit('admin.taxonomy.update', { type: 'appellation', id: doc._id }, { from: p.keep.name, name: p.name, synonyms: p.synonyms });
         }
       }
     }
@@ -381,18 +450,32 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
     for (const k of [d.key, ...d.synonymKeys]) if (k && !family.has(k)) others.add(k);
   }
 
-  /** Write one planned move unless its new key is taken; returns whether the row moved. */
-  const moveWine = async (w, target, familyName, line) => {
+  /**
+   * Write one planned move unless its new key is taken; returns whether the
+   * row moved. `cru` is the cru a Champagne move takes out of the appellation:
+   * a twin stating another cru level is a different bottling (needs a person),
+   * and a twin stating none would lose the cru in a merge (said on the line).
+   */
+  const moveWine = async (w, target, familyName, line, { cru = null } = {}) => {
     const { $set, keysLeft } = planWineMove(w, target);
     const newKey = $set.normalizedKey;
     if (newKey) {
       const twin = (claimed.has(newKey) && idOf(claimed.get(newKey)._id) !== idOf(w._id) ? claimed.get(newKey) : null)
-        || await WineDefinition.findOne({ normalizedKey: newKey, _id: { $ne: w._id } }).select('name producer appellation').lean();
+        || await WineDefinition.findOne({ normalizedKey: newKey, _id: { $ne: w._id } }).select('name producer appellation classification classifications').lean();
       if (twin) {
+        let note = null;
+        if (cru) {
+          const twinLevels = await cruLevelsOf(twin);
+          if (twinLevels.size && !twinLevels.has(cru)) {
+            report.needsAPerson.push({ kind: 'cru_levels', text: `${label(w)} (${w._id}) on "${w.appellation}" would take the key of ${label(twin)} (${twin._id}) on "${twin.appellation || '(none)'}", classification ${shownClassification(twin.classification)}: two cru levels (${cru}, ${[...twinLevels].join(' / ')}) under one name are two bottlings. Rename one of them (the name carries the cru); do not merge. Left as typed.` });
+            return false;
+          }
+          if (!twinLevels.size) note = `the keeper has no ${cru}: add it after merging, or merge the other way and run again`;
+        }
         report.mergeCandidates.push({
-          family: familyName, wouldBe: target.appellation,
-          wine: { id: idOf(w._id), producer: w.producer || '', name: w.name, appellation: w.appellation, bottles: await bottleCount(w._id) },
-          twin: { id: idOf(twin._id), producer: twin.producer || '', name: twin.name, appellation: twin.appellation || null, bottles: await bottleCount(twin._id) },
+          family: familyName, wouldBe: target.appellation, note,
+          wine: { id: idOf(w._id), producer: w.producer || '', name: w.name, appellation: w.appellation, classification: w.classification || null, bottles: await bottleCount(w._id) },
+          twin: { id: idOf(twin._id), producer: twin.producer || '', name: twin.name, appellation: twin.appellation || null, classification: twin.classification || null, bottles: await bottleCount(twin._id) },
         });
         return false;
       }
@@ -413,14 +496,18 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
           // A wine minted under the new key since the check above: a twin too.
           report.changes -= 1;
           report.mergeCandidates.push({
-            family: familyName, wouldBe: target.appellation,
-            wine: { id: idOf(w._id), producer: w.producer || '', name: w.name, appellation: w.appellation, bottles: await bottleCount(w._id) },
-            twin: { id: null, producer: w.producer || '', name: w.name, appellation: target.appellation, bottles: null },
+            family: familyName, wouldBe: target.appellation, note: null,
+            wine: { id: idOf(w._id), producer: w.producer || '', name: w.name, appellation: w.appellation, classification: w.classification || null, bottles: await bottleCount(w._id) },
+            twin: { id: null, producer: w.producer || '', name: w.name, appellation: target.appellation, classification: null, bottles: null },
           });
           return false;
         }
         throw err;
       }
+      await audit('admin.wine.update', { type: 'wine', id: w._id }, {
+        appellation: { from: w.appellation, to: target.appellation },
+        ...(target.classification ? { classification: { from: w.classification || null, to: target.classification.classification } } : {}),
+      });
       if (searchOk) await searchService.indexWine(w._id);
     }
     return true;
@@ -463,7 +550,9 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
   // ── 3. Champagne wines ─────────────────────────────────────────────────────
   log('\nChampagne wines — the appellation "Champagne", the cru as a classification');
   const champagneWines = await WineDefinition.find({ appellation: /champagne/i, canary: { $ne: true } }).select(WINE_FIELDS).lean();
-  const stillOnCru = new Map(); // cru → wines that stay on a cru form (their new key is taken)
+  const stillOnCru = new Map(); // cru → wines that stay on a cru form (a twin, or a person decides)
+  const stays = (cru) => stillOnCru.set(cru, (stillOnCru.get(cru) || 0) + 1);
+  const planned = [];
   for (const w of champagneWines) {
     const cleaned = normalizeAppellation(w.appellation) || w.appellation;
     const cru = champagneCruOf(cleaned);
@@ -476,11 +565,37 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
     const target = { appellation: cleaned, classification: w.classification || null, classifications: (w.classifications || []).slice(), country: w.country };
     await moveChampagneCru(target);
     const tiers = { classification: target.classification, classifications: target.classifications };
-    const line = `${label(w)}:  "${w.appellation}"  →  "${CHAMPAGNE}", classification ${w.classification ? `"${w.classification}"` : '(none)'}  →  "${target.classification}"`;
-    if (await moveWine(w, { appellation: CHAMPAGNE, classification: tiers }, 'champagne', line)) {
-      report.champagne.push({ id: idOf(w._id), producer: w.producer || '', name: w.name, from: w.appellation, cru, classification: target.classification });
+    const lost = await lostClassificationParts(w, tiers, w.country);
+    if (lost.length) {
+      report.needsAPerson.push({ kind: 'classification', text: `${label(w)} (${w._id}) on "${w.appellation}": adding the ${cru} would turn classification ${shownClassification(w.classification)} into ${shownClassification(target.classification)} and drop ${lost.map((x) => `"${x}"`).join(', ')}. Move those words to where they belong (a dosage is the label sweetness term), then run again. Left as typed.` });
+      stays(cru);
+      continue;
+    }
+    const { $set } = planWineMove(w, { appellation: CHAMPAGNE, classification: tiers });
+    planned.push({ w, cru, tiers, newKey: $set.normalizedKey || w.normalizedKey || null });
+  }
+  // Rows of this run that would share one key under "Champagne" while stating
+  // different cru levels are a Grand Cru and a Premier Cru bottling under one
+  // name: none of them moves, whichever comes first.
+  const levelsByKey = new Map();
+  for (const c of planned) if (c.newKey) levelsByKey.set(c.newKey, (levelsByKey.get(c.newKey) || new Set()).add(c.cru));
+  const named = new Set();
+  for (const c of planned) {
+    const { w, cru, tiers } = c;
+    if (c.newKey && levelsByKey.get(c.newKey).size > 1) {
+      if (!named.has(c.newKey)) {
+        named.add(c.newKey);
+        const rows = planned.filter((o) => o.newKey === c.newKey).map((o) => `${label(o.w)} (${o.w._id}) on "${o.w.appellation}"`);
+        report.needsAPerson.push({ kind: 'cru_levels', text: `${rows.join(' and ')} would share one key under "${CHAMPAGNE}": two cru levels under one name are two bottlings. Rename one of them (the name carries the cru); do not merge. Left as typed.` });
+      }
+      stays(cru);
+      continue;
+    }
+    const line = `${label(w)}:  "${w.appellation}"  →  "${CHAMPAGNE}", classification ${shownClassification(w.classification)}  →  "${tiers.classification}"`;
+    if (await moveWine(w, { appellation: CHAMPAGNE, classification: tiers }, 'champagne', line, { cru })) {
+      report.champagne.push({ id: idOf(w._id), producer: w.producer || '', name: w.name, from: w.appellation, cru, classification: tiers.classification });
     } else {
-      stillOnCru.set(cru, (stillOnCru.get(cru) || 0) + 1);
+      stays(cru);
     }
   }
   if (!report.champagne.length) log('  nothing to move.');
@@ -491,7 +606,7 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
   for (const d of cruDocs) {
     const left = stillOnCru.get(champagneCruOf(d.name)) || 0;
     if (left) {
-      log(`  "${d.name}" stays: ${left} wine${left === 1 ? '' : 's'} still on it (merge candidates below). Run again after the merge.`);
+      log(`  "${d.name}" stays: ${left} wine${left === 1 ? '' : 's'} still on it (merge candidates and needs a person below). Run again once they are settled.`);
       report.list.kept.push({ name: d.name, wines: left });
       continue;
     }
@@ -501,6 +616,7 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
     if (apply) {
       backup.append({ kind: 'appellation', removed: true, ...d });
       await Appellation.deleteOne({ _id: d._id });
+      await audit('admin.taxonomy.delete', { type: 'appellation', id: d._id }, { name: d.name });
     }
   }
   if (!cruDocs.length) log('  none on the list.');
@@ -514,8 +630,9 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
   // ── The findings ───────────────────────────────────────────────────────────
   log(`\nMerge candidates — not written, the new key belongs to another wine (${report.mergeCandidates.length})`);
   for (const m of report.mergeCandidates) {
-    log(`  ⚠ ${m.wine.producer} "${m.wine.name}"  ${m.wine.id} on "${m.wine.appellation}" (${m.wine.bottles} bottle${m.wine.bottles === 1 ? '' : 's'})`);
-    log(`      would become "${m.wouldBe}", which is ${m.twin.id || 'a wine added during this run'}${m.twin.id ? ` ${m.twin.producer} "${m.twin.name}" on "${m.twin.appellation || '(none)'}" (${m.twin.bottles} bottle${m.twin.bottles === 1 ? '' : 's'})` : ''}`);
+    log(`  ⚠ ${m.wine.producer} "${m.wine.name}"  ${m.wine.id} on "${m.wine.appellation}", classification ${shownClassification(m.wine.classification)} (${m.wine.bottles} bottle${m.wine.bottles === 1 ? '' : 's'})`);
+    log(`      would become "${m.wouldBe}", which is ${m.twin.id || 'a wine added during this run'}${m.twin.id ? ` ${m.twin.producer} "${m.twin.name}" on "${m.twin.appellation || '(none)'}", classification ${shownClassification(m.twin.classification)} (${m.twin.bottles} bottle${m.twin.bottles === 1 ? '' : 's'})` : ''}`);
+    if (m.note) log(`      ${m.note}`);
   }
   if (!report.mergeCandidates.length) log('  none.');
   log(`\nNeeds a person (${report.needsAPerson.length})`);

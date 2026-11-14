@@ -178,6 +178,12 @@ describe('planWineMove', () => {
     expect($set.normalizedKey).toBe('domaine exemple:cuvee aurore:champagne');
   });
 
+  test('a copy adopted through the Registry Bridge moves without a new updatedAt, so it does not read as edited here', () => {
+    const { $set } = planWineMove(row('Champagne Grand Cru', { registryId: 'reg1' }), { appellation: 'Champagne', classification: { classification: 'Grand Cru', classifications: ['gc'] } });
+    expect($set).toMatchObject({ appellation: 'Champagne', normalizedKey: 'domaine exemple:cuvee aurore:champagne' });
+    expect($set).not.toHaveProperty('updatedAt');
+  });
+
   test('a spelling the fold already keyed as the canonical one changes no key', () => {
     const { $set, keysLeft } = planWineMove(row('Echézeaux Grand Cru', { normalizedKey: 'domaine exemple:cuvee aurore:echezeaux grand cru', canonicalKey: 'exemple:cuvee aurore:echezeaux grand cru' }), { appellation: 'Échezeaux Grand Cru' });
     expect(keysLeft).toEqual([]);
