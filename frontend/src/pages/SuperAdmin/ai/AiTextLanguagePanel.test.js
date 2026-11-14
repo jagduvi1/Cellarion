@@ -22,6 +22,12 @@ test('off by default: "Off (English)" is chosen and Save waits for a change', ()
   expect(screen.getByText(/keep their English text until their profile is written again/)).toBeInTheDocument();
 });
 
+test('the help says Registry Bridge copies and curator profiles stay in English', () => {
+  // No local enrichment path writes either (registryId / source 'curator'), so a translation can never come.
+  render(<AiTextLanguagePanel current="" languages={LANGUAGES} apiFetch={vi.fn()} />);
+  expect(screen.getByText(/Registry Bridge and profiles written by a curator always stay in English/)).toBeInTheDocument();
+});
+
 test('choosing a language sends its code', async () => {
   const apiFetch = vi.fn(async () => okJson({ aiTextLanguage: 'de' }));
   render(<AiTextLanguagePanel current="" languages={LANGUAGES} apiFetch={apiFetch} />);

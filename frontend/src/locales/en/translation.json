@@ -4358,7 +4358,7 @@
   "adminAiLanguage": {
     "title": "Language for AI-written wine texts",
     "intro": "The AI can also write each wine's tasting note, flavours and food pairings in one of the app's languages. The English text stays as it is: search, matching and similar wines read it, and the Registry Bridge shares it. The wine, bottle and vintage pages show the translation.",
-    "help": "Only new AI texts are written in this language. Existing wines, and wines from the Registry Bridge, keep their English text until their profile is written again.",
+    "help": "Only new AI texts are written in this language. Existing wines keep their English text until their profile is written again. Wines from the Registry Bridge and profiles written by a curator always stay in English: this install never rewrites them.",
     "label": "Language",
     "off": "Off (English)",
     "save": "Save",
