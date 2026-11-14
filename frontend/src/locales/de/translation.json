@@ -2658,7 +2658,6 @@
     "undoError": "Eine Verschiebung fehlgeschlagen beim Rückgängigmachen – das Regal hat sich möglicherweise geändert. Schließe und überprüfe das Regal."
   },
   "rackLens": {
-    "dragHint": "Tipp: Ziehe eine Flasche auf ein leeres Fach, um sie zu verschieben, oder auf eine andere Flasche, um sie zu tauschen.",
     "searchPlaceholder": "In Regalen suchen…",
     "colorBy": "Färben nach",
     "lensType": "Weintyp",

@@ -1686,14 +1686,12 @@
     "cabinetHeadToTailLabel": "Flaskene ligger annenhver vei",
     "cabinetHeadToTailHelp": "For flasker som ligger én i dybden, med bunnen og halsen frem annenhver gang, så det får plass til flere i hver rad. Annenhver flaske tegnes med halsen frem. Bare tegningen endres. Antallet flasker og plassnumrene er de samme.",
     "cabinetHeadToTailNeedsSingle": "«Annenhver vei» gjelder flasker som ligger én i dybden. Fjern først haken for «To i dybden».",
-    "cabinetHeadToTailBeta": "Flasker som ligger annenhver vei, er i tidlig tilgang.",
     "cabinetShelfSidewaysShort": "flaskene ligger",
     "cabinetSidewaysNone": "forfra og bakover",
     "cabinetSidewaysFront": "én på tvers foran",
     "cabinetSidewaysAll": "alle på tvers",
     "cabinetSidewaysHelp": "Flaskene ligger forfra og bakover, med én flaske på tvers foran de andre (som i et smalt kjøleskap), eller alle på tvers (som i en bunnskuff). Er hyllen stablet i nivåer i et vinskap med én flaske i dybden, hviler nivået over en tverrliggende flaske på flaskene bak, så det får plass til én færre. Ellers er antallet flasker og plassnumrene de samme.",
     "cabinetSidewaysEditLabel": "Slik ligger flaskene på hver hylle, øverste først",
-    "cabinetSidewaysBeta": "Flasker som ligger på tvers, er i tidlig tilgang.",
     "cabinetAlternateLabel": "Radene veksler i bredde på hver hylle (6 / 5 / 6 …)",
     "cabinetAlternateHelp": "Det første nivået har en full rad foran en rad med én flaske færre. Nivået over ligger i forsenkningene, med én færre foran en full rad, og så videre. Det er bikakemønsteret på en hylle i Liebherr GrandCru. Valget gjelder alle hyllene. Fjern haken for enkelthyller over. Dette endrer hvor mange flasker vinskapet har plass til, så det må velges når vinskapet opprettes.",
     "cabinetAlternateNests": "Rader som veksler i bredde, ligger alltid i hverandre: hver smal rad ligger i forsenkningene i den brede raden under.",
@@ -1716,7 +1714,6 @@
     "moveBottles": {
       "menuItem": "Flytt flaskene til en annen reol …",
       "title": "Flytt flaskene til en annen reol",
-      "betaNote": "Å flytte en hel reol på én gang er i tidlig tilgang.",
       "intro_one": "Flasken i {{from}} flyttes til den første ledige plassen i reolen du velger.",
       "intro_other": "De {{count}} flaskene i {{from}} flyttes til reolen du velger. De beholder rekkefølgen og fyller de ledige plassene fra den første.",
       "toLabel": "Flytt dem til",
@@ -1785,8 +1782,7 @@
       "button": "Flytt",
       "hint": "Trykk på plassen du vil flytte {{name}} til",
       "otherRackHint": "til en annen reol: åpne fanen for den først",
-      "otherRackFilled": "I en annen reol må du velge en tom plass. Flasker kan bare bytte plass innenfor samme reol.",
-      "betaNote": "Å flytte en flaske ved å trykke er i tidlig tilgang."
+      "otherRackFilled": "I en annen reol må du velge en tom plass. Flasker kan bare bytte plass innenfor samme reol."
     }
   },
   "serving": {
@@ -3486,7 +3482,6 @@
     "undoError": "Kunne ikke angre en av flyttingene. Reolen kan ha endret seg. Lukk og sjekk reolen."
   },
   "rackLens": {
-    "dragHint": "Tips: dra en flaske til en ledig plass for å flytte den, eller oppå en annen flaske for å bytte plass på dem.",
     "searchPlaceholder": "Finn i reolene …",
     "colorBy": "Fargelegg etter",
     "lensType": "Vintype",
@@ -4332,30 +4327,10 @@
     "feedbackSent": "Tilbakemeldingen din er sendt til Cellarion-teamet. Du får svar på samme måte som fra brukerstøtte: i appen under «Brukerstøtte», og på e-post hvis du ikke har slått det av.",
     "openSupport": "Åpne brukerstøtte",
     "features": {
-      "rackMoveBottles": {
-        "name": "Flytt alle flaskene i en reol til en annen reol",
-        "description": "Flytt alle flaskene i en reol til en annen reol i samme kjeller på én gang. De beholder rekkefølgen og fyller den andre reolen fra første ledige plass. Nyttig når du bytter ut en reol, for eksempel med et vinskap.",
-        "where": "På siden «Reoler»: åpne en reol og velg ⋮ → «Flytt flaskene til en annen reol»."
-      },
-      "cabinetHeadToTail": {
-        "name": "Flasker annenhver vei i vinskap",
-        "description": "For vinskap der flaskene ligger én i dybden, med bunnen og halsen frem annenhver gang. Tegningene av vinskapet viser da annenhver flaske med halsen frem. Plassnumrene blir de samme, så du kan slå det på for et vinskap som allerede har flasker.",
-        "where": "På siden «Reoler»: opprett eller rediger et vinskap, fjern haken for «To i dybden» og kryss av for «Flaskene ligger annenhver vei»."
-      },
-      "cabinetSideways": {
-        "name": "Flasker på tvers i vinskap",
-        "description": "Velg for hver hylle i vinskapet hvordan flaskene ligger: på langs, med én flaske på tvers foran de andre (som i et smalt kjøleskap), eller alle på tvers (som i en skuff nederst). Tegningene av vinskapet følger med, også i 3D-rommet. Plassnumrene blir de samme, så du kan endre det på et vinskap som allerede har flasker. Det finnes også et ferdig oppsett for Kingsbottle Atelier Duo.",
-        "where": "På siden «Reoler»: opprett eller rediger et vinskap og velg hvordan flaskene ligger på hver hylle, eller start fra Kingsbottle → Atelier Duo."
-      },
       "pickLists": {
         "name": "Plukklister",
         "description": "Lag en liste over flaskene du skal hente, til en middag, en vinsmaking eller det du vil drikke neste gang. Den viser kjeller, reol og plass for hver flaske, i den rekkefølgen du går forbi dem. Kryss av flaskene mens du plukker dem, skriv ut listen og merk alle de plukkede som drukket på én gang.",
         "where": "Trykk på «Velg» i kjelleren, velg flasker og trykk på «Plukkliste», eller bruk ⋮ → «Legg til på plukkliste» på siden til en flaske. Listene dine finner du under «Plukklister» i menyen."
-      },
-      "rackSlotMove": {
-        "name": "Flytt en flaske ved å trykke",
-        "description": "Flytt en flaske til en annen plass uten å dra den, for eksempel på mobilen, der dra og slipp ikke fungerer. Trykk på flasken, velg «Flytt» og trykk på plassen den skal til. Velger du en annen flaske i samme reol, bytter de to plass.",
-        "where": "På siden «Reoler»: trykk på en flaske og velg «Flytt»."
       },
       "maturityTimeline": {
         "name": "Drikkevinduet som tidslinje",

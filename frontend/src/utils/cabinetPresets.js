@@ -120,11 +120,9 @@ export const CABINET_PRESETS = [
   // (piled 4 / 3). The top shelf is the diagram's own: 4 front to back + 1
   // across, with 3 in the grooves on top — 5 wide, alternating, the level
   // above counted from the 4 behind the bottle across (rackLayouts
-  // .cabinetRowWidth; it used to be drawn as 2 × 4, the same 8 stacked 4 on
-  // 3). Shown only with early access 'cabinetSideways', which draws the
-  // bottles that lie across.
+  // .cabinetRowWidth).
   {
-    key: 'kingsbottleAtelierDuo', group: 'kingsbottle', feature: 'cabinetSideways', shelves: 15, cols: 6, twoDeep: false,
+    key: 'kingsbottleAtelierDuo', group: 'kingsbottle', shelves: 15, cols: 6, twoDeep: false,
     shelfRows: [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
     shelfCols: [5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 4],
     shelfAlternate: [true, false, false, false, false, false, false, false, false, false, false, false, false, false, true],

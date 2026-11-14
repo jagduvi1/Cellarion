@@ -1627,14 +1627,12 @@
     "cabinetHeadToTailLabel": "Bottles lie head to tail",
     "cabinetHeadToTailHelp": "For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.",
     "cabinetHeadToTailNeedsSingle": "Head to tail is for bottles that lie one deep: untick Two deep first.",
-    "cabinetHeadToTailBeta": "Bottles head to tail is in early access.",
     "cabinetShelfSidewaysShort": "bottles lie",
     "cabinetSidewaysNone": "front to back",
     "cabinetSidewaysFront": "one across the front",
     "cabinetSidewaysAll": "all across",
     "cabinetSidewaysHelp": "Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). On a shelf stacked in levels of a one-deep cabinet, the level above a bottle lying across rests on the bottles behind it, so it holds one fewer. Otherwise the number of bottles and the slot numbers stay the same.",
     "cabinetSidewaysEditLabel": "How each shelf's bottles lie, top shelf first",
-    "cabinetSidewaysBeta": "Bottles lying sideways is in early access.",
     "cabinetAlternateLabel": "Rows alternate in width on every shelf (6 / 5 / 6 …)",
     "cabinetAlternateHelp": "The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. Sets every shelf at once; untick single shelves above. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.",
     "cabinetAlternateNests": "Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.",
@@ -1657,7 +1655,6 @@
     "moveBottles": {
       "menuItem": "Move bottles to another rack…",
       "title": "Move bottles to another rack",
-      "betaNote": "Moving a whole rack at once is in early access.",
       "intro_one": "The {{count}} bottle in {{from}} moves to the rack you choose, into its first free slot.",
       "intro_other": "The {{count}} bottles in {{from}} move to the rack you choose. They keep their order and fill its free slots from the first one.",
       "toLabel": "Move them to",
@@ -1726,8 +1723,7 @@
       "button": "Move",
       "hint": "Tap the slot to move {{name}} to",
       "otherRackHint": "for another rack, open its tab first",
-      "otherRackFilled": "In another rack, choose an empty slot — bottles only swap places within one rack.",
-      "betaNote": "Moving a bottle by tapping is in early access."
+      "otherRackFilled": "In another rack, choose an empty slot — bottles only swap places within one rack."
     }
   },
   "nfc": {
@@ -4274,7 +4270,6 @@
     "undoError": "A move failed while undoing — the rack may have changed. Close and check the rack."
   },
   "rackLens": {
-    "dragHint": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.",
     "searchPlaceholder": "Find in racks…",
     "colorBy": "Color by",
     "lensType": "Wine type",
@@ -6146,30 +6141,10 @@
     "feedbackSent": "Your feedback is with the Cellarion team. The answer comes like a support reply: in the app under Support, and by email unless you turned those off.",
     "openSupport": "Open Support",
     "features": {
-      "rackMoveBottles": {
-        "name": "Move a rack's bottles to another rack",
-        "description": "Move every bottle in a rack to another rack in the same cellar in one go. They keep their order and fill the other rack from its first free slot. Handy when you replace a rack, for example with a wine cabinet.",
-        "where": "On the Racks page: open a rack, then ⋮ → Move bottles to another rack."
-      },
-      "cabinetHeadToTail": {
-        "name": "Wine cabinet bottles head to tail",
-        "description": "For a wine cabinet whose bottles lie one deep, base forward and neck forward in turn. The cabinet drawings then show every other bottle neck forward. The slot numbers stay the same, so you can switch it on for a cabinet that already holds bottles.",
-        "where": "On the Racks page: create or edit a wine cabinet, untick Two deep, then tick Bottles lie head to tail."
-      },
-      "cabinetSideways": {
-        "name": "Wine cabinet bottles lying sideways",
-        "description": "For each shelf of a wine cabinet, choose how its bottles lie: front to back, with one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). The cabinet drawings follow, including the 3D view. The slot numbers stay the same, so you can change it on a cabinet that already holds bottles. Includes a starting shape for the Kingsbottle Atelier Duo.",
-        "where": "On the Racks page: create or edit a wine cabinet and pick how each shelf's bottles lie, or start from Kingsbottle → Atelier Duo."
-      },
       "pickLists": {
         "name": "Pick lists",
         "description": "Make a list of the bottles you are about to fetch — for a dinner, a tasting, or what to drink next — and see the cellar, rack and slot of each, in the order you walk past them. Tick bottles off as you pick them, print the list, and mark the picked ones as drunk in one go.",
         "where": "In your cellar, tap Select, pick bottles and choose Pick list, or use ⋮ → Add to pick list on a bottle's page. Your lists are under Pick lists in the menu."
-      },
-      "rackSlotMove": {
-        "name": "Move a bottle by tapping",
-        "description": "Move a bottle to another slot without dragging — made for phones, where dragging does not work. Tap the bottle, choose Move, then tap the slot it should go to. On a bottle in the same rack the two swap places.",
-        "where": "On the Racks page: tap a bottle, then Move."
       },
       "maturityTimeline": {
         "name": "Drink window as a timeline",

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
-import BetaBadge from '../BetaBadge';
 import { getTotalSlots, getModularTotalSlots } from '../../utils/rackLayouts';
 
 // Slots a rack can still take: its capacity, less disabled and taken slots
@@ -14,9 +13,9 @@ export function freeSlotsOf(rack) {
 }
 
 /**
- * Early access ('rackMoveBottles'): move every bottle of a rack into another
- * rack of the same cellar in one go (forum feedback 2026-10-12: a rack
- * rebuilt as a wine cabinet meant moving every bottle across by hand).
+ * Move every bottle of a rack into another rack of the same cellar in one go
+ * (a rack rebuilt as a wine cabinet would otherwise mean moving every bottle
+ * across by hand).
  *
  * The bottles keep their order and fill the chosen rack's free slots from the
  * first one; when it has less room, the first ones by position move and the
@@ -75,7 +74,6 @@ export default function MoveRackBottlesModal({ rack, racks, onMove, onShowRack, 
 
   return (
     <Modal title={t('racks.moveBottles.title', 'Move bottles to another rack')} onClose={onClose} showClose trapFocus>
-      <BetaBadge feature="rackMoveBottles" note={t('racks.moveBottles.betaNote', 'Moving a whole rack at once is in early access.')} />
       {others.length === 0 ? (
         <p>{t('racks.moveBottles.noOtherRack', 'This cellar has no other rack yet. Create the rack the bottles should go to, for example a wine cabinet, then come back here.')}</p>
       ) : (

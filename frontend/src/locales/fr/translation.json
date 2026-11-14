@@ -2703,7 +2703,6 @@
     "undoError": "Un déplacement a échoué pendant l'annulation — le casier a peut-être changé. Ferme et vérifie le casier."
   },
   "rackLens": {
-    "dragHint": "Astuce : fais glisser une bouteille vers un emplacement vide pour la déplacer, ou sur une autre bouteille pour les échanger.",
     "searchPlaceholder": "Chercher dans les casiers…",
     "colorBy": "Colorer par",
     "lensType": "Type de vin",
