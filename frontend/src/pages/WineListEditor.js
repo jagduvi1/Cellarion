@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo, getWineListStats, previewWineListPdf, getCellarWines } from '../api/wineLists';
 import { buildSections, groupingLevels, LEVEL_FIELDS } from '../utils/wineListSections';
 import WineListMenu from '../components/WineListMenu';
+import IntegerField from '../components/IntegerField';
 import './WineListEditor.css';
 import { formatVintage } from '../utils/vintage';
 
@@ -1074,15 +1075,11 @@ function WineListEditor() {
             <div className="wle-glass-calc-fields">
               <div className="form-group">
                 <label>{t('wineLists.glassesPerBottle')}</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
+                <IntegerField
+                  min={1}
+                  max={20}
                   value={layout.glassesPerBottle || 6}
-                  onChange={e => setWineList({
-                    ...wineList,
-                    layout: { ...layout, glassesPerBottle: parseInt(e.target.value) || 6 }
-                  })}
+                  onCommit={glassesPerBottle => setWineList({ ...wineList, layout: { ...layout, glassesPerBottle } })}
                   style={{ width: '80px' }}
                 />
               </div>

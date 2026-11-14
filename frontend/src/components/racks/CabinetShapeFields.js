@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { CABINET_PRESETS, CABINET_PRESET_GROUPS, CABINET_MAX_ROWS_PER_SHELF, fitShelfRows, cabinetCapacity } from '../../utils/cabinetPresets';
 import { cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways } from '../../utils/rackLayouts';
 import { useFeature } from '../../utils/featureFlags';
+import IntegerField from '../IntegerField';
 
 // The shape of a wine cabinet in the new-rack form: preset, rows of bottles
 // per shelf, two deep.
@@ -64,14 +65,14 @@ export default function CabinetShapeFields({ newRack, setNewRack }) {
     setPresetKey('custom');
     setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, ...patch } });
   };
-  const setRow = (i, value) => {
+  const setRow = (i, rows) => {
     const next = [...shelfRows];
-    next[i] = Math.max(1, Math.min(CABINET_MAX_ROWS_PER_SHELF, parseInt(value, 10) || 1));
+    next[i] = rows;
     setShelf({ shelfRows: next });
   };
-  const setWidth = (i, value) => {
+  const setWidth = (i, across) => {
     const next = [...shelfCols];
-    next[i] = Math.max(1, Math.min(newRack.cols || 1, parseInt(value, 10) || 1));
+    next[i] = across;
     setShelf({ shelfCols: next });
   };
   const setPattern = (i, value) => {
@@ -114,24 +115,20 @@ export default function CabinetShapeFields({ newRack, setNewRack }) {
             <div key={i} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem 0.6rem', fontSize: '0.85rem' }}>
               <span style={{ minWidth: '4.5rem' }}>{t('racks.cabinetShelfN', { n: i + 1 })}</span>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <input
-                  type="number"
-                  inputMode="numeric"
+                <IntegerField
                   min={1} max={CABINET_MAX_ROWS_PER_SHELF}
                   value={v}
-                  onChange={(e) => setRow(i, e.target.value)}
+                  onCommit={(rows) => setRow(i, rows)}
                   style={{ width: '4.2rem' }}
                   aria-label={`${t('racks.cabinetShelfN', { n: i + 1 })} ${t('racks.cabinetShelfRowsShort', 'rows')}`}
                 />
                 <span>{t('racks.cabinetShelfRowsShort', 'rows')}</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <input
-                  type="number"
-                  inputMode="numeric"
+                <IntegerField
                   min={1} max={newRack.cols || 1}
                   value={shelfCols[i]}
-                  onChange={(e) => setWidth(i, e.target.value)}
+                  onCommit={(across) => setWidth(i, across)}
                   style={{ width: '4.2rem' }}
                   aria-label={`${t('racks.cabinetShelfN', { n: i + 1 })} ${t('racks.cabinetShelfAcrossShort', 'across')}`}
                 />
