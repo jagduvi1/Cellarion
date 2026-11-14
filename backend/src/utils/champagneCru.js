@@ -17,8 +17,9 @@
  *   - the write rule (services/classificationOps moveChampagneCru, run by the
  *     WineDefinition pre-validate hook) stores "Champagne" and adds the cru to
  *     the wine's tiers;
- *   - the mint (services/findOrCreateWine) and the registry import
- *     (routes/admin/import mapRow) split the value before they match or write.
+ *   - the mint (services/findOrCreateWine) and the registry import (the
+ *     POST /wines handler in routes/admin/import, after the resolver) split
+ *     the value before they match or write.
  *
  * No dependency on utils/normalize: that module requires this one.
  */
