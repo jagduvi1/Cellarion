@@ -118,6 +118,14 @@
   margin: 0;
 }
 
+/* Camera + "Choose a photo" (components/ScanLabelButtons) */
+.scan-label-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
 .wine-select-manual-link {
   background: none;
   border: none;

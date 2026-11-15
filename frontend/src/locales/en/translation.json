@@ -148,7 +148,8 @@
       "username_invalid": "Usernames are 3–30 characters and may use letters, numbers, dots, underscores and hyphens — no spaces.",
       "consent_required": "To create an account, accept the Privacy Policy and agree to the processing of your personal data.",
       "verification_token_invalid": "This confirmation link is invalid or has expired. Ask for a new confirmation email.",
-      "reset_token_invalid": "This reset link is invalid or has expired. Ask for a new one from the login page."
+      "reset_token_invalid": "This reset link is invalid or has expired. Ask for a new one from the login page.",
+      "wishlist_shop_url_invalid": "The shop link must be a web address, such as https://shop.example/wine."
     }
   },
   "auth": {
@@ -4823,6 +4824,9 @@
     "priorityHighOption": "High — must buy!",
     "notes": "Notes",
     "notesPlaceholder": "Where you tried it, price you saw...",
+    "shopUrl": "Shop link",
+    "shopUrlPlaceholder": "https://shop.example/wine",
+    "shopLinkAt": "Shop: {{host}} ↗",
     "saving": "Saving...",
     "save": "Save",
     "cancel": "Cancel",
@@ -4896,6 +4900,8 @@
     "priorityHigh": "High — must buy!",
     "notes": "Notes",
     "notesPlaceholder": "Where you tried it, what you liked, price you saw...",
+    "shopUrl": "Shop link",
+    "shopUrlPlaceholder": "Where you saw it, e.g. https://shop.example/wine",
     "cancel": "Cancel",
     "failedSaveWine": "Failed to save wine",
     "requiredFields": "Name, producer, and country are required",
@@ -5545,7 +5551,9 @@
     "closeCamera": "Close camera",
     "takePhoto": "Take photo",
     "switchCamera": "Switch camera",
-    "takePhotoButton": "Take Photo"
+    "takePhotoButton": "Take Photo",
+    "choosePhoto": "Choose a photo",
+    "photoUnreadable": "That photo could not be opened. Try another one."
   },
   "photoCapture": {
     "removingBackground": "Removing background…",

@@ -23,6 +23,13 @@ const wishlistItemSchema = new mongoose.Schema({
     trim: true,
     maxlength: [2000, 'Notes too long']
   },
+  // The shop page the member saw the wine on; http(s) only, normalised by
+  // utils/shopUrl before it is stored.
+  shopUrl: {
+    type: String,
+    trim: true,
+    maxlength: [2000, 'Shop link too long']
+  },
   priority: {
     type: String,
     enum: ['low', 'medium', 'high'],

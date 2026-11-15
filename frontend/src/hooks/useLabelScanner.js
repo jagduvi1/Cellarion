@@ -4,6 +4,34 @@ import { scanLabel, scanLabelBack } from '../api/wines';
 import { track } from '../utils/track';
 import { openCamera, isSuperseded } from '../utils/camera';
 
+// Every scan is sent at most 800 px on its longer edge, to keep the API cost low.
+const MAX_DIM = 800;
+
+// Draw `source` (a video frame or a loaded photo) into `canvas`, scaled down
+// to MAX_DIM on its longer edge.
+function drawScaled(canvas, source, width, height) {
+  let w = width;
+  let h = height;
+  if (w > MAX_DIM || h > MAX_DIM) {
+    if (w >= h) { h = Math.round((h / w) * MAX_DIM); w = MAX_DIM; }
+    else { w = Math.round((w / h) * MAX_DIM); h = MAX_DIM; }
+  }
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+}
+
+// A photo the user picked, decoded into an <img> the canvas can draw.
+function loadPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('photo could not be read')); };
+    img.src = url;
+  });
+}
+
 /**
  * Custom hook that encapsulates label-scan camera logic.
  *
@@ -22,9 +50,13 @@ import { openCamera, isSuperseded } from '../utils/camera';
  * @param {Function} callbacks.onBackScanSuccess — called with the back-scan
  *   response ({ merged, conflicts, filled, match, backScanImageId })
  *
+ * A photo chosen from the device (scanFile) goes through the same pipeline as
+ * a camera capture: the viewfinder opens only to show "reading the label", and
+ * the result arrives through the same callbacks. It is always a FRONT scan.
+ *
  * @returns {{ labelCam, labelScanning, labelFacing, setLabelFacing,
  *             labelVideoRef, labelCanvasRef,
- *             startCamera, startBackCamera, stopCamera, capturePhoto }}
+ *             startCamera, startBackCamera, stopCamera, capturePhoto, scanFile }}
  */
 export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, onBackScanSuccess } = {}) {
   const [labelCam, setLabelCam] = useState({ open: false, error: null });
@@ -131,30 +163,10 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
     };
   }, []);
 
-  const capturePhoto = useCallback(async () => {
-    const video = labelVideoRef.current;
-    const canvas = labelCanvasRef.current;
-    if (!video || !canvas) return;
-
-    // Resize to max 800px to keep API cost low
-    const MAX_DIM = 800;
-    let vw = video.videoWidth;
-    let vh = video.videoHeight;
-    if (vw > MAX_DIM || vh > MAX_DIM) {
-      if (vw >= vh) { vh = Math.round((vh / vw) * MAX_DIM); vw = MAX_DIM; }
-      else { vw = Math.round((vw / vh) * MAX_DIM); vh = MAX_DIM; }
-    }
-    canvas.width = vw;
-    canvas.height = vh;
-    canvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
-
-    // Stop the stream right after capture
-    if (labelStreamRef.current) {
-      labelStreamRef.current.getTracks().forEach(t => t.stop());
-      labelStreamRef.current = null;
-    }
+  // Send a drawn canvas to the scan endpoint for the current mode; shared by
+  // the camera shutter and a chosen photo.
+  const scanCanvas = useCallback((canvas) => {
     setLabelScanning(true);
-
     canvas.toBlob(async (blob) => {
       if (!blob) {
         setLabelCam({ open: true, error: i18n.t('camera.captureFailed') });
@@ -217,6 +229,40 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
     }, 'image/jpeg', 0.55);
   }, [apiFetch, stopCamera]);
 
+  const capturePhoto = useCallback(() => {
+    const video = labelVideoRef.current;
+    const canvas = labelCanvasRef.current;
+    if (!video || !canvas) return;
+    drawScaled(canvas, video, video.videoWidth, video.videoHeight);
+
+    // Stop the stream right after capture
+    if (labelStreamRef.current) {
+      labelStreamRef.current.getTracks().forEach(t => t.stop());
+      labelStreamRef.current = null;
+    }
+    scanCanvas(canvas);
+  }, [scanCanvas]);
+
+  // Scan a label photo chosen from the device (a gallery picture or a shop
+  // screenshot) instead of the camera.
+  const scanFile = useCallback(async (file) => {
+    if (!file) return;
+    modeRef.current = 'front';
+    setLabelScanning(true);
+    setLabelCam({ open: true, error: null });
+    let photo;
+    try {
+      photo = await loadPhoto(file);
+    } catch {
+      setLabelScanning(false);
+      setLabelCam({ open: true, error: i18n.t('camera.photoUnreadable') });
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    drawScaled(canvas, photo, photo.naturalWidth, photo.naturalHeight);
+    scanCanvas(canvas);
+  }, [scanCanvas]);
+
   return {
     labelCam,
     labelScanning,
@@ -227,6 +273,7 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
     startCamera,
     startBackCamera,
     stopCamera,
-    capturePhoto
+    capturePhoto,
+    scanFile
   };
 }
