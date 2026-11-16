@@ -28,6 +28,8 @@ import SITE_URL from '../config/siteUrl';
 import WineImage from '../components/WineImage';
 import WineDiscussionsPanel from '../components/WineDiscussionsPanel';
 import AddToCellarButton from '../components/AddToCellarButton';
+import RegistryContributionPanel from '../components/RegistryContributionPanel';
+import { isHostedOrigin } from '../utils/mcpConnect';
 import { WhenToDrinkCard, WhereFromCard, MoreWinesCard } from '../components/WineContextCards';
 import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
@@ -378,6 +380,9 @@ export default function WineDetail() {
           </button>
         </div>
       )}
+
+      {/* A self-hosted install: offer a wine made here to the shared registry. */}
+      {user && !isHostedOrigin(window.location.origin) && <RegistryContributionPanel wineId={wine._id} />}
 
       <WhereFromCard context={context} countryName={wine.country?.name} />
       <MoreWinesCard context={context} wine={wine} />

@@ -288,6 +288,16 @@ function startScheduler() {
     } catch (err) {
       console.error('[scheduler] Registry bridge request sync failed:', err);
     }
+    // Wines this install offered to the registry: link the approved ones,
+    // record the declined ones, then send what is queued as far as today's
+    // allowance goes (services/registryContributionOps).
+    const contributions = require('./registryContributionOps');
+    try {
+      await contributions.syncContributions();
+      await contributions.sendQueued();
+    } catch (err) {
+      console.error('[scheduler] Registry bridge contributions failed:', err);
+    }
   });
 
   // API deprecation reminders: daily at 08:11 UTC, morning in Europe, on an

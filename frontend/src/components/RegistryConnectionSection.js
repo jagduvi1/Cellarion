@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getBridgeStatus, setBridgeRefreshMode } from '../api/bridge';
 import { HOSTED_ORIGIN } from '../utils/mcpConnect';
+import RegistryContributionsBlock from './RegistryContributionsBlock';
 
 // Settings card on a SELF-HOSTED install: whether this server is connected to
 // the shared wine registry on cellarion.app (Registry Bridge), what it has
@@ -100,6 +101,7 @@ function RegistryConnectionSection() {
                     {t('settings.registryConnection.quotaLine', 'Today: {{searches}}/{{searchCap}} searches · {{fetches}}/{{fetchCap}} wines copied', {
                       searches: used.searches || 0, searchCap: caps.searches || 0, fetches: used.fetches || 0, fetchCap: caps.fetches || 0,
                     })}
+                    {caps.contributions ? ` · ${t('settings.registryConnection.contributionsLine', '{{used}}/{{cap}} contributions', { used: used.contributions || 0, cap: caps.contributions })}` : ''}
                     {usage.importWindow?.active ? ` · ${t('settings.registryConnection.importWindowActive', 'import window open')}` : ''}
                   </span>
                 )}
@@ -124,6 +126,7 @@ function RegistryConnectionSection() {
             </div>
           )}
           {refreshNotice && <div className="alert alert-info">{refreshNotice}</div>}
+          {isAdmin && <RegistryContributionsBlock />}
           {status.blocked && (
             <div className="alert alert-info">
               {t('settings.registryConnection.blocked', 'The registry answered "{{reason}}"; this install pauses its requests until {{until}}.', { reason: status.blocked.reason, until: formatDate(status.blocked.until) })}

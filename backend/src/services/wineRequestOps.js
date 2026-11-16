@@ -28,6 +28,8 @@ const { bumpDataVersion } = require('./dataVersion');
 const { createNotification } = require('./notifications');
 const { stripHtml } = require('../utils/sanitize');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
+const { seedSuggestedWindows } = require('./maturityOps');
+const { logAudit } = require('./audit');
 
 // How long a claim holds. A resolve that creates a wine also cuts out and
 // stores its pictures; past this the claim is taken to be an abandoned one
@@ -161,6 +163,16 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
     // never surfaced for a somm to set a drink window.
     for (const vintage of pendingVintages) {
       await ensurePendingVintageProfile(linkedWine._id, vintage);
+    }
+
+    // The drink windows a self-hosted install contributed with this wine go
+    // to the maturity queue as suggestions, never as published windows.
+    if (Array.isArray(wineRequest.proposedWindows) && wineRequest.proposedWindows.length) {
+      const vintages = await seedSuggestedWindows(linkedWine._id, wineRequest.proposedWindows, { setBy: wineRequest.user });
+      if (vintages.length) {
+        logAudit(null, 'wineRequest.windows.suggested', { type: 'wine', id: linkedWine._id },
+          { requestId: String(wineRequest._id), vintages });
+      }
     }
   }
 

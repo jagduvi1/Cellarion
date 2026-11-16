@@ -50,3 +50,30 @@ export const setBridgeRefreshMode = (apiFetch, mode) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ mode }),
   });
+
+// ── Contributions: wines made on this install offered to the shared registry
+// (backend/src/services/registryContributionOps.js). Offering and taking back
+// are for this install's admins.
+
+// GET /api/bridge/contributions — { enabled, offerable, counts: { queued, sent,
+// declined, duplicate, failed }, attention: [...] } (admins).
+export const getRegistryContributions = (apiFetch) => apiFetch('/api/bridge/contributions');
+
+// GET /api/bridge/contributions/:wineId — { enabled } or { enabled, linked,
+// offerable, contribution: { status, notes, duplicateOf, … } | null }.
+export const getWineContribution = (apiFetch, wineId) =>
+  apiFetch(`/api/bridge/contributions/${encodeURIComponent(wineId)}`);
+
+// POST /api/bridge/contributions — body: { wineIds } or { all: true }.
+// 202 { queued, wine? } (wine: the state of a single wine, sent at once).
+export const contributeWines = (apiFetch, body) =>
+  apiFetch('/api/bridge/contributions', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+
+// DELETE /api/bridge/contributions/:wineId — take back an offer nothing on
+// cellarion.app waits on. 409 when it is already there.
+export const withdrawWineContribution = (apiFetch, wineId) =>
+  apiFetch(`/api/bridge/contributions/${encodeURIComponent(wineId)}`, { method: 'DELETE' });

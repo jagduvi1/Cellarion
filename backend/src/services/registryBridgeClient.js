@@ -170,6 +170,10 @@ async function requestStatuses(ids) {
   return Array.isArray(r.body.requests) ? r.body.requests : [];
 }
 const forwardCorrection = (payload) => request('/corrections', { method: 'POST', body: payload });
+// A wine created on this install, offered to the registry
+// (services/registryContributionOps). The registry answers with a request id
+// that GET /requests reports on like any forwarded request.
+const forwardContribution = (payload) => request('/contributions', { method: 'POST', body: payload });
 const forwardValue = (payload) => request('/values', { method: 'POST', body: payload });
 
 /** Test hook: forget cached searches and any backoff. */
@@ -177,6 +181,6 @@ function _reset() { searchCache.clear(); blockedUntil = 0; blockedReason = null;
 
 module.exports = {
   config, isEnabled, transportState, request, search, fetchWine, changes, me,
-  forwardRequest, requestStatuses, forwardCorrection, forwardValue, _reset,
+  forwardRequest, requestStatuses, forwardCorrection, forwardValue, forwardContribution, _reset,
   TIMEOUT_MS,
 };

@@ -577,7 +577,8 @@
       "step3": "Put the two lines into this server's .env and restart the backend.",
       "hostedSettingsLink": "Open cellarion.app settings",
       "docsLink": "How the bridge works",
-      "errorLoad": "Failed to read the registry connection."
+      "errorLoad": "Failed to read the registry connection.",
+      "contributionsLine": "{{used}}/{{cap}} contributions"
     },
     "aiConnect": {
       "title": "Connect your AI",
@@ -732,6 +733,32 @@
         "title": "Early access",
         "summary": "Try new features before everyone else, and tell us what you think"
       }
+    },
+    "registryContributions": {
+      "title": "Wines made on this install",
+      "offerable_one": "{{count}} wine made on this install is not in the shared registry. You can offer it, with its picture and the drink windows reviewed here; it is reviewed on cellarion.app before it joins the registry, and when it is approved your wine here is linked to it.",
+      "offerable_other": "{{count}} wines made on this install are not in the shared registry. You can offer them, with their pictures and the drink windows reviewed here; each is reviewed on cellarion.app before it joins the registry, and when it is approved your wine here is linked to it.",
+      "offerAll_one": "Contribute {{count}} wine",
+      "offerAll_other": "Contribute all {{count}}",
+      "confirm": "They go up under the cellarion.app account that owns this install's key, as far as each day's allowance reaches. A wine still waiting can be taken back from its page.",
+      "confirmSend": "Offer them",
+      "queuedNotice_one": "{{count}} wine offered. It is sent as far as today's allowance reaches, or with the next hourly run.",
+      "queuedNotice_other": "{{count}} wines offered. They are sent as far as today's allowance reaches, and the rest follow hourly.",
+      "countQueued_one": "{{count}} waiting to be sent",
+      "countQueued_other": "{{count}} waiting to be sent",
+      "countSent_one": "{{count}} waiting for review on cellarion.app",
+      "countSent_other": "{{count}} waiting for review on cellarion.app",
+      "countDeclined_one": "{{count}} declined",
+      "countDeclined_other": "{{count}} declined",
+      "countDuplicate_one": "{{count}} already copied here",
+      "countDuplicate_other": "{{count}} already copied here",
+      "countFailed_one": "{{count}} not accepted as sent",
+      "countFailed_other": "{{count}} not accepted as sent",
+      "reasonDuplicate": "approved, and this install already has its copy; an admin can merge the two",
+      "reasonFailed": "not accepted as sent: {{reason}}",
+      "reasonDeclined": "declined: {{reason}}",
+      "errorLoad": "Failed to read the wines offered to the shared registry.",
+      "errorOffer": "The wines could not be offered right now. Please try again."
     }
   },
   "climate": {
@@ -2138,7 +2165,14 @@
       "applyGrapesLabel": "Grapes to add",
       "linkSearchLabel": "Search Wine Registry",
       "linkSearchPlaceholder": "Search by name or producer…",
-      "selectedId": "Selected ID:"
+      "selectedId": "Selected ID:",
+      "fromInstall": "From the self-hosted install",
+      "grapes": "Grapes",
+      "proposedWindows": "Drink windows from the install",
+      "proposedWindowsNote": "Approving the wine puts these in the maturity queue as suggestions. Nothing is published until a curator reviews them.",
+      "phaseEarly": "early",
+      "phasePeak": "peak",
+      "phaseLate": "late"
     },
     "bottleSizes": {
       "normalizeAll": "Normalize all",
@@ -3650,7 +3684,23 @@
     "moreFromRegion_dessert": "More dessert wines from {{region}}",
     "moreFromRegion_fortified": "More fortified wines from {{region}}",
     "windowReviewedTitle": "A sommelier has reviewed these drink windows",
-    "windowShowAll": "Show all {{count}} vintages"
+    "windowShowAll": "Show all {{count}} vintages",
+    "contribution": {
+      "title": "Shared wine registry",
+      "offerable": "This wine was made on this install and is not in the shared registry on cellarion.app. You can offer it, with its picture and the drink windows reviewed here. It is reviewed there before it joins the registry, and when it is approved this wine is linked to it; its bottles stay where they are.",
+      "queued": "Offered to the shared registry. It goes with the next hourly run, as far as today's allowance reaches.",
+      "sent": "With the shared registry on cellarion.app, waiting for review. When it is approved, this wine is linked to it.",
+      "declined": "The shared registry declined this wine: {{reason}}",
+      "failed": "The shared registry did not accept this wine as it was sent: {{reason}}",
+      "duplicate": "The shared registry approved this wine, and this install already has its copy of it. An admin can merge the two.",
+      "openCopy": "Open the registry's copy",
+      "offer": "Contribute to the shared registry",
+      "offerAgain": "Offer it again",
+      "withdraw": "Take it back",
+      "dismiss": "Dismiss",
+      "errorOffer": "The wine could not be offered right now. Please try again.",
+      "errorWithdraw": "That did not work. Please try again."
+    }
   },
   "taxonomy": {
     "loading": "Loading…",
