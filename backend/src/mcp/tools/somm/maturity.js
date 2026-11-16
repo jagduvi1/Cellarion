@@ -30,7 +30,10 @@ registerTool({
     '"skipped_thin_identity" — no region or appellation, automatic enrichment deliberately declines those; "off" — ' +
     'automatic enrichment is switched off, nothing is coming; "pending" — it may still be enriched. In the first two ' +
     'cases nothing will ever write it but you. withheld:true means a generated profile exists but is held for the ' +
-    'stated reason — judge it through list_held_profiles rather than overwriting blind. Write with set_wine_profile.',
+    'stated reason — judge it through list_held_profiles rather than overwriting blind. Write with set_wine_profile. ' +
+    'suggested_window, when present, is a window proposed from OUTSIDE curation (a self-hosted install that ' +
+    'contributed the wine): a starting point to check against the registry rules, never published. phases ' +
+    'holds only what a curator set; set_vintage_maturity writes the window you send and drops the suggestion.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -95,6 +98,14 @@ registerTool({
       status: p.status,
       relative_nv: !!p.relative,
       phases: PHASE_FIELDS.reduce((acc, f) => ((acc[f] = p[f] ?? null), acc), {}),
+      // Never part of phases: a curator who sets only some phases must not
+      // publish the rest of someone else's proposal (services/maturityOps).
+      ...(p.suggestion ? {
+        suggested_window: {
+          phases: PHASE_FIELDS.reduce((acc, f) => ((acc[f] = p.suggestion[f] ?? null), acc), {}),
+          source: p.suggestion.source,
+        },
+      } : {}),
       // The generated tasting profile the curator is about to judge the drink
       // window against. Returned so a wrong one can be corrected in the same
       // pass with set_wine_profile, instead of the curator silently working

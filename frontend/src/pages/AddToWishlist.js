@@ -1093,7 +1093,7 @@ function AddToWishlist() {
                   id="wishlist-shop-url"
                   type="text"
                   inputMode="url"
-                  autoComplete="url"
+                  autoComplete="off"
                   value={shopUrl}
                   onChange={(e) => setShopUrl(e.target.value)}
                   placeholder={t('addToWishlist.shopUrlPlaceholder')}

@@ -10,7 +10,7 @@ import { messageForResponse } from '../utils/friendlyError';
 // that offers them all, and what became of the ones offered before
 // (backend services/registryContributionOps). Mounted by
 // RegistryConnectionSection only while the install is connected.
-export default function RegistryContributionsBlock() {
+export default function RegistryContributionsBlock({ onChanged }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [overview, setOverview] = useState(null);
@@ -52,8 +52,12 @@ export default function RegistryContributionsBlock() {
         return;
       }
       setConfirming(false);
-      setNotice(t('settings.registryContributions.queuedNotice', '{{count}} wines offered. They are sent as far as today\'s allowance reaches, and the rest follow hourly.', { count: body.queued || 0 }));
+      setNotice(body.queued
+        ? t('settings.registryContributions.queuedNotice', '{{count}} wines offered. They are sent as far as today\'s allowance reaches, and the rest follow hourly.', { count: body.queued })
+        : t('settings.registryContributions.nothingQueued', 'Nothing was offered: every wine made here has been offered already.'));
       setOverview(await load());
+      // The card's quota line counts these too.
+      if (onChanged) onChanged();
     } catch {
       setError(fallback);
     } finally {

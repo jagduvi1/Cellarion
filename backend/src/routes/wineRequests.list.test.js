@@ -33,6 +33,7 @@ afterAll((done) => { server.closeAllConnections(); server.close(done); });
 test('the linked wine is populated without contributor fields, curation internals or aiProfile', async () => {
   const rows = [{ _id: 'r1', wineName: 'Blanc', status: 'resolved', linkedWineDefinition: { name: 'Blanc', producer: 'Example Estate' } }];
   const query = {};
+  query.select = jest.fn(() => query);
   query.populate = jest.fn(() => query);
   query.sort = jest.fn(() => Promise.resolve(rows));
   WineRequest.find.mockReturnValue(query);
@@ -49,4 +50,18 @@ test('the linked wine is populated without contributor fields, curation internal
     '-createdBy', '-contribution', '-createdVia', '-canary', '-identityProvenance',
     '-normalizedKey', '-canonicalKey', '-scanImage', '-aiProfile',
   ]));
+});
+
+test('the list never carries the request photos: it does not show them, and a member who contributed many wines would download every one', async () => {
+  const query = {};
+  query.select = jest.fn(() => query);
+  query.populate = jest.fn(() => query);
+  query.sort = jest.fn(() => Promise.resolve([]));
+  WineRequest.find.mockReturnValue(query);
+
+  const res = await fetch(`${baseUrl}/api/wine-requests`, {
+    headers: { Authorization: `Bearer ${jwt.sign({ id: USER_ID, roles: ['user'] }, 'test-secret')}` },
+  });
+  expect(res.status).toBe(200);
+  expect(query.select).toHaveBeenCalledWith('-image -backImage');
 });

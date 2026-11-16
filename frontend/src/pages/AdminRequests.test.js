@@ -18,12 +18,13 @@ const apiFetch = vi.fn();
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch }) }));
 
 const getWineRequests = vi.fn();
+const getGrapes = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ grapes: [] }) }));
 vi.mock('../api/admin', () => ({
   adminGetWineRequests: (...a) => getWineRequests(...a),
   adminResolveWineRequest: vi.fn(),
   adminRejectWineRequest: vi.fn(),
   adminGetCountries: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ countries: [] }) }),
-  adminGetGrapes: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ grapes: [] }) }),
+  adminGetGrapes: (...a) => getGrapes(...a),
   adminGetRegions: vi.fn(),
   adminGetAppellations: vi.fn(),
 }));
@@ -244,4 +245,23 @@ test('a back label given as a link offers no checkbox', async () => {
   fireEvent.click(await screen.findByText('Wine 0'));
   await screen.findByPlaceholderText('https://...');
   expect(screen.queryByTestId('add-back-photo')).toBeNull();
+});
+
+test('grape names on a request pre-select the varieties the taxonomy knows by that name; others are not guessed', async () => {
+  getGrapes.mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => Promise.resolve({
+    grapes: [{ _id: 'g-pn', name: 'Pinot Noir' }, { _id: 'g-ch', name: 'Chardonnay' }],
+  }) }));
+  adminResolveWineRequest.mockResolvedValue(jsonRes({ wineRequest: {} }));
+  getWineRequests.mockResolvedValue(jsonRes({
+    count: 1, total: 1,
+    requests: [{ ...makeRequests(1)[0], via: 'bridge', suggestedGrapes: ['pinot noir', 'Pinot Noir', 'Gamay Noir à Jus Blanc'] }],
+  }));
+  render(<AdminRequests />);
+  fireEvent.click(await screen.findByText('Wine 0'));
+  // The names stay readable above the form, the unknown one included.
+  expect(await screen.findByText(/Gamay Noir à Jus Blanc/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'admin.requests.resolve' }));
+  await waitFor(() => expect(adminResolveWineRequest).toHaveBeenCalledTimes(1));
+  expect(adminResolveWineRequest.mock.calls[0][2].wineData.grapes).toEqual(['g-pn']);
 });

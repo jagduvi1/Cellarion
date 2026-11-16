@@ -142,8 +142,8 @@ function hasWindowContent(profile) {
  * Write a validated window onto the row: the phases named in `next` (null
  * clears; a phase `next` does not name is left as it is), the note when given
  * (undefined leaves it), reviewed with the curator's stamp and the row's
- * relative flag. Saves, moves the owners' data version, audits
- * somm.maturity.review. Returns the relative flag.
+ * relative flag, and drops a suggestion the row carried. Saves, moves the
+ * owners' data version, audits somm.maturity.review. Returns the relative flag.
  */
 async function applyWindow(profile, next, { sommNotes, actorId, req, via }) {
   for (const f of PHASE_FIELDS) {
@@ -156,6 +156,8 @@ async function applyWindow(profile, next, { sommNotes, actorId, req, via }) {
   profile.status = 'reviewed';
   profile.setBy = actorId;
   profile.setAt = new Date();
+  // A suggestion has done its job once a curator set the window.
+  profile.suggestion = undefined;
   await profile.save();
   bumpWineOwners([wineIdOf(profile)]);
   logAudit(req, 'somm.maturity.review',
@@ -258,22 +260,27 @@ async function reseedPendingRow(prev) {
 }
 
 /**
- * Drink windows proposed from OUTSIDE curation, stored as PENDING suggestions
- * the way a member's cellar import stores its windows (services/cellarImport
- * attachMaturity): the phases and the proposer (setBy) are kept for the
- * maturity queue, and nothing is published until a curator adjusts the row
- * to the registry's rules and reviews it. A row that is reviewed or already
- * carries content is never touched; an empty pending stub (seeded by a bottle
- * add) is filled. Year vintages only, each window checked with checkWindow;
- * one that fails is left out. Caller: services/wineRequestOps
- * completeRequestResolve, for the windows a self-hosted install sent with a
- * contributed wine. Returns the vintages written.
+ * Drink windows proposed from OUTSIDE curation, today the windows a
+ * self-hosted install sent with a wine it contributed: each is stored as the
+ * row's `suggestion`, NEVER in its phase fields, so no reader can take it for
+ * a window and no partial curator write can publish part of it. The row is
+ * created pending when the vintage has none; a reviewed row, or one already
+ * holding a suggestion, is left alone in one atomic write. Nothing is seeded
+ * for a wine kept out of the queue (a non-wine, pending or draft row). Year
+ * vintages only (utils/validation parseAndValidateVintage), each window
+ * checked with checkWindow; one that fails is left out. Caller:
+ * services/wineRequestOps completeRequestResolve. Returns the vintages written.
  */
-async function seedSuggestedWindows(wineId, windows, { setBy = null } = {}) {
+async function seedSuggestedWindows(wineId, windows, { requestId = null } = {}) {
+  const WineDefinition = require('../models/WineDefinition');
+  const { MATURITY_QUEUE_EXCLUDED } = require('../utils/vintageProfile');
+  const { parseAndValidateVintage } = require('../utils/validation');
+  if (await WineDefinition.exists({ _id: wineId, ...MATURITY_QUEUE_EXCLUDED })) return [];
   const written = [];
   for (const win of Array.isArray(windows) ? windows : []) {
-    const vintage = canonicalVintage(win?.vintage ?? '');
-    if (!/^\d{4}$/.test(vintage)) continue;
+    const parsed = parseAndValidateVintage(win?.vintage);
+    if (!parsed.ok || !/^\d{4}$/.test(parsed.value)) continue;
+    const vintage = parsed.value;
     const incoming = {};
     for (const f of PHASE_FIELDS) {
       if (Number.isInteger(win[f])) incoming[f] = win[f];
@@ -281,26 +288,22 @@ async function seedSuggestedWindows(wineId, windows, { setBy = null } = {}) {
     if (!Object.keys(incoming).length) continue;
     const checked = checkWindow({ vintage }, incoming);
     if (!checked.ok) continue;
-    const phases = {};
+    const suggestion = { source: 'bridge', requestId, at: new Date() };
     for (const f of PHASE_FIELDS) {
-      if (checked.next[f] != null) phases[f] = checked.next[f];
+      if (checked.next[f] != null) suggestion[f] = checked.next[f];
     }
     try {
-      const existing = await WineVintageProfile.findOne({ wineDefinition: wineId, vintage });
-      if (!existing) {
-        await WineVintageProfile.create({ wineDefinition: wineId, vintage, status: 'pending', relative: false, ...phases, setBy });
-      } else if (existing.status === 'pending' && !hasWindowContent(existing)) {
-        Object.assign(existing, phases);
-        existing.setBy = setBy;
-        await existing.save();
-      } else {
-        continue;
-      }
-      written.push(vintage);
+      // The filter IS the rule: a reviewed row, or one with a suggestion,
+      // does not match, and the upsert's insert then collides with it on the
+      // unique (wine, vintage) index instead of touching it.
+      const res = await WineVintageProfile.updateOne(
+        { wineDefinition: wineId, vintage, status: { $ne: 'reviewed' }, suggestion: { $exists: false } },
+        { $set: { suggestion }, $setOnInsert: { wineDefinition: wineId, vintage, status: 'pending', relative: false } },
+        { upsert: true }
+      );
+      if (res.upsertedCount || res.modifiedCount) written.push(vintage);
     } catch (err) {
-      // A bottle add creating the same row a moment earlier (the unique
-      // index) leaves that row as it is; the rest of the windows still go.
-      logger.warn({ err, wineId: String(wineId), vintage }, 'suggested drink window not stored');
+      if (err?.code !== 11000) logger.warn({ err, wineId: String(wineId), vintage }, 'suggested drink window not stored');
     }
   }
   return written;

@@ -41,7 +41,7 @@ header that names your install in the readers report and on contributions.
 | `GET /requests?ids=` | Up to 50 ids from `POST /requests` → `{ id, status, notes, wine }` for each that this key's owner filed over the bridge; `wine` is the registry identity a resolved request was linked to | — |
 | `POST /corrections` | `{ wineId, fields, reason, evidenceUrl }` → an admin-reviewed proposal | 50 (shared) |
 | `POST /values` | `{ wineId, keyName \| keyId, value, reason, evidenceUrl, vintage? }` → a value suggestion | 50 (shared) |
-| `POST /contributions` | `{ name, producer, country?, region?, appellation?, type?, grapes?, image?, windows? }` → a wine the install created, into the same hosted queue as `/requests`; `windows` use the shape `GET /wines/:id` serves (year vintages, at most 30). Answered through `GET /requests`. The same wine still pending answers `200` with that request | 50 (shared) |
+| `POST /contributions` | `{ ref, name, producer, country?, region?, appellation?, type?, classification?, colour?, sweetness?, lwin?, grapes?, image?, windows? }` → a wine the install created, into the same hosted queue as `/requests`. `ref` is the install's own id for the wine: the same `ref` still pending answers `200` with that request. `image` is an inline picture only (`data:image/…`, ≤ 500,000 characters). `windows` use the shape `GET /wines/:id` serves (year vintages from 1900 to this year, at most 30). Answered through `GET /requests`. Refused with `403 banned` for an account banned from contributing | 50 (shared) |
 
 Burst limit: 60 requests per minute per key. Once per 30 days the owner can open an
 **import window** from Settings that multiplies every daily quota by five for 24
@@ -150,18 +150,28 @@ users until they search.
   wine created there (never a registry copy, a pending or a draft row) from its page, or
   every such wine at once from Settings. The offer carries the identity the install
   holds, the wine's picture (re-encoded like a request photo) and the drink windows
-  reviewed there (year vintages only, NV offsets stay). On cellarion.app it lands in the
+  reviewed there (year vintages only, NV offsets stay), plus its classification, colour,
+  label sweetness term and LWIN for the curator to see. On cellarion.app it lands in the
   wine-request queue; nothing is published as sent. Approval may adjust the wine to the
-  registry's rules or link it to a wine the registry already has, and the windows wait
-  in the maturity queue as suggestions until a curator reviews them. The install asks
-  about its offers every hour (`GET /requests`): an approved one LINKS the wine on the
-  install to the registry wine (`registryId`), so its bottles stay where they are, the
-  approved identity replaces the local one, and later corrections flow up like any
-  copy's. A window or a tasting profile set on the install stays, as on any copy. If the
-  install already holds a copy of the approved wine, the offer is marked as a duplicate
-  and merging the two is left to a person. A decline comes back with its reason. Sending
-  stops ten short of the day's contribution allowance, which the install's own requests
-  and corrections share; the rest stay queued for the next hourly run.
+  registry's rules or link it to a wine the registry already has. The windows then wait
+  in the maturity queue as a SUGGESTION beside each vintage's window, never in it: a
+  curator sees it, may use it as a starting point, and only the window the curator sets
+  is published. The install asks about its offers every hour at :47 (`GET /requests`):
+  an approved one LINKS the wine on the install to the registry wine (`registryId`), so
+  its bottles stay where they are, the approved identity replaces the local one, and
+  later corrections flow up like any copy's. A window set on the install stays, and so
+  does a tasting profile curated there (at the link and at every later refresh); a
+  classification, LWIN, colour, region or grapes the registry wine lacks are kept at the
+  link. If the install already holds a copy of the approved wine, the offer is marked as
+  a duplicate and merging the two is left to a person; once that copy is gone, the next
+  sync links the wine. A decline comes back with its reason. An offer the registry no
+  longer knows (a key from another account, say) ends as failed after two days of hourly
+  checks. Sending stops ten short of the day's contribution allowance, which the
+  install's own requests and corrections share, and the calls of one run are spaced
+  under the burst limit; the rest stay queued for the next hourly run, and a wine that
+  repeatedly gets no answer goes to the back of the queue and, after five tries, ends as
+  failed. An admin can take an offer back before it is sent: it is then left out of
+  "offer every wine" and can still be offered again from its page.
 - **No bulk download.** Nothing is copied when the key is set: registry wines appear in
   the add-bottle search straight away and a wine is copied when someone picks it. The
   Monday run only refreshes wines already copied.

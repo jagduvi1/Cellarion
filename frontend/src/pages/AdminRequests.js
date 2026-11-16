@@ -13,6 +13,9 @@ import displayableImage from '../utils/displayableImage';
 import { WINE_COLOURS, isStyleType, colourLabel } from '../utils/wineColour';
 import './AdminRequests.css';
 
+// What a request's hints may hold, in the order they are shown.
+const HINT_KEYS = ['country', 'region', 'appellation', 'type', 'classification', 'colour', 'sweetness', 'lwin'];
+
 // A contributed window as the curator reads it: "early 2023–2026 · peak 2026–2034".
 function proposedWindowText(w, t) {
   const phases = [
@@ -238,13 +241,24 @@ function AdminRequests() {
     prefillFromHints(request);
   };
 
-  // What the import FILE said about the wine (request.hints — country,
-  // region, appellation, type) pre-fills the create form the same way an AI
-  // lookup does, so the curator starts from the file's geography instead of
-  // re-deriving it. Bails if another request was
-  // selected while the region list was loading (selectedIdRef is the page's
-  // existing "which request is open" ref).
+  // What an import file said about the wine, or what a self-hosted install
+  // holds for a wine it contributed (request.hints — country, region,
+  // appellation, type — and the grape names) pre-fills the create form the
+  // same way an AI lookup does, so the curator starts from it instead of
+  // re-deriving it. Bails if another request was selected while the region
+  // list was loading (selectedIdRef is the page's existing "which request is
+  // open" ref).
   const prefillFromHints = async (request) => {
+    // Grape names pre-select the varieties the taxonomy knows by exactly that
+    // name, as the AI lookup does; any other name stays shown as text above
+    // the form, never guessed.
+    if (request.requestType !== 'grape_suggestion' && request.suggestedGrapes?.length && grapes.length) {
+      const ids = [...new Set(request.suggestedGrapes
+        .map((name) => grapes.find((g) => g.name.toLowerCase() === String(name).toLowerCase()))
+        .filter(Boolean)
+        .map((g) => g._id))];
+      if (ids.length) setResolveData((prev) => ({ ...prev, wineData: { ...prev.wineData, grapes: ids } }));
+    }
     const hints = request.hints;
     if (!hints || !(hints.country || hints.region || hints.appellation || hints.type)) return;
     const patch = {};
@@ -516,12 +530,14 @@ function AdminRequests() {
                       ))}
                   </p>
                 )}
-                {selected.hints && (selected.hints.country || selected.hints.region || selected.hints.appellation || selected.hints.type) && (
+                {selected.hints && HINT_KEYS.some((k) => selected.hints[k]) && (
                   <p>
                     {/* Over the bridge, hints come with a wine a self-hosted install
-                        contributed; otherwise from an import file. */}
+                        contributed (the last four only from there); otherwise from
+                        an import file. Not on the create form: added to the wine
+                        after it is created, where they apply. */}
                     <strong>{selected.via === 'bridge' ? t('admin.requests.fromInstall', 'From the self-hosted install') : t('admin.requests.fromFile', 'From the import file')}:</strong>{' '}
-                    {[selected.hints.country, selected.hints.region, selected.hints.appellation, selected.hints.type].filter(Boolean).join(' · ')}
+                    {HINT_KEYS.map((k) => selected.hints[k]).filter(Boolean).join(' · ')}
                   </p>
                 )}
                 {selected.requestType !== 'grape_suggestion' && selected.suggestedGrapes?.length > 0 && (

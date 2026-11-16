@@ -91,7 +91,11 @@ router.get('/', async (req, res) => {
 
     // The linked wine as a bottle list carries it: no member-hidden field
     // (who contributed it, the curation internals) and no aiProfile.
+    // Not the photos: up to two inline images per request that this list
+    // never shows, and a member who contributed many wines from a
+    // self-hosted install would download every one on each visit.
     const requests = await WineRequest.find(filter)
+      .select('-image -backImage')
       .populate('linkedWineDefinition', WINE_LIST_SELECT)
       .populate('resolvedBy', 'username')
       .sort({ createdAt: -1 });

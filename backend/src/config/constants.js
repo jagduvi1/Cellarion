@@ -35,6 +35,9 @@ const MEMBER_WINE_HIDDEN_FIELDS = [
   'scanImage', 'scanImageBack', 'scanFieldConflicts', 'normalizedKey', 'canonicalKey',
   'verifiedChecks', 'identityProvenance', 'productNumber', 'previousSlugs', 'canary',
   'createdBy', 'contribution', 'createdVia',
+  // A self-hosted install's offer of the wine to the shared registry: request
+  // ids and the registry's notes, read through /api/bridge/contributions.
+  'registryContribution',
   // The label-sweetness curation marks: a curator's "the word is the name"
   // flag and the review marker. Curation internals, like verifiedChecks.
   'sweetnessReview', 'sweetnessInName',

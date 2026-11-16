@@ -16,6 +16,7 @@ const { dataForWine, suggestValue } = require('../services/registryDataOps');
 const { createFieldCorrection } = require('../services/wineProposalOps');
 const { createWineRequest } = require('../services/accountOps');
 const { parseContribution, fileContribution } = require('../services/registryContributionIntake');
+const { checkContributionGate } = require('../services/contributionGate');
 const asyncHandler = require('../utils/asyncHandler');
 const { createNotifications } = require('../services/notifications');
 const { logAudit } = require('../services/audit');
@@ -534,7 +535,16 @@ function validContribution(req, res, next) {
   next();
 }
 
-router.post('/contributions', validContribution, quota('contributions'), asyncHandler(async (req, res) => {
+// An account banned from contributing (services/contributionGate) files
+// nothing, and is told so before the quota is spent. The tier budget is not
+// applied: the daily bridge quota already bounds what an install sends.
+const contributorAllowed = asyncHandler(async (req, res, next) => {
+  const gate = await checkContributionGate(req.user.id, { budget: false });
+  if (!gate.ok) return res.status(gate.code === 'banned' ? 403 : 400).json({ error: gate.message, code: gate.code });
+  next();
+});
+
+router.post('/contributions', validContribution, contributorAllowed, quota('contributions'), asyncHandler(async (req, res) => {
   const { wineRequest, reused } = await fileContribution(req.user.id, req.contribution, { via: 'bridge', req });
   if (!reused) {
     logAudit(req, 'bridge.contribution.forwarded', { type: 'wineRequest', id: wineRequest._id },

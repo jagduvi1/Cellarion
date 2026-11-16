@@ -93,3 +93,10 @@ describe('RegistryContributionPanel (wine page, self-hosted)', () => {
     expect(apiFetch).toHaveBeenCalledTimes(2);
   });
 });
+
+test('an offer being sent right now says so and offers no action', async () => {
+  apiFetch.mockImplementation(() => ok({ enabled: true, linked: false, offerable: false, contribution: { status: 'sending' } }));
+  renderPanel();
+  expect(await screen.findByText('Being sent to the shared registry now.')).toBeInTheDocument();
+  expect(screen.queryByRole('button')).toBeNull();
+});

@@ -149,7 +149,11 @@
       "consent_required": "To create an account, accept the Privacy Policy and agree to the processing of your personal data.",
       "verification_token_invalid": "This confirmation link is invalid or has expired. Ask for a new confirmation email.",
       "reset_token_invalid": "This reset link is invalid or has expired. Ask for a new one from the login page.",
-      "wishlist_shop_url_invalid": "The shop link must be a web address, such as https://shop.example/wine."
+      "wishlist_shop_url_invalid": "The shop link must be a web address, such as https://shop.example/wine.",
+      "bridge_not_connected": "This install is not connected to the shared registry.",
+      "contribution_wine_ids_invalid": "Choose between 1 and {{max}} wines to offer.",
+      "contribution_already_sent": "This wine is already with the shared registry; it is answered there.",
+      "contribution_not_offered": "This wine has not been offered to the shared registry."
     }
   },
   "auth": {
@@ -759,7 +763,8 @@
       "reasonFailed": "not accepted as sent: {{reason}}",
       "reasonDeclined": "declined: {{reason}}",
       "errorLoad": "Failed to read the wines offered to the shared registry.",
-      "errorOffer": "The wines could not be offered right now. Please try again."
+      "errorOffer": "The wines could not be offered right now. Please try again.",
+      "nothingQueued": "Nothing was offered: every wine made here has been offered already."
     }
   },
   "climate": {
@@ -2836,7 +2841,9 @@
       "removeTitle": "Remove from queue",
       "removeConfirm": "The wine was never released in {{vintage}}? Removing takes the pair out of the queue without setting a drink window. If anyone adds a bottle of this wine and vintage again — for instance once it is actually released — it returns to the queue automatically.",
       "removing": "Removing…",
-      "removeError": "Failed to remove from the queue"
+      "removeError": "Failed to remove from the queue",
+      "suggestionFromInstall": "Suggested by the self-hosted install that contributed this wine:",
+      "useSuggestion": "Use as a starting point"
     },
     "prices": {
       "title": "Price Queue",
@@ -3700,7 +3707,8 @@
       "withdraw": "Take it back",
       "dismiss": "Dismiss",
       "errorOffer": "The wine could not be offered right now. Please try again.",
-      "errorWithdraw": "That did not work. Please try again."
+      "errorWithdraw": "That did not work. Please try again.",
+      "sending": "Being sent to the shared registry now."
     }
   },
   "taxonomy": {
@@ -5603,7 +5611,10 @@
     "switchCamera": "Switch camera",
     "takePhotoButton": "Take Photo",
     "choosePhoto": "Choose a photo",
-    "photoUnreadable": "That photo could not be opened. Try another one."
+    "photoUnreadable": "That photo could not be opened. Try another one.",
+    "labelUnreadable": "Could not read the label. Try again.",
+    "backLabelUnreadable": "Could not read the back label. Try again.",
+    "scanFailed": "Scan failed. Please try again."
   },
   "photoCapture": {
     "removingBackground": "Removing background…",

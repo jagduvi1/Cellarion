@@ -183,6 +183,28 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
 
+  // The install's proposal into the form, like an AI suggestion: nothing is
+  // saved until the curator marks the window reviewed.
+  const useSuggestion = () => {
+    const s = profile.suggestion || {};
+    setForm(f => ({
+      ...f,
+      earlyFrom:  s.earlyFrom  ?? '',
+      earlyUntil: s.earlyUntil ?? '',
+      peakFrom:   s.peakFrom   ?? '',
+      peakUntil:  s.peakUntil  ?? '',
+      lateFrom:   s.lateFrom   ?? '',
+      lateUntil:  s.lateUntil  ?? '',
+    }));
+  };
+  const suggestionText = (s) => [
+    [t('somm.maturity.phaseEarly', 'early'), s.earlyFrom, s.earlyUntil],
+    [t('somm.maturity.phasePeak', 'peak'), s.peakFrom, s.peakUntil],
+    [t('somm.maturity.phaseLate', 'late'), s.lateFrom, s.lateUntil],
+  ].filter(([, from, until]) => from != null || until != null)
+    .map(([label, from, until]) => `${label} ${from ?? '…'}–${until ?? '…'}`)
+    .join(' · ');
+
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -338,6 +360,21 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
           {aiMsg && (
             <div className={`somm-ai-msg ${aiMsg.ok ? 'somm-ai-msg--ok' : 'somm-ai-msg--err'}`}>
               {aiMsg.text}
+            </div>
+          )}
+
+          {/* A window proposed from outside curation (a self-hosted install
+              that contributed the wine). Beside the form, never in it: it
+              becomes the window only through this curator's own save. */}
+          {profile.suggestion && (
+            <div className="somm-form-hint-row">
+              <p className="somm-form-hint">
+                {t('somm.maturity.suggestionFromInstall', 'Suggested by the self-hosted install that contributed this wine:')}{' '}
+                {suggestionText(profile.suggestion)}
+              </p>
+              <button type="button" className="btn btn-secondary btn-small" onClick={useSuggestion}>
+                {t('somm.maturity.useSuggestion', 'Use as a starting point')}
+              </button>
             </div>
           )}
 

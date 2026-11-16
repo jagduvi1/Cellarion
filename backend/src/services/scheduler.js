@@ -288,15 +288,26 @@ function startScheduler() {
     } catch (err) {
       console.error('[scheduler] Registry bridge request sync failed:', err);
     }
-    // Wines this install offered to the registry: link the approved ones,
-    // record the declined ones, then send what is queued as far as today's
-    // allowance goes (services/registryContributionOps).
+  });
+
+  // Registry Bridge contributions (self-hosted installs): hourly at :47, apart
+  // from the :29 request sync and the Monday 06:30 refresh, whose registry
+  // calls would otherwise share one minute's burst limit. Link the approved
+  // offers, record the declined ones, then send what is queued as far as
+  // today's allowance goes (services/registryContributionOps). A no-op when
+  // REGISTRY_BRIDGE_KEY is not set.
+  cron.schedule('47 * * * *', async () => {
+    if (!registryBridge.isEnabled()) return;
     const contributions = require('./registryContributionOps');
     try {
       await contributions.syncContributions();
+    } catch (err) {
+      console.error('[scheduler] Registry bridge contribution sync failed:', err);
+    }
+    try {
       await contributions.sendQueued();
     } catch (err) {
-      console.error('[scheduler] Registry bridge contributions failed:', err);
+      console.error('[scheduler] Registry bridge contribution send failed:', err);
     }
   });
 
@@ -341,7 +352,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC, api-deprecation-reminders daily 08:11 UTC, inactive-accounts daily 09:13 UTC (off until turned on))');
+  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC, bridge-contributions hourly :47, api-deprecation-reminders daily 08:11 UTC, inactive-accounts daily 09:13 UTC (off until turned on))');
 }
 
 /**
