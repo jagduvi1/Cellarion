@@ -120,7 +120,9 @@ router.get('/lookup', async (req, res) => {
       wineDefinition: String(wine),
       vintage: String(vintage)
     });
-    const profile = await (curator ? query.populate({ path: 'setBy', select: 'username' }) : query.select('-setBy'));
+    // A member sees the window, never the curation behind it: who set it, or
+    // an install's suggestion (which names the wine request it came with).
+    const profile = await (curator ? query.populate({ path: 'setBy', select: 'username' }) : query.select('-setBy -suggestion'));
 
     if (!profile) {
       return res.json({ profile: null });

@@ -517,6 +517,7 @@ module.exports = {
   createWineRequest,
   validateSourceUrl,
   validateImageRef,
+  isOwnUploadPath,
   MAX_SOURCE_URLS,
   // Exposed so the MCP tool descriptions/schemas can enumerate the same options.
   ALLOWED_CURRENCIES,

@@ -12,6 +12,14 @@ describe('normalizeShopUrl', () => {
     expect(normalizeShopUrl('www.systembolaget.se/produkt/vin/123')).toEqual({ url: 'https://www.systembolaget.se/produkt/vin/123' });
   });
 
+  test('a host with a port and no scheme is an address, not a scheme', () => {
+    expect(normalizeShopUrl('shop.example:8080/wine')).toEqual({ url: 'https://shop.example:8080/wine' });
+    expect(normalizeShopUrl('shop.example:8443')).toEqual({ url: 'https://shop.example:8443/' });
+    // Still refused: a scheme that is not http(s), and a bare host with a port.
+    expect(normalizeShopUrl('javascript:alert(1)')).toEqual({ error: true });
+    expect(normalizeShopUrl('localhost:3000/x')).toEqual({ error: true });
+  });
+
   test('an empty value means no link', () => {
     expect(normalizeShopUrl(undefined)).toEqual({ url: null });
     expect(normalizeShopUrl(null)).toEqual({ url: null });

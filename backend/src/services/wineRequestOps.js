@@ -166,9 +166,10 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
     }
 
     // The drink windows a self-hosted install contributed with this wine go
-    // to the maturity queue as suggestions, never as published windows.
+    // to the maturity queue as suggestions beside the curator's empty window,
+    // never into it.
     if (Array.isArray(wineRequest.proposedWindows) && wineRequest.proposedWindows.length) {
-      const vintages = await seedSuggestedWindows(linkedWine._id, wineRequest.proposedWindows, { setBy: wineRequest.user });
+      const vintages = await seedSuggestedWindows(linkedWine._id, wineRequest.proposedWindows, { requestId: wineRequest._id });
       if (vintages.length) {
         logAudit(null, 'wineRequest.windows.suggested', { type: 'wine', id: linkedWine._id },
           { requestId: String(wineRequest._id), vintages });

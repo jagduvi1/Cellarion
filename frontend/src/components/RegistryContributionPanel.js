@@ -72,6 +72,8 @@ export default function RegistryContributionPanel({ wineId }) {
   let text;
   if (!c) {
     text = t('wineDetail.contribution.offerable', 'This wine was made on this install and is not in the shared registry on cellarion.app. You can offer it, with its picture and the drink windows reviewed here. It is reviewed there before it joins the registry, and when it is approved this wine is linked to it; its bottles stay where they are.');
+  } else if (c.status === 'sending') {
+    text = t('wineDetail.contribution.sending', 'Being sent to the shared registry now.');
   } else if (c.status === 'queued') {
     text = t('wineDetail.contribution.queued', 'Offered to the shared registry. It goes with the next hourly run, as far as today\'s allowance reaches.');
   } else if (c.status === 'sent') {
@@ -101,7 +103,7 @@ export default function RegistryContributionPanel({ wineId }) {
               {c ? t('wineDetail.contribution.offerAgain', 'Offer it again') : t('wineDetail.contribution.offer', 'Contribute to the shared registry')}
             </button>
           )}
-          {c && c.status !== 'sent' && (
+          {c && c.status !== 'sent' && c.status !== 'sending' && (
             <button type="button" className="btn btn-secondary btn-small" onClick={takeBack} disabled={busy}>
               {c.status === 'queued' ? t('wineDetail.contribution.withdraw', 'Take it back') : t('wineDetail.contribution.dismiss', 'Dismiss')}
             </button>

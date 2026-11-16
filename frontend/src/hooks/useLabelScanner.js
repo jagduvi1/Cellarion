@@ -3,6 +3,7 @@ import i18n from '../i18n';
 import { scanLabel, scanLabelBack } from '../api/wines';
 import { track } from '../utils/track';
 import { openCamera, isSuperseded } from '../utils/camera';
+import { messageForResponse } from '../utils/friendlyError';
 
 // Every scan is sent at most 800 px on its longer edge, to keep the API cost low.
 const MAX_DIM = 800;
@@ -18,7 +19,12 @@ function drawScaled(canvas, source, width, height) {
   }
   canvas.width = w;
   canvas.height = h;
-  canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+  const ctx = canvas.getContext('2d');
+  // White under the picture: a cut-out bottle (a shop's transparent PNG or
+  // WebP) would otherwise be read on the black a JPEG gives transparent pixels.
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(source, 0, 0, w, h);
 }
 
 // A photo the user picked, decoded into an <img> the canvas can draw.
@@ -94,7 +100,14 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
   // stopped and the camera light stays on until page unload.
   const camOpenRef = useRef(false);
 
-  const stopCamera = useCallback(() => {
+  // Which scan is current. A scan's answer reaches the page only while it is
+  // still the latest one: a viewfinder dismissed mid-read (stopCamera) or a
+  // second photo chosen meanwhile makes the earlier answer stale, so it can
+  // neither overwrite the newer result nor close what is showing now.
+  const scanSeqRef = useRef(0);
+
+  // Close the viewfinder the way a finished scan does; the scan stays current.
+  const closeViewfinder = useCallback(() => {
     camOpenRef.current = false;
     // Back to the ordinary front scan: the next time the viewfinder opens it is
     // for a new bottle unless a page explicitly asks for the rescue again.
@@ -105,6 +118,13 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
     }
     setLabelCam({ open: false, error: null });
   }, []);
+
+  // The person closing the viewfinder: a read still under way is dropped.
+  const stopCamera = useCallback(() => {
+    scanSeqRef.current += 1;
+    setLabelScanning(false);
+    closeViewfinder();
+  }, [closeViewfinder]);
 
   const startCamera = useCallback(async () => {
     setLabelCam({ open: true, error: null });
@@ -166,8 +186,11 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
   // Send a drawn canvas to the scan endpoint for the current mode; shared by
   // the camera shutter and a chosen photo.
   const scanCanvas = useCallback((canvas) => {
+    const seq = ++scanSeqRef.current;
+    const current = () => seq === scanSeqRef.current;
     setLabelScanning(true);
     canvas.toBlob(async (blob) => {
+      if (!current()) return;
       if (!blob) {
         setLabelCam({ open: true, error: i18n.t('camera.captureFailed') });
         setLabelScanning(false);
@@ -193,11 +216,12 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
             ...(ctx.frontScanImageId ? { frontScanImageId: ctx.frontScanImageId } : {}),
           });
           const data = await res.json();
-          stopCamera();
+          if (!current()) return;
+          closeViewfinder();
           if (res.ok && data.merged) {
             if (onBackSuccessRef.current) onBackSuccessRef.current(data);
           } else if (onErrorRef.current) {
-            onErrorRef.current(data.error || 'Could not read the back label. Try again.', data);
+            onErrorRef.current(messageForResponse(res, data, i18n.t('camera.backLabelUnreadable'), i18n.t), data);
           }
           return;
         }
@@ -209,25 +233,27 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
         const res = await scanLabel(apiFetch, base64, 'image/jpeg');
         const data = await res.json();
         track('label-scan', { result: res.ok && data.extracted ? 'read' : 'unreadable' });
+        if (!current()) return;
 
         if (res.ok && data.extracted) {
-          stopCamera();
+          closeViewfinder();
           if (onSuccessRef.current) onSuccessRef.current(data);
         } else {
-          stopCamera();
+          closeViewfinder();
           // The BODY rides along, not just the message: a 422 carries a
           // scanImageId, and dropping it is how an unreadable label used to
           // lose its photo (the pending wine then had no evidence at all).
-          if (onErrorRef.current) onErrorRef.current(data.error || 'Could not read label. Try again.', data);
+          if (onErrorRef.current) onErrorRef.current(messageForResponse(res, data, i18n.t('camera.labelUnreadable'), i18n.t), data);
         }
       } catch {
-        stopCamera();
-        if (onErrorRef.current) onErrorRef.current('Scan failed. Please try again.', null);
+        if (!current()) return;
+        closeViewfinder();
+        if (onErrorRef.current) onErrorRef.current(i18n.t('camera.scanFailed'), null);
       } finally {
-        setLabelScanning(false);
+        if (current()) setLabelScanning(false);
       }
     }, 'image/jpeg', 0.55);
-  }, [apiFetch, stopCamera]);
+  }, [apiFetch, closeViewfinder]);
 
   const capturePhoto = useCallback(() => {
     const video = labelVideoRef.current;
@@ -248,18 +274,32 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
   const scanFile = useCallback(async (file) => {
     if (!file) return;
     modeRef.current = 'front';
+    const seq = ++scanSeqRef.current;
     setLabelScanning(true);
     setLabelCam({ open: true, error: null });
+    const unreadable = () => {
+      setLabelScanning(false);
+      setLabelCam({ open: true, error: i18n.t('camera.photoUnreadable') });
+    };
     let photo;
     try {
       photo = await loadPhoto(file);
     } catch {
-      setLabelScanning(false);
-      setLabelCam({ open: true, error: i18n.t('camera.photoUnreadable') });
+      if (seq === scanSeqRef.current) unreadable();
       return;
     }
+    // Dismissed, or another photo chosen, while this one was decoding.
+    if (seq !== scanSeqRef.current) return;
     const canvas = document.createElement('canvas');
-    drawScaled(canvas, photo, photo.naturalWidth, photo.naturalHeight);
+    try {
+      // Throws when the browser cannot give a canvas (a phone's canvas memory
+      // limit) or cannot draw the decoded picture: say so, never hang on
+      // "reading the label".
+      drawScaled(canvas, photo, photo.naturalWidth, photo.naturalHeight);
+    } catch {
+      unreadable();
+      return;
+    }
     scanCanvas(canvas);
   }, [scanCanvas]);
 

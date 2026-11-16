@@ -10,6 +10,9 @@
  * (no link, or clear the link), or { error: true } for anything else.
  */
 const SHOP_URL_MAX_LENGTH = 2000;
+// "shop.example:8080/wine" starts like a scheme ("shop.example:") to the test
+// below; a dotted host followed by a port is an address typed without one.
+const HOST_WITH_PORT = /^[^\s/:?#@]+\.[^\s/:?#@]+:\d+(?:[/?#]|$)/;
 
 function normalizeShopUrl(raw) {
   if (raw == null) return { url: null };
@@ -17,7 +20,8 @@ function normalizeShopUrl(raw) {
   const trimmed = raw.trim();
   if (!trimmed) return { url: null };
   if (trimmed.length > SHOP_URL_MAX_LENGTH) return { error: true };
-  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const hasScheme = !HOST_WITH_PORT.test(trimmed) && /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+  const withScheme = hasScheme ? trimmed : `https://${trimmed}`;
   let parsed;
   try {
     parsed = new URL(withScheme);

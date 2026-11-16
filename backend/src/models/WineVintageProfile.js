@@ -57,6 +57,28 @@ const wineVintageProfileSchema = new mongoose.Schema({
   lateFrom:   { type: Number, min: 0, max: 2200 },
   lateUntil:  { type: Number, min: 0, max: 2200 },
 
+  // Drink-window phases proposed from OUTSIDE curation: today, a self-hosted
+  // install that contributed the wine over the Registry Bridge
+  // (services/maturityOps seedSuggestedWindows). Never read as a window: the
+  // phase fields above hold only what a curator set, and every reader uses
+  // those of a reviewed row. Shown to the curator in the maturity queue as a
+  // starting point, and cleared when the row is reviewed (applyWindow).
+  suggestion: {
+    type: new mongoose.Schema({
+      earlyFrom:  { type: Number, min: 1900, max: 2200 },
+      earlyUntil: { type: Number, min: 1900, max: 2200 },
+      peakFrom:   { type: Number, min: 1900, max: 2200 },
+      peakUntil:  { type: Number, min: 1900, max: 2200 },
+      lateFrom:   { type: Number, min: 1900, max: 2200 },
+      lateUntil:  { type: Number, min: 1900, max: 2200 },
+      source: { type: String, enum: ['bridge'], required: true },
+      // The wine request it came with: who and which install, on that record.
+      requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'WineRequest', default: null },
+      at: { type: Date, default: null },
+    }, { _id: false }),
+    default: undefined
+  },
+
   // Optional notes from the somm
   sommNotes: {
     type: String,

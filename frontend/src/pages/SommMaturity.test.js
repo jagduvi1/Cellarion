@@ -61,3 +61,26 @@ test('a field that was never set stays empty and is sent as null', async () => {
   await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/somm/maturity/p1', expect.objectContaining({ method: 'PUT' })));
   expect(sentBody().earlyFrom).toBeNull();
 });
+
+test('a window an install suggested sits beside an empty form, and fills it only when the curator asks', async () => {
+  const profile = {
+    _id: 'p2', wineDefinition: { ...WINE, type: 'red' }, vintage: '2019', relative: false, status: 'pending', sommNotes: '',
+    suggestion: { source: 'bridge', earlyFrom: 2022, earlyUntil: 2025, peakFrom: 2026, peakUntil: 2034 },
+  };
+  apiFetch.mockImplementation(async (url, opts) => {
+    if (opts?.method === 'PUT') return ok({ profile: { ...profile, ...JSON.parse(opts.body) } });
+    return ok(url.includes('status=reviewed') ? { profiles: [], total: 0 } : { profiles: [profile], total: 1 });
+  });
+  render(<SommMaturity />);
+  // A pending card opens expanded.
+  await screen.findByText('Brut Réserve');
+
+  // Never in the window itself, and never shown as anyone's review.
+  expect(screen.getAllByRole('spinbutton').map((i) => i.value)).toEqual(['', '', '', '', '', '']);
+  expect(screen.getByText(/Suggested by the self-hosted install/)).toHaveTextContent(/2022–2025.*2026–2034/);
+  expect(screen.queryByText(/somm\.maturity\.lastReviewedBy/)).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Use as a starting point' }));
+  expect(screen.getAllByRole('spinbutton').map((i) => i.value)).toEqual(['2022', '2025', '2026', '2034', '', '']);
+  expect(apiFetch.mock.calls.some(([, o]) => o?.method === 'PUT')).toBe(false);
+});

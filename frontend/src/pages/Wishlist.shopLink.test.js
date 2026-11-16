@@ -77,12 +77,14 @@ test('the edit dialog sends the shop link with the other fields', async () => {
   expect(JSON.parse(opts.body)).toMatchObject({ shopUrl: 'shop.example/other' });
 });
 
-test('a refused shop link shows the translated reason from its code', async () => {
+test('a refused shop link shows the translated reason INSIDE the dialog, and a later save clears it', async () => {
+  let refuse = true;
   api.mockImplementation(async (url, opts) => {
     if (url.startsWith('/api/wishlist?')) return ok({ items, total: items.length });
-    if (opts?.method === 'PUT') {
+    if (opts?.method === 'PUT' && refuse) {
       return { ok: false, status: 400, headers: { get: () => null }, json: async () => ({ error: 'The shop link must be a web address (http:// or https://)', code: 'wishlist_shop_url_invalid' }) };
     }
+    if (opts?.method === 'PUT') return ok({ item: { ...items[0], ...JSON.parse(opts.body) } });
     return ok({});
   });
   renderPage();
@@ -92,5 +94,14 @@ test('a refused shop link shows the translated reason from its code', async () =
   fireEvent.change(screen.getByLabelText('wishlist.shopUrl'), { target: { value: 'ftp://shop.example' } });
   fireEvent.click(screen.getByRole('button', { name: 'wishlist.save' }));
 
-  expect(await screen.findByText('translated:errors.codes.wishlist_shop_url_invalid')).toBeInTheDocument();
+  const message = await screen.findByText('translated:errors.codes.wishlist_shop_url_invalid');
+  // In the dialog, beside the field: the page's own alert sits behind the
+  // dialog's overlay, where nobody can read it.
+  expect(screen.getByLabelText('wishlist.shopUrl').closest('.modal-box, [role="dialog"]')).toContainElement(message);
+
+  refuse = false;
+  fireEvent.change(screen.getByLabelText('wishlist.shopUrl'), { target: { value: 'shop.example/wine' } });
+  fireEvent.click(screen.getByRole('button', { name: 'wishlist.save' }));
+  await waitFor(() => expect(screen.queryByLabelText('wishlist.shopUrl')).toBeNull());
+  expect(screen.queryByText('translated:errors.codes.wishlist_shop_url_invalid')).toBeNull();
 });

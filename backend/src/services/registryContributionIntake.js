@@ -20,8 +20,8 @@
 const WineRequest = require('../models/WineRequest');
 const { originFrom } = require('../utils/contributionOrigin');
 const { validateImageRef } = require('./accountOps');
-const { pickImportHints } = require('./wineRequestIntake');
 const { PHASE_FIELDS, checkWindow } = require('./maturityOps');
+const { parseAndValidateVintage } = require('../utils/validation');
 
 const NAME_MAX = 300;
 const PRODUCER_MAX = 200;
@@ -32,13 +32,21 @@ const WINDOWS_MAX = 30;
 // the shape it reads them.
 const WIRE_PHASES = [['early', 'earlyFrom', 'earlyUntil'], ['peak', 'peakFrom', 'peakUntil'], ['late', 'lateFrom', 'lateUntil']];
 
+// The hints a contribution may carry, with the WineRequest.hints limits.
+const HINT_MAX = { country: 100, region: 100, appellation: 150, type: 20, classification: 150, colour: 20, sweetness: 40, lwin: 20 };
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// '' for nothing, the trimmed text, or null when it is not text, is too long,
+// or carries a control character (a NUL would make the lookup in
+// fileContribution throw after the quota was spent).
 function text(value, max) {
   if (value == null) return '';
   if (typeof value !== 'string') return null;
   const s = value.trim();
-  return s.length > max ? null : s;
+  return s.length > max || CONTROL.test(s) ? null : s;
 }
 
 /** The windows as stored (proposedWindows), or { error }. */
@@ -49,8 +57,9 @@ function parseWindows(raw) {
   const windows = [];
   const seen = new Set();
   for (const w of raw) {
-    const vintage = w && typeof w.vintage !== 'object' ? String(w.vintage ?? '').trim() : '';
-    if (!/^\d{4}$/.test(vintage)) return { error: 'windows: each vintage must be a year' };
+    const parsed = w && typeof w.vintage !== 'object' ? parseAndValidateVintage(w.vintage) : { ok: false };
+    const vintage = parsed.ok ? parsed.value : '';
+    if (!/^\d{4}$/.test(vintage)) return { error: 'windows: each vintage must be a year from 1900 to this year' };
     if (seen.has(vintage)) return { error: `windows: ${vintage} is listed twice` };
     seen.add(vintage);
     const incoming = {};
@@ -97,13 +106,26 @@ function parseContribution(body) {
     }
   }
 
-  // A link or an inline photo. A bare path names a file on the INSTALL's
-  // server, which means nothing here.
+  const hints = {};
+  for (const [key, max] of Object.entries(HINT_MAX)) {
+    const v = text(b[key], max);
+    if (v === null) return { error: `${key} must be text of at most ${max} characters` };
+    if (v) hints[key] = key === 'type' || key === 'colour' ? v.toLowerCase() : v;
+  }
+
+  // An inline photo only, as the install sends it: a link would make a
+  // picture the contributor can swap later, and a bare path names a file on
+  // the INSTALL's server.
   const image = typeof b.image === 'string' ? b.image.trim() : '';
-  if (b.image != null && typeof b.image !== 'string') return { error: 'image must be an http(s) link or an inline image' };
-  if (image.startsWith('/')) return { error: 'image must be an http(s) link or an inline image' };
+  if (b.image != null && (typeof b.image !== 'string' || (image && !image.startsWith('data:image/')))) {
+    return { error: 'image must be an inline image (data:image/…)' };
+  }
   const imageErr = validateImageRef(image);
   if (imageErr) return { error: imageErr };
+
+  // The install's own id for the wine, opaque here: what "the same wine sent
+  // again" means (fileContribution).
+  if (b.ref != null && !(typeof b.ref === 'string' && /^[a-f0-9]{24}$/i.test(b.ref))) return { error: 'ref must be the install\'s wine id' };
 
   const parsed = parseWindows(b.windows);
   if (parsed.error) return { error: parsed.error };
@@ -112,10 +134,11 @@ function parseContribution(body) {
     contribution: {
       name,
       producer,
-      hints: pickImportHints({ country: b.country, region: b.region, appellation: b.appellation, type: b.type }),
+      hints: Object.keys(hints).length ? hints : null,
       grapes,
       image: image || null,
       windows: parsed.windows,
+      ref: b.ref != null ? String(b.ref) : null,
     },
   };
 }
@@ -123,20 +146,22 @@ function parseContribution(body) {
 /**
  * File a parsed contribution for the key owner (`userId`) as a pending
  * new_wine request. The same wine sent again while the first is still
- * pending answers that request (reused: true) rather than queueing a second.
- * Caller: routes/bridgeV1.js POST /contributions. Returns
- * { wineRequest, reused }.
+ * pending answers that request (reused: true) rather than queueing a second:
+ * the same install wine id (`ref`) from this account. Without a ref, the
+ * name, producer and appellation must all match. Caller: routes/bridgeV1.js
+ * POST /contributions. Returns { wineRequest, reused }.
  */
 async function fileContribution(userId, contribution, { via = 'bridge', req } = {}) {
-  const { name, producer, hints, grapes, image, windows } = contribution;
-  const existing = await WineRequest.findOne({
-    user: userId,
-    via: 'bridge',
-    requestType: 'new_wine',
-    status: 'pending',
-    wineName: new RegExp(`^${escapeRegex(name)}$`, 'i'),
-    producer: new RegExp(`^${escapeRegex(producer)}$`, 'i'),
-  });
+  const { name, producer, hints, grapes, image, windows, ref } = contribution;
+  const exact = (v) => new RegExp(`^${escapeRegex(v)}$`, 'i');
+  const same = ref
+    ? { contributionRef: ref }
+    : {
+      wineName: exact(name),
+      producer: exact(producer),
+      'hints.appellation': hints?.appellation ? exact(hints.appellation) : { $in: [null, ''] },
+    };
+  const existing = await WineRequest.findOne({ user: userId, via: 'bridge', requestType: 'new_wine', status: 'pending', ...same });
   if (existing) return { wineRequest: existing, reused: true };
 
   const wineRequest = new WineRequest({
@@ -147,6 +172,7 @@ async function fileContribution(userId, contribution, { via = 'bridge', req } = 
     ...(grapes.length ? { suggestedGrapes: grapes } : {}),
     image,
     ...(windows.length ? { proposedWindows: windows } : {}),
+    ...(ref ? { contributionRef: ref } : {}),
     user: userId,
     status: 'pending',
     installFollowsAt: new Date(),

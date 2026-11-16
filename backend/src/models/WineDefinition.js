@@ -321,6 +321,10 @@ const wineDefinitionSchema = new mongoose.Schema({
     source:       { type: String, default: 'ai', enum: ['ai', 'curator'] },
     verifiedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     verifiedAt:   { type: Date, default: null },
+    // Self-hosted installs (services/registryBridge): a profile curated HERE
+    // on a wine the bridge then linked to a registry wine. The refresh never
+    // replaces it with the registry's; set only by the bridge when it keeps one.
+    heldLocally:  { type: Boolean, default: undefined },
     // description, flavors and foodPairings translated into the language set
     // in SuperAdmin → AI (utils/profileLanguage), from the same model answer
     // as the English (enrichmentJob). Beside the English, never in its place:
@@ -517,11 +521,13 @@ const wineDefinitionSchema = new mongoose.Schema({
   // that this install already holds as a copy; merging the two is a person's
   // decision. The copy is found by that registry id when the state is read,
   // never stored as a reference, so a merge or cleanup of wines here has
-  // nothing to follow. failed: the registry refused the contribution as sent
-  // (its message in notes). Absent on every wine never offered.
+  // nothing to follow. failed: the registry refused the contribution as sent,
+  // or it could not be sent or finished (the reason in notes). withdrawn: an
+  // admin took the offer back, so "offer every wine" leaves it out; it can
+  // still be offered again by hand. Absent on every wine never offered.
   registryContribution: {
     type: new mongoose.Schema({
-      status: { type: String, enum: ['queued', 'sending', 'sent', 'declined', 'duplicate', 'failed'], required: true },
+      status: { type: String, enum: ['queued', 'sending', 'sent', 'declined', 'duplicate', 'failed', 'withdrawn'], required: true },
       requestId: { type: String, maxlength: 24, default: null },
       queuedAt: { type: Date, default: null },
       sentAt: { type: Date, default: null },
@@ -529,6 +535,13 @@ const wineDefinitionSchema = new mongoose.Schema({
       decidedAt: { type: Date, default: null },
       notes: { type: String, trim: true, maxlength: 2000, default: null },
       approvedRegistryId: { type: String, maxlength: 24, default: null },
+      // Sends that ended without an answer (unreachable, a 5xx): after a few
+      // the wine is failed instead of holding the front of the queue.
+      attempts: { type: Number, default: 0 },
+      // Hourly checks of a sent offer that got no usable answer (the registry
+      // does not know the request, or its wine is not visible): after
+      // MISS_LIMIT the offer is failed instead of waiting for ever.
+      misses: { type: Number, default: 0 },
     }, { _id: false }),
     default: undefined
   },

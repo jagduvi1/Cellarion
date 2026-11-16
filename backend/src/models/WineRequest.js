@@ -68,15 +68,20 @@ const wineRequestSchema = new mongoose.Schema({
     trim: true,
     maxlength: 500000
   },
-  // What the import FILE said about the wine (CellarTracker / Vivino / Ploc
-  // all name these). Plain strings for the curator's benefit — prefilled on
-  // the admin page, never written to the registry until the request is
-  // resolved, so a request never has to be re-derived from the file.
+  // What an import FILE said about the wine (CellarTracker / Vivino / Ploc
+  // all name these), or what a self-hosted install holds for a wine it
+  // contributed (the last four come only from a contribution). Plain strings
+  // for the curator's benefit — prefilled or shown on the admin page, never
+  // written to the registry until the request is resolved.
   hints: {
     country: { type: String, trim: true, maxlength: 100 },
     region: { type: String, trim: true, maxlength: 100 },
     appellation: { type: String, trim: true, maxlength: 150 },
-    type: { type: String, trim: true, maxlength: 20 }
+    type: { type: String, trim: true, maxlength: 20 },
+    classification: { type: String, trim: true, maxlength: 150 },
+    colour: { type: String, trim: true, maxlength: 20 },
+    sweetness: { type: String, trim: true, maxlength: 40 },
+    lwin: { type: String, trim: true, maxlength: 20 }
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -158,6 +163,14 @@ const wineRequestSchema = new mongoose.Schema({
   // resolved, each becomes a PENDING suggestion in the maturity queue
   // (services/wineRequestOps → maturityOps.seedSuggestedWindows), and a
   // curator adjusts it to the registry's rules and reviews it, or not.
+  // Registry side only: the contributing install's own id for the wine (opaque
+  // here). "The same wine sent again" is the same id from the same account,
+  // never a name match: two wines of one producer may share a name.
+  contributionRef: {
+    type: String,
+    default: null,
+    maxlength: 24
+  },
   proposedWindows: {
     type: [{
       _id: false,

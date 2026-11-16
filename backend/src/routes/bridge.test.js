@@ -17,7 +17,7 @@ jest.mock('../models/ApiToken', () => {
   const crypto = require('crypto');
   return { findOne: jest.fn(), hashToken: (raw) => crypto.createHash('sha256').update(raw).digest('hex'), TOKEN_PREFIX: 'cel_' };
 });
-jest.mock('../services/registryBridge', () => ({ status: jest.fn(), adoptWine: jest.fn(), setRefreshMode: jest.fn() }));
+jest.mock('../services/registryBridge', () => ({ status: jest.fn(), adoptWine: jest.fn(), setRefreshMode: jest.fn(), isEnabled: jest.fn(() => true) }));
 jest.mock('../utils/grapeDisplay', () => ({ decorateGrapes: (w) => ({ ...w, decorated: true }) }));
 jest.mock('../services/registryContributionOps', () => ({
   queueContributions: jest.fn(), sendQueued: jest.fn().mockResolvedValue({ sent: 1, failed: 0 }), withdrawContribution: jest.fn(),
@@ -43,7 +43,7 @@ beforeAll((done) => {
   server.listen(0, () => { baseUrl = `http://127.0.0.1:${server.address().port}`; done(); });
 });
 afterAll((done) => { server.closeAllConnections(); server.close(done); });
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => { jest.clearAllMocks(); bridge.isEnabled.mockReturnValue(true); });
 
 const token = (claims = {}) => `Bearer ${jwt.sign({ id: 'u1', roles: ['user'], ...claims }, process.env.JWT_SECRET, { algorithm: 'HS256' })}`;
 const call = (method, path, body, auth = token()) => fetch(`${baseUrl}${path}`, {
@@ -169,9 +169,13 @@ describe('contributions — offering wines made on this install', () => {
 
   test('not connected is a 404 with the reason; a bad list is a 400; nothing queued sends nothing', async () => {
     contributions.queueContributions.mockResolvedValue({ ok: false, code: 'disabled' });
-    expect(await (await call('POST', '/api/bridge/contributions', { all: true }, admin())).json()).toMatchObject({ code: 'disabled' });
+    const notConnected = await call('POST', '/api/bridge/contributions', { all: true }, admin());
+    expect(notConnected.status).toBe(404);
+    expect(await notConnected.json()).toMatchObject({ code: 'bridge_not_connected' });
     contributions.queueContributions.mockResolvedValue({ ok: false, code: 'invalid' });
-    expect((await call('POST', '/api/bridge/contributions', { wineIds: ['x'] }, admin())).status).toBe(400);
+    const badList = await call('POST', '/api/bridge/contributions', { wineIds: ['x'] }, admin());
+    expect(badList.status).toBe(400);
+    expect(await badList.json()).toMatchObject({ code: 'contribution_wine_ids_invalid', max: 500 });
     contributions.queueContributions.mockResolvedValue({ ok: true, queued: 0, ids: [] });
     expect((await call('POST', '/api/bridge/contributions', { all: true }, admin())).status).toBe(200);
     expect(contributions.sendQueued).not.toHaveBeenCalled();
@@ -190,10 +194,24 @@ describe('contributions — offering wines made on this install', () => {
     expect((await call('GET', '/api/bridge/contributions/nope')).status).toBe(400);
   });
 
-  test('taking back maps the service codes: a sent offer is a 409', async () => {
+  test('taking back maps the service codes: a sent offer is a 409, one never offered a 404', async () => {
     contributions.withdrawContribution.mockResolvedValue({ ok: false, code: 'sent' });
-    expect((await call('DELETE', `/api/bridge/contributions/${WINE}`, null, admin())).status).toBe(409);
+    const sent = await call('DELETE', `/api/bridge/contributions/${WINE}`, null, admin());
+    expect(sent.status).toBe(409);
+    expect(await sent.json()).toMatchObject({ code: 'contribution_already_sent' });
+    contributions.withdrawContribution.mockResolvedValue({ ok: false, code: 'not_found' });
+    const none = await call('DELETE', `/api/bridge/contributions/${WINE}`, null, admin());
+    expect(none.status).toBe(404);
+    expect(await none.json()).toMatchObject({ code: 'contribution_not_offered' });
     contributions.withdrawContribution.mockResolvedValue({ ok: true });
     expect((await call('DELETE', `/api/bridge/contributions/${WINE}`, null, admin())).status).toBe(200);
   });
+});
+
+test('an install that is not connected answers a wine page at once, without looking the wine up', async () => {
+  bridge.isEnabled.mockReturnValue(false);
+  const res = await call('GET', `/api/bridge/contributions/${'b'.repeat(24)}`);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ enabled: false });
+  expect(findVisibleWine).not.toHaveBeenCalled();
 });

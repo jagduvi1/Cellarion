@@ -286,6 +286,11 @@ export const adminDeleteTaxonomy = (apiFetch, endpoint, id) =>
 export const adminGetWineRequests = (apiFetch, params) =>
   apiFetch(`/api/admin/wine-requests${params}`);
 
+// GET /api/admin/wine-requests/:id/photos — { image, backImage } in full. The
+// list carries only hasInlineImage / hasInlineBackImage for an inline photo.
+export const adminGetWineRequestPhotos = (apiFetch, id) =>
+  apiFetch(`/api/admin/wine-requests/${id}/photos`);
+
 export const adminResolveWineRequest = (apiFetch, id, data) =>
   apiFetch(`/api/admin/wine-requests/${id}/resolve`, {
     method: 'PUT',

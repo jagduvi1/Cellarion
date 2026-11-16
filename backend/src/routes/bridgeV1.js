@@ -16,6 +16,7 @@ const { dataForWine, suggestValue } = require('../services/registryDataOps');
 const { createFieldCorrection } = require('../services/wineProposalOps');
 const { createWineRequest } = require('../services/accountOps');
 const { parseContribution, fileContribution } = require('../services/registryContributionIntake');
+const { checkContributionGate } = require('../services/contributionGate');
 const asyncHandler = require('../utils/asyncHandler');
 const { createNotifications } = require('../services/notifications');
 const { logAudit } = require('../services/audit');
@@ -520,13 +521,15 @@ router.get('/requests', async (req, res) => {
   }
 });
 
-// POST /v1/contributions — { name, producer, country?, region?, appellation?,
-// type?, grapes?, image?, windows? } → the hosted wine-request queue as a
-// pending new_wine request (services/registryContributionIntake). windows use
-// the shape GET /wines/:id serves: [{ vintage, early, peak, late }], each
-// phase { from, until }. Nothing is published: an admin resolves the request
-// and the windows wait in the maturity queue as suggestions. The install
-// reads the outcome with GET /requests. Checked before the quota is spent.
+// POST /v1/contributions — { ref, name, producer, country?, region?,
+// appellation?, type?, classification?, colour?, sweetness?, lwin?, grapes?,
+// image?, windows? } → the hosted wine-request queue as a pending new_wine
+// request (services/registryContributionIntake). ref is the install's own id
+// for the wine; image is inline only; windows use the shape GET /wines/:id
+// serves: [{ vintage, early, peak, late }], each phase { from, until }.
+// Nothing is published: an admin resolves the request and the windows wait in
+// the maturity queue as suggestions. The install reads the outcome with
+// GET /requests. Checked before the quota is spent.
 function validContribution(req, res, next) {
   const parsed = parseContribution(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error, code: 'invalid' });
@@ -534,7 +537,16 @@ function validContribution(req, res, next) {
   next();
 }
 
-router.post('/contributions', validContribution, quota('contributions'), asyncHandler(async (req, res) => {
+// An account banned from contributing (services/contributionGate) files
+// nothing, and is told so before the quota is spent. The tier budget is not
+// applied: the daily bridge quota already bounds what an install sends.
+const contributorAllowed = asyncHandler(async (req, res, next) => {
+  const gate = await checkContributionGate(req.user.id, { budget: false });
+  if (!gate.ok) return res.status(gate.code === 'banned' ? 403 : 400).json({ error: gate.message, code: gate.code });
+  next();
+});
+
+router.post('/contributions', validContribution, contributorAllowed, quota('contributions'), asyncHandler(async (req, res) => {
   const { wineRequest, reused } = await fileContribution(req.user.id, req.contribution, { via: 'bridge', req });
   if (!reused) {
     logAudit(req, 'bridge.contribution.forwarded', { type: 'wineRequest', id: wineRequest._id },

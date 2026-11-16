@@ -38,6 +38,11 @@ const ERROR_CODES = {
   reset_token_invalid: 'Invalid or expired reset token',
   // Wishlist
   wishlist_shop_url_invalid: 'The shop link must be a web address (http:// or https://)',
+  // Offering wines made on a self-hosted install to the shared registry
+  bridge_not_connected: 'This install is not connected to the shared registry.',
+  contribution_wine_ids_invalid: 'Choose between 1 and {{max}} wines to offer.',
+  contribution_already_sent: 'This wine is already with the shared registry; it is answered there.',
+  contribution_not_offered: 'This wine has not been offered to the shared registry.',
 };
 
 /** The JSON body of a coded error, with `fields` filled into the sentence and sent along. */

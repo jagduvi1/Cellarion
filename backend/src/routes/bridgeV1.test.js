@@ -26,6 +26,7 @@ jest.mock('../services/accountOps', () => ({ createWineRequest: jest.fn() }));
 // The contribution intake is unit-tested on its own
 // (services/registryContributionIntake.test.js); here the route's wiring.
 jest.mock('../services/registryContributionIntake', () => ({ parseContribution: jest.fn(), fileContribution: jest.fn() }));
+jest.mock('../services/contributionGate', () => ({ checkContributionGate: jest.fn() }));
 jest.mock('../services/notifications', () => ({ createNotifications: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/clientIp', () => ({ rateLimitKey: (req) => req.ip || '127.0.0.1' }));
@@ -75,6 +76,7 @@ const { dataForWine, suggestValue } = require('../services/registryDataOps');
 const { createFieldCorrection } = require('../services/wineProposalOps');
 const { createWineRequest } = require('../services/accountOps');
 const { parseContribution, fileContribution } = require('../services/registryContributionIntake');
+const { checkContributionGate } = require('../services/contributionGate');
 const { createNotifications } = require('../services/notifications');
 const BridgeKey = require('../models/BridgeKey');
 const { logAudit } = require('../services/audit');
@@ -408,6 +410,7 @@ describe('contributions', () => {
 // ── Audit 2026-09-08 regressions ─────────────────────────────────────────────
 
 describe('POST /contributions — a wine an install created, into the hosted intake', () => {
+  beforeEach(() => checkContributionGate.mockResolvedValue({ ok: true }));
   const body = { name: 'Clos Example', producer: 'Domaine Example', windows: [{ vintage: '2019', peak: { from: 2024, until: 2030 } }] };
   const parsed = { name: 'Clos Example', producer: 'Domaine Example', hints: null, grapes: [], image: null, windows: [{ vintage: '2019', peakFrom: 2024, peakUntil: 2030 }] };
 
@@ -440,6 +443,18 @@ describe('POST /contributions — a wine an install created, into the hosted int
     const res = await call('POST', '/api/bridge/v1/contributions', { name: 'x' });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'producer is required (at most 200 characters)', code: 'invalid' });
+    expect(global.__bridgeQuotaSpends).toEqual([]);
+    expect(fileContribution).not.toHaveBeenCalled();
+  });
+
+  test('an account banned from contributing is refused before the quota is spent; the tier budget is not applied', async () => {
+    parseContribution.mockReturnValue({ contribution: parsed });
+    checkContributionGate.mockResolvedValue({ ok: false, code: 'banned', message: 'You are banned from posting content visible to other users' });
+    global.__bridgeQuotaSpends.length = 0;
+    const res = await call('POST', '/api/bridge/v1/contributions', body);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'banned' });
+    expect(checkContributionGate).toHaveBeenCalledWith('u1', { budget: false });
     expect(global.__bridgeQuotaSpends).toEqual([]);
     expect(fileContribution).not.toHaveBeenCalled();
   });

@@ -74,3 +74,16 @@ describe('RegistryContributionsBlock (Settings, self-hosted admins)', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 });
+
+test('"Contribute all" that finds nothing new says so, and the card above reloads its quota line', async () => {
+  const onChanged = vi.fn();
+  apiFetch
+    .mockImplementationOnce(() => ok({ enabled: true, offerable: 2, counts: empty, attention: [] }))
+    .mockImplementationOnce(() => ok({ queued: 0 }))
+    .mockImplementationOnce(() => ok({ enabled: true, offerable: 0, counts: empty, attention: [] }));
+  render(<MemoryRouter><RegistryContributionsBlock onChanged={onChanged} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Contribute all 2' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Offer them' }));
+  await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText(/0 wines offered/)).toBeNull();
+});

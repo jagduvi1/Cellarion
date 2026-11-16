@@ -66,6 +66,9 @@ async function findOrCreatePendingRequest({ userId, wineName, producer, suggeste
     user: userId,
     requestType: 'new_wine',
     status: 'pending',
+    // A request a self-hosted install filed for this account is that
+    // install's to follow: an import here never puts bottles on it.
+    via: { $ne: 'bridge' },
     wineName: new RegExp('^' + escapeRegex(name) + '$', 'i'),
     producer: prod ? new RegExp('^' + escapeRegex(prod) + '$', 'i') : { $in: [null, ''] },
   };

@@ -126,7 +126,7 @@ function RegistryConnectionSection() {
             </div>
           )}
           {refreshNotice && <div className="alert alert-info">{refreshNotice}</div>}
-          {isAdmin && <RegistryContributionsBlock />}
+          {isAdmin && <RegistryContributionsBlock onChanged={load} />}
           {status.blocked && (
             <div className="alert alert-info">
               {t('settings.registryConnection.blocked', 'The registry answered "{{reason}}"; this install pauses its requests until {{until}}.', { reason: status.blocked.reason, until: formatDate(status.blocked.until) })}

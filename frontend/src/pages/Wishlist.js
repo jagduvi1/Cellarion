@@ -32,6 +32,9 @@ function Wishlist() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // A refused edit is shown INSIDE the edit dialog: the page's own alert sits
+  // behind the dialog's overlay, where nobody can read it.
+  const [editError, setEditError] = useState(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('wanted');
@@ -158,11 +161,13 @@ function Wishlist() {
     setEditPriority(item.priority || 'medium');
     setEditVintage(item.vintage || '');
     setEditShopUrl(item.shopUrl || '');
+    setEditError(null);
   };
 
   const handleSaveEdit = async () => {
     if (!editItem) return;
     setSaving(true);
+    setEditError(null);
     try {
       const res = await updateWishlistItem(apiFetch, editItem._id, {
         notes: editNotes,
@@ -171,11 +176,11 @@ function Wishlist() {
         shopUrl: editShopUrl.trim()
       });
       const data = await res.json();
-      if (!res.ok) { setError(messageForResponse(res, data, t('wishlist.failedUpdate'), t)); return; }
+      if (!res.ok) { setEditError(messageForResponse(res, data, t('wishlist.failedUpdate'), t)); return; }
       setItems(prev => prev.map(i => i._id === editItem._id ? data.item : i));
       setEditItem(null);
     } catch {
-      setError(t('wishlist.networkError'));
+      setEditError(t('wishlist.networkError'));
     } finally {
       setSaving(false);
     }
@@ -355,8 +360,9 @@ function Wishlist() {
           </div>
           <div className="form-group">
             <label htmlFor="wishlist-edit-shop-url">{t('wishlist.shopUrl')}</label>
-            <input id="wishlist-edit-shop-url" type="text" inputMode="url" autoComplete="url" value={editShopUrl} onChange={(e) => setEditShopUrl(e.target.value)} maxLength={2000} placeholder={t('wishlist.shopUrlPlaceholder')} />
+            <input id="wishlist-edit-shop-url" type="text" inputMode="url" autoComplete="off" value={editShopUrl} onChange={(e) => setEditShopUrl(e.target.value)} maxLength={2000} placeholder={t('wishlist.shopUrlPlaceholder')} />
           </div>
+          {editError && <div className="alert alert-error" role="alert">{editError}</div>}
           <div className="form-actions">
             <button className="btn btn-success" onClick={handleSaveEdit} disabled={saving}>
               {saving ? t('wishlist.saving') : t('wishlist.save')}
