@@ -189,6 +189,9 @@ app.use('/api/bridge/v1/wines/changes', express.json({ limit: '256kb' }));
 // front and, since #1460, back — each up to the same 500,000-character cap a
 // request has here (services/accountOps).
 app.use('/api/bridge/v1/requests', express.json({ limit: '1200kb' }));
+// A contributed wine carries one label photo inline under the same cap, plus
+// its identity and up to 30 drink windows (services/registryContributionIntake).
+app.use('/api/bridge/v1/contributions', express.json({ limit: '700kb' }));
 // A climate post may carry 100 readings (routes/climate INGEST_MAX_READINGS):
 // with timestamps and long channel names that passes 10 kB.
 app.use('/api/climate/ingest', express.json({ limit: '32kb' }));

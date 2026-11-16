@@ -23,6 +23,9 @@ jest.mock('../services/registryReadTracker', () => ({ recordRead: jest.fn().mock
 jest.mock('../services/registryDataOps', () => ({ dataForWine: jest.fn(), suggestValue: jest.fn() }));
 jest.mock('../services/wineProposalOps', () => ({ createFieldCorrection: jest.fn() }));
 jest.mock('../services/accountOps', () => ({ createWineRequest: jest.fn() }));
+// The contribution intake is unit-tested on its own
+// (services/registryContributionIntake.test.js); here the route's wiring.
+jest.mock('../services/registryContributionIntake', () => ({ parseContribution: jest.fn(), fileContribution: jest.fn() }));
 jest.mock('../services/notifications', () => ({ createNotifications: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/clientIp', () => ({ rateLimitKey: (req) => req.ip || '127.0.0.1' }));
@@ -71,6 +74,7 @@ const { recordRead } = require('../services/registryReadTracker');
 const { dataForWine, suggestValue } = require('../services/registryDataOps');
 const { createFieldCorrection } = require('../services/wineProposalOps');
 const { createWineRequest } = require('../services/accountOps');
+const { parseContribution, fileContribution } = require('../services/registryContributionIntake');
 const { createNotifications } = require('../services/notifications');
 const BridgeKey = require('../models/BridgeKey');
 const { logAudit } = require('../services/audit');
@@ -115,7 +119,7 @@ const wine = (over = {}) => ({
 
 describe('auth and quota wiring', () => {
   test('every route sits behind the key middleware', async () => {
-    for (const [m, p] of [['GET', '/api/bridge/v1/me'], ['GET', '/api/bridge/v1/search?q=salmos'], ['GET', `/api/bridge/v1/wines/${ID}`], ['POST', '/api/bridge/v1/wines/changes'], ['POST', '/api/bridge/v1/requests'], ['POST', '/api/bridge/v1/corrections'], ['POST', '/api/bridge/v1/values']]) {
+    for (const [m, p] of [['GET', '/api/bridge/v1/me'], ['GET', '/api/bridge/v1/search?q=salmos'], ['GET', `/api/bridge/v1/wines/${ID}`], ['POST', '/api/bridge/v1/wines/changes'], ['POST', '/api/bridge/v1/requests'], ['POST', '/api/bridge/v1/corrections'], ['POST', '/api/bridge/v1/values'], ['POST', '/api/bridge/v1/contributions']]) {
       expect((await call(m, p, {}, 'bad')).status).toBe(401);
     }
   });
@@ -124,7 +128,8 @@ describe('auth and quota wiring', () => {
     const kinds = global.__bridgeQuotaKinds;
     expect(quota).toBeDefined();
     expect(kinds).toEqual(expect.arrayContaining(['searches', 'fetches', 'changeChecks', 'contributions']));
-    expect(kinds.filter((k) => k === 'contributions')).toHaveLength(3);
+    // requests, corrections, values and contributed wines.
+    expect(kinds.filter((k) => k === 'contributions')).toHaveLength(4);
   });
 
   test('GET /me reports the key, the quotas and the terms version', async () => {
@@ -401,6 +406,44 @@ describe('contributions', () => {
 });
 
 // ── Audit 2026-09-08 regressions ─────────────────────────────────────────────
+
+describe('POST /contributions — a wine an install created, into the hosted intake', () => {
+  const body = { name: 'Clos Example', producer: 'Domaine Example', windows: [{ vintage: '2019', peak: { from: 2024, until: 2030 } }] };
+  const parsed = { name: 'Clos Example', producer: 'Domaine Example', hints: null, grapes: [], image: null, windows: [{ vintage: '2019', peakFrom: 2024, peakUntil: 2030 }] };
+
+  test('files it under the key owner with via "bridge", audits it with the instance, answers 201', async () => {
+    parseContribution.mockReturnValue({ contribution: parsed });
+    fileContribution.mockResolvedValue({ wineRequest: { _id: 'r9', status: 'pending', wineName: 'Clos Example', proposedWindows: parsed.windows }, reused: false });
+    global.__bridgeQuotaSpends.length = 0;
+    const res = await call('POST', '/api/bridge/v1/contributions', body);
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ request: { id: 'r9', status: 'pending', wineName: 'Clos Example', reused: false } });
+    expect(parseContribution).toHaveBeenCalledWith(body);
+    expect(fileContribution).toHaveBeenCalledWith('u1', parsed, expect.objectContaining({ via: 'bridge' }));
+    expect(global.__bridgeQuotaSpends).toEqual(['contributions']);
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'bridge.contribution.forwarded', { type: 'wineRequest', id: 'r9' },
+      expect.objectContaining({ key: 'k1', instanceHost: 'cellar.example.org', windows: 1 }));
+  });
+
+  test('the same wine still pending answers 200 with that request, and is not audited again', async () => {
+    parseContribution.mockReturnValue({ contribution: parsed });
+    fileContribution.mockResolvedValue({ wineRequest: { _id: 'r9', status: 'pending', wineName: 'Clos Example' }, reused: true });
+    const res = await call('POST', '/api/bridge/v1/contributions', body);
+    expect(res.status).toBe(200);
+    expect((await res.json()).request).toMatchObject({ id: 'r9', reused: true });
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('a malformed contribution is a 400 before it costs quota, and nothing is filed', async () => {
+    parseContribution.mockReturnValue({ error: 'producer is required (at most 200 characters)' });
+    global.__bridgeQuotaSpends.length = 0;
+    const res = await call('POST', '/api/bridge/v1/contributions', { name: 'x' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'producer is required (at most 200 characters)', code: 'invalid' });
+    expect(global.__bridgeQuotaSpends).toEqual([]);
+    expect(fileContribution).not.toHaveBeenCalled();
+  });
+});
 
 describe('audit 2026-09-08 — counting and the kill switch', () => {
   const rateLimitsConfig = require('../config/rateLimits');

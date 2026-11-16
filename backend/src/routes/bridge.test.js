@@ -10,7 +10,7 @@
  */
 process.env.JWT_SECRET = 'test-secret';
 
-jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../services/audit', () => ({ logAudit: jest.fn(), logger: { warn: jest.fn(), info: jest.fn() } }));
 jest.mock('../config/rateLimits', () => ({ get: () => ({ auth: { max: 1000 }, api: { max: 1000 }, write: { max: 1000 } }) }));
 jest.mock('../models/User', () => ({ findById: jest.fn(), exists: jest.fn().mockResolvedValue(true) }));
 jest.mock('../models/ApiToken', () => {
@@ -19,12 +19,19 @@ jest.mock('../models/ApiToken', () => {
 });
 jest.mock('../services/registryBridge', () => ({ status: jest.fn(), adoptWine: jest.fn(), setRefreshMode: jest.fn() }));
 jest.mock('../utils/grapeDisplay', () => ({ decorateGrapes: (w) => ({ ...w, decorated: true }) }));
+jest.mock('../services/registryContributionOps', () => ({
+  queueContributions: jest.fn(), sendQueued: jest.fn().mockResolvedValue({ sent: 1, failed: 0 }), withdrawContribution: jest.fn(),
+  contributionForWine: jest.fn(), contributionOverview: jest.fn(), QUEUE_MAX: 500,
+}));
+jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const bridge = require('../services/registryBridge');
 const { logAudit } = require('../services/audit');
+const contributions = require('../services/registryContributionOps');
+const { findVisibleWine } = require('../services/wineVisibility');
 const router = require('./bridge');
 
 let server, baseUrl;
@@ -125,5 +132,68 @@ describe('PATCH /api/bridge/refresh', () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ code: 'env_override', mode: 'off', source: 'env' });
     expect(logAudit.mock.calls.some((c) => c[1] === 'bridge.refresh_mode.update')).toBe(false);
+  });
+});
+
+describe('contributions — offering wines made on this install', () => {
+  const admin = () => token({ roles: ['admin'] });
+  const WINE = 'b'.repeat(24);
+
+  test('offering, taking back and the overview are for admins of this install; demo accounts never', async () => {
+    expect((await call('POST', '/api/bridge/contributions', { wineIds: [WINE] })).status).toBe(403);
+    expect((await call('DELETE', `/api/bridge/contributions/${WINE}`)).status).toBe(403);
+    expect((await call('GET', '/api/bridge/contributions')).status).toBe(403);
+    expect((await call('POST', '/api/bridge/contributions', { all: true }, token({ roles: ['admin'], isDemo: true }))).status).toBe(403);
+    expect((await call('POST', '/api/bridge/contributions', { all: true }, null)).status).toBe(401);
+    expect(contributions.queueContributions).not.toHaveBeenCalled();
+  });
+
+  test('one wine is queued and sent at once, and its state comes back for the page', async () => {
+    contributions.queueContributions.mockResolvedValue({ ok: true, queued: 1, ids: [WINE] });
+    contributions.contributionForWine.mockResolvedValue({ enabled: true, linked: false, offerable: false, contribution: { status: 'sent' } });
+    const res = await call('POST', '/api/bridge/contributions', { wineIds: [WINE] }, admin());
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ queued: 1, wine: { enabled: true, linked: false, offerable: false, contribution: { status: 'sent' } } });
+    expect(contributions.queueContributions).toHaveBeenCalledWith(expect.objectContaining({ wineIds: [WINE], all: false, via: 'web' }));
+    expect(contributions.sendQueued).toHaveBeenCalledWith({ max: 1, ids: [WINE] });
+  });
+
+  test('"all" queues and answers at once; the sending runs on after the answer', async () => {
+    contributions.queueContributions.mockResolvedValue({ ok: true, queued: 60, ids: [] });
+    const res = await call('POST', '/api/bridge/contributions', { all: true }, admin());
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ queued: 60 });
+    expect(contributions.queueContributions).toHaveBeenCalledWith(expect.objectContaining({ all: true }));
+    expect(contributions.sendQueued).toHaveBeenCalledWith();
+  });
+
+  test('not connected is a 404 with the reason; a bad list is a 400; nothing queued sends nothing', async () => {
+    contributions.queueContributions.mockResolvedValue({ ok: false, code: 'disabled' });
+    expect(await (await call('POST', '/api/bridge/contributions', { all: true }, admin())).json()).toMatchObject({ code: 'disabled' });
+    contributions.queueContributions.mockResolvedValue({ ok: false, code: 'invalid' });
+    expect((await call('POST', '/api/bridge/contributions', { wineIds: ['x'] }, admin())).status).toBe(400);
+    contributions.queueContributions.mockResolvedValue({ ok: true, queued: 0, ids: [] });
+    expect((await call('POST', '/api/bridge/contributions', { all: true }, admin())).status).toBe(200);
+    expect(contributions.sendQueued).not.toHaveBeenCalled();
+  });
+
+  test("a wine's state is readable by any member who can see the wine, and only then", async () => {
+    findVisibleWine.mockResolvedValue(null);
+    expect((await call('GET', `/api/bridge/contributions/${WINE}`)).status).toBe(404);
+    expect(contributions.contributionForWine).not.toHaveBeenCalled();
+    findVisibleWine.mockResolvedValue({ _id: WINE });
+    contributions.contributionForWine.mockResolvedValue({ enabled: true, linked: false, offerable: true, contribution: null });
+    const res = await call('GET', `/api/bridge/contributions/${WINE}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ enabled: true, linked: false, offerable: true, contribution: null });
+    expect(findVisibleWine).toHaveBeenCalledWith(WINE, expect.objectContaining({ userId: 'u1', roles: ['user'] }));
+    expect((await call('GET', '/api/bridge/contributions/nope')).status).toBe(400);
+  });
+
+  test('taking back maps the service codes: a sent offer is a 409', async () => {
+    contributions.withdrawContribution.mockResolvedValue({ ok: false, code: 'sent' });
+    expect((await call('DELETE', `/api/bridge/contributions/${WINE}`, null, admin())).status).toBe(409);
+    contributions.withdrawContribution.mockResolvedValue({ ok: true });
+    expect((await call('DELETE', `/api/bridge/contributions/${WINE}`, null, admin())).status).toBe(200);
   });
 });

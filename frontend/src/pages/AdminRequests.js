@@ -13,6 +13,19 @@ import displayableImage from '../utils/displayableImage';
 import { WINE_COLOURS, isStyleType, colourLabel } from '../utils/wineColour';
 import './AdminRequests.css';
 
+// A contributed window as the curator reads it: "early 2023–2026 · peak 2026–2034".
+function proposedWindowText(w, t) {
+  const phases = [
+    [t('admin.requests.phaseEarly', 'early'), w.earlyFrom, w.earlyUntil],
+    [t('admin.requests.phasePeak', 'peak'), w.peakFrom, w.peakUntil],
+    [t('admin.requests.phaseLate', 'late'), w.lateFrom, w.lateUntil],
+  ];
+  return phases
+    .filter(([, from, until]) => from != null || until != null)
+    .map(([label, from, until]) => `${label} ${from ?? '…'}–${until ?? '…'}`)
+    .join(' · ');
+}
+
 function AdminRequests() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -489,7 +502,7 @@ function AdminRequests() {
                       {selected.suggestedGrapes.join(', ')}
                     </p>
                   )
-                ) : (
+                ) : (selected.sourceUrl || selected.sourceUrls?.length > 0) && (
                   <p className="request-links">
                     <strong>{t('common.source')}:</strong>{' '}
                     {/* Every link the requester gave (#1460); older requests know one. */}
@@ -505,9 +518,29 @@ function AdminRequests() {
                 )}
                 {selected.hints && (selected.hints.country || selected.hints.region || selected.hints.appellation || selected.hints.type) && (
                   <p>
-                    <strong>{t('admin.requests.fromFile', 'From the import file')}:</strong>{' '}
+                    {/* Over the bridge, hints come with a wine a self-hosted install
+                        contributed; otherwise from an import file. */}
+                    <strong>{selected.via === 'bridge' ? t('admin.requests.fromInstall', 'From the self-hosted install') : t('admin.requests.fromFile', 'From the import file')}:</strong>{' '}
                     {[selected.hints.country, selected.hints.region, selected.hints.appellation, selected.hints.type].filter(Boolean).join(' · ')}
                   </p>
+                )}
+                {selected.requestType !== 'grape_suggestion' && selected.suggestedGrapes?.length > 0 && (
+                  <p>
+                    <strong>{t('admin.requests.grapes', 'Grapes')}:</strong> {selected.suggestedGrapes.join(', ')}
+                  </p>
+                )}
+                {selected.proposedWindows?.length > 0 && (
+                  <div>
+                    <p>
+                      <strong>{t('admin.requests.proposedWindows', 'Drink windows from the install')}:</strong>{' '}
+                      {t('admin.requests.proposedWindowsNote', 'Approving the wine puts these in the maturity queue as suggestions. Nothing is published until a curator reviews them.')}
+                    </p>
+                    <ul>
+                      {selected.proposedWindows.map((w) => (
+                        <li key={w.vintage}>{w.vintage}: {proposedWindowText(w, t)}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 {(displayableImage(selected.image) || displayableImage(selected.backImage)) && (
                   <div className="request-photos">

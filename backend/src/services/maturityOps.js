@@ -17,7 +17,7 @@
 // This module stays free of Express and of the MCP envelope.
 
 const WineVintageProfile = require('../models/WineVintageProfile');
-const { logAudit } = require('./audit');
+const { logAudit, logger } = require('./audit');
 const { bumpWineOwners } = require('./dataVersion');
 
 const PHASE_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
@@ -257,6 +257,55 @@ async function reseedPendingRow(prev) {
   );
 }
 
+/**
+ * Drink windows proposed from OUTSIDE curation, stored as PENDING suggestions
+ * the way a member's cellar import stores its windows (services/cellarImport
+ * attachMaturity): the phases and the proposer (setBy) are kept for the
+ * maturity queue, and nothing is published until a curator adjusts the row
+ * to the registry's rules and reviews it. A row that is reviewed or already
+ * carries content is never touched; an empty pending stub (seeded by a bottle
+ * add) is filled. Year vintages only, each window checked with checkWindow;
+ * one that fails is left out. Caller: services/wineRequestOps
+ * completeRequestResolve, for the windows a self-hosted install sent with a
+ * contributed wine. Returns the vintages written.
+ */
+async function seedSuggestedWindows(wineId, windows, { setBy = null } = {}) {
+  const written = [];
+  for (const win of Array.isArray(windows) ? windows : []) {
+    const vintage = canonicalVintage(win?.vintage ?? '');
+    if (!/^\d{4}$/.test(vintage)) continue;
+    const incoming = {};
+    for (const f of PHASE_FIELDS) {
+      if (Number.isInteger(win[f])) incoming[f] = win[f];
+    }
+    if (!Object.keys(incoming).length) continue;
+    const checked = checkWindow({ vintage }, incoming);
+    if (!checked.ok) continue;
+    const phases = {};
+    for (const f of PHASE_FIELDS) {
+      if (checked.next[f] != null) phases[f] = checked.next[f];
+    }
+    try {
+      const existing = await WineVintageProfile.findOne({ wineDefinition: wineId, vintage });
+      if (!existing) {
+        await WineVintageProfile.create({ wineDefinition: wineId, vintage, status: 'pending', relative: false, ...phases, setBy });
+      } else if (existing.status === 'pending' && !hasWindowContent(existing)) {
+        Object.assign(existing, phases);
+        existing.setBy = setBy;
+        await existing.save();
+      } else {
+        continue;
+      }
+      written.push(vintage);
+    } catch (err) {
+      // A bottle add creating the same row a moment earlier (the unique
+      // index) leaves that row as it is; the rest of the windows still go.
+      logger.warn({ err, wineId: String(wineId), vintage }, 'suggested drink window not stored');
+    }
+  }
+  return written;
+}
+
 module.exports = {
   PHASE_FIELDS,
   SOMM_NOTES_MAX,
@@ -273,4 +322,5 @@ module.exports = {
   removalSnapshot,
   restoreWindow,
   reseedPendingRow,
+  seedSuggestedWindows,
 };

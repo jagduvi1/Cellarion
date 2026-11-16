@@ -15,6 +15,8 @@ const { recordRead } = require('../services/registryReadTracker');
 const { dataForWine, suggestValue } = require('../services/registryDataOps');
 const { createFieldCorrection } = require('../services/wineProposalOps');
 const { createWineRequest } = require('../services/accountOps');
+const { parseContribution, fileContribution } = require('../services/registryContributionIntake');
+const asyncHandler = require('../utils/asyncHandler');
 const { createNotifications } = require('../services/notifications');
 const { logAudit } = require('../services/audit');
 const { rateLimitKey } = require('../utils/clientIp');
@@ -31,6 +33,8 @@ const { CURRENT_REGISTRY_TERMS_VERSION } = require('../config/legal');
 //   POST /wines/changes      which of the ids the install HOLDS changed since a time
 //   POST /requests           a wine request into the hosted intake (a label photo may ride along)
 //   GET  /requests?ids=      what became of the requests this install filed
+//   POST /contributions      a wine the install created, with its identity, photo and
+//                            drink windows, into the same intake (answered via GET /requests)
 //   POST /corrections        a field-correction proposal into the admin queue
 //   POST /values             a public-value suggestion into the review queue
 //   GET  /me                 the key, its quotas and today's spend
@@ -515,6 +519,29 @@ router.get('/requests', async (req, res) => {
     res.status(500).json({ error: 'Failed to read the requests' });
   }
 });
+
+// POST /v1/contributions — { name, producer, country?, region?, appellation?,
+// type?, grapes?, image?, windows? } → the hosted wine-request queue as a
+// pending new_wine request (services/registryContributionIntake). windows use
+// the shape GET /wines/:id serves: [{ vintage, early, peak, late }], each
+// phase { from, until }. Nothing is published: an admin resolves the request
+// and the windows wait in the maturity queue as suggestions. The install
+// reads the outcome with GET /requests. Checked before the quota is spent.
+function validContribution(req, res, next) {
+  const parsed = parseContribution(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error, code: 'invalid' });
+  req.contribution = parsed.contribution;
+  next();
+}
+
+router.post('/contributions', validContribution, quota('contributions'), asyncHandler(async (req, res) => {
+  const { wineRequest, reused } = await fileContribution(req.user.id, req.contribution, { via: 'bridge', req });
+  if (!reused) {
+    logAudit(req, 'bridge.contribution.forwarded', { type: 'wineRequest', id: wineRequest._id },
+      { key: req.bridge.key.id, instanceHost: req.bridge.key.instanceHost, windows: wineRequest.proposedWindows?.length || 0 });
+  }
+  res.status(reused ? 200 : 201).json({ request: { id: wineRequest._id, status: wineRequest.status, wineName: wineRequest.wineName, reused } });
+}));
 
 // POST /v1/corrections — { wineId, fields, reason, evidenceUrl } → admin-reviewed proposal.
 router.post('/corrections', quota('contributions'), async (req, res) => {

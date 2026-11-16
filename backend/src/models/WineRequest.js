@@ -152,6 +152,25 @@ const wineRequestSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Registry side only, on a wine a self-hosted install CONTRIBUTED (POST
+  // /api/bridge/v1/contributions): the drink windows that install set on it,
+  // one per year vintage. Never published from here. When the request is
+  // resolved, each becomes a PENDING suggestion in the maturity queue
+  // (services/wineRequestOps → maturityOps.seedSuggestedWindows), and a
+  // curator adjusts it to the registry's rules and reviews it, or not.
+  proposedWindows: {
+    type: [{
+      _id: false,
+      vintage: { type: String, trim: true, maxlength: 4 },
+      earlyFrom: { type: Number, min: 1900, max: 2200 },
+      earlyUntil: { type: Number, min: 1900, max: 2200 },
+      peakFrom: { type: Number, min: 1900, max: 2200 },
+      peakUntil: { type: Number, min: 1900, max: 2200 },
+      lateFrom: { type: Number, min: 1900, max: 2200 },
+      lateUntil: { type: Number, min: 1900, max: 2200 },
+    }],
+    default: undefined
+  },
   createdAt: {
     type: Date,
     default: Date.now

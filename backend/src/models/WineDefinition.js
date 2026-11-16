@@ -509,6 +509,29 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Registry Bridge (self-hosted installs, services/registryContributionOps):
+  // a wine created HERE that was offered to the shared registry. queued →
+  // sending → sent (the registry's request id) → linked on approval, which
+  // sets registryId and removes this field. declined: the registry's reason
+  // in notes. duplicate: approved as a registry wine (approvedRegistryId)
+  // that this install already holds as a copy; merging the two is a person's
+  // decision. The copy is found by that registry id when the state is read,
+  // never stored as a reference, so a merge or cleanup of wines here has
+  // nothing to follow. failed: the registry refused the contribution as sent
+  // (its message in notes). Absent on every wine never offered.
+  registryContribution: {
+    type: new mongoose.Schema({
+      status: { type: String, enum: ['queued', 'sending', 'sent', 'declined', 'duplicate', 'failed'], required: true },
+      requestId: { type: String, maxlength: 24, default: null },
+      queuedAt: { type: Date, default: null },
+      sentAt: { type: Date, default: null },
+      checkedAt: { type: Date, default: null },
+      decidedAt: { type: Date, default: null },
+      notes: { type: String, trim: true, maxlength: 2000, default: null },
+      approvedRegistryId: { type: String, maxlength: 24, default: null },
+    }, { _id: false }),
+    default: undefined
+  },
   // Pending identity: this row was minted at bottle-commit from an INCOMPLETE
   // identity — no producer, a sentinel producer ("Unknown", "N/A"), or a
   // geography typed into the producer box. The bottle saves instantly (that is
@@ -795,6 +818,12 @@ wineDefinitionSchema.index({ createdBy: 1, draft: 1 }, { partialFilterExpression
 // Quarantined non-wines: a member's own search looks for theirs among these
 // (services/ownHiddenWines). Partial, so it holds only the flagged rows.
 wineDefinitionSchema.index({ nonWine: 1 }, { partialFilterExpression: { nonWine: true } });
+// The contribution send and sync (services/registryContributionOps): the few
+// wines offered to the shared registry, by state, oldest first.
+wineDefinitionSchema.index(
+  { 'registryContribution.status': 1, 'registryContribution.queuedAt': 1 },
+  { partialFilterExpression: { 'registryContribution.status': { $exists: true } } }
+);
 
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {
