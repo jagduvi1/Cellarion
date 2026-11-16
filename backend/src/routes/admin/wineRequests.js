@@ -20,11 +20,34 @@ const { validateImageRef } = require('../../services/accountOps');
 const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
 
 const router = express.Router();
+const asyncHandler = require('../../utils/asyncHandler');
 
 // All routes require admin role
 router.use(requireAuth, requireRole('admin'));
 
 // GET /api/admin/wine-requests - List all wine requests
+// Inline photos (data: URLs of up to 500,000 characters each) stay out of the
+// list: a page of fifty wines a self-hosted install contributed would
+// otherwise be many megabytes. A link is short and stays; an inline photo is
+// flagged and read on its own (GET /:id/photos) when the request is opened.
+// Worked out in the database, so the photos never leave it for a list.
+const isInline = (field) => ({ $eq: [{ $substrCP: [{ $ifNull: [`$${field}`, ''] }, 0, 5] }, 'data:'] });
+async function listPictures(ids) {
+  if (!ids.length) return new Map();
+  const rows = await WineRequest.aggregate([
+    { $match: { _id: { $in: ids } } },
+    {
+      $project: {
+        hasInlineImage: isInline('image'),
+        hasInlineBackImage: isInline('backImage'),
+        image: { $cond: [isInline('image'), null, { $ifNull: ['$image', null] }] },
+        backImage: { $cond: [isInline('backImage'), null, { $ifNull: ['$backImage', null] }] },
+      },
+    },
+  ]);
+  return new Map(rows.map((r) => [String(r._id), r]));
+}
+
 router.get('/', async (req, res) => {
   try {
     const { status } = req.query;
@@ -47,6 +70,7 @@ router.get('/', async (req, res) => {
 
     const [requests, total] = await Promise.all([
       WineRequest.find(filter)
+        .select('-image -backImage')
         .populate('user', 'username email')
         .populate({
           path: 'linkedWineDefinition',
@@ -59,16 +83,38 @@ router.get('/', async (req, res) => {
       WineRequest.countDocuments(filter)
     ]);
 
+    const pictures = await listPictures(requests.map((r) => r._id));
+    const rows = requests.map((r) => {
+      const p = pictures.get(String(r._id)) || {};
+      return {
+        ...r.toJSON(),
+        image: p.image ?? null,
+        backImage: p.backImage ?? null,
+        hasInlineImage: !!p.hasInlineImage,
+        hasInlineBackImage: !!p.hasInlineBackImage,
+      };
+    });
+
     res.json({
-      count: requests.length,
+      count: rows.length,
       total,
-      requests
+      requests: rows
     });
   } catch (error) {
     console.error('Get wine requests error:', error);
     res.status(500).json({ error: 'Failed to get wine requests' });
   }
 });
+
+// GET /api/admin/wine-requests/:id/photos — the request's two photos in full,
+// for the request an admin opened: the list carries only a flag for an
+// inline one (listPictures).
+router.get('/:id/photos', asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+  const row = await WineRequest.findById(req.params.id).select('image backImage').lean();
+  if (!row) return res.status(404).json({ error: 'Wine request not found' });
+  res.json({ image: row.image || null, backImage: row.backImage || null });
+}));
 
 // PUT /api/admin/wine-requests/:id/resolve - Resolve wine request
 router.put('/:id/resolve', async (req, res) => {

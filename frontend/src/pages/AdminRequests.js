@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  adminGetWineRequests, adminResolveWineRequest, adminRejectWineRequest,
+  adminGetWineRequests, adminGetWineRequestPhotos, adminResolveWineRequest, adminRejectWineRequest,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
 } from '../api/admin';
 import { searchWines, getAiWineInfo } from '../api/wines';
@@ -196,6 +196,20 @@ function AdminRequests() {
     }, 350);
   };
 
+  // The inline photos of the request just opened. A request opened after it
+  // wins: the answer for an earlier one is dropped (selectedIdRef).
+  const loadPhotos = async (id) => {
+    try {
+      const res = await adminGetWineRequestPhotos(apiFetch, id);
+      if (!res.ok) return;
+      const photos = await res.json();
+      if (selectedIdRef.current !== id) return;
+      setSelected((prev) => (prev && prev._id === id ? { ...prev, image: photos.image, backImage: photos.backImage } : prev));
+    } catch {
+      // Not shown is all it costs: the approval uses the stored photo either way.
+    }
+  };
+
   const handleSelectRequest = (request) => {
     setSelected(request);
     setRegions([]);
@@ -205,11 +219,13 @@ function AdminRequests() {
     const requestImage = displayableImage(request.image);
     const prefillImage = requestImage && !requestImage.startsWith('data:') ? requestImage : '';
     // A photo attached to the request (inline) is offered as a checkbox
-    // instead: kept, the server stores it as the new wine's picture file.
-    const hasRequestPhoto = !!requestImage && requestImage.startsWith('data:');
+    // instead: kept, the server stores it as the new wine's picture file. The
+    // list flags an inline photo rather than carrying it (hasInlineImage);
+    // the bytes are loaded below, only to be shown.
+    const hasRequestPhoto = !!request.hasInlineImage || (!!requestImage && requestImage.startsWith('data:'));
     // A back label photo (#1460) is offered for the wine's public photos the
     // same way — on by default, the server publishes it as a gallery photo.
-    const hasBackPhoto = !!displayableImage(request.backImage)?.startsWith('data:');
+    const hasBackPhoto = !!request.hasInlineBackImage || !!displayableImage(request.backImage)?.startsWith('data:');
     setResolveData({
       mode: request.requestType === 'grape_suggestion' ? 'apply_grapes' : 'create',
       adminNotes: '',
@@ -238,6 +254,7 @@ function AdminRequests() {
     setLinkResults([]);
     setAiLookup({ loading: false, error: null });
     selectedIdRef.current = request._id;
+    if (request.hasInlineImage || request.hasInlineBackImage) loadPhotos(request._id);
     prefillFromHints(request);
   };
 
@@ -808,7 +825,7 @@ function AdminRequests() {
                             }}
                             placeholder="https://..."
                           />
-                          {displayableImage(selected.image)?.startsWith('data:') && !resolveData.wineData.image && (
+                          {(selected.hasInlineImage || displayableImage(selected.image)?.startsWith('data:')) && !resolveData.wineData.image && (
                             <label className="request-photo-toggle">
                               <input
                                 type="checkbox"
@@ -822,7 +839,7 @@ function AdminRequests() {
                               <span>{t('admin.requests.useRequestPhoto', "Use the photo from the request as the wine's picture")}</span>
                             </label>
                           )}
-                          {displayableImage(selected.backImage)?.startsWith('data:') && (
+                          {(selected.hasInlineBackImage || displayableImage(selected.backImage)?.startsWith('data:')) && (
                             <label className="request-photo-toggle">
                               <input
                                 type="checkbox"
