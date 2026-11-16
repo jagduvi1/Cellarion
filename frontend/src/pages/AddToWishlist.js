@@ -7,6 +7,7 @@ import { adoptRegistryWine } from '../api/bridge';
 import useLabelScanner from '../hooks/useLabelScanner';
 import useTapToFocus from '../hooks/useTapToFocus';
 import CameraFocusRing from '../components/CameraFocusRing';
+import ScanLabelButtons from '../components/ScanLabelButtons';
 import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
 import './AddBottle.css';
@@ -17,6 +18,7 @@ import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } fro
 import './AddToWishlist.css';
 import { backLabel } from '../utils/backLabel';
 import { formatVintage, parseVintageInput } from '../utils/vintage';
+import { messageForResponse } from '../utils/friendlyError';
 
 function AddToWishlist() {
   const { t } = useTranslation();
@@ -160,6 +162,7 @@ function AddToWishlist() {
   // ── Wishlist item details ──
   const [vintage, setVintage] = useState('');
   const [notes, setNotes] = useState('');
+  const [shopUrl, setShopUrl] = useState('');
   const [priority, setPriority] = useState('medium');
   const [saving, setSaving] = useState(false);
 
@@ -273,7 +276,7 @@ function AddToWishlist() {
     labelCam, labelScanning, setLabelFacing,
     labelVideoRef, labelCanvasRef,
     startCamera: startLabelCamera, startBackCamera: startBackLabelCamera,
-    stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
+    stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto, scanFile: scanLabelFile
   } = useLabelScanner(apiFetch, {
     onScanSuccess: handleScanSuccess,
     onScanError: handleScanError,
@@ -574,6 +577,7 @@ function AddToWishlist() {
       const body = {
         vintage: parseVintageInput(vintage, t) || undefined,
         notes: notes || undefined,
+        shopUrl: shopUrl.trim() || undefined,
         priority
       };
       // The scan evidence rides at the ONE place a newWine payload is sent, so
@@ -598,7 +602,7 @@ function AddToWishlist() {
         return;
       }
       if (!res.ok) {
-        setError(data.error || t('addToWishlist.failedAdd'));
+        setError(messageForResponse(res, data, t('addToWishlist.failedAdd'), t));
         // Release-audit MEDIUM (same as AddBottle): a mint-gate 400 arrives
         // after the wine form is gone — when the failed save carried newWine,
         // reopen the manual form seeded with the typed fields so the user
@@ -876,9 +880,7 @@ function AddToWishlist() {
                 <p className="camera-prompt-hint">
                   {t('addToWishlist.cameraHint')}
                 </p>
-                <button type="button" className="btn btn-primary" onClick={startLabelCamera}>
-                  {t('addToWishlist.startCamera')}
-                </button>
+                <ScanLabelButtons cameraLabel={t('addToWishlist.startCamera')} onCamera={startLabelCamera} onFile={scanLabelFile} />
               </div>
               <button type="button" className="wine-select-manual-link" onClick={() => setShowTextSearch(true)}>
                 {t('addToWishlist.noCameraSearch')}
@@ -1082,6 +1084,19 @@ function AddToWishlist() {
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder={t('addToWishlist.notesPlaceholder')}
                   rows="3"
+                  maxLength={2000}
+                />
+              </div>
+              <div className="form-group form-group-full">
+                <label htmlFor="wishlist-shop-url">{t('addToWishlist.shopUrl')}</label>
+                <input
+                  id="wishlist-shop-url"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  value={shopUrl}
+                  onChange={(e) => setShopUrl(e.target.value)}
+                  placeholder={t('addToWishlist.shopUrlPlaceholder')}
                   maxLength={2000}
                 />
               </div>

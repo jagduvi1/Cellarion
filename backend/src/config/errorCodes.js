@@ -36,6 +36,8 @@ const ERROR_CODES = {
   // Email confirmation and password reset
   verification_token_invalid: 'Invalid or expired verification token',
   reset_token_invalid: 'Invalid or expired reset token',
+  // Wishlist
+  wishlist_shop_url_invalid: 'The shop link must be a web address (http:// or https://)',
 };
 
 /** The JSON body of a coded error, with `fields` filled into the sentence and sent along. */

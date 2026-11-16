@@ -50,6 +50,7 @@ registerTool({
       priority: it.priority,
       status: it.status,
       notes: it.notes || null,
+      shop_url: it.shopUrl || null,
       added_at: it.createdAt,
     }));
     return ok(`${data.length} of ${total} wishlist item(s)`, data, { page: { limit, offset, total } });

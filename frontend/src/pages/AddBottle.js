@@ -21,6 +21,7 @@ import ManualWineForm from '../components/addBottle/ManualWineForm';
 import BottleCoreFields from '../components/addBottle/BottleCoreFields';
 import BottlePhotoSection from '../components/addBottle/BottlePhotoSection';
 import LabelCameraModal from '../components/addBottle/LabelCameraModal';
+import ScanLabelButtons from '../components/ScanLabelButtons';
 import AddBottleDialogs from '../components/addBottle/AddBottleDialogs';
 import { backLabel } from '../utils/backLabel';
 import { useBackToClose } from '../utils/useBackToClose';
@@ -368,7 +369,7 @@ function AddBottle() {
     labelCam, labelScanning, setLabelFacing,
     labelVideoRef, labelCanvasRef,
     startCamera: startLabelCamera, startBackCamera: startBackLabelCamera,
-    stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
+    stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto, scanFile: scanLabelFile
   } = useLabelScanner(apiFetch, {
     onScanSuccess: handleScanSuccess,
     onScanError: handleScanError,
@@ -1335,9 +1336,7 @@ function AddBottle() {
                 <p className="camera-prompt-hint">
                   {t('addBottle.scanPromptHint', 'Take a photo of the label — we\'ll identify the wine and add it to the registry if it doesn\'t exist yet.')}
                 </p>
-                <button type="button" className="btn btn-primary" onClick={startLabelCamera}>
-                  {t('addBottle.startCamera', 'Start Camera')}
-                </button>
+                <ScanLabelButtons cameraLabel={t('addBottle.startCamera', 'Start Camera')} onCamera={startLabelCamera} onFile={scanLabelFile} />
               </div>
               <button type="button" className="wine-select-manual-link" onClick={() => setShowTextSearch(true)}>
                 {t('addBottle.searchManuallyInstead', 'Type the name instead →')}

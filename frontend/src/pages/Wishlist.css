@@ -210,6 +210,14 @@
   line-height: 1.4;
 }
 
+.wishlist-item-shop-link {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-primary);
+  overflow-wrap: anywhere;
+}
+
 .wishlist-item-bought-date {
   display: inline-block;
   margin-top: 0.25rem;

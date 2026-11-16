@@ -9,6 +9,8 @@ const { escapeRegex } = require('../utils/sanitize');
 const { resolveOrMintWine } = require('../services/wineCommit');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { MEMBER_WINE_HIDDEN_FIELDS } = require('../config/constants');
+const { errorBody } = require('../config/errorCodes');
+const { normalizeShopUrl } = require('../utils/shopUrl');
 
 const router = express.Router();
 
@@ -178,10 +180,10 @@ router.get('/', async (req, res) => {
 /**
  * POST /api/wishlist
  * Add a wine to the authenticated user's wishlist.
- * Body: { wineDefinitionId, vintage?, notes?, priority? }
+ * Body: { wineDefinitionId, vintage?, notes?, priority?, shopUrl? }
  *   or: { newWine: { name, producer, country, region?, appellation?, type?,
  *                    grapes?, confirmCreate?, source?, scanImageId?,
- *                    scanImageBackId?, scanConflicts? }, vintage?, notes?, priority? }
+ *                    scanImageBackId?, scanConflicts? }, vintage?, notes?, priority?, shopUrl? }
  *
  * Exactly one of wineDefinitionId | newWine. A wishlist item REQUIRES a real
  * registry row (the schema references WineDefinition, and the whole list UI
@@ -197,7 +199,7 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { wineDefinitionId, newWine, vintage, notes, priority } = req.body;
+    const { wineDefinitionId, newWine, vintage, notes, priority, shopUrl } = req.body;
 
     if ((!wineDefinitionId && !newWine) || (wineDefinitionId && newWine)) {
       return res.status(400).json({ error: 'Provide wineDefinitionId or newWine (exactly one)' });
@@ -219,6 +221,8 @@ router.post('/', async (req, res) => {
     if (safeVintage && safeVintage.length > 20) {
       return res.status(400).json({ error: 'Vintage must be 20 characters or less' });
     }
+    const shop = normalizeShopUrl(shopUrl);
+    if (shop.error) return res.status(400).json(errorBody('wishlist_shop_url_invalid'));
 
     let resolvedWineId;
     if (newWine) {
@@ -283,6 +287,7 @@ router.post('/', async (req, res) => {
       wineDefinition: resolvedWineId,
       vintage: safeVintage || undefined,
       notes: notes || undefined,
+      shopUrl: shop.url || undefined,
       priority: priority || 'medium'
     });
 
@@ -314,7 +319,7 @@ router.post('/', async (req, res) => {
 
 /**
  * PUT /api/wishlist/:id
- * Update a wishlist item (notes, priority, status, vintage).
+ * Update a wishlist item (notes, priority, status, vintage, shopUrl).
  * Only the owning user can update.
  */
 router.put('/:id', async (req, res) => {
@@ -330,7 +335,7 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { notes, priority, status, vintage } = req.body;
+    const { notes, priority, status, vintage, shopUrl } = req.body;
 
     // null clears a field (mirrors POST's "absent" semantics) — guard before
     // reading .length, and never store the literal string 'null'.
@@ -357,6 +362,11 @@ router.put('/:id', async (req, res) => {
       const safeVin = vintage != null ? String(vintage) : '';
       if (safeVin.length > 20) return res.status(400).json({ error: 'Vintage too long' });
       item.vintage = safeVin || undefined;
+    }
+    if (shopUrl !== undefined) {
+      const shop = normalizeShopUrl(shopUrl);
+      if (shop.error) return res.status(400).json(errorBody('wishlist_shop_url_invalid'));
+      item.shopUrl = shop.url || undefined;
     }
 
     await item.save();
