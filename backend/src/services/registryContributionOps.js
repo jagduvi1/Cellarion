@@ -77,6 +77,11 @@ const OFFERABLE = Object.freeze({
 });
 const NEVER_OFFERED = { registryContribution: { $exists: false } };
 const OFFERABLE_AGAIN = { $or: [NEVER_OFFERED, { 'registryContribution.status': { $in: REOFFERABLE } }] };
+// What OFFERABLE refuses, a registry id aside (a linked wine is tidied on its
+// own): a copy, a pending or draft row, a non-wine, a wine without a producer.
+const NO_LONGER_OFFERABLE = {
+  $or: [{ createdVia: 'bridge' }, { pendingIdentity: true }, { draft: true }, { nonWine: true }, { producer: { $in: [null, ''] } }],
+};
 
 const PHASE_WIRE = [['early', 'earlyFrom', 'earlyUntil'], ['peak', 'peakFrom', 'peakUntil'], ['late', 'lateFrom', 'lateUntil']];
 
@@ -144,8 +149,9 @@ async function contributionPayload(wine) {
   if (wine.region?.name) payload.region = wine.region.name;
   if (wine.appellation) payload.appellation = wine.appellation;
   if (wine.type) payload.type = wine.type;
-  // Shown to the curator, so the registry wine can carry them too: a link
-  // keeps them here only while the registry wine has none of its own.
+  // Shown to the curator, so the registry wine can carry them too. Here they
+  // stay while the registry wine has none of its own (registryBridge
+  // applyRegistryUpdate keeps a wine made here's extras).
   const classes = (wine.classifications || []).map((c) => c?.name).filter(Boolean);
   const classification = classes.length ? classes.join(', ') : wine.classification;
   if (classification && classification.length <= 150) payload.classification = classification;
@@ -204,20 +210,26 @@ let sending = false;
 let syncing = false;
 
 /**
- * What both runs start with: a claim left by a run that died goes back to the
- * queue, and an offer on a wine that got linked to the registry another way
- * meanwhile (an adoption by the same identity) is dropped, having nothing
- * left to do. A 'sent' one stays: with a registry id it is a link still being
- * finished (registryBridge.linkContributedWine).
+ * What both runs start with. A claim left by a run that died goes back to the
+ * queue. An offer on a wine fully linked to the registry another way meanwhile
+ * (an adoption by the same identity: a registry id AND a sync stamp) is
+ * dropped, having nothing left to do; a registry id without a stamp is a link
+ * of ours still being finished, and stays. A queued wine that can no longer be
+ * offered (marked not a wine, made a draft, its producer cleared) is failed
+ * with the reason instead of waiting for ever.
  */
 async function tidyStates() {
   await WineDefinition.updateMany(
-    { 'registryContribution.status': { $exists: true, $ne: 'sent' }, registryId: { $nin: [null, ''] } },
+    { 'registryContribution.status': { $exists: true, $ne: 'sent' }, registryId: { $nin: [null, ''] }, registrySyncedAt: { $ne: null } },
     { $unset: { registryContribution: 1 } }
   );
   await WineDefinition.updateMany(
     { 'registryContribution.status': 'sending', 'registryContribution.sentAt': { $lt: new Date(Date.now() - SENDING_STALE_MS) } },
     stateSet({ status: 'queued', sentAt: null })
+  );
+  await WineDefinition.updateMany(
+    { 'registryContribution.status': 'queued', registryId: { $in: [null, ''] }, ...NO_LONGER_OFFERABLE },
+    stateSet({ status: 'failed', decidedAt: new Date(), notes: 'This wine can no longer be offered: it was marked as not a wine, made a draft, or lost its producer.' })
   );
 }
 
@@ -328,14 +340,14 @@ async function sendOne(wine) {
 /**
  * Finish what cellarion.app has answered. An approved offer is linked
  * (registryBridge.linkContributedWine), or marked duplicate when this install
- * already holds the registry's copy; a duplicate whose copy is gone (merged
- * into it, or deleted) is linked now. A declined one keeps the registry's
+ * already holds the registry's copy; a declined one keeps the registry's
  * reason. A sent offer with no usable answer for MISS_LIMIT checks (the
  * registry does not know it, or its wine is not visible) is failed, and so is
- * one approved as a registry wine that no longer exists. At most
- * SYNC_LINK_MAX links per run, CALL_PAUSE_MS apart; an unreachable registry
- * ends the linking for the run. Oldest-checked first. Run hourly by the
- * scheduler. Returns counts.
+ * one approved as a registry wine that no longer exists, or one whose link
+ * fails ATTEMPT_LIMIT times. Then, with the links left, a duplicate whose copy
+ * here is gone (merged into it, or deleted) is linked. At most SYNC_LINK_MAX
+ * links per run, CALL_PAUSE_MS apart; an unreachable registry ends the linking
+ * for the run. Oldest-checked first. Run hourly by the scheduler. Returns counts.
  */
 async function syncContributions({ now = new Date(), pauseMs = CALL_PAUSE_MS } = {}) {
   if (!bridge.isEnabled()) return { skipped: 'disabled' };
@@ -346,13 +358,6 @@ async function syncContributions({ now = new Date(), pauseMs = CALL_PAUSE_MS } =
     const counts = { checked: 0, linked: 0, declined: 0, duplicates: 0, failures: 0, expired: 0 };
     let links = 0;
     let linkingStopped = false;
-    const link = async (wineId, registryId) => {
-      if (links > 0) await pause(pauseMs);
-      links++;
-      const r = await bridge.linkContributedWine(wineId, registryId);
-      if (!r.ok && r.code === 'unavailable') linkingStopped = true;
-      return r;
-    };
     const canLink = () => !linkingStopped && links < SYNC_LINK_MAX;
     const mark = (w, patch) => WineDefinition.updateOne({ _id: w._id, 'registryContribution.status': w.registryContribution.status }, stateSet(patch))
       .catch((err) => logger.warn({ err, wineId: String(w._id) }, '[bridge] contribution check not stamped'));
@@ -360,30 +365,39 @@ async function syncContributions({ now = new Date(), pauseMs = CALL_PAUSE_MS } =
       await WineDefinition.updateOne({ _id: w._id }, stateSet({ status: 'failed', notes, decidedAt: now, checkedAt: now }));
       logAudit(null, 'bridge.contribution.failed', { type: 'wine', id: w._id }, detail);
     };
-
-    // Duplicates whose copy here is gone: nothing stands in the way any more.
-    const duplicates = await WineDefinition.find({ 'registryContribution.status': 'duplicate', 'registryContribution.approvedRegistryId': { $type: 'string' } })
-      .select('_id registryContribution').limit(SYNC_BATCH_MAX).lean();
-    if (duplicates.length) {
-      const copies = await localCopies(duplicates.map((d) => d.registryContribution.approvedRegistryId));
-      for (const d of duplicates) {
-        const registryId = d.registryContribution.approvedRegistryId;
-        if (copies.has(registryId) || !canLink()) continue;
-        const r = await link(d._id, registryId);
-        if (r.ok) {
-          counts.linked++;
-          logAudit(null, 'bridge.contribution.linked', { type: 'wine', id: d._id }, { registryId, afterDuplicate: true });
-        }
+    // One link, never throwing: { ok } | { code } | { code: 'error', message }.
+    const link = async (wineId, registryId) => {
+      if (links > 0) await pause(pauseMs);
+      links++;
+      try {
+        const r = await bridge.linkContributedWine(wineId, registryId);
+        if (!r.ok && r.code === 'unavailable') linkingStopped = true;
+        return r;
+      } catch (err) {
+        logger.warn({ err, wineId: String(wineId) }, '[bridge] contribution link failed');
+        return { ok: false, code: 'error', message: err.message };
       }
-    }
+    };
+    // A link that keeps failing here (not the registry being away) is counted,
+    // and ends as failed after ATTEMPT_LIMIT runs instead of costing a fetch
+    // every hour for good.
+    const linkFailed = async (w, r, detail) => {
+      counts.failures++;
+      if (r.code === 'unavailable') { await mark(w, { checkedAt: now }); return; }
+      const attempts = (w.registryContribution.attempts || 0) + 1;
+      if (attempts >= ATTEMPT_LIMIT) {
+        await fail(w, `Approved on cellarion.app, but it could not be linked here (${r.message || r.code}). Offer it again.`, { ...detail, reason: r.code, attempts });
+        return;
+      }
+      await mark(w, { checkedAt: now, attempts });
+    };
 
     const waiting = await WineDefinition.find({ 'registryContribution.status': 'sent', 'registryContribution.requestId': { $type: 'string' } })
       .select('_id registryContribution')
       .sort({ 'registryContribution.checkedAt': 1, 'registryContribution.sentAt': 1 })
       .limit(SYNC_BATCH_MAX).lean();
     counts.checked = waiting.length;
-    if (!waiting.length) return counts;
-    const answers = await client.requestStatuses(waiting.map((w) => w.registryContribution.requestId));
+    const answers = waiting.length ? await client.requestStatuses(waiting.map((w) => w.registryContribution.requestId)) : [];
     if (answers === null) return { ...counts, checked: 0, failed: true };
     const byId = new Map(answers.map((a) => [String(a.id), a]));
 
@@ -401,7 +415,7 @@ async function syncContributions({ now = new Date(), pauseMs = CALL_PAUSE_MS } =
           }
           if (linked.code === 'duplicate') {
             counts.duplicates++;
-            await WineDefinition.updateOne({ _id: w._id }, stateSet({ status: 'duplicate', approvedRegistryId: String(a.wine.id), decidedAt: now, checkedAt: now }));
+            await WineDefinition.updateOne({ _id: w._id }, stateSet({ status: 'duplicate', approvedRegistryId: String(a.wine.id), decidedAt: now, checkedAt: now, attempts: 0 }));
             logAudit(null, 'bridge.contribution.duplicate', { type: 'wine', id: w._id }, { registryId: String(a.wine.id), duplicateOf: String(linked.heldId) });
             continue;
           }
@@ -416,8 +430,7 @@ async function syncContributions({ now = new Date(), pauseMs = CALL_PAUSE_MS } =
             await fail(w, 'Approved on cellarion.app, but the registry wine it became is no longer there. Offer it again.', { registryRequestId: requestId, registryId: String(a.wine.id), reason: 'not_found' });
             continue;
           }
-          counts.failures++;
-          await mark(w, { checkedAt: now });
+          await linkFailed(w, linked, { registryRequestId: requestId, registryId: String(a.wine.id) });
           continue;
         }
         if (a && a.status === 'rejected') {
@@ -448,6 +461,39 @@ async function syncContributions({ now = new Date(), pauseMs = CALL_PAUSE_MS } =
         await mark(w, { checkedAt: now });
       }
     }
+
+    // Duplicates whose copy here is gone: nothing stands in the way any more.
+    // Oldest-checked first, with the links an approval did not need.
+    const duplicates = await WineDefinition.find({ 'registryContribution.status': 'duplicate', 'registryContribution.approvedRegistryId': { $type: 'string' } })
+      .select('_id registryContribution')
+      .sort({ 'registryContribution.checkedAt': 1, _id: 1 })
+      .limit(SYNC_BATCH_MAX).lean();
+    if (duplicates.length) {
+      const copies = await localCopies(duplicates.map((d) => d.registryContribution.approvedRegistryId));
+      for (const d of duplicates) {
+        if (!canLink()) break;
+        const registryId = d.registryContribution.approvedRegistryId;
+        const holder = copies.get(registryId);
+        // Still held by another wine here; a holder that is this very wine is
+        // a link of ours cut short, and is finished now.
+        if (holder && holder !== String(d._id)) { await mark(d, { checkedAt: now }); continue; }
+        const r = await link(d._id, registryId);
+        if (r.ok) {
+          counts.linked++;
+          logAudit(null, 'bridge.contribution.linked', { type: 'wine', id: d._id }, { registryId, afterDuplicate: true });
+          continue;
+        }
+        if (r.code === 'duplicate') { await mark(d, { checkedAt: now }); continue; }
+        if (r.code === 'not_found') {
+          counts.failures++;
+          await fail(d, 'Approved on cellarion.app, but the registry wine it became is no longer there. Offer it again.', { registryId, reason: 'not_found', afterDuplicate: true });
+          continue;
+        }
+        if (r.code === 'gone' || r.code === 'conflict') continue;
+        await linkFailed(d, r, { registryId, afterDuplicate: true });
+      }
+    }
+
     if (counts.linked || counts.declined || counts.duplicates || counts.failures || counts.expired) {
       logger.info(counts, '[bridge] contribution sync');
     }

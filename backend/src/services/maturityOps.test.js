@@ -76,9 +76,14 @@ describe('windowSnapshot', () => {
     const setAt = new Date('2026-01-01');
     expect(ops.windowSnapshot(row({ peakFrom: 2020, peakUntil: 2030, status: 'reviewed', setBy: 'u9', setAt, sommNotes: 'n' }))).toEqual({
       earlyFrom: null, earlyUntil: null, peakFrom: 2020, peakUntil: 2030, lateFrom: null, lateUntil: null,
-      sommNotes: 'n', status: 'reviewed', relative: false, setBy: 'u9', setAt,
+      sommNotes: 'n', status: 'reviewed', relative: false, setBy: 'u9', setAt, suggestion: null,
     });
     expect(ops.windowSnapshot(row())).toMatchObject({ sommNotes: null, setBy: null, setAt: null, relative: false });
+  });
+
+  test("keeps an install's suggestion as plain data, so an undo brings it back", () => {
+    const suggestion = { peakFrom: 2026, peakUntil: 2034, source: 'bridge' };
+    expect(ops.windowSnapshot(row({ suggestion })).suggestion).toEqual(suggestion);
   });
 });
 

@@ -521,13 +521,15 @@ router.get('/requests', async (req, res) => {
   }
 });
 
-// POST /v1/contributions — { name, producer, country?, region?, appellation?,
-// type?, grapes?, image?, windows? } → the hosted wine-request queue as a
-// pending new_wine request (services/registryContributionIntake). windows use
-// the shape GET /wines/:id serves: [{ vintage, early, peak, late }], each
-// phase { from, until }. Nothing is published: an admin resolves the request
-// and the windows wait in the maturity queue as suggestions. The install
-// reads the outcome with GET /requests. Checked before the quota is spent.
+// POST /v1/contributions — { ref, name, producer, country?, region?,
+// appellation?, type?, classification?, colour?, sweetness?, lwin?, grapes?,
+// image?, windows? } → the hosted wine-request queue as a pending new_wine
+// request (services/registryContributionIntake). ref is the install's own id
+// for the wine; image is inline only; windows use the shape GET /wines/:id
+// serves: [{ vintage, early, peak, late }], each phase { from, until }.
+// Nothing is published: an admin resolves the request and the windows wait in
+// the maturity queue as suggestions. The install reads the outcome with
+// GET /requests. Checked before the quota is spent.
 function validContribution(req, res, next) {
   const parsed = parseContribution(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error, code: 'invalid' });

@@ -279,16 +279,117 @@ describeWithMongo('contributions (real MongoDB)', () => {
       expect(linked.registryContribution).toBeUndefined();
     });
 
-    test('a wine an adoption already linked to the same registry wine is only finished: its stamps stay the bridge\'s', async () => {
+    test('a wine an adoption already linked to the same registry wine is refreshed like a copy, never frozen', async () => {
       const RID = rid();
       const syncedAt = new Date(Date.now() - 60000);
       const wine = await localWine('Clos Example', { registryId: RID, registrySyncedAt: syncedAt, ...sentState('d'.repeat(24)) });
+      await WineDefinition.collection.updateOne({ _id: wine._id }, { $set: { updatedAt: syncedAt } });
+      // A row the adoption wrote: the bridge's note and the adoption's stamp.
+      await WineVintageProfile.create({ wineDefinition: wine._id, vintage: '2019', status: 'reviewed', peakFrom: 2025, peakUntil: 2030, sommNotes: NOTE, setAt: syncedAt });
       client.requestStatuses.mockResolvedValue([{ id: 'd'.repeat(24), status: 'resolved', wine: { id: RID } }]);
+      client.fetchWine.mockResolvedValue(registryWine(RID, { windows: [{ vintage: '2019', relative: false, peak: { from: 2026, until: 2032 } }] }));
       expect(await ops.syncContributions(FAST)).toMatchObject({ linked: 1 });
-      expect(client.fetchWine).not.toHaveBeenCalled();
       const after = await reload(wine._id);
-      expect(after.registrySyncedAt.getTime()).toBe(syncedAt.getTime());
       expect(after.registryContribution).toBeUndefined();
+      expect(after.registrySyncedAt.getTime()).toBeGreaterThan(syncedAt.getTime());
+      // Still the bridge's row, so the registry's change arrived.
+      expect(await WineVintageProfile.findOne({ wineDefinition: wine._id, vintage: '2019' }).lean()).toMatchObject({ peakFrom: 2026, peakUntil: 2032, sommNotes: NOTE });
+    });
+
+    test('extras kept for a wine made here survive later refreshes; a region only while the country stays; a pure copy follows the registry', async () => {
+      const burgundy = await findOrCreateRegion('Burgundy', france._id, USER);
+      const RID = rid();
+      const wine = await localWine('Clos Example', { lwin: { lwin7: '7654321' }, region: burgundy._id, ...sentState('6'.repeat(24)) });
+      client.requestStatuses.mockResolvedValue([{ id: '6'.repeat(24), status: 'resolved', wine: { id: RID } }]);
+      client.fetchWine.mockResolvedValue(registryWine(RID, { region: null, lwin: null }));
+      await ops.syncContributions(FAST);
+
+      // The registry wine changes (a window reviewed there): the weekly refresh.
+      client.changes.mockResolvedValue({ changed: [{ id: RID, updatedAt: new Date(Date.now() + 60000).toISOString() }], removed: [], checked: 1, checkedAt: new Date().toISOString() });
+      client.fetchWine.mockResolvedValue(registryWine(RID, { region: null, lwin: null, name: 'Clos Example' }));
+      await bridge.refreshHeld({ now: new Date() });
+      let after = await reload(wine._id);
+      expect(after.lwin).toEqual({ lwin7: '7654321' });
+      expect(String(after.region)).toBe(String(burgundy._id));
+
+      // Approved under another country: the old country's region goes.
+      const italy = await findOrCreateCountry('Italy', USER);
+      client.fetchWine.mockResolvedValue(registryWine(RID, { region: null, lwin: null, name: 'Clos Example', country: 'Italy' }));
+      client.changes.mockResolvedValue({ changed: [{ id: RID, updatedAt: new Date(Date.now() + 120000).toISOString() }], removed: [], checked: 1, checkedAt: new Date().toISOString() });
+      await bridge.refreshHeld({ now: new Date() });
+      after = await reload(wine._id);
+      expect(String(after.country)).toBe(String(italy._id));
+      expect(after.region == null).toBe(true);
+      expect(after.lwin).toEqual({ lwin7: '7654321' });
+
+      // A pure copy (createdVia 'bridge') takes the registry as it is.
+      const CID = rid();
+      const copy = await localWine('Copied', { createdVia: 'bridge', registryId: CID, registrySyncedAt: new Date(Date.now() - 60000), lwin: { lwin7: '1111111' } });
+      await WineDefinition.collection.updateOne({ _id: copy._id }, { $set: { updatedAt: new Date(Date.now() - 60000) } });
+      client.changes.mockResolvedValue({ changed: [{ id: CID, updatedAt: new Date(Date.now() + 60000).toISOString() }], removed: [], checked: 2, checkedAt: new Date().toISOString() });
+      client.fetchWine.mockResolvedValue(registryWine(CID, { name: 'Copied', lwin: null }));
+      await bridge.refreshHeld({ now: new Date() });
+      expect((await reload(copy._id)).lwin?.lwin7 ?? null).toBeNull();
+    });
+
+    test('a link that fails after stamping the wine is finished by the next sync, and its windows arrive', async () => {
+      const RID = rid();
+      const wine = await localWine('Clos Example', sentState('5'.repeat(24)));
+      client.requestStatuses.mockResolvedValue([{ id: '5'.repeat(24), status: 'resolved', wine: { id: RID } }]);
+      client.fetchWine.mockResolvedValue(registryWine(RID, { windows: [{ vintage: '2019', relative: false, peak: { from: 2026, until: 2032 } }] }));
+      const spy = jest.spyOn(WineVintageProfile, 'findOneAndUpdate').mockRejectedValueOnce(new Error('db blip'));
+      expect(await ops.syncContributions(FAST)).toMatchObject({ linked: 0, failures: 1 });
+      spy.mockRestore();
+      expect((await reload(wine._id)).registryContribution).toMatchObject({ status: 'sent', attempts: 1 });
+      expect(await ops.syncContributions(FAST)).toMatchObject({ linked: 1 });
+      expect((await reload(wine._id)).registryContribution).toBeUndefined();
+      expect(await WineVintageProfile.findOne({ wineDefinition: wine._id, vintage: '2019' }).lean()).toMatchObject({ peakFrom: 2026, sommNotes: NOTE });
+    });
+
+    test('a link that keeps failing here ends as failed; one failing link never stops the rest of the run', async () => {
+      const RID = rid(); const RID2 = rid();
+      const stuck = await localWine('Stuck', sentState('4'.repeat(24), { attempts: ops.ATTEMPT_LIMIT - 1 }));
+      const fine = await localWine('Fine', sentState('3'.repeat(24)));
+      client.requestStatuses.mockResolvedValue([
+        { id: '4'.repeat(24), status: 'resolved', wine: { id: RID } },
+        { id: '3'.repeat(24), status: 'resolved', wine: { id: RID2 } },
+      ]);
+      client.fetchWine.mockImplementation(async (id) => registryWine(id, { name: id === RID ? 'Stuck' : 'Fine' }));
+      const spy = jest.spyOn(bridge, 'linkContributedWine');
+      spy.mockRejectedValueOnce(new Error('taxonomy write failed'));
+      expect(await ops.syncContributions(FAST)).toMatchObject({ linked: 1, failures: 1 });
+      spy.mockRestore();
+      expect((await reload(stuck._id)).registryContribution).toMatchObject({ status: 'failed', notes: expect.stringContaining('taxonomy write failed') });
+      expect(await reload(fine._id)).toMatchObject({ registryId: RID2 });
+    });
+
+    test('a duplicate whose link was cut short is not tidied away but finished; a dead duplicate ends as failed', async () => {
+      const RID = rid(); const DEAD = rid();
+      const halfLinked = await localWine('Half', { registryId: RID, registrySyncedAt: null, registryContribution: { status: 'duplicate', approvedRegistryId: RID } });
+      const dead = await localWine('Dead', { registryContribution: { status: 'duplicate', approvedRegistryId: DEAD } });
+      client.requestStatuses.mockResolvedValue([]);
+      client.fetchWine.mockImplementation(async (id) => (id === DEAD ? { removed: true } : registryWine(id, { name: 'Half' })));
+      await ops.syncContributions(FAST);
+      const half = await reload(halfLinked._id);
+      expect(half.registryContribution).toBeUndefined();
+      expect(half.registrySyncedAt).toBeInstanceOf(Date);
+      expect((await reload(dead._id)).registryContribution).toMatchObject({ status: 'failed', notes: expect.stringContaining('no longer there') });
+    });
+
+    test('a queued wine that can no longer be offered ends as failed instead of waiting for ever', async () => {
+      const wine = await localWine('Clos Example', { registryContribution: { status: 'queued', queuedAt: new Date() } });
+      await WineDefinition.collection.updateOne({ _id: wine._id }, { $set: { nonWine: true } });
+      await ops.sendQueued(FAST);
+      expect((await reload(wine._id)).registryContribution).toMatchObject({ status: 'failed', notes: expect.stringContaining('can no longer be offered') });
+      expect(client.forwardContribution).not.toHaveBeenCalled();
+    });
+
+    test('adopting a registry wine onto a local row keeps the profile curated here for good', async () => {
+      const RID = rid();
+      const wine = await localWine('Clos Example', { aiProfile: { description: 'Our own notes.', source: 'curator' } });
+      client.fetchWine.mockResolvedValue(registryWine(RID));
+      expect((await bridge.adoptWine(RID, USER)).ok).toBe(true);
+      expect((await reload(wine._id)).aiProfile).toMatchObject({ description: 'Our own notes.', heldLocally: true });
     });
 
     test('an approval for a wine this install already holds as a copy is marked duplicate; once the copy is gone it is linked', async () => {
@@ -437,6 +538,30 @@ describeWithMongo('contributions (real MongoDB)', () => {
       expect(reviewed.earlyFrom ?? null).toBeNull();
       expect(reviewed.lateFrom ?? null).toBeNull();
       expect(reviewed.suggestion).toBeUndefined();
+    });
+
+    test('a second contribution for a vintage that already holds a suggestion leaves it alone', async () => {
+      const wine = await registryRow();
+      const first = await contribute([{ vintage: '2019', peak: { from: 2026, until: 2034 } }]);
+      await completeRequestResolve(await WineRequest.findById(first._id), wine, {});
+      const second = await WineRequest.create({ requestType: 'new_wine', wineName: 'Clos Example', producer: 'Domaine Example', user: USER, status: 'pending', via: 'bridge', proposedWindows: [{ vintage: '2019', peakFrom: 2030, peakUntil: 2040 }] });
+      await completeRequestResolve(await WineRequest.findById(second._id), wine, {});
+      const row = await WineVintageProfile.findOne({ wineDefinition: wine._id, vintage: '2019' }).lean();
+      expect([row.suggestion.peakFrom, row.suggestion.peakUntil, String(row.suggestion.requestId)]).toEqual([2026, 2034, String(first._id)]);
+    });
+
+    test('an undo of a review brings the install\'s suggestion back', async () => {
+      const wine = await registryRow();
+      const req = await contribute([{ vintage: '2019', peak: { from: 2026, until: 2034 } }]);
+      await completeRequestResolve(await WineRequest.findById(req._id), wine, {});
+      const row = await WineVintageProfile.findOne({ wineDefinition: wine._id, vintage: '2019' });
+      const prev = maturityOps.windowSnapshot(row);
+      await maturityOps.applyWindow(row, { peakFrom: 2027, peakUntil: 2035 }, { actorId: USER, req: null });
+      expect((await WineVintageProfile.findById(row._id).lean()).suggestion).toBeUndefined();
+      await maturityOps.restoreWindow(await WineVintageProfile.findById(row._id), prev);
+      const restored = await WineVintageProfile.findById(row._id).lean();
+      expect(restored.status).toBe('pending');
+      expect(restored.suggestion).toMatchObject({ peakFrom: 2026, peakUntil: 2034, source: 'bridge' });
     });
 
     test('nothing is seeded for a wine kept out of the maturity queue', async () => {

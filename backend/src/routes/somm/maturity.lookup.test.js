@@ -61,7 +61,8 @@ test('a member gets the window without who set it', async () => {
   expect(res.status).toBe(200);
   expect(res.body.profile).toEqual({ status: 'reviewed', peakFrom: 2024, peakUntil: 2030 });
   expect(WineVintageProfile.findOne).toHaveBeenCalledWith({ wineDefinition: WINE_ID, vintage: '2018' });
-  expect(q.select).toHaveBeenCalledWith('-setBy');
+  // Neither who set the window nor an install's suggestion behind it.
+  expect(q.select).toHaveBeenCalledWith('-setBy -suggestion');
   expect(q.populate).not.toHaveBeenCalled();
 });
 

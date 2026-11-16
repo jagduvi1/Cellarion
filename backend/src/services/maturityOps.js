@@ -118,6 +118,7 @@ function mergeWindow(profile, incoming) {
  * record this shape, so one undo branch restores either.
  */
 function windowSnapshot(profile) {
+  const s = profile.suggestion;
   return {
     ...PHASE_FIELDS.reduce((acc, f) => ((acc[f] = profile[f] ?? null), acc), {}),
     sommNotes: profile.sommNotes ?? null,
@@ -125,6 +126,8 @@ function windowSnapshot(profile) {
     relative: !!profile.relative,
     setBy: profile.setBy ? String(profile.setBy) : null,
     setAt: profile.setAt || null,
+    // An install's proposal (seedSuggestedWindows), so an undo brings it back.
+    suggestion: s ? JSON.parse(JSON.stringify(typeof s.toObject === 'function' ? s.toObject() : s)) : null,
   };
 }
 
@@ -135,7 +138,7 @@ function windowSnapshot(profile) {
  */
 function hasWindowContent(profile) {
   return PHASE_FIELDS.some((f) => profile[f] !== null && profile[f] !== undefined)
-    || !!profile.sommNotes || !!profile.setBy;
+    || !!profile.sommNotes || !!profile.setBy || !!profile.suggestion;
 }
 
 /**
@@ -230,6 +233,8 @@ async function restoreWindow(profile, prev) {
   profile.relative = !!prev.relative;
   profile.setBy = prev.setBy || null;
   profile.setAt = prev.setAt || null;
+  // A snapshot from before suggestions existed has no key: leave the row's own.
+  if ('suggestion' in prev) profile.suggestion = prev.suggestion || undefined;
   await profile.save();
   bumpWineOwners([wineIdOf(profile)]);
 }
@@ -251,6 +256,7 @@ async function reseedPendingRow(prev) {
   }
   if (prev.sommNotes) content.sommNotes = prev.sommNotes;
   if (prev.setBy) content.setBy = prev.setBy;
+  if (prev.suggestion) content.suggestion = prev.suggestion;
   const relative = prev.relative !== undefined ? !!prev.relative : vintage === 'NV';
   await WineVintageProfile.findOneAndUpdate(
     { wineDefinition, vintage },

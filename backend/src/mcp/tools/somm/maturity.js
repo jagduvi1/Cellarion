@@ -309,8 +309,9 @@ registerTool({
     }
 
     // For the auto-seeded stub, wine+vintage is all the undo needs. A pending
-    // row can also carry a window a member's import suggested; then the
-    // snapshot keeps it, so undoing brings the suggestion back too.
+    // row can also carry a window a member's import suggested, or an
+    // install's suggestion; then the snapshot keeps it, so undoing brings it
+    // back too.
     const prev = maturityOps.removalSnapshot(profile);
     // Deleted and audited: the same body as the REST remove (services/maturityOps).
     // The delete re-checks the status, so a row reviewed since the load stays.

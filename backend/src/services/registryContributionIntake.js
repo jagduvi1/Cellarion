@@ -21,7 +21,7 @@ const WineRequest = require('../models/WineRequest');
 const { originFrom } = require('../utils/contributionOrigin');
 const { validateImageRef } = require('./accountOps');
 const { PHASE_FIELDS, checkWindow } = require('./maturityOps');
-const { parseAndValidateVintage, isValidId } = require('../utils/validation');
+const { parseAndValidateVintage } = require('../utils/validation');
 
 const NAME_MAX = 300;
 const PRODUCER_MAX = 200;
@@ -40,8 +40,8 @@ const CONTROL = /[\u0000-\u001f\u007f]/;
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // '' for nothing, the trimmed text, or null when it is not text, is too long,
-// or carries a control character (a NUL would fail the database write after
-// the quota was spent).
+// or carries a control character (a NUL would make the lookup in
+// fileContribution throw after the quota was spent).
 function text(value, max) {
   if (value == null) return '';
   if (typeof value !== 'string') return null;
@@ -125,7 +125,7 @@ function parseContribution(body) {
 
   // The install's own id for the wine, opaque here: what "the same wine sent
   // again" means (fileContribution).
-  if (b.ref != null && !isValidId(b.ref)) return { error: 'ref must be the install\'s wine id' };
+  if (b.ref != null && !(typeof b.ref === 'string' && /^[a-f0-9]{24}$/i.test(b.ref))) return { error: 'ref must be the install\'s wine id' };
 
   const parsed = parseWindows(b.windows);
   if (parsed.error) return { error: parsed.error };

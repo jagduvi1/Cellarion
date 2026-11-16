@@ -56,7 +56,8 @@ export default function RegistryContributionsBlock({ onChanged }) {
         ? t('settings.registryContributions.queuedNotice', '{{count}} wines offered. They are sent as far as today\'s allowance reaches, and the rest follow hourly.', { count: body.queued })
         : t('settings.registryContributions.nothingQueued', 'Nothing was offered: every wine made here has been offered already.'));
       setOverview(await load());
-      // The card's quota line counts these too.
+      // The card reloads its quota line; the sends themselves run on after
+      // this answer, so it catches up on the next visit.
       if (onChanged) onChanged();
     } catch {
       setError(fallback);

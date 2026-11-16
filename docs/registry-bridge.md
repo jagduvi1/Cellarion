@@ -161,12 +161,14 @@ users until they search.
   its bottles stay where they are, the approved identity replaces the local one, and
   later corrections flow up like any copy's. A window set on the install stays, and so
   does a tasting profile curated there (at the link and at every later refresh); a
-  classification, LWIN, colour, region or grapes the registry wine lacks are kept at the
-  link. If the install already holds a copy of the approved wine, the offer is marked as
+  classification, LWIN, colour, region or grapes the registry wine lacks are kept for as
+  long as the registry wine has none of its own (a region only while the country stays).
+  If the install already holds a copy of the approved wine, the offer is marked as
   a duplicate and merging the two is left to a person; once that copy is gone, the next
   sync links the wine. A decline comes back with its reason. An offer the registry no
-  longer knows (a key from another account, say) ends as failed after two days of hourly
-  checks. Sending stops ten short of the day's contribution allowance, which the
+  longer knows (a key from another account, say) ends as failed after 48 checks (two
+  days while fewer than 50 offers wait), and one whose link keeps failing here after
+  five tries. Sending stops ten short of the day's contribution allowance, which the
   install's own requests and corrections share, and the calls of one run are spaced
   under the burst limit; the rest stay queued for the next hourly run, and a wine that
   repeatedly gets no answer goes to the back of the queue and, after five tries, ends as
