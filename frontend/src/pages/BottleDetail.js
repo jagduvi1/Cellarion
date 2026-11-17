@@ -98,6 +98,8 @@ function BottleDetail() {
   const [lotSiblingIds, setLotSiblingIds] = useState([]);
   const [lotMsg, setLotMsg] = useState(null);
   const [vintageProfile, setVintageProfile] = useState(null);
+  // Bumped when the consumed card shares the bottle as a review: the reviews card reloads.
+  const [reviewsVersion, setReviewsVersion] = useState(0);
   const [priceHistory, setPriceHistory] = useState(null);
   const [currentRelease, setCurrentRelease] = useState(null);
   const [rates, setRates] = useState(null);
@@ -702,7 +704,7 @@ function BottleDetail() {
 
       {/* ── Consumption details (history bottles only) ── */}
       {isConsumed && (
-        <ConsumedDetails bottle={bottle} canEdit={canEditConsumed} onUpdate={setBottle} />
+        <ConsumedDetails bottle={bottle} canEdit={canEditConsumed} onUpdate={setBottle} onReviewSaved={() => setReviewsVersion((v) => v + 1)} />
       )}
 
       {/* Undo an accidental removal — only within the 2-day restore window */}
@@ -799,7 +801,7 @@ function BottleDetail() {
 
       {/* ── Reviews (the wine's and this vintage's; shared with the vintage page) ── */}
       <CollapsibleBlock {...blockProps('vintage.reviews', t('reviews.communityReviews', 'Reviews'))}>
-        <WineReviewsCard wine={wine} vintage={bottle?.vintage} communityRating={wine?.communityRating} />
+        <WineReviewsCard wine={wine} vintage={bottle?.vintage} communityRating={wine?.communityRating} refreshKey={reviewsVersion} />
       </CollapsibleBlock>
 
       </>}

@@ -96,3 +96,13 @@ test('editing a review on a later page reloads that page, not the first', async 
   expect(queryOf(api.mock.calls[2]).get('page')).toBe('2');
   expect(screen.queryByText('(4)')).toBeNull();
 });
+
+test('a review saved elsewhere on the page (refreshKey) reloads the list and drops the stale average', async () => {
+  const { rerender } = render(<WineReviewsCard wine={WINE} vintage="2015" communityRating={{ reviewCount: 4, averageNormalized: 80 }} />);
+  await screen.findByTestId('review');
+  expect(api).toHaveBeenCalledTimes(1);
+
+  rerender(<WineReviewsCard wine={WINE} vintage="2015" communityRating={{ reviewCount: 4, averageNormalized: 80 }} refreshKey={1} />);
+  await waitFor(() => expect(api).toHaveBeenCalledTimes(2));
+  expect(screen.queryByText('(4)')).toBeNull();
+});

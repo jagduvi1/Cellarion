@@ -6,19 +6,27 @@ import RatingInput from './RatingInput';
 import { createReview, updateReview } from '../api/reviews';
 import './ReviewForm.css';
 
-export default function ReviewForm({ wineDefinition, wineName, existingReview, defaultVintage, onClose, onSaved }) {
+/**
+ * Write or edit a review of a wine. `prefill` ({ rating, ratingScale, overall })
+ * starts a NEW review from what the user already wrote elsewhere (the rating
+ * and note of a bottle they drank); `bottleId` links the new review to that
+ * bottle, so the bottle page can find it again and offer an edit instead of a
+ * second review. An existing review always wins over the prefill.
+ */
+export default function ReviewForm({ wineDefinition, wineName, existingReview, defaultVintage, prefill, bottleId, onClose, onSaved }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const isEdit = !!existingReview;
+  const start = isEdit ? null : prefill;
 
-  const [rating, setRating] = useState(existingReview?.rating ?? null);
+  const [rating, setRating] = useState(existingReview?.rating ?? start?.rating ?? null);
   const [ratingScale, setRatingScale] = useState(
-    existingReview?.ratingScale || user?.preferences?.ratingScale || '5'
+    existingReview?.ratingScale || start?.ratingScale || user?.preferences?.ratingScale || '5'
   );
   const [aroma, setAroma] = useState(existingReview?.tasting?.aroma || '');
   const [palate, setPalate] = useState(existingReview?.tasting?.palate || '');
   const [finish, setFinish] = useState(existingReview?.tasting?.finish || '');
-  const [overall, setOverall] = useState(existingReview?.tasting?.overall || '');
+  const [overall, setOverall] = useState(existingReview?.tasting?.overall || start?.overall || '');
   const [vintage, setVintage] = useState(existingReview?.vintage || defaultVintage || '');
   const [visibility, setVisibility] = useState(existingReview?.visibility || 'public');
   const [saving, setSaving] = useState(false);
@@ -47,7 +55,7 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, d
       if (isEdit) {
         res = await updateReview(apiFetch, existingReview._id, data);
       } else {
-        res = await createReview(apiFetch, { ...data, wineDefinition });
+        res = await createReview(apiFetch, { ...data, wineDefinition, ...(bottleId ? { bottle: bottleId } : {}) });
       }
 
       const result = await res.json();
