@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { getBlogPosts, getBlogTags } from '../api/blog';
 import { useAuth } from '../contexts/AuthContext';
 import { markBlogSeen } from '../hooks/useUnreadBlog';
+import { readerLanguage } from '../utils/blogLanguage';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import './Blog.css';
@@ -51,8 +52,11 @@ export function matchedTag(tags, activeTag) {
 }
 
 function Blog() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { apiFetch } = useAuth();
+  // Each post in the reader's language when it has a version in it, else in
+  // English; posts in other languages are not listed (utils/blogLanguage.js).
+  const lang = readerLanguage(i18n);
   const [searchParams, setSearchParams] = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [tags, setTags] = useState([]);
@@ -73,7 +77,7 @@ function Blog() {
       // apiFetch doesn't throw on non-2xx — an error body ({error}) has no
       // posts array, and rendering would crash on posts.length.
       const res = await getBlogPosts(apiFetch, {
-        page, tag: activeTag || undefined, q: activeQuery || undefined,
+        page, tag: activeTag || undefined, q: activeQuery || undefined, lang,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -88,17 +92,17 @@ function Blog() {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, page, activeTag, activeQuery]);
+  }, [apiFetch, page, activeTag, activeQuery, lang]);
 
   const fetchTags = useCallback(async () => {
     try {
-      const res = await getBlogTags(apiFetch);
+      const res = await getBlogTags(apiFetch, { lang });
       const data = await res.json();
       setTags(res.ok ? (data.tags || []) : []);
     } catch {
       setTags([]);
     }
-  }, [apiFetch]);
+  }, [apiFetch, lang]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
   useEffect(() => { fetchTags(); }, [fetchTags]);

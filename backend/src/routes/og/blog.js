@@ -5,6 +5,21 @@ const express = require('express');
 const BlogPost = require('../../models/BlogPost');
 const { sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml } = require('../../utils/sanitizeHtml');
 const { SITE_URL, esc, serializeJsonLd, ogLimiter } = require('./shared');
+const { DEFAULT_LANGUAGE, alternatesOf, defaultAlternate } = require('../../services/blogLanguage');
+
+/**
+ * hreflang links between the language versions of one post: one per
+ * published version, plus x-default (services/blogLanguage.js). Empty when
+ * the post exists in one language only.
+ */
+function alternateLinks(alternates) {
+  if (alternates.length === 0) return '';
+  const link = (lang, slug) => `\n  <link rel="alternate" hreflang="${esc(lang)}" href="${esc(`${SITE_URL}/blog/${slug}`)}" />`;
+  return [
+    ...alternates.map((a) => link(a.language, a.slug)),
+    link('x-default', defaultAlternate(alternates).slug),
+  ].join('');
+}
 
 const router = express.Router();
 
@@ -15,7 +30,7 @@ router.get('/blog', ogLimiter, async (req, res) => {
   try {
     const posts = await BlogPost.find({ status: 'published' })
       .sort({ publishedAt: -1 })
-      .select('title slug excerpt metaDescription publishedAt')
+      .select('title slug excerpt metaDescription publishedAt language')
       .limit(50)
       .lean();
 
@@ -81,7 +96,10 @@ router.get('/blog', ogLimiter, async (req, res) => {
     ${posts.length === 0 ? '<p>No posts yet.</p>' : `<ul>${posts.map(p => {
       const desc = p.metaDescription || p.excerpt || '';
       const date = p.publishedAt ? new Date(p.publishedAt).toISOString().split('T')[0] : '';
-      return `<li><a href="${esc(`${SITE_URL}/blog/${p.slug}`)}"><strong>${esc(p.title)}</strong></a>${date ? ` — <time datetime="${esc(date)}">${esc(date)}</time>` : ''}${desc ? `<br/><small>${esc(desc)}</small>` : ''}</li>`;
+      // Every language is listed: this page is how a crawler finds a post,
+      // and the link says which language it leads to.
+      const lang = p.language && p.language !== DEFAULT_LANGUAGE ? ` hreflang="${esc(p.language)}"` : '';
+      return `<li><a href="${esc(`${SITE_URL}/blog/${p.slug}`)}"${lang}><strong>${esc(p.title)}</strong></a>${date ? ` — <time datetime="${esc(date)}">${esc(date)}</time>` : ''}${desc ? `<br/><small>${esc(desc)}</small>` : ''}</li>`;
     }).join('')}</ul>`}
   </main>
   <footer>
@@ -112,6 +130,8 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
 
     const metaTitle = post.metaTitle || post.title;
     const metaDescription = post.metaDescription || post.excerpt || `${post.title} — Cellarion Blog`;
+    const language = post.language || DEFAULT_LANGUAGE;
+    const alternates = await alternatesOf(post);
     const postUrl = `${SITE_URL}/blog/${post.slug}`;
     const publishedDate = post.publishedAt ? new Date(post.publishedAt).toISOString().split('T')[0] : '';
     const modifiedDate = post.updatedAt ? new Date(post.updatedAt).toISOString().split('T')[0] : '';
@@ -149,6 +169,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
           logo: { '@type': 'ImageObject', url: `${SITE_URL}/cellarion-logo.jpg` }
         },
         mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
+        inLanguage: language,
         ...(post.coverImage ? { image: post.coverImage } : {})
       },
       {
@@ -186,7 +207,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
     const jsonLd = { '@context': 'https://schema.org', '@graph': graph };
 
     const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="${esc(language)}">
 <head>
   <meta charset="utf-8" />
   <title>${esc(metaTitle)} — Cellarion Blog</title>
@@ -202,7 +223,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
   <meta name="twitter:title" content="${esc(metaTitle)}" />
   <meta name="twitter:description" content="${esc(metaDescription)}" />
   ${post.coverImage ? `<meta name="twitter:image" content="${esc(post.coverImage)}" />` : ''}
-  <link rel="canonical" href="${esc(postUrl)}" />
+  <link rel="canonical" href="${esc(postUrl)}" />${alternateLinks(alternates)}
   <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>

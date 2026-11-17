@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getBlogPosts } from '../api/blog';
+import { readerLanguage, isTranslation } from '../utils/blogLanguage';
 
 export const STORAGE_KEY = 'blogLastSeenAt';
 
@@ -14,15 +16,17 @@ export const SCAN_LIMIT = 20;
  * How many of `posts` were published after `lastSeenAt`.
  *
  * Pure and exported because the counting rule is the whole feature: an
- * unparseable date must not silently become "unread", and a missing timestamp
- * must mean zero rather than everything. Far easier to pin here than through a
- * rendered nav bar.
+ * unparseable date must not silently become "unread", a missing timestamp
+ * must mean zero rather than everything, and a translation of another post is
+ * never news (utils/blogLanguage.js), so it is never counted. Far easier to
+ * pin here than through a rendered nav bar.
  */
 export function countUnread(posts, lastSeenAt) {
   if (!Array.isArray(posts) || !lastSeenAt) return 0;
   const seen = Date.parse(lastSeenAt);
   if (Number.isNaN(seen)) return 0;
   return posts.filter((post) => {
+    if (isTranslation(post)) return false;
     const at = Date.parse(post?.publishedAt);
     return !Number.isNaN(at) && at > seen;
   }).length;
@@ -42,6 +46,7 @@ export function countUnread(posts, lastSeenAt) {
  */
 export function firstRunLastSeen(posts, now = Date.now()) {
   const newest = (Array.isArray(posts) ? posts : [])
+    .filter((post) => !isTranslation(post))
     .map((post) => Date.parse(post?.publishedAt))
     .filter((at) => !Number.isNaN(at))
     .reduce((max, at) => (at > max ? at : max), -Infinity);
@@ -85,6 +90,9 @@ export function markBlogSeen() {
 /** Unread post count for the nav badge. Always 0 when signed out. */
 export default function useUnreadBlog() {
   const { apiFetch, user } = useAuth();
+  const { i18n } = useTranslation();
+  // The same list the reader's blog page shows (Blog.js asks in this language too).
+  const lang = readerLanguage(i18n);
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -97,7 +105,7 @@ export default function useUnreadBlog() {
 
     (async () => {
       try {
-        const res = await getBlogPosts(apiFetch, { limit: SCAN_LIMIT });
+        const res = await getBlogPosts(apiFetch, { limit: SCAN_LIMIT, lang });
         // apiFetch resolves on non-2xx too, and an error body has no posts array.
         if (!res.ok) return;
         const data = await res.json();
@@ -121,7 +129,7 @@ export default function useUnreadBlog() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, user]);
+  }, [apiFetch, user, lang]);
 
   useEffect(() => {
     const clear = () => setCount(0);

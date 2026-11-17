@@ -185,26 +185,46 @@ describe('drink_window_for', () => {
 });
 
 describe('guides', () => {
-  test('list_guides: published-only filter, tag pass-through, public_url shape', async () => {
+  test('list_guides: published originals only, tag pass-through, public_url shape', async () => {
     BlogPost.countDocuments.mockResolvedValue(1);
     BlogPost.find.mockReturnValue(chain([
       { slug: 'drink-windows-101', title: 'Drink Windows 101', excerpt: 'x', tags: ['aging'], publishedAt: new Date() },
     ]));
     const res = await tool('list_guides').handler({ tag: 'Aging' }, ANON);
     const body = parse(res);
-    expect(BlogPost.find).toHaveBeenCalledWith({ status: 'published', tags: 'aging' });
+    expect(BlogPost.find).toHaveBeenCalledWith({ status: 'published', translationOf: null, tags: 'aging' });
     expect(body.data[0].public_url).toBe('https://cellarion.app/blog/drink-windows-101');
+    // A post with no language is English, and has no translations.
+    expect(body.data[0].language).toBe('en');
+    expect(body.data[0].translations).toEqual([]);
+  });
+
+  test('list_guides: a translation is listed under its original, not as an article of its own', async () => {
+    const original = new mongoose.Types.ObjectId();
+    BlogPost.countDocuments.mockResolvedValue(1);
+    BlogPost.find
+      .mockReturnValueOnce(chain([{ _id: original, slug: 'drink-windows-101', title: 'Drink Windows 101', tags: [], publishedAt: new Date() }]))
+      .mockReturnValueOnce(chain([{ slug: 'dricka-i-tid', language: 'sv', translationOf: original }]));
+    const body = parse(await tool('list_guides').handler({}, ANON));
+    expect(BlogPost.find).toHaveBeenLastCalledWith({ status: 'published', translationOf: { $in: [original] } });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].translations).toEqual([
+      { language: 'sv', slug: 'dricka-i-tid', public_url: 'https://cellarion.app/blog/dricka-i-tid' },
+    ]);
   });
 
   test('read_guide: published-only, slug lowercased, truncation warning on huge content', async () => {
     BlogPost.findOne.mockReturnValue(chain({
       slug: 's', title: 'T', excerpt: null, tags: [], publishedAt: new Date(), content: 'x'.repeat(30001),
     }));
+    BlogPost.find.mockReturnValue(chain([]));
     let res = await tool('read_guide').handler({ slug: '  MY-Guide ' }, ANON);
     let body = parse(res);
     expect(BlogPost.findOne).toHaveBeenCalledWith({ slug: 'my-guide', status: 'published' });
     expect(body.data.content).toHaveLength(30000);
     expect(body.warnings.join(' ')).toMatch(/truncated/i);
+    expect(body.data.language).toBe('en');
+    expect(body.data.other_languages).toEqual([]);
 
     BlogPost.findOne.mockReturnValue(chain(null));
     res = await tool('read_guide').handler({ slug: 'draft-post' }, ANON);

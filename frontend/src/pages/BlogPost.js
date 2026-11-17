@@ -14,6 +14,8 @@ function BlogPost() {
   const { slug } = useParams();
   const { apiFetch, user } = useAuth();
   const [post, setPost] = useState(null);
+  // The same post in other languages, for the hreflang links ([] for none).
+  const [alternates, setAlternates] = useState([]);
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,7 +27,10 @@ function BlogPost() {
       try {
         const res = await getBlogPost(apiFetch, slug);
         const data = await res.json();
-        if (!cancelled) setPost(data.post);
+        if (!cancelled) {
+          setPost(data.post);
+          setAlternates(Array.isArray(data.alternates) ? data.alternates : []);
+        }
       } catch {
         if (!cancelled) setError(t('blog.postNotFound'));
       } finally {
@@ -123,6 +128,11 @@ function BlogPost() {
         title={`${metaTitle} — Cellarion Blog`}
         description={metaDescription}
         path={`/blog/${post.slug}`}
+        // A post's languages are its own versions, each at its own address,
+        // not the app's languages at this one (SEOHead).
+        hreflang={alternates.length > 1
+          ? alternates.map((a) => ({ lang: a.language, path: `/blog/${a.slug}` }))
+          : 'none'}
         image={post.coverImage || undefined}
         ogType="article"
         jsonLd={jsonLd}

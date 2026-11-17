@@ -58,6 +58,12 @@ describe('countUnread', () => {
     expect(countUnread(posts, SEEN)).toBe(1);
   });
 
+  it('never counts a translation: publishing one is not news', () => {
+    const translation = { ...post('2026-08-05T09:00:00.000Z'), translationOf: '6aa9257367c260237d47185d' };
+    expect(countUnread([translation], SEEN)).toBe(0);
+    expect(countUnread([translation, post('2026-08-04T09:00:00.000Z')], SEEN)).toBe(1);
+  });
+
   it('returns 0 for a non-array payload', () => {
     // apiFetch resolves on non-2xx, so an error body ({error: '…'}) can reach
     // this with no posts array at all.
@@ -93,6 +99,13 @@ describe('firstRunLastSeen', () => {
   it('ignores posts with unusable dates when picking the newest', () => {
     const messy = [{ slug: 'no-date' }, { slug: 'bad', publishedAt: 'soon' }, post(NEWEST)];
     expect(firstRunLastSeen(messy)).toBe('2026-08-03T08:59:59.999Z');
+  });
+
+  it('starts a first-time reader just behind the newest original, not a newer translation', () => {
+    const translation = { ...post('2026-08-09T09:00:00.000Z'), translationOf: '6aa9257367c260237d47185d' };
+    const withTranslation = [translation, ...posts];
+    expect(firstRunLastSeen(withTranslation)).toBe('2026-08-03T08:59:59.999Z');
+    expect(countUnread(withTranslation, firstRunLastSeen(withTranslation))).toBe(1);
   });
 
   it('falls back to now when there is nothing to invite anyone to', () => {

@@ -8,12 +8,14 @@ import Image from '@tiptap/extension-image';
 import Youtube from '@tiptap/extension-youtube';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
-import { getAdminBlogPost, createBlogPost, updateBlogPost } from '../api/blog';
+import { getAdminBlogPost, getAdminBlogOriginals, createBlogPost, updateBlogPost } from '../api/blog';
 import { apiJson } from '../utils/apiJson';
+import { friendlyError } from '../utils/friendlyError';
+import { BLOG_LANGUAGES, languageName } from '../utils/blogLanguage';
 import './AdminBlogEditor.css';
 
 function AdminBlogEditor() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const { apiFetch } = useAuth();
@@ -26,6 +28,14 @@ function AdminBlogEditor() {
   const [status, setStatus] = useState('draft');
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
+  const [language, setLanguage] = useState('en');
+  // The id of the original this post translates; '' for an original.
+  const [translationOf, setTranslationOf] = useState('');
+  // The posts a translation can point at, fetched the first time the Language
+  // section is opened (null until then), so opening a post stays one request.
+  // Until then the list holds the current original, which the load populates.
+  const [originals, setOriginals] = useState(null);
+  const [currentOriginal, setCurrentOriginal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!isNew);
   const [showSource, setShowSource] = useState(false);
@@ -72,6 +82,10 @@ function AdminBlogEditor() {
       setStatus(post.status);
       setMetaTitle(post.metaTitle || '');
       setMetaDescription(post.metaDescription || '');
+      setLanguage(post.language || 'en');
+      const original = post.translationOf && typeof post.translationOf === 'object' ? post.translationOf : null;
+      setCurrentOriginal(original);
+      setTranslationOf(original ? original._id : (post.translationOf || ''));
       // Handed to the editor by the effect below, once it exists.
       setPendingContent(post.content || '');
     } catch {
@@ -93,6 +107,19 @@ function AdminBlogEditor() {
     setPendingContent(null);
   }, [editor, pendingContent]);
 
+  const loadOriginals = async () => {
+    if (originals) return;
+    try {
+      const data = await apiJson(getAdminBlogOriginals(apiFetch));
+      // A post cannot translate itself.
+      setOriginals((data?.posts || []).filter((p) => p._id !== id));
+    } catch {
+      setOriginals([]);
+    }
+  };
+
+  const originalOptions = originals || (currentOriginal ? [currentOriginal] : []);
+
   const handleSave = async (publishOverride) => {
     if (!title.trim()) {
       alert(t('blog.editor.titleRequired'));
@@ -113,7 +140,9 @@ function AdminBlogEditor() {
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
       status: publishOverride || status,
       metaTitle: metaTitle.trim(),
-      metaDescription: metaDescription.trim()
+      metaDescription: metaDescription.trim(),
+      language,
+      translationOf: translationOf || null
     };
 
     try {
@@ -126,8 +155,11 @@ function AdminBlogEditor() {
       if (publishOverride === 'published') {
         alert(t('blog.editor.published'));
       }
-    } catch {
-      alert(t('blog.editor.saveFailed'));
+    } catch (err) {
+      // A refusal with a reason (a translation in the same language as its
+      // original, a second one in a language) says which; anything else is
+      // the plain "could not save".
+      alert(err?.body?.code ? friendlyError(err, t) : t('blog.editor.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -317,6 +349,31 @@ function AdminBlogEditor() {
               placeholder={t('blog.editor.tagsPlaceholder')}
             />
           </div>
+
+          <details
+            className="blog-editor-seo"
+            onToggle={(e) => { if (e.currentTarget.open) loadOriginals(); }}
+          >
+            <summary>{t('blog.editor.languageSummary', { language: languageName(language, i18n?.language) })}</summary>
+            <div className="blog-editor-field">
+              <label htmlFor="blog-editor-language">{t('blog.editor.language')}</label>
+              <select id="blog-editor-language" value={language} onChange={e => setLanguage(e.target.value)}>
+                {[...new Set([...BLOG_LANGUAGES, language])].map(code => (
+                  <option key={code} value={code}>{languageName(code, i18n?.language)} ({code})</option>
+                ))}
+              </select>
+            </div>
+            <div className="blog-editor-field">
+              <label htmlFor="blog-editor-translation-of">{t('blog.editor.translationOf')}</label>
+              <select id="blog-editor-translation-of" value={translationOf} onChange={e => setTranslationOf(e.target.value)}>
+                <option value="">{t('blog.editor.translationOfNone')}</option>
+                {originalOptions.map(p => (
+                  <option key={p._id} value={p._id}>{p.title} ({p.language || 'en'})</option>
+                ))}
+              </select>
+              <span className="blog-editor-hint">{t('blog.editor.translationHint')}</span>
+            </div>
+          </details>
 
           <details className="blog-editor-seo">
             <summary>{t('blog.editor.seoSettings')}</summary>

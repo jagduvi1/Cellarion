@@ -43,6 +43,14 @@ const ERROR_CODES = {
   contribution_wine_ids_invalid: 'Choose between 1 and {{max}} wines to offer.',
   contribution_already_sent: 'This wine is already with the shared registry; it is answered there.',
   contribution_not_offered: 'This wine has not been offered to the shared registry.',
+  // Blog posts in more than one language (admin)
+  blog_language_invalid: 'Choose the language the post is written in.',
+  blog_translation_of_invalid: 'Choose the original post this one translates.',
+  blog_translation_of_translation: 'A translation must point at the original post, not at another translation.',
+  blog_translation_same_language: 'A translation must be in another language than its original.',
+  blog_translation_exists: 'The original already has a translation in this language.',
+  blog_original_has_translations: 'This post has translations of its own, so it cannot be a translation.',
+  blog_language_taken_by_translation: 'A translation of this post is already in that language.',
 };
 
 /** The JSON body of a coded error, with `fields` filled into the sentence and sent along. */
