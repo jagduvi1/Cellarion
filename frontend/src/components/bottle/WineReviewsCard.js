@@ -15,9 +15,11 @@ const ReviewForm = lazy(() => import('../ReviewForm'));
  * review belongs to the wine and a vintage, not to one bottle.
  *
  * `communityRating` is the wine's stored aggregate; after a review is saved
- * or deleted it is dropped rather than shown stale.
+ * or deleted it is dropped rather than shown stale. `refreshKey` changes when
+ * a review was saved elsewhere on the page (a drunk bottle's "Share as
+ * review"): the list reloads the same way.
  */
-export default function WineReviewsCard({ wine, vintage, communityRating }) {
+export default function WineReviewsCard({ wine, vintage, communityRating, refreshKey = 0 }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const wineId = wine?._id;
@@ -69,6 +71,8 @@ export default function WineReviewsCard({ wine, vintage, communityRating }) {
   const changed = () => { load(1); setRating(null); };
   // An edit keeps the list on its page, so the edited review stays in view.
   const edited = () => { load(page); setRating(null); };
+  // A review saved elsewhere on the page.
+  useEffect(() => { if (refreshKey) changed(); }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!wine) return null;
   const scale = user?.preferences?.ratingScale || '5';

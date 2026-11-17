@@ -3389,6 +3389,8 @@
     "vintageAll": "All vintages",
     "noReviews": "No reviews yet. Be the first to review this wine!",
     "writeReview": "Write a Review",
+    "shareAsReview": "Share as review",
+    "editSharedReview": "Edit your review",
     "visibility": "Visibility",
     "visibilityPublic": "Public",
     "visibilityPrivate": "Private",
