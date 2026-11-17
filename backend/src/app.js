@@ -145,6 +145,11 @@ app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/images/remove-bg-preview', express.json({ limit: '5mb' }));
 app.use('/api/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/admin/wine-requests', express.json({ limit: '5mb' }));
+// Admin → a wine's official image: image_base64 carries a whole photo, so this
+// one path gets the budget of its MCP twin admin_add_registry_wine
+// (mcp/tools/adminRegistry.js MAX_BASE64_CHARS, 1.5M characters, + JSON
+// overhead). The rest of /api/admin/wines keeps the 10 kb default.
+app.use(/^\/api\/admin\/wines\/[^/]+\/image$/, express.json({ limit: '2mb' }));
 // The back-label rescue scan carries TWO frames — the back photo plus the front
 // one it is filling the gaps from — so it gets double the front route's budget.
 // Same 800px JPEG captures from the camera hook. Order relative to the sibling
