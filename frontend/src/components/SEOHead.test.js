@@ -62,6 +62,21 @@ describe('hreflang alternates', () => {
     expect(alternates()).not.toContain('fr');
   });
 
+  test('a page whose languages live at addresses of their own names each one, x-default on the English one', async () => {
+    renderHead({ path: '/blog/drickfonster', hreflang: [
+      { lang: 'sv', path: '/blog/drickfonster' },
+      { lang: 'en', path: '/blog/drink-windows' },
+    ] });
+    await waitFor(() => expect(alternates()).toContain('sv'));
+    const hrefs = Object.fromEntries([...document.head.querySelectorAll('link[rel="alternate"]')]
+      .map((l) => [l.getAttribute('hreflang'), l.getAttribute('href')]));
+    expect(hrefs.sv).toMatch(/\/blog\/drickfonster$/);
+    expect(hrefs.en).toMatch(/\/blog\/drink-windows$/);
+    expect(hrefs['x-default']).toBe(hrefs.en);
+    // Not the app's languages at this one address.
+    expect(Object.keys(hrefs).sort()).toEqual(['en', 'sv', 'x-default']);
+  });
+
   test('emits nothing when the page opts out of hreflang', async () => {
     renderHead({ hreflang: 'none' });
     await waitFor(() => expect(document.head.querySelector('link[rel="canonical"]')).toBeTruthy());

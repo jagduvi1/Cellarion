@@ -240,6 +240,12 @@
   margin-right: 0.75rem;
 }
 
+.blog-article-languages {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin: 0.5rem 0 0;
+}
+
 .blog-article-tags {
   display: flex;
   flex-wrap: wrap;

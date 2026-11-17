@@ -65,11 +65,36 @@ const blogPostSchema = new mongoose.Schema({
     trim: true,
     maxlength: [160, 'Meta description should be under 160 characters'],
     default: ''
+  },
+  // The language the post is written in, as a two-letter code. Posts written
+  // before the field existed have none: they are English, and every read
+  // treats a missing value as 'en' (services/blogLanguage.js).
+  language: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    default: 'en',
+    match: [/^[a-z]{2}$/, 'Language must be a two-letter code']
+  },
+  // The original post this one translates, or null for an original. Which
+  // version a reader sees, and why a translation is never news, is in
+  // services/blogLanguage.js.
+  translationOf: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BlogPost',
+    default: null
   }
 }, { timestamps: true });
 
 // Public listing: published posts sorted by publish date
 blogPostSchema.index({ status: 1, publishedAt: -1 });
+
+// One translation per language per original, and the family lookup behind a
+// post's hreflang alternates. Partial: originals carry no translationOf.
+blogPostSchema.index(
+  { translationOf: 1, language: 1 },
+  { unique: true, partialFilterExpression: { translationOf: { $type: 'objectId' } } }
+);
 
 module.exports = mongoose.model('BlogPost', blogPostSchema);
 module.exports.STATUSES = STATUSES;

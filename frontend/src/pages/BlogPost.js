@@ -7,13 +7,49 @@ import { getDiscussions } from '../api/discussions';
 import { useAuth } from '../contexts/AuthContext';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
+import { isTranslation, languageName, nativeLanguageName } from '../utils/blogLanguage';
 import './Blog.css';
 
+/**
+ * The line that leads from one version of a post to the others. A translation
+ * says what it was translated from and links the original; an original lists
+ * its translations, each named in its own language. Nothing for a post in one
+ * language. The crawler page carries the same line (backend routes/og/blog.js).
+ */
+export function PostLanguages({ post, alternates, uiLanguage, t }) {
+  if (!Array.isArray(alternates) || alternates.length < 2) return null;
+  if (isTranslation(post)) {
+    const original = alternates.find((a) => a.original);
+    if (!original) return null;
+    return (
+      <p className="blog-article-languages">
+        {t('blog.translatedFrom', { language: languageName(original.language, uiLanguage) })}{' '}
+        <Link to={`/blog/${original.slug}`} hrefLang={original.language}>{t('blog.readOriginal')}</Link>
+      </p>
+    );
+  }
+  const others = alternates.filter((a) => a.slug !== post.slug);
+  return (
+    <p className="blog-article-languages">
+      {t('blog.alsoIn')}{' '}
+      {others.map((a, i) => (
+        <span key={a.slug}>
+          {i > 0 && ' · '}
+          <Link to={`/blog/${a.slug}`} hrefLang={a.language} lang={a.language}>{nativeLanguageName(a.language)}</Link>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 function BlogPost() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { slug } = useParams();
   const { apiFetch, user } = useAuth();
   const [post, setPost] = useState(null);
+  // Every published version of this post, for the language line and the
+  // hreflang links ([] for a post in one language).
+  const [alternates, setAlternates] = useState([]);
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,7 +61,10 @@ function BlogPost() {
       try {
         const res = await getBlogPost(apiFetch, slug);
         const data = await res.json();
-        if (!cancelled) setPost(data.post);
+        if (!cancelled) {
+          setPost(data.post);
+          setAlternates(Array.isArray(data.alternates) ? data.alternates : []);
+        }
       } catch {
         if (!cancelled) setError(t('blog.postNotFound'));
       } finally {
@@ -123,6 +162,11 @@ function BlogPost() {
         title={`${metaTitle} — Cellarion Blog`}
         description={metaDescription}
         path={`/blog/${post.slug}`}
+        // A post's languages are its own versions, each at its own address,
+        // not the app's languages at this one (SEOHead).
+        hreflang={alternates.length > 1
+          ? alternates.map((a) => ({ lang: a.language, path: `/blog/${a.slug}` }))
+          : 'none'}
         image={post.coverImage || undefined}
         ogType="article"
         jsonLd={jsonLd}
@@ -155,6 +199,7 @@ function BlogPost() {
               </span>
             )}
           </div>
+          <PostLanguages post={post} alternates={alternates} uiLanguage={i18n?.language} t={t} />
           {post.tags?.length > 0 && (
             <div className="blog-article-tags">
               {post.tags.map(tag => (

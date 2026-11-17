@@ -153,7 +153,14 @@
       "bridge_not_connected": "This install is not connected to the shared registry.",
       "contribution_wine_ids_invalid": "Choose between 1 and {{max}} wines to offer.",
       "contribution_already_sent": "This wine is already with the shared registry; it is answered there.",
-      "contribution_not_offered": "This wine has not been offered to the shared registry."
+      "contribution_not_offered": "This wine has not been offered to the shared registry.",
+      "blog_language_invalid": "Choose the language the post is written in.",
+      "blog_translation_of_invalid": "Choose the original post this one translates.",
+      "blog_translation_of_translation": "A translation must point at the original post, not at another translation.",
+      "blog_translation_same_language": "A translation must be in another language than its original.",
+      "blog_translation_exists": "The original already has a translation in this language.",
+      "blog_original_has_translations": "This post has translations of its own, so it cannot be a translation.",
+      "blog_language_taken_by_translation": "A translation of this post is already in that language."
     }
   },
   "auth": {
@@ -3323,6 +3330,9 @@
     "searchResults": "{{count}} posts matching \"{{query}}\"",
     "postNotFound": "Post not found.",
     "backToList": "Back to Blog",
+    "alsoIn": "Also in:",
+    "translatedFrom": "Translated from {{language}} with AI.",
+    "readOriginal": "Read the original",
     "discussTitle": "Discuss this post",
     "discussIntro": "Questions or thoughts about this post? Start or join a thread in the community.",
     "discussStart": "Start a discussion",
@@ -3377,7 +3387,12 @@
       "sourceCode": "Source Code",
       "enterUrl": "Enter URL:",
       "enterImageUrl": "Enter image URL:",
-      "enterVideoUrl": "Enter YouTube URL:"
+      "enterVideoUrl": "Enter YouTube URL:",
+      "language": "Language",
+      "languageSummary": "Language: {{language}}",
+      "translationOf": "Translation of",
+      "translationOfNone": "None: this is the original",
+      "translationHint": "A translation is not listed in the blog: its original links to it, and search engines show it to people who search in its language. It is never shown as a new post in the app."
     }
   },
   "reviews": {

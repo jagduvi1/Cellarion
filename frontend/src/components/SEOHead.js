@@ -4,6 +4,8 @@ import SITE_URL from '../config/siteUrl';
 
 const DEFAULT_IMAGE = `${SITE_URL}/cellarion-logo.jpg`;
 
+const absolute = (path) => (path.startsWith('http') ? path : `${SITE_URL}${path}`);
+
 // Serialize JSON-LD for embedding inside <script type="application/ld+json">.
 // JSON.stringify does NOT escape `<`/`>`/`&`, and react-helmet-async applies
 // script children via innerHTML — a user-influenced field containing
@@ -24,6 +26,11 @@ export function serializeJsonLd(obj) {
 //
 // Auth-only pages must not use this — they aren't crawler-reachable and adding canonicals
 // to them would leak personal-data URLs to anyone who scrapes the rendered HTML.
+//
+// `hreflang`: 'public' declares the app's finished languages at this page's own
+// address; 'none' declares nothing; an array of { lang, path } declares a page
+// whose language versions live at addresses of their own (a blog post and its
+// translations), with x-default on the English one, else the first.
 export default function SEOHead({
   title,
   description,
@@ -36,7 +43,7 @@ export default function SEOHead({
   hreflang = 'public',
   articleMeta,
 }) {
-  const url = path.startsWith('http') ? path : `${SITE_URL}${path}`;
+  const url = absolute(path);
   const imageUrl = image || DEFAULT_IMAGE;
 
   return (
@@ -62,6 +69,16 @@ export default function SEOHead({
         <link key={code} rel="alternate" hrefLang={code} href={url} />
       ))}
       {hreflang === 'public' && <link rel="alternate" hrefLang="x-default" href={url} />}
+      {Array.isArray(hreflang) && hreflang.map((alt) => (
+        <link key={alt.lang} rel="alternate" hrefLang={alt.lang} href={absolute(alt.path)} />
+      ))}
+      {Array.isArray(hreflang) && hreflang.length > 0 && (
+        <link
+          rel="alternate"
+          hrefLang="x-default"
+          href={absolute((hreflang.find((alt) => alt.lang === 'en') || hreflang[0]).path)}
+        />
+      )}
       {articleMeta?.publishedTime && (
         <meta property="article:published_time" content={articleMeta.publishedTime} />
       )}

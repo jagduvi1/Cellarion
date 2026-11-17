@@ -5,6 +5,42 @@ const express = require('express');
 const BlogPost = require('../../models/BlogPost');
 const { sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml } = require('../../utils/sanitizeHtml');
 const { SITE_URL, esc, serializeJsonLd, ogLimiter } = require('./shared');
+const {
+  DEFAULT_LANGUAGE, LISTED, alternatesOf, defaultAlternate, nativeLanguageName,
+} = require('../../services/blogLanguage');
+
+/**
+ * hreflang links between the language versions of one post: one per
+ * published version, plus x-default (services/blogLanguage.js). Empty when
+ * the post exists in one language only.
+ */
+function alternateLinks(alternates) {
+  if (alternates.length === 0) return '';
+  const link = (lang, slug) => `\n  <link rel="alternate" hreflang="${esc(lang)}" href="${esc(`${SITE_URL}/blog/${slug}`)}" />`;
+  return [
+    ...alternates.map((a) => link(a.language, a.slug)),
+    link('x-default', defaultAlternate(alternates).slug),
+  ].join('');
+}
+
+/**
+ * The visible line that leads from one version of a post to the others, as
+ * the app's post page shows it: a translation says it is one and links its
+ * original; an original lists its translations. Empty for a post in one
+ * language.
+ */
+function languageLine(post, alternates) {
+  if (alternates.length === 0) return '';
+  const href = (slug) => esc(`${SITE_URL}/blog/${slug}`);
+  if (post.translationOf) {
+    const original = alternates.find((a) => a.original);
+    if (!original) return '';
+    const from = new Intl.DisplayNames(['en'], { type: 'language' }).of(original.language) || original.language;
+    return `\n    <p>Translated from ${esc(from)} with AI. <a href="${href(original.slug)}" hreflang="${esc(original.language)}">Read the original</a></p>`;
+  }
+  const others = alternates.filter((a) => a.slug !== post.slug);
+  return `\n    <p>Also in: ${others.map((a) => `<a href="${href(a.slug)}" hreflang="${esc(a.language)}" lang="${esc(a.language)}">${esc(nativeLanguageName(a.language))}</a>`).join(' · ')}</p>`;
+}
 
 const router = express.Router();
 
@@ -13,7 +49,7 @@ const router = express.Router();
 // by /og/blog/:slug below.
 router.get('/blog', ogLimiter, async (req, res) => {
   try {
-    const posts = await BlogPost.find({ status: 'published' })
+    const posts = await BlogPost.find({ status: 'published', ...LISTED })
       .sort({ publishedAt: -1 })
       .select('title slug excerpt metaDescription publishedAt')
       .limit(50)
@@ -112,6 +148,8 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
 
     const metaTitle = post.metaTitle || post.title;
     const metaDescription = post.metaDescription || post.excerpt || `${post.title} — Cellarion Blog`;
+    const language = post.language || DEFAULT_LANGUAGE;
+    const alternates = await alternatesOf(post);
     const postUrl = `${SITE_URL}/blog/${post.slug}`;
     const publishedDate = post.publishedAt ? new Date(post.publishedAt).toISOString().split('T')[0] : '';
     const modifiedDate = post.updatedAt ? new Date(post.updatedAt).toISOString().split('T')[0] : '';
@@ -149,6 +187,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
           logo: { '@type': 'ImageObject', url: `${SITE_URL}/cellarion-logo.jpg` }
         },
         mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
+        inLanguage: language,
         ...(post.coverImage ? { image: post.coverImage } : {})
       },
       {
@@ -186,7 +225,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
     const jsonLd = { '@context': 'https://schema.org', '@graph': graph };
 
     const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="${esc(language)}">
 <head>
   <meta charset="utf-8" />
   <title>${esc(metaTitle)} — Cellarion Blog</title>
@@ -202,7 +241,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
   <meta name="twitter:title" content="${esc(metaTitle)}" />
   <meta name="twitter:description" content="${esc(metaDescription)}" />
   ${post.coverImage ? `<meta name="twitter:image" content="${esc(post.coverImage)}" />` : ''}
-  <link rel="canonical" href="${esc(postUrl)}" />
+  <link rel="canonical" href="${esc(postUrl)}" />${alternateLinks(alternates)}
   <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
@@ -213,7 +252,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
       ${publishedDate ? `<time datetime="${esc(publishedDate)}">${esc(publishedDate)}</time>` : ''}
       ${post.author?.username ? `<p>By ${esc(post.author.username)}</p>` : ''}
       ${post.tags?.length ? `<p>Tags: ${post.tags.map(t => esc(t)).join(', ')}</p>` : ''}
-    </header>
+    </header>${languageLine(post, alternates)}
     ${post.coverImage ? `<img src="${esc(post.coverImage)}" alt="${esc(post.title)}" width="800" />` : ''}
     <div>${safeContent}</div>
   </article>

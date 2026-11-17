@@ -93,7 +93,13 @@ function AdminBlog() {
                 <tr key={post._id}>
                   <td className="admin-blog-title-cell">
                     <span className="admin-blog-post-title">{post.title}</span>
-                    <span className="admin-blog-slug">/{post.slug}</span>
+                    <span className="admin-blog-slug">
+                      /{post.slug}
+                      {/* Only a post in another language is marked: English is the default. */}
+                      {post.language && post.language !== 'en' && (
+                        <span className="admin-blog-lang"> · {post.language.toUpperCase()}</span>
+                      )}
+                    </span>
                   </td>
                   <td>
                     <span className={`admin-blog-status admin-blog-status--${post.status}`}>

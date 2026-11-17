@@ -102,8 +102,9 @@ registerTool({
   title: 'List wine guides & articles',
   description:
     'Cellarion\'s published guides and blog articles (cellar management, drink windows, storage, buying) — title, ' +
-    'slug, excerpt and tags. Call when the user wants a how-to or background reading; follow with read_guide for ' +
-    'the full text.',
+    'slug, language, excerpt and tags, one entry per article with its versions in other languages under ' +
+    'translations. Call when the user wants a how-to or background reading; follow with read_guide for the full ' +
+    'text, in the user\'s language when a translation has it.',
   scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
@@ -122,20 +123,34 @@ registerTool({
     const BlogPost = require('../../models/BlogPost');
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 10, 1), GUIDE_LIST_LIMIT);
     const offset = Math.max(parseInt(args.offset, 10) || 0, 0);
-    const filter = { status: 'published' };
+    // Originals only: a translation is listed under its original rather than
+    // as an article of its own (services/blogLanguage.js has the rule).
+    const filter = { status: 'published', translationOf: null };
     if (args.tag && String(args.tag).trim()) filter.tags = String(args.tag).trim().toLowerCase();
     const [total, posts] = await Promise.all([
       BlogPost.countDocuments(filter),
       BlogPost.find(filter).sort({ publishedAt: -1 }).skip(offset).limit(limit)
-        .select('title slug excerpt tags publishedAt').lean(),
+        .select('title slug excerpt tags publishedAt language').lean(),
     ]);
+    const translations = posts.length === 0 ? [] : await BlogPost.find({
+      status: 'published', translationOf: { $in: posts.map((p) => p._id) },
+    }).select('slug language translationOf').lean();
+    const byOriginal = new Map();
+    for (const t of translations) {
+      if (!t.translationOf) continue;
+      const key = String(t.translationOf);
+      if (!byOriginal.has(key)) byOriginal.set(key, []);
+      byOriginal.get(key).push({ language: t.language, slug: t.slug, public_url: `${siteBaseUrl()}/blog/${t.slug}` });
+    }
     return ok(`${posts.length} of ${total} published guide(s)`, posts.map((p) => ({
       slug: p.slug,
       title: p.title,
+      language: p.language || 'en',
       excerpt: p.excerpt || null,
       tags: p.tags || [],
       published_at: p.publishedAt,
       public_url: `${siteBaseUrl()}/blog/${p.slug}`,
+      translations: byOriginal.get(String(p._id)) || [],
     })), { page: { limit, offset, total } });
   },
 });
@@ -154,12 +169,17 @@ registerTool({
   handler: async (args) => {
     const BlogPost = require('../../models/BlogPost');
     const post = await BlogPost.findOne({ slug: String(args.slug).trim().toLowerCase(), status: 'published' })
-      .select('title slug excerpt tags publishedAt content').lean();
+      .select('title slug excerpt tags publishedAt content language translationOf').lean();
     if (!post) return fail('not_found', 'No published article with that slug. Use list_guides for valid slugs.');
     const truncated = post.content.length > GUIDE_MAX_CHARS;
+    const { alternatesOf } = require('../../services/blogLanguage');
+    const versions = (await alternatesOf(post)).filter((v) => v.slug !== post.slug);
     return ok(`"${post.title}"`, {
       slug: post.slug,
       title: post.title,
+      language: post.language || 'en',
+      // The same article in other languages; for a translation, its original is one of them.
+      other_languages: versions.map((v) => ({ ...v, public_url: `${siteBaseUrl()}/blog/${v.slug}` })),
       excerpt: post.excerpt || null,
       tags: post.tags || [],
       published_at: post.publishedAt,

@@ -26,6 +26,10 @@ export const getAdminBlogPosts = (apiFetch, { page = 1, limit = 20, status } = {
 export const getAdminBlogPost = (apiFetch, id) =>
   apiFetch(`/api/blog/admin/posts/${id}`);
 
+// The posts a translation can point at, for the editor's "Translation of" list.
+export const getAdminBlogOriginals = (apiFetch) =>
+  apiFetch('/api/blog/admin/originals');
+
 export const createBlogPost = (apiFetch, data) =>
   apiFetch('/api/blog/admin/posts', {
     method: 'POST',
