@@ -3,7 +3,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const BlogPost = require('../models/BlogPost');
 const { logAudit } = require('../services/audit');
 const { submitUrls } = require('../services/indexNow');
-const { readerLanguage, visibleTo, alternatesOf, resolveLanguageFields } = require('../services/blogLanguage');
+const { LISTED, alternatesOf, resolveLanguageFields } = require('../services/blogLanguage');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
 const { escapeRegex } = require('../utils/sanitize');
 const { parsePagination } = require('../utils/pagination');
@@ -54,13 +54,12 @@ function refusedSave(err, res) {
 
 // ── Public routes (no auth required) ──
 
-// GET /api/blog — List published posts. `lang` is the reader's language: each
-// post is shown in it when a version exists, else in English, else not at all
-// (services/blogLanguage.js).
+// GET /api/blog — List published posts: the originals, the same for every
+// reader; a translation is reached from its original (services/blogLanguage.js).
 router.get('/', asyncHandler(async (req, res) => {
   const { limit, offset, page } = parsePagination(req.query, { limit: 12, maxLimit: 50 });
 
-  const filter = { status: 'published' };
+  const filter = { status: 'published', ...LISTED };
   if (typeof req.query.tag === 'string' && req.query.tag.trim()) {
     filter.tags = String(req.query.tag).toLowerCase();
   }
@@ -85,8 +84,6 @@ router.get('/', asyncHandler(async (req, res) => {
     filter.$or = [{ title: rx }, { excerpt: rx }, { tags: q.toLowerCase() }];
   }
 
-  filter.$and = [await visibleTo(readerLanguage(req.query.lang))];
-
   const [posts, total] = await Promise.all([
     BlogPost.find(filter)
       .sort({ publishedAt: -1 })
@@ -100,7 +97,7 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json({ posts, total, page, pages: Math.ceil(total / limit) });
 }));
 
-// GET /api/blog/tags — Tags of the posts a reader in `lang` sees, most-used first
+// GET /api/blog/tags — Tags of the listed posts (the originals), most-used first
 //
 // Ordered by how many posts carry the tag rather than alphabetically. The blog
 // page shows only the first handful before a "show all" toggle, and with close
@@ -108,9 +105,8 @@ router.get('/', asyncHandler(async (req, res) => {
 // the least useful slice available. Ties break alphabetically so the order is
 // stable. Response shape: an array of tag strings.
 router.get('/tags', asyncHandler(async (req, res) => {
-  const visible = await visibleTo(readerLanguage(req.query.lang));
   const rows = await BlogPost.aggregate([
-    { $match: { $and: [{ status: 'published' }, visible] } },
+    { $match: { status: 'published', ...LISTED } },
     { $unwind: '$tags' },
     { $group: { _id: '$tags', count: { $sum: 1 } } },
     { $sort: { count: -1, _id: 1 } },
@@ -118,9 +114,9 @@ router.get('/tags', asyncHandler(async (req, res) => {
   res.json({ tags: rows.map((row) => row._id) });
 }));
 
-// GET /api/blog/:slug — One published post by slug, with the published
-// versions of it in other languages (`alternates`, [] when there are none) for
-// the page's hreflang links.
+// GET /api/blog/:slug — One published post by slug, original or translation,
+// with every published version of it (`alternates`, [] when there is only
+// this one) for the page's language links and hreflang.
 router.get('/:slug', asyncHandler(async (req, res) => {
   const post = await BlogPost.findOne({ slug: req.params.slug, status: 'published' })
     .populate('author', 'username');
@@ -156,7 +152,7 @@ router.get('/admin/posts', requireAuth, requireRole('admin'), asyncHandler(async
 // GET /api/blog/admin/originals — Every post a translation can point at (the
 // originals, drafts included), newest first: the editor's "Translation of" list.
 router.get('/admin/originals', requireAuth, requireRole('admin'), asyncHandler(async (req, res) => {
-  const posts = await BlogPost.find({ translationOf: null })
+  const posts = await BlogPost.find(LISTED)
     .sort({ createdAt: -1 })
     .select('title slug language status')
     .lean();

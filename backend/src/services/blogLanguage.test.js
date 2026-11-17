@@ -1,25 +1,20 @@
-// The reader language a request asks for, and the slug a post in another
-// language gets. The family rule itself runs on MongoDB in
-// routes/blog.languages.mongo.test.js.
+// How a translation is labelled, and the slug a post in another language
+// gets. What the blog lists, and the language links between versions, run on
+// MongoDB in routes/blog.languages.mongo.test.js.
 jest.mock('../models/BlogPost', () => ({}));
 
-const { readerLanguage } = require('./blogLanguage');
+const { nativeLanguageName } = require('./blogLanguage');
 const { generateSlug } = require('../routes/blog');
 
-describe('readerLanguage', () => {
-  test('the base code of what the reader asks for', () => {
-    expect(readerLanguage('sv')).toBe('sv');
-    expect(readerLanguage('fr-CA')).toBe('fr');
-    expect(readerLanguage('  DE ')).toBe('de');
+describe('nativeLanguageName', () => {
+  test('a language in its own words, capitalised: what a reader of it looks for', () => {
+    expect(nativeLanguageName('sv')).toBe('Svenska');
+    expect(nativeLanguageName('fr')).toBe('Français');
+    expect(nativeLanguageName('de')).toBe('Deutsch');
   });
 
-  test('English when the request names no usable language', () => {
-    expect(readerLanguage(undefined)).toBe('en');
-    expect(readerLanguage('')).toBe('en');
-    expect(readerLanguage('9x')).toBe('en');
-    // `?lang[$gt]=` reaches the route as an object.
-    expect(readerLanguage({ $gt: '' })).toBe('en');
-    expect(readerLanguage(['sv', 'fr'])).toBe('en');
+  test('a code the runtime cannot name is shown as itself', () => {
+    expect(nativeLanguageName('zz')).toMatch(/^zz$/i);
   });
 });
 

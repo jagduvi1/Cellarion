@@ -1,20 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readerLanguage, isTranslation, languageName } from './blogLanguage';
-
-describe('readerLanguage', () => {
-  it('is the base code of the language the app shows', () => {
-    expect(readerLanguage({ resolvedLanguage: 'sv', language: 'sv' })).toBe('sv');
-    expect(readerLanguage({ language: 'fr-CA' })).toBe('fr');
-    expect(readerLanguage({ language: 'DE' })).toBe('de');
-  });
-
-  it('is English when the app names no usable language', () => {
-    // Tests and early renders hand over no i18n instance at all.
-    expect(readerLanguage(undefined)).toBe('en');
-    expect(readerLanguage({})).toBe('en');
-    expect(readerLanguage({ language: '1x' })).toBe('en');
-  });
-});
+import { isTranslation, languageName, nativeLanguageName } from './blogLanguage';
 
 describe('isTranslation', () => {
   it('is true only for a post that points at an original', () => {
@@ -26,8 +11,15 @@ describe('isTranslation', () => {
 });
 
 describe('languageName', () => {
-  it('names a language, or answers the code when it cannot', () => {
+  it('names a language in the reader\'s language, or answers the code when it cannot', () => {
     expect(languageName('fr', 'en')).toBe('French');
     expect(languageName('zz-not-a-code', 'en')).toBe('zz-not-a-code');
+  });
+});
+
+describe('nativeLanguageName', () => {
+  it('names a language in itself, capitalised, so its readers find it in any page language', () => {
+    expect(nativeLanguageName('sv')).toBe('Svenska');
+    expect(nativeLanguageName('fr')).toBe('Français');
   });
 });

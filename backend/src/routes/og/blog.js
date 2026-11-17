@@ -5,7 +5,9 @@ const express = require('express');
 const BlogPost = require('../../models/BlogPost');
 const { sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml } = require('../../utils/sanitizeHtml');
 const { SITE_URL, esc, serializeJsonLd, ogLimiter } = require('./shared');
-const { DEFAULT_LANGUAGE, alternatesOf, defaultAlternate } = require('../../services/blogLanguage');
+const {
+  DEFAULT_LANGUAGE, LISTED, alternatesOf, defaultAlternate, nativeLanguageName,
+} = require('../../services/blogLanguage');
 
 /**
  * hreflang links between the language versions of one post: one per
@@ -21,6 +23,25 @@ function alternateLinks(alternates) {
   ].join('');
 }
 
+/**
+ * The visible line that leads from one version of a post to the others, as
+ * the app's post page shows it: a translation says it is one and links its
+ * original; an original lists its translations. Empty for a post in one
+ * language.
+ */
+function languageLine(post, alternates) {
+  if (alternates.length === 0) return '';
+  const href = (slug) => esc(`${SITE_URL}/blog/${slug}`);
+  if (post.translationOf) {
+    const original = alternates.find((a) => a.original);
+    if (!original) return '';
+    const from = new Intl.DisplayNames(['en'], { type: 'language' }).of(original.language) || original.language;
+    return `\n    <p>Translated from ${esc(from)} with AI. <a href="${href(original.slug)}" hreflang="${esc(original.language)}">Read the original</a></p>`;
+  }
+  const others = alternates.filter((a) => a.slug !== post.slug);
+  return `\n    <p>Also in: ${others.map((a) => `<a href="${href(a.slug)}" hreflang="${esc(a.language)}" lang="${esc(a.language)}">${esc(nativeLanguageName(a.language))}</a>`).join(' · ')}</p>`;
+}
+
 const router = express.Router();
 
 // GET /og/blog — Server-rendered blog index for crawlers. Nginx routes the bare
@@ -28,9 +49,9 @@ const router = express.Router();
 // by /og/blog/:slug below.
 router.get('/blog', ogLimiter, async (req, res) => {
   try {
-    const posts = await BlogPost.find({ status: 'published' })
+    const posts = await BlogPost.find({ status: 'published', ...LISTED })
       .sort({ publishedAt: -1 })
-      .select('title slug excerpt metaDescription publishedAt language')
+      .select('title slug excerpt metaDescription publishedAt')
       .limit(50)
       .lean();
 
@@ -96,10 +117,7 @@ router.get('/blog', ogLimiter, async (req, res) => {
     ${posts.length === 0 ? '<p>No posts yet.</p>' : `<ul>${posts.map(p => {
       const desc = p.metaDescription || p.excerpt || '';
       const date = p.publishedAt ? new Date(p.publishedAt).toISOString().split('T')[0] : '';
-      // Every language is listed: this page is how a crawler finds a post,
-      // and the link says which language it leads to.
-      const lang = p.language && p.language !== DEFAULT_LANGUAGE ? ` hreflang="${esc(p.language)}"` : '';
-      return `<li><a href="${esc(`${SITE_URL}/blog/${p.slug}`)}"${lang}><strong>${esc(p.title)}</strong></a>${date ? ` — <time datetime="${esc(date)}">${esc(date)}</time>` : ''}${desc ? `<br/><small>${esc(desc)}</small>` : ''}</li>`;
+      return `<li><a href="${esc(`${SITE_URL}/blog/${p.slug}`)}"><strong>${esc(p.title)}</strong></a>${date ? ` — <time datetime="${esc(date)}">${esc(date)}</time>` : ''}${desc ? `<br/><small>${esc(desc)}</small>` : ''}</li>`;
     }).join('')}</ul>`}
   </main>
   <footer>
@@ -234,7 +252,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
       ${publishedDate ? `<time datetime="${esc(publishedDate)}">${esc(publishedDate)}</time>` : ''}
       ${post.author?.username ? `<p>By ${esc(post.author.username)}</p>` : ''}
       ${post.tags?.length ? `<p>Tags: ${post.tags.map(t => esc(t)).join(', ')}</p>` : ''}
-    </header>
+    </header>${languageLine(post, alternates)}
     ${post.coverImage ? `<img src="${esc(post.coverImage)}" alt="${esc(post.title)}" width="800" />` : ''}
     <div>${safeContent}</div>
   </article>

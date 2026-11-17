@@ -3330,6 +3330,9 @@
     "searchResults": "{{count}} posts matching \"{{query}}\"",
     "postNotFound": "Post not found.",
     "backToList": "Back to Blog",
+    "alsoIn": "Also in:",
+    "translatedFrom": "Translated from {{language}} with AI.",
+    "readOriginal": "Read the original",
     "discussTitle": "Discuss this post",
     "discussIntro": "Questions or thoughts about this post? Start or join a thread in the community.",
     "discussStart": "Start a discussion",
@@ -3389,7 +3392,7 @@
       "languageSummary": "Language: {{language}}",
       "translationOf": "Translation of",
       "translationOfNone": "None: this is the original",
-      "translationHint": "A translation is shown to readers of its language instead of the original. It is never shown as a new post in the app."
+      "translationHint": "A translation is not listed in the blog: its original links to it, and search engines show it to people who search in its language. It is never shown as a new post in the app."
     }
   },
   "reviews": {

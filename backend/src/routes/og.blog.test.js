@@ -66,7 +66,8 @@ describe('GET /api/og/blog', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('public, max-age=3600');
-    expect(BlogPost.find).toHaveBeenCalledWith({ status: 'published' });
+    // The originals, like the app's list; a translation is reached from its original.
+    expect(BlogPost.find).toHaveBeenCalledWith({ status: 'published', translationOf: null });
     expect(canonical(res.html)).toBe(`${SITE}/blog`);
     expect(forSnapshot(res.html)).toMatchSnapshot();
   });

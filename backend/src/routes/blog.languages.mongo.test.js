@@ -3,17 +3,15 @@
  * MongoDB (services/blogLanguage.js has the rule).
  *
  * WHY THIS TEST EXISTS:
- * From each family (an original and its translations) a reader sees the
- * version in their language, else the English one, else nothing: an English
- * reader never meets a Swedish post, a Swedish reader gets the Swedish version
- * in place of the English one, never both. A post without a `language` is
- * English. The list carries `translationOf`, which is what keeps a
- * translation out of the app's "new post" badge. A post page names its other
- * versions (hreflang) and the crawler page links them. The admin can only
- * make a translation that points at an original in another language, one per
- * language. These are query shapes ($nin over families, a missing field read
- * as English) that mocked models cannot check, which is why it runs on
- * MongoDB.
+ * The blog lists the originals, the same for every reader, whatever language
+ * they ask for: a translation is never listed (so it is never a "new post" in
+ * the app) and is reached from its original's page. A post page names every
+ * version of it (the language line and hreflang), and the crawler page shows
+ * and links the same. The admin can only make a translation that points at
+ * an original in another language, one per language. A stored post with no
+ * `language` or `translationOf` is an English original. These are query
+ * shapes (a missing field matched as null, a partial unique index) that
+ * mocked models cannot check, which is why it runs on MongoDB.
  *
  * Needs CONTRACT_MONGO_URI (CI provides one); it uses its own database,
  * `cellarion_contract_blog`, dropped before and after. Skipped without it.
@@ -108,54 +106,44 @@ describeWithMongo('blog posts in more than one language (real MongoDB)', () => {
     }
   });
 
-  describe('which posts a reader sees', () => {
-    test('an English reader (and a reader who names no language) sees English posts only, a post without a language among them', async () => {
-      for (const qs of ['', '?lang=en', '?lang=xx-1', '?lang[$gt]=']) {
+  describe('what the blog lists', () => {
+    test('the originals, newest first, the same whatever language the reader asks for', async () => {
+      for (const qs of ['', '?lang=sv', '?lang=fr', '?lang[$gt]=']) {
         const { status, body } = await get(`/api/blog${qs}`);
         expect(status).toBe(200);
-        expect(slugs(body)).toEqual(['storing-wine', 'drink-windows']);
-        expect(body.total).toBe(2);
+        expect(slugs(body)).toEqual(['alternative-a-oeni', 'storing-wine', 'drink-windows']);
+        expect(body.total).toBe(3);
       }
     });
 
-    test('a Swedish reader gets the Swedish version in place of the English one, never both, and no French post', async () => {
-      for (const qs of ['?lang=sv', '?lang=sv-SE', '?lang=SV']) {
-        const { body } = await get(`/api/blog${qs}`);
-        expect(slugs(body)).toEqual(['drickfonster', 'storing-wine']);
-        expect(body.total).toBe(2);
-      }
+    test('a translation is never listed, so it is never a new post in the app', async () => {
+      const { body } = await get('/api/blog?limit=50');
+      expect(slugs(body)).not.toContain('drickfonster');
+      expect(body.posts.every((p) => p.translationOf === null)).toBe(true);
     });
 
-    test('a French reader gets the French original and English for the rest', async () => {
-      const { body } = await get('/api/blog?lang=fr');
-      expect(slugs(body)).toEqual(['alternative-a-oeni', 'storing-wine', 'drink-windows']);
-    });
-
-    test('the list says which post is a translation: what keeps it out of the "new post" badge', async () => {
-      const { body } = await get('/api/blog?lang=sv');
-      const sv = body.posts.find((p) => p.slug === 'drickfonster');
-      expect(sv.language).toBe('sv');
-      expect(sv.translationOf).toBe(String(ids.drink));
-      expect(body.posts.find((p) => p.slug === 'storing-wine').translationOf).toBeNull();
-    });
-
-    test('search and tag filters keep the language rule', async () => {
-      expect(slugs((await get('/api/blog?lang=sv&q=drick')).body)).toEqual(['drickfonster']);
+    test('search and tag filters list originals only', async () => {
       expect(slugs((await get('/api/blog?q=drick')).body)).toEqual([]);
+      expect(slugs((await get('/api/blog?q=drink')).body)).toEqual(['drink-windows']);
+      expect(slugs((await get('/api/blog?tag=lagring')).body)).toEqual([]);
       expect(slugs((await get('/api/blog?tag=aging')).body)).toEqual(['drink-windows']);
-      expect(slugs((await get('/api/blog?lang=sv&tag=aging')).body)).toEqual([]);
     });
 
-    test('the tag list holds the tags of the posts the reader sees', async () => {
-      expect((await get('/api/blog/tags')).body.tags.sort()).toEqual(['aging', 'guide', 'storage']);
-      expect((await get('/api/blog/tags?lang=sv')).body.tags.sort()).toEqual(['lagring', 'storage']);
+    test('the tag list holds the tags of the originals', async () => {
+      expect((await get('/api/blog/tags')).body.tags.sort()).toEqual(['aging', 'guide', 'oeni', 'storage']);
     });
   });
 
   describe('a post and its other languages', () => {
-    test('a post names every published version of it, the original first', async () => {
-      const expected = [{ language: 'en', slug: 'drink-windows' }, { language: 'sv', slug: 'drickfonster' }];
-      expect((await get('/api/blog/drickfonster')).body.alternates).toEqual(expected);
+    test('a translation opens by its own address, and a post names every published version of it, the original first', async () => {
+      const expected = [
+        { language: 'en', slug: 'drink-windows', original: true },
+        { language: 'sv', slug: 'drickfonster', original: false },
+      ];
+      const sv = await get('/api/blog/drickfonster');
+      expect(sv.status).toBe(200);
+      expect(sv.body.post.language).toBe('sv');
+      expect(sv.body.alternates).toEqual(expected);
       expect((await get('/api/blog/drink-windows')).body.alternates).toEqual(expected);
     });
 
@@ -174,17 +162,25 @@ describeWithMongo('blog posts in more than one language (real MongoDB)', () => {
       expect(text).toContain('<link rel="alternate" hreflang="x-default" href="https://cellarion.app/blog/drink-windows" />');
     });
 
-    test('the crawler page of a post in one language has no alternates', async () => {
+    test('the crawler page shows the same language line as the app: a translation links its original, an original its translations', async () => {
+      const sv = (await get('/api/og/blog/drickfonster')).text;
+      expect(sv).toContain('<p>Translated from English with AI. <a href="https://cellarion.app/blog/drink-windows" hreflang="en">Read the original</a></p>');
+      const en = (await get('/api/og/blog/drink-windows')).text;
+      expect(en).toContain('<p>Also in: <a href="https://cellarion.app/blog/drickfonster" hreflang="sv" lang="sv">Svenska</a></p>');
+    });
+
+    test('the crawler page of a post in one language has no alternates and no language line', async () => {
       const { text } = await get('/api/og/blog/storing-wine');
       expect(text).toContain('<html lang="en">');
       expect(text).not.toContain('hreflang=');
+      expect(text).not.toContain('Also in');
     });
 
-    test('the crawler index lists every language, marking the links that lead to another one', async () => {
+    test('the crawler index lists the originals, like the app', async () => {
       const { text } = await get('/api/og/blog');
-      expect(text).toContain('href="https://cellarion.app/blog/drickfonster" hreflang="sv"');
-      expect(text).toContain('href="https://cellarion.app/blog/alternative-a-oeni" hreflang="fr"');
       expect(text).toContain('href="https://cellarion.app/blog/drink-windows"><strong>');
+      expect(text).toContain('href="https://cellarion.app/blog/alternative-a-oeni"><strong>');
+      expect(text).not.toContain('/blog/drickfonster');
     });
   });
 
@@ -255,7 +251,8 @@ describeWithMongo('blog posts in more than one language (real MongoDB)', () => {
       expect(res.status).toBe(200);
       const sv = await BlogPost.findById(ids.svDrink).lean();
       expect(sv.translationOf).toBeNull();
-      expect(slugs((await get('/api/blog?lang=sv')).body)).toContain('drickfonster');
+      // Now an original of its own, it is listed.
+      expect(slugs((await get('/api/blog')).body)).toContain('drickfonster');
     });
   });
 });

@@ -2,21 +2,18 @@ import { JSON_HEADERS } from './apiConstants';
 
 // ── Public ──
 
-// `lang` is the reader's language (utils/blogLanguage.js readerLanguage): the
-// list holds each post in it when a version exists, else in English.
-export const getBlogPosts = (apiFetch, { page = 1, limit = 12, tag, q, lang } = {}) => {
+export const getBlogPosts = (apiFetch, { page = 1, limit = 12, tag, q } = {}) => {
   const params = new URLSearchParams({ page, limit });
   if (tag) params.set('tag', tag);
   if (q) params.set('q', q);
-  if (lang) params.set('lang', lang);
   return apiFetch(`/api/blog?${params}`);
 };
 
 export const getBlogPost = (apiFetch, slug) =>
   apiFetch(`/api/blog/${slug}`);
 
-export const getBlogTags = (apiFetch, { lang } = {}) =>
-  apiFetch(lang ? `/api/blog/tags?lang=${encodeURIComponent(lang)}` : '/api/blog/tags');
+export const getBlogTags = (apiFetch) =>
+  apiFetch('/api/blog/tags');
 
 // ── Admin ──
 

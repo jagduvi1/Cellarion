@@ -1,64 +1,31 @@
-// The language of each blog post, and which posts a reader sees.
+// The language of each blog post, and how its translations are reached.
 //
 // A post is an ORIGINAL (translationOf null) or a TRANSLATION of one original;
-// an original and its translations are one family. From each family a reader
-// sees the version in their own language, else the English one, else nothing:
-// an English reader never sees a Swedish post, and a Swedish reader sees the
-// Swedish version in place of the English one, never both.
+// an original and its translations are one family. The originals are what is
+// written (in English); the translations are made from them. So every reader
+// sees the same blog: the list, its tags and the unread badge hold originals
+// only, whatever language the app shows. A translation is reached from its
+// original's page ("Also in"), from search engines (hreflang between the
+// versions) and from the MCP guide list; it is never news, so publishing one
+// tells no member there is something new.
 //
-// A translation is never news. The app's unread-blog badge counts originals
-// only (frontend hooks/useUnreadBlog.js), so publishing a translation does not
-// tell members there is something new; it exists for readers who arrive from
-// a search in that language.
-//
-// Posts without a `language` are English; every query here reads a missing
-// value as 'en'.
+// Posts without a `language` are English.
 
-const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
-const { coerceStringQuery, isValidId } = require('../utils/validation');
+const { isValidId } = require('../utils/validation');
 const { errorBody } = require('../config/errorCodes');
 
 const DEFAULT_LANGUAGE = 'en';
 const LANGUAGE_CODE = /^[a-z]{2}$/;
 
-/** The language a reader asks for ('fr-CA' reads as 'fr'); English when absent or malformed. */
-function readerLanguage(raw) {
-  const code = coerceStringQuery(raw).trim().toLowerCase().slice(0, 2);
-  return LANGUAGE_CODE.test(code) ? code : DEFAULT_LANGUAGE;
-}
-
-/** Mongo condition: the post is written in `lang`. */
-function writtenIn(lang) {
-  return lang === DEFAULT_LANGUAGE
-    ? { language: { $in: [DEFAULT_LANGUAGE, null] } }
-    : { language: lang };
-}
-
-const familyId = (post) => String(post.translationOf || post._id);
+/** Mongo condition for the posts the blog lists: originals (a missing translationOf is one). */
+const LISTED = Object.freeze({ translationOf: null });
 
 /**
- * Mongo condition for the posts a reader in `lang` sees, one version per
- * family (rule at the top). Callers add `status: 'published'` themselves.
- * REST: GET /api/blog and GET /api/blog/tags. Returns a filter object.
- */
-async function visibleTo(lang) {
-  if (lang === DEFAULT_LANGUAGE) return writtenIn(DEFAULT_LANGUAGE);
-  const own = await BlogPost.find({ status: 'published', language: lang }).select('_id translationOf').lean();
-  const covered = [...new Set(own.map(familyId))].map((id) => new mongoose.Types.ObjectId(id));
-  return {
-    $or: [
-      { language: lang },
-      { ...writtenIn(DEFAULT_LANGUAGE), _id: { $nin: covered }, translationOf: { $nin: covered } },
-    ],
-  };
-}
-
-/**
- * The published versions of a post's family as [{ language, slug }], the
- * original first, or [] when no other version is published. The hreflang
- * alternates of a post page come from this.
- * REST: GET /api/blog/:slug; the crawler page /og/blog/:slug.
+ * The published versions of a post's family as [{ language, slug, original }],
+ * the original first, or [] when no other version is published. A post page's
+ * language links and hreflang alternates come from this.
+ * REST: GET /api/blog/:slug; the crawler page /og/blog/:slug; MCP read_guide.
  */
 async function alternatesOf(post) {
   const family = post.translationOf || post._id;
@@ -67,8 +34,20 @@ async function alternatesOf(post) {
   if (!Array.isArray(versions) || versions.length < 2) return [];
   return versions
     .map((v) => ({ language: v.language || DEFAULT_LANGUAGE, slug: v.slug, original: !v.translationOf }))
-    .sort((a, b) => (b.original - a.original) || a.language.localeCompare(b.language))
-    .map(({ language, slug }) => ({ language, slug }));
+    .sort((a, b) => (b.original - a.original) || a.language.localeCompare(b.language));
+}
+
+/**
+ * A language's name in itself, capitalised ('sv' → 'Svenska'), or its code
+ * when the runtime cannot name it: the label of a link to a translation, as
+ * the app's post page labels it (frontend utils/blogLanguage.js).
+ */
+function nativeLanguageName(code) {
+  let name = code;
+  try {
+    name = new Intl.DisplayNames([code], { type: 'language' }).of(code) || code;
+  } catch { /* an unknown code is shown as itself */ }
+  return name.charAt(0).toLocaleUpperCase(code) + name.slice(1);
 }
 
 /** The version search engines show when none matches the searcher's language: English, else the original. */
@@ -121,5 +100,5 @@ async function resolveLanguageFields(body, post) {
 }
 
 module.exports = {
-  DEFAULT_LANGUAGE, readerLanguage, visibleTo, alternatesOf, defaultAlternate, resolveLanguageFields,
+  DEFAULT_LANGUAGE, LISTED, alternatesOf, defaultAlternate, nativeLanguageName, resolveLanguageFields,
 };

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getBlogPosts } from '../api/blog';
-import { readerLanguage, isTranslation } from '../utils/blogLanguage';
+import { isTranslation } from '../utils/blogLanguage';
 
 export const STORAGE_KEY = 'blogLastSeenAt';
 
@@ -90,9 +89,6 @@ export function markBlogSeen() {
 /** Unread post count for the nav badge. Always 0 when signed out. */
 export default function useUnreadBlog() {
   const { apiFetch, user } = useAuth();
-  const { i18n } = useTranslation();
-  // The same list the reader's blog page shows (Blog.js asks in this language too).
-  const lang = readerLanguage(i18n);
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -105,7 +101,7 @@ export default function useUnreadBlog() {
 
     (async () => {
       try {
-        const res = await getBlogPosts(apiFetch, { limit: SCAN_LIMIT, lang });
+        const res = await getBlogPosts(apiFetch, { limit: SCAN_LIMIT });
         // apiFetch resolves on non-2xx too, and an error body has no posts array.
         if (!res.ok) return;
         const data = await res.json();
@@ -129,7 +125,7 @@ export default function useUnreadBlog() {
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, user, lang]);
+  }, [apiFetch, user]);
 
   useEffect(() => {
     const clear = () => setCount(0);
