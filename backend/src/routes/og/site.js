@@ -16,8 +16,8 @@ const router = express.Router();
 // empty SPA shell (no schema, no FAQ, no prose). Keep this in sync with the SPA:
 // if you change the landing copy or FAQ in translation.json, update it here too.
 const LANDING = {
-  metaTitle: 'Cellarion — Wine Cellar App | Track Your Wine Collection Online',
-  metaDescription: 'Track your wine collection with Cellarion. Log every bottle, visualise racks, get drink-window alerts, and share cellars with friends. Free wine cellar app at cellarion.app.',
+  metaTitle: 'Free Wine Cellar App, No Bottle Limit | Cellarion',
+  metaDescription: 'A free wine cellar app with every feature included: no bottle limit, no subscription. Track bottles, 3D racks, drink-window alerts and cellar value.',
   heroHeadline: 'Your wine cellar, beautifully organised.',
   heroSubline: 'The modern way to track your wine collection. Log every bottle, visualise your racks, get drink-window alerts at the perfect moment, and share cellars with friends — all in one private, ad-free app.',
   aboutTitle: 'What is Cellarion?',
@@ -35,7 +35,7 @@ const LANDING = {
   ],
   whyTitle: 'Why wine lovers choose Cellarion',
   why: [
-    ['Free to use', 'All core features are free at cellarion.app — no credit card, no trial, no upsell pop-ups. We don\'t sell ads either.'],
+    ['Free, every feature', 'Every feature is free at cellarion.app: no bottle limit, no paid tier, no credit card, no trial, no upsell pop-ups. We don\'t sell ads either.'],
     ['No lock-in', 'Your collection is yours. Export everything as JSON — or a ZIP with your images — with one click, any time. If you ever leave, you walk out with all your data.'],
     ['Private by design', 'No third-party trackers, no data sold to wine merchants. Just a clean app that stays out of your way.'],
     ['GDPR-compliant', 'Hosted on European infrastructure. Full data export, account deletion, and a one-click email opt-out built in from day one.'],
@@ -46,7 +46,7 @@ const LANDING = {
     ['What is Cellarion?', 'Cellarion is a wine cellar management app that helps you track every bottle in your collection. Log vintage, producer, region, price, personal rating, and tasting notes; organise bottles across cellars and racks; get drink-window alerts when wines approach their peak; and share cellars with friends or co-managers. It\'s free to use at cellarion.app.'],
     ['How do I track my wine collection with Cellarion?', 'You log each bottle with its vintage, producer, region, price, personal rating, and tasting notes. Bottles live inside named cellars and can be placed on customisable racks for visual organisation. Cellarion automatically calculates drink windows, tracks consumption history, and gives you statistics across your whole collection.'],
     ['What is a drink window in wine?', 'A drink window is the period during which a wine is at its best — typically a range of years bracketing the wine\'s peak maturity. Cellarion classifies every vintage as Not Ready, Early, Peak, Late, or Declining based on producer notes and vintage data, so you know which bottles to drink soon and which to keep cellaring.'],
-    ['Is Cellarion really free?', 'Yes. All core features at cellarion.app are free — track unlimited bottles, organise cellars, get drink-window alerts, share with friends, and export your data anytime. There are no credit-card prompts, no premium tiers gating basic functionality, and we don\'t sell ads or your data.'],
+    ['Is Cellarion really free?', 'Yes. Every feature at cellarion.app is free, with no bottle limit: track as many bottles as you like, organise cellars and racks in 3D, get drink-window alerts, see your cellar\'s value and statistics, connect your AI assistant, share with friends and export your data any time. There is no paid tier that unlocks anything and no credit-card prompt, and we don\'t sell ads or your data. Members who want to can support Cellarion; supporting unlocks nothing.'],
     ['How do I import wines from Vivino or CellarTracker?', 'Cellarion supports CSV import. Export your collection from Vivino, CellarTracker, or any spreadsheet, then upload the CSV in Cellarion\'s import tool. The shared wine registry deduplicates entries automatically so your data stays clean and consistent across the whole catalogue.'],
     ['Can I export my data and leave any time?', 'Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON (or a ZIP including your uploaded images), plus CSV import for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR.'],
   ],
