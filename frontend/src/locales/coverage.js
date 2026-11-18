@@ -54,13 +54,13 @@ const listed = (set, code) =>
 export const isMachineDrafted = (code, drafted = MACHINE_DRAFTED) => listed(drafted, code);
 
 // Languages no speaker has read yet. Distinct from MACHINE_DRAFTED on purpose:
-// Swedish was typed by a human but sits at 1% approved in Weblate (3,196
-// strings unreviewed), so it is unreviewed without being drafted.
+// Swedish was mostly typed by a human and completed by AI, with few strings
+// approved in Weblate, so it is unreviewed without being drafted.
 //
 // This flag is LABEL-ONLY. It deliberately does not touch `beta`, which is what
 // governs SHIPPED_CODES, browser auto-detection and hreflang — demoting a
-// language that is 98% translated and live in production would hand Swedish
-// users an English UI to make a point about review process. Honesty about
+// complete language that is live in production would hand its users an
+// English UI to make a point about review process. Honesty about
 // review status and fitness to ship are two different questions.
 //
 // Entries are cleared by hand as review lands; the app cannot see Weblate's
