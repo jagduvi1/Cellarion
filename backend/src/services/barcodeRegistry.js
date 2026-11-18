@@ -28,6 +28,13 @@ const { logAudit, logger } = require('./audit');
 
 const MEMBERS = 'members';
 
+// Every failure here is a background one: it is logged, never thrown. A log
+// call that itself fails (an audit module without a logger) falls back to the
+// console, so it cannot turn into an unhandled rejection either.
+function warn(fields, msg) {
+  try { logger.warn(fields, msg); } catch { console.warn(msg, fields); }
+}
+
 /** Demo accounts are thrown away within hours: their bottles teach nothing. */
 const demoUserIds = () => User.distinct('_id', { isDemo: true });
 
@@ -136,12 +143,12 @@ async function putBack(wineId, entry) {
   try {
     await WineDefinition.updateOne({ _id: wineId, 'barcodes.code': { $ne: entry.code } }, { $push: { barcodes: entry } });
   } catch (err) {
-    if (!(err && err.code === 11000)) logger.warn({ err: err.message, code: entry.code, wine: String(wineId) }, 'barcode registry: could not put a code back');
+    if (!(err && err.code === 11000)) warn({ err: err.message, code: entry.code, wine: String(wineId) }, 'barcode registry: could not put a code back');
   }
 }
 
 const learnLogged = (code, context, options) => learnBarcode(code, options)
-  .catch((err) => logger.warn({ err: err.message, code, ...context }, 'barcode registry: could not learn a barcode'));
+  .catch((err) => warn({ err: err.message, code, ...context }, 'barcode registry: could not learn a barcode'));
 
 // Codes being learned right now → whether another save asked again meanwhile.
 // A bulk edit saves a case of twelve one by one: that is one run plus at most
@@ -188,7 +195,7 @@ function learnWineBarcodesSoon(wineId, context) {
   Promise.resolve()
     .then(() => Bottle.distinct('barcode', { wineDefinition: wineId, barcode: { $type: 'string' } }))
     .then((codes) => learnBarcodesSoon(codes, { wine: String(wineId), ...context }))
-    .catch((err) => logger.warn({ err: err.message, wine: String(wineId), ...context }, 'barcode registry: could not read a wine\'s barcodes'));
+    .catch((err) => warn({ err: err.message, wine: String(wineId), ...context }, 'barcode registry: could not read a wine\'s barcodes'));
 }
 
 /**
@@ -234,7 +241,7 @@ async function backfillBarcodes() {
     try {
       ({ action } = await learnBarcode(code, { demoIds, audit: false }));
     } catch (err) {
-      logger.warn({ err: err.message, code }, 'barcode registry: backfill could not learn a barcode');
+      warn({ err: err.message, code }, 'barcode registry: backfill could not learn a barcode');
     }
     counts[action] = (counts[action] || 0) + 1;
   }
