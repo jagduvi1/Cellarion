@@ -164,7 +164,7 @@ describe('dry run with the reads mocked', () => {
     expect(res.unusedIds).toEqual([profiled]);
   });
 
-  test('a canary is never a candidate: the wine scan leaves canaries out', async () => {
+  test('a canary or a wine holding barcodes is never a candidate: the wine scan leaves them out', async () => {
     distincts = { WineDefinition: { _id: [id(1)] } };
 
     await cleanup();
@@ -172,7 +172,7 @@ describe('dry run with the reads mocked', () => {
     const i = mongoose.Model.distinct.mock.contexts.findIndex((Model, n) => Model.modelName === 'WineDefinition'
       && mongoose.Model.distinct.mock.calls[n][0] === '_id');
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(mongoose.Model.distinct.mock.calls[i][1]).toEqual({ canary: { $ne: true } });
+    expect(mongoose.Model.distinct.mock.calls[i][1]).toEqual({ canary: { $ne: true }, 'barcodes.code': { $exists: false } });
   });
 
   test('right before the delete, a candidate that gained a reference since the scan is dropped', async () => {

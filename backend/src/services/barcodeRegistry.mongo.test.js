@@ -165,6 +165,55 @@ describeWithMongo('barcodes on the registry wine (real MongoDB)', () => {
     expect(s.barcodes).toBeUndefined();
   });
 
+  test('a code finds its wine through the index, not by scanning the registry', async () => {
+    const plan = JSON.stringify((await WineDefinition.find({ 'barcodes.code': C1 }).explain()).queryPlanner.winningPlan);
+    expect(plan).toContain('IXSCAN');
+    expect(plan).not.toContain('COLLSCAN');
+  });
+
+  test('a join that hides the member-hidden fields never carries the codes (as the wishlist list does)', async () => {
+    const { MEMBER_WINE_HIDDEN_FIELDS } = require('../config/constants');
+    const holder = await holderOf(C3);
+    await mongoose.connection.collection('wishlistitems').insertOne({ _id: oid(), wineDefinition: holder._id });
+    const [row] = await mongoose.connection.collection('wishlistitems').aggregate([
+      { $match: { wineDefinition: holder._id } },
+      { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wineDefinition' } },
+      { $unwind: '$wineDefinition' },
+      { $unset: MEMBER_WINE_HIDDEN_FIELDS.map((f) => `wineDefinition.${f}`) },
+    ]).toArray();
+    expect(row.wineDefinition).not.toHaveProperty('barcodes');
+  });
+
+  test('a code only one member taught is withdrawn once their bottle no longer carries it', async () => {
+    const code = '4055555555550';
+    const w = await wine('Nu');
+    const { insertedId } = await bottle(users[0], w, code);
+    expect(await registry.learnBarcode(code)).toEqual({ action: 'added' });
+    // The member clears the barcode: their bottle no longer carries it.
+    await Bottle.updateOne({ _id: insertedId }, { $unset: { barcode: 1 } });
+    expect(await registry.learnBarcode(code)).toEqual({ action: 'withdrawn' });
+    expect(await holderOf(code)).toBeNull();
+  });
+
+  test('a code several members confirmed stays when their bottles are gone, and one new bottle does not move it', async () => {
+    const code = '4066666666660';
+    const confirmed = await wine('Xi');
+    await WineDefinition.updateOne({ _id: confirmed }, { $push: { barcodes: { code, source: 'members', owners: 5 } } });
+    const elsewhere = await wine('Omicron');
+    await bottle(users[1], elsewhere, code);
+    expect(await registry.learnBarcode(code)).toEqual({ action: 'kept' });
+    expect((await entryOf(code)).wine).toBe(String(confirmed));
+  });
+
+  test("a wine's bottles teach all their codes at once (a wine published, or a merge's keeper)", async () => {
+    const codes = ['4077777777770', '4088888888880'];
+    const w = await wine('Pi');
+    for (const code of codes) await bottle(users[2], w, code);
+    registry.learnWineBarcodesSoon(w, { via: 'test' });
+    await settle(async () => (await Promise.all(codes.map(entryOf))).every(Boolean));
+    for (const code of codes) expect((await entryOf(code)).wine).toBe(String(w));
+  });
+
   const settle = async (done) => {
     for (let i = 0; i < 50; i++) { if (await done()) return; await new Promise((r) => setTimeout(r, 50)); }
     throw new Error('the background learning did not finish');

@@ -10,9 +10,12 @@
 // DISTINCT OWNERS, so one member's twelve bottles are one vote; who they are
 // is never stored. One barcode belongs to one wine (a unique index): the
 // public wine most members' bottles carry it on. A code moves to another wine
-// only when more members' bottles carry it there; a catalogue's code is never
-// moved by members. A pending or draft wine is not registry content yet, so
-// nothing is attached to it.
+// only when more members' bottles carry it there than ever confirmed it where
+// it is; a catalogue's code is never moved by members. A code only one
+// member taught, whose bottles no longer carry it (cleared, corrected,
+// deleted), was most likely a mistake and is withdrawn. A pending or draft
+// wine is not registry content yet, so nothing is attached to it until it is
+// published (models/WineDefinition.js post-save teaches it then).
 //
 // Bottles keep their own barcode (the member's data, in their export), and
 // services/barcodeLookup.js still falls back to them for a code the registry
@@ -21,16 +24,20 @@
 const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
-const { logger } = require('./audit');
+const { logAudit, logger } = require('./audit');
 
 const MEMBERS = 'members';
 
+/** Demo accounts are thrown away within hours: their bottles teach nothing. */
+const demoUserIds = () => User.distinct('_id', { isDemo: true });
+
 /** Member evidence for one code: [{ wine, owners, last, bottleSize }], most owners first. */
-async function evidenceFor(code) {
-  // Demo accounts are thrown away within hours: their bottles teach nothing.
-  const demoIds = await User.distinct('_id', { isDemo: true });
+async function evidenceFor(code, demoIds) {
+  const excluded = demoIds || await demoUserIds();
   const rows = await Bottle.aggregate([
-    { $match: { barcode: code, user: { $nin: demoIds } } },
+    // The $type makes the query match the bottles' partial barcode index
+    // (models/Bottle.js); an equality alone does not, and scans every bottle.
+    { $match: { barcode: { $eq: code, $type: 'string' }, user: { $nin: excluded } } },
     { $group: { _id: { wine: '$wineDefinition', user: '$user' }, last: { $max: '$createdAt' }, sizes: { $addToSet: '$bottleSize' } } },
     { $group: { _id: '$_id.wine', owners: { $sum: 1 }, last: { $max: '$last' }, sizes: { $push: '$sizes' } } },
   ]);
@@ -43,17 +50,31 @@ async function evidenceFor(code) {
     .sort((a, b) => (b.owners - a.owners) || (b.last - a.last));
 }
 
+// A userless audit row: the registry records what happened to a code, never
+// whose bottle taught it.
+const audit = (action, wineId, detail, options) => {
+  if (options.audit === false) return;
+  logAudit(null, action, { type: 'wine', id: wineId }, detail);
+};
+
+/** Takes a member-learned code off a wine; a catalogue's entry is never touched. */
+const pullMemberCode = (wineId, code) => WineDefinition.updateOne(
+  { _id: wineId }, { $pull: { barcodes: { code, source: MEMBERS } } },
+);
+
 /**
  * Brings the registry's record of one barcode in line with members' bottles:
  * attaches it to the public wine most members' bottles carry it on, updates
- * its owner count, or moves a member-learned code to a wine with MORE owners.
- * Callers: learnBarcodeSoon / learnBarcodesSoon (bottle add, edit, change wine,
- * a restored cellar) and the one-time backfill at boot.
- * Returns { action: 'added' | 'updated' | 'moved' | 'kept' | 'none' | 'catalogue' }.
+ * its owner count, moves a member-learned code to a wine with MORE owners, or
+ * withdraws a one-member code no bottle carries any more.
+ * Callers: learnBarcodeSoon / learnBarcodesSoon (bottle add, edit, delete,
+ * restore, change wine, a restored cellar, a wine leaving the pending state)
+ * and the one-time backfill at boot.
+ * Returns { action: 'added' | 'updated' | 'moved' | 'withdrawn' | 'kept' | 'none' | 'catalogue' }.
  */
-async function learnBarcode(code) {
+async function learnBarcode(code, options = {}) {
   if (!code) return { action: 'none' };
-  const evidence = await evidenceFor(code);
+  const evidence = await evidenceFor(code, options.demoIds);
   const publicIds = new Set((await WineDefinition.find({
     _id: { $in: evidence.map((e) => e.wine) }, pendingIdentity: { $ne: true },
   }).select('_id').lean()).map((w) => String(w._id)));
@@ -62,8 +83,16 @@ async function learnBarcode(code) {
   const entry = holder && holder.barcodes.find((b) => b.code === code);
 
   if (entry && entry.source !== MEMBERS) return { action: 'catalogue' };
+  const holderLive = holder ? ((evidence.find((e) => e.wine === String(holder._id)) || {}).owners || 0) : 0;
+  const withdrawable = Boolean(holder) && holderLive === 0 && (entry.owners || 0) <= 1;
   const winner = candidates[0];
-  if (!winner) return { action: holder ? 'kept' : 'none' };
+
+  if (!winner) {
+    if (!withdrawable) return { action: holder ? 'kept' : 'none' };
+    await pullMemberCode(holder._id, code);
+    audit('registry.barcode.withdraw', holder._id, { code }, options);
+    return { action: 'withdrawn' };
+  }
 
   if (holder && String(holder._id) === winner.wine) {
     await WineDefinition.updateOne(
@@ -73,25 +102,45 @@ async function learnBarcode(code) {
     return { action: 'updated' };
   }
   if (holder) {
-    // Stays with the wine it is on unless more members' bottles say otherwise.
-    const holderEvidence = evidence.find((e) => e.wine === String(holder._id));
-    if (winner.owners <= (holderEvidence ? holderEvidence.owners : 0)) return { action: 'kept' };
-    await WineDefinition.updateOne({ _id: holder._id }, { $pull: { barcodes: { code } } });
+    // Stays where it is unless more members' bottles say otherwise than ever
+    // confirmed it there: bottles that are gone still counted when they were here.
+    const holderWeight = withdrawable ? 0 : Math.max(holderLive, entry.owners || 0);
+    if (winner.owners <= holderWeight) return { action: 'kept' };
+    await pullMemberCode(holder._id, code);
   }
+  const fresh = { code, bottleSize: winner.bottleSize, source: MEMBERS, owners: winner.owners, addedAt: new Date() };
+  let attached = false;
   try {
-    await WineDefinition.updateOne(
-      { _id: winner.wine, 'barcodes.code': { $ne: code } },
-      { $push: { barcodes: { code, bottleSize: winner.bottleSize, source: MEMBERS, owners: winner.owners, addedAt: new Date() } } },
-    );
+    const r = await WineDefinition.updateOne({ _id: winner.wine, 'barcodes.code': { $ne: code } }, { $push: { barcodes: fresh } });
+    attached = r.modifiedCount === 1;
   } catch (err) {
     // Another request attached the code first (the unique index): theirs stands.
-    if (err && err.code === 11000) return { action: 'kept' };
-    throw err;
+    if (!(err && err.code === 11000)) {
+      if (holder) await putBack(holder._id, entry);
+      throw err;
+    }
   }
+  if (!attached) {
+    // The winner is gone (merged or deleted meanwhile) or someone else holds
+    // the code now: the code goes back where it was, if it was anywhere.
+    if (holder) await putBack(holder._id, entry);
+    return { action: 'kept' };
+  }
+  audit(holder ? 'registry.barcode.move' : 'registry.barcode.add', winner.wine,
+    { code, owners: winner.owners, ...(holder ? { from: String(holder._id) } : {}) }, options);
   return { action: holder ? 'moved' : 'added' };
 }
 
-const learnLogged = (code, context) => learnBarcode(code)
+/** Puts a code back on a wine after a failed move, unless another wine took it meanwhile. */
+async function putBack(wineId, entry) {
+  try {
+    await WineDefinition.updateOne({ _id: wineId, 'barcodes.code': { $ne: entry.code } }, { $push: { barcodes: entry } });
+  } catch (err) {
+    if (!(err && err.code === 11000)) logger.warn({ err: err.message, code: entry.code, wine: String(wineId) }, 'barcode registry: could not put a code back');
+  }
+}
+
+const learnLogged = (code, context, options) => learnBarcode(code, options)
   .catch((err) => logger.warn({ err: err.message, code, ...context }, 'barcode registry: could not learn a barcode'));
 
 // Codes being learned right now → whether another save asked again meanwhile.
@@ -102,7 +151,8 @@ const inFlight = new Map();
 /**
  * learnBarcode in the background: a bottle save never waits for the registry,
  * and a failure is logged, not thrown. Caller: services/bottleOps.js (add,
- * edit, change wine; a bulk edit saves each bottle through the same edit).
+ * edit, delete, restore, change wine; a bulk edit saves each bottle through
+ * the same edit).
  */
 function learnBarcodeSoon(code, context) {
   if (!code) return;
@@ -119,7 +169,7 @@ function learnBarcodeSoon(code, context) {
 /**
  * learnBarcode for many codes, one after another in the background, so a
  * restored cellar of hundreds of bottles is not hundreds of queries at once.
- * Caller: services/cellarImport.js (importCellar).
+ * Callers: services/cellarImport.js (importCellar) and learnWineBarcodesSoon.
  */
 function learnBarcodesSoon(codes, context) {
   const list = [...new Set((codes || []).filter(Boolean))];
@@ -128,36 +178,67 @@ function learnBarcodesSoon(codes, context) {
 }
 
 /**
- * Moves a merged-away wine's barcodes onto the keeper (one place for both
- * merge routes: services/wineMergeOps.reassignWineRefs). A code the keeper
- * already holds stays as the keeper has it.
+ * Teaches every code on one wine's bottles, in the background: a wine that
+ * has just become registry content (published, its identity completed) or a
+ * merge's keeper. Callers: models/WineDefinition.js (post-save, on promotion)
+ * and services/wineMergeOps.reassignWineRefs.
  */
-async function moveBarcodes(sourceId, keeperId) {
-  const source = await WineDefinition.findById(sourceId).select('+barcodes').lean();
-  const entries = (source && source.barcodes) || [];
-  if (!entries.length) return 0;
-  // Off the source first: one wine per code is enforced by a unique index.
-  await WineDefinition.updateOne({ _id: sourceId }, { $unset: { barcodes: 1 } });
-  const keeper = await WineDefinition.findById(keeperId).select('+barcodes').lean();
-  const held = new Set(((keeper && keeper.barcodes) || []).map((b) => b.code));
-  const moving = entries.filter((b) => !held.has(b.code));
-  if (moving.length) await WineDefinition.updateOne({ _id: keeperId }, { $push: { barcodes: { $each: moving } } });
-  return moving.length;
+function learnWineBarcodesSoon(wineId, context) {
+  // Never throws, also not synchronously: it runs inside a wine's save hook.
+  Promise.resolve()
+    .then(() => Bottle.distinct('barcode', { wineDefinition: wineId, barcode: { $type: 'string' } }))
+    .then((codes) => learnBarcodesSoon(codes, { wine: String(wineId), ...context }))
+    .catch((err) => logger.warn({ err: err.message, wine: String(wineId), ...context }, 'barcode registry: could not read a wine\'s barcodes'));
 }
 
 /**
- * Teaches the registry every barcode members' bottles carry. Idempotent.
- * Called once at boot (server.js, marker migration.barcodesOnWine).
- * Returns the count per action.
+ * Moves a merged-away wine's barcodes onto the keeper, one code at a time (one
+ * place for both merge routes: services/wineMergeOps.reassignWineRefs). Each
+ * code leaves the source before it joins the keeper (one wine per code, a
+ * unique index); a code the keeper already holds stays as the keeper has it,
+ * a code another wine took meanwhile stays there, and a code that cannot be
+ * written is put back on the source, so a merge run again picks it up.
+ * Returns the number of codes the keeper received.
+ */
+async function moveBarcodes(sourceId, keeperId) {
+  const source = await WineDefinition.findById(sourceId).select('+barcodes').lean();
+  let moved = 0;
+  for (const entry of (source && source.barcodes) || []) {
+    await WineDefinition.updateOne({ _id: sourceId }, { $pull: { barcodes: { code: entry.code } } });
+    try {
+      const r = await WineDefinition.updateOne({ _id: keeperId, 'barcodes.code': { $ne: entry.code } }, { $push: { barcodes: entry } });
+      moved += r.modifiedCount;
+    } catch (err) {
+      if (err && err.code === 11000) continue;
+      await putBack(sourceId, entry);
+      throw err;
+    }
+  }
+  // A wine without codes carries no barcodes field, as before it had any.
+  await WineDefinition.updateOne({ _id: sourceId, barcodes: { $size: 0 } }, { $unset: { barcodes: 1 } });
+  return moved;
+}
+
+/**
+ * Teaches the registry every barcode members' bottles carry. Idempotent; a
+ * code that fails is counted and left to the next bottle event, so one bad
+ * code never makes every boot start over. Called once at boot (server.js,
+ * marker migration.barcodesOnWine). Returns the count per action.
  */
 async function backfillBarcodes() {
   const codes = await Bottle.distinct('barcode', { barcode: { $type: 'string' } });
+  const demoIds = await demoUserIds();
   const counts = {};
   for (const code of codes) {
-    const { action } = await learnBarcode(code);
+    let action = 'failed';
+    try {
+      ({ action } = await learnBarcode(code, { demoIds, audit: false }));
+    } catch (err) {
+      logger.warn({ err: err.message, code }, 'barcode registry: backfill could not learn a barcode');
+    }
     counts[action] = (counts[action] || 0) + 1;
   }
   return { codes: codes.length, ...counts };
 }
 
-module.exports = { learnBarcode, learnBarcodeSoon, learnBarcodesSoon, moveBarcodes, backfillBarcodes, MEMBERS };
+module.exports = { learnBarcode, learnBarcodeSoon, learnBarcodesSoon, learnWineBarcodesSoon, moveBarcodes, backfillBarcodes, MEMBERS };

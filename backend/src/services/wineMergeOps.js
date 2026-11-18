@@ -46,7 +46,7 @@ const { repointInquiriesForWineMerge } = require('./ownerInquiryOps');
 const { embedSinglePair } = require('./embeddingJob');
 const searchService = require('./search');
 const { logAudit } = require('./audit');
-const { moveBarcodes } = require('./barcodeRegistry');
+const { moveBarcodes, learnWineBarcodesSoon } = require('./barcodeRegistry');
 
 // The single-pair merge body, so the correction-proposal approve
 // (routes/admin/wineProposals.js) runs EXACTLY the machinery
@@ -449,6 +449,9 @@ async function reassignWineRefs(sourceId, keeperId) {
       await reassignKeyedRefs(RegistryDataValue, sourceId, keeperId, ['key', 'vintage', 'status']);
     })(),
   ]);
+  // The source's bottles now vote for the keeper, also with codes the source
+  // never held (it was pending, or they were outvoted).
+  if (bottleRes.modifiedCount) learnWineBarcodesSoon(keeperId, { via: 'merge' });
   return bottleRes.modifiedCount || 0;
 }
 

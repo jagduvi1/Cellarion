@@ -10,6 +10,8 @@
  */
 jest.mock('../models/Bottle', () => ({ aggregate: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn() }));
+const DEMO = 'demo-user';
+jest.mock('../models/User', () => ({ distinct: jest.fn().mockResolvedValue(['demo-user']) }));
 
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
@@ -36,7 +38,8 @@ it('groups by wine and counts distinct owners, most confirmed first', async () =
   expect(out).toMatchObject({ wine: { _id: 'w1', name: 'Wine w1' }, owners: 3, vintage: null });
   expect(out.wine).not.toHaveProperty('createdBy');
   const pipeline = Bottle.aggregate.mock.calls[0][0];
-  expect(pipeline[0]).toEqual({ $match: { barcode: '4006381333931' } });
+  // The $type lets MongoDB use the partial index; demo accounts are no vote.
+  expect(pipeline[0]).toEqual({ $match: { barcode: { $eq: '4006381333931', $type: 'string' }, user: { $nin: [DEMO] } } });
   expect(pipeline[1].$group._id).toEqual({ wine: '$wineDefinition', user: '$user' });
   expect(pipeline[3]).toEqual({ $sort: { owners: -1, last: -1 } });
 });

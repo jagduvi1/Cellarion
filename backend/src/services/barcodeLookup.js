@@ -16,6 +16,7 @@
  */
 
 const Bottle = require('../models/Bottle');
+const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
 const { canSeeWine } = require('./wineVisibility');
 const { decorateGrapes } = require('../utils/grapeDisplay');
@@ -55,8 +56,12 @@ async function answerFor(wineId, row, viewer, entry) {
  * @returns {Promise<{ wine: object|null, vintage?: string|null, owners?: number, bottleSize?: string }>}
  */
 async function lookupBarcode(code, viewer) {
+  // Demo accounts are thrown away within hours: their bottles are no vote here
+  // either (as in services/barcodeRegistry.js).
+  const demoIds = await User.distinct('_id', { isDemo: true });
   const rows = await Bottle.aggregate([
-    { $match: { barcode: code } },
+    // The $type matches the bottles' partial barcode index (models/Bottle.js).
+    { $match: { barcode: { $eq: code, $type: 'string' }, user: { $nin: demoIds } } },
     // One row per (wine, owner): the vintages that owner has, and when.
     { $group: { _id: { wine: '$wineDefinition', user: '$user' }, vintages: { $addToSet: '$vintage' }, last: { $max: '$createdAt' } } },
     // One row per wine: how many owners, and every owner's vintages.

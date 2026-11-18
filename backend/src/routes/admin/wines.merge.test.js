@@ -57,7 +57,7 @@ jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
 // Barcodes on the wine have their own real-MongoDB suite (services/barcodeRegistry.mongo.test.js).
-jest.mock('../../services/barcodeRegistry', () => ({ moveBarcodes: jest.fn().mockResolvedValue(0), learnBarcodeSoon: jest.fn() }));
+jest.mock('../../services/barcodeRegistry', () => ({ moveBarcodes: jest.fn().mockResolvedValue(0), learnBarcodeSoon: jest.fn(), learnWineBarcodesSoon: jest.fn() }));
 
 const express = require('express');
 const http = require('http');

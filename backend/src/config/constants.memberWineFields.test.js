@@ -16,6 +16,10 @@ test('the list names the label-sweetness curation marks — the term itself stay
   expect(MEMBER_WINE_HIDDEN_FIELDS).not.toContain('sweetnessStyle');
 });
 
+test("the list names the wine's barcodes, which an aggregate would otherwise hand out", () => {
+  expect(MEMBER_WINE_HIDDEN_FIELDS).toContain('barcodes');
+});
+
 test('WINE_LIST_SELECT excludes every member-hidden field', () => {
   const fields = WINE_LIST_SELECT.split(/\s+/);
   for (const f of MEMBER_WINE_HIDDEN_FIELDS) expect(fields).toContain(`-${f}`);

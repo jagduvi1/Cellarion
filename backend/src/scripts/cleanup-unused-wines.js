@@ -15,7 +15,9 @@
  *
  * Canary wines are never candidates: nothing references them by design, and
  * deleting one would take its curated windows with it and silently remove the
- * registry-lockdown tripwire it exists to be.
+ * registry-lockdown tripwire it exists to be. Nor is a wine that holds
+ * barcodes (services/barcodeRegistry.js): they outlive the bottles that taught
+ * them, so a scan still finds the wine after the last bottle is gone.
  *
  * The scan takes a while, so right before the delete every candidate is
  * checked again (stillUnreferenced): a wine that gained its first bottle, or
@@ -179,8 +181,8 @@ async function cleanup({ apply = false, backupDir = resolveBackupDir() } = {}) {
 
   // ── Phase 1: Unused wine definitions ──────────────────────────────────────
 
-  const allWineIds = await WineDefinition.distinct('_id', { canary: { $ne: true } });
-  console.log(`Wine definitions total:  ${allWineIds.length} (canaries not counted)`);
+  const allWineIds = await WineDefinition.distinct('_id', { canary: { $ne: true }, 'barcodes.code': { $exists: false } });
+  console.log(`Wine definitions total:  ${allWineIds.length} (canaries and wines holding barcodes not counted)`);
 
   const usedSet = await referencedIds(WINE_REF_SOURCES);
   let unusedIds = allWineIds.filter(id => !usedSet.has(id.toString()));

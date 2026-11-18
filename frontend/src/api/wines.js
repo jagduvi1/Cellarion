@@ -7,9 +7,10 @@ export const getWine = (apiFetch, id) =>
   apiFetch(`/api/wines/${id}`);
 
 /**
- * The registry wine a retail barcode belongs to, learned from members' bottles
- * added after scanning it. Answers { wine, vintage, owners, code } or
- * { wine: null } when the code is not known yet. A read; no AI.
+ * The registry wine a retail barcode belongs to: the wine that holds the code,
+ * else the one members' bottles carry it on. Answers
+ * { wine, vintage, owners, bottleSize?, code } or { wine: null } when the code
+ * is not known yet. A read; no AI.
  */
 export const lookupBarcode = (apiFetch, code) =>
   apiFetch(`/api/wines/barcode/${encodeURIComponent(code)}`);

@@ -940,7 +940,11 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
     if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
     throw err;
   }
-  if (changes.barcode) learnBarcodeSoon(changes.barcode, { via: 'edit' });
+  if ('barcode' in changes) {
+    // The new code is a vote; the old one may have lost its only vote.
+    if (changes.barcode) learnBarcodeSoon(changes.barcode, { via: 'edit' });
+    if (prev.barcode && prev.barcode !== changes.barcode) learnBarcodeSoon(prev.barcode, { via: 'edit' });
+  }
   if ('vintage' in changes) {
     // The bottle's photos are photos of THIS bottle, so they follow its
     // vintage (same-vintage photos are preferred over the wine's generic
@@ -1030,6 +1034,8 @@ async function removeBottleCascade(bottle, req, auditAction, options = {}) {
 
   const cellarId = bottle.cellar;
   await bottle.deleteOne();
+  // Its barcode may have lost its only vote in the registry.
+  if (bottle.barcode) learnBarcodeSoon(bottle.barcode, { via: 'delete' });
 
   // Only remove the request if THIS was the last bottle waiting on it.
   //
@@ -1137,6 +1143,7 @@ async function restoreDeletedBottle(snapshot, req, { via = 'undo' } = {}) {
   // setter for ("EURO" → "EUR"; release audit 2026-10-13).
   if (typeof raw.currency === 'string') raw.currency = normalizeCurrency(raw.currency);
   await Bottle.collection.insertOne(raw);
+  if (raw.barcode) learnBarcodeSoon(raw.barcode, { via: 'restore' });
 
   const bestEffort = async (label, fn) => {
     try { return await fn(); } catch (err) {
