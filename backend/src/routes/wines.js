@@ -1196,10 +1196,11 @@ router.get('/:idOrSlug/community-prices', publicWineLimiter, async (req, res) =>
   }
 });
 
-// GET /api/wines/barcode/:code — the registry wine a retail barcode belongs to,
-// learned from members' bottles that were added after scanning it
-// (services/barcodeLookup). Answers { wine, vintage, owners } or { wine: null }
-// — an unknown or invalid code is not an error, it is simply not known yet.
+// GET /api/wines/barcode/:code — the registry wine a retail barcode belongs to:
+// the wine that holds the code, else the one members' bottles carry it on
+// (services/barcodeLookup). Answers { wine, vintage, owners, bottleSize?, code }
+// or { wine: null } — an unknown or invalid code is not an error, it is simply
+// not known yet.
 // No AI and no write: a cheap read the add-bottle camera makes when it sees a
 // barcode.
 router.get('/barcode/:code', requireAuth, async (req, res) => {

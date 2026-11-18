@@ -46,6 +46,7 @@ const { repointInquiriesForWineMerge } = require('./ownerInquiryOps');
 const { embedSinglePair } = require('./embeddingJob');
 const searchService = require('./search');
 const { logAudit } = require('./audit');
+const { moveBarcodes, learnWineBarcodesSoon } = require('./barcodeRegistry');
 
 // The single-pair merge body, so the correction-proposal approve
 // (routes/admin/wineProposals.js) runs EXACTLY the machinery
@@ -392,6 +393,8 @@ async function reassignWineRefs(sourceId, keeperId) {
     DiscussionReply.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     // Delete the source's vectors (its WineEmbedding rows).
     purgeSourceVectors(sourceId),
+    // The source's barcodes name the same product: they move to the keeper.
+    moveBarcodes(sourceId, keeperId),
     // Drop any "not duplicate" decisions referencing the disappearing source.
     forgetWine(sourceId),
     // Reviews have no unique index on (author, wineDefinition) — a user may
@@ -446,6 +449,9 @@ async function reassignWineRefs(sourceId, keeperId) {
       await reassignKeyedRefs(RegistryDataValue, sourceId, keeperId, ['key', 'vintage', 'status']);
     })(),
   ]);
+  // The source's bottles now vote for the keeper, also with codes the source
+  // never held (it was pending, or they were outvoted).
+  if (bottleRes.modifiedCount) learnWineBarcodesSoon(keeperId, { via: 'merge' });
   return bottleRes.modifiedCount || 0;
 }
 

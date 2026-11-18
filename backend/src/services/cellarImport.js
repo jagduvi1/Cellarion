@@ -52,6 +52,7 @@ const { getMaxPosition, fitCabinetTypeConfig } = require('../utils/rackGeometry'
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { normalizeBarcode } = require('../utils/barcode');
+const { learnBarcodesSoon } = require('./barcodeRegistry');
 const { stripHtml } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { photoVintage } = require('../utils/imageVintage');
@@ -1086,6 +1087,10 @@ async function importCellar(userId, cellar, opts) {
     }
     throw err;
   }
+
+  // A restored cellar's barcodes teach the registry as bottles added by hand
+  // do (services/barcodeRegistry.js); a demo clone teaches nothing.
+  if (!opts.demoMode) learnBarcodesSoon(items.map((it) => normalizeBarcode(it.barcode)), { via: 'import' });
 
   return result;
 }

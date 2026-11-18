@@ -93,9 +93,9 @@ const bottleSchema = new mongoose.Schema({
   },
   // The retail barcode scanned when this bottle was added, in the canonical
   // form utils/barcode.normalizeBarcode returns. The member's own data
-  // (exported and deleted with the bottle); bottles carrying a barcode are
-  // also how the same wine is recognised when another member scans it
-  // (services/barcodeLookup) — counted, never shown with whose they are.
+  // (exported and deleted with the bottle). It also teaches the shared
+  // registry which wine the code belongs to (services/barcodeRegistry.js puts
+  // the code on the wine, counted, never with whose bottle taught it).
   barcode: {
     type: String,
     match: /^\d{8,14}$/,
@@ -331,8 +331,10 @@ const bottleSchema = new mongoose.Schema({
 // Compound indexes for efficient queries
 bottleSchema.index({ user: 1, cellar: 1, wineDefinition: 1 });
 bottleSchema.index({ wineDefinition: 1 }); // For reverse lookup
-// Barcode → wine recognition (services/barcodeLookup). Partial: only the few
-// bottles added by scanning carry one, so the index stays small.
+// Barcode → wine recognition (services/barcodeLookup, services/barcodeRegistry).
+// Partial: only the few bottles added by scanning carry one, so the index stays
+// small. A query uses it only when it states the filter: { $type: 'string' }
+// next to the code, as both services do.
 bottleSchema.index({ barcode: 1, wineDefinition: 1 }, { partialFilterExpression: { barcode: { $type: 'string' } } });
 bottleSchema.index({ cellar: 1, vintage: 1 }); // For filtering by vintage
 bottleSchema.index({ cellar: 1, rating: 1 }); // For filtering by rating

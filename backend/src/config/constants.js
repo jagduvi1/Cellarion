@@ -41,6 +41,10 @@ const MEMBER_WINE_HIDDEN_FIELDS = [
   // The label-sweetness curation marks: a curator's "the word is the name"
   // flag and the review marker. Curation internals, like verifiedChecks.
   'sweetnessReview', 'sweetnessInName',
+  // The wine's retail barcodes (services/barcodeRegistry.js). select:false
+  // keeps them out of find(); an aggregate or $lookup ignores that and leans
+  // on this list.
+  'barcodes',
 ];
 const excludeFields = (fields) => fields.map((f) => `-${f}`).join(' ');
 const MEMBER_WINE_EXCLUDE = excludeFields(MEMBER_WINE_HIDDEN_FIELDS);
