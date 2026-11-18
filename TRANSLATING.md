@@ -64,7 +64,7 @@ A language can be complete and still unread, so those are two flags, not one:
 | | label in Settings → Language | offered in the menu | auto-selected from the browser | declared via hreflang |
 |---|---|---|---|---|
 | `en` | English | yes | yes | yes |
-| `sv` (98 %, 1 % approved) | `Svenska (unreviewed)` | yes | **yes** | **yes** |
+| `sv` (human, completed by AI) | `Svenska (unreviewed)` | yes | **yes** | **yes** |
 | `fr` / `de` (AI, complete) | `Français (unreviewed)` | yes | **yes** | no (crawlers read English pages) |
 
 `UNREVIEWED` in [`coverage.js`](frontend/src/locales/coverage.js) is **label-only**: it never changes whether a language ships. Swedish is honest about its review state without losing the auto-detection and search visibility it has had since v1.88.0 — telling Swedish users nothing is wrong, but handing them an English UI to make a point about process would be. Fitness to ship stays governed by `beta`.

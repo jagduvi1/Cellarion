@@ -223,8 +223,8 @@ describe('virtual:locale-coverage (build-time plugin output)', () => {
     expect(sv.beta).toBe(sv.ratio < BETA_BELOW);
   });
 
-  test('French and German ship: complete, offered from the browser language, labelled unreviewed', () => {
-    for (const code of ['fr', 'de']) {
+  test('French, German and Swedish ship: complete, offered from the browser language, labelled unreviewed', () => {
+    for (const code of ['fr', 'de', 'sv']) {
       const locale = LOCALES.find((l) => l.code === code);
       expect(locale).toBeDefined();
       expect(locale.ratio).toBeGreaterThanOrEqual(BETA_BELOW);

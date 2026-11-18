@@ -88,6 +88,30 @@ describe('translation files', () => {
     expect(bad).toEqual([]);
   });
 
+  // And the other way round: a translation that leaves out a placeholder loses
+  // the value it stands for ("auf Lager" for "{{count}} in stock"). A plural
+  // form for a small count may leave out {{count}} ("one bottle"); an empty
+  // string is untranslated, which the test above handles.
+  test.each(otherLocales)('%s keeps every placeholder en has', (code, bundle) => {
+    const enNeeds = new Map();
+    for (const k of enKeys) {
+      const norm = k.replace(PLURAL_SUFFIX, '');
+      const set = enNeeds.get(norm) || new Set();
+      placeholders(get(en, k)).forEach((p) => set.add(p));
+      enNeeds.set(norm, set);
+    }
+    const bad = flatten(bundle).flatMap((k) => {
+      if (/_(zero|one|two|few)$/.test(k)) return [];
+      const v = get(bundle, k);
+      if (typeof v !== 'string' || !v) return [];
+      const need = enNeeds.get(k.replace(PLURAL_SUFFIX, ''));
+      if (!need) return [];
+      const have = new Set(placeholders(v));
+      return [...need].filter((p) => !have.has(p)).map((p) => `${k}: {{${p}}}`);
+    });
+    expect(bad).toEqual([]);
+  });
+
   // A key ending in _one/_other/… is a CLDR plural family to i18next AND to
   // Weblate — which scaffolds "missing" sibling forms as empty strings. Enum
   // lookups must therefore never use a plural suffix (nest them instead:
