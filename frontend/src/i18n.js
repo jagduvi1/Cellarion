@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import { readStored, writeStored, removeStored } from './utils/safeStorage';
 import { LOCALE_CODES, SHIPPED_CODES } from 'virtual:locale-coverage';
 
 // English is the fallback language and stays statically bundled so first
@@ -77,6 +78,31 @@ export const hasLanguagePreview = (search) =>
     search ?? (typeof window === 'undefined' ? '' : window.location.search)
   ).has(LANGUAGE_QUERY_PARAM);
 
+// Only a CHOSEN language is remembered: Settings, the account's saved
+// language, or a ?lng= preview. The language the detection below lands on is
+// not: i18next would store whatever it resolved, the English fallback
+// included, and that stored value then outranks the browser's language for
+// good, also after the browser's language ships.
+export const STORED_LANGUAGE_KEY = 'i18nextLng';
+export const LANGUAGE_CHOSEN_KEY = 'i18nextLngChosen';
+
+/**
+ * Drops a stored language nobody chose (one a detection stored), so the
+ * browser's language decides again. Pure over the given storage functions.
+ */
+export function forgetDetectedLanguage(read = readStored, remove = removeStored) {
+  if (read(STORED_LANGUAGE_KEY) && !read(LANGUAGE_CHOSEN_KEY)) remove(STORED_LANGUAGE_KEY);
+}
+
+/** Remembers a language as chosen. */
+export function rememberLanguage(code, write = writeStored) {
+  if (!code) return;
+  write(STORED_LANGUAGE_KEY, code);
+  write(LANGUAGE_CHOSEN_KEY, '1');
+}
+
+forgetDetectedLanguage();
+
 const detector = new LanguageDetector();
 
 detector.addDetector({
@@ -108,7 +134,8 @@ i18n
       // in the menu yet (see TRANSLATING.md). Explicit, so it may select an
       // incomplete language — unlike the navigator lookup, which may not.
       order: ['querystring', 'localStorage', 'shippedNavigator'],
-      caches: ['localStorage'],
+      // Nothing is stored by detection; rememberLanguage stores a choice.
+      caches: [],
       lookupLocalStorage: 'i18nextLng',
       lookupQuerystring: LANGUAGE_QUERY_PARAM,
     },
@@ -146,6 +173,19 @@ function syncDocumentLanguage(lng) {
     document.documentElement.lang = String(lng || 'en').replace('_', '-') || 'en';
   }
 }
+
+/**
+ * Switches the app to a language the user chose, and remembers it.
+ * Callers: pages/Settings.js (the language menu) and contexts/AuthContext.js
+ * (the account's saved language).
+ */
+export function chooseLanguage(code) {
+  rememberLanguage(code);
+  return i18n.changeLanguage(code);
+}
+
+// A ?lng= preview is a choice too: it stays when the translator moves on.
+if (hasLanguagePreview()) rememberLanguage(i18n.language);
 
 ensureLocaleLoaded(i18n.language);
 syncDocumentLanguage(i18n.language);

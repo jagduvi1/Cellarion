@@ -8,6 +8,7 @@ import { AuthProvider, useAuth, refreshOutcome, START_RETRY_DELAYS_MS } from './
 vi.mock('../i18n', () => ({
   default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
   hasLanguagePreview: () => false,
+  chooseLanguage: vi.fn(),
 }));
 
 const SERVER_USER = {

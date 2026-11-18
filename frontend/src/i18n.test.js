@@ -20,7 +20,7 @@ vi.mock('virtual:locale-coverage', () => ({
   SHIPPED_CODES: ['en', 'sv'],
 }));
 
-const { default: i18n, shippedNavigatorLanguage, resolveLocaleCode, hasLanguagePreview } =
+const { default: i18n, shippedNavigatorLanguage, resolveLocaleCode, hasLanguagePreview, forgetDetectedLanguage, rememberLanguage } =
   await import('./i18n');
 
 describe('resolving a language tag to a locale directory', () => {
@@ -137,6 +137,30 @@ describe('i18next wiring', () => {
 
   test('falls back to English so untranslated keys degrade rather than blank', () => {
     expect(i18n.options.fallbackLng).toContain('en');
+  });
+});
+
+describe('only a chosen language is remembered', () => {
+  const memory = (init = {}) => {
+    const m = new Map(Object.entries(init));
+    return { read: (k) => (m.has(k) ? m.get(k) : null), write: (k, v) => m.set(k, v), remove: (k) => m.delete(k), m };
+  };
+
+  test('detection stores nothing, so a browser keeps getting its own language once that language ships', () => {
+    expect(i18n.options.detection.caches).toEqual([]);
+  });
+
+  test('an English stored by an earlier visit, never chosen, is forgotten so the browser language decides again', () => {
+    const s = memory({ i18nextLng: 'en' });
+    forgetDetectedLanguage(s.read, s.remove);
+    expect(s.m.has('i18nextLng')).toBe(false);
+  });
+
+  test('a chosen language stays', () => {
+    const s = memory();
+    rememberLanguage('fr', s.write);
+    forgetDetectedLanguage(s.read, s.remove);
+    expect(s.read('i18nextLng')).toBe('fr');
   });
 });
 

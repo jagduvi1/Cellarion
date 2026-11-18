@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 vi.mock('../i18n', () => ({
   default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
   hasLanguagePreview: () => false,
+  chooseLanguage: vi.fn(),
 }));
 
 const SERVER_USER = {

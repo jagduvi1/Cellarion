@@ -39,14 +39,19 @@ export const BETA_BELOW = 0.9;
 // Removing a code from this set is the same deliberate, announced step as any
 // other graduation out of beta — see TRANSLATING.md, and remember
 // backend/src/config/languages.js.
-export const MACHINE_DRAFTED = new Set(['fr', 'de']);
+//
+// Empty today: French and German were completed by AI and checked against the
+// current English with a fixed word list, and ship labelled unreviewed
+// (UNREVIEWED below) until a speaker reviews them in Weblate.
+export const MACHINE_DRAFTED = new Set([]);
 
 // A regional variant inherits its base language's status: an `fr-CA` directory
-// branched from drafted `fr` is drafted too until reviewed.
+// branched from a drafted `fr` is drafted too until reviewed.
 const listed = (set, code) =>
   set.has(code) || set.has(String(code || '').split(/[-_]/)[0]);
 
-export const isMachineDrafted = (code) => listed(MACHINE_DRAFTED, code);
+// `drafted` lets the tests exercise the rule while the real set is empty.
+export const isMachineDrafted = (code, drafted = MACHINE_DRAFTED) => listed(drafted, code);
 
 // Languages no speaker has read yet. Distinct from MACHINE_DRAFTED on purpose:
 // Swedish was typed by a human but sits at 1% approved in Weblate (3,196
@@ -125,7 +130,7 @@ export function localeStatus(code, en, bundle, options) {
     translated,
     total,
     ratio,
-    beta: ratio < BETA_BELOW || isMachineDrafted(code),
+    beta: ratio < BETA_BELOW || isMachineDrafted(code, options && options.drafted),
     unreviewed: isUnreviewed(code),
   };
 }

@@ -8,6 +8,7 @@ import { AuthProvider, useAuth, REFRESH_WAIT_MAX_MS } from './AuthContext';
 vi.mock('../i18n', () => ({
   default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
   hasLanguagePreview: () => false,
+  chooseLanguage: vi.fn(),
 }));
 
 function memoryStorage() {

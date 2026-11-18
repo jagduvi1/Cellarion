@@ -16,7 +16,7 @@ export const API_MUTATION_EVENT = 'cellarion-api-mutation';
 const notifyApiMutation = (url) => {
   try { window.dispatchEvent(new CustomEvent(API_MUTATION_EVENT, { detail: { url: String(url || '') } })); } catch { /* noop */ }
 };
-import i18n, { hasLanguagePreview } from '../i18n';
+import i18n, { chooseLanguage, hasLanguagePreview } from '../i18n';
 import { getSignupSource } from '../utils/signupSource';
 import { markSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
 import { removeStored } from '../utils/safeStorage';
@@ -189,7 +189,7 @@ export const AuthProvider = ({ children }) => {
     if (userData?.localeDefaultsPending) return;
     const preferred = userData?.preferences?.language;
     if (preferred && findLanguage(preferred)) {
-      i18n.changeLanguage(preferred);
+      chooseLanguage(preferred);
     }
   };
 
