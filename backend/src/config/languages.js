@@ -13,6 +13,6 @@
  * Beta languages are deliberately absent: pointing a crawler at a
  * half-translated page is worse than not claiming the language at all.
  */
-const CRAWLER_LANGUAGES = ['en', 'sv'];
+const CRAWLER_LANGUAGES = ['en', 'sv', 'fr', 'de'];
 
 module.exports = { CRAWLER_LANGUAGES };

@@ -96,10 +96,13 @@ describe('machine-drafted languages', () => {
     bottles: { count_one: '{{count}} bouteille', count_other: '{{count}} bouteilles' },
   };
 
+  // The real set is empty today; 'xx' stands in for a bulk-drafted language.
+  const drafted = new Set(['xx']);
+
   test('a fully-filled drafted locale is still beta — filled is not reviewed', () => {
-    const fr = localeStatus('fr', source, complete);
-    expect(fr.ratio).toBe(1);
-    expect(fr.beta).toBe(true);
+    const xx = localeStatus('xx', source, complete, { drafted });
+    expect(xx.ratio).toBe(1);
+    expect(xx.beta).toBe(true);
   });
 
   test('an equally complete locale that was never drafted is not beta', () => {
@@ -107,18 +110,18 @@ describe('machine-drafted languages', () => {
   });
 
   test('a regional variant inherits its base language draft status', () => {
-    expect(isMachineDrafted('fr-CA')).toBe(true);
-    expect(isMachineDrafted('fr_CA')).toBe(true);
-    expect(isMachineDrafted('sv')).toBe(false);
-    expect(isMachineDrafted(undefined)).toBe(false);
+    expect(isMachineDrafted('xx-CA', drafted)).toBe(true);
+    expect(isMachineDrafted('xx_CA', drafted)).toBe(true);
+    expect(isMachineDrafted('sv', drafted)).toBe(false);
+    expect(isMachineDrafted(undefined, drafted)).toBe(false);
   });
 
   test('the flag only ever adds beta, never clears it', () => {
     // A drafted locale that is also genuinely incomplete stays beta for both
     // reasons — removing it from the set must not ship a half-empty language.
     const half = { cellars: { title: 'Caves' } };
-    expect(localeStatus('fr', source, half).beta).toBe(true);
-    expect(localeStatus('de', source, half).ratio).toBeCloseTo(0.5);
+    expect(localeStatus('xx', source, half, { drafted }).beta).toBe(true);
+    expect(localeStatus('xx', source, half, { drafted }).ratio).toBeCloseTo(0.5);
   });
 });
 
@@ -126,8 +129,8 @@ describe('unreviewed languages', () => {
   const source = { cellars: { title: 'Cellars' } };
   const done = { cellars: { title: 'Caves' } };
 
-  test('a drafted language is both beta and unreviewed', () => {
-    expect(localeStatus('fr', source, done)).toMatchObject({ beta: true, unreviewed: true });
+  test('a complete French is offered as finished, and still says it is unreviewed', () => {
+    expect(localeStatus('fr', source, done)).toMatchObject({ beta: false, unreviewed: true });
   });
 
   test('Swedish is unreviewed WITHOUT being beta — the flag must not demote it', () => {
@@ -220,15 +223,14 @@ describe('virtual:locale-coverage (build-time plugin output)', () => {
     expect(sv.beta).toBe(sv.ratio < BETA_BELOW);
   });
 
-  test('the machine-drafted languages ship as beta however full they are', () => {
-    // The whole point of the flag: fr/de are ~100% filled, so without it they
-    // would be auto-selected from the browser and declared via hreflang before
-    // a single string had been read by a French or German speaker.
+  test('French and German ship: complete, offered from the browser language, labelled unreviewed', () => {
     for (const code of ['fr', 'de']) {
       const locale = LOCALES.find((l) => l.code === code);
       expect(locale).toBeDefined();
-      expect(locale.beta).toBe(true);
-      expect(SHIPPED_CODES).not.toContain(code);
+      expect(locale.ratio).toBeGreaterThanOrEqual(BETA_BELOW);
+      expect(locale.beta).toBe(false);
+      expect(locale.unreviewed).toBe(true);
+      expect(SHIPPED_CODES).toContain(code);
     }
   });
 });

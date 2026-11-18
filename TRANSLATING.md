@@ -45,9 +45,9 @@ Starting a language from scratch? [How Cellarion was translated into Norwegian B
 3. Anyone can select a beta language deliberately, but nobody is switched into one automatically: browser-language detection only ever selects a finished language, and only finished languages are declared to search engines.
 4. At **90 % of user-facing strings** the label and the restrictions drop off by themselves — no code change, no waiting for someone to add your language to a list.
 
-### Machine-drafted languages are a special case
+### French and German: complete, translated by AI, not yet reviewed
 
-French and German did not start from zero: their first pass was **drafted in bulk by the maintainers** so that reviewing beats typing. Those languages are listed in `MACHINE_DRAFTED` in [`frontend/src/locales/coverage.js`](frontend/src/locales/coverage.js) and **stay labelled beta at any percentage** — the percentage only knows that a string is *filled*, and a drafted locale is 100 % filled and 0 % read.
+French and German did not start from zero: their text was **written by AI** and checked against the current English with a fixed word list (wine terms, "vous" in French, "du" in German), so reviewing beats typing. They ship like any finished language (offered from the browser's language, declared to search engines) and say **unreviewed** in Settings → Language until a speaker has read them.
 
 What that means if you translate French or German: everything is already there, so your work is **reviewing, not filling in blanks**. In Weblate the queue you want is *unreviewed* strings, not *untranslated* ones — read what is there, fix what is wrong, and approve what is right. The search query is:
 
@@ -55,7 +55,7 @@ What that means if you translate French or German: everything is already there, 
 state:translated NOT state:approved
 ```
 
-When enough of a language has been read by an actual speaker, a maintainer removes it from `MACHINE_DRAFTED` and it graduates the normal way.
+A future language bootstrapped in bulk without that check goes in `MACHINE_DRAFTED` in [`frontend/src/locales/coverage.js`](frontend/src/locales/coverage.js), which keeps it labelled beta at any percentage (the percentage only knows that a string is *filled*) until a maintainer removes it.
 
 ### "Unreviewed" is tracked separately from "beta"
 
@@ -65,7 +65,7 @@ A language can be complete and still unread, so those are two flags, not one:
 |---|---|---|---|---|
 | `en` | English | yes | yes | yes |
 | `sv` (98 %, 1 % approved) | `Svenska (unreviewed)` | yes | **yes** | **yes** |
-| `fr` / `de` (drafted) | `Français (beta · unreviewed)` | yes | no | no |
+| `fr` / `de` (AI, complete) | `Français (unreviewed)` | yes | **yes** | **yes** |
 
 `UNREVIEWED` in [`coverage.js`](frontend/src/locales/coverage.js) is **label-only**: it never changes whether a language ships. Swedish is honest about its review state without losing the auto-detection and search visibility it has had since v1.88.0 — telling Swedish users nothing is wrong, but handing them an English UI to make a point about process would be. Fitness to ship stays governed by `beta`.
 
