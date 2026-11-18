@@ -2151,7 +2151,7 @@
       "adminNotesPlaceholder": "Optionale Notizen für den Nutzer…",
       "adminNotesRequiredHint": "(erforderlich bei Ablehnung)",
       "potentialDuplicates": "⚠️ Mögliche Dopplungen gefunden",
-      "match": "% Übereinstimmung",
+      "match": "{{percent}} % Übereinstimmung",
       "useThis": "Verwenden",
       "wineDefIdLabel": "Wein-Definitions-ID",
       "wineDefIdPlaceholder": "Wein-ID aus dem Register einfügen",
@@ -3475,7 +3475,7 @@
     "runningLow": "Geht zur Neige",
     "gettingLow": "Wird knapp",
     "wellStocked": "Gut bestückt",
-    "inStock": "auf Lager",
+    "inStock": "{{count}} auf Lager",
     "consumeRate": "~{{rate}}/Monat",
     "monthsSupply": "~{{months}} Monate Vorrat",
     "outOfStock": "Ausverkauft",
@@ -3596,7 +3596,7 @@
         "summary": "Teile Keller mit Freunden oder sende einen Link zu einer bestimmten Flasche.",
         "d1": "Keller teilen: Öffne den Keller und tippe auf ⋮ → „Teilen“. Lade jemanden per E-Mail als Betrachter (kann Flaschen und Regale ansehen) oder Bearbeiter (kann auch Flaschen hinzufügen und entfernen) ein. Nur der Besitzer des Kellers kann teilen.",
         "d2": "Flasche teilen: Klicke auf der Flaschen-Detailseite auf das Teilungssymbol, um einen direkten Link an jemanden zu senden.",
-        "d3": "„Zum Besitzer machen“ übergibt den ganzen Keller mit seinen Flaschen und Regalen an jemanden, mit dem du ihn teilst. Du bleibst als Bearbeiter dabei, kannst ihn aber nicht zurücknehmen."
+        "d3": "„Zum Eigentümer machen“ übergibt den ganzen Keller mit seinen Flaschen und Regalen an jemanden, mit dem du ihn teilst. Du bleibst als Bearbeiter dabei, kannst ihn aber nicht zurücknehmen."
       },
       "racks": {
         "title": "Regale",
@@ -3604,7 +3604,7 @@
         "d1": "Öffne einen Keller und tippe oben in der Leiste auf „Regale“.",
         "d2": "Wähle einen Regaltyp: Raster, X-Regal, Wabe, A-Regal, Stapel, Modularer Würfel, Offenes Regal oder Weinschrank.",
         "d3": "Passe jedes Regal mit einem Namen, einer Größe und einem Layout an, das deine echte Lagerung widerspiegelt.",
-        "d4": "Platziere Flaschen auf Regalplätzen, indem du auf einen leeren Platz klickst und eine Flasche auswählst. Die Seite einer noch nicht platzierten Flasche bietet auch „In ein Regal stellen“, das die Regalseite öffnet, bereit zum Platzieren.",
+        "d4": "Platziere Flaschen auf Regalplätzen, indem du auf einen leeren Platz klickst und eine Flasche auswählst. Die Seite einer noch nicht platzierten Flasche bietet auch „In einem Regal platzieren“, das die Regalseite öffnet, bereit zum Platzieren.",
         "d5": "Das visuelle Raster zeigt, welche Fächer belegt und welche leer sind."
       },
       "roomView": {
@@ -3621,7 +3621,7 @@
         "title": "Entnahmelisten",
         "summary": "Die Flaschen, die du gleich holen willst, jeweils mit Keller, Regal und Platz.",
         "earlyTitle": "Entnahmelisten (früher Zugang)",
-        "earlyNote": "Entnahmelisten sind eine Vorschau im frühen Zugang. Um sie auszuprobieren, aktiviere Einstellungen → Früher Zugang → „Zeig mir neue Funktionen vor allen anderen“.",
+        "earlyNote": "Entnahmelisten sind eine Vorschau im frühen Zugang. Um sie auszuprobieren, aktiviere Einstellungen → Früher Zugang → „Mir neue Funktionen vor allen anderen zeigen“.",
         "d1": "Flaschen hinzufügen: Tippe in deinem Keller auf „Auswählen“, hake die Flaschen an und wähle „Entnahmeliste“. Oder tippe auf der Seite einer Flasche oder auf einer Wein- und Jahrgangsseite auf ⋮ → „Zur Entnahmeliste hinzufügen“.",
         "d2": "Wähle eine Liste oder „Neue Entnahmeliste…“, um eine anzulegen und ihr einen Namen zu geben, zum Beispiel Samstagsessen.",
         "d3": "Deine Listen findest du im Menü unter „Entnahmelisten“. Jede zeigt, wo jede Flasche liegt, in der Reihenfolge, in der du an ihnen vorbeikommst.",
@@ -3691,7 +3691,7 @@
         "d2": "Der Tab „Tabelle“ listet deine Flaschen. Wähle, welche (Aktive Flaschen, Entnommene Flaschen oder Alle Flaschen) und welche Keller, grenze sie mit „+ Filter“ ein und wähle die Spalten.",
         "d3": "„Zusammenfassen“ gruppiert die Flaschen, zum Beispiel nach Region oder Jahrgang, und ergänzt Summen oder Durchschnitte wie Preis oder Bewertung. Zeig das Ergebnis als Tabelle, Balken, Donut oder Linie.",
         "d4": "„Ansichten“ enthält fertige Ansichten wie „Wo mein Geld steckt“ und „Bald trinken (meine Fenster)“. „Ansicht speichern“ behält deine eigenen, und ein Stern hält die meistgenutzten oben.",
-        "d5": "„Zum Dashboard hinzufügen“ heftet die Tabelle oder das Diagramm an ein Dashboard. Der Tab „Boards“ zeigt deine Dashboards; „+ Neues Dashboard“ legt ein weiteres an.",
+        "d5": "„Zum Dashboard hinzufügen“ heftet die Tabelle oder das Diagramm an ein Dashboard. Der Tab „Dashboards“ zeigt deine Dashboards; „+ Neues Dashboard“ legt ein weiteres an.",
         "d6": "„CSV exportieren“ lädt die Tabelle als Tabellendatei herunter.",
         "d7": "Preise werden in die Währung umgerechnet, die du in den Einstellungen gewählt hast."
       },
@@ -3712,7 +3712,7 @@
         "title": "Massenimport",
         "summary": "Hol Flaschen aus einer Datei, einer anderen App oder einem Foto eines Kassenbons herein.",
         "d1": "Öffne den Keller und tippe auf ⋮ → „Flaschen importieren“.",
-        "d2": "Lade eine Datei hoch: einen Cellarion-Export (JSON), Vivino, CellarTracker, Oeno by Vintec, Ploc oder eine beliebige CSV mit Spalten für Wein, Erzeuger und Jahrgang.",
+        "d2": "Lade eine Datei hoch: einen Cellarion-Export (JSON), Vivino, CellarTracker, Oeno by Vintec, Ploc oder eine beliebige CSV mit den Spalten Wine, Producer und Vintage.",
         "d3": "Importierte Weine werden automatisch dem Register zugeordnet, und du prüfst die Zuordnungen, bevor etwas hinzugefügt wird.",
         "d4": "Mehrere Flaschen gekauft? „Kassenbon oder Bestellung scannen“ (in der Beta) liest Fotos oder ein PDF des Kassenbons in Zeilen ein, die du genauso prüfst.",
         "d5": "Um ganze Keller samt Regalen und Layout aus einem Cellarion-Export wiederherzustellen, nutze „Kellerexport importieren“ unter Einstellungen → Deine Daten."
@@ -3725,7 +3725,7 @@
         "d3": "Bewertungsskala: 5 Sterne, 20 Punkte oder 100 Punkte.",
         "d4": "Push-Benachrichtigungspräferenzen und Geräteverwaltung.",
         "d5": "Profil: Benutzername und E-Mail.",
-        "d6": "Der Offline-Modus steht unter „Präferenzen“, „Neue Funktionen früh testen“ unter „Früher Zugang“: siehe die eigenen Abschnitte unten.",
+        "d6": "Der Offline-Modus steht unter „Präferenzen“, „Neue Funktionen früh ausprobieren“ unter „Früher Zugang“: siehe die eigenen Abschnitte unten.",
         "d7": "Deine Daten: Lade alles herunter, was Cellarion über dich speichert, oder exportiere deine Keller, um sie woandershin mitzunehmen."
       },
       "offline": {
@@ -3741,9 +3741,9 @@
       "earlyAccess": {
         "title": "Früher Zugang",
         "summary": "Probiere neue Funktionen vor allen anderen aus und sag uns, was du denkst.",
-        "d1": "Aktiviere ihn unter Einstellungen → Früher Zugang → „Zeig mir neue Funktionen vor allen anderen“. Du kannst ihn jederzeit wieder ausschalten.",
+        "d1": "Aktiviere ihn unter Einstellungen → Früher Zugang → „Mir neue Funktionen vor allen anderen zeigen“. Du kannst ihn jederzeit wieder ausschalten.",
         "d2": "Größere Änderungen erreichen diese Mitglieder zuerst, damit sie ausprobiert und verbessert werden können, bevor alle sie bekommen.",
-        "d3": "Einstellungen → Früher Zugang zeigt, was „Jetzt in der Beta“ ist und was „Kürzlich veröffentlicht“ wurde.",
+        "d3": "Einstellungen → Früher Zugang zeigt, was „Jetzt in der Beta“ ist und was „Kürzlich freigegeben“ wurde.",
         "d4": "Eine Funktion im frühen Zugang zeigt einen Beta-Streifen mit „Feedback geben“, der deine Gedanken als Support-Ticket an das Cellarion-Team schickt.",
         "d5": "Deine Daten werden so oder so gleich gespeichert, beim Ausschalten geht also nichts verloren.",
         "d6": "Wie alles in Cellarion ist er kostenlos."
@@ -3985,7 +3985,7 @@
     "age6to10": "6–10 Jahre",
     "age11to20": "11–20 Jahre",
     "age20plus": "> 20 Jahre",
-    "ageNV": "JG / unbekannt",
+    "ageNV": "NV / unbekannt",
     "ratingExcellent": "Hervorragend",
     "ratingGood": "Gut",
     "ratingAverage": "Durchschnittlich",
@@ -4104,10 +4104,10 @@
       "maturity": "Trinkfenster-Reife"
     },
     "totalUsers": "Nutzer",
-    "withBottles": "mit Flaschen",
+    "withBottles": "{{count, number}} mit Flaschen",
     "totalCellars": "Keller",
     "activeBottles": "Aktive Flaschen",
-    "allTime": "insgesamt",
+    "allTime": "{{count, number}} insgesamt",
     "consumedBottles": "Konsumierte Flaschen",
     "drank_one": "{{count, number}} getrunken",
     "drank_other": "{{count, number}} getrunken",
@@ -4140,7 +4140,7 @@
     "uniqueWines": "Wein-Definitionen",
     "inLibrary": "in gemeinsamem Register",
     "newUsers30": "Neue Nutzer (30d)",
-    "in30Days": "in 30 Tagen",
+    "in30Days": "{{count, number}} in 30 Tagen",
     "in90Days": "in 90 Tagen",
     "countIn90Days": "{{count, number}} in 90 Tagen",
     "bottlesAdded30": "Flaschen hinzugefügt (30d)",
@@ -4445,7 +4445,7 @@
     "identifying": "Wein wird identifiziert…",
     "change": "Ändern",
     "vintage": "Jahrgang",
-    "vintagePlaceholder": "z.B. 2020 oder JG",
+    "vintagePlaceholder": "z.B. 2020 oder NV",
     "priority": "Priorität",
     "priorityLow": "Niedrig",
     "priorityMedium": "Mittel",

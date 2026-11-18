@@ -299,7 +299,7 @@ function Settings() {
     const result = await updatePreferences({ currency, language, ratingScale, rackNavigation, restockScope, temperatureUnit });
     setSaving(false);
     if (result.success) {
-      i18n.changeLanguage(language);
+      chooseLanguage(language);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } else {

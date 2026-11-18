@@ -15,6 +15,7 @@ vi.mock('../i18n', () => ({
     })[key] ?? (typeof fallback === 'string' ? fallback : fallback?.defaultValue),
   },
   hasLanguagePreview: () => false,
+  chooseLanguage: vi.fn(),
 }));
 
 const json = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });

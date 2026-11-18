@@ -6,13 +6,16 @@ import i18n from '../i18n';
 // language was only the server default) and to start on USD. The server now
 // marks a new account (localeDefaultsPending); its first sign-in keeps the
 // language on screen and saves it, with the device's currency, exactly once.
+const i18nMock = vi.hoisted(() => ({
+  changeLanguage: vi.fn(), resolvedLanguage: 'sv', language: 'sv-SE',
+  // Answers the inline English, as a failed sign-in words its message with it.
+  t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key),
+}));
 vi.mock('../i18n', () => ({
-  default: {
-    changeLanguage: vi.fn(), resolvedLanguage: 'sv', language: 'sv-SE',
-    // Answers the inline English, as a failed sign-in words its message with it.
-    t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key),
-  },
+  default: i18nMock,
   hasLanguagePreview: () => false,
+  // A chosen language goes through i18n.changeLanguage, which these tests watch.
+  chooseLanguage: (code) => i18nMock.changeLanguage(code),
 }));
 vi.mock('../utils/localeDefaults', () => ({ guessCurrency: () => 'SEK', guessTemperatureUnit: () => 'C' }));
 

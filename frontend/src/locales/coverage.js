@@ -46,7 +46,7 @@ export const BETA_BELOW = 0.9;
 export const MACHINE_DRAFTED = new Set([]);
 
 // A regional variant inherits its base language's status: an `fr-CA` directory
-// branched from drafted `fr` is drafted too until reviewed.
+// branched from a drafted `fr` is drafted too until reviewed.
 const listed = (set, code) =>
   set.has(code) || set.has(String(code || '').split(/[-_]/)[0]);
 

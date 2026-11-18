@@ -16,6 +16,7 @@ import { readBottleViewMode, storeBottleViewMode } from './utils/bottleViewMode'
 vi.mock('./i18n', () => ({
   default: { changeLanguage: vi.fn(), t: (k) => k },
   hasLanguagePreview: () => false,
+  chooseLanguage: vi.fn(),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

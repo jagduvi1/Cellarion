@@ -47,7 +47,7 @@ Starting a language from scratch? [How Cellarion was translated into Norwegian B
 
 ### French and German: complete, translated by AI, not yet reviewed
 
-French and German did not start from zero: their text was **written by AI** and checked against the current English with a fixed word list (wine terms, "vous" in French, "du" in German), so reviewing beats typing. They ship like any finished language (offered from the browser's language, declared to search engines) and say **unreviewed** in Settings → Language until a speaker has read them.
+French and German did not start from zero: their text was **written by AI** and checked against the current English with a fixed word list (wine terms, "vous" in French, "du" in German), so reviewing beats typing. They ship like any finished language (offered from the browser's language) and say **unreviewed** in Settings → Language until a speaker has read them. They are not declared to search engines yet: the pages crawlers read are English, so that waits for public pages in those languages.
 
 What that means if you translate French or German: everything is already there, so your work is **reviewing, not filling in blanks**. In Weblate the queue you want is *unreviewed* strings, not *untranslated* ones — read what is there, fix what is wrong, and approve what is right. The search query is:
 
@@ -65,7 +65,7 @@ A language can be complete and still unread, so those are two flags, not one:
 |---|---|---|---|---|
 | `en` | English | yes | yes | yes |
 | `sv` (98 %, 1 % approved) | `Svenska (unreviewed)` | yes | **yes** | **yes** |
-| `fr` / `de` (AI, complete) | `Français (unreviewed)` | yes | **yes** | **yes** |
+| `fr` / `de` (AI, complete) | `Français (unreviewed)` | yes | **yes** | no (crawlers read English pages) |
 
 `UNREVIEWED` in [`coverage.js`](frontend/src/locales/coverage.js) is **label-only**: it never changes whether a language ships. Swedish is honest about its review state without losing the auto-detection and search visibility it has had since v1.88.0 — telling Swedish users nothing is wrong, but handing them an English UI to make a point about process would be. Fitness to ship stays governed by `beta`.
 
