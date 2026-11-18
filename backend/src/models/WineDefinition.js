@@ -187,6 +187,25 @@ const wineDefinitionSchema = new mongoose.Schema({
     default: null,
     trim: true
   },
+  // The retail barcodes (GTINs) of this wine. A barcode names one product in
+  // one bottle size, and producers usually keep it from one vintage to the
+  // next, so the vintage-free wine is where it belongs. Learned from members'
+  // bottles or loaded from a catalogue (services/barcodeRegistry.js); only how
+  // many members' bottles agree is kept, never whose. Curation data: not
+  // loaded unless asked for (select: false), so no read hands it out.
+  barcodes: {
+    type: [new mongoose.Schema({
+      code: { type: String, required: true, match: /^\d{8,14}$/ },
+      bottleSize: { type: String, default: null, maxlength: 20 },
+      // 'members', or the name of the catalogue it came from.
+      source: { type: String, required: true, maxlength: 60 },
+      // Distinct members whose bottles of this wine carry the code.
+      owners: { type: Number, default: 0, min: 0 },
+      addedAt: { type: Date, default: Date.now },
+    }, { _id: false })],
+    default: undefined,
+    select: false,
+  },
   communityRating: {
     averageNormalized: {
       type: Number,
@@ -776,6 +795,11 @@ const wineDefinitionSchema = new mongoose.Schema({
 wineDefinitionSchema.index({ name: 'text', producer: 'text' });
 
 // Compound indexes for common filter combinations
+// One wine per barcode, across the registry (services/barcodeRegistry.js).
+wineDefinitionSchema.index(
+  { 'barcodes.code': 1 },
+  { unique: true, partialFilterExpression: { 'barcodes.code': { $type: 'string' } } }
+);
 wineDefinitionSchema.index({ country: 1, type: 1 });
 wineDefinitionSchema.index({ country: 1, region: 1 });
 wineDefinitionSchema.index({ type: 1, createdAt: -1 });

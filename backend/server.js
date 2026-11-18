@@ -188,6 +188,26 @@ connectDB().then(async () => {
     console.error('[migration] Star-grade re-key failed (will retry next boot):', err.message);
   }
 
+  // Barcodes onto the wine (services/barcodeRegistry.js), once: every barcode
+  // members' bottles carry is attached to the public wine most of them name.
+  // The unique index is built first, so one barcode can only land on one wine.
+  try {
+    const SiteConfig = require('./src/models/SiteConfig');
+    const MARKER = 'migration.barcodesOnWine';
+    if (!(await SiteConfig.exists({ key: MARKER }))) {
+      await require('./src/models/WineDefinition').init();
+      const r = await require('./src/services/barcodeRegistry').backfillBarcodes();
+      console.log(`[migration] Barcodes onto the wine: ${JSON.stringify(r)}`);
+      await SiteConfig.updateOne(
+        { key: MARKER },
+        { $set: { value: { at: new Date(), ...r }, updatedAt: new Date() } },
+        { upsert: true },
+      );
+    }
+  } catch (err) {
+    console.error('[migration] Barcodes onto the wine failed (will retry next boot):', err.message);
+  }
+
   try {
     await searchService.initialize();
   } catch (err) {

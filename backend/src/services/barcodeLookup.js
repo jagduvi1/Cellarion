@@ -1,14 +1,14 @@
 /**
- * Barcode → wine: which registry wine a retail barcode belongs to, learned
- * from the bottles members added after scanning it.
+ * Barcode → wine: which registry wine a retail barcode belongs to.
  *
- * There is no barcode table to keep in sync and no record of who scanned what:
- * the evidence is the `barcode` field on members' own bottles, which leaves
- * with a bottle and with an account. For a code, bottles are grouped by wine
- * and counted by DISTINCT OWNERS — one member adding twelve bottles is one
- * vote, so a single mistake cannot outvote everyone else — and the most
- * confirmed wine the viewer is allowed to see wins. The answer names the wine
- * and how many members confirmed it, never who.
+ * Two sources, in this order: the wine's own record of the code
+ * (WineDefinition.barcodes, kept by services/barcodeRegistry.js from members'
+ * bottles and catalogues), then the members' bottles themselves. On bottles,
+ * evidence is grouped by wine and counted by DISTINCT OWNERS — one member
+ * adding twelve bottles is one vote, so a single mistake cannot outvote
+ * everyone else — and the most confirmed wine the viewer is allowed to see
+ * wins. The answer names the wine and how many members confirmed it, never
+ * who.
  *
  * Vintage: a GTIN usually stays the same across vintages, so the year is
  * suggested only when at least two owners agree on one vintage and nobody has
@@ -30,9 +30,29 @@ const CANDIDATES = 5;
 const MIN_OWNERS_FOR_VINTAGE = 2;
 
 /**
+ * The answer for one candidate wine, or null when the viewer may not see it
+ * (a pending or private draft wine of someone else is skipped, not revealed).
+ */
+async function answerFor(wineId, row, viewer, entry) {
+  const wine = await WineDefinition.findById(wineId).select(MEMBER_SELECT).populate(['country', 'region', 'grapes']);
+  if (!wine || !canSeeWine(wine, viewer)) return null;
+  const payload = decorateGrapes(wine);
+  delete payload.createdBy;
+  const owners = Math.max(row ? row.owners : 0, entry ? entry.owners || 0 : 0);
+  const vintagesSeen = new Set(row ? row.vintages.flat().filter(Boolean) : []);
+  const vintage = row && row.owners >= MIN_OWNERS_FOR_VINTAGE && vintagesSeen.size === 1 ? [...vintagesSeen][0] : null;
+  return { wine: payload, vintage, owners, ...(entry && entry.bottleSize ? { bottleSize: entry.bottleSize } : {}) };
+}
+
+/**
+ * The registry wine a barcode belongs to. The wine's own record of the code
+ * (services/barcodeRegistry.js) answers first: it outlives the bottles that
+ * taught it and holds catalogue codes no member has scanned. Without one,
+ * members' bottles decide, most distinct owners first.
+ * REST: GET /api/wines/barcode/:code.
  * @param {string} code    canonical barcode (utils/barcode.normalizeBarcode)
  * @param {{ userId, roles }} viewer
- * @returns {Promise<{ wine: object|null, vintage?: string|null, owners?: number }>}
+ * @returns {Promise<{ wine: object|null, vintage?: string|null, owners?: number, bottleSize?: string }>}
  */
 async function lookupBarcode(code, viewer) {
   const rows = await Bottle.aggregate([
@@ -45,17 +65,17 @@ async function lookupBarcode(code, viewer) {
     { $limit: CANDIDATES },
   ]);
 
+  const holder = await WineDefinition.findOne({ 'barcodes.code': code }).select('+barcodes').lean();
+  if (holder) {
+    const entry = (holder.barcodes || []).find((b) => b.code === code);
+    const row = rows.find((r) => String(r._id) === String(holder._id));
+    const answer = await answerFor(holder._id, row, viewer, entry);
+    if (answer) return answer;
+  }
   for (const row of rows) {
-    const wine = await WineDefinition.findById(row._id).select(MEMBER_SELECT).populate(['country', 'region', 'grapes']);
-    // A pending or private draft wine of someone else is skipped, not
-    // revealed: the next candidate (or nothing) answers instead.
-    if (!wine || !canSeeWine(wine, viewer)) continue;
-    const payload = decorateGrapes(wine);
-    delete payload.createdBy;
-
-    const vintagesSeen = new Set(row.vintages.flat().filter(Boolean));
-    const vintage = row.owners >= MIN_OWNERS_FOR_VINTAGE && vintagesSeen.size === 1 ? [...vintagesSeen][0] : null;
-    return { wine: payload, vintage, owners: row.owners };
+    if (holder && String(row._id) === String(holder._id)) continue;
+    const answer = await answerFor(row._id, row, viewer);
+    if (answer) return answer;
   }
   return { wine: null };
 }

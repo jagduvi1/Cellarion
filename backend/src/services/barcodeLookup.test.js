@@ -9,7 +9,7 @@
  * the code is clearly vintage-specific.
  */
 jest.mock('../models/Bottle', () => ({ aggregate: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn() }));
 
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
@@ -19,7 +19,13 @@ const VIEWER = { userId: 'viewer', roles: ['user'] };
 const chain = (doc) => ({ select: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(doc) }) });
 const wine = (id, extra = {}) => ({ _id: id, name: `Wine ${id}`, producer: 'P', grapes: [], createdBy: 'someone', ...extra });
 
-beforeEach(() => jest.clearAllMocks());
+// The wine's own barcode record (services/barcodeRegistry.js): none unless a test sets one.
+const holder = (doc) => ({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(doc) }) });
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  WineDefinition.findOne.mockReturnValue(holder(null));
+});
 
 it('groups by wine and counts distinct owners, most confirmed first', async () => {
   Bottle.aggregate.mockResolvedValue([{ _id: 'w1', owners: 3, vintages: [['2019'], ['2020'], ['2019']], last: new Date() }]);
@@ -74,4 +80,40 @@ it('skips a wine the viewer may not see and answers with the next one', async ()
 it('answers wine:null for a code nobody has added yet', async () => {
   Bottle.aggregate.mockResolvedValue([]);
   expect(await lookupBarcode('4006381333931', VIEWER)).toEqual({ wine: null });
+});
+
+describe("the wine's own barcode record answers first", () => {
+  it('names the wine that holds the code, even when no bottle carries it any more', async () => {
+    Bottle.aggregate.mockResolvedValue([]);
+    WineDefinition.findOne.mockReturnValue(holder({ _id: 'w9', barcodes: [{ code: '4006381333931', owners: 2, bottleSize: '750ml', source: 'members' }] }));
+    WineDefinition.findById.mockReturnValue(chain(wine('w9')));
+
+    const out = await lookupBarcode('4006381333931', VIEWER);
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({ 'barcodes.code': '4006381333931' });
+    expect(out).toMatchObject({ wine: { _id: 'w9' }, owners: 2, bottleSize: '750ml', vintage: null });
+  });
+
+  it('wins over the bottles, and takes its vintage hint from the bottles of that wine', async () => {
+    Bottle.aggregate.mockResolvedValue([
+      { _id: 'w1', owners: 3, vintages: [['2018']], last: new Date() },
+      { _id: 'w9', owners: 2, vintages: [['2019'], ['2019']], last: new Date() },
+    ]);
+    WineDefinition.findOne.mockReturnValue(holder({ _id: 'w9', barcodes: [{ code: '4006381333931', owners: 2, source: 'members' }] }));
+    WineDefinition.findById.mockImplementation((id) => chain(wine(id)));
+
+    const out = await lookupBarcode('4006381333931', VIEWER);
+    expect(out.wine._id).toBe('w9');
+    expect(out.vintage).toBe('2019');
+  });
+
+  it('falls back to the bottles when the viewer may not see the wine that holds it', async () => {
+    Bottle.aggregate.mockResolvedValue([{ _id: 'w2', owners: 1, vintages: [], last: new Date() }]);
+    WineDefinition.findOne.mockReturnValue(holder({ _id: 'hidden', barcodes: [{ code: '4006381333931', owners: 4, source: 'members' }] }));
+    WineDefinition.findById.mockImplementation((id) => chain(id === 'hidden'
+      ? wine('hidden', { draft: true, createdBy: 'someone-else' })
+      : wine('w2')));
+
+    const out = await lookupBarcode('4006381333931', VIEWER);
+    expect(out.wine._id).toBe('w2');
+  });
 });

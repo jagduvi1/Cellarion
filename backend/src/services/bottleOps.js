@@ -22,6 +22,7 @@ const { normalizeCurrency, parseCurrency } = require('../config/currencies');
 const { normalizeBarcode } = require('../utils/barcode');
 const { parseExpectedArrival } = require('../utils/onOrder');
 const { logAudit } = require('./audit');
+const { learnBarcodeSoon } = require('./barcodeRegistry');
 const Rack = require('../models/Rack');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const Bottle = require('../models/Bottle');
@@ -634,6 +635,8 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   }
 
   // Post-save side effects, one order for both surfaces.
+  // A scanned barcode also teaches the shared registry which wine it is.
+  if (bottle.barcode && !req?.user?.isDemo) learnBarcodeSoon(bottle.barcode, { via: 'add' });
   // A bottle ON ORDER is not queued for a sommelier drink window yet: an en
   // primeur vintage may not even be released, so there is nothing to judge.
   // markArrived queues it the day it arrives.
@@ -937,6 +940,7 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
     if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
     throw err;
   }
+  if (changes.barcode) learnBarcodeSoon(changes.barcode, { via: 'edit' });
   if ('vintage' in changes) {
     // The bottle's photos are photos of THIS bottle, so they follow its
     // vintage (same-vintage photos are preferred over the wine's generic
@@ -1290,6 +1294,8 @@ async function changeBottleWine(bottle, wineDoc, req) {
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
     { fromWineId: fromId, fromWine: fromName, toWineId: String(wineDoc._id), toWine: [wineDoc.producer, wineDoc.name].filter(Boolean).join(' — '), vintage: bottle.vintage });
 
+  // A barcode on the bottle is now evidence for the new wine.
+  if (bottle.barcode) learnBarcodeSoon(bottle.barcode, { via: 'change_wine' });
   // Bookkeeping for the new (wine, vintage): never fails the change.
   if (bottle.status !== ORDERED_STATUS) {
     try {
