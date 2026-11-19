@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 // An empty slot's picker lists the cellar's unplaced bottles. A load that
 // fails says so and offers Retry — "no unplaced bottles" would read as a
@@ -213,4 +213,52 @@ test('Retry keeps focus inside the picker, and the alert is the message without 
   again.resolve(listed(bottle('b1', 'Château Margaux')));
   expect(await within(popup).findByText('Château Margaux')).toBeInTheDocument();
   expect(within(popup).getByRole('textbox')).toHaveFocus();
+});
+
+// ?rack= focuses the rack by scrolling to it; jsdom has no scrollIntoView.
+beforeAll(() => { if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {}; });
+
+// "Add a new bottle here": a bottle that is not in the cellar yet is added
+// from the free slot and comes back to it.
+const AddBottleStub = () => <pre data-testid="add-state">{JSON.stringify(useLocation().state)}</pre>;
+const renderAt = (entry) => render(
+  <MemoryRouter initialEntries={[entry]}>
+    <Routes>
+      <Route path="/cellars/:id/racks" element={<CellarRacks />} />
+      <Route path="/cellars/:id/add-bottle" element={<AddBottleStub />} />
+    </Routes>
+  </MemoryRouter>,
+);
+
+test('a free slot offers to add a new bottle there; Add Bottle opens with that slot', async () => {
+  setup();
+  renderAt('/cellars/c1/racks');
+  fireEvent.click(await screen.findByRole('button', { name: 'slot-1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'racks.addNewHere' }));
+  expect(JSON.parse((await screen.findByTestId('add-state')).textContent)).toEqual({ placeAt: { rackId: 'r1', position: 1 } });
+});
+
+test('a bottle added from a slot goes into that slot when the rack page opens', async () => {
+  setup();
+  const inner = api.getMockImplementation();
+  api.mockImplementation(async (url, opts) => {
+    if (url === '/api/racks/r1/slots/2') return ok({ rack: { ...rack(), slots: [{ position: 2, bottle: bottle('6a000000000000000000b009', 'Opus One') }] } });
+    return inner(url, opts);
+  });
+  renderAt({ pathname: '/cellars/c1/racks', search: '?rack=r1', state: { placeQueue: ['6a000000000000000000b009'], placeAt: { rackId: 'r1', position: 2 } } });
+
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/racks/r1/slots/2', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ bottleId: '6a000000000000000000b009' }) })));
+});
+
+test('a slot taken meanwhile places nothing and says so', async () => {
+  setup();
+  const inner = api.getMockImplementation();
+  api.mockImplementation(async (url, opts) => {
+    if (url === '/api/racks?cellar=c1') return ok({ racks: [{ ...rack(), slots: [{ position: 2, bottle: bottle('b1', 'Château Margaux') }] }] });
+    return inner(url, opts);
+  });
+  renderAt({ pathname: '/cellars/c1/racks', search: '?rack=r1', state: { placeQueue: ['6a000000000000000000b009'], placeAt: { rackId: 'r1', position: 2 } } });
+
+  expect(await screen.findByText(/racks\.placeQueue\.slotTaken/)).toBeInTheDocument();
+  expect(api.mock.calls.some(([u]) => u === '/api/racks/r1/slots/2')).toBe(false);
 });

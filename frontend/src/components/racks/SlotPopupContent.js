@@ -24,7 +24,7 @@ function groupBottles(bottles) {
   return [...map.values()];
 }
 
-export function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssign, onAssignMany, freeRun, onDisable, onClose }) {
+export function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssign, onAssignMany, freeRun, onDisable, onAddNew, onClose }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
@@ -206,11 +206,19 @@ export function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, 
         )}
       </div>
       )}
-      {canEdit && onDisable && (
+      {canEdit && (onAddNew || onDisable) && (
         <div className="slot-popup-actions">
-          <button className="btn btn-secondary btn-small" onClick={onDisable}>
-            {t('racks.disableSlot')}
-          </button>
+          {/* A bottle that is not in the cellar yet: add it, and it comes back to this slot. */}
+          {onAddNew && (
+            <button className="btn btn-primary btn-small" onClick={onAddNew}>
+              {t('racks.addNewHere', 'Add a new bottle here')}
+            </button>
+          )}
+          {onDisable && (
+            <button className="btn btn-secondary btn-small" onClick={onDisable}>
+              {t('racks.disableSlot')}
+            </button>
+          )}
         </div>
       )}
     </>

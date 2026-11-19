@@ -754,6 +754,23 @@ function CellarRacks() {
     }
   };
 
+  // A bottle added from an empty slot ("Add a new bottle here") goes into
+  // that slot as soon as the racks are loaded; the rest of the queue (more
+  // bottles of the add) is placed as usual. A slot taken meanwhile says so
+  // and keeps the bottle in the queue. Declared above the error return (hooks
+  // must run every render); a render with an error never reaches the
+  // placement, whose handler is declared below that return.
+  const placeAtDone = useRef(false);
+  useEffect(() => {
+    const placeAt = location.state?.placeAt;
+    if (error || placeAtDone.current || !placeAt || !placeQueue.length || !racks.length || !canEditCellar(cellar)) return;
+    placeAtDone.current = true;
+    const target = racks.find((r) => r._id === placeAt.rackId);
+    const taken = target && (target.slots || []).some((s) => s.position === placeAt.position);
+    if (!target || taken) { setPlaceNotice({ kind: 'error', text: t('racks.placeQueue.slotTaken') }); return; }
+    handlePlaceTap(target, placeAt.position, null);
+  }, [racks, placeQueue, cellar, error]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (error) return <div className="alert alert-error">{error}</div>;
 
   const rack = racks.find(r => r._id === selectedRackId) || racks[0];
@@ -1304,6 +1321,9 @@ function CellarRacks() {
                     : undefined}
                   onAssign={(pos, bottleId) => handleAssign(activePopup.rackId, pos, bottleId)}
                   onDisable={() => handleDisableSlot(activePopup.rackId, activePopup.position)}
+                  onAddNew={canEdit
+                    ? () => navigate(`/cellars/${id}/add-bottle`, { state: { placeAt: { rackId: activePopup.rackId, position: activePopup.position } } })
+                    : undefined}
                   onClose={() => setActivePopup(null)}
                 />
               )}

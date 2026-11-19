@@ -19,6 +19,7 @@ vi.mock('../contexts/AuthContext', () => ({
 }));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'cellar1' }),
+  useLocation: () => ({ state: null }),
   useNavigate: () => vi.fn(),
   Link: ({ children }) => <a href="/">{children}</a>,
 }));
