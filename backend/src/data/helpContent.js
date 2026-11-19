@@ -63,6 +63,19 @@ const sections = [
     tourId: 'add-bottle',
   },
   {
+    id: 'notes-and-reviews',
+    title: 'Ratings, notes, journal and reviews',
+    route: null,
+    tourId: null,
+    summary: 'Four places to write about a wine, and who sees each.',
+    details: [
+      'Rating and notes on a bottle: your own notes about that bottle. They stay with it, and anyone you share the cellar with sees them too.',
+      'When you drink a bottle, the rating and note you give it then go with it to the cellar\'s History, so you can look back on how it was.',
+      'A journal entry is the moment: the occasion, the food, the people, and how the wine showed. Journal entries are private unless you make one public.',
+      'A review is about the wine, for other members: it shows on the wine\'s page for everyone, unless you mark it private. After drinking a bottle, "Share as review" starts one from the rating and note you already wrote.',
+    ],
+  },
+  {
     id: 'vintage-page',
     title: 'Wine and vintage page',
     route: null,

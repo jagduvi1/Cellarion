@@ -10,10 +10,10 @@
 
 const { sections } = require('./helpContent');
 
-// SECTION_KEYS in frontend/src/pages/Help.js. Add a key here when the Help
-// page gets a new section, and give it a section in helpContent.js.
+// SECTION_KEYS in frontend/src/utils/helpSections.js. Add a key here when the
+// Help page gets a new section, and give it a section in helpContent.js.
 const FRONTEND_SECTION_KEYS = [
-  'cellars', 'bottles', 'vintagePage', 'openBottle', 'labelScan', 'barcode',
+  'cellars', 'bottles', 'notesAndReviews', 'vintagePage', 'openBottle', 'labelScan', 'barcode',
   'onOrder', 'selectMode', 'recentlyDeleted', 'sharing', 'racks', 'roomView',
   'pickLists', 'wineLists', 'wishlist', 'restock', 'journal', 'recommendations',
   'cellarChat', 'analytics', 'dashboard', 'community', 'wineRequests', 'import',

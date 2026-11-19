@@ -3890,6 +3890,14 @@
         "d9": "Saved a bottle under the wrong wine? Open the bottle, tap the ⋮ menu and choose \"Change wine…\": search for the right wine and the bottle moves there, keeping its dates, price, notes, rating, rack slot and history.",
         "d10": "The bottle page's ⋮ menu also has \"Add more bottles\", \"Move to another cellar\" and \"Added by mistake?\". A bottle added by mistake goes to Recently deleted, where you can bring it back for 30 days."
       },
+      "notesAndReviews": {
+        "title": "Ratings, notes, journal and reviews",
+        "summary": "Four places to write about a wine, and who sees each.",
+        "d1": "Rating and notes on a bottle: your own notes about that bottle. They stay with it, and anyone you share the cellar with sees them too.",
+        "d2": "When you drink a bottle, the rating and note you give it then go with it to the cellar's History, so you can look back on how it was.",
+        "d3": "A journal entry is the moment: the occasion, the food, the people, and how the wine showed. Journal entries are private unless you make one public.",
+        "d4": "A review is about the wine, for other members: it shows on the wine's page for everyone, unless you mark it private. After drinking a bottle, \"Share as review\" starts one from the rating and note you already wrote."
+      },
       "vintagePage": {
         "title": "Wine and vintage page",
         "summary": "One page for each wine and vintage in a cellar, whether you have one bottle or twenty.",
