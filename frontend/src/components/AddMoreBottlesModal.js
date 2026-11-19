@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { createBottle } from '../api/bottles';
 import Modal from './Modal';
 import { bottleCopyPayload, MAX_COPIES } from '../utils/bottleCopy';
-import { formatVintage } from '../utils/vintage';
+import { formatVintage, parseVintageInput, vintageInputProps } from '../utils/vintage';
 
 // Cap per batch — this flow tops up a bottle you already registered (a case or
 // two), it is not the bulk importer. Matches the sequential-POST budget the
@@ -24,9 +24,13 @@ const MAX_MORE = MAX_COPIES;
  * already created are real, there is no rollback. New bottles arrive unplaced;
  * rack placement stays a separate step.
  *
+ * The vintage starts as this bottle's and can be changed: a bottle of the
+ * same wine from another year is added here too, without searching the wine
+ * again in Add Bottle.
+ *
  * Props: bottle (the populated bottle being viewed — must have a
- * wineDefinition), onClose(), onAdded(count) — fired only when the whole
- * batch succeeded. copyDetailsDefault: whether "Copy this bottle's details"
+ * wineDefinition), onClose(), onAdded(count, vintage) — fired only when the
+ * whole batch succeeded, with the stored vintage the new bottles carry. copyDetailsDefault: whether "Copy this bottle's details"
  * starts ticked — off for "Add again" of a bottle already drunk, a new
  * purchase whose date, price, shop, notes and occasion are not the old one's.
  */
@@ -34,7 +38,9 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const countId = useId();
+  const vintageId = useId();
   const [count, setCount] = useState(1);
+  const [vintageText, setVintageText] = useState(() => formatVintage(bottle.vintage, t));
   const [copyDetails, setCopyDetails] = useState(copyDetailsDefault);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -47,18 +53,26 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
   const clampCount = (raw) => Math.min(MAX_MORE, Math.max(1, parseInt(raw, 10) || 1));
 
   // Once part of the batch exists, its parameters are frozen — a retry must
-  // finish the SAME batch. Changing count or the copy toggle between attempts
-  // would silently mix differently-shaped bottles into one batch.
+  // finish the SAME batch. Changing count, vintage or the copy toggle between
+  // attempts would silently mix differently-shaped bottles into one batch.
   const locked = saving || createdSoFar > 0;
 
   // The copy rule (which fields travel) is shared with an order's "Change
   // quantity": utils/bottleCopy.
-  const buildPayload = () => bottleCopyPayload(bottle, { copyDetails });
+  const vintageProps = vintageInputProps(t);
+  const vintage = parseVintageInput(vintageText, t);
+  const vintageValid = new RegExp(vintageProps.pattern).test(String(vintageText).trim());
+  const buildPayload = () => ({ ...bottleCopyPayload(bottle, { copyDetails }), vintage });
 
   const handleSubmit = async () => {
     // In-flight guard (belt to the disabled buttons): a second submit during
     // the N sequential POSTs would duplicate bottles.
     if (saving) return;
+    // The field is not inside a <form>, so its pattern is checked here.
+    if (!vintageValid) {
+      setError(t('bottleDetail.vintagePattern'));
+      return;
+    }
     setSaving(true);
     setError(null);
     // AddBottle's partial-failure message, verbatim: report created/total and
@@ -82,7 +96,7 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
         done += 1;
         setCreatedSoFar(done);
       }
-      onAdded(count);
+      onAdded(count, vintage);
     } catch {
       setError(partialError(t('common.networkError'), done));
     } finally {
@@ -100,8 +114,26 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
   return (
     <Modal title={t('bottleDetail.addMore.title', 'Add more bottles')} onClose={guardedClose} showClose trapFocus>
       <p style={{ marginTop: 0 }}>
-        <strong>{wine?.name}{bottle.vintage ? ` · ${formatVintage(bottle.vintage, t)}` : ''}</strong>
+        <strong>{wine?.name}</strong>
       </p>
+
+      <div className="form-group">
+        <label htmlFor={vintageId}>{t('bottleDetail.addMore.vintageLabel', 'Vintage')}</label>
+        <input
+          id={vintageId}
+          type="text"
+          value={vintageText}
+          onChange={(e) => setVintageText(e.target.value)}
+          placeholder={t('bottleDetail.vintagePlaceholder')}
+          {...vintageProps}
+          title={t('bottleDetail.vintagePattern')}
+          disabled={locked}
+          required
+        />
+        <p style={{ ...hintStyle, marginBottom: 0 }}>
+          {t('bottleDetail.addMore.vintageHint', 'Change the year to add another vintage of this wine.')}
+        </p>
+      </div>
 
       <div className="form-group">
         <label htmlFor={countId}>{t('bottleDetail.addMore.countLabel', 'How many more bottles?')}</label>

@@ -1479,7 +1479,11 @@
       "submit_one": "Add {{count}} bottle",
       "submit_other": "Add {{count}} bottles",
       "success_one": "{{count}} more bottle added to this cellar. It's unplaced — place it from the cellar page whenever you like.",
-      "success_other": "{{count}} more bottles added to this cellar. They're unplaced — place them from the cellar page whenever you like."
+      "success_other": "{{count}} more bottles added to this cellar. They're unplaced — place them from the cellar page whenever you like.",
+      "vintageLabel": "Vintage",
+      "vintageHint": "Change the year to add another vintage of this wine.",
+      "successOtherVintage_one": "{{count}} bottle of the {{vintage}} vintage added to this cellar. It's unplaced — place it from the cellar page whenever you like.",
+      "successOtherVintage_other": "{{count}} bottles of the {{vintage}} vintage added to this cellar. They're unplaced — place them from the cellar page whenever you like."
     },
     "backToVintage": "Back to the vintage",
     "barcode": "Barcode",

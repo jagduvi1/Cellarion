@@ -34,6 +34,7 @@ import { useCollapsedBlocks } from '../utils/collapsedBlocks';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
+import { formatVintage } from '../utils/vintage';
 import './BottleDetail.css';
 import { backLabel as backLabelText } from '../utils/backLabel';
 import { isSafeInternalPath } from '../utils/postLoginRedirect';
@@ -453,9 +454,11 @@ function BottleDetail() {
     leaveToList(); // stay with the source cellar (or the list this visit started from)
   };
 
-  const handleAddedMore = (n) => {
+  const handleAddedMore = (n, vintage) => {
     setAddMoreOpen(false);
-    setAddMoreMsg(t('bottleDetail.addMore.success', { count: n }));
+    setAddMoreMsg(vintage && vintage !== bottle?.vintage
+      ? t('bottleDetail.addMore.successOtherVintage', { count: n, vintage: formatVintage(vintage, t) })
+      : t('bottleDetail.addMore.success', { count: n }));
     // Same refresh path every other mutation on this page uses (edit, open):
     // re-pull the bottle + its cellar/rack context after the cellar changed.
     fetchBottle();

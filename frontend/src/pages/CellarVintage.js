@@ -905,7 +905,13 @@ function CellarVintage() {
           <AddMoreBottlesModal
             bottle={addTemplate}
             onClose={() => setModal(null)}
-            onAdded={(n) => { setModal(null); setNotice(t('bottleDetail.addMore.success', { count: n })); load(); }}
+            onAdded={(n, vintage) => {
+              setModal(null);
+              setNotice(vintage && vintage !== addTemplate.vintage
+                ? t('bottleDetail.addMore.successOtherVintage', { count: n, vintage: formatVintage(vintage, t) })
+                : t('bottleDetail.addMore.success', { count: n }));
+              load();
+            }}
           />
         )}
         {(modal === 'report' || modal === 'reportWine') && wine && (

@@ -527,8 +527,8 @@ function CellarHistory() {
             bottle={addTemplate}
             copyDetailsDefault={false}
             onClose={() => setAddTemplate(null)}
-            onAdded={(count) => {
-              const name = bottleNoticeName(addTemplate);
+            onAdded={(count, vintage) => {
+              const name = bottleNoticeName({ ...addTemplate, vintage });
               setAddTemplate(null);
               setNotice(name
                 ? t('bottleNotice.added', { count, name })
