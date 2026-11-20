@@ -1047,6 +1047,11 @@ exports[`the slot popups > a free slot, once its picker has listed the unplaced 
     class="slot-popup-actions"
   >
     <button
+      class="btn btn-primary btn-small"
+    >
+      racks.addNewHere
+    </button>
+    <button
       class="btn btn-secondary btn-small"
     >
       racks.disableSlot

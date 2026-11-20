@@ -7,9 +7,10 @@
  */
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-const { apiFetchMock, navigateMock } = vi.hoisted(() => ({
+const { apiFetchMock, navigateMock, routerState } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
   navigateMock: vi.fn(),
+  routerState: { current: null },
 }));
 
 vi.mock('../api/wines', () => ({
@@ -22,6 +23,7 @@ vi.mock('../contexts/AuthContext', () => ({
 }));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'cellar1' }),
+  useLocation: () => ({ state: routerState.current }),
   useNavigate: () => navigateMock,
   Link: ({ children }) => <a href="/">{children}</a>,
 }));
@@ -98,6 +100,20 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
 
     fireEvent.click(screen.getByTestId('place-now'));
     expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1/racks', { state: { placeQueue: ['b1', 'b2'] } });
+  });
+
+  test('an add started from an empty rack slot skips the question and goes back to that rack with the slot', async () => {
+    const placeAt = { rackId: 'r1', position: 7 };
+    routerState.current = { placeAt };
+    try {
+      routeApi({ racks: [{ _id: 'r1', name: 'Wall', type: 'grid' }] });
+      await submitTwoBottles();
+
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1/racks?rack=r1', { state: { placeQueue: [expect.any(String), expect.any(String)], placeAt } }));
+      expect(screen.queryByText('addBottle.placePrompt.title')).not.toBeInTheDocument();
+    } finally {
+      routerState.current = null;
+    }
   });
 
   // The cellar page then says what was added, with "Add another bottle"

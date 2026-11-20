@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import DialogBox from '../DialogBox';
 import { afterPopupEntryGone } from '../../utils/useBackToClose';
 
@@ -5,11 +7,21 @@ import { afterPopupEntryGone } from '../../utils/useBackToClose';
  * The two dialogs that can follow an add: the custom fields the server did
  * not save (the bottles were added), and the offer to place the new bottles
  * in a rack. The page owns when each shows and what closing it does.
+ *
+ * An add started from an empty rack slot (the racks page's "Add a new bottle
+ * here", router state `placeAt`) does not ask: the new bottles go straight to
+ * the racks page, the first into that slot (pages/CellarRacks.js).
  */
 export default function AddBottleDialogs({
   customFieldNotice, setCustomFieldNotice, finishAdd, t, placePrompt, leavePlacePrompt, navigate,
   cellarId,
 }) {
+  const placeAt = useLocation().state?.placeAt || null;
+  useEffect(() => {
+    if (!placePrompt || !placeAt) return;
+    navigate(`/cellars/${cellarId}/racks?rack=${encodeURIComponent(placeAt.rackId)}`, { state: { placeQueue: placePrompt.ids, placeAt } });
+  }, [placePrompt, placeAt, cellarId, navigate]);
+
   return (
     <>
       {/* A custom field the server refused. The bottles were added — say so
@@ -40,7 +52,7 @@ export default function AddBottleDialogs({
       )}
 
       {/* Post-add placing offer — skippable, never blocking */}
-      {placePrompt && (
+      {placePrompt && !placeAt && (
         <div className="modal-overlay" onClick={leavePlacePrompt}>
           <DialogBox
             className="modal-box"

@@ -1740,6 +1740,7 @@
     "nfcLink": "NFC Tag",
     "nfcLinked": "NFC Linked",
     "disableSlot": "Disable slot",
+    "addNewHere": "Add a new bottle here",
     "enableSlot": "Enable slot",
     "disabledSlotTitle": "Slot {{position}} — Disabled",
     "disabledSlotNote": "This slot is marked as unusable — bottles can't be placed here.",
