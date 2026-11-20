@@ -28,6 +28,7 @@ const personalData = require('../services/personalData');
 const { decorateGrapes } = require('../utils/grapeDisplay');
 const { displayProfile } = require('../utils/profileLanguage');
 const mongoose = require('mongoose');
+const { isValidId } = require('../utils/validation');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
 // shared service so the REST routes and the MCP tools can never drift (§7).
 const {
@@ -870,7 +871,7 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
     const { bottle, cellar: sourceCellar } = req;
     const { toCellarId } = req.body;
 
-    if (!toCellarId || !mongoose.isValidObjectId(toCellarId)) {
+    if (!isValidId(toCellarId)) {
       return res.status(400).json({ error: 'Invalid destination cellar' });
     }
     if (String(toCellarId) === String(sourceCellar._id)) {
@@ -896,6 +897,13 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
     const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
+    // An API token gets the bottle with its wine as an id, the shape of the
+    // consume answer (openapi/document.js MoveResponse); the bottle page gets
+    // the wine populated.
+    if (req.apiToken) {
+      bottle.depopulate('wineDefinition');
+      return res.json({ bottle });
+    }
     await bottle.populate(WINE_POPULATE);
     res.json({ bottle });
   } catch (error) {

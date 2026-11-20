@@ -121,4 +121,16 @@ function parseDrinkYear(raw, label = 'Drink year') {
   return { ok: true, value: n };
 }
 
-module.exports = { isValidId, coerceStringQuery, parseAndValidateVintage, parseDrinkYear, DRINK_YEAR_MIN, DRINK_YEAR_MAX };
+/**
+ * A rack slot position as a whole number, or null when it is not one: an
+ * integer, or a string of digits (a route parameter). Never parseInt: that
+ * reads "5abc" as 5, and a number too large to print in full ("1e+21") as 1,
+ * so a guard and the write behind it could end up looking at different slots.
+ * The rack's own range (1–max) is the caller's to check.
+ */
+function parseSlotPosition(raw) {
+  const n = typeof raw === 'number' ? raw : (typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+module.exports = { isValidId, coerceStringQuery, parseAndValidateVintage, parseDrinkYear, parseSlotPosition, DRINK_YEAR_MIN, DRINK_YEAR_MAX };

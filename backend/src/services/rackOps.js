@@ -18,6 +18,7 @@ const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
 const { removeFromRacks } = require('./bottleOps');
+const { parseSlotPosition } = require('../utils/validation');
 
 const { RACK_TYPES } = Rack;
 
@@ -106,8 +107,8 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
  * Returns { error } | { rack, displaced: bottleId|null, previousPosition: n|null }.
  */
 async function placeBottleInRack(rack, position, bottleId, req) {
-  const pos = parseInt(position, 10);
-  if (isNaN(pos)) return { error: { status: 400, message: 'Invalid position' } };
+  const pos = parseSlotPosition(position);
+  if (pos === null) return { error: { status: 400, message: 'Invalid position' } };
   const maxPos = getMaxPosition(rack);
   if (pos < 1 || pos > maxPos) return { error: { status: 400, message: `Position must be 1–${maxPos}` } };
   if ((rack.disabledPositions || []).includes(pos)) return { error: { status: 400, message: 'This slot is disabled' } };
@@ -126,9 +127,13 @@ async function placeBottleInRack(rack, position, bottleId, req) {
     return { error: { status: 400, message: 'Only a bottle still in the cellar can be placed in a rack — this one is consumed' } };
   }
 
-  const occupant = rack.slots.find((s) => s.position === pos && String(s.bottle) !== String(bottleId));
+  // The stored id from here on, never the caller's spelling of it: an id
+  // sent in upper case names the same bottle, but as text it would not equal
+  // the slot that already holds it and the bottle would get a second slot.
+  const id = String(bottle._id);
+  const occupant = rack.slots.find((s) => s.position === pos && String(s.bottle) !== id);
   const displaced = occupant ? String(occupant.bottle) : null;
-  const oldSlot = rack.slots.find((s) => String(s.bottle) === String(bottleId));
+  const oldSlot = rack.slots.find((s) => String(s.bottle) === id);
   const previousPosition = oldSlot ? oldSlot.position : null;
 
   // Clear the bottle from other racks in the cellar (this rack handled in
@@ -137,13 +142,13 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   // (auto_arrange apply/undo) VersionErrors instead of re-inserting the
   // bottle it just lost — same reasoning as bottleOps.removeFromRacks.
   await Rack.updateMany(
-    { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottleId },
-    { $pull: { slots: { bottle: bottleId } }, $inc: { __v: 1 } }
+    { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottle._id },
+    { $pull: { slots: { bottle: bottle._id } }, $inc: { __v: 1 } }
   );
 
   // The procedural one-per-slot / one-slot-per-bottle invariant.
-  rack.slots = rack.slots.filter((s) => s.position !== pos && String(s.bottle) !== String(bottleId));
-  rack.slots.push({ position: pos, bottle: bottleId });
+  rack.slots = rack.slots.filter((s) => s.position !== pos && String(s.bottle) !== id);
+  rack.slots.push({ position: pos, bottle: bottle._id });
   try {
     await rack.save();
   } catch (err) {
@@ -162,11 +167,22 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   return { rack, displaced, previousPosition, position: pos };
 }
 
-/** Clear a rack slot. Mirrors DELETE /api/racks/:id/slots/:position. */
+/**
+ * Clear a rack slot (loaded, editor-access-checked rack): the REST route
+ * DELETE /api/racks/:id/slots/:position and the MCP tool unplace_bottle.
+ * An empty slot of the rack is fine; a position the rack does not have is not.
+ * Returns { error } | { rack, cleared: bottleId|null }.
+ */
 async function clearRackSlot(rack, position, req) {
-  const pos = parseInt(position, 10);
-  if (isNaN(pos)) return { error: { status: 400, message: 'Invalid position' } };
+  const pos = parseSlotPosition(position);
+  if (pos === null) return { error: { status: 400, message: 'Invalid position' } };
   const had = rack.slots.find((s) => s.position === pos);
+  // A bottle can always be taken out, wherever it sits. An empty position is
+  // only a slot when the rack has it.
+  if (!had) {
+    const maxPos = getMaxPosition(rack);
+    if (pos < 1 || pos > maxPos) return { error: { status: 400, message: `Position must be 1–${maxPos}` } };
+  }
   rack.slots = rack.slots.filter((s) => s.position !== pos);
   try {
     await rack.save();

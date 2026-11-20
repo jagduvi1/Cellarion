@@ -16,7 +16,7 @@ const {
   normalizeRackGroup, moveRackBottles,
 } = require('../services/rackOps');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange');
-const { isValidId } = require('../utils/validation');
+const { isValidId, parseSlotPosition } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { WINE_LIST_SELECT } = require('../config/constants');
@@ -123,6 +123,17 @@ async function rackAccess(req, res, rack, minRole, deniedMessage) {
     return null;
   }
   return role;
+}
+
+// What a slot write answers. A session gets the rack as the racks page draws
+// it: every placed bottle with its wine and maturity. An API token gets the
+// summary form of GET /api/racks?summary=1 (slot bottle ids) and what the
+// write did to the other bottle involved — the public contract
+// (openapi/document.js PlaceResponse, UnplaceResponse).
+async function slotAnswer(req, rack, change) {
+  if (req.apiToken) return { rack: rack.toObject(), ...change };
+  await rack.populate(SLOT_BOTTLES);
+  return { rack: await withMaturity(rack) };
 }
 
 // GET /api/racks/nfc/:id  — resolve a rack ID to its cellar (for NFC tag redirect)
@@ -484,15 +495,16 @@ function slotChanged(rack, position, expected) {
   if (expected === undefined) return false;
   const slot = rack.slots.find((s) => s.position === position);
   const actual = slot && slot.bottle ? String(slot.bottle) : null;
-  return actual !== (expected ? String(expected) : null);
+  // Ids compare as text; a stored id prints in lower case.
+  return actual !== (expected ? String(expected).toLowerCase() : null);
 }
 
 // PUT /api/racks/:id/slots/:position  — assign a bottle to a slot (owner or editor)
 router.put('/:id/slots/:position', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const position = parseInt(req.params.position, 10);
-    if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
+    const position = parseSlotPosition(req.params.position);
+    if (position === null) return res.status(400).json({ error: 'Invalid position' });
     const { bottleId } = req.body;
     if (!isValidId(bottleId)) return res.status(400).json({ error: 'Valid bottleId required' });
 
@@ -506,8 +518,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     const result = await placeBottleInRack(rack, position, bottleId, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    await rack.populate(SLOT_BOTTLES);
-    res.json({ rack: await withMaturity(rack) });
+    res.json(await slotAnswer(req, rack, { displaced: result.displaced }));
   } catch (err) {
     console.error('Assign slot error:', err);
     res.status(500).json({ error: 'Failed to assign slot' });
@@ -716,8 +727,8 @@ router.post('/:id/arrange/apply', async (req, res) => {
 router.delete('/:id/slots/:position', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const position = parseInt(req.params.position, 10);
-    if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
+    const position = parseSlotPosition(req.params.position);
+    if (position === null) return res.status(400).json({ error: 'Invalid position' });
 
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
@@ -731,8 +742,7 @@ router.delete('/:id/slots/:position', async (req, res) => {
     const result = await clearRackSlot(rack, position, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    await rack.populate(SLOT_BOTTLES);
-    res.json({ rack: await withMaturity(rack) });
+    res.json(await slotAnswer(req, rack, { removed: result.cleared }));
   } catch (err) {
     console.error('Clear slot error:', err);
     res.status(500).json({ error: 'Failed to clear slot' });

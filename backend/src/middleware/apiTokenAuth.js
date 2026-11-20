@@ -46,6 +46,8 @@ const utcDay = (d) => d.toISOString().slice(0, 10);
  *             Context Protocol endpoint, whose per-tool authorization is
  *             enforced inside the MCP registry (a read token sees read tools).
  *   consume — POST /api/bottles/:id/consume only.
+ *   write   — moving a bottle: to another cellar, into a rack slot, out of
+ *             one. Every other write is an MCP write tool behind POST /api/mcp.
  *   climate — POST /api/climate/ingest only: the sensor-device credential.
  *             A leaked device token can post readings and nothing else.
  */
@@ -60,8 +62,9 @@ const SCOPE_ALLOWLIST = {
     { method: 'GET', pattern: /^\/api\/bottles\/[a-f0-9]{24}$/ },
     { method: 'GET', pattern: /^\/api\/notifications$/ },
     { method: 'GET', pattern: /^\/api\/notifications\/unread-count$/ },
-    // The rack LIST only — exact-anchored, so no rack sub-route (edits, slot
-    // moves, arrange, the NFC lookup) is reachable. A token gets the light
+    // The rack LIST only — exact-anchored, so no rack sub-route (edits,
+    // arrange, the NFC lookup) is reachable with `read`; placing a bottle in a
+    // slot is a `write` rule below. A token gets the light
     // summary form (layout + slot bottle ids); routes/racks.js refuses the
     // populated form to tokens, since an integration may poll it.
     { method: 'GET', pattern: /^\/api\/racks$/ },
@@ -96,8 +99,17 @@ const SCOPE_ALLOWLIST = {
     { method: 'DELETE', pattern: /^\/api\/mcp$/ },
   ],
   write: [
-    // MCP endpoint only — the write scope exists FOR the MCP write tools; it
-    // grants no REST routes. Per-tool authz lives in the MCP registry.
+    // Moving a bottle: to another cellar the caller owns, into a rack slot,
+    // out of a rack slot. Exact-anchored, so the bulk move, the in-rack swap
+    // (/slots/:position/move), disabling a slot and every other bottle or
+    // rack edit stay unreachable. Each has an MCP twin a write token already
+    // reaches (move_bottle, place_bottle, unplace_bottle), so these rules give
+    // a token no power it lacked. Database writes only — never AI money.
+    { method: 'POST', pattern: /^\/api\/bottles\/[a-f0-9]{24}\/move$/ },
+    { method: 'PUT', pattern: /^\/api\/racks\/[a-f0-9]{24}\/slots\/\d{1,9}$/ },
+    { method: 'DELETE', pattern: /^\/api\/racks\/[a-f0-9]{24}\/slots\/\d{1,9}$/ },
+    // MCP endpoint — every other write is an MCP write tool; per-tool authz
+    // lives in the MCP registry.
     { method: 'POST', pattern: /^\/api\/mcp$/ },
     { method: 'GET', pattern: /^\/api\/mcp$/ },
     { method: 'DELETE', pattern: /^\/api\/mcp$/ },
