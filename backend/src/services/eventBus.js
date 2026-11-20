@@ -4,7 +4,7 @@
  * Holds the open /api/events/stream responses per user and fans out
  * "something changed" nudges. Events carry NO cellar data — clients react to
  * any event by refreshing via the normal REST API — so the bus can stay dumb:
- * per-user debounce, last event wins.
+ * per-user debounce, one of each event name per window.
  *
  * Single-process by design (the backend runs as one Node process). If the
  * deployment ever goes multi-instance this becomes a thin facade over Redis
@@ -43,6 +43,14 @@ function cancelPending(key) {
   clearTimeout(timers.get(key));
   timers.delete(key);
   pending.delete(key);
+}
+
+/**
+ * The user's last stream closed: the pending nudge has nobody to go to,
+ * unless an in-process listener (an MCP session) still waits for it.
+ */
+function cancelUnlessListening(key) {
+  if (!listeners.get(key)?.size) cancelPending(key);
 }
 
 // userId -> Set<fn(event, data)> — in-process listeners (MCP session
@@ -176,7 +184,7 @@ function unregister(userId, res) {
   }
   if (set.size === 0) {
     streams.delete(key);
-    cancelPending(key);
+    cancelUnlessListening(key);
   }
 }
 
@@ -192,12 +200,15 @@ function dropUser(userId) {
     try { hook(key); } catch { /* a failing hook must not block session teardown */ }
   }
   const set = streams.get(key);
-  if (!set) return;
-  for (const entry of set) {
-    safeEnd(entry.res);
-    totalStreams--;
+  if (set) {
+    for (const entry of set) {
+      safeEnd(entry.res);
+      totalStreams--;
+    }
+    streams.delete(key);
   }
-  streams.delete(key);
+  // Also for a user with in-process listeners only: the hooks above have
+  // torn those down, so nothing may be delivered to them later.
   cancelPending(key);
 }
 
@@ -217,7 +228,7 @@ function dropToken(tokenId) {
     }
     if (set.size === 0) {
       streams.delete(key);
-      cancelPending(key);
+      cancelUnlessListening(key);
     }
   }
 }

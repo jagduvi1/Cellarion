@@ -102,7 +102,9 @@ const REGISTRY = [
         { 'actor.userId': ctx.userId },
         {
           $set: { 'actor.userId': null, 'actor.ipAddress': null },
-          $unset: { 'detail.email': '', 'detail.username': '', 'detail.sharedWith': '', 'detail.invitedEmail': '', userAgent: '' },
+          // actor.tokenId too: it equals the resource id of the token's own
+          // token.created row, which would tie the anonymised rows together.
+          $unset: { 'detail.email': '', 'detail.username': '', 'detail.sharedWith': '', 'detail.invitedEmail': '', userAgent: '', 'actor.tokenId': '' },
         }
       ),
       // (b) The departing user as the SUBJECT of ANOTHER actor's event — a

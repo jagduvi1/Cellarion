@@ -86,7 +86,7 @@ One emitter call per user-visible data change. Initial set:
 |-------|-----------|
 | `stats_changed` | bottle create / update / delete / consume (`routes/bottles.js`), cellar create / update / delete (`routes/cellars.js`), import completion (`services/cellarImport.js`) |
 | `notification` | notification creation (incl. `drinkWindowNotifier`) |
-| `racks_changed` | every `rack.` audit action (`services/audit.js`): a bottle placed, moved or taken out, a rack created, changed or deleted. Sent at once, then at most once per 30 s while the changes go on, because a racking session is hundreds of placements and the client refreshes on every event |
+| `racks_changed` | every `rack.` audit action (`services/audit.js`): a bottle placed, moved or taken out, a rack created, changed or deleted. A bottle that leaves its slot because it was drunk, deleted or moved to another cellar is a `bottle.` action and sends `stats_changed`. Sent at once, then at most once per 30 s while the changes go on, because a racking session is hundreds of placements and the client refreshes on every event |
 
 Within one debounce window each event name is sent once (`services/eventBus.js`), so a `racks_changed` never replaces a `stats_changed`.
 

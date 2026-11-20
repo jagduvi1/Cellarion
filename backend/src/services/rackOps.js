@@ -149,6 +149,15 @@ async function placeBottleInRack(rack, position, bottleId, req) {
     { projection: { slots: { $elemMatch: { bottle: bottle._id } } }, lean: true }
   );
   const cameFrom = other && other.slots && other.slots[0] ? { rackId: other._id, slot: other.slots[0] } : null;
+  // A bottle in a second other rack exists only where that index could not be
+  // built (models/Rack.js says when): clear those too. One more write, and
+  // only when the bottle came from another rack.
+  if (other) {
+    await Rack.updateMany(
+      { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottle._id },
+      { $pull: { slots: { bottle: bottle._id } }, $inc: { __v: 1 } }
+    );
+  }
 
   // The procedural one-per-slot / one-slot-per-bottle invariant.
   rack.slots = rack.slots.filter((s) => s.position !== pos && String(s.bottle) !== id);
@@ -165,7 +174,7 @@ async function placeBottleInRack(rack, position, bottleId, req) {
     }
     // The bottle is in this rack's old state or in no rack at all: give it
     // back the slot it was taken from, so a refused placement moves nothing.
-    await putBackSlot(cameFrom);
+    await putBackSlot(cameFrom, rack.cellar);
     if (err.name === 'VersionError') {
       return { error: { status: 409, message: 'This rack was modified by another request — refresh and retry.', code: 'conflict' } };
     }
@@ -176,13 +185,20 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   // that landed in between cleared its slots before this one existed, so look
   // again: a bottle this rack may no longer hold leaves the slot, and the
   // bottle it pushed out gets the slot back.
-  const stillHere = await Bottle.exists({ _id: bottle._id, cellar: rack.cellar, status: { $in: ['active', null] } });
+  let stillHere = true;
+  try {
+    stillHere = !!(await onShelfIn(bottle._id, rack.cellar));
+  } catch (err) {
+    // The placement is saved. A read that fails here must not turn it into an
+    // error with no audit row, so it stands.
+    console.warn('[rackOps] could not look at the placed bottle again:', err.message);
+  }
   if (!stillHere) {
     await Rack.updateOne({ _id: rack._id }, { $pull: { slots: { bottle: bottle._id } }, $inc: { __v: 1 } });
     rack.slots = rack.slots.filter((s) => String(s.bottle) !== id);
     if (occupant) {
       const slot = typeof occupant.toObject === 'function' ? occupant.toObject() : occupant;
-      await putBackSlot({ rackId: rack._id, slot });
+      await putBackSlot({ rackId: rack._id, slot }, rack.cellar);
       rack.slots.push(slot);
     }
     return { error: { status: 409, message: 'This bottle was moved or taken out of the cellar meanwhile — refresh and retry.', code: 'conflict' } };
@@ -192,22 +208,30 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   return { rack, displaced, previousPosition, position: pos };
 }
 
+// A bottle a rack of this cellar may hold: in the cellar, and on the shelf.
+const onShelfIn = (bottleId, cellarId) => Bottle.exists({ _id: bottleId, cellar: cellarId, status: { $in: ['active', null] } });
+
 /**
  * Give a bottle back the slot a refused placement took it from, when that
  * position is still free and the bottle sits nowhere else in the rack. Best
  * effort: a slot taken meanwhile, or the bottle placed in another rack (the
- * unique slots.bottle index refuses it), leaves the bottle in no rack.
+ * unique slots.bottle index refuses it), leaves things as they are. A bottle
+ * that was drunk or moved to another cellar while it was out of the rack is
+ * taken out again: its own sweep of the racks ran when it held no slot.
  */
-async function putBackSlot(cameFrom) {
+async function putBackSlot(cameFrom, cellarId) {
   if (!cameFrom) return;
   const { rackId, slot } = cameFrom;
   try {
-    await Rack.updateOne(
+    const res = await Rack.updateOne(
       { _id: rackId, deletedAt: null, 'slots.position': { $ne: slot.position }, 'slots.bottle': { $ne: slot.bottle } },
       { $push: { slots: slot }, $inc: { __v: 1 } }
     );
+    if (res && res.modifiedCount && !(await onShelfIn(slot.bottle, cellarId))) {
+      await Rack.updateOne({ _id: rackId }, { $pull: { slots: { bottle: slot.bottle } }, $inc: { __v: 1 } });
+    }
   } catch (err) {
-    console.warn('[rackOps] placement put-back failed (the bottle is left in no rack):', err.message);
+    console.warn('[rackOps] placement put-back failed:', err.message);
   }
 }
 

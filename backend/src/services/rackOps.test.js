@@ -223,6 +223,55 @@ describe('placeBottleInRack', () => {
     expect(logAudit).not.toHaveBeenCalled();
   });
 
+  test('a bottle that came from another rack is cleared from every other rack, also where the unique index is missing', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    Rack.findOneAndUpdate.mockResolvedValue({ _id: 'rOther', slots: [{ position: 7, bottle: 'b1' }] });
+    expect((await placeBottleInRack(rack(), 5, 'b1', REQ)).error).toBeUndefined();
+    expect(Rack.updateMany).toHaveBeenCalledWith(
+      { _id: { $ne: 'r1' }, cellar: 'c1', 'slots.bottle': 'b1' },
+      { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } }
+    );
+    // A bottle that sat in no other rack costs no second write.
+    Rack.updateMany.mockClear();
+    Rack.findOneAndUpdate.mockResolvedValue(null);
+    expect((await placeBottleInRack(rack(), 6, 'b1', REQ)).error).toBeUndefined();
+    expect(Rack.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('a bottle drunk or moved while it was out of its rack is not put back to stay', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    Rack.findOneAndUpdate.mockResolvedValue({ _id: 'rOther', slots: [{ position: 7, bottle: 'b1' }] });
+    Rack.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    Bottle.exists.mockResolvedValue(null); // gone from the shelf meanwhile
+    const r = rack(); r.save = jest.fn().mockRejectedValue(Object.assign(new Error('v'), { name: 'VersionError' }));
+    expect((await placeBottleInRack(r, 5, 'b1', REQ)).error).toMatchObject({ status: 409 });
+    expect(Rack.updateOne).toHaveBeenLastCalledWith({ _id: 'rOther' }, { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } });
+    Rack.updateOne.mockResolvedValue({});
+  });
+
+  test('a save that fails for another reason still puts the bottle back, then fails loudly', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    Rack.findOneAndUpdate.mockResolvedValue({ _id: 'rOther', slots: [{ position: 7, bottle: 'b1' }] });
+    const r = rack(); r.save = jest.fn().mockRejectedValue(new Error('disk full'));
+    await expect(placeBottleInRack(r, 5, 'b1', REQ)).rejects.toThrow('disk full');
+    expect(Rack.updateOne).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'rOther', 'slots.position': { $ne: 7 } }),
+      { $push: { slots: { position: 7, bottle: 'b1' } }, $inc: { __v: 1 } }
+    );
+  });
+
+  test('a saved placement stands, with its audit row, when the bottle cannot be looked at again', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    Bottle.exists.mockRejectedValue(new Error('connection reset'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = rack();
+    const res = await placeBottleInRack(r, 5, 'b1', REQ);
+    warn.mockRestore();
+    expect(res.error).toBeUndefined();
+    expect(r.slots).toEqual([{ position: 5, bottle: 'b1' }]);
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_assign', expect.anything(), { position: 5, bottleId: 'b1' });
+  });
+
   test('an id sent in upper case names the same bottle: it keeps one slot', async () => {
     const stored = 'aaaaaaaaaaaaaaaaaaaaaaaa';
     Bottle.findOne.mockReturnValue(selectable({ _id: stored, status: 'active' }));
