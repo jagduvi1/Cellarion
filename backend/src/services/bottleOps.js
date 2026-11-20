@@ -1034,6 +1034,9 @@ async function removeBottleCascade(bottle, req, auditAction, options = {}) {
 
   const cellarId = bottle.cellar;
   await bottle.deleteOne();
+  // Again, now that the bottle is gone: a placement that read it before the
+  // delete may have saved a slot for it since the sweep above.
+  await removeFromRacks(bottleId);
   // Its barcode may have lost its only vote in the registry.
   if (bottle.barcode) learnBarcodeSoon(bottle.barcode, { via: 'delete' });
 

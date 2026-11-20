@@ -57,6 +57,18 @@ describe('emit (debounce + coalesce)', () => {
     expect(res.written).toHaveLength(3);
   });
 
+  test('a nudge cancelled when the last stream closed is not delivered to the stream that reconnects', () => {
+    const first = mockRes();
+    eventBus.register('u1', first);
+    eventBus.emit('u1', 'stats_changed', { reason: 'bottle.add' });
+    eventBus.unregister('u1', first);
+    const second = mockRes();
+    eventBus.register('u1', second);
+    eventBus.emit('u1', 'racks_changed', { reason: 'rack.slot_assign' });
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(second.written).toEqual(['event: racks_changed\ndata: {"reason":"rack.slot_assign"}\n\n']);
+  });
+
   test('emits after the window produce a new frame', () => {
     const res = mockRes();
     eventBus.register('u1', res);
@@ -196,6 +208,27 @@ describe('in-process listeners (MCP sessions, plan §4)', () => {
       ['stats_changed', { reason: 'bottle.update' }],
       ['racks_changed', { reason: 'rack.slot_assign' }],
     ]);
+  });
+
+  test('a listener keeps its nudge when the last stream closes', () => {
+    const res = mockRes();
+    eventBus.register('u1', res);
+    const got = [];
+    eventBus.addListener('u1', (event) => got.push(event));
+    eventBus.emit('u1', 'stats_changed', {});
+    eventBus.unregister('u1', res);
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(got).toEqual(['stats_changed']);
+  });
+
+  test('dropUser cancels the nudge of a user who has listeners and no stream', () => {
+    const got = [];
+    eventBus.addListener('u1', (event) => got.push(event));
+    eventBus.emit('u1', 'stats_changed', {});
+    eventBus.dropUser('u1');
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(got).toEqual([]);
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   test('a throwing listener does not break other listeners or streams', () => {

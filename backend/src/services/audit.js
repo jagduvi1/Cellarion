@@ -96,8 +96,9 @@ function logAudit(req, action, resource = {}, detail = {}) {
       role:      req?.user?.roles?.[0]  || (req ? 'anonymous' : 'system'),
       ipAddress: getClientIp(req),
       // Set by middleware/apiTokenAuth.js, and carried by an MCP session's
-      // request snapshot (mcp/requestSnapshot.js).
-      ...(req?.apiToken?.id ? { tokenId: req.apiToken.id } : {})
+      // request snapshot (mcp/requestSnapshot.js). Only a well-formed id: a
+      // value the schema cannot cast would fail the whole row.
+      ...(typeof req?.apiToken?.id === 'string' && /^[a-f0-9]{24}$/i.test(req.apiToken.id) ? { tokenId: req.apiToken.id } : {})
     },
     action,
     resource,

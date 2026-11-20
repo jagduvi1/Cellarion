@@ -88,6 +88,8 @@ describe('userDataRegistry', () => {
             'detail.username': '',
             'detail.sharedWith': '',
             'detail.invitedEmail': '',
+            // The API token the row was made with: it would link the anonymised rows.
+            'actor.tokenId': '',
           }),
         })
       );

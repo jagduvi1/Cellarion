@@ -175,4 +175,13 @@ describe('who made the change', () => {
     logAudit(reqFor('u1'), 'bottle.move.out', { type: 'bottle' }, {});
     expect(AuditLog.create.mock.calls[1][0].actor).not.toHaveProperty('tokenId');
   });
+
+  test('a token id that is not a well-formed id is left off, so the row is still written', () => {
+    for (const id of ['not-an-object-id', '', 12345, { $ne: null }]) {
+      AuditLog.create.mockClear();
+      logAudit({ ...reqFor('u1'), apiToken: { id, scopes: ['write'] } }, 'bottle.move.out', { type: 'bottle' }, {});
+      expect(AuditLog.create).toHaveBeenCalledTimes(1);
+      expect(AuditLog.create.mock.calls[0][0].actor).not.toHaveProperty('tokenId');
+    }
+  });
 });
