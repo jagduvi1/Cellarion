@@ -136,15 +136,19 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   const oldSlot = rack.slots.find((s) => String(s.bottle) === id);
   const previousPosition = oldSlot ? oldSlot.position : null;
 
-  // Clear the bottle from other racks in the cellar (this rack handled in
-  // memory below — an external $pull would trip optimistic concurrency).
-  // $inc __v so a concurrent whole-slots writer on one of THOSE racks
-  // (auto_arrange apply/undo) VersionErrors instead of re-inserting the
-  // bottle it just lost — same reasoning as bottleOps.removeFromRacks.
-  await Rack.updateMany(
+  // Take the bottle out of the other rack that holds it (this rack is handled
+  // in memory below — an external $pull would trip optimistic concurrency),
+  // and keep the slot it sat in so a save that fails can put it back. The
+  // unique slots.bottle index means at most one other rack holds it. $inc __v
+  // so a concurrent whole-slots writer on THAT rack (auto_arrange apply/undo)
+  // VersionErrors instead of re-inserting the bottle it just lost — same
+  // reasoning as bottleOps.removeFromRacks.
+  const other = await Rack.findOneAndUpdate(
     { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottle._id },
-    { $pull: { slots: { bottle: bottle._id } }, $inc: { __v: 1 } }
+    { $pull: { slots: { bottle: bottle._id } }, $inc: { __v: 1 } },
+    { projection: { slots: { $elemMatch: { bottle: bottle._id } } }, lean: true }
   );
+  const cameFrom = other && other.slots && other.slots[0] ? { rackId: other._id, slot: other.slots[0] } : null;
 
   // The procedural one-per-slot / one-slot-per-bottle invariant.
   rack.slots = rack.slots.filter((s) => s.position !== pos && String(s.bottle) !== id);
@@ -152,19 +156,59 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   try {
     await rack.save();
   } catch (err) {
-    if (err.name === 'VersionError') {
-      return { error: { status: 409, message: 'This rack was modified by another request — refresh and retry.', code: 'conflict' } };
-    }
     // Unique slots.bottle index (prior-audit M4): a concurrent placement of
     // this bottle into ANOTHER rack won the race — different documents, so
-    // only the index (not __v) can see it.
+    // only the index (not __v) can see it. The bottle is placed; nothing to
+    // put back.
     if (err.code === 11000) {
       return { error: { status: 409, message: 'This bottle was just placed in another rack — refresh and retry.', code: 'conflict' } };
     }
+    // The bottle is in this rack's old state or in no rack at all: give it
+    // back the slot it was taken from, so a refused placement moves nothing.
+    await putBackSlot(cameFrom);
+    if (err.name === 'VersionError') {
+      return { error: { status: 409, message: 'This rack was modified by another request — refresh and retry.', code: 'conflict' } };
+    }
     throw err;
   }
+
+  // The bottle was read before the save. A move to another cellar or a drink
+  // that landed in between cleared its slots before this one existed, so look
+  // again: a bottle this rack may no longer hold leaves the slot, and the
+  // bottle it pushed out gets the slot back.
+  const stillHere = await Bottle.exists({ _id: bottle._id, cellar: rack.cellar, status: { $in: ['active', null] } });
+  if (!stillHere) {
+    await Rack.updateOne({ _id: rack._id }, { $pull: { slots: { bottle: bottle._id } }, $inc: { __v: 1 } });
+    rack.slots = rack.slots.filter((s) => String(s.bottle) !== id);
+    if (occupant) {
+      const slot = typeof occupant.toObject === 'function' ? occupant.toObject() : occupant;
+      await putBackSlot({ rackId: rack._id, slot });
+      rack.slots.push(slot);
+    }
+    return { error: { status: 409, message: 'This bottle was moved or taken out of the cellar meanwhile — refresh and retry.', code: 'conflict' } };
+  }
+
   logAudit(req, 'rack.slot_assign', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { position: pos, bottleId: id, ...(displaced ? { displaced } : {}) });
   return { rack, displaced, previousPosition, position: pos };
+}
+
+/**
+ * Give a bottle back the slot a refused placement took it from, when that
+ * position is still free and the bottle sits nowhere else in the rack. Best
+ * effort: a slot taken meanwhile, or the bottle placed in another rack (the
+ * unique slots.bottle index refuses it), leaves the bottle in no rack.
+ */
+async function putBackSlot(cameFrom) {
+  if (!cameFrom) return;
+  const { rackId, slot } = cameFrom;
+  try {
+    await Rack.updateOne(
+      { _id: rackId, deletedAt: null, 'slots.position': { $ne: slot.position }, 'slots.bottle': { $ne: slot.bottle } },
+      { $push: { slots: slot }, $inc: { __v: 1 } }
+    );
+  } catch (err) {
+    console.warn('[rackOps] placement put-back failed (the bottle is left in no rack):', err.message);
+  }
 }
 
 /**

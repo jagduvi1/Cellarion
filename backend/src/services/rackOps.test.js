@@ -13,9 +13,11 @@ jest.mock('../models/Rack', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'rack-new'; this.save = jest.fn().mockResolvedValue(undefined); });
   M.RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'];
   M.updateMany = jest.fn().mockResolvedValue({});
+  M.updateOne = jest.fn().mockResolvedValue({});
+  M.findOneAndUpdate = jest.fn().mockResolvedValue(null);
   return M;
 });
-jest.mock('../models/Bottle', () => ({ findOne: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ findOne: jest.fn(), findById: jest.fn(), exists: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({
   getMaxPosition: jest.fn(() => 32),
@@ -37,7 +39,12 @@ const { createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBott
 const REQ = { user: { id: 'u1', roles: ['user'] }, headers: {} };
 const selectable = (doc) => ({ select: jest.fn().mockResolvedValue(doc) });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  // A placed bottle is looked at again after the save: still in the cellar.
+  Bottle.exists.mockResolvedValue({ _id: 'b1' });
+  Rack.findOneAndUpdate.mockResolvedValue(null);
+});
 
 describe('createCellar', () => {
   test('trims name, audits cellar.create; duplicate → 409 conflict', async () => {
@@ -151,9 +158,10 @@ describe('placeBottleInRack', () => {
     // $inc __v: the cross-rack $pull must bump those racks' versions so a
     // concurrent whole-slots save() on one of them (auto_arrange) conflicts
     // cleanly instead of re-inserting the bottle it just lost.
-    expect(Rack.updateMany).toHaveBeenCalledWith(
+    expect(Rack.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: { $ne: 'r1' }, cellar: 'c1', 'slots.bottle': 'b1' },
-      { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } }
+      { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } },
+      expect.objectContaining({ lean: true })
     );
     // The row names the bottle and the one it pushed out, not only the slot.
     expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_assign', expect.anything(), { position: 5, bottleId: 'b1', displaced: 'bOccupant' });
@@ -175,6 +183,44 @@ describe('placeBottleInRack', () => {
     const res = await placeBottleInRack(r, 5, 'b1', REQ);
     expect(res.error).toMatchObject({ status: 409, code: 'conflict' });
     expect(res.error.message).toMatch(/another rack/);
+  });
+
+  test('a placement refused by a concurrent write gives the bottle back the slot it was taken from', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    // b1 sat in another rack of the cellar, slot 7.
+    Rack.findOneAndUpdate.mockResolvedValue({ _id: 'rOther', slots: [{ position: 7, bottle: 'b1' }] });
+    const r = rack(); r.save = jest.fn().mockRejectedValue(Object.assign(new Error('v'), { name: 'VersionError' }));
+    const res = await placeBottleInRack(r, 5, 'b1', REQ);
+    expect(res.error).toMatchObject({ status: 409, code: 'conflict' });
+    // Back into slot 7 of that rack, only if the slot is still free and the bottle sits nowhere else in it.
+    expect(Rack.updateOne).toHaveBeenCalledWith(
+      { _id: 'rOther', deletedAt: null, 'slots.position': { $ne: 7 }, 'slots.bottle': { $ne: 'b1' } },
+      { $push: { slots: { position: 7, bottle: 'b1' } }, $inc: { __v: 1 } }
+    );
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('a bottle that lost the race into another rack is placed there: nothing is put back', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    Rack.findOneAndUpdate.mockResolvedValue({ _id: 'rOther', slots: [{ position: 7, bottle: 'b1' }] });
+    const r = rack(); r.save = jest.fn().mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 }));
+    expect((await placeBottleInRack(r, 5, 'b1', REQ)).error).toMatchObject({ status: 409, code: 'conflict' });
+    expect(Rack.updateOne).not.toHaveBeenCalled();
+  });
+
+  test('a bottle that left the cellar while it was being placed is taken out again, and the bottle it pushed out gets the slot back', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    Bottle.exists.mockResolvedValue(null); // moved to another cellar, or drunk, meanwhile
+    const r = rack([{ position: 5, bottle: 'bOccupant' }]);
+    const res = await placeBottleInRack(r, 5, 'b1', REQ);
+    expect(res.error).toMatchObject({ status: 409, code: 'conflict' });
+    expect(Bottle.exists).toHaveBeenCalledWith({ _id: 'b1', cellar: 'c1', status: { $in: ['active', null] } });
+    expect(Rack.updateOne).toHaveBeenNthCalledWith(1, { _id: 'r1' }, { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } });
+    expect(Rack.updateOne).toHaveBeenNthCalledWith(2,
+      { _id: 'r1', deletedAt: null, 'slots.position': { $ne: 5 }, 'slots.bottle': { $ne: 'bOccupant' } },
+      { $push: { slots: { position: 5, bottle: 'bOccupant' } }, $inc: { __v: 1 } });
+    expect(r.slots).toEqual([{ position: 5, bottle: 'bOccupant' }]);
+    expect(logAudit).not.toHaveBeenCalled();
   });
 
   test('an id sent in upper case names the same bottle: it keeps one slot', async () => {
