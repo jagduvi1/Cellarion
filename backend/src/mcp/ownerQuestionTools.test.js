@@ -5,8 +5,9 @@
  * Pins: both tools are plain user tools (no somm gate; list read-scoped,
  * answer write-scoped and budgeted like every write); the list runs the SAME
  * recipient projection the web card uses (only the caller's entry — no other
- * recipient's id or answer ever crosses this surface) with unanswered rows
- * first; the answer delegates to the shared claim (via 'mcp'), maps a
+ * recipient's id or answer ever crosses this surface, and a question reads
+ * open until the user answers it, whoever else did) with unanswered rows
+ * first and no place lookup; the answer delegates to the shared claim (via 'mcp'), maps a
  * non-recipient exactly like a missing inquiry (never confirms what others
  * were asked), refuses a second answer as conflict, writes a ledger row that
  * undo_last can never select, and keeps the answer text out of the ledger.
@@ -19,10 +20,10 @@ jest.mock('../models/WineOwnerInquiry', () => ({
   findOneAndUpdate: jest.fn(),
 }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
-// The service also reads where the caller's bottle is (the web list names
-// its cellar); the tool's output does not carry it.
+// The service can also read where a bottle of each wine is (the web list
+// names its cellar); the tool asks for no place, so these stay unread.
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn(), aggregate: jest.fn() }));
 jest.mock('../services/notifications', () => ({
   createNotification: jest.fn().mockResolvedValue(undefined),
   createNotifications: jest.fn().mockResolvedValue(undefined),
@@ -107,8 +108,6 @@ describe('list_curator_questions', () => {
     });
     // The service returns newest first; the tool puts the unanswered one first regardless.
     WineOwnerInquiry.find.mockReturnValue(findChain([answered, row()]));
-    Cellar.find.mockReturnValue({ select: () => ({ lean: async () => [{ _id: oid('9'), name: 'Summer house' }] }) });
-    Bottle.find.mockReturnValue({ select: () => ({ lean: async () => [{ _id: oid('5'), cellar: oid('9'), vintage: '2016', status: 'active' }] }) });
 
     const body = parse(await tool('list_curator_questions').handler({}, CTX));
 
@@ -124,15 +123,37 @@ describe('list_curator_questions', () => {
     expect(raw).not.toContain('Secret answer from another owner');
     expect(raw).not.toContain('Curator-only note');
     // The tool's output keeps its own fields: the cellar and vintage the web
-    // list shows are not part of it.
+    // list shows are not part of it, and are not even looked up.
     expect(Object.keys(body.data[0]).sort()).toEqual([
       'answered', 'answered_at', 'asked_at', 'bottle_id', 'curator_reply', 'expires_at',
       'inquiry_id', 'my_answer', 'question', 'resolved_at', 'status', 'wine',
     ]);
-    expect(raw).not.toContain('Summer house');
+    expect(Cellar.find).not.toHaveBeenCalled();
+    expect(Bottle.find).not.toHaveBeenCalled();
+    expect(Bottle.aggregate).not.toHaveBeenCalled();
     expect(WineOwnerInquiry.find.mock.calls[0][0]['recipients.user']).toBe(ME);
     // The one-shot warning rides only while something is waiting.
     expect(body.warnings[0]).toMatch(/answered ONCE/);
+  });
+
+  test('a question another owner answered reads open to a user who has not answered; their own answer reads answered', async () => {
+    // row() carries OTHER's answer, so the stored status is 'answered'.
+    WineOwnerInquiry.find.mockReturnValue(findChain([
+      row({ status: 'answered' }),
+      row({
+        _id: oid('f'), status: 'answered',
+        recipients: [{ user: ME, bottle: oid('7'), response: 'Says E. Pira e Figli', respondedAt: new Date('2026-08-02') }],
+      }),
+    ]));
+
+    const body = parse(await tool('list_curator_questions').handler({}, CTX));
+
+    expect(body.data.map((r) => [r.inquiry_id, r.status, r.answered])).toEqual([
+      [I1, 'open', false],
+      [oid('f'), 'answered', true],
+    ]);
+    expect(body.summary).toMatch(/^1 question\(s\) waiting for an answer, 1 answered$/);
+    expect(JSON.stringify(body)).not.toContain('Secret answer from another owner');
   });
 
   test('wine_id scopes the query; nothing waiting means no warning', async () => {
@@ -142,6 +163,15 @@ describe('list_curator_questions', () => {
     expect(body.data).toEqual([]);
     expect(body.summary).toMatch(/No curator questions/);
     expect(body.warnings).toBeUndefined();
+  });
+
+  test('wine_id with a question runs no place query either', async () => {
+    WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
+    const body = parse(await tool('list_curator_questions').handler({ wine_id: WINE }, CTX));
+    expect(body.data).toHaveLength(1);
+    expect(Cellar.find).not.toHaveBeenCalled();
+    expect(Bottle.find).not.toHaveBeenCalled();
+    expect(Bottle.aggregate).not.toHaveBeenCalled();
   });
 });
 

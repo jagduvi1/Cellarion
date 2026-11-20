@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../api/ownerInquiries', () => ({
@@ -6,11 +6,13 @@ vi.mock('../../api/ownerInquiries', () => ({
   respondToOwnerInquiry: vi.fn(),
 }));
 
-// The card passes English fallbacks inline — return those so assertions read
-// like the real UI (the ConnectAi test convention).
+// The card passes English fallbacks inline — return those, placeholders
+// filled, so assertions read like the real UI (the ConnectAi test convention).
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key, fallback) => (typeof fallback === 'string' ? fallback : key),
+    t: (key, fallback, opts) => (typeof fallback === 'string'
+      ? fallback.replace(/{{(\w+)}}/g, (_, name) => String(opts?.[name] ?? ''))
+      : key),
   }),
 }));
 
@@ -171,4 +173,46 @@ test('a given question is shown as is, with no lookup, and its own intro line', 
   expect(screen.getByText(INQUIRY.question)).toBeInTheDocument();
   expect(screen.getByText('You have no bottle of this wine any more.')).toBeInTheDocument();
   expect(getMyOwnerInquiries).not.toHaveBeenCalled();
+});
+
+// The list holds many cards under its own headings: each one's heading nests
+// at the level the page gives, and each answer box says which wine it is for.
+test('heading level: h2 by default (the bottle page), the level a page asks for otherwise', async () => {
+  const { unmount } = renderCard();
+  expect(await screen.findByRole('heading', { level: 2, name: 'A curator has a question about this wine' })).toBeInTheDocument();
+  unmount();
+
+  render(<MemoryRouter><OwnerInquiryCard apiFetch={vi.fn()} wineId={WINE_ID} inquiry={INQUIRY} headingLevel={4} /></MemoryRouter>);
+  expect(screen.getByRole('heading', { level: 4, name: 'A curator has a question about this wine' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+  cleanup();
+
+  render(<MemoryRouter><OwnerInquiryCard apiFetch={vi.fn()} wineId={WINE_ID} inquiry={REPLIED} headingLevel={3} /></MemoryRouter>);
+  expect(screen.getByRole('heading', { level: 3, name: 'A curator replied about this wine' })).toBeInTheDocument();
+});
+
+test('the answer box is named by more than its placeholder: with the wine when the card was handed a question', async () => {
+  const { unmount } = renderCard();
+  expect(await screen.findByRole('textbox', { name: 'Your answer' })).toBeInTheDocument();
+  unmount();
+
+  render(<MemoryRouter><OwnerInquiryCard apiFetch={vi.fn()} wineId={WINE_ID} inquiry={INQUIRY} /></MemoryRouter>);
+  expect(screen.getByRole('textbox', { name: 'Your answer about Pira — Barolo' })).toBeInTheDocument();
+});
+
+test('onAnswered fires once, with the answer sent, only when the server accepted it', async () => {
+  const onAnswered = vi.fn();
+  respondToOwnerInquiry.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: 'A response is required' }) });
+  render(<MemoryRouter><OwnerInquiryCard apiFetch={vi.fn()} wineId={WINE_ID} inquiry={INQUIRY} onAnswered={onAnswered} /></MemoryRouter>);
+
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: ' Front label reads E. Pira. ' } });
+  fireEvent.click(screen.getByText('Send answer'));
+  expect(await screen.findByText('A response is required')).toBeInTheDocument();
+  expect(onAnswered).not.toHaveBeenCalled();
+
+  respondToOwnerInquiry.mockResolvedValueOnce(ok({ message: 'ok', status: 'answered' }));
+  fireEvent.click(screen.getByText('Send answer'));
+  expect(await screen.findByText(/Thank you — your answer was sent/)).toBeInTheDocument();
+  expect(onAnswered).toHaveBeenCalledTimes(1);
+  expect(onAnswered).toHaveBeenCalledWith('Front label reads E. Pira.');
 });

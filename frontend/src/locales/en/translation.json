@@ -1455,6 +1455,7 @@
       "replyTitle": "A curator replied about this wine",
       "replyIntro": "You answered a question about this wine — here is what came of it. Thank you: the shared registry is more accurate because you checked.",
       "yourAnswer": "Your answer",
+      "answerAbout": "Your answer about {{wine}}",
       "curatorReply": "The curator’s reply"
     },
     "tastingProfile": "Tasting profile",

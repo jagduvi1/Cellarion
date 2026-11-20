@@ -56,7 +56,7 @@ export default function CuratorQuestion() {
   if (state.status === 'error') {
     return (
       <div className="curator-question-page">
-        <p className="error-message" role="alert">{t('curatorQuestion.loadError', 'Could not load the question.')}</p>
+        <div className="alert alert-error" role="alert">{t('curatorQuestion.loadError', 'Could not load the question.')}</div>
         <button type="button" className="btn btn-secondary btn-small" onClick={() => setAttempt((n) => n + 1)}>
           {t('common.retry', 'Retry')}
         </button>
@@ -112,9 +112,11 @@ function AllQuestionsLink() {
 /**
  * A question the member answered that has no curator reply to show (a reply
  * shows on OwnerInquiryCard): the question, their answer, and where it
- * stands. Shared with the questions list (CuratorQuestions.js).
+ * stands. Shared with the questions list (CuratorQuestions.js), which passes
+ * `justSent` for an answer sent from its card a moment ago so the card's
+ * thank-you stays with the question.
  */
-export function AnsweredQuestion({ inquiry }) {
+export function AnsweredQuestion({ inquiry, justSent = false }) {
   const { t } = useTranslation();
   return (
     <>
@@ -126,9 +128,11 @@ export function AnsweredQuestion({ inquiry }) {
         </>
       )}
       <p className="curator-question-answered" role="status">
-        {inquiry.status === 'resolved'
-          ? t('curatorQuestion.resolved', 'The curators have closed this question. Thank you for your answer.')
-          : t('curatorQuestion.answered', 'You answered this question. Thank you — the curators will take it from here.')}
+        {justSent
+          ? t('bottleDetail.ownerInquiry.thanks', 'Thank you — your answer was sent to the curators and helps keep the shared registry accurate.')
+          : inquiry.status === 'resolved'
+            ? t('curatorQuestion.resolved', 'The curators have closed this question. Thank you for your answer.')
+            : t('curatorQuestion.answered', 'You answered this question. Thank you — the curators will take it from here.')}
       </p>
     </>
   );

@@ -19,7 +19,7 @@ jest.mock('../models/WineOwnerInquiry', () => ({
 }));
 // GET /:id resolves a bottle page the caller can open now.
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ find: jest.fn(), findOne: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn(), findOne: jest.fn(), aggregate: jest.fn() }));
 // requireAuth calls User.exists for demo tokens (must resolve truthy or the
 // demo test would 401 and prove nothing); the respond path reads the asker's
 // roles for the notification link.
@@ -125,10 +125,12 @@ describe('GET /:id', () => {
 describe('GET /mine', () => {
   const Cellar = require('../models/Cellar');
   const Bottle = require('../models/Bottle');
-  // Where the caller's bottle is (the list names its cellar and vintage).
-  const places = ({ cellars = [], bottles = [] } = {}) => {
+  // Where a bottle of the wine is (the list names its cellar and vintage):
+  // the recorded bottles by id, and the newest bottle on a shelf per wine.
+  const places = ({ cellars = [], recorded = [], newest = [] } = {}) => {
     Cellar.find.mockReturnValue({ select: () => ({ lean: async () => cellars }) });
-    Bottle.find.mockReturnValue({ select: () => ({ lean: async () => bottles }) });
+    Bottle.find.mockReturnValue({ select: () => ({ lean: async () => recorded }) });
+    Bottle.aggregate.mockResolvedValue(newest);
   };
   beforeEach(() => places());
 
@@ -136,12 +138,30 @@ describe('GET /mine', () => {
     WineOwnerInquiry.find.mockReturnValue(findChain([INQUIRY_ROW]));
     places({
       cellars: [{ _id: oid('9'), name: 'Summer house' }],
-      bottles: [{ _id: oid('5'), cellar: oid('9'), vintage: '2016', status: 'active' }],
+      recorded: [{ _id: oid('5'), wineDefinition: W1, cellar: oid('9'), vintage: '2016' }],
     });
 
     const { inquiries } = await (await mine()).json();
     expect(inquiries[0]).toMatchObject({ cellar: { _id: oid('9'), name: 'Summer house' }, vintage: '2016' });
     expect(Bottle.find.mock.calls[0][0]._id.$in).toEqual([oid('5')]);
+  });
+
+  test('the one-wine card (?wine=) runs no place query and carries no place', async () => {
+    WineOwnerInquiry.find.mockReturnValue(findChain([INQUIRY_ROW]));
+    const { inquiries } = await (await mine(`?wine=${W1}`)).json();
+    expect(inquiries).toHaveLength(1);
+    expect(inquiries[0]).not.toHaveProperty('cellar');
+    expect(inquiries[0]).not.toHaveProperty('vintage');
+    expect(Cellar.find).not.toHaveBeenCalled();
+    expect(Bottle.find).not.toHaveBeenCalled();
+    expect(Bottle.aggregate).not.toHaveBeenCalled();
+  });
+
+  test('a question another owner answered reads open to a caller who has not answered', async () => {
+    // INQUIRY_ROW carries OTHER's answer; stored, the inquiry is 'answered'.
+    WineOwnerInquiry.find.mockReturnValue(findChain([{ ...INQUIRY_ROW, status: 'answered' }]));
+    const { inquiries } = await (await mine()).json();
+    expect(inquiries[0]).toMatchObject({ status: 'open', responded: false });
   });
 
   test('returns ONLY the caller recipient view — no other recipients, identities or answers', async () => {

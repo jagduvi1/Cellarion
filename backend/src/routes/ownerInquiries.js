@@ -5,14 +5,19 @@
  *
  *   GET  /mine        — the caller's active inquiries (their recipient view):
  *                       question, wine, THEIR bottle and THEIR response state
- *                       only. Other recipients' identities and answers never
- *                       leave the server here — an owner must not learn who
- *                       else owns the wine (privacy). ?wine=<id> narrows to
- *                       one wine (what the BottleDetail card asks). Also
- *                       returns inquiries the caller ANSWERED that a curator
- *                       resolved within the last REPLY_VISIBLE_DAYS, carrying
- *                       `curatorReply` — closing the loop for the person who
- *                       went and read the label. The curator's own
+ *                       only; `status` reads 'open' until they answer, however
+ *                       many others did. Other recipients' identities and
+ *                       answers never leave the server here — an owner must
+ *                       not learn who else owns the wine (privacy). The full
+ *                       list (the questions page) also carries, per row, the
+ *                       `cellar` ({ _id, name }) and `vintage` of a bottle of
+ *                       the wine on a shelf the caller can open, or null for
+ *                       both. ?wine=<id> narrows to one wine (what the bottle
+ *                       and vintage pages' card asks) and carries neither.
+ *                       Also returns inquiries the caller ANSWERED that a
+ *                       curator resolved within the last REPLY_VISIBLE_DAYS,
+ *                       carrying `curatorReply` — closing the loop for the
+ *                       person who went and read the label. The curator's own
  *                       `resolutionNote` is never projected here.
  *   POST /:id/respond — body { response } (1–1000 plain text). Recipient-only,
  *                       single-shot and immutable (second attempt → 409),
@@ -41,7 +46,8 @@ router.get('/mine', async (req, res) => {
     // Optional wine scope — validated id or ignored (never a cast 500).
     const wine = typeof req.query.wine === 'string' ? req.query.wine : '';
     if (wine && !isValidId(wine)) return res.json({ inquiries: [] });
-    const inquiries = await listInquiriesForRecipient(req.user.id, wine ? { wineId: wine } : {});
+    // Only the full list shows where each bottle is; the one-wine card does not.
+    const inquiries = await listInquiriesForRecipient(req.user.id, wine ? { wineId: wine } : { withPlaces: true });
     res.json({ inquiries });
   } catch (err) {
     console.error('List my owner inquiries error:', err);
