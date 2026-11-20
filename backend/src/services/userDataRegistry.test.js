@@ -339,6 +339,33 @@ describe('WineOwnerInquiry — recipient-entry erasure + asker nulling', () => {
       findSpy.mockRestore();
     }
   });
+
+  test('the export does not tell a member who has not answered that another owner did', async () => {
+    const chain = (rows) => {
+      const c = {};
+      for (const m of ['select', 'populate', 'limit']) c[m] = jest.fn(() => c);
+      c.lean = jest.fn(async () => rows);
+      return c;
+    };
+    const inquiry = (status, recipients) => ({ question: 'Q', status, wineDefinition: { producer: 'P', name: 'W' }, recipients, createdAt: 'c' });
+    const received = [
+      // Someone else answered: the stored status says so, the export must not.
+      inquiry('answered', [{ user: 'u1' }, { user: 'u2', response: 'theirs' }]),
+      // The member answered themselves: 'answered' is their own news.
+      inquiry('answered', [{ user: 'u1', response: 'mine' }, { user: 'u2' }]),
+      inquiry('closed', [{ user: 'u1' }]),
+    ];
+    const findSpy = jest.spyOn(WineOwnerInquiry, 'find')
+      .mockReturnValueOnce(chain(received))
+      .mockReturnValueOnce(chain([]));
+    try {
+      const frag = await entry.exportFragment({ userId: 'u1', truncated: {} });
+      expect(frag.ownerInquiries.received.map((r) => r.status)).toEqual(['open', 'answered', 'closed']);
+      expect(JSON.stringify(frag)).not.toContain('theirs');
+    } finally {
+      findSpy.mockRestore();
+    }
+  });
 });
 
 // Portability of wine corrections (pre-deploy audit 2026-09-18). `amendments`

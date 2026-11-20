@@ -131,7 +131,10 @@ module.exports = [
             return {
               wine: label(i),
               question: i.question,
-              status: i.status,
+              // As the questions list shows it (ownerInquiryOps.recipientRow):
+              // 'answered' means someone answered, which a recipient who has
+              // not must not learn about the other owners.
+              status: i.status === 'answered' && !mine?.response ? 'open' : i.status,
               myResponse: mine?.response || null,
               respondedAt: mine?.respondedAt || null,
               notifiedAt: mine?.notifiedAt || null,
