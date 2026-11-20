@@ -14,7 +14,11 @@ const auditLogSchema = new mongoose.Schema({
       default: null  // null for anonymous (e.g. failed login with unknown username)
     },
     role: { type: String, default: 'anonymous' },
-    ipAddress: { type: String }
+    ipAddress: { type: String },
+    // The API token the request came with (a personal token or a connected
+    // assistant's), so a change an integration made can be told from the
+    // member's own click. Absent for a signed-in session.
+    tokenId: { type: mongoose.Schema.Types.ObjectId, ref: 'ApiToken' }
   },
   // Dot-separated action name: category.verb[.outcome]
   // e.g. 'auth.login.failed', 'bottle.add', 'cellar.share.add'

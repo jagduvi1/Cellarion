@@ -96,7 +96,7 @@ Every answer carries \`RateLimit-Limit\`, \`RateLimit-Remaining\`, \`RateLimit-R
 
 ## Live updates
 
-\`GET /api/events/stream\` is a Server-Sent Events stream. It sends \`stats_changed\`, \`notification\` or \`climate\` when your data changes: it says *that* something changed, not what, so refetch what you show. A \`: hb\` comment arrives every 25 seconds; reconnect with backoff after 90 seconds of silence. Authenticate with the \`Authorization\` header (a browser \`EventSource\` cannot send headers; use a client that can).
+\`GET /api/events/stream\` is a Server-Sent Events stream. It sends \`stats_changed\`, \`racks_changed\`, \`notification\` or \`climate\` when your data changes: it says *that* something changed, not what, so refetch what you show. A \`: hb\` comment arrives every 25 seconds; reconnect with backoff after 90 seconds of silence. Authenticate with the \`Authorization\` header (a browser \`EventSource\` cannot send headers; use a client that can).
 
 ## Revoking a token
 

@@ -817,7 +817,7 @@ const paths = {
       description: [
         'A long-lived `text/event-stream` (Server-Sent Events). It says *that* something changed, not what: refetch what you show (for example `GET /api/inventory` with its ETag).',
         '',
-        'On connect: `retry: 5000`, then `event: ready`. Events: `stats_changed` (`data: {"reason": "…"}`), `notification` (`data: {"id": "…", "type": "…"}`) and `climate` (`data: {"device": "…"}`). Events are coalesced over about 2 seconds. A `: hb` comment arrives every 25 seconds; treat 90 seconds of silence as a lost connection and reconnect with backoff.',
+        'On connect: `retry: 5000`, then `event: ready`. Events: `stats_changed` (`data: {"reason": "…"}`) when bottles or cellars change, `racks_changed` (`data: {"reason": "…"}`) when a bottle is placed in a rack, moved or taken out, or a rack itself changes, `notification` (`data: {"id": "…", "type": "…"}`) and `climate` (`data: {"device": "…"}`). Events are coalesced over about 2 seconds; while racks keep changing, `racks_changed` comes at most about twice a minute. A `: hb` comment arrives every 25 seconds; treat 90 seconds of silence as a lost connection and reconnect with backoff.',
         '',
         'A stream lasts at most 24 hours and closes when the token is revoked. At most 5 streams per user (429 beyond). New event names may appear; ignore the ones you don\'t know.',
       ].join('\n'),
