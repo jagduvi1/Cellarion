@@ -221,14 +221,22 @@ beforeAll(() => { if (!Element.prototype.scrollIntoView) Element.prototype.scrol
 // "Add a new bottle here": a bottle that is not in the cellar yet is added
 // from the free slot and comes back to it.
 const AddBottleStub = () => <pre data-testid="add-state">{JSON.stringify(useLocation().state)}</pre>;
+// What the current history entry carries — what Back or a reload comes back to.
+const EntryState = () => <pre data-testid="entry-state">{JSON.stringify(useLocation().state)}</pre>;
+const entryState = () => JSON.parse(screen.getByTestId('entry-state').textContent);
 const renderAt = (entry) => render(
   <MemoryRouter initialEntries={[entry]}>
     <Routes>
       <Route path="/cellars/:id/racks" element={<CellarRacks />} />
       <Route path="/cellars/:id/add-bottle" element={<AddBottleStub />} />
     </Routes>
+    <EntryState />
   </MemoryRouter>,
 );
+const B1 = '6a000000000000000000b009';
+const B2 = '6a000000000000000000b00a';
+const fromSlot = (placeQueue) => ({ pathname: '/cellars/c1/racks', search: '?rack=r1', state: { placeQueue, placeAt: { rackId: 'r1', position: 2 } } });
+const slotWrites = () => api.mock.calls.filter(([u, o]) => u.startsWith('/api/racks/r1/slots/') && o?.method === 'PUT').length;
 
 test('a free slot offers to add a new bottle there; Add Bottle opens with that slot', async () => {
   setup();
@@ -238,16 +246,84 @@ test('a free slot offers to add a new bottle there; Add Bottle opens with that s
   expect(JSON.parse((await screen.findByTestId('add-state')).textContent)).toEqual({ placeAt: { rackId: 'r1', position: 1 } });
 });
 
-test('a bottle added from a slot goes into that slot when the rack page opens', async () => {
+test('a bottle added from a slot goes into that slot when the rack page opens, only if the server still finds it empty', async () => {
   setup();
   const inner = api.getMockImplementation();
   api.mockImplementation(async (url, opts) => {
-    if (url === '/api/racks/r1/slots/2') return ok({ rack: { ...rack(), slots: [{ position: 2, bottle: bottle('6a000000000000000000b009', 'Opus One') }] } });
+    if (url === '/api/racks/r1/slots/2') return ok({ rack: { ...rack(), slots: [{ position: 2, bottle: bottle(B1, 'Opus One') }] } });
     return inner(url, opts);
   });
-  renderAt({ pathname: '/cellars/c1/racks', search: '?rack=r1', state: { placeQueue: ['6a000000000000000000b009'], placeAt: { rackId: 'r1', position: 2 } } });
+  renderAt(fromSlot([B1]));
 
-  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/racks/r1/slots/2', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ bottleId: '6a000000000000000000b009' }) })));
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/racks/r1/slots/2', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ bottleId: B1, expectOccupant: null }) })));
+});
+
+test('a slot filled on the server meanwhile pushes nothing out: the racks are read again and the slot is said to be taken', async () => {
+  setup();
+  const inner = api.getMockImplementation();
+  let racksReads = 0;
+  api.mockImplementation(async (url, opts) => {
+    if (url === '/api/racks?cellar=c1') {
+      racksReads += 1;
+      return ok({ racks: [racksReads === 1 ? rack() : { ...rack(), slots: [{ position: 2, bottle: bottle('b7', 'Someone else') }] }] });
+    }
+    if (url === '/api/racks/r1/slots/2') return refused(409, { error: 'This slot has changed since — check the rack and try again.', code: 'slot_changed' });
+    return inner(url, opts);
+  });
+  renderAt(fromSlot([B1]));
+
+  expect(await screen.findByText(/racks\.placeQueue\.slotTaken/)).toBeInTheDocument();
+  expect(api).toHaveBeenCalledWith('/api/racks/r1/slots/2', expect.objectContaining({ body: JSON.stringify({ bottleId: B1, expectOccupant: null }) }));
+  await waitFor(() => expect(racksReads).toBe(2));
+  // The bottle stays in the queue, to be placed by a tap.
+  expect(screen.getByText(/racks\.placeQueue\.progress:\{"placed":0,"total":1\}/)).toBeInTheDocument();
+});
+
+test('the slot is decided once: the history entry then keeps only the queue, and a reload places nothing again', async () => {
+  setup();
+  const inner = api.getMockImplementation();
+  const placed = { ...rack(), slots: [{ position: 2, bottle: bottle(B1, 'Opus One') }] };
+  let current = rack();
+  api.mockImplementation(async (url, opts) => {
+    if (url === '/api/racks?cellar=c1') return ok({ racks: [current] });
+    if (url === '/api/racks/r1/slots/2') { current = placed; return ok({ rack: placed }); }
+    return inner(url, opts);
+  });
+  const { unmount } = renderAt(fromSlot([B1, B2]));
+
+  await waitFor(() => expect(slotWrites()).toBe(1));
+  await waitFor(() => expect(entryState()).toEqual({ placeQueue: [B1, B2] }));
+  const kept = entryState();
+  unmount();
+
+  renderAt({ pathname: '/cellars/c1/racks', search: '?rack=r1', state: kept });
+  expect(await screen.findByText(/racks\.placeQueue\.progress:\{"placed":1,"total":2\}/)).toBeInTheDocument();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(slotWrites()).toBe(1);
+  expect(screen.queryByText(/racks\.placeQueue\.slotTaken/)).not.toBeInTheDocument();
+});
+
+// An entry that still carries the slot while its first bottle is in a rack
+// (Back or a reload after the placement): that bottle was placed already —
+// it must not be called a stranger in its slot, nor be moved back into it.
+test.each([
+  ['in the slot it was added for', 2],
+  ['moved to another slot since', 1],
+])('with the first bottle already in a rack (%s), nothing is written and no "slot taken" is said', async (_, position) => {
+  setup();
+  const inner = api.getMockImplementation();
+  api.mockImplementation(async (url, opts) => {
+    if (url === '/api/racks?cellar=c1') return ok({ racks: [{ ...rack(), slots: [{ position, bottle: bottle(B1, 'Opus One') }] }] });
+    if (url === '/api/racks/r1/slots/2') return ok({ rack: { ...rack(), slots: [{ position: 2, bottle: bottle(B1, 'Opus One') }] } });
+    return inner(url, opts);
+  });
+  renderAt(fromSlot([B1, B2]));
+
+  expect(await screen.findByText(/racks\.placeQueue\.progress:\{"placed":1,"total":2\}/)).toBeInTheDocument();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(slotWrites()).toBe(0);
+  expect(screen.queryByText(/racks\.placeQueue\.slotTaken/)).not.toBeInTheDocument();
+  await waitFor(() => expect(entryState()).toEqual({ placeQueue: [B1, B2] }));
 });
 
 test('a slot taken meanwhile places nothing and says so', async () => {
@@ -257,8 +333,44 @@ test('a slot taken meanwhile places nothing and says so', async () => {
     if (url === '/api/racks?cellar=c1') return ok({ racks: [{ ...rack(), slots: [{ position: 2, bottle: bottle('b1', 'Château Margaux') }] }] });
     return inner(url, opts);
   });
-  renderAt({ pathname: '/cellars/c1/racks', search: '?rack=r1', state: { placeQueue: ['6a000000000000000000b009'], placeAt: { rackId: 'r1', position: 2 } } });
+  renderAt(fromSlot([B1]));
 
   expect(await screen.findByText(/racks\.placeQueue\.slotTaken/)).toBeInTheDocument();
   expect(api.mock.calls.some(([u]) => u === '/api/racks/r1/slots/2')).toBe(false);
+  // Refused is decided too: Back or a reload does not say it again.
+  await waitFor(() => expect(entryState()).toEqual({ placeQueue: [B1] }));
+});
+
+// ?rack= picks its rack once: a slot change afterwards must not pull the view
+// back to it from the rack the member went on to.
+test('?rack= selects its rack once; a slot change in another rack keeps that rack in view', async () => {
+  setup();
+  const inner = api.getMockImplementation();
+  api.mockImplementation(async (url, opts) => {
+    if (url === '/api/racks?cellar=c1') return ok({ racks: [rack(), { ...rack(), _id: 'r2', name: 'Right wall' }] });
+    if (url === '/api/racks/r1/slots/1') return ok({ rack: { ...rack(), slots: [{ position: 1, bottle: bottle('b1', 'Château Margaux') }] } });
+    return inner(url, opts);
+  });
+  renderAt('/cellars/c1/racks?rack=r2');
+  const tab = (name) => screen.getByRole('button', { name: new RegExp(name) });
+  await waitFor(() => expect(tab('Right wall')).toHaveClass('active'));
+
+  fireEvent.click(tab('Left wall'));
+  fireEvent.click(screen.getByRole('button', { name: 'slot-1' }));
+  fireEvent.click(await within(screen.getByRole('dialog')).findByText('Château Margaux'));
+
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/racks/r1/slots/1', expect.objectContaining({ method: 'PUT' })));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(tab('Left wall')).toHaveClass('active');
+  expect(tab('Right wall')).not.toHaveClass('active');
+});
+
+test('the demo is not offered "Add a new bottle here": it cannot add bottles', async () => {
+  setup();
+  auth.user = { ...auth.user, isDemo: true };
+  renderAt('/cellars/c1/racks');
+  const popup = await openPicker();
+
+  await within(popup).findByText('Château Margaux');
+  expect(within(popup).queryByRole('button', { name: 'racks.addNewHere' })).not.toBeInTheDocument();
 });

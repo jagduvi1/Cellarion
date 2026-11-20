@@ -247,11 +247,15 @@ function CellarRacks() {
     }
   }, [highlightBottleId, racks]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-select rack when navigating from room view with ?rack=<id>
+  // Auto-select rack when navigating from room view with ?rack=<id>. Once per
+  // id: the racks change with every slot action, and focusing again would
+  // pull the view back from the rack the member has moved on to.
+  const focusedRackId = useRef(null);
   useEffect(() => {
-    if (!focusRackId || racks.length === 0) return;
+    if (!focusRackId || focusedRackId.current === focusRackId || racks.length === 0) return;
     const found = racks.find(r => r._id === focusRackId);
     if (found) {
+      focusedRackId.current = focusRackId;
       setSelectedRackId(found._id);
       // Scroll to the rack after a short delay for rendering
       setTimeout(() => {
@@ -760,15 +764,22 @@ function CellarRacks() {
   // and keeps the bottle in the queue. Declared above the error return (hooks
   // must run every render); a render with an error never reaches the
   // placement, whose handler is declared below that return.
+  // One-shot: once decided, the history entry keeps only the queue, so Back or
+  // a reload never decides again. The slot is for the add's first bottle; a
+  // rack holding it already (this render's queue may not be trimmed yet)
+  // means it was placed, and nothing else may take its slot.
   const placeAtDone = useRef(false);
   useEffect(() => {
     const placeAt = location.state?.placeAt;
     if (error || placeAtDone.current || !placeAt || !placeQueue.length || !racks.length || !canEditCellar(cellar)) return;
     placeAtDone.current = true;
+    navigate(location.pathname + location.search, { replace: true, state: { placeQueue: location.state.placeQueue } });
+    const [first] = readPlaceQueue(location.state);
+    if (placeQueue[0] !== first || !withoutPlaced([first], racks).length) return;
     const target = racks.find((r) => r._id === placeAt.rackId);
     const taken = target && (target.slots || []).some((s) => s.position === placeAt.position);
     if (!target || taken) { setPlaceNotice({ kind: 'error', text: t('racks.placeQueue.slotTaken') }); return; }
-    handlePlaceTap(target, placeAt.position, null);
+    handlePlaceTap(target, placeAt.position, null, { auto: true });
   }, [racks, placeQueue, cellar, error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <div className="alert alert-error">{error}</div>;
@@ -846,8 +857,10 @@ function CellarRacks() {
     clearPlaceState();
   };
 
-  // Returns true when the tap was consumed by the placing mode.
-  const handlePlaceTap = async (targetRack, pos, slotData) => {
+  // Returns true when the tap was consumed by the placing mode. `auto` is the
+  // placement no tap asked for (an add from a slot): the server must find the
+  // slot still empty, so a bottle placed there meanwhile is never pushed out.
+  const handlePlaceTap = async (targetRack, pos, slotData, { auto = false } = {}) => {
     if (!placeQueue.length || !canEdit) return false;
     if (placeBusy) return true; // a placement is in flight — swallow the tap, do not open the slot picker
     const isDisabled = (targetRack.disabledPositions || []).includes(pos);
@@ -855,8 +868,13 @@ function CellarRacks() {
     const bottleId = placeQueue[0];
     setPlaceBusy(true);
     try {
-      const res = await updateSlot(apiFetch, targetRack._id, pos, { bottleId });
+      const res = await updateSlot(apiFetch, targetRack._id, pos, auto ? { bottleId, expectOccupant: null } : { bottleId });
       const data = await res.json();
+      if (res.status === 409 && data.code === 'slot_changed') {
+        setPlaceNotice({ kind: 'error', text: t('racks.placeQueue.slotTaken') });
+        await reloadRacks();
+        return true;
+      }
       if (res.status === 404) {
         // The bottle is gone (deleted or moved since the add) — it must not
         // block the rest of the queue.
@@ -1321,7 +1339,8 @@ function CellarRacks() {
                     : undefined}
                   onAssign={(pos, bottleId) => handleAssign(activePopup.rackId, pos, bottleId)}
                   onDisable={() => handleDisableSlot(activePopup.rackId, activePopup.position)}
-                  onAddNew={canEdit
+                  // The demo cannot add bottles (as on the cellar page).
+                  onAddNew={canEdit && !user?.isDemo
                     ? () => navigate(`/cellars/${id}/add-bottle`, { state: { placeAt: { rackId: activePopup.rackId, position: activePopup.position } } })
                     : undefined}
                   onClose={() => setActivePopup(null)}
