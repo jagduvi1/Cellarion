@@ -16,7 +16,7 @@ const {
   normalizeRackGroup, moveRackBottles,
 } = require('../services/rackOps');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange');
-const { isValidId } = require('../utils/validation');
+const { isValidId, parseSlotPosition } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { WINE_LIST_SELECT } = require('../config/constants');
@@ -495,15 +495,16 @@ function slotChanged(rack, position, expected) {
   if (expected === undefined) return false;
   const slot = rack.slots.find((s) => s.position === position);
   const actual = slot && slot.bottle ? String(slot.bottle) : null;
-  return actual !== (expected ? String(expected) : null);
+  // Ids compare as text; a stored id prints in lower case.
+  return actual !== (expected ? String(expected).toLowerCase() : null);
 }
 
 // PUT /api/racks/:id/slots/:position  — assign a bottle to a slot (owner or editor)
 router.put('/:id/slots/:position', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const position = parseInt(req.params.position, 10);
-    if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
+    const position = parseSlotPosition(req.params.position);
+    if (position === null) return res.status(400).json({ error: 'Invalid position' });
     const { bottleId } = req.body;
     if (!isValidId(bottleId)) return res.status(400).json({ error: 'Valid bottleId required' });
 
@@ -726,8 +727,8 @@ router.post('/:id/arrange/apply', async (req, res) => {
 router.delete('/:id/slots/:position', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const position = parseInt(req.params.position, 10);
-    if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
+    const position = parseSlotPosition(req.params.position);
+    if (position === null) return res.status(400).json({ error: 'Invalid position' });
 
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });

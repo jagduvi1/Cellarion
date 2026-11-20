@@ -125,6 +125,9 @@ const exampleBottle = {
   otherVintageImageUrl: null,
 };
 
+// The list and detail answers add the image fields; a write answer has none.
+const withoutImageUrls = ({ defaultImageUrl, vintageImageUrl, pendingImageUrl, otherVintageImageUrl, ...bottle }) => bottle;
+
 const exampleRack = {
   _id: ID.rack, cellar: ID.cellar, name: 'Wine fridge', group: null, type: 'cabinet', rows: 2, cols: 3,
   typeConfig: { shelfRows: [1, 1] }, isModular: false, slots: [{ position: 5, bottle: ID.bottle }],
@@ -929,7 +932,7 @@ const paths = {
         content: json(ref('MoveRequest'), { toCellarId: ID.cellar2 }),
       },
       responses: {
-        200: ok('The bottle, now in the other cellar.', ref('MoveResponse'), { bottle: { ...exampleBottle, wineDefinition: ID.wine, cellar: ID.cellar2 } }),
+        200: ok('The bottle, now in the other cellar.', ref('MoveResponse'), { bottle: { ...withoutImageUrls(exampleBottle), wineDefinition: ID.wine, cellar: ID.cellar2 } }),
         ...errors(400, 401, 403, 404, 409, 429),
       },
     },
@@ -983,7 +986,7 @@ const paths = {
       operationId: 'unplaceBottle',
       tags: ['Moving bottles'],
       summary: 'Take a bottle out of a rack slot',
-      description: 'Empties the slot. The bottle stays in the cellar, in no rack. A slot that is already empty answers 200 with `removed: null`. Needs the `write` scope and editor access to the cellar.',
+      description: 'Empties the slot. The bottle stays in the cellar, in no rack. A slot that is already empty answers 200 with `removed: null`; a position the rack does not have answers 400. Needs the `write` scope and editor access to the cellar.',
       security: scope('write'),
       parameters: [
         { $ref: '#/components/parameters/RackId' },
@@ -992,7 +995,7 @@ const paths = {
       ],
       responses: {
         200: ok('The rack in summary form, and the bottle that was taken out.', ref('UnplaceResponse'), { rack: { ...exampleRack, slots: [] }, removed: ID.bottle }),
-        ...errors(401, 403, 404, 409, 429),
+        ...errors(400, 401, 403, 404, 409, 429),
       },
     },
   },
@@ -1155,7 +1158,7 @@ const components = {
         '- `read`: read your cellars, bottles, racks, personal fields, statistics and notifications, and the event stream.',
         '- `consume`: take bottles out of the cellar.',
         '- `climate`: post sensor readings (device tokens, made when you add a climate device).',
-        '- `write`: move a bottle to another cellar, into a rack slot or out of one. The same scope lets an AI assistant add and edit bottles, racks and cellars over MCP, so give it only to something you trust.',
+        '- `write`: move a bottle to another cellar, into a rack slot or out of one. It is the broadest scope: the same token also works over MCP, where it can add, edit and delete bottles, racks and cellars, change your profile and make a download link for your account export. Give it only to something you trust.',
         '',
         'A request the token\'s scopes don\'t cover answers 403. A revoked or unknown token answers 401.',
       ].join('\n'),
@@ -1181,7 +1184,7 @@ const components = {
     BadRequest: { description: 'The request is malformed, e.g. an invalid id or value.', content: json(ref('Error'), { error: 'Invalid ID' }) },
     Unauthorized: { description: 'No token, or the token is invalid or revoked. Ask the user for a new one; retrying will not help.', content: json(ref('Error'), { error: 'Invalid token' }) },
     Forbidden: {
-      description: 'The token lacks the scope this operation needs, or the caller lacks the role in that cellar. On a self-hosted server it can also mean the server is older than this operation.',
+      description: 'The token lacks the scope this operation needs, or the caller lacks the role in that cellar. A path that is not exactly a documented one, such as a malformed id, answers 403 too. On a self-hosted server it can also mean the server is older than this operation.',
       content: json(ref('Error'), { error: 'API token scope insufficient for this request' }),
     },
     NotFound: { description: 'No such resource visible to the caller, or a server older than this operation.', content: json(ref('Error'), { error: 'Bottle not found' }) },

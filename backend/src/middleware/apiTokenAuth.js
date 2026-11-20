@@ -106,8 +106,8 @@ const SCOPE_ALLOWLIST = {
     // reaches (move_bottle, place_bottle, unplace_bottle), so these rules give
     // a token no power it lacked. Database writes only — never AI money.
     { method: 'POST', pattern: /^\/api\/bottles\/[a-f0-9]{24}\/move$/ },
-    { method: 'PUT', pattern: /^\/api\/racks\/[a-f0-9]{24}\/slots\/\d+$/ },
-    { method: 'DELETE', pattern: /^\/api\/racks\/[a-f0-9]{24}\/slots\/\d+$/ },
+    { method: 'PUT', pattern: /^\/api\/racks\/[a-f0-9]{24}\/slots\/\d{1,9}$/ },
+    { method: 'DELETE', pattern: /^\/api\/racks\/[a-f0-9]{24}\/slots\/\d{1,9}$/ },
     // MCP endpoint — every other write is an MCP write tool; per-tool authz
     // lives in the MCP registry.
     { method: 'POST', pattern: /^\/api\/mcp$/ },

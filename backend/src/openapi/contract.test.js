@@ -330,11 +330,28 @@ describeWithMongo('public API contract', () => {
 
     await expectContract('placeBottle', 400, { token: 'write', params: slot(99), body: { bottleId: b('b2') } });
     await expectContract('placeBottle', 400, { token: 'write', params: slot(3), body: { bottleId: b('ordered') } });
+    await expectContract('placeBottle', 400, { token: 'write', params: slot(3), body: { bottleId: b('drunk') } });
     await expectContract('placeBottle', 401, { token: 'revoked', params: slot(3), body: { bottleId: b('b2') } });
     await expectContract('placeBottle', 403, { token: 'read', params: slot(3), body: { bottleId: b('b2') } });
     await expectContract('placeBottle', 404, { token: 'write', params: { rackId: ID_ZERO, position: 3 }, body: { bottleId: b('b2') } });
     // A bottle of another cellar reads like one that does not exist.
     await expectContract('placeBottle', 404, { token: 'write', params: slot(3), body: { bottleId: b('bobs') } });
+
+    // A slot number too long to be one is outside the documented path: 403,
+    // and slot 1 keeps its bottle.
+    await expectContract('placeBottle', 403, { token: 'write', params: slot('1000000000000000000000'), body: { bottleId: b('b2'), expectOccupant: null } });
+    const after = await call('listRacks', { token: 'read', query: `?cellar=${home}&summary=1` });
+    expect(after.body.racks.find((r) => r._id === grid).slots.find((s) => s.position === 1).bottle).toBe(b('b3'));
+
+    // Bob's racks: one in a cellar alice only views (403), one she cannot see (404, like a rack that does not exist).
+    const Cellar = require('../models/Cellar');
+    const Rack = require('../models/Rack');
+    const bob = world.users.bob._id;
+    const viewed = await Cellar.create({ name: 'Viewed', user: bob, members: [{ user: world.users.alice._id, role: 'viewer' }] });
+    const hidden = await Cellar.create({ name: 'Hidden', user: bob });
+    const rackIn = async (cellar) => String((await Rack.create({ cellar: cellar._id, user: bob, name: 'Shelf', type: 'grid', rows: 1, cols: 2 }))._id);
+    await expectContract('placeBottle', 403, { token: 'write', params: { rackId: await rackIn(viewed), position: 1 }, body: { bottleId: b('b2') } });
+    await expectContract('placeBottle', 404, { token: 'write', params: { rackId: await rackIn(hidden), position: 1 }, body: { bottleId: b('b2') } });
   });
 
   test('unplace: the bottle leaves the slot, an empty slot is fine, refusals', async () => {
@@ -350,6 +367,8 @@ describeWithMongo('public API contract', () => {
     // Slot 2 holds b1, not the bottle the caller expected.
     const refused = await expectContract('unplaceBottle', 409, { token: 'write', params: slot(2), query: `?expect=${b('b3')}` });
     expect(refused.body.code).toBe('slot_changed');
+    // The grid has six slots.
+    await expectContract('unplaceBottle', 400, { token: 'write', params: slot(99) });
     await expectContract('unplaceBottle', 401, { token: 'revoked', params: slot(2) });
     await expectContract('unplaceBottle', 403, { token: 'consume', params: slot(2) });
     await expectContract('unplaceBottle', 404, { token: 'write', params: { rackId: ID_ZERO, position: 2 } });
@@ -368,6 +387,8 @@ describeWithMongo('public API contract', () => {
 
     await expectContract('moveBottle', 400, { token: 'write', params: { bottleId: id }, body: { toCellarId: 'attic' } });
     await expectContract('moveBottle', 400, { token: 'write', params: { bottleId: id }, body: { toCellarId: attic } }); // already there
+    await expectContract('moveBottle', 400, { token: 'write', params: { bottleId: id }, body: { toCellarId: 12345 } });
+    await expectContract('moveBottle', 400, { token: 'write', params: { bottleId: b('drunk') }, body: { toCellarId: attic } });
     await expectContract('moveBottle', 401, { token: 'revoked', params: { bottleId: id }, body: { toCellarId: attic } });
     await expectContract('moveBottle', 403, { token: 'read', params: { bottleId: id }, body: { toCellarId: attic } });
     // An editor of a shared cellar may not move its bottles out.

@@ -270,6 +270,10 @@ describe('isRequestAllowed (default-deny)', () => {
     expect(isRequestAllowed(WRITE, 'PUT', `/api/racks/${ID}`)).toBe(false);
     expect(isRequestAllowed(WRITE, 'DELETE', `/api/racks/${ID}`)).toBe(false);
     expect(isRequestAllowed(WRITE, 'PUT', `/api/racks/${ID}/slots/1x`)).toBe(false);
+    // A slot number has at most nine digits: none that a number cannot hold exactly.
+    expect(isRequestAllowed(WRITE, 'PUT', `/api/racks/${ID}/slots/999999999`)).toBe(true);
+    expect(isRequestAllowed(WRITE, 'PUT', `/api/racks/${ID}/slots/1000000000`)).toBe(false);
+    expect(isRequestAllowed(WRITE, 'DELETE', `/api/racks/${ID}/slots/1000000000000000000000`)).toBe(false);
     expect(isRequestAllowed(WRITE, 'PUT', '/api/racks/not-an-id/slots/1')).toBe(false);
     expect(isRequestAllowed(WRITE, 'POST', '/api/bottles')).toBe(false);
     expect(isRequestAllowed(WRITE, 'PUT', `/api/bottles/${ID}`)).toBe(false);
@@ -511,6 +515,28 @@ describe('authenticateApiToken', () => {
       await authenticateApiToken(mockReq(method, baseUrl, path), res, next, RAW);
       expect(res.status).toHaveBeenCalledWith(403);
       expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  test('an OAuth token with the write scope CANNOT use the REST moves a personal write token reaches', async () => {
+    const ID = 'a'.repeat(24);
+    for (const [method, baseUrl, path] of [
+      ['POST', '/api/bottles', `/${ID}/move`],
+      ['PUT', '/api/racks', `/${ID}/slots/3`],
+      ['DELETE', '/api/racks', `/${ID}/slots/3`],
+    ]) {
+      ApiToken.findOne.mockResolvedValue(activeToken({ origin: 'oauth', scopes: ['read', 'consume', 'write'], expiresAt: new Date(Date.now() + 60000) }));
+      User.findById.mockReturnValue(selectable(activeUser()));
+      const res = mockRes(); const next = jest.fn();
+      await authenticateApiToken(mockReq(method, baseUrl, path), res, next, RAW);
+      expect([method, path, res.status.mock.calls[0]]).toEqual([method, path, [403]]);
+      expect(next).not.toHaveBeenCalled();
+      // The same request with a personal write token goes through.
+      ApiToken.findOne.mockResolvedValue(activeToken({ scopes: ['write'] }));
+      User.findById.mockReturnValue(selectable(activeUser()));
+      const ok = jest.fn();
+      await authenticateApiToken(mockReq(method, baseUrl, path), mockRes(), ok, RAW);
+      expect([method, path, ok.mock.calls.length]).toEqual([method, path, 1]);
     }
   });
 

@@ -142,3 +142,27 @@ describe('parseDrinkYear', () => {
     expect(parseDrinkYear(9999, 'drinkTo').error).toMatch(/drinkTo/);
   });
 });
+
+describe('parseSlotPosition', () => {
+  const { parseSlotPosition } = require('./validation');
+
+  it('reads a whole number, as a number or as a string of digits', () => {
+    expect(parseSlotPosition(7)).toBe(7);
+    expect(parseSlotPosition('7')).toBe(7);
+    expect(parseSlotPosition('007')).toBe(7);
+    expect(parseSlotPosition(0)).toBe(0); // the rack's range is the caller's to check
+  });
+
+  it('refuses what parseInt would have read as some other slot', () => {
+    // parseInt reads '5abc' as 5, and 1e21 (printed "1e+21") as 1.
+    for (const raw of ['5abc', '1.5', 1.5, '-1', '', ' 7', '1e3', 1e21, '1000000000000000000000', NaN, Infinity]) {
+      expect([raw, parseSlotPosition(raw)]).toEqual([raw, null]);
+    }
+  });
+
+  it('refuses anything that is not a number or a string', () => {
+    for (const raw of [null, undefined, {}, [7], true]) {
+      expect(parseSlotPosition(raw)).toBeNull();
+    }
+  });
+});

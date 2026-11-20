@@ -175,6 +175,27 @@ describe('placeBottleInRack', () => {
     expect(res.error).toMatchObject({ status: 409, code: 'conflict' });
     expect(res.error.message).toMatch(/another rack/);
   });
+
+  test('an id sent in upper case names the same bottle: it keeps one slot', async () => {
+    const stored = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+    Bottle.findOne.mockReturnValue(selectable({ _id: stored, status: 'active' }));
+    const r = rack([{ position: 5, bottle: stored }]);
+    const res = await placeBottleInRack(r, 3, stored.toUpperCase(), REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.previousPosition).toBe(5);
+    expect(r.slots).toEqual([{ position: 3, bottle: stored }]);
+  });
+
+  test('a position is a whole slot number: one too large to print in full is refused, never read as slot 1', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    const r = rack([{ position: 1, bottle: 'bOccupant' }]);
+    for (const position of [1e21, '1000000000000000000000', '5abc', 1.5, -1, '']) {
+      const res = await placeBottleInRack(r, position, 'b1', REQ);
+      expect([position, res.error && res.error.status]).toEqual([position, 400]);
+    }
+    expect(r.slots).toEqual([{ position: 1, bottle: 'bOccupant' }]);
+    expect(r.save).not.toHaveBeenCalled();
+  });
 });
 
 describe('applyArrangement', () => {
@@ -197,6 +218,24 @@ describe('clearRackSlot', () => {
     expect(res.cleared).toBe('b1');
     expect(r.slots).toEqual([]);
     expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_clear', expect.anything(), { position: 5 });
+  });
+
+  test('an empty slot of the rack is fine; a position the rack does not have is refused and nothing is saved', async () => {
+    const r = { _id: 'r1', cellar: 'c1', slots: [{ position: 1, bottle: 'b1' }], save: jest.fn().mockResolvedValue(undefined) };
+    expect((await clearRackSlot(r, 5, REQ)).cleared).toBeNull();
+    r.save.mockClear();
+    for (const position of [0, 33, 1e21, '1000000000000000000000', '5abc']) {
+      const res = await clearRackSlot(r, position, REQ);
+      expect([position, res.error && res.error.status]).toEqual([position, 400]);
+    }
+    expect(r.slots).toEqual([{ position: 1, bottle: 'b1' }]);
+    expect(r.save).not.toHaveBeenCalled();
+  });
+
+  test('a bottle can always be taken out, even from a position beyond the range of the rack', async () => {
+    const r = { _id: 'r1', cellar: 'c1', slots: [{ position: 40, bottle: 'b1' }], save: jest.fn().mockResolvedValue(undefined) };
+    expect((await clearRackSlot(r, 40, REQ)).cleared).toBe('b1');
+    expect(r.slots).toEqual([]);
   });
 });
 

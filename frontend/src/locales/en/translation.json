@@ -510,7 +510,7 @@
       "errorWrongPassword": "Your password is incorrect.",
       "errorRateLimited": "Too many attempts. Please wait a few minutes and try again.",
       "scope_write": "write",
-      "scopeDesc_write": "Write — let an integration move bottles between your cellars and rack slots, and let a connected AI add, edit and organise bottles via MCP. Broadest scope; grant only to something you trust.",
+      "scopeDesc_write": "Write — move bottles between your cellars and rack slots through the API. The broadest scope: the same token also lets a connected AI add, edit and delete bottles, racks and cellars, change your profile and export your account data via MCP. Grant it only to something you trust.",
       "developersLink": "Building an integration? Read the API guide for developers",
       "scopesHelpLink": "What each scope allows, and the terms of use (API guide, opens in a new tab)",
       "deprecatedUse_one": "Still calls a route that API tokens can no longer use from {{date}}:",
