@@ -19,6 +19,10 @@ jest.mock('../models/WineOwnerInquiry', () => ({
   findOneAndUpdate: jest.fn(),
 }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
+// The service also reads where the caller's bottle is (the web list names
+// its cellar); the tool's output does not carry it.
+jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
 jest.mock('../services/notifications', () => ({
   createNotification: jest.fn().mockResolvedValue(undefined),
   createNotifications: jest.fn().mockResolvedValue(undefined),
@@ -36,6 +40,8 @@ jest.mock('../services/bottleOps', () => ({
 
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
 const User = require('../models/User');
+const Cellar = require('../models/Cellar');
+const Bottle = require('../models/Bottle');
 const McpActionLog = require('../models/McpActionLog');
 const { logAudit } = require('../services/audit');
 const { allTools, toolsForScopes } = require('./registry');
@@ -101,6 +107,8 @@ describe('list_curator_questions', () => {
     });
     // The service returns newest first; the tool puts the unanswered one first regardless.
     WineOwnerInquiry.find.mockReturnValue(findChain([answered, row()]));
+    Cellar.find.mockReturnValue({ select: () => ({ lean: async () => [{ _id: oid('9'), name: 'Summer house' }] }) });
+    Bottle.find.mockReturnValue({ select: () => ({ lean: async () => [{ _id: oid('5'), cellar: oid('9'), vintage: '2016', status: 'active' }] }) });
 
     const body = parse(await tool('list_curator_questions').handler({}, CTX));
 
@@ -115,6 +123,13 @@ describe('list_curator_questions', () => {
     expect(raw).not.toContain(OTHER);
     expect(raw).not.toContain('Secret answer from another owner');
     expect(raw).not.toContain('Curator-only note');
+    // The tool's output keeps its own fields: the cellar and vintage the web
+    // list shows are not part of it.
+    expect(Object.keys(body.data[0]).sort()).toEqual([
+      'answered', 'answered_at', 'asked_at', 'bottle_id', 'curator_reply', 'expires_at',
+      'inquiry_id', 'my_answer', 'question', 'resolved_at', 'status', 'wine',
+    ]);
+    expect(raw).not.toContain('Summer house');
     expect(WineOwnerInquiry.find.mock.calls[0][0]['recipients.user']).toBe(ME);
     // The one-shot warning rides only while something is waiting.
     expect(body.warnings[0]).toMatch(/answered ONCE/);

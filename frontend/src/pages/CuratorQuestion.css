@@ -1,4 +1,5 @@
-/* What a curator-question notification opens. */
+/* What a curator-question notification opens, and the list of all of them
+   (CuratorQuestions.js). */
 .curator-question-page {
   max-width: 640px;
   margin: 0 auto;
@@ -31,4 +32,51 @@
   margin: 0 0 0.25rem;
   font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+.curator-question-more {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+}
+
+/* ── The list ── */
+.curator-questions-intro {
+  color: var(--color-text-muted);
+  margin: 0 0 1.5rem;
+}
+
+.curator-questions-page h2 {
+  font-size: 1.15rem;
+  margin: 1.5rem 0 0.75rem;
+}
+
+.curator-questions-page h3 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.curator-questions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* overflow-wrap is inherited: a long unbroken word in a question or a wine
+   name wraps inside the card instead of widening the page. */
+.curator-questions-item {
+  margin: 0 0 1.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* …but a button's label never breaks inside a word. */
+.curator-questions-item button {
+  overflow-wrap: normal;
+}
+
+.curator-questions-open {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
 }

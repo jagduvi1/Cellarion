@@ -70,6 +70,7 @@ export default function CuratorQuestion() {
         <h1>{t('curatorQuestion.goneTitle', 'This question is closed')}</h1>
         <p>{t('curatorQuestion.gone', 'The curators have closed this question, or it was not addressed to you. Nothing is needed from you.')}</p>
         <Link to="/cellars" className="btn btn-secondary btn-small">{t('curatorQuestion.toCellars', 'Go to your cellars')}</Link>
+        <AllQuestionsLink />
       </div>
     );
   }
@@ -92,21 +93,43 @@ export default function CuratorQuestion() {
             : null}
         />
       ) : (
+        <AnsweredQuestion inquiry={inquiry} />
+      )}
+      <AllQuestionsLink />
+    </div>
+  );
+}
+
+function AllQuestionsLink() {
+  const { t } = useTranslation();
+  return (
+    <p className="curator-question-more">
+      <Link to="/questions">{t('curatorQuestions.allLink', 'All questions from the curators')}</Link>
+    </p>
+  );
+}
+
+/**
+ * A question the member answered that has no curator reply to show (a reply
+ * shows on OwnerInquiryCard): the question, their answer, and where it
+ * stands. Shared with the questions list (CuratorQuestions.js).
+ */
+export function AnsweredQuestion({ inquiry }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <blockquote className="curator-question-quote">{inquiry.question}</blockquote>
+      {inquiry.myResponse && (
         <>
-          <blockquote className="curator-question-quote">{inquiry.question}</blockquote>
-          {inquiry.myResponse && (
-            <>
-              <p className="curator-question-label">{t('bottleDetail.ownerInquiry.yourAnswer', 'Your answer')}</p>
-              <blockquote className="curator-question-quote">{inquiry.myResponse}</blockquote>
-            </>
-          )}
-          <p className="curator-question-answered" role="status">
-            {inquiry.status === 'resolved'
-              ? t('curatorQuestion.resolved', 'The curators have closed this question. Thank you for your answer.')
-              : t('curatorQuestion.answered', 'You answered this question. Thank you — the curators will take it from here.')}
-          </p>
+          <p className="curator-question-label">{t('bottleDetail.ownerInquiry.yourAnswer', 'Your answer')}</p>
+          <blockquote className="curator-question-quote">{inquiry.myResponse}</blockquote>
         </>
       )}
-    </div>
+      <p className="curator-question-answered" role="status">
+        {inquiry.status === 'resolved'
+          ? t('curatorQuestion.resolved', 'The curators have closed this question. Thank you for your answer.')
+          : t('curatorQuestion.answered', 'You answered this question. Thank you — the curators will take it from here.')}
+      </p>
+    </>
   );
 }

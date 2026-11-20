@@ -6341,6 +6341,18 @@
     "toCellars": "Go to your cellars",
     "loadError": "Could not load the question."
   },
+  "curatorQuestions": {
+    "title": "Questions from the curators",
+    "intro": "When a wine’s record needs something only the label can tell, the curators ask its owners. Each question can be answered once.",
+    "waitingTitle": "Waiting for your answer",
+    "noCellar": "Not in any of your cellars",
+    "introNoCellar": "If you remember the label, or have a photo of it, you can answer here. Answering is optional; only registry curators see your answer.",
+    "answeredTitle": "Answered",
+    "openBottle": "Open the bottle",
+    "empty": "No questions from the curators right now.",
+    "loadError": "Could not load your questions.",
+    "allLink": "All questions from the curators"
+  },
   "pickLists": {
     "whichBottles": "Which bottles?",
     "chooseTitle": "Choose the bottles to add",

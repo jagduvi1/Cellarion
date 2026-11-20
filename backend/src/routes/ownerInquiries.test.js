@@ -123,6 +123,27 @@ describe('GET /:id', () => {
 });
 
 describe('GET /mine', () => {
+  const Cellar = require('../models/Cellar');
+  const Bottle = require('../models/Bottle');
+  // Where the caller's bottle is (the list names its cellar and vintage).
+  const places = ({ cellars = [], bottles = [] } = {}) => {
+    Cellar.find.mockReturnValue({ select: () => ({ lean: async () => cellars }) });
+    Bottle.find.mockReturnValue({ select: () => ({ lean: async () => bottles }) });
+  };
+  beforeEach(() => places());
+
+  test('each row carries the cellar and vintage of the caller\'s own bottle', async () => {
+    WineOwnerInquiry.find.mockReturnValue(findChain([INQUIRY_ROW]));
+    places({
+      cellars: [{ _id: oid('9'), name: 'Summer house' }],
+      bottles: [{ _id: oid('5'), cellar: oid('9'), vintage: '2016', status: 'active' }],
+    });
+
+    const { inquiries } = await (await mine()).json();
+    expect(inquiries[0]).toMatchObject({ cellar: { _id: oid('9'), name: 'Summer house' }, vintage: '2016' });
+    expect(Bottle.find.mock.calls[0][0]._id.$in).toEqual([oid('5')]);
+  });
+
   test('returns ONLY the caller recipient view — no other recipients, identities or answers', async () => {
     WineOwnerInquiry.find.mockReturnValue(findChain([INQUIRY_ROW]));
 

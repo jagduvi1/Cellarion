@@ -6,7 +6,8 @@ import { JSON_HEADERS } from './apiConstants';
 /**
  * Active inquiries addressed to the caller, plus ones they ANSWERED that a
  * curator resolved in the last 30 days (those carry `curatorReply`); pass
- * wineId to scope to one wine.
+ * wineId to scope to one wine. Each row carries the `vintage` of the caller's
+ * bottle and the `cellar` ({ _id, name }) it sits in, or null.
  */
 export const getMyOwnerInquiries = (apiFetch, wineId = null) =>
   apiFetch(`/api/owner-inquiries/mine${wineId ? `?wine=${wineId}` : ''}`);

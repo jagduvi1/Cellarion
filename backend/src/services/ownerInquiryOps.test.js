@@ -539,6 +539,14 @@ describe('owner side', () => {
   });
 
   describe('listInquiriesForRecipient', () => {
+    const C1 = oid('3');
+    // Where the caller's bottle is: Cellar.find → select → lean, Bottle.find → select → lean.
+    const places = ({ cellars = [], bottles = [] } = {}) => {
+      Cellar.find.mockReturnValue({ select: jest.fn(() => ({ lean: async () => cellars })) });
+      Bottle.find.mockReturnValue({ select: jest.fn(() => ({ lean: async () => bottles })) });
+    };
+    beforeEach(() => places());
+
     test('projects ONLY the caller recipient entry — never the other recipients, their ids or answers', async () => {
       WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
 
@@ -592,6 +600,76 @@ describe('owner side', () => {
 
       expect(await listInquiriesForRecipient(ME, { wineId: 'not-an-id' })).toEqual([]);
       expect(WineOwnerInquiry.find).toHaveBeenCalledTimes(1);
+    });
+
+    test('each row names the cellar and vintage of the caller\'s own bottle, in two queries for the whole list', async () => {
+      const I2 = oid('d');
+      WineOwnerInquiry.find.mockReturnValue(findChain([
+        row(),
+        row({ _id: I2, recipients: [{ user: ME, bottle: oid('7'), response: null }, { user: OTHER, bottle: oid('6'), response: null }] }),
+      ]));
+      places({
+        cellars: [{ _id: C1, name: 'Summer house' }],
+        bottles: [
+          { _id: oid('5'), cellar: C1, vintage: '2016', status: 'active' },
+          { _id: oid('7'), cellar: C1, vintage: 'NV', status: 'active' },
+        ],
+      });
+
+      const out = await listInquiriesForRecipient(ME);
+
+      expect(out.map((r) => [r._id, r.cellar, r.vintage])).toEqual([
+        [I1, { _id: C1, name: 'Summer house' }, '2016'],
+        [I2, { _id: C1, name: 'Summer house' }, 'NV'],
+      ]);
+      expect(Cellar.find).toHaveBeenCalledTimes(1);
+      expect(Cellar.find).toHaveBeenCalledWith({ $or: [{ user: ME }, { 'members.user': ME }], deletedAt: null });
+      expect(Bottle.find).toHaveBeenCalledTimes(1);
+      // Only the caller's own bottles, only in cellars they can open — the
+      // other recipient's bottle is never even read.
+      expect(Bottle.find).toHaveBeenCalledWith({ _id: { $in: [oid('5'), oid('7')] }, cellar: { $in: [C1] } });
+      const raw = JSON.stringify(out);
+      expect(raw).not.toContain(oid('6'));
+      expect(raw).not.toContain(OTHER);
+    });
+
+    test('a bottle that is gone, or in a deleted cellar or one the caller cannot open, gives cellar and vintage null', async () => {
+      WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
+
+      // Gone: no bottle comes back.
+      places({ cellars: [{ _id: C1, name: 'Summer house' }], bottles: [] });
+      let [view] = await listInquiriesForRecipient(ME);
+      expect(view).toMatchObject({ cellar: null, vintage: null });
+
+      // Its cellar is deleted or not shared with the caller: not among the
+      // cellars they can open, so nothing about it is named.
+      places({ cellars: [{ _id: C1, name: 'Summer house' }], bottles: [{ _id: oid('5'), cellar: oid('9'), vintage: '2016', status: 'active' }] });
+      [view] = await listInquiriesForRecipient(ME);
+      expect(view).toMatchObject({ cellar: null, vintage: null });
+
+      // No cellar they can open at all: the bottle is not looked up.
+      places({ cellars: [] });
+      Bottle.find.mockClear();
+      [view] = await listInquiriesForRecipient(ME);
+      expect(view).toMatchObject({ cellar: null, vintage: null });
+      expect(Bottle.find).not.toHaveBeenCalled();
+    });
+
+    test('a bottle off the shelf (drunk, on order) keeps its vintage but names no cellar', async () => {
+      WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
+      for (const status of ['drank', 'ordered']) {
+        places({ cellars: [{ _id: C1, name: 'Summer house' }], bottles: [{ _id: oid('5'), cellar: C1, vintage: '2016', status }] });
+        const [view] = await listInquiriesForRecipient(ME);
+        expect(view).toMatchObject({ cellar: null, vintage: '2016' });
+      }
+    });
+
+    test('rows without a bottle of the caller cost no place queries', async () => {
+      WineOwnerInquiry.find.mockReturnValue(findChain([row({ recipients: [{ user: ME, bottle: null, response: null }] })]));
+      const [view] = await listInquiriesForRecipient(ME);
+      expect(view).toMatchObject({ bottle: null, cellar: null, vintage: null });
+      expect(Cellar.find).not.toHaveBeenCalled();
+      expect(Bottle.find).not.toHaveBeenCalled();
     });
   });
 

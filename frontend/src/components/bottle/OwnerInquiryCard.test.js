@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../api/ownerInquiries', () => ({
   getMyOwnerInquiries: vi.fn(),
@@ -33,7 +34,7 @@ beforeEach(() => {
   getMyOwnerInquiries.mockResolvedValue(ok({ inquiries: [INQUIRY] }));
 });
 
-const renderCard = () => render(<OwnerInquiryCard apiFetch={vi.fn()} wineId={WINE_ID} />);
+const renderCard = () => render(<MemoryRouter><OwnerInquiryCard apiFetch={vi.fn()} wineId={WINE_ID} /></MemoryRouter>);
 
 test('renders the curator question fetched for this wine', async () => {
   renderCard();
@@ -141,6 +142,25 @@ test('a terminal 409 (already answered / closed) hides the form — no retry tha
   expect(await screen.findByText('You already answered this inquiry')).toBeInTheDocument();
   expect(screen.queryByText('Send answer')).not.toBeInTheDocument();
   expect(screen.queryByPlaceholderText(/The label says/)).not.toBeInTheDocument();
+});
+
+// On the bottle page the card is the one place the member meets a question,
+// so it leads on to all of them — quietly, under the question or the reply.
+test('a card that found its own question links to the list of every question', async () => {
+  const { unmount } = renderCard();
+  expect(await screen.findByRole('link', { name: 'All questions from the curators' })).toHaveAttribute('href', '/questions');
+  unmount();
+
+  getMyOwnerInquiries.mockResolvedValue(ok({ inquiries: [REPLIED] }));
+  renderCard();
+  await screen.findByText('A curator replied about this wine');
+  expect(screen.getByRole('link', { name: 'All questions from the curators' })).toHaveAttribute('href', '/questions');
+});
+
+test('a card handed its question (the question page, the list) has no link of its own', () => {
+  render(<MemoryRouter><OwnerInquiryCard apiFetch={vi.fn()} wineId={WINE_ID} inquiry={INQUIRY} /></MemoryRouter>);
+  expect(screen.getByText(INQUIRY.question)).toBeInTheDocument();
+  expect(screen.queryByRole('link')).toBeNull();
 });
 
 // The question page hands the card the question the

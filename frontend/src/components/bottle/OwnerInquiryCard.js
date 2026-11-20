@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getMyOwnerInquiries, respondToOwnerInquiry } from '../../api/ownerInquiries';
 
@@ -90,6 +91,15 @@ function OwnerInquiryCard({ apiFetch, wineId, inquiry: given = null, intro = nul
     borderRadius: 'var(--radius-sm)', fontSize: '0.95rem',
   };
 
+  // Only where the card found the question itself (a bottle or vintage page):
+  // the pages that hand it one are the question page and the list, which
+  // carry their own way to the list.
+  const listLink = given ? null : (
+    <p style={{ margin: '0.6rem 0 0', fontSize: '0.8rem' }}>
+      <Link to="/questions">{t('curatorQuestions.allLink', 'All questions from the curators')}</Link>
+    </p>
+  );
+
   if (isReply) {
     return (
       <div className="card oi-card" style={{ padding: '1rem 1.25rem', borderLeft: '3px solid var(--color-primary, #7c2d3a)' }}>
@@ -110,6 +120,7 @@ function OwnerInquiryCard({ apiFetch, wineId, inquiry: given = null, intro = nul
         <blockquote style={{ ...quoteStyle, margin: 0, borderLeft: '2px solid var(--color-primary, #7c2d3a)' }}>
           {inquiry.curatorReply}
         </blockquote>
+        {listLink}
       </div>
     );
   }
@@ -156,6 +167,7 @@ function OwnerInquiryCard({ apiFetch, wineId, inquiry: given = null, intro = nul
           </div>
         </form>
       )}
+      {listLink}
     </div>
   );
 }

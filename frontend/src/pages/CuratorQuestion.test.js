@@ -81,6 +81,18 @@ test('closed, or not addressed to them: said plainly, with a way back', async ()
   expect(screen.getByRole('link', { name: 'Go to your cellars' })).toHaveAttribute('href', '/cellars');
 });
 
+test('the question on its own page, and a closed one, lead on to every question from the curators', async () => {
+  apiFetchMock.mockResolvedValue(reply(200, { inquiry: { ...INQUIRY, link: null } }));
+  const { unmount } = render(<CuratorQuestion />);
+  expect(await screen.findByRole('link', { name: 'All questions from the curators' })).toHaveAttribute('href', '/questions');
+  unmount();
+
+  apiFetchMock.mockResolvedValue(reply(404, { error: 'Inquiry not found' }));
+  render(<CuratorQuestion />);
+  await screen.findByText('This question is closed');
+  expect(screen.getByRole('link', { name: 'All questions from the curators' })).toHaveAttribute('href', '/questions');
+});
+
 test('a network failure offers a retry that asks again', async () => {
   apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     .mockResolvedValueOnce(reply(200, { inquiry: { ...INQUIRY, link: '/cellars/c1/bottles/b1' } }));
