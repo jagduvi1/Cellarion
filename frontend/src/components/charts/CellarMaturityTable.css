@@ -1,13 +1,24 @@
 /* Maturity Status by cellar (Statistics). The table scrolls sideways inside
    its own box, so the page never does at phone width; the cellar column stays
-   in place while the counts scroll under it. */
+   in place while the counts scroll under it. The scroll padding keeps a link
+   that takes focus clear of that column. The numbers are in the text colour,
+   readable in both themes; the phase colour is the dot in the column head. */
 .cellar-maturity-scroll {
   overflow-x: auto;
+  scroll-padding-left: 8rem;
 }
 
+.cellar-maturity-scroll:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Separate borders: with collapsed ones the row lines do not travel with the
+   sticky cell. */
 .cellar-maturity-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
@@ -30,7 +41,7 @@
   color: var(--color-text-muted);
 }
 
-.cellar-maturity-table thead th .drink-legend-dot {
+.cellar-maturity-table .drink-legend-dot {
   display: inline-block;
   margin-right: 0.35rem;
 }
@@ -73,10 +84,10 @@
 
 .cellar-maturity-count--link:hover {
   text-decoration: underline;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-surface-hover);
 }
 
 .cellar-maturity-count--link:focus-visible {
-  outline: 2px solid #D4C87A;
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 1px;
 }
