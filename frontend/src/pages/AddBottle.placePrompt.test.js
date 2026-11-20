@@ -102,14 +102,15 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
     expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1/racks', { state: { placeQueue: ['b1', 'b2'] } });
   });
 
-  test('an add started from an empty rack slot skips the question and goes back to that rack with the slot', async () => {
+  // Replaced, not pushed: Back from the rack must not land on the emptied form.
+  test('an add started from an empty rack slot skips the question and goes back to that rack with the slot, in place of the add page', async () => {
     const placeAt = { rackId: 'r1', position: 7 };
     routerState.current = { placeAt };
     try {
       routeApi({ racks: [{ _id: 'r1', name: 'Wall', type: 'grid' }] });
       await submitTwoBottles();
 
-      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1/racks?rack=r1', { state: { placeQueue: [expect.any(String), expect.any(String)], placeAt } }));
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1/racks?rack=r1', { replace: true, state: { placeQueue: [expect.any(String), expect.any(String)], placeAt } }));
       expect(screen.queryByText('addBottle.placePrompt.title')).not.toBeInTheDocument();
     } finally {
       routerState.current = null;

@@ -10,7 +10,9 @@ import { afterPopupEntryGone } from '../../utils/useBackToClose';
  *
  * An add started from an empty rack slot (the racks page's "Add a new bottle
  * here", router state `placeAt`) does not ask: the new bottles go straight to
- * the racks page, the first into that slot (pages/CellarRacks.js).
+ * the racks page, the first into that slot (pages/CellarRacks.js). The racks
+ * page takes the add page's place in the history, so Back from the rack never
+ * lands on the emptied form.
  */
 export default function AddBottleDialogs({
   customFieldNotice, setCustomFieldNotice, finishAdd, t, placePrompt, leavePlacePrompt, navigate,
@@ -19,7 +21,7 @@ export default function AddBottleDialogs({
   const placeAt = useLocation().state?.placeAt || null;
   useEffect(() => {
     if (!placePrompt || !placeAt) return;
-    navigate(`/cellars/${cellarId}/racks?rack=${encodeURIComponent(placeAt.rackId)}`, { state: { placeQueue: placePrompt.ids, placeAt } });
+    navigate(`/cellars/${cellarId}/racks?rack=${encodeURIComponent(placeAt.rackId)}`, { replace: true, state: { placeQueue: placePrompt.ids, placeAt } });
   }, [placePrompt, placeAt, cellarId, navigate]);
 
   return (

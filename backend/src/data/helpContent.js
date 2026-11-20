@@ -71,7 +71,7 @@ const sections = [
     details: [
       'Rating and notes on a bottle: your own notes about that bottle. They stay with it, and anyone you share the cellar with sees them too.',
       'When you drink a bottle, the rating and note you give it then go with it to the cellar\'s History, so you can look back on how it was.',
-      'A journal entry is the moment: the occasion, the food, the people, and how the wine showed. Journal entries are private unless you make one public.',
+      'A journal entry is the moment: the occasion, the food, the people, and how the wine showed. Only you can see your journal entries; marking one public only tells the members you tagged in it that they were mentioned.',
       'A review is about the wine, for other members: it shows on the wine\'s page for everyone, unless you mark it private. After drinking a bottle, "Share as review" starts one from the rating and note you already wrote.',
     ],
   },

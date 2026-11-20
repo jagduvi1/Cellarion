@@ -230,6 +230,56 @@ test('non-vintage typed as a word is stored as NV', async () => {
   expect(createBottle.mock.calls[0][1].vintage).toBe('NV');
 });
 
+// Another year is another purchase: the old price, date, shop, link, notes and
+// occasion stay behind unless the member ticks the box themselves.
+test('another vintage unticks "copy details"; back to the bottle\'s own vintage it is ticked again', async () => {
+  createBottle.mockResolvedValue(ok());
+  const onAdded = vi.fn();
+  renderModal({ onAdded });
+
+  fireEvent.change(vintageInput(), { target: { value: '2019' } });
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
+  fireEvent.change(vintageInput(), { target: { value: '2016' } });
+  expect(screen.getByRole('checkbox')).toBeChecked();
+
+  fireEvent.change(vintageInput(), { target: { value: '2019' } });
+  fireEvent.click(submitBtn(1));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, '2019'));
+  expect(createBottle).toHaveBeenCalledWith(apiFetch, {
+    cellar: 'c1', wineDefinition: 'w1', vintage: '2019', bottleSize: '750ml', currency: 'EUR',
+  });
+});
+
+test('a box the member ticked for another vintage stays ticked and copies the details', async () => {
+  createBottle.mockResolvedValue(ok());
+  const onAdded = vi.fn();
+  renderModal({ onAdded });
+
+  fireEvent.change(vintageInput(), { target: { value: '2019' } });
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.change(vintageInput(), { target: { value: '2020' } });
+  expect(screen.getByRole('checkbox')).toBeChecked();
+
+  fireEvent.click(submitBtn(1));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, '2020'));
+  expect(createBottle).toHaveBeenCalledWith(apiFetch, { ...COPIED_PAYLOAD, vintage: '2020' });
+});
+
+// The server stores NV for a blank vintage; the required field must not stop
+// such a bottle from adding more of itself.
+test.each([[''], [null]])('a bottle stored without a vintage (%j) starts at NV and adds NV bottles', async (stored) => {
+  createBottle.mockResolvedValue(ok());
+  const onAdded = vi.fn();
+  renderModal({ onAdded, bottle: { ...BOTTLE, vintage: stored } });
+
+  expect(screen.getByRole('checkbox')).toBeChecked();
+  fireEvent.click(submitBtn(1));
+
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, 'NV'));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(createBottle).toHaveBeenCalledWith(apiFetch, { ...COPIED_PAYLOAD, vintage: 'NV' });
+});
+
 test('a year the field cannot take creates nothing and says why', async () => {
   const onAdded = vi.fn();
   renderModal({ onAdded });

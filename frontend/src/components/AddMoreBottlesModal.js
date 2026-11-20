@@ -26,7 +26,10 @@ const MAX_MORE = MAX_COPIES;
  *
  * The vintage starts as this bottle's and can be changed: a bottle of the
  * same wine from another year is added here too, without searching the wine
- * again in Add Bottle.
+ * again in Add Bottle. A bottle stored without a vintage starts at NV, which
+ * is what the server stores for a blank. Another year is another purchase, so
+ * "Copy this bottle's details" unticks for it until the member sets the box
+ * themselves.
  *
  * Props: bottle (the populated bottle being viewed — must have a
  * wineDefinition), onClose(), onAdded(count, vintage) — fired only when the
@@ -40,8 +43,10 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
   const countId = useId();
   const vintageId = useId();
   const [count, setCount] = useState(1);
-  const [vintageText, setVintageText] = useState(() => formatVintage(bottle.vintage, t));
-  const [copyDetails, setCopyDetails] = useState(copyDetailsDefault);
+  const ownVintageText = formatVintage(bottle.vintage || 'NV', t);
+  const [vintageText, setVintageText] = useState(ownVintageText);
+  // null until the member sets the box; their choice then stands.
+  const [copyChoice, setCopyChoice] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   // Bottles already created by earlier attempts of THIS batch — a retry after
@@ -62,6 +67,8 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
   const vintageProps = vintageInputProps(t);
   const vintage = parseVintageInput(vintageText, t);
   const vintageValid = new RegExp(vintageProps.pattern).test(String(vintageText).trim());
+  const otherVintage = vintage !== parseVintageInput(ownVintageText, t);
+  const copyDetails = copyChoice ?? (copyDetailsDefault && !otherVintage);
   const buildPayload = () => ({ ...bottleCopyPayload(bottle, { copyDetails }), vintage });
 
   const handleSubmit = async () => {
@@ -156,7 +163,7 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = tr
           <input
             type="checkbox"
             checked={copyDetails}
-            onChange={(e) => setCopyDetails(e.target.checked)}
+            onChange={(e) => setCopyChoice(e.target.checked)}
             disabled={locked}
           />
           <span>{t('bottleDetail.addMore.copyLabel', "Copy this bottle's details")}</span>
