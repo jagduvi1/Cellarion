@@ -8,6 +8,17 @@ const statType = (wd) => (wd?.nonWine === true ? 'other' : (wd?.type || 'unknown
 
 const avgOf = (sum, count) => (count > 0 ? Math.round((sum / count) * 10) / 10 : null);
 
+// One shape for the maturity buckets: the overall counts, each cellar's row
+// and the empty answer all start here, so their keys cannot drift apart.
+const emptyMaturity = () => ({ declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 });
+
+// The Regret Index: the share of the bottles WITH a drink window that are
+// past it, in whole percent; 0 when no bottle has a window.
+function regretIndexOf(m) {
+  const withWindow = m.declining + m.late + m.peak + m.early + m.notReady;
+  return withWindow > 0 ? Math.round((m.declining / withWindow) * 100) : 0;
+}
+
 /**
  * The rating distribution three ways (someone who rates only when drinking
  * must not see an empty "Rating distribution"): the bottles
@@ -72,7 +83,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   const byBottleSize  = {};
   const byPurchaseYear = {};
   const byProducer    = {};
-  const maturity      = { declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 };
+  const maturity      = emptyMaturity();
   const maturityCoverage = { sommSet: 0, none: 0 };
   const cellarMap     = {};
   const topValueArr   = [];
@@ -151,13 +162,14 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       (resolvedWindow.earlyFrom != null || resolvedWindow.peakFrom != null || resolvedWindow.peakUntil != null);
 
     const maturityStatus = classifyMaturity(b, profileMap);
+    // The bucket counts here and again in the bottle's cellar row below, so
+    // the cellars' counts always add up to these.
+    const maturityKey = !maturityStatus ? 'noProfile'
+      : maturityStatus === 'not-ready' ? 'notReady' : maturityStatus;
+    maturity[maturityKey]++;
     if (maturityStatus) {
-      const key = maturityStatus === 'not-ready' ? 'notReady' : maturityStatus;
-      maturity[key]++;
       healthScoreSum += HEALTH_SCORES[maturityStatus] ?? 0;
       healthScoreCount++;
-    } else {
-      maturity.noProfile++;
     }
 
     // Coverage note ("N with sommelier profiles") counts ONLY a usable reviewed
@@ -217,9 +229,10 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       // (forum request, turbulent3964 2026-08-29). Falls back to the map key,
       // which IS the cellar id — so the link works even when the cellar doc
       // wasn't in the fetched list.
-      cellarMap[cid] = { id: cid, name: cel?.name || 'Cellar', count: 0, value: 0, wines: new Set() };
+      cellarMap[cid] = { id: cid, name: cel?.name || 'Cellar', count: 0, value: 0, wines: new Set(), maturity: emptyMaturity() };
     }
     cellarMap[cid].count++;
+    cellarMap[cid].maturity[maturityKey]++;
     if (b.price) {
       const v = toTarget(b.price, b.currency || 'USD');
       if (v != null) cellarMap[cid].value += v;
@@ -338,8 +351,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   const healthScore = healthScoreCount > 0 ? Math.round(healthScoreSum / healthScoreCount) : null;
   const healthGrade = healthScore === null ? null : healthScore >= 85 ? 'A' : healthScore >= 70 ? 'B' : healthScore >= 55 ? 'C' : healthScore >= 40 ? 'D' : 'F';
 
-  const bottlesWithProfile = maturity.declining + maturity.late + maturity.peak + maturity.early + maturity.notReady;
-  const regretIndex = bottlesWithProfile > 0 ? Math.round((maturity.declining / bottlesWithProfile) * 100) : 0;
+  const regretIndex = regretIndexOf(maturity);
 
   const maturityForecast = forecastYears.map(y => ({ year: y, count: forecastCounts[y] || 0, isCurrent: y === currentYear }));
 
@@ -432,7 +444,13 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     consumedByCountry,
     consumedByGrape,
     consumedByProducer,
-    cellarBreakdown: Object.values(cellarMap).map(c => ({ id: c.id, name: c.name, bottleCount: c.count, value: Math.round(c.value * 100) / 100, uniqueWines: c.wines.size })).sort((a, b) => b.bottleCount - a.bottleCount),
+    // `maturity` and `regretIndex` per cellar feed the Statistics page's
+    // "by cellar" table. They are left out of the public API document
+    // (openapi/document.js) on purpose: documented fields are a contract.
+    cellarBreakdown: Object.values(cellarMap).map(c => ({
+      id: c.id, name: c.name, bottleCount: c.count, value: Math.round(c.value * 100) / 100, uniqueWines: c.wines.size,
+      maturity: c.maturity, regretIndex: regretIndexOf(c.maturity),
+    })).sort((a, b) => b.bottleCount - a.bottleCount),
     maturityForecast,
     urgencyLadder: urgencyArr.slice(0, 10),
     holdingTime,
@@ -464,7 +482,7 @@ function buildEmptyStats(currency, targetRatingScale) {
     byVintage: [], byRating: emptyBands(),
     ratingViews: ratingViews({ byRating: emptyBands(), sum: 0, count: 0 }, { byRating: emptyBands(), sum: 0, count: 0 }),
     byBottleSize: {}, byPurchaseYear: [],
-    maturity:   { declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 },
+    maturity:   emptyMaturity(),
     maturityCoverage: { sommSet: 0, none: 0 },
     topValueBottles: [], consumptionByYear: [],
     consumptionByReason: { drank: 0, gifted: 0, sold: 0, other: 0 },

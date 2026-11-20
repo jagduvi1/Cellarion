@@ -36,6 +36,35 @@ export const GRAPE_COLORS = [
 
 export const GRADE_COLORS = { A: '#2D7A45', B: '#D4C87A', C: '#D4A373', D: '#C0504D', F: '#9A2020' };
 
+// The drink-window phases, most urgent first, with the colour every maturity
+// chart on the Statistics page gives them. `key` is the bucket in the stats
+// payload; `filter` is the value the bottle list's ?maturity= filter takes
+// for it (utils/filterLabels.js MATURITY_FILTER_OPTIONS).
+export const MATURITY_PHASES = [
+  { key: 'declining', filter: 'declining', color: '#C94040', icon: '⚠' },
+  { key: 'late',      filter: 'late',      color: '#D4A070', icon: '⏱' },
+  { key: 'peak',      filter: 'peak',      color: '#7A1E2D', icon: '✓' },
+  { key: 'early',     filter: 'early',     color: '#7aade0', icon: '◷' },
+  { key: 'notReady',  filter: 'not-ready', color: '#5B8DB8', icon: '⏳' },
+  { key: 'noProfile', filter: 'none',      color: '#3a3a3a', icon: '—' },
+];
+
+// The Regret Index's bands and their colours, shared by its card and the
+// per-cellar table so a percentage reads the same in both.
+export const REGRET_LEVEL_COLORS = {
+  critical: '#C94040',
+  warning:  '#D4A070',
+  mild:     '#D4C87A',
+  great:    '#7A1E2D',
+};
+
+export function regretLevel(regretIndex) {
+  return regretIndex >= 30 ? 'critical'
+    : regretIndex >= 15 ? 'warning'
+    : regretIndex > 0 ? 'mild'
+    : 'great';
+}
+
 export const RATING_BAND_DEFS = [
   { key: '81-100', labelKey: 'excellent', color: '#7A1E2D' },
   { key: '61-80',  labelKey: 'veryGood', color: '#D4C87A' },
@@ -94,6 +123,27 @@ export function fmtCurrency(amount, currency) {
   } catch {
     return `${currency} ${fmt(amount)}`;
   }
+}
+
+/**
+ * The address of the bottle list a chart segment opens. Bottles still in the
+ * cellar open in the cellar view of `cellarId` (with scope 'owned' it spans
+ * every cellar the member owns), which has the filters, sorting and photos a
+ * separate drill-down list would not. A history filter (status, consumedYear)
+ * opens /bottles: the cellar view does not show drunk bottles.
+ */
+export function filteredBottlesUrl(params, { cellarId, scope } = {}) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v == null || v === '') continue;
+    qs.set(k, String(v));
+  }
+  const consumed = 'status' in params || 'consumedYear' in params;
+  if (!consumed && cellarId) {
+    if (scope) qs.set('scope', scope);
+    return `/cellars/${cellarId}?${qs.toString()}`;
+  }
+  return `/bottles?${qs.toString()}`;
 }
 
 export function fmtDays(days, t) {

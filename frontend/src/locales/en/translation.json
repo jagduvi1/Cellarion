@@ -3172,7 +3172,14 @@
     "maturity": {
       "withProfiles": "{{count}} with sommelier profiles",
       "withoutData": "{{count}} without data",
-      "profilesNeeded": "Sommelier maturity profiles needed to see your score"
+      "profilesNeeded": "Sommelier maturity profiles needed to see your score",
+      "goToSection": "Go to {{section}}"
+    },
+    "healthNoScore": "N/A",
+    "maturityByCellar": {
+      "cellar": "Cellar",
+      "countLink_one": "{{phase}} in {{cellar}}: {{count}} bottle",
+      "countLink_other": "{{phase}} in {{cellar}}: {{count}} bottles"
     },
     "regret": {
       "pastPrime_one": "{{count}} bottle past their prime, still unopened.",
@@ -3249,6 +3256,8 @@
     "sections": {
       "wineTypes": "Wine Types",
       "maturityStatus": "Maturity Status",
+      "maturityByCellar": "Maturity Status by Cellar",
+      "mostInNeedFirst": "Most in need first",
       "topOrigins": "Top Origins",
       "top5": "Top 5",
       "vintageDistribution": "Vintage Distribution",

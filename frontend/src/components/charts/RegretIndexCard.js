@@ -1,20 +1,10 @@
 import { useTranslation } from 'react-i18next';
+import { REGRET_LEVEL_COLORS, regretLevel } from './chartHelpers';
 
 function RegretIndexCard({ regretIndex, decliningCount, total }) {
   const { t } = useTranslation();
-  const level =
-    regretIndex >= 30 ? 'critical' :
-    regretIndex >= 15 ? 'warning'  :
-    regretIndex > 0   ? 'mild'     : 'great';
-
-  const levelColors = {
-    critical: '#C94040',
-    warning:  '#D4A070',
-    mild:     '#D4C87A',
-    great:    '#7A1E2D',
-  };
-
-  const color = levelColors[level];
+  const level = regretLevel(regretIndex);
+  const color = REGRET_LEVEL_COLORS[level];
 
   return (
     <div className="regret-card">

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { MATURITY_PHASES } from './chartHelpers';
 
 /**
  * `onSegmentClick(segmentKey)` makes each legend row + bar segment a
@@ -8,14 +9,7 @@ import { useTranslation } from 'react-i18next';
  */
 function MaturityViz({ maturity, maturityCoverage, total, onSegmentClick }) {
   const { t } = useTranslation();
-  const segments = [
-    { key: 'declining',  filter: 'declining', color: '#C94040', icon: '⚠' },
-    { key: 'late',       filter: 'late',      color: '#D4A070', icon: '⏱' },
-    { key: 'peak',       filter: 'peak',      color: '#7A1E2D', icon: '✓' },
-    { key: 'early',      filter: 'early',     color: '#7aade0', icon: '◷' },
-    { key: 'notReady',   filter: 'not-ready', color: '#5B8DB8', icon: '⏳' },
-    { key: 'noProfile',  filter: 'none',      color: '#3a3a3a', icon: '—' },
-  ];
+  const segments = MATURITY_PHASES;
 
   const hasCoverage = maturityCoverage && maturityCoverage.sommSet > 0;
   const clickable = typeof onSegmentClick === 'function';
