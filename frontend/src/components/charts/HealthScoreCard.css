@@ -25,11 +25,11 @@
 }
 
 .health-phases--link:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-surface-hover);
 }
 
 .health-phases--link:focus-visible {
-  outline: 2px solid #D4C87A;
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 1px;
 }
 

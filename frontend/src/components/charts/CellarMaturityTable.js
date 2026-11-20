@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MATURITY_PHASES, REGRET_LEVEL_COLORS, regretLevel, filteredBottlesUrl } from './chartHelpers';
@@ -22,18 +23,21 @@ export function byNeed(a, b) {
  */
 function CellarMaturityTable({ cellars }) {
   const { t } = useTranslation();
-  const rows = (cellars || []).filter(c => c.maturity);
+  const titleId = useId();
+  // A copy, sorted: the page hands the same array to its other cards.
+  const rows = (cellars || []).filter(c => c.maturity).sort(byNeed);
   if (rows.length < 2) return null;
-  rows.sort(byNeed);
 
   return (
     <div className="stats-card stats-card--full">
-      <h2 className="stats-card-title">
+      <h2 className="stats-card-title" id={titleId}>
         {t('statistics.sections.maturityByCellar')}
         <span className="stats-card-title-note">{t('statistics.sections.mostInNeedFirst')}</span>
       </h2>
-      <div className="cellar-maturity-scroll">
-        <table className="cellar-maturity-table">
+      {/* A named, focusable region: at phone width the table scrolls sideways
+          in here, and a keyboard must be able to scroll it too. */}
+      <div className="cellar-maturity-scroll" role="region" tabIndex={0} aria-labelledby={titleId}>
+        <table className="cellar-maturity-table" aria-labelledby={titleId}>
           <thead>
             <tr>
               <th scope="col">{t('statistics.maturityByCellar.cellar')}</th>
@@ -64,9 +68,6 @@ function CellarMaturityTable({ cellars }) {
                       <Link
                         to={filteredBottlesUrl({ maturity: p.filter }, { cellarId: c.id })}
                         className="cellar-maturity-count--link"
-                        // The page's rule: a count takes its phase colour, except
-                        // "no data", whose grey would vanish on the card.
-                        style={p.key !== 'noProfile' ? { color: p.color } : undefined}
                         aria-label={t('statistics.maturityByCellar.countLink', {
                           count, phase: t(`statistics.maturityPhases.${p.key}`), cellar: c.name,
                         })}
@@ -76,10 +77,10 @@ function CellarMaturityTable({ cellars }) {
                     </td>
                   );
                 })}
-                <td
-                  className={c.regretIndex > 0 ? undefined : 'cellar-maturity-zero'}
-                  style={c.regretIndex > 0 ? { color: REGRET_LEVEL_COLORS[regretLevel(c.regretIndex)] } : undefined}
-                >
+                <td className={c.regretIndex > 0 ? undefined : 'cellar-maturity-zero'}>
+                  {c.regretIndex > 0 && (
+                    <span className="drink-legend-dot" style={{ background: REGRET_LEVEL_COLORS[regretLevel(c.regretIndex)] }} />
+                  )}
                   {c.regretIndex ?? 0}%
                 </td>
               </tr>

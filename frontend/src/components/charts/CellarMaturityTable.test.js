@@ -95,3 +95,28 @@ test('a cellar without an id renders as text, never a link to undefined', () => 
   expect(within(store).queryByRole('link')).toBeNull();
   expect(container.innerHTML).not.toContain('undefined');
 });
+
+test('the numbers are in the text colour: readable in both themes, the phase colour is the dot in the column head', () => {
+  renderTable([HOUSE, STORE]);
+  for (const a of screen.getAllByRole('link')) expect(a.getAttribute('style')).toBeNull();
+  // The Regret Index keeps its band as a dot beside the number, not as the number's colour.
+  const store = bodyRows().find((r) => within(r).queryByText('Storage unit'));
+  const regret = within(store).getAllByRole('cell').at(-1);
+  expect(regret).toHaveTextContent('57%');
+  expect(regret.getAttribute('style')).toBeNull();
+  expect(regret.querySelector('.drink-legend-dot')).not.toBeNull();
+});
+
+test('the table is named by its heading and scrolls in a region a keyboard can reach', () => {
+  renderTable([HOUSE, STORE]);
+  expect(screen.getByRole('table', { name: /statistics\.sections\.maturityByCellar/ })).toBeInTheDocument();
+  const region = screen.getByRole('region', { name: /statistics\.sections\.maturityByCellar/ });
+  expect(region).toHaveAttribute('tabindex', '0');
+});
+
+test('sorting the rows leaves the array the page shares with its other cards as it was', () => {
+  const cellars = [HOUSE, STORE];
+  renderTable(cellars);
+  expect(cellars.map((c) => c.name)).toEqual(['House', 'Storage unit']);
+  expect(rowNames()).toEqual(['Storage unit', 'House']);
+});
