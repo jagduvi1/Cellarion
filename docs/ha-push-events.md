@@ -263,6 +263,7 @@ auth; JWT sessions implicitly have all scopes. Initial scopes:
 |-------|--------|
 | `read` | all GETs the HA integration uses (stats, cellars, bottles, notifications, events stream, and the rack list `GET /api/racks?cellar=<id>&summary=1` — summary form only: slot bottle ids, details via `GET /api/bottles/:id`) + `GET /api/inventory` (exact path — §4) + `GET /api/auth/whoami` (own account id, no PII — for reauth same-account verification) |
 | `consume` | `POST /api/bottles/:id/consume` only |
+| `write` | moving a bottle: `POST /api/bottles/:id/move` (to another cellar the caller owns), `PUT` and `DELETE /api/racks/:id/slots/:position` (into and out of a rack slot). Every other write is an MCP write tool behind `POST /api/mcp` |
 
 **Management endpoints + settings UI**
 

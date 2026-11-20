@@ -125,6 +125,17 @@ async function rackAccess(req, res, rack, minRole, deniedMessage) {
   return role;
 }
 
+// What a slot write answers. A session gets the rack as the racks page draws
+// it: every placed bottle with its wine and maturity. An API token gets the
+// summary form of GET /api/racks?summary=1 (slot bottle ids) and what the
+// write did to the other bottle involved — the public contract
+// (openapi/document.js PlaceResponse, UnplaceResponse).
+async function slotAnswer(req, rack, change) {
+  if (req.apiToken) return { rack: rack.toObject(), ...change };
+  await rack.populate(SLOT_BOTTLES);
+  return { rack: await withMaturity(rack) };
+}
+
 // GET /api/racks/nfc/:id  — resolve a rack ID to its cellar (for NFC tag redirect)
 // Requires auth so only logged-in users can follow NFC links.
 router.get('/nfc/:id', requireAuth, async (req, res) => {
@@ -506,8 +517,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     const result = await placeBottleInRack(rack, position, bottleId, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    await rack.populate(SLOT_BOTTLES);
-    res.json({ rack: await withMaturity(rack) });
+    res.json(await slotAnswer(req, rack, { displaced: result.displaced }));
   } catch (err) {
     console.error('Assign slot error:', err);
     res.status(500).json({ error: 'Failed to assign slot' });
@@ -731,8 +741,7 @@ router.delete('/:id/slots/:position', async (req, res) => {
     const result = await clearRackSlot(rack, position, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    await rack.populate(SLOT_BOTTLES);
-    res.json({ rack: await withMaturity(rack) });
+    res.json(await slotAnswer(req, rack, { removed: result.cleared }));
   } catch (err) {
     console.error('Clear slot error:', err);
     res.status(500).json({ error: 'Failed to clear slot' });

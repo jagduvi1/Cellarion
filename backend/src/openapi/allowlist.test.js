@@ -12,7 +12,7 @@ const { TOKEN_SCOPES } = require('../models/ApiToken');
 
 const v = createValidator(buildOpenApiDocument({ version: 'test' }));
 const SAMPLE_ID = '66f0a1b2c3d4e5f6a7b8c906';
-const concrete = (path) => path.replace(/\{bottleId\}/g, SAMPLE_ID).replace(/\{(\w+)\}/g, 'x');
+const concrete = (path) => path.replace(/\{(bottleId|rackId)\}/g, SAMPLE_ID).replace(/\{position\}/g, '5').replace(/\{(\w+)\}/g, 'x');
 
 // Allowlist rules documented elsewhere: the MCP endpoint (docs/mcp-connect.md).
 const DOCUMENTED_ELSEWHERE = [/\\\/api\\\/mcp\$/];

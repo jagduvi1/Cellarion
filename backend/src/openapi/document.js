@@ -71,6 +71,7 @@ const ID = {
   user: '66f0a1b2c3d4e5f6a7b8c901',
   cellar: '66f0a1b2c3d4e5f6a7b8c902',
   shared: '66f0a1b2c3d4e5f6a7b8c903',
+  cellar2: '66f0a1b2c3d4e5f6a7b8c90d',
   rack: '66f0a1b2c3d4e5f6a7b8c904',
   wine: '66f0a1b2c3d4e5f6a7b8c905',
   bottle: '66f0a1b2c3d4e5f6a7b8c906',
@@ -124,6 +125,12 @@ const exampleBottle = {
   otherVintageImageUrl: null,
 };
 
+const exampleRack = {
+  _id: ID.rack, cellar: ID.cellar, name: 'Wine fridge', group: null, type: 'cabinet', rows: 2, cols: 3,
+  typeConfig: { shelfRows: [1, 1] }, isModular: false, slots: [{ position: 5, bottle: ID.bottle }],
+  createdAt: '2025-01-02T10:00:00.000Z', updatedAt: '2025-01-02T10:00:00.000Z',
+};
+
 // ── Schemas ────────────────────────────────────────────────────────────────
 const schemas = {
   Error: {
@@ -132,7 +139,7 @@ const schemas = {
     required: ['error'],
     properties: {
       error: { type: 'string' },
-      code: { type: 'string', description: 'Present on some errors, e.g. `state_changed` on a consume with `ifActive`.' },
+      code: { type: 'string', description: 'Present on some errors, e.g. `state_changed` on a consume with `ifActive`, or `slot_changed` when a rack slot holds something other than you expected.' },
     },
   },
   Health: {
@@ -399,7 +406,7 @@ const schemas = {
       cellar: OBJECT_ID,
       wineDefinition: {
         oneOf: [{ type: 'null' }, OBJECT_ID, ref('WineSummary')],
-        description: 'The wine: an object in lists and the bottle detail, its id alone in the consume answer; null while the bottle waits on a wine request.',
+        description: 'The wine: an object in lists and the bottle detail, its id alone in the consume and move answers; null while the bottle waits on a wine request.',
       },
       pendingWineRequest: {
         description: 'The wine request the bottle waits on, when it has no wine yet.',
@@ -646,6 +653,45 @@ const schemas = {
     properties: { bottle: ref('Bottle') },
   },
 
+  // Moving
+  MoveRequest: {
+    type: 'object',
+    required: ['toCellarId'],
+    properties: { toCellarId: { ...OBJECT_ID, description: 'The cellar to move the bottle to. You must own it.' } },
+  },
+  MoveResponse: {
+    type: 'object',
+    required: ['bottle'],
+    properties: { bottle: ref('Bottle') },
+  },
+  PlaceRequest: {
+    type: 'object',
+    required: ['bottleId'],
+    properties: {
+      bottleId: { ...OBJECT_ID, description: 'The bottle to put in the slot.' },
+      expectOccupant: {
+        ...NULL_ID,
+        description: 'What you believe is in the slot now: `null` for an empty slot, or the id of the bottle there. A slot that holds something else answers 409 `slot_changed` and nothing changes. Leave it out to place the bottle whatever is there.',
+      },
+    },
+  },
+  PlaceResponse: {
+    type: 'object',
+    required: ['rack', 'displaced'],
+    properties: {
+      rack: ref('RackSummary'),
+      displaced: { ...NULL_ID, description: 'The bottle that was in the slot and is now in no rack, or null when the slot was free.' },
+    },
+  },
+  UnplaceResponse: {
+    type: 'object',
+    required: ['rack', 'removed'],
+    properties: {
+      rack: ref('RackSummary'),
+      removed: { ...NULL_ID, description: 'The bottle that was taken out of the slot, or null when the slot was already empty.' },
+    },
+  },
+
   // Climate
   ClimateIngestRequest: {
     type: 'object',
@@ -870,6 +916,24 @@ const paths = {
       },
     },
   },
+  '/api/bottles/{bottleId}/move': {
+    post: {
+      operationId: 'moveBottle',
+      tags: ['Moving bottles'],
+      summary: 'Move a bottle to another cellar',
+      description: 'Moves a bottle that is in a cellar, or on order, to another cellar. Needs the `write` scope, and you must own both cellars. Everything recorded on the bottle is kept. It leaves its rack slot and arrives in no rack: place it with `PUT /api/racks/{rackId}/slots/{position}`.',
+      security: scope('write'),
+      parameters: [{ $ref: '#/components/parameters/BottleId' }],
+      requestBody: {
+        required: true,
+        content: json(ref('MoveRequest'), { toCellarId: ID.cellar2 }),
+      },
+      responses: {
+        200: ok('The bottle, now in the other cellar.', ref('MoveResponse'), { bottle: { ...exampleBottle, wineDefinition: ID.wine, cellar: ID.cellar2 } }),
+        ...errors(400, 401, 403, 404, 409, 429),
+      },
+    },
+  },
   '/api/racks': {
     get: {
       operationId: 'listRacks',
@@ -883,13 +947,52 @@ const paths = {
       ],
       responses: {
         200: ok('The racks.', ref('RackList'), {
-          racks: [{
-            _id: ID.rack, cellar: ID.cellar, name: 'Wine fridge', group: null, type: 'cabinet', rows: 2, cols: 3,
-            typeConfig: { shelfRows: [1, 1] }, isModular: false, slots: [{ position: 5, bottle: ID.bottle }],
-            createdAt: '2025-01-02T10:00:00.000Z', updatedAt: '2025-01-02T10:00:00.000Z',
-          }],
+          racks: [exampleRack],
         }),
         ...errors(400, 401, 403, 404),
+      },
+    },
+  },
+  '/api/racks/{rackId}/slots/{position}': {
+    put: {
+      operationId: 'placeBottle',
+      tags: ['Moving bottles'],
+      summary: 'Put a bottle in a rack slot',
+      description: [
+        'Places a bottle in a slot, or moves it there. A bottle sits in one slot at a time, so it leaves the slot it was in, in this rack or in another rack of the cellar. Needs the `write` scope and editor access to the cellar.',
+        '',
+        'The bottle must be in the rack\'s cellar and still in the cellar: one on order or already drunk answers 400. A bottle that is in the slot already is taken out of the rack, stays in the cellar and is named in `displaced`. Send `expectOccupant` to refuse that instead.',
+        '',
+        'Slot numbers are the `position` in `GET /api/racks` and in a bottle\'s `location` in `GET /api/inventory`.',
+      ].join('\n'),
+      security: scope('write'),
+      parameters: [{ $ref: '#/components/parameters/RackId' }, { $ref: '#/components/parameters/Position' }],
+      requestBody: {
+        required: true,
+        content: json(ref('PlaceRequest'), { bottleId: ID.bottle2, expectOccupant: null }),
+      },
+      responses: {
+        200: ok('The rack in summary form, and the bottle that had to leave the slot.', ref('PlaceResponse'), {
+          rack: { ...exampleRack, slots: [{ position: 2, bottle: ID.bottle2 }, { position: 5, bottle: ID.bottle }] },
+          displaced: null,
+        }),
+        ...errors(400, 401, 403, 404, 409, 429),
+      },
+    },
+    delete: {
+      operationId: 'unplaceBottle',
+      tags: ['Moving bottles'],
+      summary: 'Take a bottle out of a rack slot',
+      description: 'Empties the slot. The bottle stays in the cellar, in no rack. A slot that is already empty answers 200 with `removed: null`. Needs the `write` scope and editor access to the cellar.',
+      security: scope('write'),
+      parameters: [
+        { $ref: '#/components/parameters/RackId' },
+        { $ref: '#/components/parameters/Position' },
+        { name: 'expect', in: 'query', schema: OBJECT_ID, description: 'The id of the bottle you believe is in the slot. A slot that holds another bottle, or none, answers 409 `slot_changed` and nothing changes.' },
+      ],
+      responses: {
+        200: ok('The rack in summary form, and the bottle that was taken out.', ref('UnplaceResponse'), { rack: { ...exampleRack, slots: [] }, removed: ID.bottle }),
+        ...errors(401, 403, 404, 409, 429),
       },
     },
   },
@@ -1052,7 +1155,7 @@ const components = {
         '- `read`: read your cellars, bottles, racks, personal fields, statistics and notifications, and the event stream.',
         '- `consume`: take bottles out of the cellar.',
         '- `climate`: post sensor readings (device tokens, made when you add a climate device).',
-        '- `write`: only for AI assistants over MCP; it opens no REST operation.',
+        '- `write`: move a bottle to another cellar, into a rack slot or out of one. The same scope lets an AI assistant add and edit bottles, racks and cellars over MCP, so give it only to something you trust.',
         '',
         'A request the token\'s scopes don\'t cover answers 403. A revoked or unknown token answers 401.',
       ].join('\n'),
@@ -1060,6 +1163,8 @@ const components = {
   },
   parameters: {
     BottleId: { name: 'bottleId', in: 'path', required: true, schema: OBJECT_ID },
+    RackId: { name: 'rackId', in: 'path', required: true, schema: OBJECT_ID },
+    Position: { name: 'position', in: 'path', required: true, schema: { type: 'integer', minimum: 1 }, description: 'The 1-based slot number.' },
     Limit: { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200, default: 30 } },
     Offset: { name: 'offset', in: 'query', schema: { type: 'integer', minimum: 0, default: 0 }, description: 'Items to skip. `skip` is accepted as a synonym.' },
     IfNoneMatch: { name: 'If-None-Match', in: 'header', schema: { type: 'string' }, description: 'The `ETag` of the copy you hold, exactly as you received it.' },
@@ -1080,7 +1185,7 @@ const components = {
       content: json(ref('Error'), { error: 'API token scope insufficient for this request' }),
     },
     NotFound: { description: 'No such resource visible to the caller, or a server older than this operation.', content: json(ref('Error'), { error: 'Bottle not found' }) },
-    Conflict: { description: 'The state moved on, e.g. the bottle already left the cellar (`code: state_changed`) or is still on order.', content: json(ref('Error'), { error: 'This bottle has already left the cellar', code: 'state_changed' }) },
+    Conflict: { description: 'The state moved on, e.g. the bottle already left the cellar (`code: state_changed`), is still on order, or a rack slot holds something other than you expected (`code: slot_changed`).', content: json(ref('Error'), { error: 'This bottle has already left the cellar', code: 'state_changed' }) },
     TooManyRequests: {
       description: 'Rate limited. Wait `Retry-After` seconds.',
       headers: { 'Retry-After': { $ref: '#/components/headers/RetryAfter' }, ...rateLimitHeaders },
@@ -1095,6 +1200,7 @@ const TAGS = [
   { name: 'Live updates', description: 'Know when to refetch, without polling.' },
   { name: 'Cellars and bottles', description: 'Cellars, filtered bottle lists, one bottle, racks.' },
   { name: 'Drinking', description: 'Take a bottle out of the cellar.' },
+  { name: 'Moving bottles', description: 'Move a bottle to another cellar, into a rack slot or out of one.' },
   { name: 'Statistics', description: 'Totals and drink-window counts for dashboards.' },
   { name: 'Notifications', description: 'Restock suggestions, drink-window reminders and other notices.' },
   { name: 'Climate sensors', description: 'Temperature and humidity from a sensor in your cellar.' },
@@ -1115,7 +1221,7 @@ function buildOpenApiDocument({ version, serverUrl = 'https://cellarion.app' } =
     info: {
       title: 'Cellarion API',
       version: version || '0.0.0',
-      summary: 'Read your cellar, take bottles out, post sensor readings.',
+      summary: 'Read your cellar, take bottles out, move them, post sensor readings.',
       description: guideMarkdown(serverUrl),
       termsOfService: `${serverUrl}/developers#section/Terms-of-use`,
       license: { name: 'AGPL-3.0', identifier: 'AGPL-3.0-only' },

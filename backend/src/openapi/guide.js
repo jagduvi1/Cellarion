@@ -22,7 +22,7 @@ The stable REST API for **your own Cellarion data**: your cellars and the ones s
 
 | You are building | Use |
 |---|---|
-| A dashboard, a home-automation integration, a script | **This REST API**, starting with \`GET /api/inventory\` |
+| A dashboard, a home-automation integration, a script | **This REST API**, starting with \`GET /api/inventory\`. It reads the cellar, takes bottles out and moves them |
 | Something that should react when the cellar changes | The **event stream**, \`GET /api/events/stream\`, then refetch |
 | An AI assistant (Claude, ChatGPT and others) | **MCP**: see [Connect an AI assistant](/connect-ai) |
 | A temperature or humidity sensor | **Climate ingest**, \`POST /api/climate/ingest\` |
@@ -31,7 +31,7 @@ The API gives you your own data. It does not expose Cellarion's AI features (lab
 
 ## Getting started
 
-1. **Create a token.** In the app, open *Settings → API tokens* and create one with the fewest scopes you need: \`read\` for a dashboard, plus \`consume\` if your integration takes bottles out. The token is shown once; store it like a password.
+1. **Create a token.** In the app, open *Settings → API tokens* and create one with the fewest scopes you need: \`read\` for a dashboard, plus \`consume\` if your integration takes bottles out, plus \`write\` if it moves them. The token is shown once; store it like a password.
 2. **Pick the base URL.** \`https://cellarion.app\`, or your own server's address if you self-host. A self-hosted server can run an older version (see *Stability and versioning*).
 3. **Make a first call.**
 
@@ -64,7 +64,7 @@ Send the token in the \`Authorization\` header: \`Authorization: Bearer cel_…\
 | \`read\` | Reading your cellars and the ones shared with you: bottles, racks, personal fields, statistics, notifications, and the event stream |
 | \`consume\` | Taking bottles out of the cellar |
 | \`climate\` | Posting sensor readings. Device tokens get it when you add a climate device in the app |
-| \`write\` | AI assistants over MCP only; it opens no REST operation |
+| \`write\` | Moving a bottle to another cellar, into a rack slot or out of one. The same scope lets an AI assistant add and edit bottles, racks and cellars over MCP, so give it only to something you trust |
 
 A request outside the token's scopes answers \`403\`. An unknown or revoked token answers \`401\`.
 
@@ -162,6 +162,8 @@ const python = (source) => ({ lang: 'Python', label: 'Python', source });
 /** operationId → x-codeSamples for one server's base URL. */
 function codeSamples(base) {
   const ID = '66f0a1b2c3d4e5f6a7b8c906';
+  const RACK = '66f0a1b2c3d4e5f6a7b8c904';
+  const CELLAR_2 = '66f0a1b2c3d4e5f6a7b8c90d';
   return {
     getInventory: [
       curl(`curl -i ${H(base)}/api/inventory"\n\n# Later: send the ETag back; 304 means nothing changed\ncurl -i -H 'If-None-Match: W/"…"' ${H(base)}/api/inventory"`),
@@ -191,9 +193,21 @@ function codeSamples(base) {
       curl(`curl -X POST -H "Content-Type: application/json" \\\n  -d '{"reason": "drank", "rating": 4, "consumedRatingScale": "5", "ifActive": true}' \\\n  ${H(base)}/api/bottles/${ID}/consume"`),
       python(PY_CLIENT(base, `await client.consume_bottle("${ID}", reason="drank", rating=4)`)),
     ],
+    moveBottle: [
+      curl(`curl -X POST -H "Content-Type: application/json" \\\n  -d '{"toCellarId": "${CELLAR_2}"}' \\\n  ${H(base)}/api/bottles/${ID}/move"`),
+      python(PY_PLAIN(base, `/api/bottles/${ID}/move`, { method: 'POST', body: `{"toCellarId": "${CELLAR_2}"}` })),
+    ],
     listRacks: [
       curl(`curl ${H(base)}/api/racks?cellar=66f0a1b2c3d4e5f6a7b8c902&summary=1"`),
       python(PY_PLAIN(base, '/api/racks?cellar=66f0a1b2c3d4e5f6a7b8c902&summary=1')),
+    ],
+    placeBottle: [
+      curl(`curl -X PUT -H "Content-Type: application/json" \\\n  -d '{"bottleId": "${ID}", "expectOccupant": null}' \\\n  ${H(base)}/api/racks/${RACK}/slots/2"`),
+      python(PY_PLAIN(base, `/api/racks/${RACK}/slots/2`, { method: 'PUT', body: `{"bottleId": "${ID}", "expectOccupant": None}` })),
+    ],
+    unplaceBottle: [
+      curl(`curl -X DELETE ${H(base)}/api/racks/${RACK}/slots/2?expect=${ID}"`),
+      python(PY_PLAIN(base, `/api/racks/${RACK}/slots/2?expect=${ID}`, { method: 'DELETE' })),
     ],
     getStatsOverview: [
       curl(`curl ${H(base)}/api/stats/overview"`),

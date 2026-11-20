@@ -72,6 +72,7 @@ const NOT_EXERCISED = {
   'getHealth 503': 'only while the process drains or has lost its database',
   'getThumbnail 200': 'needs a photo file in the uploads volume',
   'getThumbnail 503': 'only while the thumbnail renderer is saturated',
+  'moveBottle 409': 'only when another request changes the bottle at the same moment',
 };
 
 // Every operation documents 429 (the global per-address limiter); the
@@ -300,6 +301,80 @@ describeWithMongo('public API contract', () => {
     await expectContract('consumeBottle', 401, { token: 'revoked', params: { bottleId: b('b3') }, body: {} });
     await expectContract('consumeBottle', 403, { token: 'read', params: { bottleId: b('b3') }, body: {} });
     await expectContract('consumeBottle', 404, { token: 'consume', params: { bottleId: ID_ZERO }, body: {} });
+  });
+
+  // The three moves run in this order on one world: the grid starts with b2 in
+  // slot 4 and the fridge with b1 in slot 5; b3 and `late` are in no rack.
+  test('place: a free slot, a move from another rack, an occupied slot, refusals', async () => {
+    const home = String(world.cellars.home._id);
+    const grid = String(world.racks.grid._id);
+    const fridge = String(world.racks.fridge._id);
+    const slot = (position) => ({ rackId: grid, position });
+
+    const placed = await expectContract('placeBottle', 200, { token: 'write', params: slot(1), body: { bottleId: b('b3'), expectOccupant: null } });
+    expect(placed.body.displaced).toBeNull();
+    // The summary form: a slot carries the bottle's id, never the bottle.
+    expect(placed.body.rack.slots.map((s) => [s.position, s.bottle]).sort()).toEqual([[1, b('b3')], [4, b('b2')]]);
+
+    // A bottle sits in one slot: placed in the grid, b1 has left the fridge.
+    await expectContract('placeBottle', 200, { token: 'write', params: slot(2), body: { bottleId: b('b1') } });
+    const racks = await call('listRacks', { token: 'read', query: `?cellar=${home}&summary=1` });
+    expect(racks.body.racks.find((r) => r._id === fridge).slots).toEqual([]);
+
+    // An occupied slot: refused when the caller expected it free, else the
+    // bottle there leaves the rack and is named.
+    const refused = await expectContract('placeBottle', 409, { token: 'write', params: slot(4), body: { bottleId: b('late'), expectOccupant: null } });
+    expect(refused.body.code).toBe('slot_changed');
+    const swapped = await expectContract('placeBottle', 200, { token: 'write', params: slot(4), body: { bottleId: b('late') } });
+    expect(swapped.body.displaced).toBe(b('b2'));
+
+    await expectContract('placeBottle', 400, { token: 'write', params: slot(99), body: { bottleId: b('b2') } });
+    await expectContract('placeBottle', 400, { token: 'write', params: slot(3), body: { bottleId: b('ordered') } });
+    await expectContract('placeBottle', 401, { token: 'revoked', params: slot(3), body: { bottleId: b('b2') } });
+    await expectContract('placeBottle', 403, { token: 'read', params: slot(3), body: { bottleId: b('b2') } });
+    await expectContract('placeBottle', 404, { token: 'write', params: { rackId: ID_ZERO, position: 3 }, body: { bottleId: b('b2') } });
+    // A bottle of another cellar reads like one that does not exist.
+    await expectContract('placeBottle', 404, { token: 'write', params: slot(3), body: { bottleId: b('bobs') } });
+  });
+
+  test('unplace: the bottle leaves the slot, an empty slot is fine, refusals', async () => {
+    const grid = String(world.racks.grid._id);
+    const slot = (position) => ({ rackId: grid, position });
+
+    const out = await expectContract('unplaceBottle', 200, { token: 'write', params: slot(1), query: `?expect=${b('b3')}` });
+    expect(out.body.removed).toBe(b('b3'));
+    expect(out.body.rack.slots.map((s) => s.position).sort()).toEqual([2, 4]);
+    const empty = await expectContract('unplaceBottle', 200, { token: 'write', params: slot(1) });
+    expect(empty.body.removed).toBeNull();
+
+    // Slot 2 holds b1, not the bottle the caller expected.
+    const refused = await expectContract('unplaceBottle', 409, { token: 'write', params: slot(2), query: `?expect=${b('b3')}` });
+    expect(refused.body.code).toBe('slot_changed');
+    await expectContract('unplaceBottle', 401, { token: 'revoked', params: slot(2) });
+    await expectContract('unplaceBottle', 403, { token: 'consume', params: slot(2) });
+    await expectContract('unplaceBottle', 404, { token: 'write', params: { rackId: ID_ZERO, position: 2 } });
+  });
+
+  test('move: to another cellar of your own, out of its rack; refusals', async () => {
+    const Cellar = require('../models/Cellar');
+    const attic = String((await Cellar.create({ name: 'Attic', user: world.users.alice._id }))._id);
+    const id = b('b1'); // in the grid, slot 2
+
+    const res = await expectContract('moveBottle', 200, { token: 'write', params: { bottleId: id }, body: { toCellarId: attic } });
+    // The wine as its id, like the consume answer.
+    expect(res.body.bottle).toMatchObject({ _id: id, cellar: attic, status: 'active', wineDefinition: String(world.wines.red._id) });
+    const after = await call('getBottle', { token: 'read', params: { bottleId: id } });
+    expect(after.body.rackInfo).toBeNull();
+
+    await expectContract('moveBottle', 400, { token: 'write', params: { bottleId: id }, body: { toCellarId: 'attic' } });
+    await expectContract('moveBottle', 400, { token: 'write', params: { bottleId: id }, body: { toCellarId: attic } }); // already there
+    await expectContract('moveBottle', 401, { token: 'revoked', params: { bottleId: id }, body: { toCellarId: attic } });
+    await expectContract('moveBottle', 403, { token: 'read', params: { bottleId: id }, body: { toCellarId: attic } });
+    // An editor of a shared cellar may not move its bottles out.
+    await expectContract('moveBottle', 403, { token: 'write', params: { bottleId: b('bobs') }, body: { toCellarId: attic } });
+    await expectContract('moveBottle', 404, { token: 'write', params: { bottleId: ID_ZERO }, body: { toCellarId: attic } });
+    // A cellar you do not own reads like one that does not exist.
+    await expectContract('moveBottle', 404, { token: 'write', params: { bottleId: id }, body: { toCellarId: String(world.cellars.shared._id) } });
   });
 
   test('climate ingest', async () => {

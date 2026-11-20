@@ -896,6 +896,13 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
     const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
+    // An API token gets the bottle with its wine as an id, the shape of the
+    // consume answer (openapi/document.js MoveResponse); the bottle page gets
+    // the wine populated.
+    if (req.apiToken) {
+      bottle.depopulate('wineDefinition');
+      return res.json({ bottle });
+    }
     await bottle.populate(WINE_POPULATE);
     res.json({ bottle });
   } catch (error) {
