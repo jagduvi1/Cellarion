@@ -178,6 +178,19 @@
   margin-top: 0.3rem;
 }
 
+/* ── Footer: the way to every curator question ── */
+
+.notif-footer {
+  border-top: 1px solid var(--color-border);
+  padding: 0.6rem 1rem;
+  text-align: center;
+}
+
+.notif-footer-link {
+  color: var(--color-primary);
+  font-size: 0.8rem;
+}
+
 /* ── Mobile ── */
 
 @media (max-width: 768px) {

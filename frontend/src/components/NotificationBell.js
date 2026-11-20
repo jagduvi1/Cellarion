@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../contexts/NotificationContext';
 import timeAgo from '../utils/timeAgo';
 import internalPath from '../utils/internalPath';
 import './NotificationBell.css';
+
+// A curator's question to the member, and the curator's reply to their answer
+// (backend services/ownerInquiryOps.js). Either one shows the way to the list
+// of all of them.
+const CURATOR_QUESTION_TYPES = new Set(['owner_inquiry', 'owner_inquiry_resolved']);
 
 export default function NotificationBell() {
   const { t } = useTranslation();
@@ -12,6 +17,8 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
   const navigate = useNavigate();
+  // Read from the notifications already loaded: no request of its own.
+  const hasCuratorQuestion = notifications.some((n) => CURATOR_QUESTION_TYPES.has(n.type));
 
   // Close on outside click
   useEffect(() => {
@@ -85,6 +92,14 @@ export default function NotificationBell() {
               ))
             )}
           </div>
+
+          {hasCuratorQuestion && (
+            <div className="notif-footer">
+              <Link to="/questions" className="notif-footer-link" onClick={() => setOpen(false)}>
+                {t('curatorQuestions.allLink')}
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -70,11 +70,15 @@ const visibleFor = (now) => ([
 
 /**
  * The caller's RECIPIENT view of their inquiries: question, wine, THEIR
- * bottle and THEIR response state only. Other recipients' identities and
- * answers never leave the server here — an owner must not learn who else
- * owns the wine (privacy). `resolutionNote` is absent BY DESIGN: it is the
- * curator's private record, and only `ownerReply` was written to be read
- * here. Newest first, capped at 50.
+ * bottle (its `vintage` and the `cellar` it sits in, see withBottlePlaces)
+ * and THEIR response state only. Callers: GET /api/owner-inquiries/mine (the
+ * questions page and the bottle card) and the MCP tool
+ * list_curator_questions. Returns rows newest first, capped at 50.
+ *
+ * Other recipients' identities and answers never leave the server here — an
+ * owner must not learn who else owns the wine (privacy). `resolutionNote` is
+ * absent BY DESIGN: it is the curator's private record, and only `ownerReply`
+ * was written to be read here.
  *
  * @param {string} userId
  * @param {object} [opts]
@@ -97,9 +101,48 @@ async function listInquiriesForRecipient(userId, { wineId } = {}) {
     .populate('wineDefinition', 'name producer')
     .lean();
 
-  return rows
+  const views = rows
     .filter((i) => recipientMaySee(i, userId))
     .map((i) => recipientRow(i, userId));
+  return withBottlePlaces(userId, views);
+}
+
+// Cellars the caller can open: live ones they own or are a member of.
+const reachableCellars = (userId) => ({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null });
+
+// Where the caller's own bottle of each inquiry is, so a member with cellars
+// in different places knows where to go and read the label. Two queries for
+// the whole list, whatever its length. Only the caller's bottles and cellars
+// are read, never another recipient's. A bottle that is gone, or sits in a
+// cellar the caller can no longer open, gives cellar and vintage null. One
+// they can open that is not on the shelf (drunk, given away, sold, or still
+// on order) keeps its vintage but names no cellar: there is no label to read
+// there.
+async function withBottlePlaces(userId, views) {
+  const bottleIds = [...new Set(views.map((v) => v.bottle).filter(Boolean).map(String))];
+  let cellarById = new Map();
+  let bottleById = new Map();
+  if (bottleIds.length) {
+    const cellars = await Cellar.find(reachableCellars(userId)).select('name').lean();
+    cellarById = new Map(cellars.map((c) => [String(c._id), c]));
+    if (cellars.length) {
+      const bottles = await Bottle.find({ _id: { $in: bottleIds }, cellar: { $in: cellars.map((c) => c._id) } })
+        .select('cellar vintage status')
+        .lean();
+      bottleById = new Map(bottles.map((b) => [String(b._id), b]));
+    }
+  }
+  return views.map((v) => {
+    const bottle = v.bottle ? bottleById.get(String(v.bottle)) : null;
+    const cellar = bottle ? cellarById.get(String(bottle.cellar)) : null;
+    if (!cellar) return { ...v, cellar: null, vintage: null };
+    const onShelf = !NOT_IN_CELLAR_STATUSES.includes(bottle.status);
+    return {
+      ...v,
+      cellar: onShelf ? { _id: cellar._id, name: cellar.name } : null,
+      vintage: bottle.vintage || null,
+    };
+  });
 }
 
 // A resolved row is worth showing only to someone who answered it.
@@ -143,7 +186,7 @@ const questionLink = (inquiryId) => `/questions/${inquiryId}`;
  */
 async function liveBottleLink(userId, wineId, preferBottleId) {
   if (!wineId || !isValidId(String(wineId))) return null;
-  const cellarIds = await Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).distinct('_id');
+  const cellarIds = await Cellar.find(reachableCellars(userId)).distinct('_id');
   if (!cellarIds.length) return null;
   // The original bottle by id: found however many bottles of the wine there
   // are, not only among the newest of them (pre-release audit 2026-10-14).
@@ -161,10 +204,11 @@ async function liveBottleLink(userId, wineId, preferBottleId) {
 }
 
 /**
- * One inquiry addressed to the caller, as the list shows it, plus `link`: a
- * bottle page of the wine they can open now (null when they have none left —
- * the question then shows on its own page). Someone else's inquiry, a
- * missing one and one no longer visible all answer not_found alike.
+ * One inquiry addressed to the caller, in the recipient view (without the
+ * list's cellar and vintage), plus `link`: a bottle page of the wine they can
+ * open now (null when they have none left — the question then shows on its
+ * own page). Someone else's inquiry, a missing one and one no longer visible
+ * all answer not_found alike.
  *
  * @returns {Promise<{ok:true, inquiry:object} | {ok:false, code:'not_found', message:string}>}
  */

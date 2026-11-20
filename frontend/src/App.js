@@ -77,6 +77,7 @@ const AddToWishlist        = lazy(() => import('./pages/AddToWishlist'));
 const PickLists            = lazy(() => import('./pages/PickLists'));
 const PickList             = lazy(() => import('./pages/PickList'));
 const CuratorQuestion      = lazy(() => import('./pages/CuratorQuestion'));
+const CuratorQuestions     = lazy(() => import('./pages/CuratorQuestions'));
 const Unsubscribed         = lazy(() => import('./pages/Unsubscribed'));
 const DeleteAccountLink    = lazy(() => import('./pages/DeleteAccountLink'));
 const Recommendations      = lazy(() => import('./pages/Recommendations'));
@@ -307,6 +308,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><CuratorQuestion /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        {/* Every curator question addressed to the member, grouped by cellar. */}
+        <Route
+          path="/questions"
+          element={
+            <ProtectedRoute>
+              <Layout><CuratorQuestions /></Layout>
             </ProtectedRoute>
           }
         />
