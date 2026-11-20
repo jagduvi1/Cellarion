@@ -65,6 +65,7 @@ const ok = () => ({ ok: true, json: async () => ({ bottle: { _id: 'new' } }) });
 const fail = (error) => ({ ok: false, json: async () => ({ error }) });
 
 const countInput = () => screen.getByLabelText('bottleDetail.addMore.countLabel');
+const vintageInput = () => screen.getByLabelText('bottleDetail.addMore.vintageLabel');
 const submitBtn = (n) => screen.getByText(`bottleDetail.addMore.submit:{"count":${n}}`);
 
 const renderModal = (props = {}) =>
@@ -81,7 +82,8 @@ test('renders the count input (default 1), a ticked copy checkbox and the unplac
   expect(countInput()).toHaveValue(1);
   expect(screen.getByRole('checkbox')).toBeChecked();
   expect(screen.getByText('bottleDetail.addMore.unplacedNote')).toBeInTheDocument();
-  expect(screen.getByText('Barolo Monfortino · 2016')).toBeInTheDocument();
+  expect(screen.getByText('Barolo Monfortino')).toBeInTheDocument();
+  expect(vintageInput()).toHaveValue('2016');
 });
 
 test('the count input clamps to 1–24', () => {
@@ -102,7 +104,7 @@ test('submit fires one create per bottle with the copied payload and reports the
   fireEvent.change(countInput(), { target: { value: '3' } });
   fireEvent.click(submitBtn(3));
 
-  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(3));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(3, '2016'));
   expect(createBottle).toHaveBeenCalledTimes(3);
   // Exact match — proves rating / drink window / dateAdded never travel.
   expect(createBottle).toHaveBeenLastCalledWith(apiFetch, COPIED_PAYLOAD);
@@ -116,7 +118,7 @@ test('unticking "copy details" sends only wine, cellar, vintage, size and curren
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(submitBtn(1));
 
-  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, '2016'));
   // Currency still travels — a blank copy must not fall back to the backend's
   // USD default for a non-USD user.
   expect(createBottle).toHaveBeenCalledWith(apiFetch, {
@@ -138,7 +140,7 @@ test('copyDetailsDefault={false} starts unticked and sends a blank copy; ticking
 
   expect(screen.getByRole('checkbox')).not.toBeChecked();
   fireEvent.click(submitBtn(1));
-  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, '2016'));
   expect(createBottle).toHaveBeenCalledWith(apiFetch, {
     cellar: 'c1', wineDefinition: 'w1', vintage: '2016', bottleSize: '750ml', currency: 'EUR',
   });
@@ -165,11 +167,12 @@ test('a mid-batch failure reports created/total, locks the batch shape, and a re
   // finish the SAME batch, not a differently-shaped one.
   expect(countInput()).toBeDisabled();
   expect(screen.getByRole('checkbox')).toBeDisabled();
+  expect(vintageInput()).toBeDisabled();
 
   createBottle.mockResolvedValue(ok());
   fireEvent.click(submitBtn(4));
 
-  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(4));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(4, '2016'));
   // 3 calls before + only the 2 missing bottles on retry, never 4 again.
   expect(createBottle).toHaveBeenCalledTimes(5);
 });
@@ -193,5 +196,48 @@ test('everything is disabled and the modal cannot be closed while the batch runs
   expect(onClose).not.toHaveBeenCalled();
 
   release(ok());
-  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, '2016'));
+});
+
+// Another year of the same wine, without searching the wine again in Add Bottle.
+test('a changed vintage adds bottles of that year, and says which year it added', async () => {
+  createBottle.mockResolvedValue(ok());
+  const onAdded = vi.fn();
+  renderModal({ onAdded, copyDetailsDefault: false });
+
+  fireEvent.change(vintageInput(), { target: { value: '2019' } });
+  fireEvent.click(submitBtn(1));
+
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, '2019'));
+  expect(createBottle).toHaveBeenCalledWith(apiFetch, {
+    cellar: 'c1',
+    wineDefinition: 'w1',
+    vintage: '2019',
+    bottleSize: '750ml',
+    currency: 'EUR',
+  });
+});
+
+test('non-vintage typed as a word is stored as NV', async () => {
+  createBottle.mockResolvedValue(ok());
+  const onAdded = vi.fn();
+  renderModal({ onAdded, copyDetailsDefault: false });
+
+  fireEvent.change(vintageInput(), { target: { value: 'nv' } });
+  fireEvent.click(submitBtn(1));
+
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1, 'NV'));
+  expect(createBottle.mock.calls[0][1].vintage).toBe('NV');
+});
+
+test('a year the field cannot take creates nothing and says why', async () => {
+  const onAdded = vi.fn();
+  renderModal({ onAdded });
+
+  fireEvent.change(vintageInput(), { target: { value: '19' } });
+  fireEvent.click(submitBtn(1));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('bottleDetail.vintagePattern');
+  expect(createBottle).not.toHaveBeenCalled();
+  expect(onAdded).not.toHaveBeenCalled();
 });
