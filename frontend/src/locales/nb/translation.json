@@ -132,7 +132,19 @@
       "username_invalid": "Brukernavnet må ha 3–30 tegn og kan inneholde bokstaver, tall, punktum, understrek og bindestrek, men ikke mellomrom.",
       "consent_required": "For å opprette en konto må du godta personvernerklæringen og behandlingen av personopplysningene dine.",
       "verification_token_invalid": "Bekreftelseslenken er ugyldig eller utløpt. Be om en ny e-post med bekreftelseslenke.",
-      "reset_token_invalid": "Lenken for nytt passord er ugyldig eller utløpt. Be om en ny fra innloggingssiden."
+      "reset_token_invalid": "Lenken for nytt passord er ugyldig eller utløpt. Be om en ny fra innloggingssiden.",
+      "wishlist_shop_url_invalid": "Butikklenken må være en nettadresse, f.eks. https://shop.example/wine.",
+      "bridge_not_connected": "Denne installasjonen er ikke koblet til det felles registeret.",
+      "contribution_wine_ids_invalid": "Velg mellom 1 og {{max}} viner som skal tilbys.",
+      "contribution_already_sent": "Denne vinen er allerede sendt til det felles registeret og blir behandlet der.",
+      "contribution_not_offered": "Denne vinen er ikke tilbudt til det felles registeret.",
+      "blog_language_invalid": "Velg hvilket språk innlegget er skrevet på.",
+      "blog_translation_of_invalid": "Velg originalinnlegget som dette er en oversettelse av.",
+      "blog_translation_of_translation": "En oversettelse må vise til originalinnlegget, ikke til en annen oversettelse.",
+      "blog_translation_same_language": "En oversettelse må være på et annet språk enn originalen.",
+      "blog_translation_exists": "Originalen har allerede en oversettelse på dette språket.",
+      "blog_original_has_translations": "Dette innlegget har egne oversettelser og kan derfor ikke være en oversettelse.",
+      "blog_language_taken_by_translation": "Det finnes allerede en oversettelse av dette innlegget på det språket."
     }
   },
   "auth": {
@@ -557,7 +569,8 @@
       "step3": "Legg de to linjene inn i .env på denne serveren, og start backend på nytt.",
       "hostedSettingsLink": "Åpne innstillingene på cellarion.app",
       "docsLink": "Slik fungerer broen",
-      "errorLoad": "Kunne ikke lese tilkoblingen til registeret."
+      "errorLoad": "Kunne ikke lese tilkoblingen til registeret.",
+      "contributionsLine": "{{used}}/{{cap}} bidrag"
     },
     "aiConnect": {
       "title": "Koble til KI-assistenten din",
@@ -668,7 +681,8 @@
       "deleteBtn": "Slett kontoen min",
       "typeToConfirm": "Skriv <strong>SLETT</strong> for å bekrefte:",
       "scheduling": "Planlegger …",
-      "scheduleBtn": "Planlegg sletting av kontoen"
+      "scheduleBtn": "Planlegg sletting av kontoen",
+      "cancelFailed": "Kunne ikke avbryte slettingen. Prøv igjen."
     },
     "aiActivity": {
       "title": "Nylig KI-aktivitet",
@@ -715,7 +729,34 @@
     "temperatureUnit": "Temperatur",
     "temperatureUnitHint": "Velg hvordan temperaturer vises i serveringsrådene og i klimamålingene fra kjelleren din.",
     "temperatureUnitC": "Celsius (°C)",
-    "temperatureUnitF": "Fahrenheit (°F)"
+    "temperatureUnitF": "Fahrenheit (°F)",
+    "registryContributions": {
+      "title": "Viner opprettet på denne installasjonen",
+      "offerable_one": "Én vin som er opprettet her, finnes ikke i det felles registeret. Du kan tilby den sammen med bildet og de gjennomgåtte drikkevinduene. Den blir gjennomgått på cellarion.app før den kommer inn i registeret. Når den er godkjent, blir vinen din her knyttet til den.",
+      "offerable_other": "{{count}} viner som er opprettet her, finnes ikke i det felles registeret. Du kan tilby dem sammen med bildene og de gjennomgåtte drikkevinduene. Hver vin blir gjennomgått på cellarion.app før den kommer inn i registeret. Når den er godkjent, blir vinen din her knyttet til den.",
+      "offerAll_one": "Bidra med {{count}} vin",
+      "offerAll_other": "Bidra med alle {{count}}",
+      "confirm": "De lastes opp under cellarion.app-kontoen som eier nøkkelen til denne installasjonen, i takt med dagskvoten. En vin som fortsatt venter, kan trekkes tilbake fra siden til vinen.",
+      "confirmSend": "Tilby dem",
+      "queuedNotice_one": "Én vin er tilbudt. Den sendes nå hvis dagens kvote rekker, ellers ved neste kjøring. Den skjer hver time.",
+      "queuedNotice_other": "{{count}} viner er tilbudt. De sendes så langt dagens kvote rekker, og resten følger hver time.",
+      "countQueued_one": "{{count}} venter på å bli sendt",
+      "countQueued_other": "{{count}} venter på å bli sendt",
+      "countSent_one": "{{count}} venter på gjennomgang på cellarion.app",
+      "countSent_other": "{{count}} venter på gjennomgang på cellarion.app",
+      "countDeclined_one": "{{count}} avvist",
+      "countDeclined_other": "{{count}} avvist",
+      "countDuplicate_one": "{{count}} allerede kopiert hit",
+      "countDuplicate_other": "{{count}} allerede kopiert hit",
+      "countFailed_one": "{{count}} ikke godtatt slik den ble sendt",
+      "countFailed_other": "{{count}} ikke godtatt slik de ble sendt",
+      "reasonDuplicate": "godkjent, og denne installasjonen har allerede sin kopi. En administrator kan slå dem sammen",
+      "reasonFailed": "ikke godtatt slik den ble sendt: {{reason}}",
+      "reasonDeclined": "avvist: {{reason}}",
+      "errorLoad": "Kunne ikke lese vinene som er tilbudt til det felles registeret.",
+      "errorOffer": "Kunne ikke tilby vinene nå. Prøv igjen.",
+      "nothingQueued": "Ingenting ble tilbudt: alle viner som er opprettet her, er allerede tilbudt."
+    }
   },
   "climate": {
     "title": "Klima",
@@ -1888,7 +1929,9 @@
       "removeTitle": "Fjern fra køen",
       "removeConfirm": "Ble vinen aldri lansert i {{vintage}}? Da fjernes vinen og årgangen fra køen uten at det settes et drikkevindu. Legger noen til en flaske av denne vinen og årgangen igjen, for eksempel når den faktisk blir lansert, kommer den tilbake i køen av seg selv.",
       "removing": "Fjerner …",
-      "removeError": "Kunne ikke fjerne fra køen"
+      "removeError": "Kunne ikke fjerne fra køen",
+      "suggestionFromInstall": "Foreslått av Cellarion-installasjonen som bidro med denne vinen:",
+      "useSuggestion": "Bruk som utgangspunkt"
     },
     "prices": {
       "title": "Priskø",
@@ -2336,7 +2379,10 @@
     "networkError": "Nettverksfeil",
     "failedUpdateStatus": "Kunne ikke endre statusen",
     "failedRemove": "Kunne ikke fjerne vinen",
-    "failedUpdate": "Kunne ikke lagre endringen"
+    "failedUpdate": "Kunne ikke lagre endringen",
+    "shopUrl": "Butikklenke",
+    "shopUrlPlaceholder": "https://shop.example/wine",
+    "shopLinkAt": "Butikk: {{host}} ↗"
   },
   "addToWishlist": {
     "title": "Legg til på ønskelisten",
@@ -2414,7 +2460,9 @@
     "aiMatchHint": "Denne vinen finnes allerede i registeret, så du lager ikke et duplikat.",
     "aiAddIt": "Ser riktig ut. Legg den til",
     "aiSimilarTitle": "Finnes allerede i registeret. Mente du en av disse?",
-    "demoAiBlocked": "KI-søk etter vin er ikke tilgjengelig i demoen. Opprett en gratis konto for å bruke det."
+    "demoAiBlocked": "KI-søk etter vin er ikke tilgjengelig i demoen. Opprett en gratis konto for å bruke det.",
+    "shopUrl": "Butikklenke",
+    "shopUrlPlaceholder": "Der du så den, f.eks. https://shop.example/wine"
   },
   "onOrder": {
     "linkCount_one": "{{count}} flaske bestilt",
@@ -2562,7 +2610,12 @@
     "closeCamera": "Lukk kameraet",
     "takePhoto": "Ta bilde",
     "switchCamera": "Bytt kamera",
-    "takePhotoButton": "Ta bilde"
+    "takePhotoButton": "Ta bilde",
+    "choosePhoto": "Velg et bilde",
+    "photoUnreadable": "Bildet kunne ikke åpnes. Prøv et annet.",
+    "labelUnreadable": "Kunne ikke lese etiketten. Prøv igjen.",
+    "backLabelUnreadable": "Kunne ikke lese etiketten på baksiden. Prøv igjen.",
+    "scanFailed": "Skanningen mislyktes. Prøv igjen."
   },
   "photoCapture": {
     "removingBackground": "Fjerner bakgrunnen …",
@@ -2746,7 +2799,8 @@
     "backImageLabel": "Etiketten på baksiden",
     "backImageHint": "Etiketten på baksiden oppgir ofte produsent, appellasjon og importør.",
     "backImageNotice": "Etter gjennomgang kan etiketten på baksiden vises blant bildene av vinen i det felles registeret, der alle i Cellarion kan se den.",
-    "linkedWine": "{{wine}} fra {{producer}}"
+    "linkedWine": "{{wine}} fra {{producer}}",
+    "photoUnreadable": "Bildet kunne ikke leses. Prøv et annet bilde, eller send forslaget uten."
   },
   "cellarScope": {
     "title": "Velg hvilke kjellere som skal vises",
@@ -3015,7 +3069,15 @@
     "finish": "Ettersmak",
     "finishPlaceholder": "Beskriv ettersmaken …",
     "update": "Oppdater omtalen",
-    "submit": "Publiser omtalen"
+    "submit": "Publiser omtalen",
+    "shareAsReview": "Del som omtale",
+    "editSharedReview": "Rediger omtalen din",
+    "showMore": "Vis mer",
+    "showLess": "Vis mindre",
+    "cardAroma": "Lukt:",
+    "cardPalate": "Smak:",
+    "cardFinish": "Ettersmak:",
+    "editReview": "Rediger omtalen"
   },
   "discussions": {
     "community": "Fellesskap",
@@ -3139,6 +3201,13 @@
       "recommendations": "Anbefalinger",
       "cellar-tips": "Kjellertips",
       "general": "Generelt"
+    },
+    "confirmBanFor": {
+      "10m": "Vil du utestenge {{name}} fra diskusjonene i 10 minutter?",
+      "1h": "Vil du utestenge {{name}} fra diskusjonene i én time?",
+      "1d": "Vil du utestenge {{name}} fra diskusjonene i ett døgn?",
+      "1w": "Vil du utestenge {{name}} fra diskusjonene i én uke?",
+      "permanent": "Vil du utestenge {{name}} fra diskusjonene for godt?"
     }
   },
   "wineDiscussions": {
@@ -3278,7 +3347,24 @@
     "moreFromRegion_dessert": "Flere dessertviner fra {{region}}",
     "moreFromRegion_fortified": "Flere sterkviner fra {{region}}",
     "windowReviewedTitle": "En sommelier har gått gjennom disse drikkevinduene",
-    "windowShowAll": "Vis alle årganger ({{count}})"
+    "windowShowAll": "Vis alle årganger ({{count}})",
+    "contribution": {
+      "title": "Felles vinregister",
+      "offerable": "Denne vinen er opprettet her og finnes ikke i det felles registeret på cellarion.app. Du kan tilby den sammen med bildet og de gjennomgåtte drikkevinduene. Den blir gjennomgått der før den kommer inn i registeret. Når den er godkjent, blir denne vinen knyttet til den. Flaskene blir stående der de er.",
+      "queued": "Tilbudt til det felles registeret. Den sendes ved neste kjøring hvis dagens kvote rekker. Kjøringen skjer hver time.",
+      "sent": "Sendt til det felles registeret på cellarion.app og venter på gjennomgang. Når den er godkjent, blir denne vinen knyttet til den.",
+      "declined": "Det felles registeret avviste denne vinen: {{reason}}",
+      "failed": "Det felles registeret godtok ikke vinen slik den ble sendt: {{reason}}",
+      "duplicate": "Det felles registeret godkjente denne vinen, men denne installasjonen har allerede en kopi av den. En administrator kan slå dem sammen.",
+      "openCopy": "Åpne kopien i registeret",
+      "offer": "Bidra til det felles registeret",
+      "offerAgain": "Tilby den igjen",
+      "withdraw": "Trekk tilbake",
+      "dismiss": "Lukk",
+      "errorOffer": "Kunne ikke tilby vinen nå. Prøv igjen.",
+      "errorWithdraw": "Det virket ikke. Prøv igjen.",
+      "sending": "Sendes til det felles registeret nå."
+    }
   },
   "taxonomy": {
     "loading": "Laster inn …",
@@ -3376,8 +3462,8 @@
     "featureImportDesc": "Ta med samlingen du har fra før via CSV. Alle bruker det samme vinregisteret, så hver vin er registrert likt og ryddig for alle.",
     "whyTitle": "Derfor velger vinelskere Cellarion",
     "whySub": "Laget rundt det som faktisk betyr noe når du bryr deg om samlingen din.",
-    "whyFreeTitle": "Gratis",
-    "whyFreeDesc": "Alle funksjoner er gratis på cellarion.app. Ingen kredittkort, ingen prøveperiode og ingen popup-vinduer som vil selge deg noe. Vi selger heller ikke reklame.",
+    "whyFreeTitle": "Alle funksjoner gratis",
+    "whyFreeDesc": "Alle funksjoner er gratis på cellarion.app: ingen flaskegrense, ikke noe betalt nivå, ingen kredittkort, ingen prøveperiode og ingen popup-vinduer som vil selge deg noe. Vi selger heller ikke reklame.",
     "whyExportTitle": "Ingen innlåsing",
     "whyExportDesc": "Samlingen er din. Du kan eksportere alt med ett klikk når som helst, også bildene. Slutter du, tar du med deg alle dataene.",
     "whyPrivacyTitle": "Innebygd personvern",
@@ -3394,8 +3480,8 @@
     "footerHelp": "Hjelp",
     "footerTranslate": "Oversett Cellarion",
     "footerCopy": "Cellarion",
-    "metaTitle": "Cellarion: app for vinkjeller | Hold oversikt over vinsamlingen på nett",
-    "metaDescription": "Hold oversikt over vinsamlingen med Cellarion. Registrer hver flaske, se reolene, få varsler om drikkevindu og del kjellere med venner. Gratis app for vinkjelleren på cellarion.app.",
+    "metaTitle": "Gratis vinkjellerapp uten flaskegrense | Cellarion",
+    "metaDescription": "En gratis vinkjellerapp med alle funksjoner: ingen flaskegrense og ikke noe abonnement. Hold oversikt over flaskene og verdien av kjelleren, med reoler i 3D og varsler om drikkevindu.",
     "faqTitle": "Ofte stilte spørsmål",
     "faqSub": "Korte svar om Cellarion, om å holde orden på vinkjelleren og om hvordan du kommer i gang.",
     "faq": {
@@ -3406,7 +3492,7 @@
       "q3": "Hva er et drikkevindu?",
       "a3": "Et drikkevindu er perioden da en vin er på sitt beste, som regel noen år rundt toppen av modenheten. Cellarion plasserer hver årgang i en av fasene «Ikke klar», «Tidlig», «På topp», «Sen» og «På hell» ut fra produsentens opplysninger og data om årgangen. Da vet du hvilke flasker du bør drikke snart, og hvilke du kan la ligge.",
       "q4": "Er Cellarion virkelig gratis?",
-      "a4": "Ja. Alle funksjoner på cellarion.app er gratis: ubegrenset med flasker, kjellere, varsler om drikkevindu, deling med venner og eksport av dataene når du vil. Du blir aldri bedt om kredittkort, ingen grunnfunksjoner er låst bak et betalt nivå, og vi selger verken reklame eller dataene dine.",
+      "a4": "Ja. Alle funksjoner på cellarion.app er gratis, og det er ingen flaskegrense: registrer så mange flasker du vil, sett opp kjellere og reoler i 3D, få varsler om drikkevindu, se verdien og statistikken for kjelleren, koble til KI-assistenten din, del med venner og eksporter dataene dine når du vil. Det finnes ikke noe betalt nivå som låser opp noe, du blir aldri bedt om kredittkort, og vi selger verken reklame eller dataene dine. Medlemmer som vil, kan støtte Cellarion, men støtten låser ikke opp noe.",
       "q5": "Hvordan importerer jeg viner fra Vivino eller CellarTracker?",
       "a5": "Cellarion kan importere CSV-filer. Eksporter samlingen fra Vivino, CellarTracker eller et regneark, og last opp CSV-filen i importverktøyet i Cellarion. Merk at nedlastingen Full wine list fra Vivino er skannehistorikken din, ikke kjelleren. Cellarion oppdager dette og tilbyr å importere den som drikkehistorikk (med vurderinger, omtaler og notater) i stedet for som flasker på lager. Det felles vinregisteret sørger for at hver vin bare finnes én gang, så dataene holder seg ryddige.",
       "q6": "Kan jeg eksportere dataene mine og slutte når jeg vil?",
@@ -4538,8 +4624,16 @@
       "sourceCode": "Kildekode",
       "enterUrl": "Skriv inn lenken:",
       "enterImageUrl": "Skriv inn lenken til bildet:",
-      "enterVideoUrl": "Skriv inn lenken til YouTube-videoen:"
-    }
+      "enterVideoUrl": "Skriv inn lenken til YouTube-videoen:",
+      "language": "Språk",
+      "languageSummary": "Språk: {{language}}",
+      "translationOf": "Oversettelse av",
+      "translationOfNone": "Ingen: dette er originalen",
+      "translationHint": "En oversettelse vises ikke i bloggoversikten. Originalen lenker til den, og søkemotorer viser den til dem som søker på det språket. Den vises aldri som et nytt innlegg i appen."
+    },
+    "alsoIn": "Finnes også på:",
+    "translatedFrom": "Oversatt fra {{language}} med KI.",
+    "readOriginal": "Les originalen"
   },
   "help": {
     "title": "Hjelp og funksjoner",
@@ -4555,7 +4649,7 @@
         "summary": "Lag kjellere for å holde orden på vinsamlingen.",
         "d1": "Opprett en kjeller: trykk på «+ Ny kjeller» på siden «Mine kjellere», og skriv inn et navn.",
         "d2": "Hver kjeller er en egen samling flasker.",
-        "d3": "Åpne en kjeller for å se flaskene. Søk etter navn, produsent, drue eller region, snevre inn listen med «Filtre», og sorter den etter når flasken ble lagt til, navn, årgang, pris, antall flasker eller modenhet.",
+        "d3": "Åpne en kjeller for å se flaskene. Søk etter navn, produsent, drue eller region, snevre inn listen med «Filtre», og sorter den etter når flasken ble lagt til, navn, årgang, pris, antall flasker eller modenhet. Søket finner også en flaske etter tekst og listeverdier under «Mer data» i vinoppføringen og i «Egne vindata».",
         "d4": "Fanene øverst i kjelleren bytter mellom visningene: «Flasker», «Oversikt», «Reoler», «Romvisning», «Historikk» og «Kjellerbok». «Oversikt» viser antall flasker og viner, totalverdien og snittprisen.",
         "d5": "Menyen ⋮ øverst til høyre har handlingene for kjelleren: «Rediger kjeller», «Velg farge», «Del», «Vinlister», «Importer flasker», «Eksporter», «Endringslogg», «Nylig slettet» og «Slett kjeller». Noen av dem er bare for den som eier kjelleren."
       },
