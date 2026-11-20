@@ -540,12 +540,17 @@ describe('owner side', () => {
 
   describe('listInquiriesForRecipient', () => {
     const C1 = oid('3');
-    // Where the caller's bottle is: Cellar.find → select → lean, Bottle.find → select → lean.
-    const places = ({ cellars = [], bottles = [] } = {}) => {
+    const C2 = oid('4');
+    // Where a bottle of the wine is: Cellar.find → select → lean; the recorded
+    // bottles by id (Bottle.find → select → lean); the newest bottle on a shelf
+    // per wine (Bottle.aggregate, one group per wine).
+    const places = ({ cellars = [], recorded = [], newest = [] } = {}) => {
       Cellar.find.mockReturnValue({ select: jest.fn(() => ({ lean: async () => cellars })) });
-      Bottle.find.mockReturnValue({ select: jest.fn(() => ({ lean: async () => bottles })) });
+      Bottle.find.mockReturnValue({ select: jest.fn(() => ({ lean: async () => recorded })) });
+      Bottle.aggregate.mockResolvedValue(newest);
     };
     beforeEach(() => places());
+    const withPlaces = { withPlaces: true };
 
     test('projects ONLY the caller recipient entry — never the other recipients, their ids or answers', async () => {
       WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
@@ -602,21 +607,23 @@ describe('owner side', () => {
       expect(WineOwnerInquiry.find).toHaveBeenCalledTimes(1);
     });
 
-    test('each row names the cellar and vintage of the caller\'s own bottle, in two queries for the whole list', async () => {
+    test('each row names the cellar and vintage of the recorded bottle while it is on a shelf, in three queries for the whole list', async () => {
       const I2 = oid('d');
       WineOwnerInquiry.find.mockReturnValue(findChain([
         row(),
         row({ _id: I2, recipients: [{ user: ME, bottle: oid('7'), response: null }, { user: OTHER, bottle: oid('6'), response: null }] }),
       ]));
       places({
-        cellars: [{ _id: C1, name: 'Summer house' }],
-        bottles: [
-          { _id: oid('5'), cellar: C1, vintage: '2016', status: 'active' },
-          { _id: oid('7'), cellar: C1, vintage: 'NV', status: 'active' },
+        cellars: [{ _id: C1, name: 'Summer house' }, { _id: C2, name: 'Flat' }],
+        recorded: [
+          { _id: oid('5'), wineDefinition: WINE, cellar: C1, vintage: '2016' },
+          { _id: oid('7'), wineDefinition: WINE, cellar: C1, vintage: 'NV' },
         ],
+        // A newer bottle of the wine elsewhere does not displace the recorded one.
+        newest: [{ _id: WINE, cellar: C2, vintage: '2020' }],
       });
 
-      const out = await listInquiriesForRecipient(ME);
+      const out = await listInquiriesForRecipient(ME, withPlaces);
 
       expect(out.map((r) => [r._id, r.cellar, r.vintage])).toEqual([
         [I1, { _id: C1, name: 'Summer house' }, '2016'],
@@ -625,51 +632,130 @@ describe('owner side', () => {
       expect(Cellar.find).toHaveBeenCalledTimes(1);
       expect(Cellar.find).toHaveBeenCalledWith({ $or: [{ user: ME }, { 'members.user': ME }], deletedAt: null });
       expect(Bottle.find).toHaveBeenCalledTimes(1);
-      // Only the caller's own bottles, only in cellars they can open — the
-      // other recipient's bottle is never even read.
-      expect(Bottle.find).toHaveBeenCalledWith({ _id: { $in: [oid('5'), oid('7')] }, cellar: { $in: [C1] } });
+      expect(Bottle.aggregate).toHaveBeenCalledTimes(1);
+      // Only the caller's recorded bottles, only of the list's wines, only on a
+      // shelf in cellars they can open — the other recipient's bottle is never
+      // even read.
+      const byId = Bottle.find.mock.calls[0][0];
+      expect(byId._id).toEqual({ $in: [oid('5'), oid('7')] });
+      expect(byId.wineDefinition.$in.map(String)).toEqual([WINE]);
+      expect(byId.cellar).toEqual({ $in: [C1, C2] });
+      expect(byId.status).toEqual({ $nin: NOT_IN_CELLAR_STATUSES });
+      // The fallback is one bottle per wine (the newest on a shelf), however
+      // many the member holds.
+      const pipeline = Bottle.aggregate.mock.calls[0][0];
+      expect(pipeline[0].$match).toEqual({ wineDefinition: byId.wineDefinition, cellar: byId.cellar, status: byId.status });
+      expect(pipeline[1]).toEqual({ $sort: { createdAt: -1, _id: -1 } });
+      expect(pipeline[2].$group._id).toBe('$wineDefinition');
+      expect(pipeline).toHaveLength(3);
       const raw = JSON.stringify(out);
       expect(raw).not.toContain(oid('6'));
       expect(raw).not.toContain(OTHER);
     });
 
-    test('a bottle that is gone, or in a deleted cellar or one the caller cannot open, gives cellar and vintage null', async () => {
+    test('the recorded bottle drunk, deleted or out of reach: the newest bottle of the wine on a shelf names the place', async () => {
+      WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
+      // The recorded bottle no longer matches (drunk, deleted, or in a cellar
+      // the caller cannot open): the query by id finds nothing.
+      places({
+        cellars: [{ _id: C1, name: 'Summer house' }, { _id: C2, name: 'Flat' }],
+        recorded: [],
+        newest: [{ _id: WINE, cellar: C2, vintage: '2019' }],
+      });
+
+      const [view] = await listInquiriesForRecipient(ME, withPlaces);
+
+      expect(view).toMatchObject({ cellar: { _id: C2, name: 'Flat' }, vintage: '2019' });
+      expect(String(view.bottle)).toBe(oid('5')); // the recorded bottle itself is not rewritten
+    });
+
+    test('a recorded bottle re-linked to another wine does not place the question: a bottle of the inquiry\'s wine does, or nothing', async () => {
+      const OTHER_WINE = oid('e');
+      WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
+      const relinked = { _id: oid('5'), wineDefinition: OTHER_WINE, cellar: C1, vintage: '2016' };
+
+      places({
+        cellars: [{ _id: C1, name: 'Summer house' }, { _id: C2, name: 'Flat' }],
+        recorded: [relinked],
+        newest: [{ _id: WINE, cellar: C2, vintage: '2018' }],
+      });
+      let [view] = await listInquiriesForRecipient(ME, withPlaces);
+      expect(view).toMatchObject({ cellar: { _id: C2, name: 'Flat' }, vintage: '2018' });
+
+      // No other bottle of the inquiry's wine on a shelf: no place, and not the
+      // re-linked bottle's cellar or vintage.
+      places({ cellars: [{ _id: C1, name: 'Summer house' }], recorded: [relinked], newest: [{ _id: OTHER_WINE, cellar: C1, vintage: '2016' }] });
+      [view] = await listInquiriesForRecipient(ME, withPlaces);
+      expect(view).toMatchObject({ cellar: null, vintage: null });
+    });
+
+    test('no bottle of the wine on a shelf the caller can open gives cellar and vintage null', async () => {
       WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
 
-      // Gone: no bottle comes back.
-      places({ cellars: [{ _id: C1, name: 'Summer house' }], bottles: [] });
-      let [view] = await listInquiriesForRecipient(ME);
+      places({ cellars: [{ _id: C1, name: 'Summer house' }], recorded: [], newest: [] });
+      let [view] = await listInquiriesForRecipient(ME, withPlaces);
       expect(view).toMatchObject({ cellar: null, vintage: null });
 
-      // Its cellar is deleted or not shared with the caller: not among the
-      // cellars they can open, so nothing about it is named.
-      places({ cellars: [{ _id: C1, name: 'Summer house' }], bottles: [{ _id: oid('5'), cellar: oid('9'), vintage: '2016', status: 'active' }] });
-      [view] = await listInquiriesForRecipient(ME);
-      expect(view).toMatchObject({ cellar: null, vintage: null });
-
-      // No cellar they can open at all: the bottle is not looked up.
+      // No cellar they can open at all: no bottle is looked up.
       places({ cellars: [] });
       Bottle.find.mockClear();
-      [view] = await listInquiriesForRecipient(ME);
+      Bottle.aggregate.mockClear();
+      [view] = await listInquiriesForRecipient(ME, withPlaces);
       expect(view).toMatchObject({ cellar: null, vintage: null });
       expect(Bottle.find).not.toHaveBeenCalled();
+      expect(Bottle.aggregate).not.toHaveBeenCalled();
     });
 
-    test('a bottle off the shelf (drunk, on order) keeps its vintage but names no cellar', async () => {
-      WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
-      for (const status of ['drank', 'ordered']) {
-        places({ cellars: [{ _id: C1, name: 'Summer house' }], bottles: [{ _id: oid('5'), cellar: C1, vintage: '2016', status }] });
-        const [view] = await listInquiriesForRecipient(ME);
-        expect(view).toMatchObject({ cellar: null, vintage: '2016' });
-      }
-    });
-
-    test('rows without a bottle of the caller cost no place queries', async () => {
+    test('a row with no recorded bottle is placed by the wine; a row with no wine costs no query', async () => {
       WineOwnerInquiry.find.mockReturnValue(findChain([row({ recipients: [{ user: ME, bottle: null, response: null }] })]));
-      const [view] = await listInquiriesForRecipient(ME);
-      expect(view).toMatchObject({ bottle: null, cellar: null, vintage: null });
+      places({ cellars: [{ _id: C1, name: 'Summer house' }], newest: [{ _id: WINE, cellar: C1, vintage: '2016' }] });
+      let [view] = await listInquiriesForRecipient(ME, withPlaces);
+      expect(view).toMatchObject({ bottle: null, cellar: { _id: C1, name: 'Summer house' }, vintage: '2016' });
+      expect(Bottle.find).not.toHaveBeenCalled(); // no recorded bottle to look up by id
+
+      Cellar.find.mockClear();
+      Bottle.aggregate.mockClear();
+      WineOwnerInquiry.find.mockReturnValue(findChain([row({ wineDefinition: null })]));
+      [view] = await listInquiriesForRecipient(ME, withPlaces);
+      expect(view).toMatchObject({ wine: null, cellar: null, vintage: null });
+      expect(Cellar.find).not.toHaveBeenCalled();
+      expect(Bottle.aggregate).not.toHaveBeenCalled();
+    });
+
+    test('places are opt-in: the one-wine card and the MCP list run no place query and carry no place', async () => {
+      WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
+      for (const opts of [undefined, { wineId: WINE }]) {
+        const [view] = await listInquiriesForRecipient(ME, opts);
+        expect(view).not.toHaveProperty('cellar');
+        expect(view).not.toHaveProperty('vintage');
+      }
       expect(Cellar.find).not.toHaveBeenCalled();
       expect(Bottle.find).not.toHaveBeenCalled();
+      expect(Bottle.aggregate).not.toHaveBeenCalled();
+    });
+
+    test('an inquiry another owner answered still reads open to a recipient who has not; their own answer reads answered', async () => {
+      // Stored 'answered' because OTHER replied (row() carries OTHER's answer).
+      WineOwnerInquiry.find.mockReturnValue(findChain([row({ status: 'answered' })]));
+      let [view] = await listInquiriesForRecipient(ME);
+      expect(view).toMatchObject({ status: 'open', responded: false });
+      expect(JSON.stringify(view)).not.toContain('answered');
+
+      WineOwnerInquiry.find.mockReturnValue(findChain([row({
+        status: 'answered',
+        recipients: [{ user: ME, bottle: oid('5'), response: 'Says E. Pira', respondedAt: new Date('2026-08-03') }],
+      })]));
+      [view] = await listInquiriesForRecipient(ME);
+      expect(view).toMatchObject({ status: 'answered', responded: true });
+
+      // Resolved passes through (only an answerer sees it at all).
+      WineOwnerInquiry.find.mockReturnValue(findChain([row({
+        status: 'resolved',
+        resolvedAt: new Date('2026-08-10'),
+        recipients: [{ user: ME, bottle: oid('5'), response: 'Says E. Pira' }],
+      })]));
+      [view] = await listInquiriesForRecipient(ME);
+      expect(view.status).toBe('resolved');
     });
   });
 
@@ -733,6 +819,13 @@ describe('owner side', () => {
       const filter = WineOwnerInquiry.findOne.mock.calls[0][0];
       expect(filter).toMatchObject({ _id: I1, 'recipients.user': ME });
       expect(filter.$or.map((o) => o.status)).toEqual(['answered', 'open', 'resolved']);
+    });
+
+    test('an inquiry another owner answered reads open to a recipient who has not answered', async () => {
+      WineOwnerInquiry.findOne.mockReturnValue(findOneChain(row({ status: 'answered' })));
+      cellars([]);
+      const res = await inquiryForRecipient(ME, I1);
+      expect(res.inquiry).toMatchObject({ status: 'open', responded: false });
     });
 
     test('no bottle left → link null, the question still answerable on its own page', async () => {

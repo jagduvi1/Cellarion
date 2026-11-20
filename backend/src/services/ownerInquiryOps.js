@@ -70,10 +70,10 @@ const visibleFor = (now) => ([
 
 /**
  * The caller's RECIPIENT view of their inquiries: question, wine, THEIR
- * bottle (its `vintage` and the `cellar` it sits in, see withBottlePlaces)
- * and THEIR response state only. Callers: GET /api/owner-inquiries/mine (the
- * questions page and the bottle card) and the MCP tool
- * list_curator_questions. Returns rows newest first, capped at 50.
+ * bottle and THEIR response state only (see recipientRow). Callers: GET
+ * /api/owner-inquiries/mine (the questions page with places; the bottle card
+ * scoped to one wine) and the MCP tool list_curator_questions. Returns rows
+ * newest first, capped at 50.
  *
  * Other recipients' identities and answers never leave the server here — an
  * owner must not learn who else owns the wine (privacy). `resolutionNote` is
@@ -84,8 +84,11 @@ const visibleFor = (now) => ([
  * @param {object} [opts]
  * @param {string} [opts.wineId]  narrow to one wine; an invalid id yields []
  *   rather than a cast error (what the BottleDetail card asks)
+ * @param {boolean} [opts.withPlaces]  also give each row the `cellar` and
+ *   `vintage` of a bottle of the wine on the caller's shelf (withBottlePlaces).
+ *   Off by default: it costs more queries, and only the questions page shows it.
  */
-async function listInquiriesForRecipient(userId, { wineId } = {}) {
+async function listInquiriesForRecipient(userId, { wineId, withPlaces = false } = {}) {
   const filter = {
     'recipients.user': userId,
     $or: visibleFor(new Date()),
@@ -104,44 +107,58 @@ async function listInquiriesForRecipient(userId, { wineId } = {}) {
   const views = rows
     .filter((i) => recipientMaySee(i, userId))
     .map((i) => recipientRow(i, userId));
-  return withBottlePlaces(userId, views);
+  return withPlaces ? withBottlePlaces(userId, views) : views;
 }
 
 // Cellars the caller can open: live ones they own or are a member of.
 const reachableCellars = (userId) => ({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null });
 
-// Where the caller's own bottle of each inquiry is, so a member with cellars
-// in different places knows where to go and read the label. Two queries for
-// the whole list, whatever its length. Only the caller's bottles and cellars
-// are read, never another recipient's. A bottle that is gone, or sits in a
-// cellar the caller can no longer open, gives cellar and vintage null. One
-// they can open that is not on the shelf (drunk, given away, sold, or still
-// on order) keeps its vintage but names no cellar: there is no label to read
-// there.
+// Where the member can go and read the label: a bottle OF THE INQUIRY'S WINE
+// on a shelf in a cellar they can open. The bottle that made them a recipient
+// while it still is one (it may since have been drunk, deleted or re-linked to
+// another wine), else their newest such bottle of the wine; with none, cellar
+// and vintage are null. Three queries for the whole list, whatever its length.
+// Only cellars the caller can open are searched and the inquiry's other
+// recipients are never read, so a place says nothing about who else was asked.
 async function withBottlePlaces(userId, views) {
-  const bottleIds = [...new Set(views.map((v) => v.bottle).filter(Boolean).map(String))];
-  let cellarById = new Map();
-  let bottleById = new Map();
-  if (bottleIds.length) {
-    const cellars = await Cellar.find(reachableCellars(userId)).select('name').lean();
-    cellarById = new Map(cellars.map((c) => [String(c._id), c]));
-    if (cellars.length) {
-      const bottles = await Bottle.find({ _id: { $in: bottleIds }, cellar: { $in: cellars.map((c) => c._id) } })
-        .select('cellar vintage status')
-        .lean();
-      bottleById = new Map(bottles.map((b) => [String(b._id), b]));
-    }
-  }
+  const noPlace = (v) => ({ ...v, cellar: null, vintage: null });
+  const wineIds = [...new Set(views.map((v) => v.wine?._id).filter(Boolean).map(String))];
+  if (!wineIds.length) return views.map(noPlace);
+  const cellars = await Cellar.find(reachableCellars(userId)).select('name').lean();
+  if (!cellars.length) return views.map(noPlace);
+
+  // Object ids by hand: an aggregate $match is not cast by Mongoose.
+  const onShelf = {
+    wineDefinition: { $in: wineIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    cellar: { $in: cellars.map((c) => c._id) },
+    status: { $nin: NOT_IN_CELLAR_STATUSES },
+  };
+  const recordedIds = [...new Set(views.map((v) => v.bottle).filter(Boolean).map(String))];
+  const [recorded, newest] = await Promise.all([
+    recordedIds.length
+      ? Bottle.find({ _id: { $in: recordedIds }, ...onShelf }).select('wineDefinition cellar vintage').lean()
+      : [],
+    // One bottle per wine however many the member holds: the answer is
+    // bounded by the list's wines, not by the size of their cellar.
+    Bottle.aggregate([
+      { $match: onShelf },
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $group: { _id: '$wineDefinition', cellar: { $first: '$cellar' }, vintage: { $first: '$vintage' } } },
+    ]),
+  ]);
+
+  const cellarById = new Map(cellars.map((c) => [String(c._id), c]));
+  const recordedById = new Map(recorded.map((b) => [String(b._id), b]));
+  const newestByWine = new Map(newest.map((b) => [String(b._id), b]));
   return views.map((v) => {
-    const bottle = v.bottle ? bottleById.get(String(v.bottle)) : null;
+    if (!v.wine) return noPlace(v);
+    const wineId = String(v.wine._id);
+    const own = v.bottle ? recordedById.get(String(v.bottle)) : null;
+    // A recorded bottle re-linked to another wine is not a bottle of this one.
+    const bottle = (own && String(own.wineDefinition) === wineId ? own : null) || newestByWine.get(wineId);
     const cellar = bottle ? cellarById.get(String(bottle.cellar)) : null;
-    if (!cellar) return { ...v, cellar: null, vintage: null };
-    const onShelf = !NOT_IN_CELLAR_STATUSES.includes(bottle.status);
-    return {
-      ...v,
-      cellar: onShelf ? { _id: cellar._id, name: cellar.name } : null,
-      vintage: bottle.vintage || null,
-    };
+    if (!cellar) return noPlace(v);
+    return { ...v, cellar: { _id: cellar._id, name: cellar.name }, vintage: bottle.vintage || null };
   });
 }
 
@@ -150,12 +167,15 @@ const recipientMaySee = (i, userId) => i.status !== 'resolved'
   || (i.recipients || []).some((r) => String(r.user) === String(userId) && r.response);
 
 // The recipient's view of one inquiry: their own row only, never other
-// recipients' answers.
+// recipients' answers. The stored 'answered' means SOMEONE answered; to a
+// recipient who has not, it would say another owner replied, so they see
+// 'open' until they answer themselves. 'resolved' and 'closed' pass through:
+// neither says whether anyone answered.
 function recipientRow(i, userId) {
   const mine = (i.recipients || []).find((r) => String(r.user) === String(userId));
   return {
     _id: i._id,
-    status: i.status,
+    status: i.status === 'answered' && !mine?.response ? 'open' : i.status,
     question: i.question,
     wine: i.wineDefinition
       ? { _id: i.wineDefinition._id, name: i.wineDefinition.name, producer: i.wineDefinition.producer || null }
