@@ -163,7 +163,7 @@ async function placeBottleInRack(rack, position, bottleId, req) {
     }
     throw err;
   }
-  logAudit(req, 'rack.slot_assign', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { position: pos });
+  logAudit(req, 'rack.slot_assign', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { position: pos, bottleId: id, ...(displaced ? { displaced } : {}) });
   return { rack, displaced, previousPosition, position: pos };
 }
 
@@ -192,7 +192,7 @@ async function clearRackSlot(rack, position, req) {
     }
     throw err;
   }
-  logAudit(req, 'rack.slot_clear', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { position: pos });
+  logAudit(req, 'rack.slot_clear', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { position: pos, ...(had ? { bottleId: String(had.bottle) } : {}) });
   return { rack, cleared: had ? String(had.bottle) : null };
 }
 

@@ -19,6 +19,29 @@ const STATS_CHANGED_PREFIXES = ['bottle.', 'cellar.'];
 // which token polls read from memory (release audit 2026-10-09, L).
 const DATA_CHANGED_PREFIXES = [...STATS_CHANGED_PREFIXES, 'rack.', 'climate.'];
 
+// Rack changes send their own event, racks_changed: where bottles are has
+// changed, the statistics have not. A racking session is hundreds of
+// placements and a stream client refreshes on every event, so a user hears of
+// the first change at once and then at most once per RACK_NUDGE_MS while the
+// changes go on (the last one is always announced).
+const RACK_PREFIX = 'rack.';
+const RACK_NUDGE_MS = 30 * 1000;
+const rackNudges = new Map(); // userId -> { again: action | null }
+function nudgeRacks(userId, action) {
+  const key = String(userId);
+  const quiet = rackNudges.get(key);
+  if (quiet) { quiet.again = action; return; }
+  eventBus.emit(key, 'racks_changed', { reason: action });
+  const state = { again: null };
+  rackNudges.set(key, state);
+  const timer = setTimeout(() => {
+    rackNudges.delete(key);
+    if (state.again) nudgeRacks(key, state.again);
+  }, RACK_NUDGE_MS);
+  // Never hold the process open for a pending nudge.
+  timer.unref?.();
+}
+
 // Invalidate a user's MCP read caches on any wine-data mutation (grand-audit
 // M3). Lazy-required so these MCP modules stay off audit's load path (they pull
 // the tool registry, whose search dep is ESM-only and unparseable by jest —
@@ -71,7 +94,10 @@ function logAudit(req, action, resource = {}, detail = {}) {
     actor: {
       userId:    req?.user?.id    || null,
       role:      req?.user?.roles?.[0]  || (req ? 'anonymous' : 'system'),
-      ipAddress: getClientIp(req)
+      ipAddress: getClientIp(req),
+      // Set by middleware/apiTokenAuth.js, and carried by an MCP session's
+      // request snapshot (mcp/requestSnapshot.js).
+      ...(req?.apiToken?.id ? { tokenId: req.apiToken.id } : {})
     },
     action,
     resource,
@@ -115,10 +141,12 @@ function logAudit(req, action, resource = {}, detail = {}) {
     // served the old answer (grand-audit M3). Lazy-require keeps the MCP
     // modules off audit's load path. Same owner-resolution as the push below.
     const statsChanged = STATS_CHANGED_PREFIXES.some(p => action.startsWith(p));
+    const racksChanged = action.startsWith(RACK_PREFIX);
     const touch = (userId) => {
       bumpDataVersion(userId);
       bustMcpCaches(userId);
       if (statsChanged) eventBus.emit(userId, 'stats_changed', { reason: action });
+      if (racksChanged) nudgeRacks(userId, action);
     };
     touch(entry.actor.userId);
 

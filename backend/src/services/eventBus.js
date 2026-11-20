@@ -34,7 +34,16 @@ const DEBOUNCE_MS = 2000;
 const streams = new Map();
 // userId -> pending debounce timer
 const timers = new Map();
+// userId -> Map<event name, data>: what the pending timer will deliver
+const pending = new Map();
 let totalStreams = 0;
+
+/** Drop a user's pending nudge without delivering it. */
+function cancelPending(key) {
+  clearTimeout(timers.get(key));
+  timers.delete(key);
+  pending.delete(key);
+}
 
 // userId -> Set<fn(event, data)> — in-process listeners (MCP session
 // subscriptions, plan §4). They ride the same per-user debounce as the SSE
@@ -58,9 +67,11 @@ function safeEnd(res) {
 
 /**
  * Queue an event for all of a user's open streams, debounced per user so a
- * 50-bottle import produces one nudge, not 50. Within the window the LAST
- * event wins — clients refresh everything on any event, so coalescing loses
- * nothing.
+ * 50-bottle import produces one nudge, not 50. Within the window each event
+ * NAME is delivered once, with its latest data, in the order the names first
+ * came. A stream client refreshes on any event, but an in-process listener
+ * acts on the name (mcp/server.js EVENT_RESOURCE_MAP), so one kind of event
+ * must never swallow another.
  */
 function emit(userId, event, data = {}) {
   const key = String(userId);
@@ -68,18 +79,25 @@ function emit(userId, event, data = {}) {
   const fns = listeners.get(key);
   if ((!set || set.size === 0) && (!fns || fns.size === 0)) return;
 
+  let events = pending.get(key);
+  if (!events) { events = new Map(); pending.set(key, events); }
+  events.set(event, data);
+
   clearTimeout(timers.get(key));
   const timer = setTimeout(() => {
     timers.delete(key);
+    pending.delete(key);
     const current = streams.get(key);
-    if (current) {
-      const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-      for (const entry of current) safeWrite(entry.res, frame);
-    }
     const currentFns = listeners.get(key);
-    if (currentFns) {
-      for (const fn of currentFns) {
-        try { fn(event, data); } catch { /* one bad listener must not break the fan-out */ }
+    for (const [name, payload] of events) {
+      if (current) {
+        const frame = `event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`;
+        for (const entry of current) safeWrite(entry.res, frame);
+      }
+      if (currentFns) {
+        for (const fn of currentFns) {
+          try { fn(name, payload); } catch { /* one bad listener must not break the fan-out */ }
+        }
       }
     }
   }, DEBOUNCE_MS);
@@ -90,7 +108,7 @@ function emit(userId, event, data = {}) {
 
 /**
  * Register an in-process listener for one user's events (same debounce as the
- * SSE streams; within a window the LAST event wins). Returns an unsubscribe
+ * SSE streams; within a window one of each event name). Returns an unsubscribe
  * function. Listener counts are NOT capped here — callers (MCP sessions) have
  * their own session caps.
  */
@@ -158,8 +176,7 @@ function unregister(userId, res) {
   }
   if (set.size === 0) {
     streams.delete(key);
-    clearTimeout(timers.get(key));
-    timers.delete(key);
+    cancelPending(key);
   }
 }
 
@@ -181,8 +198,7 @@ function dropUser(userId) {
     totalStreams--;
   }
   streams.delete(key);
-  clearTimeout(timers.get(key));
-  timers.delete(key);
+  cancelPending(key);
 }
 
 /** Force-close the streams a specific (revoked) API token authenticated. */
@@ -201,8 +217,7 @@ function dropToken(tokenId) {
     }
     if (set.size === 0) {
       streams.delete(key);
-      clearTimeout(timers.get(key));
-      timers.delete(key);
+      cancelPending(key);
     }
   }
 }
@@ -228,6 +243,7 @@ function closeAll({ retryMs = 10000 } = {}) {
   }
   streams.clear();
   timers.clear();
+  pending.clear();
   totalStreams = 0;
 }
 

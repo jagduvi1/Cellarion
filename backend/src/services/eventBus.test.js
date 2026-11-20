@@ -41,6 +41,22 @@ describe('emit (debounce + coalesce)', () => {
     expect(res.written[0]).toBe('event: stats_changed\ndata: {"reason":"cellar.import"}\n\n');
   });
 
+  test('two kinds of event in one window are two frames, in the order they first came', () => {
+    const res = mockRes();
+    eventBus.register('u1', res);
+    eventBus.emit('u1', 'stats_changed', { reason: 'bottle.add' });
+    eventBus.emit('u1', 'racks_changed', { reason: 'rack.slot_assign' });
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(res.written).toEqual([
+      'event: stats_changed\ndata: {"reason":"bottle.add"}\n\n',
+      'event: racks_changed\ndata: {"reason":"rack.slot_assign"}\n\n',
+    ]);
+    // Nothing is left over for the next window.
+    eventBus.emit('u1', 'notification', { id: 'n1' });
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(res.written).toHaveLength(3);
+  });
+
   test('emits after the window produce a new frame', () => {
     const res = mockRes();
     eventBus.register('u1', res);
@@ -169,13 +185,17 @@ describe('in-process listeners (MCP sessions, plan §4)', () => {
     expect(got).toEqual([['notification', { id: 'n1' }]]);
   });
 
-  test('within a window the LAST event wins (coalesced like streams)', () => {
+  test('within a window each event name arrives once: one kind never swallows another', () => {
     const got = [];
-    eventBus.addListener('u1', (event) => got.push(event));
-    eventBus.emit('u1', 'stats_changed', {});
-    eventBus.emit('u1', 'notification', {});
+    eventBus.addListener('u1', (event, data) => got.push([event, data]));
+    eventBus.emit('u1', 'stats_changed', { reason: 'bottle.add' });
+    eventBus.emit('u1', 'racks_changed', { reason: 'rack.slot_assign' });
+    eventBus.emit('u1', 'stats_changed', { reason: 'bottle.update' });
     jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
-    expect(got).toEqual(['notification']);
+    expect(got).toEqual([
+      ['stats_changed', { reason: 'bottle.update' }],
+      ['racks_changed', { reason: 'rack.slot_assign' }],
+    ]);
   });
 
   test('a throwing listener does not break other listeners or streams', () => {

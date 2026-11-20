@@ -155,7 +155,8 @@ describe('placeBottleInRack', () => {
       { _id: { $ne: 'r1' }, cellar: 'c1', 'slots.bottle': 'b1' },
       { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } }
     );
-    expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_assign', expect.anything(), { position: 5 });
+    // The row names the bottle and the one it pushed out, not only the slot.
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_assign', expect.anything(), { position: 5, bottleId: 'b1', displaced: 'bOccupant' });
   });
 
   test('VersionError on save → conflict (optimistic concurrency)', async () => {
@@ -217,7 +218,7 @@ describe('clearRackSlot', () => {
     const res = await clearRackSlot(r, 5, REQ);
     expect(res.cleared).toBe('b1');
     expect(r.slots).toEqual([]);
-    expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_clear', expect.anything(), { position: 5 });
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_clear', expect.anything(), { position: 5, bottleId: 'b1' });
   });
 
   test('an empty slot of the rack is fine; a position the rack does not have is refused and nothing is saved', async () => {

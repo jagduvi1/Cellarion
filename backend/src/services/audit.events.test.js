@@ -108,19 +108,71 @@ describe('logAudit → data version (services/dataVersion, the REST read caches)
 
   // The offline copy holds the racks, and its 304 check reads this version
   // (routes/offline): a placement it can't see would keep a device's rack
-  // view stale. Racks don't change statistics, so no stats_changed push.
+  // view stale. Racks don't change statistics, so no stats_changed push; they
+  // send racks_changed, to the actor and to the cellar's owner.
   test.each(['rack.slot_assign', 'rack.slot_move', 'rack.slot_clear', 'rack.create', 'rack.delete'])(
-    '%s moves the version of the actor and the cellar owner, without a stats push',
+    '%s moves the version of the actor and the cellar owner and sends racks_changed, never a stats push',
     async (action) => {
       const cellarId = 'b'.repeat(24);
-      Cellar.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ user: 'dv-rack-owner' }) }) });
-      const actor = getDataVersion('dv-rack-member');
-      const owner = getDataVersion('dv-rack-owner');
-      logAudit(reqFor('dv-rack-member'), action, { type: 'rack', id: 'r1', cellarId }, {});
+      // Ids of their own per action: a user who just heard of a rack change is not told again at once.
+      const member = `dv-rack-member-${action}`;
+      const ownerId = `dv-rack-owner-${action}`;
+      Cellar.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ user: ownerId }) }) });
+      const actor = getDataVersion(member);
+      const owner = getDataVersion(ownerId);
+      logAudit(reqFor(member), action, { type: 'rack', id: 'r1', cellarId }, {});
       await new Promise(r => setImmediate(r)); // the owner lookup is fire-and-forget
-      expect(getDataVersion('dv-rack-member')).not.toBe(actor);
-      expect(getDataVersion('dv-rack-owner')).not.toBe(owner);
-      expect(eventBus.emit).not.toHaveBeenCalled();
+      expect(getDataVersion(member)).not.toBe(actor);
+      expect(getDataVersion(ownerId)).not.toBe(owner);
+      expect(eventBus.emit).not.toHaveBeenCalledWith(expect.anything(), 'stats_changed', expect.anything());
+      expect(eventBus.emit).toHaveBeenCalledWith(member, 'racks_changed', { reason: action });
+      expect(eventBus.emit).toHaveBeenCalledWith(ownerId, 'racks_changed', { reason: action });
     },
   );
+});
+
+describe('racks_changed during a racking session', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+  const sent = (userId) => eventBus.emit.mock.calls.filter(([u, e]) => u === userId && e === 'racks_changed');
+
+  test('the first change is told at once, the rest at most once per quiet window, and the last one always', () => {
+    const user = 'rack-session';
+    for (let i = 0; i < 40; i++) logAudit(reqFor(user), 'rack.slot_assign', { type: 'rack' }, {});
+    logAudit(reqFor(user), 'rack.slot_clear', { type: 'rack' }, {});
+    expect(sent(user)).toHaveLength(1);
+
+    jest.advanceTimersByTime(30000);
+    expect(sent(user)).toHaveLength(2);
+    expect(sent(user)[1][2]).toEqual({ reason: 'rack.slot_clear' });
+
+    // Nothing more happened: silence, and no timer left behind.
+    jest.advanceTimersByTime(30000);
+    expect(sent(user)).toHaveLength(2);
+    expect(jest.getTimerCount()).toBe(0);
+
+    // A change after the quiet window is told at once again.
+    logAudit(reqFor(user), 'rack.slot_move', { type: 'rack' }, {});
+    expect(sent(user)).toHaveLength(3);
+  });
+
+  test('one member in a session does not delay the first change of another', () => {
+    logAudit(reqFor('rack-a'), 'rack.slot_assign', { type: 'rack' }, {});
+    logAudit(reqFor('rack-b'), 'rack.slot_assign', { type: 'rack' }, {});
+    expect(sent('rack-a')).toHaveLength(1);
+    expect(sent('rack-b')).toHaveLength(1);
+  });
+});
+
+describe('who made the change', () => {
+  const AuditLog = require('../models/AuditLog');
+
+  test('a request that came with an API token is stamped on the row; a signed-in session is not', () => {
+    const tokenId = 'a'.repeat(24);
+    logAudit({ ...reqFor('u1'), apiToken: { id: tokenId, scopes: ['write'] } }, 'bottle.move.out', { type: 'bottle' }, {});
+    expect(AuditLog.create.mock.calls[0][0].actor).toMatchObject({ userId: 'u1', tokenId });
+
+    logAudit(reqFor('u1'), 'bottle.move.out', { type: 'bottle' }, {});
+    expect(AuditLog.create.mock.calls[1][0].actor).not.toHaveProperty('tokenId');
+  });
 });
