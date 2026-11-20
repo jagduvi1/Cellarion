@@ -3,7 +3,7 @@
  * address: /help#onOrder opens that section (pages/Help).
  */
 export const SECTION_KEYS = [
-  'cellars', 'bottles', 'vintagePage', 'openBottle', 'labelScan', 'barcode',
+  'cellars', 'bottles', 'notesAndReviews', 'vintagePage', 'openBottle', 'labelScan', 'barcode',
   'onOrder', 'selectMode', 'recentlyDeleted', 'sharing', 'racks', 'roomView',
   'pickLists', 'wineLists', 'wishlist', 'restock', 'journal', 'recommendations',
   'cellarChat', 'analytics', 'dashboard', 'community', 'wineRequests', 'import',
