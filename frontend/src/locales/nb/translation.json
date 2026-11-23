@@ -402,7 +402,7 @@
     "rackNavAuto": "Automatisk (datamaskin: 3D-rom, mobil: reol)",
     "rackNavRoom": "Alltid 3D-rom",
     "rackNavRack": "Alltid flat reol",
-    "restockScope": "Omfang for påfyllsvarsler",
+    "restockScope": "Kjellere for påfyllsvarsler",
     "restockScopeHint": "Når vi sjekker om du har lignende viner etter at du har tatt ut en flaske, skal vi se i alle kjellerne dine eller bare i den flasken kom fra?",
     "restockScopeAll": "Alle kjellere (standard)",
     "restockScopeCellar": "Bare samme kjeller",
@@ -422,7 +422,7 @@
       "push": "Push",
       "drinkWindow": "Varsler om drikkevindu",
       "communityReply": "Svar på og sitater av innleggene dine",
-      "communityMention": "@omtaler",
+      "communityMention": "Når noen nevner deg (@)",
       "communityFollow": "Aktivitet i tråder du følger",
       "supportReply": "Svar på henvendelsene dine",
       "ownerInquiry": "Spørsmål fra kuratorer om vinene dine",
@@ -490,7 +490,7 @@
       "errorWrongPassword": "Passordet er feil.",
       "errorRateLimited": "For mange forsøk. Vent noen minutter og prøv igjen.",
       "scope_write": "skrive",
-      "scopeDesc_write": "Skrive (KI-agent): la en tilkoblet KI legge til, redigere og organisere flasker via MCP. Dette er den bredeste tilgangen, så gi den bare til en assistent du stoler på.",
+      "scopeDesc_write": "Skrive: flytte flasker mellom kjellerne dine og mellom plasser i reolene via API-et. Dette er den bredeste tilgangen. Det samme tokenet lar også en tilkoblet KI legge til, redigere og slette flasker, reoler og kjellere, endre profilen din og eksportere kontodataene dine via MCP. Gi tilgangen bare til noe du stoler på.",
       "developersLink": "Lager du en integrasjon? Les API-veiledningen for utviklere",
       "scopesHelpLink": "Hva hver tillatelse gir tilgang til, og bruksvilkårene (API-veiledningen åpnes i en ny fane)",
       "deprecatedUse_one": "Kaller fortsatt et endepunkt som API-tokener ikke kan bruke fra {{date}}:",
@@ -690,7 +690,7 @@
       "hintNoWindow": "Endringer som en tilkoblet KI-assistent (eller et API-token med avgrenset tilgang) har gjort i kjelleren din.",
       "byToken": "via API-token",
       "bySession": "fra økten din",
-      "tagUndo": "angring",
+      "tagUndo": "angret",
       "tagReverted": "tilbakestilt",
       "revertBtn": "Tilbakestill",
       "revertTitle": "Tilbakestill denne endringen",
@@ -738,7 +738,7 @@
       "offerAll_other": "Bidra med alle {{count}}",
       "confirm": "De lastes opp under cellarion.app-kontoen som eier nøkkelen til denne installasjonen, i takt med dagskvoten. En vin som fortsatt venter, kan trekkes tilbake fra siden til vinen.",
       "confirmSend": "Tilby dem",
-      "queuedNotice_one": "Én vin er tilbudt. Den sendes nå hvis dagens kvote rekker, ellers ved neste kjøring. Den skjer hver time.",
+      "queuedNotice_one": "Én vin er tilbudt. Den sendes nå hvis dagens kvote rekker, ellers ved neste kjøring, som skjer hver time.",
       "queuedNotice_other": "{{count}} viner er tilbudt. De sendes så langt dagens kvote rekker, og resten følger hver time.",
       "countQueued_one": "{{count}} venter på å bli sendt",
       "countQueued_other": "{{count}} venter på å bli sendt",
@@ -748,8 +748,8 @@
       "countDeclined_other": "{{count}} avvist",
       "countDuplicate_one": "{{count}} allerede kopiert hit",
       "countDuplicate_other": "{{count}} allerede kopiert hit",
-      "countFailed_one": "{{count}} ikke godtatt slik den ble sendt",
-      "countFailed_other": "{{count}} ikke godtatt slik de ble sendt",
+      "countFailed_one": "{{count}} ble ikke godtatt",
+      "countFailed_other": "{{count}} ble ikke godtatt",
       "reasonDuplicate": "godkjent, og denne installasjonen har allerede sin kopi. En administrator kan slå dem sammen",
       "reasonFailed": "ikke godtatt slik den ble sendt: {{reason}}",
       "reasonDeclined": "avvist: {{reason}}",
@@ -821,7 +821,7 @@
     }
   },
   "supporter": {
-    "title": "Cellarion er gratis og har åpen kildekode. Dette holder det i gang.",
+    "title": "Cellarion er gratis og har åpen kildekode. Slik holdes det i gang.",
     "subtitle": "Alle funksjoner er gratis for alle, for alltid. Ingen betalingsmur, ingenting er låst. Men serverne og KI-en bak appen koster ekte penger. Har Cellarion fått en plass i kjelleren din, er du hjertelig velkommen til å spleise på regningen.",
     "yourTier": "Støttenivået ditt nå:",
     "expires": "Gyldig til:",
@@ -964,7 +964,7 @@
     "sortQuantityMost": "Flest flasker først",
     "sortQuantityFewest": "Færrest flasker først",
     "sortMaturity": "Modenhet (drikk snart→senere)",
-    "allMaturity": "All modenhet",
+    "allMaturity": "Alle modenhetsfaser",
     "maturityLabel": "Modenhet",
     "needsAttention": "Bør drikkes snart",
     "needsAttentionHint": "Sen og på hell",
@@ -1055,7 +1055,7 @@
     "chipConsumed": "Tatt ut: {{value}}",
     "chipStatus": "Status: {{value}}",
     "statusLabels": {
-      "active": "Aktiv",
+      "active": "I kjelleren",
       "consumed": "Tatt ut",
       "all": "Alle",
       "drank": "Drukket",
@@ -1117,7 +1117,7 @@
     "undoPourBtn": "Angre glasset",
     "finishBtn": "Ta ut flasken …",
     "undoOpenBtn": "Åpnet ved en feil?",
-    "undoOpenHint": "Fjerner åpnet-statusen og alle glass som er skjenket",
+    "undoOpenHint": "Gjør flasken uåpnet igjen og fjerner glassene som er skjenket",
     "partialOption": "Bare et glass. Behold flasken",
     "partialOr": "eller ta den ut av kjelleren:",
     "partialConfirmBtn": "Åpne og skjenk et glass",
@@ -1184,7 +1184,7 @@
       "absoluteCap": "Uvanlig høyt. Det er over det vanlige maksimumet på {{cap}} {{currency}} per flaske. Sjekk prisen før du lagrer.",
       "userOutlier": "{{ratio}} ganger høyere enn en vanlig flaske hos deg ({{median}} {{currency}}). Kan det være en skrivefeil?",
       "aboveMarket": "{{ratio}} ganger den registrerte markedsprisen ({{marketPrice}} {{currency}}) for denne vinen og årgangen.",
-      "possiblyCents": "Ser ut som øre. Mente du {{ifCents}} {{currency}}, deler du på 100."
+      "possiblyCents": "Ser ut som øre. Del på 100 hvis du mente {{ifCents}} {{currency}}."
     },
     "stepSelectWine": "Velg vin",
     "stepBottleDetails": "Detaljer om flasken",
@@ -1458,7 +1458,11 @@
       "submit_one": "Legg til {{count}} flaske",
       "submit_other": "Legg til {{count}} flasker",
       "success_one": "Én ny flaske er lagt til i kjelleren. Den har ingen plass ennå. Plasser den fra kjellersiden når du vil.",
-      "success_other": "{{count}} nye flasker er lagt til i kjelleren. De har ingen plass ennå. Plasser dem fra kjellersiden når du vil."
+      "success_other": "{{count}} nye flasker er lagt til i kjelleren. De har ingen plass ennå. Plasser dem fra kjellersiden når du vil.",
+      "vintageLabel": "Årgang",
+      "vintageHint": "Endre året for å legge til en annen årgang av denne vinen.",
+      "successOtherVintage_one": "Én flaske av årgang {{vintage}} er lagt til i kjelleren. Den har ingen plass ennå. Plasser den fra kjellersiden når du vil.",
+      "successOtherVintage_other": "{{count}} flasker av årgang {{vintage}} er lagt til i kjelleren. De har ingen plass ennå. Plasser dem fra kjellersiden når du vil."
     },
     "backToVintage": "Tilbake til årgangen",
     "barcode": "Strekkode",
@@ -1525,7 +1529,8 @@
       "replyTitle": "En kurator har svart om denne vinen",
       "replyIntro": "Du svarte på et spørsmål om denne vinen, og her ser du hva det førte til. Takk: det felles registeret er riktigere fordi du sjekket.",
       "yourAnswer": "Svaret ditt",
-      "curatorReply": "Svaret fra kuratoren"
+      "curatorReply": "Svaret fra kuratoren",
+      "answerAbout": "Svaret ditt om {{wine}}"
     },
     "provenanceAiTitle": "Skrevet av KI ut fra navn og produsent. Et utgangspunkt, ikke en fasit",
     "provenanceCuratorTitle": "En sommelier har bekreftet denne profilen",
@@ -1794,7 +1799,7 @@
     "saveRack": "Lagre reolen",
     "overlapWarning": "Modulene overlapper. Flytt dem fra hverandre før du lagrer.",
     "nfcLink": "NFC-brikke",
-    "nfcLinked": "NFC koblet",
+    "nfcLinked": "NFC-brikke koblet til",
     "disableSlot": "Merk som ubrukbar",
     "enableSlot": "Gjør brukbar igjen",
     "disabledSlotTitle": "Plass {{position}}: ubrukbar",
@@ -1822,9 +1827,10 @@
     "moveMode": {
       "button": "Flytt",
       "hint": "Trykk på plassen du vil flytte {{name}} til",
-      "otherRackHint": "til en annen reol: åpne fanen for den først",
+      "otherRackHint": "skal den til en annen reol, åpner du fanen for den først",
       "otherRackFilled": "I en annen reol må du velge en tom plass. Flasker kan bare bytte plass innenfor samme reol."
-    }
+    },
+    "addNewHere": "Legg til en ny flaske her"
   },
   "serving": {
     "label": "Servering",
@@ -1857,7 +1863,7 @@
       "servingTempMinAria": "Serveringstemperatur, nedre grense (°C)",
       "servingTempMaxAria": "Serveringstemperatur, øvre grense (°C)",
       "needsAir": "Trenger lufting som ung",
-      "needsAirHint": "Flaskesiden gjør dette om til «dekanter», «åpne en halvtime før» eller «skjenk forsiktig» ut fra årgangens fase den dagen siden leses. Skriv aldri serveringsråd i smaksnotatet.",
+      "needsAirHint": "Flaskesiden gjør dette om til «dekanter», «åpne en halvtime før» eller «skjenk forsiktig» ut fra hvilken fase årgangen er i den dagen siden vises. Skriv aldri serveringsråd i smaksnotatet.",
       "needsAirValue": {
         "long": "Lang: dekanter én til to timer som ung",
         "short": "Kort: har godt av litt lufting",
@@ -2045,13 +2051,13 @@
       "unknown": "Venter på gjennomgang"
     },
     "clickHint": "Tips: trykk på en del av et diagram for å se flaskene, eller på en vin for å åpne den.",
-    "openBottle": "Åpne denne flasken",
+    "openBottle": "Gå til flasken",
     "replacementValue": "Anslått erstatningsverdi",
     "vsPaid": "mot kjøpspris",
     "title": "Statistikk",
     "subtitleFull_one": "Full oversikt over {{cellars}} kjeller · {{countries}} land · {{grapes}} druesorter",
     "subtitleFull_other": "Full oversikt over {{cellars}} kjellere · {{countries}} land · {{grapes}} druesorter",
-    "subtitleFree": "Samlingen din på et blunk",
+    "subtitleFree": "Samlingen din i korte trekk",
     "loading": "Går gjennom samlingen …",
     "emptyTitle": "Kjelleren din er tom",
     "emptyDesc": "Legg til flasker i kjellerne dine for å se statistikken.",
@@ -2102,7 +2108,8 @@
     "maturity": {
       "withProfiles": "Med sommelierprofil: {{count}}",
       "withoutData": "Uten data: {{count}}",
-      "profilesNeeded": "Poengene vises når flaskene har modenhetsprofiler fra en sommelier"
+      "profilesNeeded": "Poengene vises når flaskene har modenhetsprofiler fra en sommelier",
+      "goToSection": "Gå til «{{section}}»"
     },
     "regret": {
       "pastPrime_one": "Én flaske har passert toppen og er fortsatt ikke åpnet.",
@@ -2209,7 +2216,9 @@
       "expectationVsReality": "Forventning og virkelighet",
       "surprisedOrDisappointed": "Når vinene overrasket eller skuffet deg",
       "mostValuableBottles": "De mest verdifulle flaskene",
-      "valueOverTime": "Verdien av samlingen over tid"
+      "valueOverTime": "Verdien av samlingen over tid",
+      "maturityByCellar": "Modenhetsstatus per kjeller",
+      "mostInNeedFirst": "Det som haster mest, først"
     },
     "kpi": {
       "activeBottles": "Flasker i kjelleren",
@@ -2248,7 +2257,13 @@
       "cellar": "I kjelleren",
       "history": "Historikk"
     },
-    "dashboardLink": "Lag egne tabeller og diagrammer under «Analyse» →"
+    "dashboardLink": "Lag egne tabeller og diagrammer under «Analyse» →",
+    "healthNoScore": "–",
+    "maturityByCellar": {
+      "cellar": "Kjeller",
+      "countLink_one": "{{phase}} i {{cellar}}: {{count}} flaske",
+      "countLink_other": "{{phase}} i {{cellar}}: {{count}} flasker"
+    }
   },
   "trash": {
     "menuItem": "Nylig slettet",
@@ -2419,7 +2434,7 @@
     "snapLabel": "Ta et bilde av etiketten",
     "cameraHint": "Ta et bilde av etiketten, så finner vi vinen og legger den på ønskelisten din. Da kan du kjøpe den senere.",
     "startCamera": "Åpne kameraet",
-    "noCameraSearch": "Inget kamera? Søk selv i stedet →",
+    "noCameraSearch": "Har du ikke kamera? Søk selv i stedet →",
     "searchForWine": "Søk etter en vin",
     "useCameraInstead": "← Bruk kameraet i stedet",
     "searchHint": "Vær så nøyaktig som mulig, og ta med navnet på vinen og produsenten.",
@@ -2852,7 +2867,7 @@
   },
   "bulk": {
     "moveAction": "Flytt",
-    "purchaseAction": "Kjøp",
+    "purchaseAction": "Kjøpsinfo",
     "consumeAction": "Ta ut",
     "reserveAction": "Reserver",
     "listAction": "Vinliste",
@@ -3020,11 +3035,11 @@
     "thanksApplied": "Takk. Endringen din er publisert."
   },
   "priceTracking": {
-    "trigger": "Følg markedsprisen",
+    "trigger": "Be om markedspris",
     "triggerRequested": "Du har bedt om markedspris",
     "modalTitle": "Markedspris",
     "statusRequested": "Du har bedt om markedspris for denne vinen",
-    "statusNotRequested": "Følg markedsprisen for denne vinen",
+    "statusNotRequested": "Be om markedspris for denne vinen",
     "hintRequested": "En sommelier finner og legger inn en pris. Du får varsel når den er satt.",
     "hintGuidance": "Det lønner seg bare for flasker med en reell verdi på annenhåndsmarkedet, som Bordeaux Premier Cru, Bourgogne Grand Cru og samleflasker som tåler lagring. Hverdagsviner har sjelden pålitelige markedsdata.",
     "requesterCount_one": "{{count}} annen bruker har også bedt om dette",
@@ -3362,7 +3377,7 @@
       "withdraw": "Trekk tilbake",
       "dismiss": "Lukk",
       "errorOffer": "Kunne ikke tilby vinen nå. Prøv igjen.",
-      "errorWithdraw": "Det virket ikke. Prøv igjen.",
+      "errorWithdraw": "Kunne ikke trekke tilbake vinen. Prøv igjen.",
       "sending": "Sendes til det felles registeret nå."
     }
   },
@@ -3461,7 +3476,7 @@
     "featureImportTitle": "Import og eksport",
     "featureImportDesc": "Ta med samlingen du har fra før via CSV. Alle bruker det samme vinregisteret, så hver vin er registrert likt og ryddig for alle.",
     "whyTitle": "Derfor velger vinelskere Cellarion",
-    "whySub": "Laget rundt det som faktisk betyr noe når du bryr deg om samlingen din.",
+    "whySub": "Laget for det som faktisk betyr noe når du bryr deg om samlingen din.",
     "whyFreeTitle": "Alle funksjoner gratis",
     "whyFreeDesc": "Alle funksjoner er gratis på cellarion.app: ingen flaskegrense, ikke noe betalt nivå, ingen kredittkort, ingen prøveperiode og ingen popup-vinduer som vil selge deg noe. Vi selger heller ikke reklame.",
     "whyExportTitle": "Ingen innlåsing",
@@ -3597,7 +3612,7 @@
     "photographer": "Fotograf",
     "critic": "Kritiker",
     "community": "Samtalepartner",
-    "allrounder": "Allsidig",
+    "allrounder": "Allrounder",
     "score": "Bidragspoeng",
     "explain_contributor": "Får bidragspoeng ved å bidra i fellesskapet: godkjente rettelser i vinregisteret, flaskebilder, omtaler og diskusjoner.",
     "explain_enthusiast": "En erfaren bidragsyter i fellesskapet, med rettelser i vinregisteret, flaskebilder, omtaler og diskusjoner. Det andre nivået.",
@@ -4282,7 +4297,7 @@
       "myRating": "min vurdering",
       "consumedRating": "vurdering ved uttak"
     },
-    "statisticsLink": "Samlingen din på et blunk: Statistikk →"
+    "statisticsLink": "Samlingen din i korte trekk: Statistikk →"
   },
   "imageActions": {
     "deleteTitle": "Slette bildet?",
@@ -4534,8 +4549,8 @@
     "rename": "Gi nytt navn",
     "renameError": "Kunne ikke gi listen nytt navn.",
     "print": "Skriv ut",
-    "drinkPicked_one": "Merk {{count}} plukket som drukket",
-    "drinkPicked_other": "Merk {{count}} plukket som drukket",
+    "drinkPicked_one": "Merk den plukkede flasken som drukket",
+    "drinkPicked_other": "Merk de {{count}} plukkede som drukket",
     "delete": "Slett listen",
     "deleteConfirm": "Slette plukklisten? Flaskene blir stående i kjelleren.",
     "deleteError": "Kunne ikke slette listen.",
@@ -4618,7 +4633,7 @@
       "tagsPlaceholder": "vin, tips, nyheter (skilt med komma)",
       "seoSettings": "Innstillinger for søkemotorer",
       "metaTitle": "Metatittel",
-      "metaTitlePlaceholder": "Tittel for søkemotorer (er tittelen på innlegget hvis feltet er tomt)",
+      "metaTitlePlaceholder": "Tittel for søkemotorer (tittelen på innlegget brukes hvis feltet er tomt)",
       "metaDescription": "Metabeskrivelse",
       "metaDescriptionPlaceholder": "Beskrivelse for søkemotorer …",
       "sourceCode": "Kildekode",
@@ -4724,8 +4739,8 @@
         "summary": "Flytt, ta ut, reserver eller slett mange flasker på én gang.",
         "d1": "Trykk på «Velg» i flaskelisten i kjelleren (eller hold fingeren på en flaske), og kryss av flaskene. Krysser du av for en stabel, blir alle flaskene i den valgt.",
         "d2": "«Velg alle» krysser av alle flaskene som er lastet inn i listen.",
-        "d3": "Velg så en handling: «Flytt» (til en annen kjeller), «Kjøp», «Ta ut», «Reserver», «Drikkevindu», «Vinliste» (legg til på en vinliste) eller «Slett». Har du slått på tidlig tilgang, finnes også «Plukkliste».",
-        "d4": "«Kjøp» og «Drikkevindu» endrer bare det du fyller ut. Det du lar stå tomt, blir som det er på hver flaske.",
+        "d3": "Velg så en handling: «Flytt» (til en annen kjeller), «Kjøpsinfo», «Ta ut», «Reserver», «Drikkevindu», «Vinliste» (legg til på en vinliste) eller «Slett». Har du slått på tidlig tilgang, finnes også «Plukkliste».",
+        "d4": "«Kjøpsinfo» og «Drikkevindu» endrer bare det du fyller ut. Det du lar stå tomt, blir som det er på hver flaske.",
         "d5": "«Ta ut» tar flaskene ut av kjelleren med samme dato. Vurder dem én og én senere i historikken.",
         "d6": "«Reserver» merker flasker som holdt av: fyll ut en person eller anledning, et år eller begge deler. Reserverte flasker tas ikke med i forslag om hva du kan drikke, og «Ta ut» lar dem være i fred hvis du ikke krysser av for «Ta ut de reserverte også».",
         "d7": "«Slett» flytter flaskene til «Nylig slettet». Sletter du ti flasker eller flere, må du skrive inn antallet for å bekrefte. «Angre» henter alle tilbake på én gang.",
@@ -4775,7 +4790,7 @@
         "d2": "Velg en liste, eller «Ny plukkliste …» for å lage en ny og gi den et navn, for eksempel Lørdagsmiddag.",
         "d3": "Listene dine finner du under «Plukklister» i menyen. Hver liste viser hvor alle flaskene står, i den rekkefølgen du går forbi dem.",
         "d4": "Kryss av flaskene mens du plukker dem. «Skriv ut» gir deg et ryddig ark du kan ta med.",
-        "d5": "Knappen «Merk … plukket som drukket» tar alle flaskene du har krysset av, ut av kjelleren på én gang.",
+        "d5": "Knappen «Merk de … plukkede som drukket» tar alle flaskene du har krysset av, ut av kjelleren på én gang.",
         "d6": "Sletter du en liste, blir flaskene stående i kjelleren."
       },
       "wineLists": {
@@ -4874,13 +4889,13 @@
         "d3": "Vurderingsskala: fem stjerner, 20 poeng eller 100 poeng.",
         "d4": "Pushvarsler og enhetene som får dem.",
         "d5": "Profil: brukernavn og e-post.",
-        "d6": "«Frakoblet modus» ligger under «Innstillinger for bruk», og «Prøv nye funksjoner tidlig» under «Tidlig tilgang». Se de egne emnene nedenfor.",
+        "d6": "«Frakoblet modus» ligger under «Tilpasning», og «Prøv nye funksjoner tidlig» under «Tidlig tilgang». Se de egne emnene nedenfor.",
         "d7": "Dataene dine: last ned alt Cellarion lagrer om deg, eller eksporter kjellerne for å ta dem med deg et annet sted."
       },
       "offline": {
         "title": "Bruk uten nett",
         "summary": "Bruk kjelleren der du ikke har nett.",
-        "d1": "Slå det på under Innstillinger → «Innstillinger for bruk» → «Frakoblet modus»: «Ha kjelleren min tilgjengelig uten nett på denne enheten». Den installerte appen spør deg én gang.",
+        "d1": "Slå det på under Innstillinger → «Tilpasning» → «Frakoblet modus»: «Ha kjelleren min tilgjengelig uten nett på denne enheten». Den installerte appen spør deg én gang.",
         "d2": "Enheten tar vare på en kopi av kjellerne, reolene og flaskene dine, så du kan åpne dem uten nett.",
         "d3": "Uten nett kan du ta ut flasker, åpne dem, skjenke et glass, redigere dem og sette dem i eller flytte dem i reolene.",
         "d4": "Et banner viser hvor mange endringer som venter. De sendes når du er på nett igjen. Har kjelleren endret seg i mellomtiden, kan du med «Se gjennom» velge om du vil beholde din endring eller det som står der nå.",
@@ -4912,6 +4927,14 @@
         "d3": "Brukerstøtte (/support): se i «Hjelp» først. Står du fortsatt fast, kan du sende en henvendelse.",
         "d4": "NFC-brikker: fest NFC-brikker på reolene. Holder du telefonen mot en brikke, åpnes reolen rett på telefonen.",
         "d2": "«Støtt oss» (/supporter): alle funksjoner er gratis for alle. Støttespiller (2 dollar i måneden), Mesén (5 dollar i måneden) og Velgjører (10 dollar i måneden) kan også betales årlig. Det er frivillige gaver som finansierer utviklingen, og de låser ikke opp noe ekstra. Et valgfritt beløp eller en engangsgave kan du gi gjennom GitHub Sponsors."
+      },
+      "notesAndReviews": {
+        "title": "Vurderinger, notater, vindagbok og omtaler",
+        "summary": "Fire steder å skrive om en vin, og hvem som ser hva.",
+        "d1": "Vurdering og notater på en flaske: notatene dine om akkurat den flasken. De følger flasken, og alle du deler kjelleren med, ser dem også.",
+        "d2": "Når du drikker en flaske, flyttes vurderingen og notatet du gir den, til historikken i kjelleren. Der kan du se tilbake på hvordan den var.",
+        "d3": "Et innlegg i vindagboken handler om øyeblikket: anledningen, maten, menneskene og hvordan vinen smakte. Bare du kan se innleggene i vindagboken. Gjør du et innlegg offentlig, får bare medlemmene du har merket i det, beskjed om at de er nevnt.",
+        "d4": "En omtale handler om vinen og er for andre medlemmer. Den vises for alle på vinsiden, med mindre du gjør den privat. Når du har drukket en flaske, kan du trykke på «Del som omtale» for å starte en omtale med vurderingen og notatet du allerede har skrevet."
       }
     }
   },
@@ -5360,5 +5383,17 @@
     "title": "Åpne flasker",
     "meta": "≈ {{glasses}} glass · drikk innen {{date}}",
     "unnamed": "Åpen flaske"
+  },
+  "curatorQuestions": {
+    "title": "Spørsmål fra kuratorene",
+    "intro": "Når en vinoppføring trenger opplysninger som bare står på etiketten, spør kuratorene dem som eier vinen. Hvert spørsmål kan besvares én gang.",
+    "waitingTitle": "Venter på svaret ditt",
+    "noCellar": "Ikke i noen av kjellerne dine",
+    "introNoCellar": "Husker du etiketten, eller har du et bilde av den, kan du svare her. Du trenger ikke svare, og bare kuratorene i registeret ser svaret ditt.",
+    "answeredTitle": "Besvart",
+    "openBottle": "Gå til flasken",
+    "empty": "Ingen spørsmål fra kuratorene akkurat nå.",
+    "loadError": "Kunne ikke laste inn spørsmålene dine.",
+    "allLink": "Alle spørsmål fra kuratorene"
   }
 }
