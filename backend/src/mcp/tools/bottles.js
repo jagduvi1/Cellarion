@@ -358,7 +358,7 @@ async function buildBottleDetail(userId, bottleId) {
       reserved: (b.reservedFor || b.reservedUntil != null)
         ? { for: b.reservedFor || null, until: b.reservedUntil ?? null }
         : null,
-      purchase: { date: b.purchaseDate || null, location: b.purchaseLocation || null },
+      purchase: { date: b.purchaseDate || null, location: b.purchaseLocation || null, url: b.purchaseUrl || null },
       // Bought, not delivered yet: not in the cellar, so it cannot be opened,
       // consumed or placed until the user marks it as arrived in the app.
       on_order: b.status === ORDERED_STATUS

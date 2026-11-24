@@ -29,6 +29,7 @@ const { announceMintedWine } = require('../../services/wineCommit');
 const { isValidId } = require('../../utils/validation');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { parseCurrency } = require('../../config/currencies');
+const { isSafeUrl } = require('../../utils/sanitize');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess, wineSummary, FIELD_DESCRIPTIONS,
@@ -99,6 +100,13 @@ registerTool({
   },
 });
 
+// True when a YYYY-MM-DD string names a day that exists: "2026-02-30" has
+// the right shape and is no date.
+function isRealDay(day) {
+  const d = new Date(`${day}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === day;
+}
+
 registerTool({
   name: 'add_bottle',
   title: 'Add a bottle to a cellar (STEP 2)',
@@ -113,7 +121,8 @@ registerTool({
     'by itself after 7 days). Prefer it when the user is still gathering the facts of a wine the registry does not know. ' +
     'on_order:true adds a bottle that is bought but not delivered yet (en primeur, a pre-order, a delivery on its way): it ' +
     'stays out of the cellar counts, racks and suggestions until mark_arrived; expected_arrival is its month (YYYY-MM, ' +
-    'update_bottle changes it). One call adds one bottle — call it again for each further bottle of an order.',
+    'update_bottle changes it). One call adds one bottle — call it again for each further bottle of an order. ' +
+    'Bought in a shop: pass purchase_location (the shop), purchase_url (its page for the wine or the order) and purchase_date.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -125,7 +134,9 @@ registerTool({
     vintage: z.string().max(10).optional().describe('e.g. "2019" or "NV"'),
     price: z.number().min(0).optional(),
     currency: z.string().regex(/^[A-Za-z]{3}$/).optional(),
-    purchase_location: z.string().max(500).optional(),
+    purchase_location: z.string().max(500).optional().describe('Shop, merchant or place bought'),
+    purchase_url: z.string().max(2048).optional().describe('https link to the purchase or product page'),
+    purchase_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Day bought, YYYY-MM-DD (today when left out)'),
     notes: z.string().max(5000).optional(),
     occasion: z.string().max(500).optional(),
     rating: z.number().min(0).max(100).optional(),
@@ -161,6 +172,14 @@ registerTool({
     if (args.on_order === true) {
       const monthCheck = parseExpectedArrival(args.expected_arrival);
       if (!monthCheck.ok) return fail('invalid_input', monthCheck.error);
+    }
+    // And for the purchase link and day, for the same reason. addBottle checks
+    // the link again; nothing after this point checks that the day exists.
+    if (args.purchase_url && !isSafeUrl(args.purchase_url)) {
+      return fail('invalid_input', 'purchase_url must be a valid http or https URL');
+    }
+    if (args.purchase_date !== undefined && !isRealDay(args.purchase_date)) {
+      return fail('invalid_input', `purchase_date "${args.purchase_date}" is not a day in the calendar. Use YYYY-MM-DD.`);
     }
 
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
@@ -247,6 +266,8 @@ registerTool({
       price: args.price,
       currency: args.currency,
       purchaseLocation: args.purchase_location,
+      purchaseUrl: args.purchase_url,
+      purchaseDate: args.purchase_date,
       notes: args.notes,
       occasion: args.occasion,
       rating: args.rating,
