@@ -11,18 +11,14 @@ router.use(requireAuth, requireRole('admin'));
  * wines + discussions indexes from the RUNNING process. (Cellar search runs on
  * MongoDB — services/bottleSearch — so bottles have no index to rebuild.)
  *
- * Why this exists (found testing a prod-copy restore, 2026-07-29): after a
- * mongo restore the boot-time sync skips — the index "looks populated" — and
- * a stale index silently disables the fuzzy dedup net, so users' near-
- * duplicate adds mint duplicates with no error anywhere. The only in-process
- * workaround was renaming a taxonomy country to itself. This is the honest
- * button, and the restore runbook's missing step.
+ * Why this exists: after a mongo restore the boot-time sync skips — the index
+ * "looks populated" — and a stale index silently disables the fuzzy dedup
+ * net, so users' near-duplicate adds mint duplicates with no error anywhere.
+ * This button is the in-process rebuild a restore needs.
  *
- * Discussions joined 2026-08-31: the endpoint predated that index, so "full
- * rebuild" quietly meant two of three. It matters the same way — stored
- * documents only learn a NEW filterable attribute (like the forum `language`
- * field) when re-uploaded, and this button is how a deploy adds one without
- * a MEILI_FORCE_REINDEX restart.
+ * Stored documents only learn a NEW filterable attribute (like the forum
+ * `language` field) when re-uploaded, so this button is also how a deploy
+ * adds one without a MEILI_FORCE_REINDEX restart.
  *
  * Serial on purpose and awaited to completion so the response means "done",
  * not "started" — at the registry's size the whole rebuild is seconds, and
@@ -35,8 +31,8 @@ router.post('/reindex', async (req, res) => {
     }
     // fullSync returns the enqueued Meili task uids — addDocuments is 202 +
     // async task, so without waitForTasks the response would mean "enqueued",
-    // not "searchable", and async indexing failures would be invisible
-    // (audit 2026-07-29). The wait makes the durations honest too.
+    // not "searchable", and async indexing failures would be invisible. The
+    // wait makes the durations honest too.
     // throwOnError: a sync that throws lands in the catch below instead of
     // being logged and reported as done.
     const t0 = Date.now();

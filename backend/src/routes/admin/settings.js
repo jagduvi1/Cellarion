@@ -85,10 +85,8 @@ router.patch('/rate-limits', async (req, res) => {
       requireIntInRange('aiGlobalDailyCap.max', aiGlobalDailyCap.max, 0, 10_000_000);
     }
 
-    // Per-user photo-upload burst. config/rateLimits.js documented this as
-    // "runtime-tunable by SuperAdmin" since it shipped, but it was never in
-    // this handler — the one claim without a lever. Floor 5 keeps a typo from
-    // effectively disabling uploads; window floor matches the other bursts.
+    // Per-user photo-upload burst (config/rateLimits.js). Floor 5 keeps a typo
+    // from effectively disabling uploads; window floor matches the other bursts.
     if (imageUploadBurst !== undefined) {
       requireIntInRange('imageUploadBurst.max',      imageUploadBurst.max,      5,      10_000);
       requireIntInRange('imageUploadBurst.windowMs', imageUploadBurst.windowMs, 60_000, 24 * 60 * 60 * 1000);
@@ -107,19 +105,19 @@ router.patch('/rate-limits', async (req, res) => {
 
     // MCP kill switches (0 = off, 1 = on). enabled=0 shuts the whole AI
     // surface; publicEnabled=0 shuts only the anonymous endpoint.
-    // userMax/ipMax are the protocol-endpoint limits (MCP-audit M8): per-USER
+    // userMax/ipMax are the protocol-endpoint limits: per-USER
     // fair share and the pre-auth per-IP flood guard. Floors keep a typo from
     // effectively bricking the surface (userMax 10 ≈ one short exchange);
     // ipMax must stay well above userMax or one shared egress IP throttles
     // before any user reaches their own allowance.
     // registerMax bounds OAuth Dynamic Client Registration per IP per hour. The
-    // floor is 10 (the old hardcoded value) rather than 0 — dropping it lower
+    // floor is 10 rather than 0 — dropping it lower
     // would block new connections outright rather than merely slow abuse.
     // oauthMax bounds the rest of the OAuth AS per IP per 15 min. Its floor is
     // deliberately high (100): every connected client refreshes its access
     // token at least hourly and a hosted platform does that for its whole user
     // base from one egress IP, so a low value here disconnects real people
-    // mid-conversation — the exact failure the exemption existed to prevent.
+    // mid-conversation — the exact failure the exemption exists to prevent.
     if (mcp !== undefined) {
       requireIntInRange('mcp.enabled',       mcp.enabled,       0, 1);
       requireIntInRange('mcp.publicEnabled', mcp.publicEnabled, 0, 1);
@@ -131,8 +129,8 @@ router.patch('/rate-limits', async (req, res) => {
 
     // The upper bounds are deliberately near the size of the registry: a cap
     // far above it refuses nobody, which is the safety mechanism switched off
-    // by a typo rather than by a decision (audit 2026-09-08).
-    // Registry lockdown (L4): DISTINCT wines per reader per UTC day — the
+    // by a typo rather than by a decision.
+    // Registry lockdown: DISTINCT wines per reader per UTC day — the
     // one number that tells a person browsing from a copier. The anonymous
     // cap refuses for the rest of the day; the member level only puts a
     // reader in the daily report. Floors keep a typo from refusing someone

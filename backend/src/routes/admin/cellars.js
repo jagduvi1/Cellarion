@@ -6,7 +6,7 @@ const WineRequest = require('../../models/WineRequest');
 const { purgeCellarPermanently } = require('../../services/cellarPurge');
 const { logAudit } = require('../../services/audit');
 // The audit entry moves the admin's and the owner's version; the members'
-// cached token lists change too (release audit 2026-10-09, L).
+// cached token lists change too.
 const { bumpDataVersion } = require('../../services/dataVersion');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
@@ -62,9 +62,7 @@ router.post('/:id/restore', async (req, res) => {
     // Capture the cellar's deletion timestamp BEFORE clearing it — the
     // cascade stamped exactly this value on the racks that were live at
     // delete time, so we can restore ONLY those and leave racks the user had
-    // individually deleted earlier (a different, earlier deletedAt) removed
-    // (grand-audit M13). Restoring every deletedAt!=null rack resurrected them
-    // as zombies.
+    // individually deleted earlier (a different, earlier deletedAt) removed.
     const cellarDeletedAt = cellar.deletedAt;
     const restoredName = `RESTORED - ${cellar.name}`;
     cellar.name = restoredName;
@@ -109,8 +107,8 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Deleted cellar not found' });
     }
 
-    // Full cascade (bottles + images + search docs + layout/snapshots/
-    // sessions/shares/wine lists) — shared with the 30-day retention job.
+    // Full cascade (bottles + images + layout/snapshots/sessions/shares/
+    // wine lists) — shared with the 30-day retention job.
     const counts = await purgeCellarPermanently(cellar._id);
 
     logAudit(req, 'cellar.permanent_delete', { cellarId: cellar._id }, {

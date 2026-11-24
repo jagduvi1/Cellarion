@@ -173,11 +173,10 @@ router.put('/:id/resolve', async (req, res) => {
       }
     } else if (createNew && wineData) {
       // Create new wine definition — through the same canonicalization + dedup
-      // probe as every other write surface (this branch used to bypass all of
-      // it and also skipped the appellation tier-strip; dup analysis
-      // 2026-07-22 RC4). A likely duplicate returns 409 with candidates so the
-      // admin links the request to the existing wine instead — or resubmits
-      // with confirmCreate:true after an explicit "create anyway".
+      // probe as every other write surface, appellation tier-strip included.
+      // A likely duplicate returns 409 with candidates so the admin links the
+      // request to the existing wine instead — or resubmits with
+      // confirmCreate:true after an explicit "create anyway".
       const { name, producer, country, region, appellation, grapes, type, colour, image, useRequestPhoto, addBackPhoto } = wineData;
 
       if (!name || !producer || !country) {
@@ -202,10 +201,9 @@ router.put('/:id/resolve', async (req, res) => {
       }
 
       // Image: an explicitly blank field means "no image" — it must NOT fall
-      // back to the requester's value (audit 2026-09 F06-1). Whatever is
-      // stored has to pass the http(s) / own-upload check, so a
-      // protocol-relative or javascript: reference can never reach
-      // WineDefinition.image through an approval.
+      // back to the requester's value. Whatever is stored has to pass the
+      // http(s) / own-upload check, so a protocol-relative or javascript:
+      // reference can never reach WineDefinition.image through an approval.
       //
       // A photo the requester attached is stored inline on the request. It is
       // never copied into the wine record (half a megabyte of text in every
@@ -231,7 +229,7 @@ router.put('/:id/resolve', async (req, res) => {
           return res.status(400).json({ error: 'The photo on the request could not be read. Approve without it, or give a picture link.' });
         }
       }
-      // The back label (#1460) can join the new wine's PUBLIC photos — a
+      // The back label can join the new wine's PUBLIC photos — a
       // gallery photo marked as the back, never the wine's picture. On unless
       // the admin unticks it (addBackPhoto: false), like the front photo; an
       // inline photo only — a link is left on the request, nothing is fetched.
@@ -251,7 +249,7 @@ router.put('/:id/resolve', async (req, res) => {
       // WineDefinition itself rather than going through findOrCreateWine, so
       // the resolver has to be called explicitly or an approved request mints
       // a spelling variant of an already-curated appellation.
-      // A bare Prädikat is not a place — same rule as findOrCreateWine (audit 2026-09-07).
+      // A bare Prädikat is not a place — same rule as findOrCreateWine.
       const pradikatSplit = splitPradikatFromAppellation(appellation, req.body.classification, cleanName);
       const cleanAppellation = await resolveCanonicalAppellation(
         normalizeAppellation(pradikatSplit.appellation)
@@ -282,9 +280,9 @@ router.put('/:id/resolve', async (req, res) => {
         }
       }
 
-      // Same producer gate as the mint chokepoint and the admin POST
-      // (release-audit MED-3): approval builds the row directly and must not
-      // be the one surface that still publishes a place as a producer.
+      // Same producer gate as the mint chokepoint and the admin POST:
+      // approval builds the row directly and must not be the one surface
+      // that publishes a place as a producer.
       {
         const { detectBlockingProducerIssue } = require('../../services/crossFieldScan');
         const blocked = await detectBlockingProducerIssue({ name: cleanName, producer: cleanProducer, appellation: cleanAppellation || '' });
@@ -298,8 +296,8 @@ router.put('/:id/resolve', async (req, res) => {
       // Adopt the registry's existing spelling for this producer, mirroring
       // the mint chokepoint (same-string majority + same-country decoration
       // variants). Approval builds the row directly, so without this the
-      // approve button was one of the surfaces that could still mint a
-      // display split. Fail-open — ambiguity stores the typed spelling.
+      // approve button could mint a display split. Fail-open — ambiguity
+      // stores the typed spelling.
       const { resolveCanonicalProducerSpelling } = require('../../services/producerSpelling');
       const producerToStore = await resolveCanonicalProducerSpelling(
         cleanProducer, normalizeString(cleanProducer), { countryId: String(country) }
@@ -400,10 +398,10 @@ router.put('/:id/resolve', async (req, res) => {
       // The back label joins the gallery: ingested like a member's upload and
       // published at birth (the admin approved it by leaving the box ticked),
       // marked as the back so a reader can tell the faces apart. Born approved
-      // — approving it after the hand-off raced the background-removal worker,
-      // which then settled it 'processed' and out of every gallery (release
-      // audit 2026-10-09, H1). Not the official picture: assignedToWine stays
-      // false. Only for a wine created here, and best-effort, like the front.
+      // — approving it after the hand-off would race the background-removal
+      // worker, which could settle it 'processed' and out of every gallery.
+      // Not the official picture: assignedToWine stays false. Only for a wine
+      // created here, and best-effort, like the front.
       if (addBack && createdHere) {
         try {
           const keepBackground = await hasTransparency(backPhoto);

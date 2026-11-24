@@ -244,7 +244,7 @@ router.put('/appellations/:id', async (req, res) => {
     }
 
     // An absent name leaves it alone (partial update); a PRESENT one is
-    // validated, so a non-string can no longer reach .trim().
+    // validated, so a non-string never reaches .trim().
     if (name !== undefined && name !== null) {
       const nameError = appellationNameError(name);
       if (nameError) return res.status(400).json({ error: nameError });
@@ -253,8 +253,8 @@ router.put('/appellations/:id', async (req, res) => {
     }
     if (region !== undefined) {
       // Clearing (null/'') is always fine; SETTING a region re-validates it
-      // against the appellation's country — update was the easiest drift path,
-      // since a correctly created doc could be re-pointed at any region.
+      // against the appellation's country — otherwise update is the easiest
+      // drift path: a correctly created doc could be re-pointed at any region.
       if (region) {
         const refsError = await appellationRefsError(appellation.country, region);
         if (refsError) return res.status(400).json({ error: refsError });
