@@ -138,6 +138,34 @@ describe('preview', () => {
     expect(item.status).toBe('invalid');
     expect(JSON.stringify(item)).toMatch(/Unsupported currency/);
   });
+
+  // The same three checks add_bottle makes, made here for the same reason: at
+  // apply a new wine is created before the bottle.
+  test.each([
+    ['a link that is not a web address', { purchase_url: 'javascript:alert(1)' }, /purchase_url must be a valid http or https URL/],
+    ['a day that does not exist', { purchase_date: '2026-02-30' }, /purchase_date "2026-02-30" is not a day in the calendar/],
+    ['a size that cannot be read', { bottle_size: 'a big one' }, /bottle_size "a big one" is not a size Cellarion can read/],
+  ])('%s is flagged at preview', async (_label, fields, message) => {
+    ownCellar();
+    const res = await tool('bulk_add').handler({ cellar_id: oid('c'), items: [{ wine_id: oid('f'), ...fields }] }, CTX);
+    const body = parse(res);
+    expect(body.data.plan[0].status).toBe('invalid');
+    expect(body.data.plan[0].error).toMatch(message);
+    expect(body.data.applyable).toBe(false);
+  });
+
+  test('the plan states a size as it will be stored', async () => {
+    ownCellar();
+    findOrCreateWine.mockResolvedValue({ wine: { _id: oid('f'), name: 'Known', producer: 'P', grapes: [] }, created: false });
+    const res = await tool('bulk_add').handler({
+      cellar_id: oid('c'),
+      items: [{ new_wine: NEW, bottle_size: 'Magnum', purchase_location: 'Shop Example', purchase_url: 'https://shop.example/order/1', purchase_date: '2026-11-20' }, { new_wine: NEW }],
+    }, CTX);
+    const { plan } = parse(res).data;
+    expect(plan.map((p) => p.status)).toEqual(['ready', 'ready']);
+    expect(plan[0].bottle_size).toBe('1500ml');
+    expect(plan[1]).not.toHaveProperty('bottle_size');
+  });
 });
 
 describe('apply', () => {
@@ -172,6 +200,35 @@ describe('apply', () => {
     const ledger = McpActionLog.create.mock.calls.at(-1)[0];
     expect(ledger.action).toBe('bulk_add');
     expect(ledger.detail.bottles).toHaveLength(2);
+  });
+
+  test('an item\'s size and where it was bought reach its bottle; an item without them gets none', async () => {
+    const bought = { bottle_size: 'magnum', purchase_location: 'Shop Example', purchase_url: 'https://shop.example/order/1', purchase_date: '2026-11-20' };
+    const preview = () => freshPreview({
+      prev: {
+        cellarId: oid('c'),
+        items: [{ wine_id: oid('f'), vintage: '2019', ...bought }, { wine_id: oid('f'), vintage: '2020' }],
+        plan: [{ index: 0, status: 'ready', wine_id: oid('f') }, { index: 1, status: 'ready', wine_id: oid('f') }],
+      },
+    });
+    McpActionLog.findOne.mockReturnValue(chain(preview()));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(preview());
+    ownCellar();
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Known' }));
+    bottleOps.addBottle
+      .mockResolvedValueOnce({ bottle: { _id: new mongoose.Types.ObjectId(oid('1')) } })
+      .mockResolvedValueOnce({ bottle: { _id: new mongoose.Types.ObjectId(oid('2')) } });
+
+    const body = parse(await tool('bulk_add').handler({ mode: 'apply', preview_id: oid('9') }, CTX));
+    expect(body.data.added_bottle_ids).toHaveLength(2);
+    expect(bottleOps.addBottle.mock.calls[0][2]).toMatchObject({
+      bottleSize: '1500ml', purchaseLocation: 'Shop Example', purchaseUrl: 'https://shop.example/order/1', purchaseDate: '2026-11-20',
+    });
+    const plain = bottleOps.addBottle.mock.calls[1][2];
+    expect(plain.bottleSize).toBeUndefined();
+    expect(plain.purchaseLocation).toBeUndefined();
+    expect(plain.purchaseUrl).toBeUndefined();
+    expect(plain.purchaseDate).toBeUndefined();
   });
 
   // Like add_bottle and the REST mint: a wine the batch creates announces its
