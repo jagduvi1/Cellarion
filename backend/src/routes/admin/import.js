@@ -59,9 +59,9 @@ function mapType(colour, subType, wineTypeCol) {
 /**
  * The colour of a sparkling/dessert/fortified row (utils/wineColour). LWIN
  * states COLOUR beside SUB_TYPE, and mapType spends COLOUR only when the row is
- * still — so "Sparkling" + "Rosé" kept the style and threw the colour away.
- * Falls back to the same rosé-name inference the model hook runs, because the
- * bulk upsert below never reaches that hook (audit 2026-09-19).
+ * still — so without this, "Sparkling" + "Rosé" would keep the style and lose
+ * the colour. Falls back to the same rosé-name inference the model hook runs,
+ * because the bulk upsert below never reaches that hook.
  */
 function mapColour(colour, type, name, producer) {
   if (!isStyleType(type)) return null;
@@ -93,7 +93,7 @@ function lwinVal(v) {
 
 // The appellation as the model hook would store it, for this bulkWrite path,
 // which never reaches the hook: the regulatory mark goes, and a production
-// method on its own is no appellation (#1696).
+// method on its own is no appellation.
 const importAppellation = (raw) => (isProductionMethodOnly(raw) ? null : normalizeAppellation(raw));
 
 /**
@@ -111,12 +111,10 @@ function mapRow(row, format) {
     //
     // parts[0] is only trusted as the producer with THREE OR MORE parts —
     // matching the documented format. A two-part display is as often
-    // "SubRegion, WineName" as "Producer, WineName", and trusting it wrote
-    // "Bordeaux" / "California" / "Tuscany" into the producer field ~45 times
-    // across four import waves (registry audit 2026-07-26, RC-2; the same
-    // split also truncated "…Côtes de Bordeaux" names mid-appellation). A row
-    // left without a producer fails the required-fields check downstream and
-    // lands in the import error report — visible beats corrupted.
+    // "SubRegion, WineName" as "Producer, WineName", and trusting it writes a
+    // region ("Bordeaux", "Tuscany") into the producer field. A row left
+    // without a producer fails the required-fields check downstream and lands
+    // in the import error report — visible beats corrupted.
     if (!producer || !name) {
       const display = lwinVal(row.DISPLAY_NAME);
       if (display) {
@@ -139,7 +137,7 @@ function mapRow(row, format) {
       country: lwinVal(row.COUNTRY),
       region: lwinVal(row.REGION),
       // Same tier-strip as the simple format below and findOrCreateWine —
-      // LWIN SUB_REGION carries "… DOCG"/"DO …" forms too (audit RC-4).
+      // LWIN SUB_REGION carries "… DOCG"/"DO …" forms too.
       appellation: importAppellation(lwinVal(row.SUB_REGION)),
       type: mapType(row.COLOUR, row.SUB_TYPE, null),
       colour: mapColour(row.COLOUR, mapType(row.COLOUR, row.SUB_TYPE, null), name, producer),
@@ -184,7 +182,7 @@ async function getOrCreateCountry(name, userId, cache) {
   // CSV in another language can't mint a duplicate Country document.
   const canonicalName = resolveCountryName(name);
   const normalized = normalizeString(canonicalName);
-  // Mint gate, same as findOrCreateCountry (#836): a CSV cell that is not a
+  // Mint gate, same as findOrCreateCountry: a CSV cell that is not a
   // recognized real-world country must not become a Country document. THROWS
   // rather than returning null — the flush uses bulkWrite, which bypasses the
   // `country: required` validator, so a null here would insert a countryless
@@ -246,18 +244,16 @@ async function getOrCreateAppellation(name, countryId, regionId, userId, cache) 
   const key = `${countryId}:${name.toLowerCase().trim()}`;
   if (cache.has(key)) return cache.get(key);
 
-  // normalizeAppellationKey, NOT normalizeString (release-audit F1/MEDIUM-1,
-  // both auditors independently): every other Appellation creator and every
-  // lookup — the resolver, taxonomyReview, the backfill script — keys with
-  // the hyphen-folding form. normalizeString deletes hyphens without a space
-  // ("Nuits-Saint-Georges" → 'nuitssaintgeorges'), so keying here with it
-  // MISSED every hyphenated curated doc and upserted an invisible twin —
-  // which got worse, not better, once line ~445 started resolving spellings
-  // to their canonical (hyphenated) forms. Country/Region above keep
-  // normalizeString: that IS their collections' convention.
+  // normalizeAppellationKey, NOT normalizeString: every other Appellation
+  // creator and every lookup — the resolver, taxonomyReview, the backfill
+  // script — keys with the hyphen-folding form. normalizeString deletes
+  // hyphens without a space ("Nuits-Saint-Georges" → 'nuitssaintgeorges'), so
+  // keying here with it would miss every hyphenated curated doc and upsert an
+  // invisible twin. Country/Region above keep normalizeString: that IS their
+  // collections' convention.
   const normalized = normalizeAppellationKey(name);
-  // Audit 2026-09 D01-4: the CSV cell is user text feeding two indexes — same
-  // sanitiser and cap as the admin appellation routes (APPELLATION_NAME_MAX).
+  // The CSV cell is user text feeding two indexes: it is sanitised, then cut
+  // to the length the admin appellation routes allow (APPELLATION_NAME_MAX).
   const cleanName = sanitizeTaxonomyName(name).slice(0, 200);
   const doc = await Appellation.findOneAndUpdate(
     { country: countryId, normalizedName: normalized },
@@ -292,12 +288,11 @@ async function resolveImportAppellation(name, cache) {
 
 /**
  * Adopt the registry's spelling for an imported producer, memoized per import
- * run (LWIN dumps repeat a producer across hundreds of rows). The import was
- * the LAST mint surface without this: LWIN's PRODUCER_NAME column drops the
- * estate title that label scans include, so a file row "Philipp Kuhn" minted
- * beside the scan-minted "Weingut Philipp Kuhn" — the exact class the
- * 2026-08-14 consolidation cleaned 130 clusters of. Same contract as every
- * other caller of the resolver: silent, fail-open, never blocks a row.
+ * run (LWIN dumps repeat a producer across hundreds of rows). LWIN's
+ * PRODUCER_NAME column drops the estate title that label scans include, so
+ * without this a file row "Philipp Kuhn" mints beside the scan-minted
+ * "Weingut Philipp Kuhn". Same contract as every other caller of the
+ * resolver: silent, fail-open, never blocks a row.
  * Country-scoped, so the cache key carries the country id.
  */
 async function resolveImportProducer(producer, countryId, cache) {
@@ -459,9 +454,8 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     stats.updated += result.modifiedCount || 0;
     // bulkWrite bypasses every mongoose hook, so rows minted here would be
     // born without the identity invariants (canonicalKey, slug, createdVia)
-    // every other write path guarantees — the one hole the 2026-07-29
-    // registry strategy found in the write paths. Collect the ids of the
-    // rows this flush actually INSERTED and finalize them after the import.
+    // every other write path guarantees. Collect the ids of the rows this
+    // flush actually INSERTED and finalize them after the import.
     for (const id of Object.values(result.upsertedIds || {})) {
       mintedIds.push(id);
     }
@@ -523,9 +517,9 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         // Step-0 name canon, same as findOrCreateWine: this path bulkWrites
         // directly, so without it a producer-embedded name ("Vajra Albe" /
         // producer "Vajra") mints the producer-in-name shape the admin tool
-        // then has to clean up (registry audit 2026-07-26).
+        // then has to clean up.
         mapped.name = canonicalizeWineName(mapped.name, mapped.producer);
-        // Curated-registry resolve, same reason as the name canon: parseRow is
+        // Curated-registry resolve, same reason as the name canon: mapRow is
         // sync so it can only tier-strip, and this path bulkWrites directly
         // instead of going through findOrCreateWine — so without the resolver a
         // CSV column spelling both lands on the wine AND mints a duplicate
@@ -557,12 +551,11 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         const normalizedKey = generateWineKey(mapped.name, mapped.producer, mapped.appellation || '');
         // Resolution moves the dedup key ("… Yecla DO" → "… Yecla"; producer
         // "Philipp Kuhn" → "Weingut Philipp Kuhn"), so a re-import of a file
-        // whose rows this import minted BEFORE a resolver existed would miss
-        // them and upsert twins (release-audit F3). Every (producer,
-        // appellation) combination a resolution moved rides into the upsert
-        // filter's $or so the old rows still match; findOrCreateWine's
-        // sibling net gives every other path this protection, but the
-        // bulkWrite has only its filter.
+        // whose rows were minted under the unresolved spelling would miss them
+        // and upsert twins. Every (producer, appellation) combination a
+        // resolution moved rides into the upsert filter's $or so the old rows
+        // still match; findOrCreateWine's sibling net gives every other path
+        // this protection, but the bulkWrite has only its filter.
         const legacyKeys = [];
         for (const p of new Set([preResolveProducer, mapped.producer])) {
           for (const a of new Set([preResolveAppellation || '', mapped.appellation || ''])) {
@@ -587,8 +580,8 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     }
 
     // Trailing batch. flush() absorbs its own failures (see above), so a
-    // tail-batch failure can no longer discard the accumulated stats or skip
-    // the audit log below.
+    // tail-batch failure cannot discard the accumulated stats or skip the
+    // audit log below.
     await flush();
 
     // Give the freshly minted rows the invariants the bulkWrite skipped.
@@ -624,6 +617,26 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
 });
 
 /**
+ * The upsert filter for one import row. Three identities may name an existing
+ * row: the current dedup key, the PRE-RESOLVE keys (the curated-spelling
+ * resolve moves keys, and a re-import must still match a row minted under the
+ * unresolved spelling rather than upsert a twin), and the LWIN7 (stable
+ * across every spelling change). Pure and exported for tests.
+ */
+function buildUpsertFilter({ normalizedKey, legacyKey, legacyKeys, lwin7 }) {
+  const orKeys = [{ normalizedKey }];
+  // Both spellings accepted: `legacyKey` (single — pinned by tests) and
+  // `legacyKeys` (array: producer and appellation resolution both move the
+  // key, so up to three combinations).
+  const seen = new Set([normalizedKey]);
+  for (const k of [legacyKey, ...(legacyKeys || [])]) {
+    if (k && !seen.has(k)) { seen.add(k); orKeys.push({ normalizedKey: k }); }
+  }
+  if (lwin7) orKeys.push({ 'lwin.lwin7': lwin7 });
+  return orKeys.length > 1 ? { $or: orKeys } : { normalizedKey };
+}
+
+/**
  * Fold a rejected flush bulkWrite into the running stats.
  *
  * An unordered bulkWrite that rejects with MongoBulkWriteError has still
@@ -640,27 +653,6 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
  * @param {object} stats running import stats (mutated)
  * @returns {object|null} the partial BulkWriteResult to credit, or null
  */
-/**
- * The upsert filter for one import row. Three identities may name an existing
- * row: the current dedup key, the PRE-RESOLVE key (release-audit F3 — the
- * curated-spelling resolve moved keys, and a re-import of a file whose rows
- * were minted before the resolver must still match them rather than upsert
- * twins), and the LWIN7 (stable across every spelling change). Pure and
- * exported for tests.
- */
-function buildUpsertFilter({ normalizedKey, legacyKey, legacyKeys, lwin7 }) {
-  const orKeys = [{ normalizedKey }];
-  // Both spellings kept: `legacyKey` (single, the original F3 shape — pinned
-  // by tests) and `legacyKeys` (array, since producer resolution joined
-  // appellation resolution in moving the key: up to three combinations).
-  const seen = new Set([normalizedKey]);
-  for (const k of [legacyKey, ...(legacyKeys || [])]) {
-    if (k && !seen.has(k)) { seen.add(k); orKeys.push({ normalizedKey: k }); }
-  }
-  if (lwin7) orKeys.push({ 'lwin.lwin7': lwin7 });
-  return orKeys.length > 1 ? { $or: orKeys } : { normalizedKey };
-}
-
 function applyBulkWriteError(err, rows, stats) {
   const failRow = (rowIndex, reason) => {
     stats.total--;
@@ -691,10 +683,10 @@ function applyBulkWriteError(err, rows, stats) {
 /**
  * Post-import invariant pass over the rows the bulkWrite INSERTED.
  *
- * bulkWrite runs no mongoose hooks, so without this the LWIN import was the
- * one write path that minted wines with no canonicalKey (invisible to the
- * duplicate-prevention lookup and the collision report), no slug (no public
- * wine page) and no createdVia (unreviewable as a class). Slug collision
+ * bulkWrite runs no mongoose hooks, so without this the LWIN import would
+ * mint wines with no canonicalKey (invisible to the duplicate-prevention
+ * lookup and the collision report), no slug (no public wine page) and no
+ * createdVia (unreviewable as a class). Slug collision
  * handling mirrors the model's pre-save hook (-2/-3 suffix, never overwrite).
  *
  * Per-doc on purpose: only newly inserted rows are processed (a re-import of
@@ -713,15 +705,14 @@ async function finalizeMintedWines(ids) {
       if (!doc) continue;
       doc.canonicalKey = computeCanonicalKey(doc.name, doc.producer, doc.appellation);
       if (!doc.createdVia) doc.createdVia = 'import';
-      // findFreeSlug, NOT a hand-rolled `findOne({ slug })` probe (audit M-5).
-      // This was the FIFTH slug-assignment site and the only one still blind to
-      // previousSlugs: a bare slug probe happily hands an import a slug that
-      // another wine still ANSWERS TO after a rename, and then
+      // findFreeSlug, NOT a hand-rolled `findOne({ slug })` probe: a bare slug
+      // probe is blind to previousSlugs and hands an import a slug that another
+      // wine still ANSWERS TO after a rename, and then
       // `{ $or: [{slug}, {previousSlugs}] }` matches two documents and findOne
       // returns whichever the index reaches first — /wines/<slug> resolving
       // nondeterministically to two different wines. One helper, one definition
-      // of "free" (models/WineDefinition.findFreeSlug), which also ends the
-      // silent fall-through when all 98 suffixes are taken.
+      // of "free" (models/WineDefinition.findFreeSlug), which also never falls
+      // through silently when all 98 suffixes are taken.
       let slugBase = null;
       if (!doc.slug) {
         slugBase = generateWineSlug(doc.name, doc.producer);
@@ -733,8 +724,8 @@ async function finalizeMintedWines(ids) {
       // a concurrent import can win the race — on a unique-index collision,
       // ask findFreeSlug again (the winner is committed by now, so it returns
       // the next genuinely free slug) instead of abandoning the row unfinalized
-      // (audit 2026-07-29 F3: an abandoned row is exactly the invariant hole
-      // this function exists to close). Retry only when WE assigned the slug:
+      // (an abandoned row is exactly the invariant hole this function exists
+      // to close). Retry only when WE assigned the slug:
       // an 11000 on a row that already had one is a different collision
       // (normalizedKey), and mangling its URL would not fix it.
       let attempt = 0;
@@ -765,21 +756,21 @@ async function finalizeMintedWines(ids) {
 
 module.exports = router;
 // mapRow is exported for its unit tests (the DISPLAY_NAME fallback rules are
-// load-bearing — audit RC-2); it is pure and DB-free.
+// load-bearing); it is pure and DB-free.
 module.exports.mapRow = mapRow;
 // finalizeMintedWines exported for its unit tests — the invariant repair is
-// load-bearing (strategy 2026-07-29 R4).
+// load-bearing.
 module.exports.finalizeMintedWines = finalizeMintedWines;
 // applyBulkWriteError exported for its unit tests — the partial-success
 // recovery keeps a mid-batch duplicate-key from discarding up to 499
-// created wines' stats and invariants (audit 2026-08-03 H1).
+// created wines' stats and invariants.
 module.exports.applyBulkWriteError = applyBulkWriteError;
-// resolveImportAppellation exported for its unit tests — parseRow is sync and
+// resolveImportAppellation exported for its unit tests — mapRow is sync and
 // can only tier-strip, so this is the ONLY place the import adopts the curated
 // registry spelling before it both stores the string and mints the taxonomy doc.
 module.exports.resolveImportAppellation = resolveImportAppellation;
-// Test seams for the release-audit F1/F3 fixes: the Appellation-doc keying
-// convention and the legacy-key upsert filter are exactly the kind of quiet
-// contract a refactor breaks without noticing.
+// Test seams: the Appellation-doc keying convention and the legacy-key upsert
+// filter are exactly the kind of quiet contract a refactor breaks without
+// noticing.
 module.exports.getOrCreateAppellation = getOrCreateAppellation;
 module.exports.buildUpsertFilter = buildUpsertFilter;

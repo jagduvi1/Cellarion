@@ -86,11 +86,11 @@ router.patch('/:id', async (req, res) => {
     if (!action) return res.status(400).json({ error: 'action must be approve or deny' });
 
     // Atomically CLAIM the pending request so only the first of two concurrent
-    // approve/deny decisions wins (audit BUG 6: the old findById → check status
-    // → save was a check-then-act race — both admins passed the check, so a
-    // deny could land after an approve and record 'denied' while the approve's
-    // override stayed live on the user). A null result means already-decided
-    // (409) or never-existed (404).
+    // approve/deny decisions wins: findById → check status → save would be a
+    // check-then-act race — both admins pass the check, so a deny could land
+    // after an approve and record 'denied' while the approve's override stays
+    // live on the user. A null result means already-decided (409) or
+    // never-existed (404).
     const now = new Date();
     const decideConflict = async () => {
       const exists = await AiBudgetRequest.exists({ _id: requestId });

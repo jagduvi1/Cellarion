@@ -140,7 +140,7 @@ router.patch('/:id/roles', async (req, res) => {
 
     // A role change is a credential event: force every live push channel to
     // re-authenticate. SSE streams reconnect with fresh claims, and stateful
-    // MCP sessions (which freeze roles at initialize — audit MED-1) are torn
+    // MCP sessions (which freeze roles at initialize) are torn
     // down so a demoted sommelier cannot keep the somm tool surface warm for
     // the session TTL; the client transparently re-initializes.
     eventBus.dropUser(user._id);

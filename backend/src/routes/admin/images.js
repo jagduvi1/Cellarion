@@ -24,13 +24,10 @@ router.get('/', async (req, res) => {
   try {
     const { status } = req.query;
     const { limit, offset, page } = parsePagination(req.query, { limit: 20, maxLimit: 100 });
-    // Label scans are NOT moderation content (audit L-6). They are the private
-    // original frame a user scanned, kept for one purpose — letting a curator
-    // read an unreadable label — and they are never public. Surfacing them here
-    // let an admin approve one as a wine's official image, which sets
-    // assignedToWine and thereby moves it from the DELETE branch of account
-    // deletion to the ANONYMISE branch (services/userDataRegistry): the user's
-    // own photo would outlive their account, reattributed.
+    // Label scans are NOT moderation content. They are the private original
+    // frame a user scanned, kept for one purpose — letting a curator read an
+    // unreadable label — and they are never public: listing them here would
+    // let an admin approve one as a wine's official image.
     const filter = { kind: { $ne: 'label-scan' } };
     const validStatuses = ['uploaded', 'processing', 'processed', 'approved', 'rejected'];
     if (status) {
@@ -82,7 +79,7 @@ router.get('/by-wine', async (req, res) => {
     // An image belongs to a wine directly (wineDefinition) or via its bottle.
     const HAS_FILE = { $or: [{ processedUrl: { $ne: null } }, { originalUrl: { $ne: null } }] };
     const basePipeline = [
-      // kind exclusion: same reason as GET / above (audit L-6).
+      // kind exclusion: same reason as GET / above.
       { $match: { status: { $ne: 'rejected' }, kind: { $ne: 'label-scan' }, ...HAS_FILE } },
       { $lookup: { from: 'bottles', localField: 'bottle', foreignField: '_id', as: '_b' } },
       { $addFields: { effWine: { $ifNull: ['$wineDefinition', { $arrayElemAt: ['$_b.wineDefinition', 0] }] } } },
@@ -183,11 +180,10 @@ router.get('/by-wine', async (req, res) => {
 });
 
 // Dropping a retained original on approval goes through the shared
-// services/imageProcessor.discardOriginal. The processor now discards it right
-// after rembg succeeds, so this only still matters for rows processed before
-// that. The inline unlink that used to live here deleted the file whenever
-// both URLs were set — including a keepBackground row, whose "original" IS the
-// kept file — and left processedUrl pointing at nothing.
+// services/imageProcessor.discardOriginal, never an inline unlink: a
+// keepBackground row's "original" IS the kept file, and deleting it would
+// leave processedUrl pointing at nothing. The processor already discards the
+// original after rembg succeeds, so this only catches a row that still has one.
 
 // Approve, reject, set-official and visibility are services/imageModerationOps
 // — the same code the sommelier's MCP image tools run (mcp/tools/sommImages.js),
@@ -392,11 +388,9 @@ router.put('/:id/assign-to-wine', async (req, res) => {
     if (image.status !== 'approved') {
       return res.status(400).json({ error: 'Only approved images can be assigned to a wine' });
     }
-    // Never a label scan (audit L-6): it is a private frame kept only so a
-    // curator can read an unreadable label. Promoting one to a wine's official
-    // image makes it public AND sets assignedToWine, which moves it out of the
-    // delete branch of account deletion into the anonymise branch, so the
-    // uploader's own photo would outlive their account, reattributed.
+    // Never a label scan: it is a private frame kept only so a curator can
+    // read an unreadable label, and promoting one to a wine's official image
+    // would make it public.
     if (image.kind === 'label-scan') {
       return res.status(400).json({ error: 'A label scan is private curation evidence, not a wine image' });
     }
@@ -426,8 +420,8 @@ router.put('/:id/assign-to-wine', async (req, res) => {
     // Set this image as official. Assigning an image to the public wine page
     // implicitly publishes it, so flip visibility too — otherwise an
     // approved-but-private image would be served as the wine detail/og:image
-    // while GET /api/images/wine/:id still hides it (audit L-7; mirrors
-    // set-official below).
+    // while GET /api/images/wine/:id still hides it (mirrors set-official
+    // below).
     image.assignedToWine = true;
     image.wineDefinition = wineDefId;
     image.visibility = 'public';
@@ -491,7 +485,7 @@ router.put('/:id/set-vintage-official', async (req, res) => {
     if (image.status === 'rejected') {
       return res.status(400).json({ error: 'Rejected images cannot be a vintage\'s photo' });
     }
-    // Never a label scan (audit L-6): private curation evidence, never published.
+    // Never a label scan: private curation evidence, never published.
     if (image.kind === 'label-scan') {
       return res.status(400).json({ error: 'A label scan is private curation evidence, not a wine image' });
     }

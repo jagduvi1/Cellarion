@@ -291,10 +291,10 @@ router.post('/bulk-approve', async (req, res) => {
       }
     }
     // ONE follow-through per wine, after every decision in the batch has
-    // applied. Per-proposal firing let an early proposal's re-enrich race the
-    // later applies on the same wine — the last writer was indeterminate and
-    // a profile could describe an intermediate identity — and spent one
-    // forced AI call per PROPOSAL instead of per wine (audit 2026-08-16).
+    // applied. Firing per proposal would let an early proposal's re-enrich race
+    // the later applies on the same wine — the last writer indeterminate, a
+    // profile describing an intermediate identity — and spend one forced AI
+    // call per PROPOSAL instead of per wine.
     // A wine absorbed by a merge later in the batch fails the re-enrich's
     // findById silently, which is the correct outcome.
     for (const { wine, changed } of followThroughs.values()) {

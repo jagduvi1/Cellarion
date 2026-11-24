@@ -1,5 +1,5 @@
 /**
- * Admin review of the public key vocabulary + suggested values (#985 Slice B).
+ * Admin review of the public key vocabulary + suggested values.
  * Mirrors the admin wine-proposals surface: list the queues, decide rows.
  */
 const express = require('express');

@@ -11,7 +11,7 @@ const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 // A row written straight to the model bypasses services/notifications, which
 // is what moves the recipient's notifications version for the cached token
-// polls (release audit 2026-10-09, L).
+// polls.
 const { bumpNotificationsVersion } = require('../../services/dataVersion');
 const { SUPPORT_CATEGORIES } = require('../../config/constants');
 const featureFlags = require('../../config/featureFlags');

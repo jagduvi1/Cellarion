@@ -72,7 +72,7 @@ router.post('/countries', async (req, res) => {
     const normalizedName = normalizeString(name);
 
     const country = new Country({
-      // Audit 2026-09 D01-1: same cap + control-character strip as Region/Grape.
+      // Same cap + control-character strip as Region/Grape.
       name: sanitizeTaxonomyName(name),
       code: code?.trim().toUpperCase(),
       normalizedName,
@@ -245,8 +245,8 @@ router.post('/regions', async (req, res) => {
 
     const region = new Region({
       // Bounded like every other write path — the display name is stored
-      // separately from normalizedName and was only trimmed, so it could hold
-      // newlines and unbounded length (security audit 2026-08-03).
+      // separately from normalizedName, and trimming alone would let it hold
+      // newlines and unbounded length.
       name: sanitizeTaxonomyName(name),
       normalizedName,
       country,
@@ -587,10 +587,6 @@ router.delete('/grapes/:id', async (req, res) => {
   }
 });
 
-// POST /api/admin/taxonomy/regions/:id/approve — record that a human looked
-// a user-write mint set (strategy 2026-07-29 R3). Approval is its own verb,
-// not a PUT side effect: editing a region to fix a typo must not silently
-// count as "a human vouched for this".
 // ── Display-name translations ────────────────────────────────────────────────
 
 // Only the two taxonomies that genuinely change language. Appellations are
@@ -637,13 +633,17 @@ router.put('/:kind(countries|regions)/:id/translations', async (req, res) => {
   }
 });
 
+// POST /api/admin/taxonomy/regions/:id/approve — record that a human looked
+// at a region a user write minted. Approval is its own verb, not a PUT side
+// effect: editing a region to fix a typo must not silently count as "a human
+// vouched for this".
 router.post('/regions/:id/approve', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const region = await Region.findById(req.params.id);
     if (!region) return res.status(404).json({ error: 'Region not found' });
     // Idempotent like the MCP tool: a second click must not write a second
-    // audit entry for a no-op (audit 2026-07-29, REST/MCP drift).
+    // audit entry for a no-op.
     if (region.reviewedAt) return res.json({ region, already: true });
     // Stamp the review. createdByUser is NEVER cleared: it records where the
     // document came from, which stays true however many people look at it.
@@ -662,8 +662,8 @@ router.post('/regions/:id/approve', async (req, res) => {
 });
 
 // POST /api/admin/taxonomy/grapes/:id/approve — record that a human looked
-// a user-write mint set (bottle-add and import can mint a grape straight
-// into the shared taxonomy). Mirrors the
+// at a grape a user write minted (bottle-add and import can mint a grape
+// straight into the shared taxonomy). Mirrors the
 // regions verb above: approval is its own verb, not a PUT side effect —
 // editing a grape to fix a typo must not silently count as "a human vouched
 // for this". A near-miss mint gets MERGED from the queue instead (the
@@ -692,10 +692,9 @@ router.post('/grapes/:id/approve', async (req, res) => {
 
 // GET /api/admin/taxonomy/regions/duplicate-candidates
 //
-// Regions that are the same place under different names. Built after the Loire
-// was found split across FOUR documents holding 208 wines between them
-// (2026-08-31) — a split nothing surfaced, because the names share almost no
-// characters and the registry's fuzzy wine scan cannot see it.
+// Regions that are the same place under different names. Nothing else
+// surfaces such a split: the names can share almost no characters, and the
+// registry's fuzzy wine scan cannot see it.
 //
 // utils/taxonomyDuplicates explains the rule and why its stop list is short.
 // The output is a PROPOSAL: every cluster is merged by hand through the merge

@@ -16,11 +16,10 @@ const router = express.Router();
 
 router.use(requireAuth, requireRole('admin'));
 
-// The admin side of the Registry Bridge (REGISTRY_LOCKDOWN_PLAN §6; the
-// follow-up to v1.207.0): every key with its owner, install and spend, the
-// readers table the 05:15 report is drawn from, and revocation with a reason
-// the owner is shown. docs/registry-bridge-enforcement.md walks through the
-// decisions this page is meant to support.
+// The admin side of the Registry Bridge: every key with its owner, install and
+// spend, the readers table the 05:15 report is drawn from, and revocation with
+// a reason the owner is shown. docs/registry-bridge-enforcement.md walks
+// through the decisions this page is meant to support.
 //
 // Personal data here is what an admin already sees elsewhere (username,
 // email, the masked address the limiters key on). Nothing about anyone's
@@ -89,8 +88,8 @@ async function readsByReader(days, today, match = {}) {
 router.get('/keys', async (req, res) => {
   try {
     const days = daysParam(req.query.days);
-    // The read counters live for RETENTION_DAYS; asking for 30 or 90 silently
-    // returned a 14-day answer under a 90-day label (audit 2026-09-08).
+    // The read counters live for RETENTION_DAYS: cap the read window there and
+    // report it as readDays, so a 90-day label never sits on 14 days of data.
     const readDays = Math.min(days, READ_RETENTION_DAYS);
     const today = dayKey();
     const revokedSince = new Date(Date.now() - REVOKED_SHOWN_DAYS * 86400e3);

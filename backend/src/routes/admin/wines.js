@@ -122,9 +122,9 @@ router.get('/', async (req, res) => {
     const baseQuery = conditions.length === 0 ? {}
       : conditions.length === 1 ? conditions[0]
       : { $and: conditions };
-    // Users' private drafts are not registry content, not even to an admin
-    // (draft design 2026-09-12) — and this list would otherwise be the id
-    // source for every other admin surface.
+    // Users' private drafts are not registry content, not even to an admin —
+    // and this list would otherwise be the id source for every other admin
+    // surface.
     const query = { ...baseQuery, draft: { $ne: true } };
 
     // When using $text, sort by relevance score first
@@ -157,13 +157,11 @@ router.get('/', async (req, res) => {
 
 // POST /api/admin/wines - Create wine definition
 //
-// This endpoint used to bypass EVERY dedup layer (step-0 strip, sibling match,
-// fuzzy soft zone) and rely on the raw unique key alone, so only verbatim
-// duplicates were stopped (dup analysis 2026-07-22, RC4). It now canonicalizes
-// like every other write surface and probes the shared matcher first; a
-// likely duplicate returns 409 with the candidates so the admin can link or
-// merge instead — or resubmit with confirmCreate:true after an explicit
-// "create anyway".
+// Canonicalizes like every other write surface and probes the shared matcher
+// first (step-0 strip, sibling match, fuzzy soft zone) rather than relying on
+// the raw unique key, which stops only verbatim duplicates. A likely duplicate
+// returns 409 with the candidates so the admin can link or merge instead — or
+// resubmit with confirmCreate:true after an explicit "create anyway".
 router.post('/', async (req, res) => {
   try {
     const { name, producer, country, region, appellation, grapes, type, colour, image, confirmCreate } = req.body;
@@ -175,7 +173,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: `Colour must be one of: ${WINE_COLOURS.join(', ')}` });
     }
     {
-      // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
+      // Refused, not accepted-and-dropped by the model hook.
       const colourErr = colourTypeConflict(type || null, colour);
       if (colourErr) return res.status(400).json({ error: colourErr });
     }
@@ -192,7 +190,7 @@ router.post('/', async (req, res) => {
     // directly, so without the curated-registry lookup an admin create
     // reintroduces the spelling variants the mint chokepoint folds. One
     // resolution serves the dedup probe, the key and the stored field.
-    // A bare Prädikat is not a place — same rule as findOrCreateWine (audit 2026-09-07).
+    // A bare Prädikat is not a place — same rule as findOrCreateWine.
     const pradikatSplit = splitPradikatFromAppellation(appellation, req.body.classification, cleanName);
     const cleanAppellation = await resolveCanonicalAppellation(
       normalizeAppellation(pradikatSplit.appellation)
@@ -225,9 +223,9 @@ router.post('/', async (req, res) => {
 
     // A producer that IS an appellation/region/country/grape/style-term is
     // refused on this deliberate curation surface with the same 400 the mint
-    // chokepoint gives (release-audit MED-3: this route builds the row
-    // directly, so without its own gate an admin could still publish
-    // producer "Sangiovese" here while every other surface refuses it).
+    // chokepoint gives (this route builds the row directly, so without its
+    // own gate an admin could publish producer "Sangiovese" here while every
+    // other surface refuses it).
     {
       const { detectBlockingProducerIssue } = require('../../services/crossFieldScan');
       const blocked = await detectBlockingProducerIssue({ name: cleanName, producer: cleanProducer, appellation: cleanAppellation || '' });
@@ -241,10 +239,9 @@ router.post('/', async (req, res) => {
     // Adopt the registry's existing spelling for this producer (same-string
     // majority + same-country decoration variants), mirroring the mint
     // chokepoint — this branch writes the row directly, so without the call an
-    // admin create was one of the two surfaces that could still mint a
-    // display split ("Weingut Steininger" ×1 beside "Steininger" ×N came from
-    // exactly this hole). Fail-open: on any ambiguity the typed spelling is
-    // stored unchanged.
+    // admin create could mint a display split ("Weingut Steininger" beside
+    // "Steininger"). Fail-open: on any ambiguity the typed spelling is stored
+    // unchanged.
     const { resolveCanonicalProducerSpelling } = require('../../services/producerSpelling');
     const producerToStore = await resolveCanonicalProducerSpelling(
       cleanProducer, normalizeString(cleanProducer), { countryId: String(country) }
@@ -254,9 +251,8 @@ router.post('/', async (req, res) => {
     const normalizedKey = generateWineKey(cleanName, producerToStore, cleanAppellation);
 
     // The image lands on a public page and in every viewer's AuthImage, so it
-    // has to be a real http(s) link or one of our own upload paths (audit
-    // 2026-09 S7-1 / F06-1) — never an inline image (a picture is a file;
-    // POST /:id/image uploads one).
+    // has to be a real http(s) link or one of our own upload paths — never an
+    // inline image (a picture is a file; POST /:id/image uploads one).
     const imageErr = validateImageRef(image, { allowInline: false });
     if (imageErr) return res.status(400).json({ error: `Wine image: ${imageErr}` });
 
@@ -379,10 +375,10 @@ router.use(require('./wineDuplicates'));
 router.use(require('./wineQualityQueues'));
 
 // POST /api/admin/wines/:id/non-wine — quarantine (or restore) a row that is
-// not a wine (spirits/cider/sake; registry audit 2026-07-26, policy: keep,
-// hide). Body: { value: boolean }. The row and its owners' bottles keep
-// working; flagged rows leave the search index (indexWine self-heals), the
-// public taxonomy/OG/sitemap listings and the admin duplicate-scan pools.
+// not a wine (spirits/cider/sake: kept, but hidden). Body: { value: boolean }.
+// The row and its owners' bottles keep working; flagged rows leave the search
+// index (indexWine self-heals), the public taxonomy/OG/sitemap listings and
+// the admin duplicate-scan pools.
 router.post('/:id/non-wine', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -399,8 +395,8 @@ router.post('/:id/non-wine', async (req, res) => {
     // Self-healing index sync: indexWine removes flagged rows, re-adds restored ones.
     searchService.indexWine(wine._id);
     // The vectors too: a quarantined row's embeddings would keep it in
-    // semantic search and the similar-wines graph (audit 2026-10-14). A
-    // restore re-embeds the vintages in cellars, as a promotion does.
+    // semantic search and the similar-wines graph. A restore re-embeds the
+    // vintages in cellars, as a promotion does.
     if (req.body.value === true) await purgeSourceVectors(wine._id);
     else if (wasNonWine) reembedActiveVintages(wine._id).catch(() => {});
 
@@ -456,15 +452,14 @@ router.post('/:id/profile-reviewed', async (req, res) => {
     // A HELD profile + an admin review = the human override the hold was
     // waiting for: regenerate and PUBLISH (the suspect flag stays on the row
     // as provenance). The review stamp lands ONLY when the publish succeeds
-    // (inside releaseHeldProfile) — stamping first, as v1.116.0 did, hid the
-    // row from the queue forever when the AI call failed, because the
-    // outstanding filter compares reviewedAt to generatedAt and the
-    // incremental job skips held rows by design (audit 2026-08-16). On
-    // failure the row simply stays in the queue for another click. If the
-    // admin instead agrees the identity is wrong, the fix is the wine editor
-    // — the identity edit re-enriches.
+    // (inside releaseHeldProfile) — stamping first would hide the row from
+    // the queue forever when the AI call fails, because the outstanding
+    // filter compares reviewedAt to generatedAt and the incremental job skips
+    // held rows by design. On failure the row simply stays in the queue for
+    // another click. If the admin instead agrees the identity is wrong, the
+    // fix is the wine editor — the identity edit re-enriches.
     if (wine.aiProfile?.heldAt) {
-      // Somm-owned wine data (enrichmentOnAdd 'off', 2026-08-22): the AI writes
+      // Somm-owned wine data (enrichmentOnAdd 'off'): the AI writes
       // no profile, and a release is a forced regeneration. Refused with the
       // way out — writing the profile by hand replaces the held one and clears
       // the hold (services/wineProfileOps.applyProfilePatch). The MCP twin,
@@ -486,7 +481,7 @@ router.post('/:id/profile-reviewed', async (req, res) => {
     // review_held_profile gives (services/heldProfileOps). The flag and the
     // caveat owners see go, the verdict stays on the row, the model's note
     // moves into the audit row, and the wine is done in both queues. A stamp
-    // alone left the caveat on the wine and the row in the curator's queue.
+    // alone would leave the caveat on the wine and the row in the curator's queue.
     if (isUndecidedPublishedSuspect(wine.aiProfile)) {
       const decided = await decideHeldProfile(String(wine._id), 'confirm', { req });
       if (decided.error) {
@@ -524,9 +519,8 @@ router.delete('/:id/profile-reviewed', async (req, res) => {
 
 // GET /api/admin/wines/low-confidence — the "model in doubt" review queue.
 // Surfaces wines whose enrichment confidence is at or below ?threshold
-// (default 0.3 — the band that caught the Arcane range-as-producer row),
-// EXCLUDING rows an admin already reviewed SINCE their profile was last
-// generated: profileReviewedAt >= aiProfile.generatedAt suppresses; a
+// (default 0.3), EXCLUDING rows an admin already reviewed SINCE their profile
+// was last generated: profileReviewedAt >= aiProfile.generatedAt suppresses; a
 // re-enrichment bumps generatedAt past the review and the row re-surfaces
 // by comparison alone. A published profile with a flagged producer stays
 // until someone rules on the flag, whatever its stamp says (the curator
@@ -544,12 +538,9 @@ router.get('/low-confidence', async (req, res) => {
 
     // A null confidence means the generator gave us nothing usable — no number,
     // a non-numeric string, or Infinity from a `1e400` in the JSON. That is not
-    // a confident row; it is a row nobody can vouch for, and `$ne: null` was
-    // excluding exactly those from the queue built to catch them. Sanitising bad
-    // model output to null (security audit 2026-08-03, M-2) only made that worse
-    // — it routed every unusable value into the one state guaranteed to hide.
-    // Unknown now means "review me", which is also how the two rows already
-    // sitting invisible in prod get seen.
+    // a confident row; it is a row nobody can vouch for, and bad model output
+    // is sanitised to null, so `$ne: null` would hide exactly the rows this
+    // queue is built to catch. Unknown means "review me".
     const base = {
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       $or: [
@@ -642,7 +633,7 @@ router.get('/:id', async (req, res) => {
       .populate('grapes', 'name')
       .populate('classifications', 'name kind');
     // A user's private draft is not registry content, not even to an admin —
-    // the same not-found a missing id gets (draft design 2026-09-12).
+    // the same not-found a missing id gets.
     if (wine && wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
     res.json({ wine });
@@ -659,7 +650,7 @@ router.put('/:id', async (req, res) => {
     const { name, producer, country, region, appellation, classification, classifications, grapes, type, colour, image } = req.body;
 
     const wine = await WineDefinition.findById(req.params.id);
-    // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
+    // A private draft is not registry content, not even to an admin.
     if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine not found' });
     }
@@ -764,8 +755,7 @@ router.put('/:id', async (req, res) => {
 
     // Image handling. When the admin clears the default image, look for an
     // approved+public gallery image to promote in its place — otherwise the
-    // wine ends up with no image even though candidates exist (the legacy
-    // label-scan URL bug left wines in this state after Remove default image).
+    // wine ends up with no image even though candidates exist.
     if (image !== undefined) {
       if (image) {
         // A new picture is never stored inline. An unchanged one passes, so an
@@ -828,11 +818,11 @@ router.put('/:id', async (req, res) => {
     // WRONG record — including a HELD one, whose whole point was "this
     // producer looks fictional": the admin just fixed exactly that.
     // Regenerate under the corrected record (fire-and-forget, no user budget
-    // — a deliberate admin action). Real-change only: the v1.116.0 check was
-    // presence-in-body, and the edit form re-sends every field on save, so it
-    // would have regenerated (and churned generatedAt) on EVERY save. Curator
-    // profiles are never touched; if the model still doubts the new identity
-    // it simply holds again, which is the correct outcome.
+    // — a deliberate admin action). Real-change only: the edit form re-sends
+    // every field on save, so a presence-in-body check would regenerate (and
+    // churn generatedAt) on EVERY save. Curator profiles are never touched; if
+    // the model still doubts the new identity it simply holds again, which is
+    // the correct outcome.
     reenrichAfterRecordEdit(wine, profileInputsChanged);
 
     submitUrls(`/wines/${wine._id}`);
@@ -864,7 +854,7 @@ router.delete('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wine = await WineDefinition.findById(req.params.id);
-    // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
+    // A private draft is not registry content, not even to an admin.
     if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine not found' });
     }
@@ -1041,7 +1031,7 @@ router.post('/merge', async (req, res) => {
     }
 
     let bottlesMoved = 0;
-    // Lifecycle parity with performWineMerge (audit 2026-08-11 M-2): pending
+    // Lifecycle parity with performWineMerge: pending
     // proposals close and owner inquiries follow the bottles on the GOLDEN
     // route too — reassignWineRefs deliberately owns only silent ref moves,
     // these two write user-visible outcomes (reject reasons, repoint audit).

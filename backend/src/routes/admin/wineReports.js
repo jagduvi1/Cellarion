@@ -60,11 +60,10 @@ router.get('/', async (req, res) => {
 // PUT /api/admin/wine-reports/:id/resolve — mark a wine report as resolved.
 // Body: { response?, applySuggestion?: true }
 //
-// applySuggestion (R7): when the report carries a structured correction and
-// the admin agrees, resolving APPLIES it to the wine in the same action —
-// before this, resolution wrote nothing back and the admin re-typed the fix
-// in Admin → Wines (or, in practice, didn't). Applied via .save() so the
-// model hooks run (canonicalKey recompute + verifiedChecks invalidation),
+// applySuggestion: when the report carries a structured correction and the
+// admin agrees, resolving APPLIES it to the wine in the same action, so the
+// fix is never re-typed in Admin → Wines. Applied via .save() so the model
+// hooks run (canonicalKey recompute + verifiedChecks invalidation),
 // with normalizedKey recomputed the same way the admin edit route does; a
 // unique-key collision means the correction would make this wine identical
 // to an existing one — that is a MERGE, refused here with a clear 409.
@@ -96,11 +95,10 @@ router.put('/:id/resolve', async (req, res) => {
       // Before the assignment: the re-enrich below runs on a REAL change only.
       const beforeProfileInputs = profileInputsSnapshot(wine);
       // Run the suggestion through the SAME field normalizers the write
-      // pipeline applies — a raw assignment would let a one-click apply
-      // reintroduce the exact defect classes the registry campaign closed:
-      // tier-suffixed appellations, trailing vintages, producer-in-name
-      // embeds (audit 2026-07-29 R7-#1). The reporter's text is untrusted
-      // input that merely happens to arrive via an admin's click.
+      // pipeline applies — a raw assignment would let a one-click apply write
+      // the defects those normalizers stop: tier-suffixed appellations,
+      // trailing vintages, producer-in-name embeds. The reporter's text is
+      // untrusted input that merely happens to arrive via an admin's click.
       let value = report.suggestedValue.trim().replace(/\s+/g, ' ');
       if (report.suggestedField === 'name') {
         value = canonicalizeWineName(stripTrailingVintage(value), wine.producer);

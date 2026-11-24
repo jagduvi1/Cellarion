@@ -122,7 +122,7 @@ router.get('/usage', async (req, res) => {
         { $count: 'n' },
       ]),
       // Real writes AIs performed in the last 7 days — excludes preview stubs
-      // AND pending idempotency-claim stubs (MCP-audit M1/F4), same canonical
+      // AND pending idempotency-claim stubs, same canonical
       // set the activity timeline uses.
       McpActionLog.countDocuments({
         createdAt: { $gte: weekAgo },
