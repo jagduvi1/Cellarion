@@ -7,7 +7,7 @@
  * and set the daily suggestion budget (services/contributionGate).
  *
  * Cellar Cred does NOT change a user's subscription plan. Every feature is
- * free for all tiers, so contribution no longer grants supporter/patron — the
+ * free for all tiers, so contribution never grants supporter/patron — the
  * tiers below are purely cosmetic badges. Plans are set only via Stripe
  * (routes/stripe.js) or an admin grant (routes/admin/users.js).
  */
@@ -60,8 +60,8 @@ const TIERS = [
 ];
 
 // Plan ranking — retained because routes/stripe.js imports it to compare an
-// incoming Stripe plan against the user's current grant. Cellar Cred itself no
-// longer grants plans (see module header).
+// incoming Stripe plan against the user's current grant. Cellar Cred itself
+// grants no plans (see module header).
 // Rank == position in the plan ladder, taken from the config's declaration
 // order (free first, then ascending price). Deriving it means a new tier is
 // ranked automatically; a hardcoded map would silently rank it 0 and make
@@ -103,7 +103,7 @@ function getSpecialty(categories) {
  * event's point value, clamped at 0, and recompute the tier/specialty badge.
  * Does not touch the subscription plan. Fire-and-forget safe.
  *
- * Cred accounting is SYMMETRIC (security audit L-19): every award has a
+ * Cred accounting is SYMMETRIC: every award has a
  * matching reversal (unlike/un-react toggles, content deletion, visibility
  * flips), so toggle loops and create/delete cycles net to zero instead of
  * inflating the publicly-displayed badge. The aggregation-pipeline update
@@ -137,8 +137,8 @@ async function adjustCred(userId, eventType, count) {
   const newTier = getTier(user.contribution.totalScore);
   const newSpecialty = getSpecialty(user.contribution.categories);
 
-  // Recompute the cosmetic badge fields only. Cellar Cred no longer grants
-  // plan upgrades — crossing a tier changes the badge, not the subscription.
+  // Recompute the cosmetic badge fields only. Cellar Cred grants no plan
+  // upgrades — crossing a tier changes the badge, not the subscription.
   const updates = {};
   if (newTier !== user.contribution.tier) updates['contribution.tier'] = newTier;
   if (newSpecialty !== user.contribution.specialty) updates['contribution.specialty'] = newSpecialty;

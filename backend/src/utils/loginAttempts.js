@@ -71,8 +71,8 @@ function nextFailureState(prev, nowMs, { threshold, windowMs, durationMs }) {
 
 /**
  * nextFailureState as one update pipeline, so MongoDB applies it atomically.
- * Guesses sent at the same moment used to read the same count and overwrite
- * each other's increment (40 at once counted as 4 or less: never locked).
+ * Read-then-write would let guesses sent at the same moment read the same
+ * count and overwrite each other's increment, so a burst would never lock.
  */
 function failureUpdate(nowMs, { threshold, windowMs, durationMs }) {
   const now = new Date(nowMs);

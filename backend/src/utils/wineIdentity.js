@@ -1,6 +1,5 @@
 /**
- * Canonical wine identity — the durable duplicate-prevention key
- * (REGISTRY_DUPLICATE_ANALYSIS_2026-07-22, phase 1).
+ * Canonical wine identity — the durable duplicate-prevention key.
  *
  *   canonicalKey = normalizeProducerKey(producer)
  *                + ':' + normalizeWineName(canonicalizeWineName(name, producer))
@@ -33,7 +32,7 @@ const { withoutChampagneCru } = require('./champagneCru');
 // from each other instead of sharing one canonical bucket. Mirrors the raw
 // fallback in wineMatching.producerSimilarity.
 //
-// Exported (2026-08-14): services/producerSpelling.js scans the canonicalKey
+// Exported: services/producerSpelling.js scans the canonicalKey
 // index by this exact segment, so the two must be one computation — a private
 // copy there would drift the moment either fold rule changes.
 const producerSegment = (producer) =>
@@ -42,7 +41,7 @@ const producerSegment = (producer) =>
 // `sweetness` = the wine's label sweetness term (the printed word), when it has
 // one: it rides on the key as the same suffix generateWineKey adds, so a
 // Kabinett trocken and the Kabinett never share a canonical identity once the
-// word has left the name. Absent, the key is exactly what it always was.
+// word has left the name. Absent, the key carries no suffix.
 function computeCanonicalKey(name, producer, appellation = '', { sweetness = null } = {}) {
   const nameKey = normalizeWineName(canonicalizeWineName(name || '', producer || ''));
   // A production method on its own ("Méthode Traditionnelle") is no

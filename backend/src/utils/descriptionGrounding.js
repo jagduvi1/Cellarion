@@ -70,8 +70,8 @@ const PREP_CLAIM = new RegExp(
 
 // Keyword-suffixed claims: "Champagne appellation", "American style". The
 // continuation chain is the SAME capitalised-or-connector rule as PREP_CLAIM —
-// a free continuation captured junk like "It's a crowd-pleasing style" and
-// "Details on producer and origin" in the first prod dry run.
+// a free continuation captures junk like "It's a crowd-pleasing style" and
+// "Details on producer and origin".
 const KEYWORD_CLAIM = new RegExp(
   "\\b([A-ZÀ-Þ][\\wÀ-ɏ'’-]*(?:\\s+(?:" + PLACE_CONNECTOR + "|" + ELIDED_TOKEN + "|[A-ZÀ-Þ][\\wÀ-ɏ'’-]*)){0,3})" +
   "\\s+(?:appellation|AOC|AOP|DOCG?|region|style|styles)\\b",
@@ -89,7 +89,7 @@ const MATERIAL_NOISE = /\b(oak|barriques?|barrels?|casks?|cooperage|hogsheads?|m
 const TIER_WORD = /^(reservas?|riservas?|crianzas?|gran|brut|extra|demi-sec|sec|secco?|dolce|trocken|halbtrocken|feinherb|classico|superiore|premium|prestige|tradition|traditional|vintage|blanc|rouge|rosé|rosado|tinto|crémants?|cremants?|reserve)$/i;
 
 // Climate adjectives are weather, not origin — "Atlantic-influenced whites"
-// asserts nothing about where the wine is from (found in the v1.148 re-count).
+// asserts nothing about where the wine is from.
 const CLIMATE_WORD = /^(atlantic|mediterranean|continental)/i;
 
 // A stylistic comparison is not an origin claim: "styled in
@@ -136,8 +136,8 @@ const DEMONYMS = {
 
 // A place after one of these verbs is where something was CREATED, not where
 // this wine is from — "a cold-hardy hybrid grape bred in Minnesota" on a
-// French wine (somm v1.147 audit, item 5; one row, but the shape is a verb
-// governing the phrase, so the rule is cheap and principled).
+// French wine. The shape is a verb governing the phrase, so the rule is cheap
+// and principled.
 const CREATION_VERB = /\b(?:bred|crossed|hybridi[sz]ed|developed)\s*$/i;
 
 function extractClaims(sentence) {
@@ -168,7 +168,7 @@ function extractClaims(sentence) {
 }
 
 // Strip a possessive before normalising a token — "Chile's" and "Mendoza's"
-// are the places, not new words (somm v1.147 audit, item 6).
+// are the places, not new words.
 const tokenNorm = (t) => normPlace(String(t).replace(/['’]s$/i, ''));
 
 /**
@@ -180,9 +180,9 @@ const tokenNorm = (t) => normPlace(String(t).replace(/['’]s$/i, ''));
  *          claims lists only the UNGROUNDED ones — grounded mentions are the
  *          description doing its job and are not reported.
  *
- * Grounding is TOKEN SUBTRACTION, not span substring (somm v1.147 audit,
- * item 1 — the decisive one). Span-substring let the record's country ground
- * "Chile's Maipo Valley" wholesale, silently swallowing the finer place, and
+ * Grounding is TOKEN SUBTRACTION, not span substring. Span-substring would let
+ * the record's country ground "Chile's Maipo Valley" wholesale, silently
+ * swallowing the finer place, and
  * a check that under-reports on rows it already flags gives a curator false
  * assurance — worse than over-reporting. Instead: remove every token the
  * record accounts for (its places, its grapes, its country's adjective, the
@@ -195,10 +195,10 @@ function gradeDescription(description, { region, appellation, country, grapes, p
 
   // Everything the record itself accounts for, kept as WHOLE token sequences.
   // The producer's tokens are in the same pool: a description mentioning the
-  // producer is not claiming a place, however place-like the name reads (somm
-  // item 2 — three of four disclosure rows were the producer's own name, so
-  // the whole disclosure bucket was extraction noise wearing a calibrated
-  // look). Sequences, not a token set, because grapes share tokens: with the
+  // producer is not claiming a place, however place-like the name reads —
+  // without that, the producer's own name fills the disclosure bucket with
+  // extraction noise wearing a calibrated look. Sequences, not a token set,
+  // because grapes share tokens: with the
   // record carrying Cabernet SAUVIGNON, a loose-token pool subtracts the
   // "Cabernet" out of an ungrounded Cabernet FRANC claim and reports "Franc".
   const grounds = [];

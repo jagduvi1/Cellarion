@@ -14,9 +14,9 @@
  *   }
  *
  * There is NO top-level `email` / `push` flag — writing to one is silently
- * dropped by Mongoose's strict mode (which is what caused the unsubscribe
- * GDPR bug fixed in this module's reason-for-existence). All outbound-channel
- * flags live one level deeper, per category.
+ * dropped by Mongoose's strict mode, so an unsubscribe that wrote one would
+ * quietly change nothing. All outbound-channel flags live one level deeper,
+ * per category.
  *
  * Anything that mutates these flags should go through this helper so adding
  * a new category in User.js automatically wires through to the settings UI,
@@ -50,17 +50,17 @@ const OUTBOUND_CHANNELS = ['email', 'push'];
  *
  * Every channel the schema defines is written, whether or not the stored
  * record has it yet: a category added after the user's settings were saved
- * (support replies, 2026-09-26) must go off with the rest, and the settings
- * page must show it off. `emailOptOutAt` is stamped as well — every sender
- * honours it on top of the per-category flags, so a category added LATER
- * starts off for this user too (audit 2026-09-27 M7). Settings clears it when
- * the user turns any email back on (services/accountOps).
+ * must go off with the rest, and the settings page must show it off.
+ * `emailOptOutAt` is stamped as well — every sender honours it on top of the
+ * per-category flags, so a category added LATER starts off for this user too.
+ * Settings clears it when the user turns any email back on
+ * (services/accountOps).
  *
  * Returns true if anything was changed (useful for tests and audit logging).
  * Calls `user.markModified` on each touched parent path so Mongoose writes a
  * whole-object replacement and the changes actually land (see the
- * legacy-notifications healing in models/User.js for the same pattern —
- * issue #390 turned dotted $set into a fatal Mongo error).
+ * legacy-notifications healing in models/User.js for the same pattern — a
+ * dotted $set into a legacy boolean category is a fatal Mongo error).
  *
  * @param {object} user  Mongoose User document (or a plain object with the
  *                       same shape, for unit tests). Must have a

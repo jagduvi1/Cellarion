@@ -3,8 +3,8 @@
  *
  * The kept photos and uploads land in folders that are served publicly with a
  * year-long immutable cache (middleware/uploadsStatic): a request that raced a
- * plain writeFile could read — and a CDN cache — a truncated image forever
- * (release audit 2026-09-27, L). The bytes go to a temp name in the same
+ * plain writeFile could read — and a CDN cache — a truncated image forever.
+ * The bytes go to a temp name in the same
  * folder first and are renamed into place; rename is atomic on the same
  * filesystem, so the final name either does not exist yet or is complete.
  */

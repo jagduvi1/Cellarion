@@ -3,9 +3,8 @@
  * ({ ok: false, code, message }) the ops services speak
  * (personalData, wineProposalOps, registryDataOps, …).
  *
- * One full map, one owner — the 2026-08-17 audit found four hand-copied
- * partial maps, one of which had already diverged (an admin router that
- * would have turned a future `conflict` into a generic 400).
+ * One full map, one owner: a hand-copied partial map drifts, and a router
+ * missing a code turns it into a generic 400.
  */
 const CODE_STATUS = {
   invalid: 400,

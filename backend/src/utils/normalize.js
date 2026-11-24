@@ -80,8 +80,8 @@ const MAX_TAXONOMY_NAME = 200;
  * Bound a taxonomy DISPLAY name before it is stored.
  *
  * `normalizeString` already collapses whitespace for the lookup key, but the
- * display name is stored separately and was only ever `.trim()`ed \u2014 so a region
- * or grape could hold interior newlines and unbounded length. That matters twice
+ * display name is stored separately, and `.trim()` alone would let a region
+ * or grape hold interior newlines and unbounded length. That matters twice
  * over: two names differing by a space are one thing to a human and two rows to
  * the registry, and these values are substituted into the enrichment prompt,
  * where a newline is how you make injected text look like a new instruction.
@@ -235,15 +235,14 @@ const trimTrailingChars = (str, chars) => {
  * Token-based + regex-free trailing strip, so it stays strictly linear.
  */
 /**
- * The comparison KEY for appellation identity (strategy 2026-07-29 R2).
+ * The comparison KEY for appellation identity.
  *
  * normalizeString DELETES hyphens, so "Châteauneuf-du-Pape" folds to
  * 'chateauneufdupape' while the typed "Chateauneuf du Pape" folds to
- * 'chateauneuf du pape' — two keys for one place, found on the first
- * prod-data test of the appellation resolver. Hyphens become spaces FIRST so
- * both forms share one key. Appellation-specific on purpose: normalizedKey /
- * canonicalKey semantics must not change (unique index + 4k existing keys),
- * so this fold applies only where Appellation docs are matched.
+ * 'chateauneuf du pape' — two keys for one place. Hyphens become spaces FIRST
+ * so both forms share one key. Appellation-specific on purpose: normalizedKey /
+ * canonicalKey semantics must not change (unique index + the keys already
+ * stored), so this fold applies only where Appellation docs are matched.
  */
 const normalizeAppellationKey = (appellation) =>
   normalizeString(String(appellation == null ? '' : appellation).replace(/-/g, ' '));
@@ -259,7 +258,7 @@ const normalizeAppellation = (appellation) => {
   return result || original;
 };
 
-// A production METHOD is not an appellation (GitHub discussion #1696):
+// A production METHOD is not an appellation:
 // "Méthode Traditionnelle", "Metodo Classico", "Méthode Cap Classique" say how
 // the bubbles were made, not where the wine is from — yet they turn up in the
 // appellation field. Only a value that is NOTHING BUT a
@@ -298,9 +297,9 @@ const CLASSIFICATION_TIER_PHRASES = [
 const CLASSIFICATION_MARK_TOKENS = new Set([...APPELLATION_TIER_TOKENS, ...APPELLATION_LEADING_TIER_TOKENS, 'dac']);
 
 // The French label line that wraps the place in the mark ("Appellation
-// Pauillac Contrôlée", "Appellation Saint-Émilion Grand Cru Contrôlée"). The
-// old scan prompt asked for "the printed classification/tier line", and on a
-// French label that IS this line. Never a tier, whatever place it wraps. A
+// Pauillac Contrôlée", "Appellation Saint-Émilion Grand Cru Contrôlée"). On a
+// French label this IS the printed classification/tier line, so a scan that
+// reads that line brings it in. Never a tier, whatever place it wraps. A
 // token test, not a regex: `^appellation\s+.+\s+…$` is the polynomial-ReDoS
 // shape CodeQL flags on this file (js/polynomial-redos), and the value is
 // already split on single spaces.
@@ -320,7 +319,7 @@ const isWrappedMarkLine = (parts) =>
  * back "Riserva". Null or blank in,
  * null out. One rule for every write path (model hook, mint, admin edit,
  * proposals, drafts) and for the backfill (scripts/normalize-classification-
- * tiers.js) — GitHub discussion #1696.
+ * tiers.js).
  */
 const normalizeClassification = (classification) => {
   if (classification == null) return null;
@@ -473,13 +472,13 @@ const appellationKeySegment = (appellation) =>
 const pendingWineKey = (name, userId, appellation = '', { sweetness = null } = {}) =>
   `${pendingProducerKey(userId)}:${normalizeWineName(name)}:${appellationKeySegment(appellation)}${sweetnessKeySegment(sweetness)}`;
 
-// ── Label sweetness in the identity keys (GitHub discussion #1754) ──────────
+// ── Label sweetness in the identity keys ────────────────────────────────────
 // The term a label prints (trocken, Brut Nature) is identity: a Kabinett
 // trocken and the Kabinett from the same vineyard are two wines. Once the word
 // leaves the name and lives in WineDefinition.labelSweetness, their
 // producer:name:appellation keys would coincide under the UNIQUE index — so the
 // term rides on every key as a suffix, ONLY when the wine has one. A key
-// without a term is byte-identical to what it always was: no stored key moves.
+// without a term gets no suffix, so no stored key moves.
 // The segment is the normalised WORD, never an id — a key must be computable
 // before the row exists and come out the same on every Bridge server. '#' and
 // '=' never survive normalizeString, so the suffixed keys are provably disjoint
@@ -508,9 +507,9 @@ const stripSweetnessKeySegment = (key) => {
 //
 // The spellings the style guard knows for the same word, name side only:
 // "Süß" typed without the umlaut is "Suess", which the fold leaves alone, and
-// one import wrote "Riesling Troken". utils/styleTerms reads names through the
-// same map; the producer-field rules there must NOT gain these (Suess is a
-// real surname).
+// "Troken" is a known misspelling of trocken. utils/styleTerms reads names
+// through the same map; the producer-field rules there must NOT gain these
+// (Suess is a real surname).
 const SWEETNESS_ALIASES = new Map([
   ['suess', 'suss'],
   ['fruchtsuess', 'fruchtsuss'],
@@ -564,9 +563,9 @@ function sweetnessSpanKeys(text, words, i, len) {
  * term Extra Brut; "Cava Brut Natur" with Brut Nature; "Riesling Suess" with
  * süß), so nothing is ever doubled. Two readings, in this order: the folded
  * name holds a spelling as whole words ("Riesling Halb-Trocken" folds to
- * "riesling halbtrocken"), the test this function always made; then the
- * name read the way the write rule reads it. The second only finds more that
- * is carried, so a term is appended only where it always was.
+ * "riesling halbtrocken"); then the name read the way the write rule reads
+ * it. The second only finds more that is carried, so it never appends a term
+ * the first would leave off.
  * `term` is the word to show, or every spelling of the term — a list whose
  * first entry is shown, or a row { name, synonyms }. A word inside a dashed
  * compound counts as carried ("Demi-Sec" carries "sec"). Every text surface
@@ -582,10 +581,10 @@ const appendSweetnessTerm = (name, term) => {
   const t = spellings[0] || '';
   if (!t) return n;
   if (!n) return t;
-  // The whole-name test first, as it always read: a spelling the folded name
-  // holds as whole words ("Riesling Halb-Trocken" folds to "riesling
-  // halbtrocken"). So nothing is appended where it never was; the reader
-  // below only finds more that is already carried.
+  // The whole-name test first: a spelling the folded name holds as whole
+  // words ("Riesling Halb-Trocken" folds to "riesling halbtrocken"). The
+  // reader below only finds more that is already carried, so it never
+  // appends where this test would not.
   const folded = ` ${normalizeSweetnessTerm(n)} `;
   if (spellings.some((s) => { const k = normalizeSweetnessTerm(s); return k && folded.includes(` ${k} `); })) return n;
   const keys = new Set();
@@ -831,7 +830,7 @@ const GRAPE_SYNONYMS = {
   'brunello':             'Sangiovese',
   'prugnolo gentile':     'Sangiovese',
   'morellino':            'Sangiovese',
-  'sangiovese grosso':    'Sangiovese', // Montalcino's local name — 15 Brunelli on prod carried it as a separate grape
+  'sangiovese grosso':    'Sangiovese', // Montalcino's local name, not a separate grape
 
   // Zinfandel / Primitivo — same DNA, often listed interchangeably
   'primitivo':            'Zinfandel',
@@ -875,9 +874,9 @@ const GRAPE_SYNONYMS = {
   'foch':                 'Maréchal Foch',
   'portugieser':          'Blauer Portugieser',
 
-  // ß is stripped (not expanded to ss) by normalizeString, so the existing
-  // 'weissburgunder' key never matched the actual label spelling Weißburgunder
-  // — a duplicate Grape doc proved it on prod.
+  // ß is stripped (not expanded to ss) by normalizeString, so the
+  // 'weissburgunder' key cannot match the label spelling Weißburgunder,
+  // which folds to 'weiburgunder'.
   'weiburgunder':         'Pinot Blanc',
   'weisser burgunder':    'Pinot Blanc',
 };
@@ -972,7 +971,7 @@ const COUNTRY_ALIASES = {
   // Portugal — same spelling in most languages; no aliases needed
 
   // New Zealand
-  'new zeeland':              'New Zealand', // common typo (created a prod country)
+  'new zeeland':              'New Zealand', // common typo
   'nya zeeland':              'New Zealand', // sv
   'neuseeland':               'New Zealand',
   'nouvellezelande':          'New Zealand', // Nouvelle-Zélande (hyphen deleted)
@@ -1175,8 +1174,7 @@ const isRecognizedCountry = (name) => {
  * Placeholder values the AI (or an import file) uses when it doesn't actually
  * know the value — despite the prompts demanding null. The registry's
  * representation for unknown is country/region = null and grapes = [] — never
- * a taxonomy document literally named "Unknown" (prod accumulated an Unknown
- * country, five Unknown regions and an "unknown" grape this way).
+ * a taxonomy document literally named "Unknown".
  * Keys are checked after normalizeString(), so "Okänd" → "okand", "N/A" → "na",
  * "?" / "-" → "" (caught by the empty check).
  */
@@ -1193,7 +1191,7 @@ const isUnknownName = (name) => {
  * not read) puts in the box when they simply do not know — "Unknown", "N/A",
  * "-", "Domaine Unknown". They must never be STORED as a producer: every one of
  * them would become a shared-registry producer other people's wines then match
- * against (prod grew a producer literally named "Unknown" this way).
+ * against.
  *
  * Checked after normalizeString(), which lowercases, strips diacritics and
  * drops punctuation — so "N/A" → "na", "Okänd" → "okand", and "-" / "?" → ""
@@ -1228,13 +1226,13 @@ const hasNonLatinAlnum = (str) =>
  * not wrong", and by the WineDefinition auto-promote hook to decide when a
  * pending row has become a complete identity.
  *
- * UNICODE-AWARE, and it has to be (security audit): normalizeString strips
- * every non-ASCII letter, so "Мукузани", "ქართული ღვინო", "獺祭" and "Δομαίν"
- * all normalized to '' and read as MISSING. That discarded the producer the
- * user actually typed at mint time and — worse — made the row unpromotable,
- * because a curator typing the producer exactly as printed on the label hit
- * this same predicate in the auto-promote hook and the wine stayed hidden
- * forever. Any letter or number in ANY script is real information.
+ * UNICODE-AWARE, and it has to be: normalizeString strips every non-ASCII
+ * letter, so "Мукузани", "ქართული ღვინო", "獺祭" and "Δομαίν" all normalize
+ * to ''. Read as MISSING, that would discard the producer the user actually
+ * typed at mint time and — worse — make the row unpromotable, because a
+ * curator typing the producer exactly as printed on the label hits this same
+ * predicate in the auto-promote hook and the wine stays hidden forever. Any
+ * letter or number in ANY script is real information.
  */
 const isIdentitySentinel = (value) => {
   if (typeof value !== 'string') return true;
@@ -1261,10 +1259,9 @@ const ALL_STOP_WORD_PRODUCER_MAX = 15;
  * Is this producer+name pair so degenerate that it CANNOT be an identity?
  *
  * READ THIS BEFORE WIDENING IT. This predicate BLOCKS — a true verdict refuses
- * a mint, refuses an auto-promotion and refuses a curator's write. Its first
- * version tried to judge identity QUALITY from string shape and condemned an
- * entire category of real wine. Measured against 91 real producer/name pairs it
- * blocked 67 of them:
+ * a mint, refuses an auto-promotion and refuses a curator's write. Judging
+ * identity QUALITY from string shape condemns an entire category of real wine;
+ * such tests block most of a sample of real producer/name pairs:
  *
  *   • `p === n` — the single-wine estate, which is not a defect but a whole way
  *     of making wine: Château Margaux, Petrus, Krug, Salon, Dom Pérignon, Veuve
@@ -1279,15 +1276,15 @@ const ALL_STOP_WORD_PRODUCER_MAX = 15;
  *   • digits-only — the Penedès house "1+1=3" normalizes to '113', and "1865"
  *     is Viña San Pedro's range. Both real, both condemned.
  *
- * THE LESSON: producer == name is not a defect, it is a category of wine.
- * Almost nothing about identity QUALITY can be judged safely from string shape
- * alone. So the suspicion moved to where a human can overrule it — the
- * cross-field review queue's `producer-echoes-name.v1`
- * (utils/crossFieldChecks) — and what is left here is only what cannot possibly
- * be an identity in any language, under any label convention:
+ * producer == name is not a defect, it is a category of wine. Almost nothing
+ * about identity QUALITY can be judged safely from string shape alone. So the
+ * suspicion lives where a human can overrule it — the cross-field review
+ * queue's `producer-echoes-name.v1` (utils/crossFieldChecks) — and what is
+ * left here is only what cannot possibly be an identity in any language,
+ * under any label convention:
  *
  *   1. a producer shorter than 2 characters after normalization — a stray
- *      keystroke, the same bar findOrCreateWine's mint gate has always applied;
+ *      keystroke, the same bar findOrCreateWine's mint gate applies;
  *   2. a producer that is nothing but house/stop words AND short ("Domaine",
  *      "Casa", "The Wine Estate") — branding with no house attached to it.
  *
@@ -1301,13 +1298,12 @@ const ALL_STOP_WORD_PRODUCER_MAX = 15;
  * rules in utils/crossFieldChecks, enforced on the curation write path
  * (services/pendingWineOps.applyPendingFix).
  *
- * `name` is still a parameter, and still consulted for two things only: the
- * non-Latin exemption below, and the MISSING-is-not-my-verdict rule. It no
- * longer takes part in any blocking test.
+ * `name` is consulted for two things only: the non-Latin exemption below, and
+ * the MISSING-is-not-my-verdict rule. It takes part in no blocking test.
  *
  * NON-LATIN identities are exempt. normalizeString cannot see them, so both
- * folds below would read "empty" and condemn a real producer — the H-4
- * regression that made "Мукузани" rows unpromotable.
+ * folds below would read "empty" and condemn a real producer, leaving rows
+ * like "Мукузани" unpromotable.
  *
  * @param {string} producer
  * @param {string} name
@@ -1326,7 +1322,7 @@ const isImplausibleIdentity = (producer, name) => {
   if (!p || !n) return false;
 
   // 1. A one-character producer is a stray keystroke — same bar the mint gate
-  //    has always applied (findOrCreateWine's producerNorm.length < 2).
+  //    applies (findOrCreateWine's producerNorm.length < 2).
   if (p.length < 2) return true;
 
   // 2. A producer that is nothing but house/stop words ("Domaine", "Casa",
@@ -1342,7 +1338,7 @@ const isImplausibleIdentity = (producer, name) => {
  * Grape names additionally reject descriptions-instead-of-varietals: the AI
  * sometimes returns hedges like "blend - specific varieties unknown",
  * "unknown - likely Riesling, Gewurztraminer, Pinot Gris, or Muscat" or
- * "blend of 40 botanicals including orange peel" (all real prod examples).
+ * "blend of 40 botanicals including orange peel".
  * A blend's correct representation is the list of its varieties, or [].
  */
 const JUNK_GRAPE_RX = /\bblends?\b|\bbotanicals?\b|\blikely\b|\bunknown\b|\bvarieties\b|\bunspecified\b/i;
@@ -1371,7 +1367,8 @@ const slugify = (str) => {
  * Built from the DISPLAY name — the name followed by the label sweetness term
  * when the wine has one (appendSweetnessTerm, which takes `sweetness` as the
  * word or every spelling of the term) — so "Riesling Kabinett" with the term
- * trocken keeps the URL it had while the word was in its name.
+ * trocken has the URL of "Riesling Kabinett trocken": moving the word out of
+ * the name into the term leaves the URL unchanged.
  */
 const generateWineSlug = (name, producer, sweetness = null) => {
   const shown = appendSweetnessTerm(name, sweetness);

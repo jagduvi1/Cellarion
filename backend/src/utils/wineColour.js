@@ -78,8 +78,8 @@ function effectiveColour(wine) {
  * Write a colour a CALLER stated — "none" (null) included. The model hook
  * infers rosé from the name of a created, retyped or published style wine only
  * when nobody stated a colour in the same save; without this mark an explicit
- * "not stated" sent together with a retype was silently turned back into rosé,
- * and an undo could not restore a cleared colour (audit 2026-09-19).
+ * "not stated" sent together with a retype would silently turn back into rosé,
+ * and an undo could not restore a cleared colour.
  * `$locals` is per-document, never stored; plain test doubles have none.
  */
 function stateColour(wine, value) {
@@ -90,8 +90,7 @@ function stateColour(wine, value) {
 /**
  * Why `colour` cannot be written on a wine that ends up typed `typeAfter`, or
  * null when it can. The model hook would drop the value anyway — this is what
- * lets a write path REFUSE instead of reporting a success that stored nothing
- * (audit 2026-09-19).
+ * lets a write path REFUSE instead of reporting a success that stored nothing.
  */
 function colourTypeConflict(typeAfter, colour) {
   if (!colour || isStyleType(typeAfter)) return null;

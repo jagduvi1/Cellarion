@@ -104,10 +104,9 @@ function totalSlots(type, rows, cols, typeConfig) {
       // hexFlip is deliberately not read here: it reverses which rows are
       // which, a pure reversal that can never change the total.
       if (typeConfig?.hexEqualRows) return rows * cols;
-      // Closed form, not a loop (security audit 2026-09-02 D14-1): this ran
-      // `rows` iterations, and the rack UPDATE route computed it on the
-      // request's still-unvalidated rows before the schema's max-20 check —
-      // one PUT with rows "1e308" parked the event loop for every tenant.
+      // Closed form, not a loop: the count must stay cheap whatever `rows` a
+      // caller passes, even an unvalidated "1e308" — a loop of `rows`
+      // iterations would park the event loop for every tenant.
       // Even rows (0-indexed) hold `cols`, odd rows hold max(1, cols-1).
       const evenRows = Math.ceil(rows / 2);
       const oddRows = Math.floor(rows / 2);
@@ -289,10 +288,9 @@ function cabinetBays(rows, cols, typeConfig) {
  * One bottle across the front (sideways 'front') of a ONE-deep shelf: the
  * first row is that bottle plus cols−1 lying front to back behind it, and the
  * levels above rest on those, so they are counted from cols−1. A slim
- * fridge's stacked shelf: 1 across + 4, with 3 in the grooves on top (forum
- * 2026-10-14; it used to stack 4 on 3). Two deep is left as it was: there the
- * front and back rows share the level, and the bottle across lies in front
- * of both.
+ * fridge's stacked shelf: 1 across + 4, with 3 in the grooves on top. Two
+ * deep does not take this rule: there the front and back rows share the
+ * level, and the bottle across lies in front of both.
  */
 function cabinetRowWidth(row, cols, { twoDeep = true, alternate = false, sideways = '' } = {}) {
   const base = sideways === 'front' && !twoDeep && row > 1 ? Math.max(1, cols - 1) : cols;
@@ -435,14 +433,13 @@ function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effecti
  * The cabinet typeConfig an import stores: every list fitted to the shelf
  * count, every flag a real boolean (headToTail only one deep), and a per-shelf
  * key that is not a list DROPPED — a hand-edited file's `"shelfSideways":
- * "front"` used to be stored as a one-entry list on a 3-shelf cabinet, and
- * every later edit of the rack was then refused (release audit 2026-10-13).
- * Other keys pass through untouched.
+ * "front"`, stored as a one-entry list on a 3-shelf cabinet, would get every
+ * later edit of the rack refused. Other keys pass through untouched.
  */
 function fitCabinetTypeConfig(rows, cols, typeConfig) {
   const tc = typeConfig && typeof typeConfig === 'object' ? typeConfig : {};
   // A grid-only key in a hand-edited export would make every later edit of
-  // the cabinet a 400 ("only supported on grid racks" — audit 2026-10-14).
+  // the cabinet a 400 ("only supported on grid racks").
   delete tc.doubleHeightRows;
   return {
     ...tc,

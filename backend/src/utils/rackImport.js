@@ -555,7 +555,7 @@ function sanitizeRackConfigs(rawRackConfigs, { positionAnchor, rackTypes: RACK_T
         // shelves — at the TOP for bottom-anchored files (Oeno numbers
         // shelves from the bottom, so "the cabinet has more shelves than
         // the file shows" means extra shelves above), at the bottom
-        // otherwise (audit 2026-09-15).
+        // otherwise.
         if (entry.type === 'cabinet') {
           const raw = Array.isArray(cfg.typeConfig.shelfRows) ? cfg.typeConfig.shelfRows : [];
           const fitted = raw.slice(0, rows).map((v) => clampInt(v, 1, 12) || 1);
@@ -572,7 +572,7 @@ function sanitizeRackConfigs(rawRackConfigs, { positionAnchor, rackTypes: RACK_T
           // export); fitted to the shelf count the same way as shelfRows.
           // A short list grows at the same end as shelfRows above, or a
           // bottom-anchored file's narrow bottom shelf would be read as a
-          // full-width top one (audit 2026-09-16).
+          // full-width top one.
           const grown = (list) => {
             const kept = list.slice(0, rows);
             const gap = rows - kept.length;
