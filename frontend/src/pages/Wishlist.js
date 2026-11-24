@@ -294,15 +294,17 @@ function Wishlist() {
                     {item.status === 'bought' && item.boughtAt && (
                       <span className="wishlist-item-bought-date">{t('wishlist.boughtOn', { date: new Date(item.boughtAt).toLocaleDateString() })}</span>
                     )}
-                    {/* "Bought" only ticks the wishlist; this puts the bottle
-                        in the cellar — Add Bottle with the wine (and the
-                        vintage, when set) already chosen. */}
-                    {wd?._id && (
-                      <div className="wishlist-item-cellar">
-                        <AddToCellarButton wineId={wd._id} vintage={item.vintage} />
-                      </div>
-                    )}
                   </div>
+                  {/* "Bought" only ticks the wishlist; this puts the bottle
+                      in the cellar — Add Bottle with the wine (and the
+                      vintage, when set) already chosen. A sibling of the
+                      text, not a child: on a phone it shares one row with
+                      the buttons below (Wishlist.css). */}
+                  {wd?._id && (
+                    <div className="wishlist-item-cellar">
+                      <AddToCellarButton wineId={wd._id} vintage={item.vintage} />
+                    </div>
+                  )}
                   <div className="wishlist-item-actions">
                     <button
                       className={`btn btn-small ${item.status === 'wanted' ? 'btn-success' : 'btn-secondary'}`}
