@@ -25,7 +25,8 @@ const { resolveRating } = require('../../utils/ratingUtils');
 const { parseCurrency } = require('../../config/currencies');
 const WineDefinition = require('../../models/WineDefinition');
 const { findVisibleWine } = require('../../services/wineVisibility');
-const { NEW_WINE_SHAPE } = require('./write');
+const { isSafeUrl } = require('../../utils/sanitize');
+const { NEW_WINE_SHAPE, resolveMcpBottleSize, SIZE_HELP, isRealDay } = require('./write');
 const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, wineSummary } = require('../toolUtil');
 const { logAction, trimOutstandingPreviews } = require('../actionLedger');
 const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
@@ -46,8 +47,12 @@ const ITEM_SHAPE = z.object({
   new_wine: z.object(NEW_WINE_SHAPE).optional(),
   confirm_new_wine: z.boolean().optional(),
   vintage: z.string().max(10).optional(),
+  bottle_size: z.string().max(40).optional().describe('A volume ("1.5 L", "375ml") or a format name ("magnum", "half"); 750 ml when left out'),
   price: z.number().min(0).optional(),
   currency: z.string().regex(/^[A-Za-z]{3}$/).optional(),
+  purchase_location: z.string().max(500).optional().describe('Shop, merchant or place bought'),
+  purchase_url: z.string().max(2048).optional().describe('https link to the purchase or product page'),
+  purchase_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Day bought, YYYY-MM-DD (today when left out)'),
   notes: z.string().max(5000).optional(),
   rating: z.number().min(0).max(100).optional(),
   rating_scale: z.enum(['5', '20', '100']).optional(),
@@ -70,6 +75,14 @@ function validateItemFields(item) {
   // apply a new wine is created BEFORE the bottle (release audit 2026-10-13).
   const c = parseCurrency(item.currency);
   if (!c.ok) return c.error;
+  // The same three checks add_bottle makes before it mints a wine.
+  if (item.bottle_size && !resolveMcpBottleSize(item.bottle_size)) {
+    return `bottle_size "${item.bottle_size}" is not a size Cellarion can read. Use one of: ${SIZE_HELP}.`;
+  }
+  if (item.purchase_url && !isSafeUrl(item.purchase_url)) return 'purchase_url must be a valid http or https URL';
+  if (item.purchase_date !== undefined && !isRealDay(item.purchase_date)) {
+    return `purchase_date "${item.purchase_date}" is not a day in the calendar. Use YYYY-MM-DD.`;
+  }
   return null;
 }
 
@@ -125,7 +138,8 @@ registerTool({
     'with items (mode defaults to preview) — nothing is written; you get a per-item plan (matched wines, wines that ' +
     'would be newly created, problems). SHOW THE PLAN TO THE USER and get their approval. Then call again with ' +
     "mode:'apply' and the preview_id. The whole batch is one undo_last unit. Prefer resolve_wine-verified wine_ids in " +
-    'items; new_wine items follow the same registry rules as add_bottle.',
+    'items; new_wine items follow the same registry rules as add_bottle. An item may carry bottle_size and where it ' +
+    'was bought (purchase_location, purchase_url, purchase_date), as in add_bottle.',
   scope: 'write',
   // Charges the write budget ITSELF — one slot per item on apply, nothing on
   // preview — so the generic per-call charge in server.js must skip it or a
@@ -158,7 +172,10 @@ registerTool({
       for (let i = 0; i < args.items.length; i++) {
         // Serial on purpose: bounded work, and registry lookups stay gentle.
         const p = await planItem(args.items[i], ctx.user.id, ctx.user.roles);
-        plan.push({ index: i, vintage: args.items[i].vintage || 'NV', ...p });
+        // The size as Cellarion read it ("magnum" → 1500ml), so the plan the
+        // user approves says what will be stored.
+        const size = args.items[i].bottle_size ? resolveMcpBottleSize(args.items[i].bottle_size) : null;
+        plan.push({ index: i, vintage: args.items[i].vintage || 'NV', ...(size ? { bottle_size: size } : {}), ...p });
       }
       const counts = plan.reduce((acc, p) => ((acc[p.status] = (acc[p.status] || 0) + 1), acc), {});
       const applyable = !plan.some((p) => p.status === 'invalid' || p.status === 'blocked_similar');
@@ -271,8 +288,12 @@ registerTool({
         }
         const result = await addBottle(access.cellar, wineDoc, {
           vintage: item.vintage,
+          bottleSize: item.bottle_size ? resolveMcpBottleSize(item.bottle_size) : undefined,
           price: item.price,
           currency: item.currency,
+          purchaseLocation: item.purchase_location,
+          purchaseUrl: item.purchase_url,
+          purchaseDate: item.purchase_date,
           notes: item.notes,
           rating: item.rating,
           ratingScale: item.rating_scale,

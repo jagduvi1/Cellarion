@@ -132,6 +132,7 @@ registerTool({
     confirm_new_wine: z.boolean().optional().describe('Set true to create despite close-but-unconfirmed candidates'),
     draft: z.boolean().optional().describe('With new_wine only: keep the new wine as the user\'s private draft (see publish_wine)'),
     vintage: z.string().max(10).optional().describe('e.g. "2019" or "NV"'),
+    bottle_size: z.string().max(40).optional().describe('A volume ("750ml", "1.5 L", "375ml") or a format name ("magnum", "half", "imperial"); a standard 750 ml bottle when left out'),
     price: z.number().min(0).optional(),
     currency: z.string().regex(/^[A-Za-z]{3}$/).optional(),
     purchase_location: z.string().max(500).optional().describe('Shop, merchant or place bought'),
@@ -180,6 +181,13 @@ registerTool({
     }
     if (args.purchase_date !== undefined && !isRealDay(args.purchase_date)) {
       return fail('invalid_input', `purchase_date "${args.purchase_date}" is not a day in the calendar. Use YYYY-MM-DD.`);
+    }
+    // A size that cannot be read is refused, as in update_bottle
+    // (resolveMcpBottleSize below): the service would store it as 750 ml.
+    let bottleSize;
+    if (args.bottle_size) {
+      bottleSize = resolveMcpBottleSize(args.bottle_size);
+      if (!bottleSize) return fail('invalid_input', `bottle_size "${args.bottle_size}" is not a size Cellarion can read. Use one of: ${SIZE_HELP}.`);
     }
 
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
@@ -263,6 +271,7 @@ registerTool({
 
     const result = await addBottle(access.cellar, wineDoc, {
       vintage: args.vintage,
+      bottleSize,
       price: args.price,
       currency: args.currency,
       purchaseLocation: args.purchase_location,
@@ -534,7 +543,7 @@ registerTool({
 });
 
 // Shared with tools/bulk.js so batch items validate identically to singles.
-module.exports = { NEW_WINE_SHAPE };
+module.exports = { NEW_WINE_SHAPE, resolveMcpBottleSize, SIZE_HELP, isRealDay };
 
 // A bottle bought but not delivered yet has arrived — the MCP twin of the
 // On order page's "Mark as arrived" (bottleOps.markArrived, the same rules).
