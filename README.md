@@ -348,7 +348,7 @@ The backend exposes ~65 route modules; this is the core surface, not an exhausti
 | POST | `/import/validate` | Validate import data and match wines (registry-read-only) |
 | POST | `/import/confirm` | Create bottles from validated import |
 
-Writes on `/api/bottles` and `/api/racks` accept an optional `Idempotency-Key` header: a repeat with the same key gets the first answer back instead of being applied again (kept 8 days). Offline-queued writes also send preconditions (`ifActive`, `ifUnchanged`, `expectOccupant`/`expectFrom`/`expectTo`, `?expect=`) and get `409` when the cellar changed meanwhile.
+Writes on `/api/bottles` and `/api/racks` accept an optional `Idempotency-Key` header: a repeat with the same key is not applied again and gets the first answer back (kept 8 days). One answer is not kept: a signed-in session's slot write answers the whole drawn rack, and its repeat gets the first status with `{ "replayed": true }` (an API token's slot answer is kept like any other). Offline-queued writes also send preconditions (`ifActive`, `ifUnchanged`, `expectOccupant`/`expectFrom`/`expectTo`, `?expect=`) and get `409` when the cellar changed meanwhile.
 
 ### Offline — `/api/offline` *(auth required)*
 

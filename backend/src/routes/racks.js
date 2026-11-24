@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
-const { idempotency } = require('../middleware/idempotency');
+const { idempotency, keepStatusOnly } = require('../middleware/idempotency');
 const { requireCellarAccess } = require('../middleware/cellarAccess');
 const { ROLE_LEVELS } = require('../middleware/bottleAccess');
 const Rack = require('../models/Rack');
@@ -125,15 +125,24 @@ async function rackAccess(req, res, rack, minRole, deniedMessage) {
   return role;
 }
 
-// What a slot write answers. A session gets the rack as the racks page draws
-// it: every placed bottle with its wine and maturity. An API token gets the
-// summary form of GET /api/racks?summary=1 (slot bottle ids) and what the
+// The rack as the racks page draws it: every placed bottle with its wine and
+// maturity. Every write the offline queue can send (place, move, clear —
+// frontend utils/offlineOps queueableKind) answers a session through here, so
+// the retry ledger keeps the status of such a write and never the drawing.
+async function drawnRack(req, rack) {
+  await rack.populate(SLOT_BOTTLES);
+  keepStatusOnly(req);
+  return { rack: await withMaturity(rack) };
+}
+
+// What a slot write answers. A session gets the drawn rack. An API token gets
+// the summary form of GET /api/racks?summary=1 (slot bottle ids) and what the
 // write did to the other bottle involved — the public contract
-// (openapi/document.js PlaceResponse, UnplaceResponse).
+// (openapi/document.js PlaceResponse, UnplaceResponse), which the retry ledger
+// keeps whole.
 async function slotAnswer(req, rack, change) {
   if (req.apiToken) return { rack: rack.toObject(), ...change };
-  await rack.populate(SLOT_BOTTLES);
-  return { rack: await withMaturity(rack) };
+  return drawnRack(req, rack);
 }
 
 // GET /api/racks/nfc/:id  — resolve a rack ID to its cellar (for NFC tag redirect)
@@ -163,8 +172,8 @@ router.get('/nfc/:id', requireAuth, async (req, res) => {
 });
 
 router.use(requireAuth);
-// Writes sent with an Idempotency-Key (the offline queue, #1355) apply at
-// most once; without the header nothing changes.
+// Writes sent with an Idempotency-Key (the offline queue) apply at most once;
+// without the header nothing changes.
 router.use(idempotency);
 
 // GET /api/racks?cellar=:id  — list racks for a cellar (owner, editor, viewer)
@@ -563,10 +572,8 @@ router.post('/:id/slots/:position/move', async (req, res) => {
     if (toSlot) toSlot.position = from; // occupied target → swap
     await rack.save();
 
-    await rack.populate(SLOT_BOTTLES);
-
     logAudit(req, 'rack.slot_move', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { from, to, swapped: !!toSlot });
-    res.json({ rack: await withMaturity(rack) });
+    res.json(await drawnRack(req, rack));
   } catch (err) {
     if (err.name === 'VersionError') {
       return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
