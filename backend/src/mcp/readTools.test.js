@@ -189,6 +189,23 @@ describe('ownership scoping', () => {
     expect(body.data.placement).toBeNull();
     // No curator question waiting → the field is absent, not null.
     expect(body.data).not.toHaveProperty('open_curator_question');
+    // Nothing recorded about the purchase → every part reads null.
+    expect(body.data.purchase).toEqual({ date: null, location: null, url: null });
+  });
+
+  // What add_bottle / update_bottle stored reads back: the shop and its link.
+  test('get_bottle shows where the bottle was bought, link included', async () => {
+    const cellarId = new mongoose.Types.ObjectId(oid('c'));
+    const bought = new Date('2026-11-20T00:00:00.000Z');
+    Bottle.findById.mockReturnValue(chain({
+      _id: oid('d'), cellar: cellarId, vintage: '2019', status: 'active',
+      wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'X', grapes: [] },
+      pours: [], purchaseDate: bought, purchaseLocation: 'Shop Example', purchaseUrl: 'https://shop.example/wines/barolo-2019',
+    }));
+    Cellar.findById.mockReturnValue(chain({ _id: cellarId, user: ME, members: [], deletedAt: null, name: 'Mine' }));
+    Rack.findOne.mockReturnValue(chain(null));
+    const body = parse(await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX));
+    expect(body.data.purchase).toEqual({ date: bought.toISOString(), location: 'Shop Example', url: 'https://shop.example/wines/barolo-2019' });
   });
 
   // Placement in the words someone at the rack uses (utils/rackGeometry.
