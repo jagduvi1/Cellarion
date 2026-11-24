@@ -11,6 +11,12 @@ const mongoose = require('mongoose');
  * retry would consume a bottle that is already consumed, or clash with its own
  * earlier slot placement.
  *
+ * `body` is the answer in stored form (a populated reference is stored as its
+ * id), or `{ replayed: true }` for an answer the ledger does not keep: one that
+ * only draws current data (a whole rack — middleware/idempotency
+ * keepStatusOnly) or one over the size cap. A row is therefore small: it
+ * records that a write happened, not what the screen showed.
+ *
  * Scoped per user: a key is only ever looked up together with its owner, so one
  * account can never read or collide with another's outcome. `status: null`
  * marks a write still in progress. Rows expire 8 days after creation (TTL). The

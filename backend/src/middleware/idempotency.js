@@ -1,14 +1,16 @@
 /**
- * Idempotent writes (#1355): a non-GET request carrying an `Idempotency-Key`
- * header is applied at most once per user. The first request's status and JSON
- * body are stored (models/IdempotencyRecord, 8 days); a repeat with the same key
- * gets that stored answer back (`Idempotent-Replayed: true`) without running
- * the handler again.
+ * Idempotent writes: a non-GET request carrying an `Idempotency-Key` header is
+ * applied at most once per user. The first request's status and JSON body are
+ * stored (models/IdempotencyRecord, 8 days); a repeat with the same key gets
+ * that stored answer back (`Idempotent-Replayed: true`) without running the
+ * handler again.
  *
  *  - Repeat while the first is still running → 409, `Retry-After: 2`.
  *  - Same key reused for a different method/path → 422.
  *  - 5xx answers are not stored: the key stays free for a real retry.
- *  - No header → untouched, exactly as before.
+ *  - No header → untouched.
+ *  - An answer the ledger does not keep (keepStatusOnly, or one over
+ *    MAX_STORED_BODY) is repeated as its status with `{ replayed: true }`.
  *
  * The outcome is stored the moment the handler answers (res.json), not when
  * the response finishes: in a dead zone the client is often gone by then, and
@@ -19,10 +21,32 @@
  * sends (bottles, racks).
  */
 const IdempotencyRecord = require('../models/IdempotencyRecord');
+const { logger } = require('../services/audit');
 
 const KEY_PATTERN = /^[A-Za-z0-9_-]{16,100}$/;
 const MAX_STORED_BODY = 256 * 1024; // bytes of JSON; larger answers replay as { replayed: true }
 const STALE_MS = 2 * 60 * 1000;
+// What a repeat is told when the ledger did not keep the answer.
+const notKept = () => ({ replayed: true });
+
+// A ledger write runs after the answer has left: its failure is logged with
+// the record it concerns and never reaches the request.
+const logLedgerFailure = (step, recordId) => (err) =>
+  logger.warn({ err, recordId: String(recordId) }, `Idempotency ledger: ${step} failed`);
+
+/**
+ * For a handler whose answer is a drawing of current data (a whole rack with
+ * every bottle in it) and not a record of what the write did: the ledger keeps
+ * the status alone, and a repeat is told `{ replayed: true }`.
+ *
+ * Why: such a drawing is tens of kilobytes per write, kept for 8 days, and
+ * nothing reads it from a repeat. The one sender of repeats, the offline queue
+ * (frontend utils/offlineQueue flush), only asks whether the write went
+ * through and then fetches a fresh copy. Called by routes/racks.js drawnRack.
+ */
+function keepStatusOnly(req) {
+  req.idempotencyStatusOnly = true;
+}
 
 async function claim(scope, method, path) {
   try {
@@ -30,6 +54,17 @@ async function claim(scope, method, path) {
   } catch (err) {
     if (!err || err.code !== 11000) throw err;
     return { existing: await IdempotencyRecord.findOne(scope).lean() };
+  }
+}
+
+// What the ledger keeps of an answer: the body, or notKept() in its place.
+function storedBody(req, body) {
+  if (body === undefined || body === null) return null;
+  if (req.idempotencyStatusOnly) return notKept();
+  try {
+    return JSON.stringify(body).length > MAX_STORED_BODY ? notKept() : body;
+  } catch {
+    return notKept();
   }
 }
 
@@ -65,7 +100,7 @@ async function idempotency(req, res, next) {
       return res.status(422).json({ error: 'Idempotency-Key was already used for a different request' });
     }
     res.set('Idempotent-Replayed', 'true');
-    return res.status(existing.status).json(existing.body ?? { replayed: true });
+    return res.status(existing.status).json(existing.body ?? notKept());
   }
 
   const recordId = claimed.record._id;
@@ -74,14 +109,11 @@ async function idempotency(req, res, next) {
     if (settled) return;
     settled = true;
     if (status >= 500) {
-      IdempotencyRecord.deleteOne({ _id: recordId }).catch(() => {});
+      IdempotencyRecord.deleteOne({ _id: recordId }).catch(logLedgerFailure('freeing the key after a 5xx', recordId));
       return;
     }
-    let stored = body === undefined ? null : body;
-    try {
-      if (stored != null && JSON.stringify(stored).length > MAX_STORED_BODY) stored = { replayed: true };
-    } catch { stored = { replayed: true }; }
-    IdempotencyRecord.updateOne({ _id: recordId }, { $set: { status, body: stored } }).catch(() => {});
+    IdempotencyRecord.updateOne({ _id: recordId }, { $set: { status, body: storedBody(req, body) } })
+      .catch(logLedgerFailure('storing the outcome', recordId));
   };
 
   const originalJson = res.json.bind(res);
@@ -95,4 +127,4 @@ async function idempotency(req, res, next) {
   return next();
 }
 
-module.exports = { idempotency, STALE_MS };
+module.exports = { idempotency, keepStatusOnly, STALE_MS };

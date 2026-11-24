@@ -1,8 +1,8 @@
 /**
- * Idempotent writes (#1355) — a write resent with the same Idempotency-Key is
- * applied once; the repeat gets the first answer back. The offline queue
- * depends on this: in a dead zone the request often arrives while the reply
- * doesn't, and the queue sends it again.
+ * Idempotent writes — a write resent with the same Idempotency-Key is applied
+ * once; the repeat gets the first answer back. The offline queue depends on
+ * this: in a dead zone the request often arrives while the reply doesn't, and
+ * the queue sends it again.
  */
 const express = require('express');
 const http = require('http');
@@ -27,7 +27,11 @@ jest.mock('../models/IdempotencyRecord', () => ({
   }),
 }));
 
-const { idempotency, STALE_MS } = require('./idempotency');
+jest.mock('../services/audit', () => ({ logger: { warn: jest.fn() } }));
+
+const IdempotencyRecord = require('../models/IdempotencyRecord');
+const { logger } = require('../services/audit');
+const { idempotency, keepStatusOnly, STALE_MS } = require('./idempotency');
 
 let applied;
 let server;
@@ -50,6 +54,12 @@ beforeAll(async () => {
     res.json({ bottle: { _id: req.params.id, status: 'drank', n: applied } });
   });
   app.put('/api/racks/:id/slots/:pos', (req, res) => { applied++; res.status(409).json({ error: 'Slot taken' }); });
+  // An answer that draws current data: sent whole, kept as its status alone.
+  app.post('/api/racks/:id/slots/:pos/move', (req, res) => {
+    applied++;
+    keepStatusOnly(req);
+    res.json({ rack: { _id: req.params.id, slots: DRAWN_SLOTS } });
+  });
   app.get('/api/bottles/:id', (req, res) => res.json({ ok: true }));
   server = http.createServer(app);
   await new Promise((r) => server.listen(0, r));
@@ -59,6 +69,7 @@ afterAll(() => new Promise((r) => server.close(r)));
 beforeEach(() => { mockRows.clear(); applied = 0; failNext = false; slow = null; });
 
 const KEY = 'a1b2c3d4e5f6a7b8c9d0e1f2';
+const DRAWN_SLOTS = Array.from({ length: 40 }, (_, i) => ({ position: i + 1, bottle: { _id: `b${i}`, wineDefinition: { name: `Wine ${i}` } } }));
 const send = (path, { key = KEY, method = 'POST', user } = {}) => fetch(`${base}${path}`, {
   method,
   headers: { 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}), ...(user ? { 'X-Test-User': user } : {}) },
@@ -144,4 +155,36 @@ test('a malformed key is refused', async () => {
   expect((await send('/api/bottles/b1/consume', { key: 'short' })).status).toBe(400);
   expect((await send('/api/bottles/b1/consume', { key: 'x'.repeat(20) + '/..' })).status).toBe(400);
   expect(applied).toBe(0);
+});
+
+test('an answer marked status-only is sent whole, kept as its status, and a repeat is told it was applied', async () => {
+  const first = await send('/api/racks/r1/slots/3/move');
+  expect(first.status).toBe(200);
+  expect((await first.json()).rack.slots).toHaveLength(40);
+  await flush();
+  expect(mockRows.get(`u1|${KEY}`)).toMatchObject({ status: 200, body: { replayed: true } });
+
+  const again = await send('/api/racks/r1/slots/3/move');
+  expect(again.status).toBe(200);
+  expect(again.headers.get('idempotent-replayed')).toBe('true');
+  expect(await again.json()).toEqual({ replayed: true });
+  expect(applied).toBe(1);
+});
+
+test('an answer that is not marked is kept whole, whatever a neighbouring request marked', async () => {
+  await send('/api/racks/r1/slots/3/move');
+  await send('/api/bottles/b1/consume', { key: 'f'.repeat(24) });
+  await flush();
+  expect(mockRows.get(`u1|${'f'.repeat(24)}`).body).toEqual({ bottle: { _id: 'b1', status: 'drank', n: 2 } });
+});
+
+test('a ledger write that fails is logged and the request still answers', async () => {
+  IdempotencyRecord.updateOne.mockRejectedValueOnce(new Error('mongo is away'));
+  const res = await send('/api/bottles/b1/consume');
+  expect(res.status).toBe(200);
+  await flush();
+  expect(logger.warn).toHaveBeenCalledWith(
+    expect.objectContaining({ err: expect.any(Error), recordId: `u1|${KEY}` }),
+    expect.stringContaining('storing the outcome'),
+  );
 });
