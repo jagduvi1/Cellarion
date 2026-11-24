@@ -1,11 +1,11 @@
 /**
- * Parse-time import warnings, bounded (audit 2026-09 D13-12).
+ * Parse-time import warnings, bounded.
  *
  * The client sends the notices its parser produced (CellarTracker truncation,
  * encoding, table choice) so a resumed import can show the same banner. They
- * arrived as free Mixed values and were stored as-is — up to the 8 MB import
- * body per row — in ImportSession and ImportArchive. Keep the three fields the
- * banner reads, each capped, and drop everything else.
+ * arrive as free Mixed values, and stored as-is they could fill a row of
+ * ImportSession and ImportArchive with up to the whole import body. Keep the
+ * three fields the banner reads, each capped, and drop everything else.
  */
 const MAX_WARNINGS = 20;
 const CODE_MAX = 40;

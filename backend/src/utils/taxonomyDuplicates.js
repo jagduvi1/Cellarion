@@ -5,12 +5,11 @@ const { normalizeString } = require('./normalize');
  *
  * WHY NOT THE WINE SCANNER'S APPROACH. The registry's duplicate-cluster scan
  * groups by producer and fuzzy-scores the names. That is right for wines and
- * useless here: the four documents the Loire was split across on 2026-08-31 —
- * "Loire Valley" (173 wines), "Vallée de la Loire" (32), "Loire" (2) and
- * "Val de Loire" (1) — share almost no characters. Trigram or Levenshtein
- * similarity between "loire valley" and "vallee de la loire" is low. A fuzzy
- * scan would never have found them, and a mint-time fuzzy check would not have
- * prevented them.
+ * useless here: "Loire Valley", "Vallée de la Loire", "Loire" and "Val de
+ * Loire" — one place under four names — share almost no characters. Trigram
+ * or Levenshtein similarity between "loire valley" and "vallee de la loire" is
+ * low. A fuzzy scan cannot find them, and a mint-time fuzzy check cannot
+ * prevent them.
  *
  * WHAT ACTUALLY SEPARATES THEM. A region's identity lives in its proper nouns.
  * The difference between those four names is entirely articles, prepositions
@@ -31,14 +30,13 @@ const { normalizeString } = require('./normalize');
  * literally mean "valley". Nothing that could name a cru, a commune or a bank
  * of a river.
  *
- * MEASURED AGAINST REAL DATA (prod, 2026-08-31). This rule proposes exactly
- * the four merges a human confirmed, and rejects every false positive a plain
- * substring overlap produced — including Jura/Jurançon, where "jura" is a
+ * MEASURED AGAINST REAL DATA. This rule rejects the false positives a plain
+ * substring overlap produces — including Jura/Jurançon, where "jura" is a
  * substring of "jurançon" but not a token of it. It is deliberately precise
  * rather than exhaustive: it does not catch "Savoie - Haute Savoie" or
  * "Gascony / South West France", both of which a human would merge. A scan an
- * admin trusts is worth more than one that surfaces 56 pairs of which five are
- * real, because the second kind stops being read.
+ * admin trusts is worth more than one that surfaces dozens of pairs of which a
+ * handful are real, because the second kind stops being read.
  */
 
 // Articles, prepositions and conjunctions across the languages the registry
@@ -69,8 +67,7 @@ function nameSignature(name) {
   // Split on the RAW name's separators, then normalize each token — not the
   // other way round. normalizeString removes punctuation rather than turning
   // it into a space, so normalizing first fuses "Languedoc-Roussillon" into
-  // one token and it stops matching "Languedoc Roussillon" (caught by test,
-  // 2026-08-31).
+  // one token and it stops matching "Languedoc Roussillon".
   const tokens = String(name || '')
     .split(/[^\p{L}\p{N}]+/u)
     .map((t) => normalizeString(t))

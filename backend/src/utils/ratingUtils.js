@@ -174,7 +174,7 @@ function filterByRating(bottles, { minRating, maxRating, ratingBand: band } = {}
   });
 }
 
-// ANCHORS/COL are exported for the analytics engine (#987), which GENERATES a
+// ANCHORS/COL are exported for the analytics engine, which GENERATES a
 // Mongo aggregation expression from the same anchor table so in-pipeline
 // normalization can never drift from toNormalized — a parity test pins them.
 module.exports = {

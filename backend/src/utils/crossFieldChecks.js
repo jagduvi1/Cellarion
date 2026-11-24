@@ -64,7 +64,8 @@ const { SWEETNESS_WORDS } = require('./styleTerms');
 
 /**
  * Probe a reference map with BOTH normalization folds of a wine-side value,
- * mirroring findOrCreateWine's dual-key appellation lookup (~line 388 there):
+ * mirroring findOrCreateWine's dual-key appellation lookup (its
+ * producer-is-a-place gate):
  * stored Appellation keys may carry either the legacy normalizeString fold
  * ("chateauneufdupape") or the current normalizeAppellationKey fold
  * ("chateauneuf du pape") until the backfill has run — and for the
@@ -119,9 +120,9 @@ const STYLE_WORDS = new Set([
   // sweetness / dryness scales across label languages. Shared with the
   // registry matcher's style guard (utils/styleTerms), which reads the same
   // words off a wine NAME to decide that a Trocken and a Feinherb are two
-  // wines — one vocabulary, two readers (issue #1134).
+  // wines — one vocabulary, two readers.
   ...SWEETNESS_WORDS,
-  // colour-as-style — the other half of the "Roșu Demidulce" prod row
+  // colour-as-style — the other half of "Roșu Demidulce"
   'rosu', 'alb', 'negru', 'rosso', 'bianco', 'rosato', 'tinto', 'blanco',
   'rouge', 'blanc', 'rose', 'rot', 'weiss', 'red', 'white',
 ]);
@@ -147,8 +148,8 @@ const PLACEHOLDER_PRODUCERS = new Set([
 // would silently re-scope this rule's verdicts (and recorded clearances)
 // whenever the sibling scan's list is re-tuned for its own reasons.
 // Deliberately NOT widened with generic English trade words ('wines',
-// 'estate', 'winery'): name "Wines" under producer "The Freaky Wines" is a
-// real prod split this rule exists to catch.
+// 'estate', 'winery'): name "Wines" under producer "The Freaky Wines" is the
+// split this rule exists to catch.
 const CONTAINMENT_HOUSE_WORDS = new Set([
   'chateau', 'chateaux', 'domaine', 'domaines', 'clos', 'mas', 'maison',
   'cave', 'caves', 'weingut', 'schloss', 'tenuta', 'tenute', 'castello',
@@ -321,23 +322,21 @@ const CROSS_FIELD_CHECKS = [
     // Producer "Increíble", name "Increíble" — the label's one readable word
     // echoed into both boxes by the scan.
     //
-    // THIS RULE IS A FLAG, AND THAT IS THE WHOLE POINT. The same suspicion used
-    // to live in utils/normalize.isImplausibleIdentity, where it BLOCKED
-    // promotion — and blocking it condemned an entire category of real wine:
-    // producer == name is the SINGLE-WINE ESTATE (Château Margaux, Petrus,
-    // Krug, Salon, Opus One, Sassicaia, Masseto, Château Rayas, J.J. Prüm), and
-    // the containment half condemned Domaine de la Romanée-Conti / "Romanée-
-    // Conti", Harlan Estate / "Harlan", Duckhorn / "Duckhorn Vineyards". 67 of
-    // 91 sampled real pairs. Nothing in the STRING distinguishes those from the
-    // "Increíble" echo; only a person looking at the label can.
+    // THIS RULE IS A FLAG, AND THAT IS THE WHOLE POINT. Blocking it would
+    // condemn an entire category of real wine: producer == name is the
+    // SINGLE-WINE ESTATE (Château Margaux, Petrus, Krug, Salon, Opus One,
+    // Sassicaia, Masseto, Château Rayas, J.J. Prüm), and the containment half
+    // catches Domaine de la Romanée-Conti / "Romanée-Conti", Harlan Estate /
+    // "Harlan", Duckhorn / "Duckhorn Vineyards" — most of the real pairs
+    // sampled. Nothing in the STRING distinguishes those from the "Increíble"
+    // echo; only a person looking at the label can.
     //
-    // So the "Increíble" case is now SURFACED here rather than buried in a
+    // So the "Increíble" case is SURFACED here rather than buried in a
     // refusal a curator could not see or overrule: it lands in this queue like
     // every other rule, and a real single-estate wine is cleared once with the
     // existing per-rule clearing mechanism (crossChecksCleared) and never asks
-    // again. Meanwhile P2's 7-day post-promotion scan window keeps the label
-    // photo readable while a curator judges it — which is exactly the evidence
-    // the original prod row no longer had.
+    // again. Meanwhile the 7-day post-promotion scan window keeps the label
+    // photo readable while a curator judges it — the evidence that settles it.
     //
     // Overlaps nameChecks' name-equals-producer.v1 on the equality half, on
     // purpose: that suite is a different queue with a different clearance field
@@ -405,7 +404,7 @@ const CROSS_FIELD_CHECKS = [
     // maturity curve is computed for the wrong style. Pure string test — the
     // only rule in this family that reads `type`, which is why `type` joins
     // CROSS_FIELD_CHECK_SELECT and the crossChecksCleared invalidation set.
-    // v2 (audit L-7): two exemptions, both measured against real rows.
+    // v2: two exemptions, both measured against real rows.
     //   (a) a colour word that is also in the PRODUCER string is the ESTATE's
     //       name, not a claim about the wine — "Cheval Blanc" (a red),
     //       "Mas Blanc", "Clos Blanc". The name repeats the house; the house is
@@ -484,8 +483,8 @@ const DB_BACKED_CROSS_FIELD_CHECKS = [
     // producer's own range. FLAG ONLY — a producer really can own two
     // similarly-named cuvées, so nothing is ever changed automatically.
     //
-    // v2 (audit M-6): threshold 0.85 → 0.78, and a NUMERIC-ONLY difference is
-    // now disqualified — "Reserva 2010"/"Reserva 2011" and "Valbuena 5"/
+    // v2: threshold 0.78, and a NUMERIC-ONLY difference is
+    // disqualified — "Reserva 2010"/"Reserva 2011" and "Valbuena 5"/
     // "Valbuena 3" score above ANY threshold and are different wines, not
     // misreads. The threshold comment in services/crossFieldScan states what
     // 0.78 still does not reach, and why no threshold reaches it.
@@ -519,10 +518,10 @@ const ALL_CROSS_FIELD_CHECKS = [...CROSS_FIELD_CHECKS, ...DB_BACKED_CROSS_FIELD_
  * Blanc" trips name-in-producer, and refusing that would trap a wine whose
  * curator transcribed the label correctly. Those stay in the review queue.
  *
- * And emphatically NOT producer-echoes-name.v1. Refusing producer == name is
- * how the previous revision condemned Château Margaux, Petrus, Krug, Salon and
- * 63 other real single-wine estates; that rule exists to be LOOKED AT, never to
- * refuse a write. See its comment above.
+ * And emphatically NOT producer-echoes-name.v1. Refusing producer == name
+ * would condemn Château Margaux, Petrus, Krug, Salon and every other real
+ * single-wine estate; that rule exists to be LOOKED AT, never to refuse a
+ * write. See its comment above.
  */
 const IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS = [
   'producer-is-appellation.v1',
@@ -581,23 +580,23 @@ const CROSS_FIELD_CHECK_LABEL_KEYS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[
 const CROSS_FIELD_CHECK_FIELDS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.field, m), {});
 // The scan-only heuristic is not a queue check (it must never appear in the
 // review queue or gate a write) but its id DOES ship to clients in
-// `producer_suspect`, so the label/field maps must resolve it (audit L-5).
+// `producer_suspect`, so the label/field maps must resolve it.
 CROSS_FIELD_CHECK_LABEL_KEYS['producer-place-plus-filler.scan'] = 'producerPlacePlusFiller';
 CROSS_FIELD_CHECK_FIELDS['producer-place-plus-filler.scan'] = 'producer';
 
 // ── SCAN-ONLY place-plus-filler heuristic ───────────────────────────────────
 //
-// The prod row that motivated it: a label scan extracted producer "Pays d'Oc
-// Organic Wine" — an APPELLATION padded with marketing words. None of the six
+// The shape it catches: a label scan extracts producer "Pays d'Oc Organic
+// Wine" — an APPELLATION padded with marketing words. None of the six
 // blocking rules fire on it (they are full-string matches, and 'organic' is
-// neither style nor filler in their vocabularies), so it minted as a normal
-// published wine.
+// neither style nor filler in their vocabularies), so without this rule it
+// mints as a normal published wine.
 //
 // This rule flags a producer whose tokens are a known place name (appellation,
 // region or country) plus NOTHING but filler. It is deliberately AGGRESSIVE —
 // "Château Margaux" trips it (margaux = appellation, chateau = filler), and
 // that is exactly why it is SCAN-ONLY and must never gate a write: estates
-// named after their place are an entire legitimate category (the #942 lesson).
+// named after their place are an entire legitimate category.
 // At scan time the flag's whole cost is the editable prefilled form plus the
 // back-label offer instead of the one-tap card, and the route only applies it
 // when the registry matched nothing — a famous estate resolves to its
@@ -633,7 +632,7 @@ const SCAN_PLACE_FILLER_WORDS = new Set([
 function detectPlacePlusFillerProducer(producer, refs) {
   const tokens = normalizeString(String(producer == null ? '' : producer).replace(/ß/g, 'ss'))
     .split(' ').filter(Boolean);
-  // Hard token ceiling (release-audit HIGH-2): the window loop is O(n³) and
+  // Hard token ceiling: the window loop is O(n³) and
   // the front scan can feed it a model-returned string — 800 filler tokens
   // measured at ~35s of synchronous event-loop block. No real place-plus-
   // filler producer is 12+ tokens; anything longer is not this rule's shape.

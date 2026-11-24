@@ -1,14 +1,13 @@
 /**
  * Declared style terms — the label words that ARE the wine.
  *
- * Issue #1134. A Mosel estate's Riesling range came back from label scanning
- * filed under ONE registry row: "Brauneberger Juffer-Sonnenuhr Riesling
- * Spätlese Alte Reben", "… Auslese" and "… Spätlese Feinherb" all landed on
- * the Feinherb entry. Nothing was broken in the scorer — the composite is
+ * One estate's Riesling range from one vineyard — "Brauneberger
+ * Juffer-Sonnenuhr Riesling Spätlese Alte Reben", "… Auslese" and "… Spätlese
+ * Feinherb" — scores as ONE wine to the scorer alone. The composite is
  * name×0.45 + producer×0.45 + appellation×0.10, and on a range from one estate
  * in one vineyard the producer and appellation axes both score 1.0. That fixes
- * 0.55 before the name is read, so a name only has to reach 0.44 to clear the
- * scan path's old 0.75 floor. Measured against the real registry rows:
+ * 0.55 before the name is read, so a name only has to reach 0.44 to clear a
+ * 0.75 match floor. The scores of such pairs:
  *
  *   … Riesling Spätlese Alte Reben  vs … Spätlese Feinherb ......... 0.8749
  *   … Riesling Auslese              vs … Spätlese Feinherb ......... 0.8457
@@ -43,8 +42,7 @@ const { normalizeString, spellStarGrades, MAX_STAR_GRADE, SWEETNESS_ALIASES } = 
 // stripped outright, so callers that care pre-fold ß→ss — "süß" → 'suss').
 //
 // SINGLE SOURCE OF TRUTH: utils/crossFieldChecks builds its producer-is-a-
-// style-term vocabulary from this set. It used to hold its own copy, and a
-// third copy here would be two lists too many.
+// style-term vocabulary from this set, so the two can never drift apart.
 const SWEETNESS_WORDS = new Set([
   'demidulce', 'demisec', 'dulce', 'seco', 'semiseco', 'semidulce',
   'abboccato', 'amabile', 'halbtrocken', 'feinherb', 'trocken', 'lieblich',
@@ -77,18 +75,16 @@ const PRADIKAT_WORDS = new Set([
 const PRADIKAT_ALIASES = new Map([
   ['spaetlese', 'spatlese'],
   ['icewine', 'eiswein'],
-  // An OBSERVED misspelling, not a guess: "Trokenbeerenauslese" (one c, one
-  // s) occurs in real cellar exports, written that way by the exporting
-  // owner. Present because it was seen in real data. This map is not a
-  // general typo-tolerance scheme and should not grow into one: every entry
-  // needs a file behind it.
+  // An OBSERVED misspelling, not a guess: "Trokenbeerenauslese" occurs in
+  // real cellar exports. This map is not a general typo-tolerance scheme and
+  // should not grow into one: every entry needs a file behind it.
   ['trokenbeerenauslese', 'trockenbeerenauslese'],
 ]);
 
 // The sweetness twin of PRADIKAT_ALIASES, for the same keyboard: "Süß" typed
 // without the umlaut is "Suess", which normalizeString leaves alone — without
 // this the guard silently fails open for the standard ue-transliteration.
-// "Troken" comes from the same cellar export as the Prädikat typo above.
+// "Troken" is an observed misspelling too, like the Prädikat one above.
 // NAME side only, like the Prädikat map: the producer-field rules in
 // crossFieldChecks read SWEETNESS_WORDS directly and must NOT gain 'suess' —
 // Suess is a real surname, and flagging every "Weingut Suess" as a style-term
@@ -120,7 +116,7 @@ const JOINED_PHRASES = [
 // one of these words. Each grade is its own wine, so two names stating
 // different grades are two wines, exactly like two Prädikate. Bounded by
 // MAX_STAR_GRADE: a typed "400000000star" is text, not a grade (an unbounded
-// count fed '*'.repeat in the reason below — release audit 2026-10-13).
+// count would feed '*'.repeat in the reason below).
 const STAR_GRADE_TOKEN = new RegExp(`^[1-${MAX_STAR_GRADE}]star$`);
 
 /**
@@ -132,9 +128,9 @@ const STAR_GRADE_TOKEN = new RegExp(`^[1-${MAX_STAR_GRADE}]star$`);
 function statedStyle(name) {
   // Lowercase BEFORE the ß-fold: the capital eszett ẞ (U+1E9E — the official
   // uppercase form, routine on all-caps German labels) only becomes ß under
-  // toLowerCase, and folding first left it for normalizeString to delete as
-  // punctuation, silently dropping the sweetness term (post-release audit,
-  // verified by execution: "SÜẞ" read as stating nothing).
+  // toLowerCase, and folding first would leave it for normalizeString to
+  // delete as punctuation, silently dropping the sweetness term ("SÜẞ" would
+  // read as stating nothing).
   let folded = normalizeString(spellStarGrades(String(name == null ? '' : name).toLowerCase().replace(/ß/g, 'ss')));
   for (const [re, joined] of JOINED_PHRASES) folded = folded.replace(re, joined);
 
@@ -282,12 +278,11 @@ const fieldTerm = (w) => {
 /**
  * The style a WINE declares — the record first, the name as the fallback.
  *
- * Label sweetness moved into a field of its own (WineDefinition.labelSweetness,
- * GitHub discussion #1754), and the word is leaving the names it used to ride
- * in. A guard that read only names would then go blind on exactly the wines it
- * was built for (#1134), so this reads the field where the record carries it
- * and the name where it does not: a row from before the migration, a name a
- * scan or an import typed, a Bridge peer on the older protocol. The ripeness
+ * Label sweetness has a field of its own (WineDefinition.labelSweetness), and
+ * the word leaves the names. A guard that read only names would go blind on
+ * exactly the wines it is built for, so this reads the field where the record
+ * carries it and the name where it does not: a row from before the migration,
+ * a name a scan or an import typed, a Bridge peer on the older protocol. The ripeness
  * tier likewise: the classification rows of kind `ripeness` count beside any
  * Prädikat the name states.
  *
@@ -367,11 +362,12 @@ module.exports = {
 };
 
 /**
- * Route a bare Prädikat out of an appellation — the one rule for EVERY mint
- * (findOrCreateWine and the two admin routes that build a WineDefinition
- * themselves; audit 2026-09-07). Returns the appellation to store (null when
- * it was only the Prädikat) and the classification: the caller's own when
- * given, else the Prädikat unless the name contradicts it.
+ * Route a bare Prädikat out of an appellation, for the two admin routes that
+ * build a WineDefinition themselves. findOrCreateWine and the import apply the
+ * same rule through pradikatOnlyValue and pradikatContradictsName. Returns the
+ * appellation to store (null when it was only the Prädikat) and the
+ * classification: the caller's own when given, else the Prädikat unless the
+ * name contradicts it.
  */
 function splitPradikatFromAppellation(appellation, classification, name) {
   const ap = typeof appellation === 'string' ? appellation.trim() : '';

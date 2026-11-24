@@ -3,7 +3,7 @@
  * is stored or shown. restic repository strings such as
  * `rest:https://user:pass@host:8000/` or `s3:https://KEY:SECRET@host/bucket`
  * carry credentials in the authority; the super-admin backup panel must show
- * where the backups go without showing how to open them (audit 2026-09 F05-5).
+ * where the backups go without showing how to open them.
  * Non-strings and strings without an authority pass through unchanged.
  */
 function redactUrlCredentials(value) {

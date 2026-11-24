@@ -159,7 +159,7 @@ function decorateGrapes(wine, { styleAsked = false } = {}) {
  * label-true spelling finds the wine too while filters stay on the single
  * canonical vocabulary. Shared by the registry index (services/search) and
  * cellar search (services/bottleSearch): bottle cards show the regional
- * label, so cellar search must match on it (audit 2026-08-11).
+ * label, so cellar search must match on it.
  *
  * @param {object} wine – lean wine with populated `grapes` ({ name, regionalNames? })
  * @returns {string[]}

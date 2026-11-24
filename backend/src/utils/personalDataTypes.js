@@ -1,9 +1,9 @@
-// The shared typed-value system (issue #986). Validates a raw value against a
+// The shared typed-value system. Validates a raw value against a
 // key's declared type and returns the canonical cast form. Values are
 // validated for TYPE, never for truth.
 //
 // This module is deliberately free of personal-data specifics: the public
-// registry vocabulary (#985) and the analytics catalogue (#987) reuse the same
+// registry vocabulary and the analytics catalogue reuse the same
 // types, so `key` here is any object shaped { type, enumOptions? } — the unit
 // lives on the key and plays no part in validation.
 
