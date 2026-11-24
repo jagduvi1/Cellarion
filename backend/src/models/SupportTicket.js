@@ -58,10 +58,10 @@ const supportTicketSchema = new mongoose.Schema({
     maxlength: 5000
   },
   // The conversation AFTER the opening message. Admin responses are appended
-  // here AND mirrored into adminResponse (latest) for pre-thread consumers;
-  // user follow-ups (web reply box or the MCP reply_to_ticket tool) live only
-  // here and flip status back to 'open'. Tickets created before threading
-  // have an empty array and just the message/adminResponse pair.
+  // here AND mirrored into adminResponse (latest) for readers of that field
+  // alone; user follow-ups (web reply box or the MCP reply_to_ticket tool) live
+  // only here and flip status back to 'open'. With an empty array, readers
+  // show the message/adminResponse pair.
   replies: {
     type: [ticketReplySchema],
     default: []

@@ -33,10 +33,9 @@ const wineRequestSchema = new mongoose.Schema({
       message: 'Please provide a valid URL'
     }
   },
-  // Every link the requester gave, in their order, sourceUrl first. One link
-  // was all a request could carry; a winery page and a review page give a
-  // curator different evidence (#1460). sourceUrl stays the first of these,
-  // for the readers and the older installs that know only one.
+  // Every link the requester gave, in their order, sourceUrl first: a winery
+  // page and a review page give a curator different evidence. sourceUrl stays
+  // the first of these, for the readers and the installs that know only one.
   // The service (accountOps.collectSourceUrls) is the real gate; the schema
   // repeats the shape so a later writer that bypasses it cannot store a
   // javascript: entry the admin page renders as a link.
@@ -57,12 +56,12 @@ const wineRequestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  // The back label (#1460): often the producer, the appellation and the
-  // importer the front leaves out. Same shapes as image — an http(s) link or
-  // an inline data: image under the cap (services/accountOps
-  // MAX_IMAGE_REF_LENGTH, repeated here) — shown to the reviewing admin beside
-  // the front. Never the wine's picture; on approval it may be published as
-  // one of the wine's gallery photos (routes/admin/wineRequests.js).
+  // The back label: often the producer, the appellation and the importer the
+  // front leaves out. Same shapes as image — an http(s) link or an inline
+  // data: image under the cap (services/accountOps MAX_IMAGE_REF_LENGTH,
+  // repeated here) — shown to the reviewing admin beside the front. Never the
+  // wine's picture; on approval it may be published as one of the wine's
+  // gallery photos (routes/admin/wineRequests.js).
   backImage: {
     type: String,
     trim: true,
@@ -147,22 +146,16 @@ const wineRequestSchema = new mongoose.Schema({
   },
   // Registry side (cellarion.app) only, on a request a self-hosted install
   // filed through the bridge: when that install showed it follows THIS
-  // request — it asked what became of it (GET /v1/requests, v1.252.0+) or
-  // said so when forwarding it. Such an install finishes the request itself
-  // and notifies its own requester, so the decision here does not notify the
-  // key owner a second time (services/wineRequestOps). Null = no sign the
-  // install will ever hear (older than v1.252.0, or forwarded before it
-  // upgraded): the notification here is then the only one, and it stays.
+  // request — it asked what became of it (GET /v1/requests) or said so when
+  // forwarding it. Such an install finishes the request itself and notifies
+  // its own requester, so the decision here does not notify the key owner a
+  // second time (services/wineRequestOps). Null = no sign the install will
+  // ever hear (it never asked about this request): the notification here is
+  // then the only one, and it stays.
   installFollowsAt: {
     type: Date,
     default: null
   },
-  // Registry side only, on a wine a self-hosted install CONTRIBUTED (POST
-  // /api/bridge/v1/contributions): the drink windows that install set on it,
-  // one per year vintage. Never published from here. When the request is
-  // resolved, each becomes a PENDING suggestion in the maturity queue
-  // (services/wineRequestOps → maturityOps.seedSuggestedWindows), and a
-  // curator adjusts it to the registry's rules and reviews it, or not.
   // Registry side only: the contributing install's own id for the wine (opaque
   // here). "The same wine sent again" is the same id from the same account,
   // never a name match: two wines of one producer may share a name.
@@ -171,6 +164,12 @@ const wineRequestSchema = new mongoose.Schema({
     default: null,
     maxlength: 24
   },
+  // Registry side only, on a wine a self-hosted install CONTRIBUTED (POST
+  // /api/bridge/v1/contributions): the drink windows that install set on it,
+  // one per year vintage. Never published from here. When the request is
+  // resolved, each becomes a PENDING suggestion in the maturity queue
+  // (services/wineRequestOps → maturityOps.seedSuggestedWindows), and a
+  // curator adjusts it to the registry's rules and reviews it, or not.
   proposedWindows: {
     type: [{
       _id: false,

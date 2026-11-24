@@ -94,10 +94,9 @@ const wineOwnerInquirySchema = new mongoose.Schema({
   resolutionNote: { type: String, trim: true, maxlength: 500 },
   // The curator's reply BACK to the owners who answered — the one field here
   // a bottle owner ever reads. Deliberately NOT resolutionNote reused: that
-  // note has always been the curator's private record, so publishing it
-  // retroactively would push candid internal wording at real users (the
-  // adminNotes→adminResponse lesson, v1.112.0). The split is the contract:
-  // anything written HERE is user-facing, anything in resolutionNote is not.
+  // note is the curator's private record, and publishing it would push candid
+  // internal wording at real users. The split is the contract: anything
+  // written HERE is user-facing, anything in resolutionNote is not.
   ownerReply: { type: String, trim: true, maxlength: RESPONSE_MAX, default: null },
   // Answer window: an open inquiry unanswered for 60 days is marked 'closed'
   // by the lazy sweep in services/ownerInquiryOps.js (no cron needed — the

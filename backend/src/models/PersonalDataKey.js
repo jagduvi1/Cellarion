@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 const { TYPES } = require('../utils/personalDataTypes');
 
-// A user's private vocabulary of typed keys for personal wine/bottle data
-// (issue #986). The type (and unit/options) lives on the KEY, not the value,
-// so every value of a key is comparable — which is what lets the future
-// analytics catalogue (#987) sort, filter and aggregate personal data.
-// Keys are per-user; the shared registry vocabulary (#985) is a separate,
-// admin-curated concept.
+// A user's private vocabulary of typed keys for personal wine/bottle data.
+// The type (and unit/options) lives on the KEY, not the value, so every value
+// of a key is comparable — which is what lets the analytics catalogue
+// (services/analytics/fieldCatalogue.js) sort, filter and aggregate personal
+// data. Keys are per-user; the shared registry vocabulary (RegistryDataKey)
+// is a separate, admin-curated concept.
 
 const personalDataKeySchema = new mongoose.Schema({
   user: {

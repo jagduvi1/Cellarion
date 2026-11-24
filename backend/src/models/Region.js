@@ -15,7 +15,7 @@ const regionSchema = new mongoose.Schema({
   // Display names in the reader's language. The canonical `name` above stays
   // English and authoritative — search, dedup, exports and the registry key are
   // all built on it — and these are layered on top for display only, so an
-  // untranslated region simply reads as it always has (utils/localizedName).
+  // untranslated region simply reads as its `name` (utils/localizedName).
   // An import file may write "Allemagne" or "Moselle": the import ACCEPTS the
   // owner's language on the way in, and this gives it back.
   translations: {
@@ -79,26 +79,22 @@ const regionSchema = new mongoose.Schema({
   // WHERE THIS DOCUMENT CAME FROM — a permanent fact, never cleared.
   //
   // True when a user write minted it (label scan, add-bottle, import) rather
-  // than a curator. Self-minting is why the collection needed cleanup scripts
-  // twice in July: any comma-free non-country string becomes taxonomy
-  // silently. Recording the mint makes it VISIBLE instead of blocking it — a
-  // user adding a bottle is never held up by taxonomy review.
+  // than a curator. Self-minting lets any comma-free non-country string become
+  // taxonomy silently. Recording the mint makes it VISIBLE instead of blocking
+  // it — a user adding a bottle is never held up by taxonomy review.
   //
-  // Renamed from `pendingReview` on 2026-08-31. That name described an action
-  // ("review is pending") for a field that only ever recorded an origin, and
-  // the mismatch cost a month: because it was set on every mint and cleared
-  // only by an admin clicking approve, the screen showed 164 rows as a to-do
-  // list of which 161 were in normal use and one was junk. Nobody could read
-  // a list like that, so nobody did — and the real defect inside it, one
-  // region split across four documents holding 208 wines, went unnoticed.
-  // Being flagged never revealed it; all four were flagged individually.
+  // Named for the origin it records, not for an action: a "pending review"
+  // flag set on every mint and cleared only by an approve click turns into a
+  // to-do list where nearly every row is in normal use, which nobody reads —
+  // and the real defect (one region split across several documents) hides in
+  // it, each piece flagged on its own.
   //
-  // Whether a human has LOOKED is a separate fact, and now a separate field.
+  // Whether a human has LOOKED is a separate fact, in a separate field.
   createdByUser: { type: Boolean, default: false, index: true },
   // When an admin actually reviewed this document, and who. Null means nobody
   // has — which is the honest state for the great majority, and is not by
-  // itself a problem: a region carrying 36 wines has been proven real by use
-  // in a way an approval click adds nothing to. See needsHumanReview in
+  // itself a problem: a region carrying dozens of wines has been proven real by
+  // use in a way an approval click adds nothing to. See needsHumanReview in
   // services/taxonomyUsage.js for what actually earns a curator's attention.
   reviewedAt: { type: Date, default: null },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

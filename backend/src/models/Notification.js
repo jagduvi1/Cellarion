@@ -45,7 +45,7 @@ const notificationSchema = new mongoose.Schema({
       'journal_mention',
       'restock_alert',
       // A drink a member holds was moved to Other by another holder
-      // (services/nonWineOps, release audit 2026-10-28).
+      // (services/nonWineOps).
       'wine_moved_to_other',
       'price_tracked',
       'price_tracking_declined',
@@ -59,27 +59,25 @@ const notificationSchema = new mongoose.Schema({
       'owner_inquiry',
       'owner_inquiry_response',
       'owner_inquiry_resolved',
-      // Registry-data contributions. Every other submitter-facing queue
-      // (wine requests, wine reports, images, price requests) tells the
-      // submitter what happened; these two were the gap — a decided
-      // proposal recorded its rejectReason where only a GDPR export could
-      // reach it.
+      // Registry-data contributions. Like every other submitter-facing queue
+      // (wine requests, wine reports, images, price requests), these tell the
+      // submitter what happened — otherwise a decided proposal's rejectReason
+      // would reach them only through a GDPR export.
       'registry_key_decided',
       'registry_value_decided',
-      // The third of that family (2026-09-18): a user's suggested fix to a
-      // wine's identity, type or grapes was applied or not — the bottle page
-      // had been promising "you'll see the outcome" with nothing delivering it.
+      // The third of that family: a user's suggested fix to a wine's identity,
+      // type or grapes was applied or not (services/wineCorrectionNotify).
       'wine_correction_decided',
       // A member asked for a forum language section; same principle as the
       // two above — whoever asked gets told what was decided.
       'forum_language_decided',
-      // Registry lockdown (2026-09-06): the daily readers report found a
-      // reader past the alert level — admins only.
+      // Registry lockdown: the daily readers report found a reader past the
+      // alert level — admins only.
       'registry_read_alert',
-      // Private draft wines (2026-09-12, services/wineDraftExpiryJob): an
-      // EMPTY draft is about to be deleted; a draft holding bottles was
-      // auto-published as it stood; or auto-publish found the wine already
-      // in the registry and attached the bottles to it instead.
+      // Private draft wines (services/wineDraftExpiryJob): an EMPTY draft is
+      // about to be deleted; a draft holding bottles was auto-published as it
+      // stood; or auto-publish found the wine already in the registry and
+      // attached the bottles to it instead.
       'wine_draft_expiring',
       'wine_draft_published',
       'wine_draft_merged',

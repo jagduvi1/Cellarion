@@ -5,8 +5,8 @@ const mongoose = require('mongoose');
  * `Idempotency-Key` header (middleware/idempotency.js), so that sending the
  * same write again returns the first outcome instead of applying it twice.
  *
- * Why: offline mode (#1355) queues writes made in a cellar with no signal and
- * sends them when it comes back. In a basement the common failure is not "no
+ * Why: offline mode queues writes made in a cellar with no signal and sends
+ * them when it comes back. In a basement the common failure is not "no
  * network" but "the request arrived and the reply didn't" — without this, the
  * retry would consume a bottle that is already consumed, or clash with its own
  * earlier slot placement.

@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 
 /**
- * Tracks daily Anthropic-backed AI usage per user (SECURITY_AUDIT_2026-07-08
- * M-2 / L-14). One document per (userId, date) pair, mirroring ChatUsage.
+ * Tracks daily AI usage per user against the shared budget (services/aiBudget),
+ * one document per (userId, date) pair, mirroring ChatUsage.
  *
- * `count` is the number of actual Anthropic calls debited that UTC day across
- * import identify, scan-label, identify-text, ai-info, and user-triggered
- * wine enrichment. Chat keeps its own separate quota (ChatUsage).
+ * `count` = AI calls debited that UTC day (chat is counted in ChatUsage):
+ * import identify, scan-label (front and back), identify-text, ai-info, receipt
+ * scan, user-triggered wine enrichment and the MCP semantic search's embedding.
  *
  * The site-wide daily kill-switch (rateLimits.aiGlobalDailyCap) is tracked as
  * a singleton row per day with `userId: null` — not personal data.

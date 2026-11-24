@@ -15,13 +15,13 @@ const mongoose = require('mongoose');
  * within one currency every value is same-currency / same-tax and therefore
  * comparable. See docs/wine-valuation-spec.md.
  *
- * Privacy (security audit L-18): a k-anonymity floor of FIRM_MIN_OWNERS (3)
- * distinct owners is enforced both by the aggregation job (sub-floor vintages
- * are never stored, and previously stored ones are cleaned up) and by the
+ * Privacy: a k-anonymity floor of FIRM_MIN_OWNERS (3) distinct owners is
+ * enforced both by the aggregation job (sub-floor vintages are never stored,
+ * and a stored one that falls below it is removed on the next run) and by the
  * read layer (services/communityPrice.js) — a 1–2 owner aggregate would
  * effectively publish an individual user's exact purchase price on a public
- * endpoint. `indicative` therefore no longer reaches clients; the enum is kept
- * for legacy documents until the next job run sweeps them.
+ * endpoint. `indicative` therefore never reaches clients; the enum keeps the
+ * value only so a leftover document still validates until the job removes it.
  */
 const communityWinePriceSchema = new mongoose.Schema({
   wineDefinition: {
@@ -57,8 +57,8 @@ const communityWinePriceSchema = new mongoose.Schema({
     min: 1
   },
   // 'firm'  → sampleSize >= FIRM_MIN_OWNERS (anonymised, high trust)
-  // 'indicative' → 1–2 owners; NO LONGER stored or served (k-anonymity floor,
-  // L-18) — value kept in the enum only for legacy documents pending cleanup.
+  // 'indicative' → 1–2 owners; never stored or served (k-anonymity floor) —
+  // kept in the enum only for a leftover document the job has yet to remove.
   confidence: {
     type: String,
     enum: ['indicative', 'firm'],

@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 
-// A saved analytics view (#987 saved-views slice): any
-// table state — rows or grouped, filters, columns, chart — under a name the
-// user chose, plus the starring that orders the views menu. Two kinds share
-// the collection so one GDPR entry and one routes file cover both:
+// A saved analytics view: any table state — rows or grouped, filters,
+// columns, chart — under a name the user chose, plus the starring that orders
+// the views menu. Two kinds share the collection so one GDPR entry and one
+// routes file cover both:
 //
 //   kind 'own'         — a user-created view: name + query + viz, starrable
 //   kind 'preset-star' — a star on one of the built-in presets; existence IS

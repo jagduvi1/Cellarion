@@ -70,7 +70,7 @@ const rackModuleSchema = new mongoose.Schema({
     shelfCols: { type: [Number], default: undefined },
     shelfAlternate: { type: [Boolean], default: undefined },
     // (No shelfSideways here: a module is never a cabinet, and nothing
-    // validates a module's typeConfig — declared, any strings were stored;
+    // validates a module's typeConfig — declared, it would store any string;
     // left out, Mongoose drops the key.)
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
@@ -92,7 +92,7 @@ const rackSchema = new mongoose.Schema({
   // that a room needs ("Basement" holds several racks; the fridge and the
   // cooler are one each). A label, not a collection: the racks page sections
   // by it, the bottle filter scopes to it, the connector and analytics report
-  // it (discussion #1228). null = ungrouped.
+  // it. null = ungrouped.
   group:     { type: String, trim: true, maxlength: 40, default: null },
   // Simple rack fields (used when isModular is false)
   type:      { type: String, enum: RACK_TYPES, default: 'grid' },
@@ -203,17 +203,17 @@ const rackSchema = new mongoose.Schema({
 
 rackSchema.index({ cellar: 1, name: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 rackSchema.index({ rfidTag: 1 }, { unique: true, sparse: true });
-// One slot per bottle, DB-ENFORCED across racks (prior-audit M4): the
-// invariant spans multiple rack documents, so per-document optimistic
-// concurrency can't see two racks each admitting the same bottle at the same
-// moment — a unique MULTIKEY index can (the loser's save gets E11000, mapped
-// to a 409 in services/rackOps.js). Notes: multikey uniqueness applies ACROSS
-// documents (same-doc duplicates stay procedural + __v-guarded); the partial
-// filter keeps slot-less racks out of the index (an empty array indexes as a
-// null key, and two empty racks must not collide); soft-deleted racks are
-// harmless — rack deletion empties slots first (routes/racks.js). If this
-// index fails to build on an existing deployment, legacy duplicate placements
-// exist — find them with scripts/find-duplicate-rack-placements.js.
+// One slot per bottle, DB-ENFORCED across racks: the invariant spans multiple
+// rack documents, so per-document optimistic concurrency can't see two racks
+// each admitting the same bottle at the same moment — a unique MULTIKEY index
+// can (the loser's save gets E11000, mapped to a 409 in services/rackOps.js).
+// Notes: multikey uniqueness applies ACROSS documents (same-doc duplicates
+// stay procedural + __v-guarded); the partial filter keeps slot-less racks
+// out of the index (an empty array indexes as a null key, and two empty racks
+// must not collide); soft-deleted racks are harmless — rack deletion empties
+// slots first (routes/racks.js). If this index fails to build on an existing
+// deployment, duplicate placements exist — find them with
+// scripts/find-duplicate-rack-placements.js.
 rackSchema.index(
   { 'slots.bottle': 1 },
   { unique: true, partialFilterExpression: { 'slots.bottle': { $exists: true } } }

@@ -2,9 +2,8 @@ const mongoose = require('mongoose');
 
 /**
  * DeletedBottle — one bottle in a cellar's "Recently deleted", the trash a
- * bulk delete moves bottles to (forum feedback 2026-10-12: a whole import had
- * to be deleted so it could be done again, and deleting a hundred bottles for
- * good with one tap is too easy to regret).
+ * bulk delete moves bottles to: deleting a hundred bottles for good with one
+ * tap — a whole import, say, to run it again — is too easy to regret.
  *
  * The bottle document itself is gone from `bottles`, so nothing else in the
  * app (stats, search, racks, exports, the MCP) has to learn to skip it. This

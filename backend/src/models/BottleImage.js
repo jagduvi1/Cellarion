@@ -73,8 +73,8 @@ const bottleImageSchema = new mongoose.Schema({
     default: false
   },
   // What this image IS, so the one collection can hold two things that must
-  // never be confused. 'bottle' (the default, and what every pre-existing row
-  // is) = a user's photo of their bottle: gallery-eligible, wine-image-
+  // never be confused. 'bottle' (the default, also for a row without the
+  // field) = a user's photo of their bottle: gallery-eligible, wine-image-
   // eligible, public once approved. 'label-scan' = the original frame handed to
   // the AI label scanner, kept ONLY so a curator working the pending-identity
   // queue can read the label the extraction got wrong. A label-scan row is
@@ -94,8 +94,7 @@ const bottleImageSchema = new mongoose.Schema({
   // WHICH FACE of the bottle this frame shows. Read for kind:'label-scan'
   // evidence; a kind:'bottle' gallery photo keeps the 'front' default, except
   // the back label of an approved wine request, which is published with
-  // 'back' (routes/admin/wineRequests.js, #1460) — nothing reads it in the
-  // gallery yet.
+  // 'back' (routes/admin/wineRequests.js) — nothing reads it in the gallery yet.
   //
   // Exists because the back label is the rescue path when the front scan came
   // back incomplete: both frames are kept as curation evidence on the same
@@ -112,22 +111,22 @@ const bottleImageSchema = new mongoose.Schema({
   },
   // PURPOSE-BOUND retention deadline for a kind:'label-scan' row whose wine has
   // LEFT the pending-identity queue. Stamped on the TRANSITION itself — the
-  // WineDefinition post('save') hook, via
-  // services/labelScanAccess.stampPromotedScanRetention, so no promoting write
-  // path can forget (audit M-4) — and enforced by the daily sweep
-  // (services/scanImageRetentionJob): when it passes, the file and this
-  // document are deleted and WineDefinition.scanImage is nulled.
+  // WineDefinition post('save') hook, via services/labelScanAccess
+  // .stampPromotedScanRetention, so no promoting write path can forget — and
+  // enforced by the daily sweep (services/scanImageRetentionJob): when it
+  // passes, the file and this document are deleted and WineDefinition.scanImage
+  // is nulled.
   //
   // Why a scan outlives its queue at all: a curator's completion can be WRONG,
-  // and until now the label became unreadable the instant the row promoted —
-  // so the only evidence that could correct it was gone (see
+  // and a label that became unreadable the instant the row promoted would take
+  // with it the only evidence that could correct it (see
   // services/labelScanAccess for the full argument). The window is 7 days.
   //
   // null means NO CLOCK HAS STARTED, not "expired": every scan on a wine that
-  // is still pending, and every row predating the field. Those are governed by
-  // their wine's pending state and by the 30-day unattached sweep, never by
-  // this field. GDPR: this REDUCES retention (a promoted wine's scan used to be
-  // kept indefinitely) — it never extends it.
+  // is still pending, and every row never stamped. Those are governed by their
+  // wine's pending state and by the 30-day unattached sweep, never by this
+  // field. GDPR: this REDUCES retention (without it a promoted wine's scan would
+  // be kept indefinitely) — it never extends it.
   retainUntil: {
     type: Date,
     default: null
@@ -140,8 +139,8 @@ const bottleImageSchema = new mongoose.Schema({
   // in step when that bottle's vintage is edited (utils/imageVintage). null =
   // not tied to a vintage: a wine-level upload, an unknown year, or a label
   // scan. Lets a 2016 bottle show a 2016 label rather than the 2015 one.
-  // Rows older than the field have no key at all until the boot-time
-  // backfill (services/imageVintageBackfill) sets it.
+  // A row without the key gets one from the boot-time backfill
+  // (services/imageVintageBackfill).
   vintage: {
     type: String,
     trim: true,
@@ -161,7 +160,6 @@ const bottleImageSchema = new mongoose.Schema({
   // original when there is no crop). Set on import so a cellar export re-imported
   // by the same user reuses an already-stored identical image instead of writing
   // a duplicate copy to disk (see services/cellarImport.js).
-  // Sparse: legacy/live-upload images don't have it and shouldn't bloat the index.
   contentHash: {
     type: String,
     default: null
@@ -211,6 +209,7 @@ bottleImageSchema.index({ wineDefinition: 1, vintage: 1 });
 bottleImageSchema.index({ originalUrl: 1 }, { partialFilterExpression: { originalUrl: { $type: 'string' } } });
 bottleImageSchema.index({ processedUrl: 1 }, { partialFilterExpression: { processedUrl: { $type: 'string' } } });
 // Dedup lookup on import: "does this user already have this exact image?"
+// `sparse` has no effect here: uploadedBy is always set, so every row is indexed.
 bottleImageSchema.index({ uploadedBy: 1, contentHash: 1 }, { sparse: true });
 // The 30-day unattached-scan sweep (services/scanImageRetentionJob.js) reads
 // exactly this shape: label scans that never reached a wine.
@@ -218,12 +217,11 @@ bottleImageSchema.index({ kind: 1, wineDefinition: 1, createdAt: 1 });
 // The 7-day promoted-scan expiry sweep: label scans whose grace window has run
 // out.
 //
-// PARTIAL, not sparse (audit L-10). `retainUntil` has `default: null`, so every
-// document in the collection HAS the field and a sparse index indexes all of
-// them — the "small fraction" the comment claimed was the whole collection.
-// A partialFilterExpression on the value is what actually restricts it to the
-// promoted scans that carry a real deadline, which is also the only shape the
-// sweep queries ({ kind: 'label-scan', retainUntil: { $lte: now } }).
+// PARTIAL, not sparse: `retainUntil` has `default: null`, so every document
+// HAS the field and a sparse index would index all of them. A
+// partialFilterExpression on the value restricts it to the promoted scans that
+// carry a real deadline, which is also the only shape the sweep queries
+// ({ kind: 'label-scan', retainUntil: { $type: 'date', $lt: now } }).
 bottleImageSchema.index(
   { kind: 1, retainUntil: 1 },
   { partialFilterExpression: { retainUntil: { $type: 'date' } } }

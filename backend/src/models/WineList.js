@@ -118,8 +118,8 @@ const wineListSchema = new mongoose.Schema({
 
   // Auto mode: grouping config
   autoGrouping: {
-    // First (and, for lists saved before nested grouping, only) level.
-    // Kept in sync with levels[0] by the editor so older readers still work.
+    // The first level (the only one when `levels` is empty); the editor keeps
+    // it in sync with levels[0] so a reader of groupBy alone still works.
     groupBy: {
       type: String,
       enum: ['type', 'country', 'region'],
@@ -266,10 +266,10 @@ wineListSchema.index({ user: 1, cellar: 1 });
 // because the PUBLIC, unauthenticated PDF endpoint renders every entry
 // synchronously and buffers the whole document in the backend heap — without a
 // cap one account could publish a multi-thousand-entry list and DoS the whole
-// service via a few anonymous PDF requests (security audit H1). Enforced HERE
-// (pre-save) so every write path is covered: REST create/update/duplicate AND
-// the MCP add_to_list tool + its undo. Thrown as a ValidationError so the REST
-// routes (→400) and the MCP tool (→invalid_input) both surface it cleanly.
+// service via a few anonymous PDF requests. Enforced HERE (pre-save) so every
+// write path is covered: REST create/update/duplicate AND the MCP add_to_list
+// tool + its undo. Thrown as a ValidationError so the REST routes (→400) and
+// the MCP tool (→invalid_input) both surface it cleanly.
 const MAX_ENTRIES_PER_LIST = 500;
 
 /** Total entries across BOTH containers (autoGroupEntries + every section). */
@@ -292,8 +292,8 @@ function entryCapError(doc) {
 
 wineListSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
-  // The legacy single-level field always mirrors the first nested level, so
-  // readers that predate nesting (and a client that only sends groupBy) agree.
+  // groupBy, the single-level field, always mirrors the first nested level, so
+  // a reader of groupBy alone (and a client that only sends groupBy) agrees.
   const levels = this.autoGrouping?.levels;
   if (Array.isArray(levels) && levels.length) {
     this.autoGrouping.groupBy = levels[0] === 'appellation' ? 'region' : levels[0];

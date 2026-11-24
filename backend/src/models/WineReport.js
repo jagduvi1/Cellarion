@@ -29,8 +29,8 @@ const wineReportSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'WineDefinition'
   },
-  // Optional STRUCTURED correction (strategy 2026-07-29 R7): "this field
-  // should say this" instead of prose the admin has to re-type elsewhere.
+  // Optional STRUCTURED correction: "this field should say this" instead of
+  // prose the admin has to re-type elsewhere.
   // Only the one-click-appliable string fields — region/country are refs and
   // stay free-text in `details`. Resolution can apply this in one action.
   suggestedField: {
@@ -49,11 +49,9 @@ const wineReportSchema = new mongoose.Schema({
     default: 'pending',
     index: true
   },
-  // The reply the reporter reads. Named for what it is: this field has always
-  // been rendered on the user's Support page, while the admin form called it
-  // "internal notes, not shown to user" — an admin taking that at its word
-  // could have published a candid note straight to the reporter. There is no
-  // internal-notes counterpart; anything written here is user-facing.
+  // The reply the reporter reads on their Support page, and named for what it
+  // is: there is no internal-notes counterpart, so anything written here is
+  // user-facing.
   adminResponse: {
     type: String,
     trim: true,

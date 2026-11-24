@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 
-// A pick list (forum request 2026-10-13): a named list of the user's own
-// bottles to fetch from the cellar ("Saturday dinner", "Drink next"), shown
-// with each bottle's cellar, rack and slot so nobody opens the bottles one by
-// one to find them. Bottles from any cellar the user can see may be on it.
+// A pick list: a named list of the user's own bottles to fetch from the
+// cellar ("Saturday dinner", "Drink next"), shown with each bottle's cellar,
+// rack and slot so nobody opens the bottles one by one to find them. Bottles
+// from any cellar the user can see may be on it.
 //
 // Deliberately NOT a reservation: a reserved bottle is "spoken for" (kept out
 // of drink suggestions, consume warns), a picked one is about to be drunk.

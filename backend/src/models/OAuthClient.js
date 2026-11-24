@@ -5,7 +5,7 @@ const crypto = require('crypto');
  * OAuthClient — an OAuth 2.1 client registered via Dynamic Client Registration
  * (RFC 7591) at POST /api/mcp/oauth/register. This is how claude.ai / ChatGPT /
  * Claude Desktop obtain a `client_id` for the one-click MCP connector, with no
- * manual setup (MCP Authorization spec, plan §2.4 Phase B).
+ * manual setup (MCP Authorization spec).
  *
  * DCR is UNAUTHENTICATED and pre-account: the client registers before any user
  * has logged in, so there is no user ref here (the user binding happens later,
@@ -41,11 +41,11 @@ const oauthClientSchema = new mongoose.Schema({
   softwareVersion: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   lastUsedAt: { type: Date, default: null },
-  // Reap NEVER-USED clients only (security audit M-6): set to now+30d at
-  // registration and UNSET the first time the client completes a token
-  // exchange, so an actively-connected client persists forever and is never
-  // orphaned while a live token references it. TTL-at-date (expireAfterSeconds
-  // 0); a document with expiresAt null/absent is never expired.
+  // Reap NEVER-USED clients only: set to now+30d at registration and UNSET the
+  // first time the client completes a token exchange, so an actively-connected
+  // client persists forever and is never orphaned while a live token references
+  // it. TTL-at-date (expireAfterSeconds 0); a document with expiresAt
+  // null/absent is never expired.
   expiresAt: { type: Date, default: null },
 });
 
