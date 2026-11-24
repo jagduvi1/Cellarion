@@ -1,5 +1,9 @@
 # cellarion-mcp
 
+> **You probably do not need this package.** If your assistant can add a remote connector, there is nothing to install and no token to copy: add `https://cellarion.app/api/mcp` and sign in with your Cellarion account. That covers Claude (web, desktop and mobile), ChatGPT, Claude Code, VS Code, Cursor, Windsurf and Gemini CLI. The steps for each are at [cellarion.app/connect-ai](https://cellarion.app/connect-ai).
+>
+> This package is for clients that only speak stdio and cannot add a remote connector.
+
 Connect your AI to your wine cellar. This is the [MCP](https://modelcontextprotocol.io) bridge for [Cellarion](https://cellarion.app) — it lets stdio-based MCP clients (Claude Desktop, Cursor, …) talk to your Cellarion account, so you can ask your assistant things like:
 
 - *"What should I open tonight before it goes past its peak?"*
