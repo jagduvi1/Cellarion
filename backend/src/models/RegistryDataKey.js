@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 const { TYPES } = require('../utils/personalDataTypes');
 
-// The PUBLIC key vocabulary (#985 Slice B) — the shared counterpart of the
-// per-user PersonalDataKey. Creating a public key is a CURATED act: users
-// propose (name + type + rationale), an ADMIN accepts it into the vocabulary.
+// The PUBLIC key vocabulary — the shared counterpart of the per-user
+// PersonalDataKey. Creating a public key is a CURATED act: users propose
+// (name + type + rationale), an ADMIN accepts it into the vocabulary.
 // This is what prevents ABV / abv / Alcohol / "Alcohol %" arising as four
 // keys — the producer-display-split failure mode, pre-empted in a fresh
 // namespace. Supplying a VALUE for an accepted key is the ordinary user act
@@ -56,12 +56,12 @@ const registryDataKeySchema = new mongoose.Schema({
   // it is what nameKey uniqueness, MCP tool arguments and the analytics
   // vocabulary key on — and a translation is a DISPLAY concern layered on top,
   // exactly as models/Country and models/Region do it (utils/localizedName).
-  // Absent on an untranslated key, which then reads as it always has.
+  // Absent on an untranslated key, which then reads as its `name`.
   //
-  // Why this exists: the day after the vocabulary got its first
-  // German-speaking contributor, "Alkoholgehalt" was proposed as a new key.
-  // It is ABV. The vocabulary was doing its job of refusing duplicates, but
-  // a reader who never sees "ABV" in their own language cannot know that.
+  // Why this exists: a reader who never sees "ABV" in their own language
+  // cannot know that their "Alkoholgehalt" is already a key, and proposes it
+  // again — the vocabulary refuses the duplicate, but only a translation
+  // shows them why.
   translations: {
     type: Map,
     of: String,
@@ -84,7 +84,7 @@ const registryDataKeySchema = new mongoose.Schema({
   },
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   decidedAt: { type: Date, default: null },
-  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 was too short for a real explanation (registry backlog 2026-09-06)
+  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 is too short for a real explanation
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

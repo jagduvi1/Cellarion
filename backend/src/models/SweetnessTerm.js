@@ -3,11 +3,11 @@ const { normalizeSweetnessTerm } = require('../utils/normalize');
 
 /**
  * A label sweetness term: the word a label prints for how sweet the wine is
- * (trocken, Brut Nature, amabile, meio seco …), as a curated taxonomy row
- * (GitHub discussion #1754). It is an IDENTITY fact — a Spätlese trocken and
- * a Spätlese are two wines, a house's Brut Nature and its Brut are two wines —
- * and a different thing from the tasting profile's sweetness
- * (WineDefinition.aiProfile.sweetness, a taste estimate), which stays as it is.
+ * (trocken, Brut Nature, amabile, meio seco …), as a curated taxonomy row.
+ * It is an IDENTITY fact — a Spätlese trocken and a Spätlese are two wines, a
+ * house's Brut Nature and its Brut are two wines — and a different thing from
+ * the tasting profile's sweetness (WineDefinition.aiProfile.sweetness, a taste
+ * estimate), which stays as it is.
  *
  * Each row names its SCALE, because the same word means two things: German
  * "trocken" is the dry band on a still wine and the sec band (17–32 g/l) on a

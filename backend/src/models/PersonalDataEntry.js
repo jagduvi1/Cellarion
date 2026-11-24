@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 
-// A typed personal value on a wine or a bottle (issue #986). "Personal" means
-// not published to the shared registry — NOT hidden from shared-cellar
-// members: entries are visible to everyone who can see the bottle, always
-// attributed to their author (same rule Bottle.notes follows, but attributed).
+// A typed personal value on a wine or a bottle. "Personal" means not published
+// to the shared registry — NOT hidden from shared-cellar members: entries are
+// visible to everyone who can see the bottle, always attributed to their
+// author (same rule Bottle.notes follows, but attributed).
 //
 // Exactly one of wineDefinition/bottle is set, matching targetType:
 //   wine   — applies to every bottle of that wine the author owns

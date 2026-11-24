@@ -4,7 +4,7 @@ const crypto = require('crypto');
 // Registry Bridge keys ("cbr_..." bearer credentials) — the permit a
 // self-hosted Cellarion presents to cellarion.app to search the shared
 // registry, fetch single wines, check changes for wines it holds and forward
-// contributions (REGISTRY_LOCKDOWN_PLAN §6, decided 2026-09-06).
+// contributions.
 //
 // Deliberately a separate model from ApiToken, not an `origin: 'bridge'` row:
 // the two credentials have different prefixes (the auth path dispatches on the

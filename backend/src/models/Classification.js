@@ -3,9 +3,9 @@ const { normalizeString } = require('../utils/normalize');
 
 /**
  * A classification: a quality tier granted on top of the appellation, as a
- * curated taxonomy row instead of free text (GitHub discussion #1696).
- * Each row says what KIND of tier it is, so a
- * filter can tell a vineyard rank from a ripeness level from an ageing tier:
+ * curated taxonomy row instead of free text. Each row says what KIND of tier
+ * it is, so a filter can tell a vineyard rank from a ripeness level from an
+ * ageing tier:
  *
  *   vineyard_rank  Grand Cru, Premier Cru, Grand Cru Classé, Cru Bourgeois,
  *                  VDP Grosse Lage, Grosses Gewächs …
@@ -16,10 +16,10 @@ const { normalizeString } = require('../utils/normalize');
  *                  fit none of the above (Single Vineyard, Estate, Reserve)
  *
  * A wine carries an ARRAY of them (WineDefinition.classifications), so
- * "Spätlese" and "VDP Grosse Lage" are two rows, not one string. The legacy
+ * "Spätlese" and "VDP Grosse Lage" are two rows, not one string. The
  * free-text WineDefinition.classification is derived from the array by the
  * model (services/classificationOps.classificationString) and kept for every
- * reader that shows or documents it — the public API only gains a field.
+ * reader that shows or documents it — the public API only ever gains fields.
  *
  * Mirrors models/Grape: unique normalised name, synonyms with their
  * normalised copies, createdByUser + reviewedAt for the review queue

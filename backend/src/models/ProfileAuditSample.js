@@ -1,12 +1,11 @@
 const mongoose = require('mongoose');
 
 /**
- * ProfileAuditSample — one recorded spot-check of published AI profiles
- * (somm gap report 2026-08-18, item 5): sample_published_profiles asks the
- * curator to track corrections-per-sample across weeks, and that error rate
- * decides whether heavier anti-hallucination work is worth building — but
- * the number previously lived only in chat. This is the durable tally the
- * ~2026-09-15 scaling re-analysis reads.
+ * ProfileAuditSample — one recorded spot-check of published AI profiles:
+ * sample_published_profiles asks the curator to track corrections-per-sample
+ * across weeks, and that error rate decides whether heavier
+ * anti-hallucination work is worth building. This is its durable tally, so
+ * the number does not live only in a chat.
  *
  * Written by the record_profile_audit MCP tool; the tool's response computes
  * the running rate from recent rows so the trend is visible at write time.

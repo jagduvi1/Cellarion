@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
-// Native bcrypt: hash/compare run on libuv's thread pool, so a login no longer
-// stalls every other request for ~0.3 s the way pure-JS bcryptjs did (scaling
-// audit 2026-09-25). Stored bcryptjs hashes ($2a$) verify unchanged, the
-// 72-byte truncation is the same, and bcryptjs can read the $2b$ hashes this
-// writes — see User.bcrypt.test.js.
+// Native bcrypt: hash/compare run on libuv's thread pool, so a login does not
+// stall every other request for ~0.3 s as pure-JS bcryptjs would. Stored
+// bcryptjs hashes ($2a$) verify unchanged, the 72-byte truncation is the same,
+// and bcryptjs can read the $2b$ hashes this writes — see User.bcrypt.test.js.
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
@@ -12,7 +11,7 @@ const { PLAN_NAMES } = require('../config/plans');
 // Single source of truth for the bcrypt work factor. The login route's dummy
 // hash (routes/auth.js) MUST be generated at this same cost — a cheaper dummy
 // compare responds measurably faster for unknown identifiers, reintroducing
-// the timing-based account-enumeration oracle the dummy exists to close (L-1).
+// the timing-based account-enumeration oracle the dummy exists to close.
 const BCRYPT_COST = 12;
 
 const userSchema = new mongoose.Schema({
@@ -180,17 +179,17 @@ const userSchema = new mongoose.Schema({
       // outbound channels (email, push) per category.
       //
       // Defaults: drink-window alerts are about the member's own bottles, so
-      // a NEW account gets them by email (at most one a week) and push. An
-      // account created before that change keeps its stored off — the boot
-      // step drinkWindowNotifier.storeDrinkWindowDefaultsOff stores off where
-      // nothing was stored, so the new default never switches anyone on.
+      // an account is created with them on by email (at most one a week) and
+      // push. That default must not switch them on for an account with nothing
+      // stored: the boot step drinkWindowNotifier.storeDrinkWindowDefaultsOff
+      // stores off there, so the default never applies to it.
       // Community categories default ON for push (push is already
       // explicit-subscription gated, so it's safe to opt in once subscribed)
       // and OFF for email (email is the more intrusive channel — opt in if
       // you want it).
       drinkWindow: {
-        // Master toggle (back-compat with the old single boolean — still drives
-        // the in-app bell; the email/push children gate outbound channels).
+        // Master toggle: drives the in-app bell (a stored single boolean heals
+        // into it, normalizeLegacyNotifications); email/push gate outbound.
         enabled: { type: Boolean, default: true },
         email:   { type: Boolean, default: true },
         push:    { type: Boolean, default: true }
@@ -263,8 +262,8 @@ const userSchema = new mongoose.Schema({
       default: false
     }
   },
-  // One entry per signed-in device/browser (per-device sessions, 2026-09-04):
-  // `hash` is sha256 of the opaque refresh token in that device's cookie,
+  // One entry per signed-in device/browser: `hash` is sha256 of the opaque
+  // refresh token in that device's cookie,
   // `prevHash` the hash most recently rotated away (reuse detection),
   // `client` a short device label like "Android / Chrome" — never the raw UA.
   // Rotation touches only its own entry; password change/reset and account
@@ -290,8 +289,8 @@ const userSchema = new mongoose.Schema({
   // a quiet one. A day and nothing finer (data minimisation): UTC midnight of
   // that day. Only ever moves forward. Written by services/lastActive; never
   // sent to the client (toJSON below), included in the GDPR export, removed
-  // with the account row. null = not seen since the field existed — the
-  // backfill script fills it from the evidence that remains.
+  // with the account row. null = no use recorded; the backfill script
+  // (scripts/backfill-last-active.js) fills it from the evidence that remains.
   lastActiveAt: {
     type: Date,
     default: null,
@@ -319,26 +318,22 @@ const userSchema = new mongoose.Schema({
     }, { _id: false }),
     default: undefined
   },
-  // LEGACY single-session fields. Read once by /refresh to adopt a
-  // pre-sessions cookie into `sessions` (so the rollout signs nobody out),
-  // then nulled. Drop the three fields and their index once no row carries a
-  // refreshTokenHash.
+  // LEGACY single-session fields. Only /refresh reads them, once
+  // (services/authTokens resolveRefreshSession), to adopt such a cookie into
+  // `sessions` so nobody is signed out; then they are nulled. Drop the three
+  // fields and their index once no row carries a refreshTokenHash.
   refreshTokenHash: {
     type: String,
     default: null
   },
-  // Absolute session deadline: a refresh token can be rotated only until this
-  // time, after which re-login is forced regardless of activity. Set at session
-  // start (login/register) and preserved across rotations. null = no cap yet
-  // (legacy sessions; backfilled on next refresh).
+  // The old session's absolute deadline, copied to the adopted session's
+  // expiresAt (null = no cap).
   refreshTokenExpiresAt: {
     type: Date,
     default: null
   },
-  // Whether the session's refresh cookie is persistent (remember-me) or a
-  // browser-session cookie. Set at login and read on rotation paths so
-  // /refresh doesn't silently upgrade a session cookie to persistent.
-  // null = legacy session (treated as persistent).
+  // Whether the old session's cookie was persistent (remember-me), copied to
+  // the adopted session (null counts as persistent).
   refreshTokenPersistent: {
     type: Boolean,
     default: null
@@ -471,8 +466,8 @@ const userSchema = new mongoose.Schema({
   // path segment of the landing page), recorded once at signup for the admin
   // stats "signups by source" table. Allow-listed and length-capped by
   // utils/signupSource.js; never sent to the client (toJSON below), included
-  // in the GDPR export, and removed with the account row. Absent on accounts
-  // created before it was recorded.
+  // in the GDPR export, and removed with the account row. Absent when signup
+  // recorded none.
   signupSource: {
     type: new mongoose.Schema({
       referrerDomain: { type: String, maxlength: 100 },
@@ -488,11 +483,11 @@ const userSchema = new mongoose.Schema({
   // true from account creation (password or SSO) until the first sign-in, when
   // the app saves the language it is showing and a currency guessed from the
   // device's region as the account's preferences (POST /api/users/me/locale-
-  // defaults), then this is removed. Without it every new account started on
-  // English + USD whatever the visitor's browser said, and a Swedish visitor
-  // was switched from Swedish to English the moment they signed up.
-  // Deliberately NO default: accounts created before it existed have no field
-  // and are never touched, so their settings stay exactly as they are.
+  // defaults), then this is removed. Without it every new account would start
+  // on English + USD whatever the visitor's browser said, switching a Swedish
+  // visitor from Swedish to English the moment they sign up.
+  // Deliberately NO default: an account without the field is never touched,
+  // so its settings stay exactly as they are.
   localeDefaultsPending: {
     type: Boolean,
     default: undefined
@@ -502,15 +497,15 @@ const userSchema = new mongoose.Schema({
     privacyPolicy: {
       accepted: { type: Boolean, default: false },
       acceptedAt: { type: Date, default: null },
-      version: { type: String, default: null }  // e.g. '2026-03'
+      version: { type: String, default: null }  // 'YYYY-MM-DD' (config/legal.js)
     },
     dataProcessing: {
       accepted: { type: Boolean, default: false },
       acceptedAt: { type: Date, default: null }
     }
   },
-  // Registry Data Terms (registry lockdown L6 / Registry Bridge, 2026-09):
-  // accepted once per version before a bridge key is issued. Not a privacy
+  // Registry Data Terms (registry lockdown / Registry Bridge): accepted once
+  // per version before a bridge key is issued. Not a privacy
   // consent — it is the licence under which registry data reaches a
   // self-hosted install. Version = config/legal.js CURRENT_REGISTRY_TERMS_VERSION.
   registryTerms: {
@@ -536,8 +531,8 @@ const userSchema = new mongoose.Schema({
     default: null
   },
   // Last time an MCP export-link for the full GDPR account export was minted.
-  // That build spans ~35 collections and can be hundreds of MB, so the MCP
-  // path (an automated caller that could loop) throttles it to once per day.
+  // That build spans dozens of collections and can be hundreds of MB, so the
+  // MCP path (an automated caller that could loop) throttles it to once per day.
   // The web route GET /api/users/me/export stays unthrottled — a human clicking
   // download is not the threat model this bounds.
   lastAccountExportAt: {
@@ -584,11 +579,11 @@ userSchema.index({ demoExpiresAt: 1 }, { partialFilterExpression: { isDemo: true
 // timeline by their deletion date; only those few rows carry the field.
 userSchema.index({ 'inactivityNotice.deleteAfter': 1 }, { sparse: true });
 
-// Heal legacy notification-pref shapes before save. Old docs stored
-// `drinkWindow: false` (single boolean); the current schema expects
-// `{ enabled, email, push }`. Without this, Mongoose generates dotted $set
+// Heal legacy notification-pref shapes before save. A stored
+// `drinkWindow: false` (single boolean) does not fit the schema's
+// `{ enabled, email, push }`: without this, Mongoose generates dotted $set
 // sub-paths and MongoDB throws "Cannot create field 'email' in element
-// {drinkWindow: false}". See issue #390.
+// {drinkWindow: false}".
 //
 // Mutates `notif` in place. Returns the list of top-level keys that were
 // rewritten so the caller can markModified() each parent path — this forces
@@ -727,7 +722,7 @@ userSchema.methods.toJSON = function() {
   // Retention bookkeeping, same reasoning (the export carries it).
   delete obj.lastActiveAt;
   delete obj.inactivityNotice;
-  // Data minimisation (I-1): internal lockout bookkeeping and the raw Stripe
+  // Data minimisation: internal lockout bookkeeping and the raw Stripe
   // subscription id are never needed client-side. The frontend only needs to
   // know WHETHER a subscription exists — expose that as a derived boolean.
   delete obj.failedLoginAttempts;
@@ -740,8 +735,8 @@ userSchema.methods.toJSON = function() {
   // Only the web app acts on it. An account used ONLY through an API token or
   // an MCP connector never sees the prompt: those surfaces keep working after a
   // policy bump, and the account's consent record stays on the old version
-  // until they next open the app (release audit 2026-09-27, L — recorded, not
-  // changed: blocking integrations on a re-acknowledgement is a product call).
+  // until they next open the app — on purpose: blocking integrations on a
+  // re-acknowledgement is a product call.
   const pp = obj.gdprConsent?.privacyPolicy;
   obj.requiresPolicyReconsent = !pp?.accepted || (pp?.version || null) !== CURRENT_PRIVACY_POLICY_VERSION;
   // Surface the demo flag as a clean boolean so the frontend can show the

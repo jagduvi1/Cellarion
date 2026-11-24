@@ -3,11 +3,10 @@ const mongoose = require('mongoose');
 /**
  * Daily AI spend ledger — one document per (UTC day, feature, model).
  *
- * Until 2026-09-25 only Cellar Chat recorded tokens (ChatUsage), so "where does
- * the Anthropic bill go?" could only be estimated from prompt lengths. Every
- * completed Claude call now adds its `usage` here through the wrapper in
- * services/aiProvider (services/aiCostLedger.recordAiUsage), and SuperAdmin →
- * AI turns the rows into a per-feature cost table.
+ * Every completed Claude call adds its `usage` here through the wrapper in
+ * services/aiProvider (services/aiCostLedger.recordAiUsage), so "where does the
+ * Anthropic bill go?" is answered from real token counts: SuperAdmin → AI turns
+ * the rows into a per-feature cost table.
  *
  * `inputTokens` is the UNCACHED input only — the API reports cache reads and
  * cache writes separately, and each is priced differently (read 0.1×, 5-minute

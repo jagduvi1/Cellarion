@@ -1,21 +1,21 @@
 const mongoose = require('mongoose');
 const { originSchemaFields } = require('../utils/contributionOrigin');
 
-// A value for an accepted public key on a registry wine (#985 Slice B).
-// Suggested by users, TYPE-validated at entry (utils/personalDataTypes via
-// the key's declared type), and human-approved before it publishes — the
-// registry stays human-gated; suggestions never auto-apply.
+// A value for an accepted public key on a registry wine. Suggested by users,
+// TYPE-validated at entry (utils/personalDataTypes via the key's declared
+// type), and human-approved before it publishes — the registry stays
+// human-gated; suggestions never auto-apply.
 //
 // Lifecycle: suggested → published | rejected. One published value per
 // (wine, key, vintage) is the record; one suggested value per slot at a time
 // keeps the queue free of pile-ups (same one-pending discipline as
 // WineCorrectionProposal).
 //
-// Vintage slots (2026-09-04): `vintage: null` is the wine-wide DEFAULT,
-// 'YYYY' is an OVERRIDE for that bottling only. Readers resolve override →
-// default → blank (registryDataOps.resolveForVintage). ABV drifts between
-// years, and a retailer page or a label is a fact about ONE year — filing it
-// as the wine-wide answer was the mistake the single-slot model forced.
+// Vintage slots: `vintage: null` is the wine-wide DEFAULT, 'YYYY' is an
+// OVERRIDE for that bottling only. Readers resolve override → default → blank
+// (registryDataOps.resolveForVintage). ABV drifts between years, and a
+// retailer page or a label is a fact about ONE year, so it belongs in that
+// year's slot, never filed as the wine-wide answer.
 
 const registryDataValueSchema = new mongoose.Schema({
   wineDefinition: {
@@ -70,7 +70,7 @@ const registryDataValueSchema = new mongoose.Schema({
   reason: { type: String, trim: true, maxlength: 1000 },
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   decidedAt: { type: Date, default: null },
-  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 was too short for a real explanation (registry backlog 2026-09-06)
+  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 is too short for a real explanation
   // When the suggester's Cellar Cred for publishing this value was awarded
   // (services/suggestionCred); null = not awarded — not yet, or not earning.
   // Kept when a newer value supersedes this one: the contribution stood.
@@ -87,11 +87,10 @@ registryDataValueSchema.index({ bridgeKey: 1, createdAt: -1 }, { sparse: true })
 registryDataValueSchema.index({ instanceHost: 1, createdAt: -1 }, { sparse: true });
 
 // One suggested + one published row per (wine, key, vintage slot); rejected
-// rows keep history without blocking a fresh suggestion. Rows written before
-// the vintage field existed have no `vintage` at all — Mongo indexes a
-// missing field as null, so they occupy the default slot exactly as intended.
-// Replaces the pre-vintage { wineDefinition, key, status } unique index:
-// config/db.js syncIndexes() drops that one on existing databases.
+// rows keep history without blocking a fresh suggestion. A row with no
+// `vintage` field at all occupies the default slot: Mongo indexes a missing
+// field as null. config/db.js syncIndexes() drops the narrower
+// { wineDefinition, key, status } unique index this one replaces.
 registryDataValueSchema.index(
   { wineDefinition: 1, key: 1, vintage: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: { $in: ['suggested', 'published'] } } }

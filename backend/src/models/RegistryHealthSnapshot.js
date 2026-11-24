@@ -4,8 +4,7 @@ const mongoose = require('mongoose');
  * One row per weekly registry-health run (services/registryHealthJob.js) —
  * the baseline the next run compares against, so admins are notified when a
  * metric REGRESSES rather than being re-alerted about a known backlog every
- * week (the alert-once-then-re-baseline pattern the prod registry watchdog
- * proved out).
+ * week (alert once, then re-baseline).
  *
  * Contains only aggregate counts about shared registry data — no user data,
  * so it has no place in the GDPR export/deletion registry (same category as

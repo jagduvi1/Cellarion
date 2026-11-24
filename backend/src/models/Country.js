@@ -25,7 +25,7 @@ const countrySchema = new mongoose.Schema({
   // Display names in the reader's language. The canonical `name` above stays
   // English and authoritative — search, dedup, exports and the registry key are
   // all built on it — and these are layered on top for display only, so an
-  // untranslated country simply reads as it always has (utils/localizedName).
+  // untranslated country simply reads as its `name` (utils/localizedName).
   // An import file may write "Allemagne" or "Moselle": the import ACCEPTS the
   // owner's language on the way in, and this gives it back.
   translations: {

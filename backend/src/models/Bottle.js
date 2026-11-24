@@ -57,12 +57,12 @@ const bottleSchema = new mongoose.Schema({
     uppercase: true,
     trim: true,
     // Every write path (form, MCP, import, restore) stores an alias as its
-    // code: "EURO" → "EUR" (config/currencies). No enum here — older imports
+    // code: "EURO" → "EUR" (config/currencies). No enum here — stored rows can
     // hold codes outside the supported list, and a save of such a bottle must
     // keep working; the routes refuse a NEW unsupported code instead.
     // ⚠️ Mongoose runs this setter on QUERY FILTERS too: Bottle.find({
     // currency: 'EURO' }) searches for 'EUR'. To find rows stored under an
-    // alias, use Bottle.collection or an aggregation (release audit 2026-10-13).
+    // alias, use Bottle.collection or an aggregation.
     set: normalizeCurrency,
     maxlength: [10, 'Currency code too long']
   },
@@ -160,14 +160,14 @@ const bottleSchema = new mongoose.Schema({
       }
     ]
   },
-  // Optional PEAK inside the personal window: "drinkable ≠ peak". Without these, the whole drinkFrom..drinkTo span
-  // classifies as one long Peak — a wine enjoyable for ten years with a
-  // four-year best stretch cannot be expressed except by lying about one of
-  // them. With a peak set, the personal window classifies in the same five
-  // stages the sommelier WineVintageProfile has always had: not-ready →
-  // early (drinkFrom..peakFrom) → peak → late (peakUntil..drinkTo) →
-  // declining. Bottle-level like drinkFrom/drinkTo — the user's own opinion,
-  // never the shared registry's.
+  // Optional PEAK inside the personal window: "drinkable ≠ peak". Without
+  // these, the whole drinkFrom..drinkTo span classifies as one long Peak — a
+  // wine enjoyable for ten years with a four-year best stretch cannot be
+  // expressed except by lying about one of them. With a peak set, the personal
+  // window classifies in the same five stages as the sommelier
+  // WineVintageProfile: not-ready → early (drinkFrom..peakFrom) → peak → late
+  // (peakUntil..drinkTo) → declining. Bottle-level like drinkFrom/drinkTo — the
+  // user's own opinion, never the shared registry's.
   peakFrom: {
     type: Number,
     min: [1900, 'Peak-from year must be 1900 or later'],

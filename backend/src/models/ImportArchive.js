@@ -8,17 +8,16 @@ const mongoose = require('mongoose');
  * that triggered them, and by the time anyone reports one the file is gone:
  * parsing happens in the BROWSER (utils/importMappers), the server sees only
  * the mapped rows, and ImportSession — which does hold them — is deleted the
- * moment an import succeeds and TTLs at 7 days otherwise. Two real defects in
- * one week (a name column that never mapped, producing 131 unusable wine
- * requests; and Vivino-style "Sangiovese Blend" grape strings that disabled
- * the AI bypass for a whole export format) were each diagnosed by inference
- * from the wreckage rather than by reading the input.
+ * moment an import succeeds and TTLs at 7 days otherwise. Without this, a
+ * defect (a name column that never maps, a grape string one export format
+ * writes its own way) can only be diagnosed by inference from the wreckage
+ * rather than by reading the input.
  *
  * IDENTITY COLUMNS ONLY. This is deliberately NOT the user's file. Each row
  * keeps the fields that decide how a wine is identified and matched; price,
  * purchase location, personal notes and ratings are dropped on the way in
- * (see IDENTITY_FIELDS in routes/import). Those answer no import bug and
- * their absence is what keeps this archive cheap to hold and cheap to
+ * (see IDENTITY_FIELDS in services/importArchive). Those answer no import bug
+ * and their absence is what keeps this archive cheap to hold and cheap to
  * explain. The row's OUTCOME rides along, because "what did the file say"
  * and "what did we do with it" are only useful together.
  *

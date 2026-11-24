@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 /**
- * McpActionLog — the write-safety ledger for MCP mutations (plan §5.3/§5.7 L4).
+ * McpActionLog — the write-safety ledger for MCP mutations.
  *
  * One row per mutating MCP tool call. Powers three things:
  *  1. Idempotency: a retrying/looping agent that resends the same
@@ -9,8 +9,8 @@ const mongoose = require('mongoose');
  *  2. undo_last: the newest un-reversed action is what "undo" undoes; `prev`
  *     snapshots whatever the reverse operation needs (e.g. the consumed-*
  *     fields so undoing a restore can re-consume identically).
- *  3. The "recent AI activity" timeline (frontend, Phase 2d) — what did my
- *     connected AI change, with one-click revert.
+ *  3. The "recent AI activity" timeline (frontend) — what did my connected
+ *     AI change, with one-click revert.
  *
  * Retention: 90 days (TTL below) — matches AuditLog's default; undo itself is
  * bounded much tighter by the bottle restore window. GDPR: registered in
@@ -60,10 +60,10 @@ const mcpActionLogSchema = new mongoose.Schema({
   // idempotent retry so the caller can't tell the difference.
   result: { type: mongoose.Schema.Types.Mixed, default: null },
   // True while this row is an idempotency claim whose mutation has not yet
-  // completed (prior-audit M2: the claim is taken atomically BEFORE the write,
-  // so a concurrent same-key twin cannot double-execute). Cleared by logAction
-  // on success; deleted by releaseClaim when the tool fails; a crashed claim is
-  // reclaimable after a staleness window (and TTL-reaped regardless).
+  // completed (the claim is taken atomically BEFORE the write, so a concurrent
+  // same-key twin cannot double-execute). Cleared by logAction on success;
+  // deleted by releaseClaim when the tool fails; a crashed claim is reclaimable
+  // after a staleness window (and TTL-reaped regardless).
   pending: { type: Boolean, default: false },
   // Set once undo_last (or a manual revert) has reversed this action.
   reversed: { type: Boolean, default: false },
@@ -87,7 +87,7 @@ module.exports = mongoose.model('McpActionLog', mcpActionLogSchema);
 
 // Actions that are NOT real AI activity: the two preview stubs (shown, maybe
 // declined — changed nothing) and the transient `pending` idempotency claim
-// stub (actionLedger.js). SINGLE SOURCE (MCP-audit M1/F4) so the activity
-// timeline, the admin write count, AND the GDPR export all exclude the same
-// set and can't drift — a stub must never surface as "what your AI did".
+// stub (actionLedger.js). SINGLE SOURCE so the activity timeline, the admin
+// write count, AND the GDPR export all exclude the same set and can't drift —
+// a stub must never surface as "what your AI did".
 module.exports.NON_ACTIVITY_ACTIONS = ['bulk_preview', 'arrange_preview', 'pending'];

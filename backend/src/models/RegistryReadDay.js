@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 /**
  * One row per reader per UTC day: which registry wines they read and how
- * many times (registry lockdown 2026-09-06, layer L4).
+ * many times (registry lockdown).
  *
  * The threat this measures is "copy the registry", and a copy shows up as
  * DISTINCT wines per reader per day — a person browsing reads tens, a scraper
@@ -25,7 +25,7 @@ const registryReadDaySchema = new mongoose.Schema({
   day:       { type: String, required: true },   // YYYY-MM-DD, UTC
   kind:      { type: String, required: true, enum: ['ip', 'user', 'token', 'key'] },
   // Distinct wines read. $addToSet keeps it a set; the registry itself bounds
-  // its size (a few thousand ObjectIds at the very worst, i.e. a full copy).
+  // its size (at worst one id per registry wine, i.e. a full copy).
   wines:     { type: [mongoose.Schema.Types.ObjectId], default: [] },
   count:     { type: Number, default: 0 },
   // Set once when an anonymous reader crosses the daily cap, so the refusal

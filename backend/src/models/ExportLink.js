@@ -2,13 +2,13 @@ const mongoose = require('mongoose');
 
 /**
  * ExportLink — a short-lived, single-purpose download URL for a data export
- * requested over MCP (plan §3.3 `export_cellar`, §3.18 `get_account_export`).
+ * requested over MCP (the `export_cellar` and `get_account_export` tools).
  *
  * Why a link instead of returning the export itself: an export is a FILE, not
  * model context. The cellar payload is capped at 50k documents and the account
- * export spans ~35 collections — either can run to hundreds of MB, which would
- * blow up the caller's context window (and our memory) if inlined into a tool
- * result. Plan principle #7 is explicit: compact payloads, never giant dumps.
+ * export spans dozens of collections — either can run to hundreds of MB, which
+ * would blow up the caller's context window (and our memory) if inlined into a
+ * tool result: tool results stay compact, never giant dumps.
  * So the tool returns counts + this link, the user opens it, and the bytes go
  * from us straight to their disk — never through the model. That also keeps the
  * account export's PII (email, audit history) out of the third-party AI

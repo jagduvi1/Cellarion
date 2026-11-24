@@ -47,10 +47,10 @@ const wineEmbeddingSchema = new mongoose.Schema({
   dim: {
     type: Number
   },
-  // Legacy: the point id in the retired Qdrant collection. The one-off
-  // migration (scripts/migrate-vectors-from-qdrant.js) matches a point to its
-  // row by it. Left in place, so a rollback to a Qdrant-based release still
-  // finds its points. No longer unique or indexed: new rows have none.
+  // The point id in the retired Qdrant collection: the one-off migration
+  // (scripts/migrate-vectors-from-qdrant.js) matches a point to its row by it,
+  // and a rollback to a Qdrant-based release still finds its points. Neither
+  // unique nor indexed: a new row has none.
   qdrantPointId: {
     type: String
   },

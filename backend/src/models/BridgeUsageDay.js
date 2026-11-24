@@ -2,15 +2,15 @@ const mongoose = require('mongoose');
 
 /**
  * One row per ACCOUNT per UTC day: how many searches, wine fetches, change
- * checks and contributions the owner's bridge keys spent between them
- * (REGISTRY_LOCKDOWN_PLAN §6 quotas).
+ * checks and contributions the owner's bridge keys spent between them, against
+ * the daily quotas (services/bridgeQuota.js).
  *
- * Per ACCOUNT, not per key, since the 2026-09-08 audit: the two-key cap counts
- * only active keys, so revoking and re-minting is free, and a per-key row let
- * one account cycle keys to multiply its allowance — each new key arriving
- * with an unused import window — while every individual row stayed under the
- * alert level. `key` records which key opened the day's row; it is attribution,
- * never the identity of the counter.
+ * Per ACCOUNT, not per key: the two-key cap counts only active keys, so
+ * revoking and re-minting is free, and a per-key row would let one account
+ * cycle keys to multiply its allowance — each new key arriving with an unused
+ * import window — while every individual row stayed under the alert level.
+ * `key` records which key opened the day's row; it is attribution, never the
+ * identity of the counter.
  *
  * Quotas exist to make walking the registry slow and visible, not to make
  * adding bottles hard: the defaults are far above what a household spends in
@@ -38,9 +38,9 @@ const bridgeUsageDaySchema = new mongoose.Schema({
   expiresAt: { type: Date, required: true },
 }, { timestamps: true });
 
-// The counter's identity. A stale unique {key, day} index from before the
-// 2026-09-08 audit is harmless (a key belongs to one account, so its rows stay
-// unique), but it can be dropped.
+// The counter's identity. A unique {key, day} index left on an older database
+// is harmless (a key belongs to one account, so its rows stay unique), but it
+// can be dropped.
 bridgeUsageDaySchema.index({ user: 1, day: 1 }, { unique: true });
 bridgeUsageDaySchema.index({ day: 1 });
 bridgeUsageDaySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

@@ -58,21 +58,17 @@ const discussionSchema = new mongoose.Schema({
   },
   // The blog post this thread discusses, when it was opened from one.
   //
-  // Origin (2026-08-21): a user asked for blog post SEARCH; comments were a
-  // separate idea raised alongside it, and this is the form they took.
-  //
-  // A ref rather than a comment system, deliberately. Blog comments would have
-  // been a second community surface, and the first one is quiet — 5 threads and
-  // 12 replies from users who are already logged in and invested. Blog readers
-  // arrive from search and mostly aren't signed in, so an authenticated comment
-  // box would be quieter still, while an anonymous one on a crawlable page is a
-  // spam target with a single moderator.
+  // A ref rather than a comment system, deliberately. Blog comments would be a
+  // second community surface beside a quiet forum whose users are already
+  // logged in and invested. Blog readers arrive from search and mostly aren't
+  // signed in, so an authenticated comment box would be quieter still, while an
+  // anonymous one on a crawlable page is a spam target with a single moderator.
   //
   // Pointing at Discussion inherits the parts that are expensive to get right
   // and already correct here: the report queue and moderator role, the
   // GDPR export and deletion cascade registered in services/userDataRegistry,
-  // and Meili indexing. A bespoke BlogComment model would have had to re-earn
-  // all four.
+  // and Meili indexing. A bespoke BlogComment model would have to re-earn all
+  // four.
   blogPost: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'BlogPost',
@@ -96,9 +92,8 @@ const discussionSchema = new mongoose.Schema({
     default: Date.now
   },
   // Human-readable URL slug. Pinned at create time and never regenerated on
-  // title edit — URLs stay stable forever, old links don't break. Sparse so
-  // existing pre-migration discussions don't violate the unique index until
-  // backfilled.
+  // title edit — URLs stay stable forever, old links don't break. Sparse so a
+  // discussion without a slug doesn't violate the unique index.
   slug: {
     type: String,
     trim: true,
@@ -113,8 +108,8 @@ const discussionSchema = new mongoose.Schema({
 discussionSchema.index({ isPinned: -1, lastActivityAt: -1 });
 // Category-filtered views
 discussionSchema.index({ category: 1, isPinned: -1, lastActivityAt: -1 });
-// Language-filtered views — EVERY forum list carries a language now (English
-// by default), so this is the hot path, not a niche one. The two-key prefix
+// Language-filtered views — EVERY forum list carries a language (English by
+// default), so this is the hot path, not a niche one. The two-key prefix
 // serves language-only and language+category alike.
 discussionSchema.index({ language: 1, isPinned: -1, lastActivityAt: -1 });
 discussionSchema.index({ language: 1, category: 1, isPinned: -1, lastActivityAt: -1 });

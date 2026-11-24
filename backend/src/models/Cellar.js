@@ -73,14 +73,12 @@ const cellarSchema = new mongoose.Schema({
 
 // Compound index: user can't have duplicate active cellar names (deleted cellars are excluded)
 cellarSchema.index({ user: 1, name: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
-// NOTE: no TTL auto-purge of soft-deleted cellars. The previous index used
-// partialFilterExpression { deletedAt: { $ne: null } }, which MongoDB rejects
-// ($ne is unsupported in partial indexes), so syncIndexes failed every boot
-// and the index never existed — the purge has never actually run. Re-adding it
-// needs (a) the supported predicate { deletedAt: { $type: 'date' } } AND (b) a
-// purge that re-homes/deletes the cellar's Bottles + CellarLayout together,
-// because TTL deletion runs no application code and would orphan them
-// permanently (CODE_AUDIT_2026-06-10 HIGH: "Cellar TTL purge bypasses cascades").
+// NOTE: no TTL index for purging soft-deleted cellars — TTL deletion runs no
+// application code and would orphan the cellar's Bottles + CellarLayout
+// permanently. The 30-day purge is done by the daily retention job
+// (services/cellarRetentionJob.js) through the purgeCellarPermanently cascade.
+// A partial index on deletedAt needs { $type: 'date' }: MongoDB rejects $ne
+// there, and syncIndexes would then fail on every boot.
 // Index for finding cellars shared with a user
 cellarSchema.index({ 'members.user': 1 });
 
