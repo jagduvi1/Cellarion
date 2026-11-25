@@ -13,9 +13,9 @@ const { TOKEN_PREFIX } = ApiToken;
 const LAST_USED_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
 
 // token.used is audited once per token per UTC day — on the day's first use —
-// not with every hourly lastUsedAt write. Integrations polling around the
-// clock made the hourly row 41% of all audit rows (scaling audit 2026-09-25)
-// while it said nothing a daily one doesn't; lastUsedAt keeps its hour.
+// not with every hourly lastUsedAt write: for an integration polling around
+// the clock an hourly row would fill the audit log while saying nothing a
+// daily one doesn't. lastUsedAt keeps its hour.
 const utcDay = (d) => d.toISOString().slice(0, 10);
 
 /**
@@ -53,9 +53,9 @@ const utcDay = (d) => d.toISOString().slice(0, 10);
  */
 const SCOPE_ALLOWLIST = {
   read: [
-    // Exactly the documented reads. The other GETs under these prefixes that
-    // tokens used to reach are deprecated (config/apiDeprecations: still
-    // answered, with Deprecation and Sunset headers, until the sunset date).
+    // Exactly the documented reads. The other GETs under these prefixes are
+    // deprecated (config/apiDeprecations: still answered, with Deprecation and
+    // Sunset headers, until the sunset date).
     { method: 'GET', pattern: /^\/api\/stats\/overview$/ },
     { method: 'GET', pattern: /^\/api\/cellars$/ },
     { method: 'GET', pattern: /^\/api\/bottles$/ },
@@ -83,9 +83,9 @@ const SCOPE_ALLOWLIST = {
     // the caller may actually invoke is enforced *inside* by the MCP registry's
     // scope filter (a read token only ever sees read/public tools), so reaching
     // this path is safe. Anchored exact — cannot widen to any other /api/mcp/*.
-    // GET opens a session's standalone SSE stream (resources/subscribe pushes,
-    // plan §4) and DELETE terminates the session — both are no-ops without a
-    // live session bound to this exact token (mcp/sessions.js identity check).
+    // GET opens a session's standalone SSE stream (resources/subscribe pushes)
+    // and DELETE terminates the session — both are no-ops without a live
+    // session bound to this exact token (mcp/sessions.js identity check).
     { method: 'POST', pattern: /^\/api\/mcp$/ },
     { method: 'GET', pattern: /^\/api\/mcp$/ },
     { method: 'DELETE', pattern: /^\/api\/mcp$/ },
@@ -272,8 +272,8 @@ async function authenticateApiToken(req, res, next, rawToken) {
 
     // Throttled usage bookkeeping — fire-and-forget, never blocks the request.
     // The daily audit is checked on its own, not only when the hour is up: a
-    // token used at 23:50 and again at 00:20 used to miss the new day's entry
-    // when that was its only use that day (release audit 2026-09-27, L).
+    // token used at 23:50 and again at 00:20 must still get the new day's
+    // entry when that is its only use that day.
     const now = new Date();
     const hourUp = !token.lastUsedAt || now.getTime() - token.lastUsedAt.getTime() > LAST_USED_THROTTLE_MS;
     const newDay = !token.lastUsedAt || utcDay(token.lastUsedAt) !== utcDay(now);

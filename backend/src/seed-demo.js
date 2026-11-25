@@ -12,10 +12,9 @@
  * Data created:
  *   2 countries  (France, New Zealand)
  *   2 regions    (Bordeaux, Marlborough)
- *   1 district   (Margaux AOC)
  *   5 grapes     (Cabernet Sauvignon, Merlot, Cabernet Franc, Petit Verdot, Sauvignon Blanc)
- *   2 wines      (Château Margaux, Cloudy Bay Sauvignon Blanc)
- *   1 demo cellar with 5 demo bottles
+ *   2 wines      (Château Margaux, appellation Margaux AOC; Cloudy Bay Sauvignon Blanc)
+ *   1 demo cellar with 9 demo bottles (3 Château Margaux 2018, 6 Cloudy Bay 2023)
  */
 
 'use strict';
@@ -42,7 +41,7 @@ async function seed() {
   // This script mints admin@cellarion.app with a password printed in the public
   // README, on whatever MONGO_URI points at — and the documented invocation is
   // `docker exec cellarion-backend node src/seed-demo.js`, which on the hosted
-  // service is the PRODUCTION container (security audit 2026-09-02, O06-1).
+  // service is the PRODUCTION container.
   // NODE_ENV cannot tell the two apart (the image sets production everywhere),
   // so the test is the data: a database holding any account that this script
   // did not create is somebody's real instance, and seeding it would hand out

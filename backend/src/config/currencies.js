@@ -3,9 +3,8 @@
  * validation (user preferences, etc.).
  *
  * MUST stay in sync with the frontend list in frontend/src/config/currencies.js
- * (`CURRENCIES`), which drives the currency picker. The two had drifted, so the
- * UI offered currencies (NZD, JPY, HKD, SGD, ZAR) that PATCH /users/preferences
- * then rejected with "Invalid currency".
+ * (`CURRENCIES`), which drives the currency picker: a currency the picker
+ * offers and this list lacks is refused by PATCH /api/users/preferences.
  *
  * Exchange rates come from open.er-api.com (USD base) and cover all of these;
  * per-currency price caps fall back to USD in utils/priceValidation.js, so any
@@ -20,9 +19,8 @@ const SUPPORTED_CURRENCIES = [
   'ZAR',
 ];
 
-// Spellings that mean a supported code but are not one. Chrome's page
-// translation turned the add form's "EUR" into "EURO" for members using the
-// English interface in Italian (2026-10-13), and a file can carry
+// Spellings that mean a supported code but are not one: a browser's page
+// translation can turn the add form's "EUR" into "EURO", and a file can carry
 // a word or a symbol. Every bottle write stores, and every conversion reads,
 // the code they stand for. Mirrored in frontend/src/config/currencies.js.
 const CURRENCY_ALIASES = Object.freeze({ EURO: 'EUR', EUROS: 'EUR', '€': 'EUR' });
@@ -63,7 +61,7 @@ function currencySpellings(code) {
  * A currency from FILE data (an import row, an archive): the supported code
  * it names ("euro" → "EUR"), else `fallback`. A file is not a form — a row
  * saying "kr" or "€ EUR" must not become a bottle's stored code, which stats
- * would then silently drop (audit 2026-10-14).
+ * would then silently drop.
  */
 function currencyOrFallback(value, fallback) {
   const parsed = parseCurrency(value);

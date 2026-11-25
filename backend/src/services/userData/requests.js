@@ -29,7 +29,7 @@ module.exports = [
     ],
     exportFragment: async (ctx) => ({
       // details/suggestedField/suggestedValue are text the USER typed —
-      // portability requires they come back out (audit 2026-07-29 M1).
+      // portability requires they come back out.
       // adminResponse is our reply TO them: already shown on their Support
       // page, so it is part of the record they hold, not internal commentary.
       reports: { wines: markTrunc(ctx, 'wineReports', await WineReport.find({ user: ctx.userId }).select('wineDefinition reason status createdAt details suggestedField suggestedValue adminResponse respondedAt').limit(EXPORT_MAX).lean())
@@ -48,9 +48,9 @@ module.exports = [
     ],
     exportFragment: async (ctx) => ({
       // reason/proposedFields/evidenceUrl are text the USER typed —
-      // portability requires they come back out (the WineReport precedent,
-      // audit 2026-07-29 M1). The wine label comes from the propose-time
-      // snapshot so it survives the wine being merged away or renamed.
+      // portability requires they come back out, as for WineReport. The wine
+      // label comes from the propose-time snapshot so it survives the wine
+      // being merged away or renamed.
       wineCorrectionProposals: markTrunc(ctx, 'wineCorrectionProposals',
         await WineCorrectionProposal.find({ proposer: ctx.userId })
           .select('kind currentSnapshot proposedFields reason evidenceUrl amendments status rejectReason appliedNote createdAt decidedAt')
@@ -62,10 +62,9 @@ module.exports = [
           reason: p.reason,
           evidenceUrl: p.evidenceUrl || null,
           // Later filings on the same pending suggestion: each carries a reason
-          // and an evidence link the USER typed. `amendments` was selected but
-          // never mapped, so they never came back out — and since the bottle
-          // page files one field at a time, fixing a second field IS an
-          // amendment: the normal path, not an edge (pre-deploy audit 2026-09-18).
+          // and an evidence link the USER typed, so they come back out too. The
+          // bottle page files one field at a time, so fixing a second field IS
+          // an amendment: the normal path, not an edge.
           amendments: (p.amendments || []).map(a => ({
             at: a.at || null,
             fields: a.fields || [],

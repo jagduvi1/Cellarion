@@ -123,19 +123,19 @@ module.exports = [
   {
     model: BottleImage, category: 'personal-data', userFields: ['uploadedBy', 'reviewedBy'],
     // A photo the registry keeps (services/photoRetention: the wine's chosen
-    // picture, or any photo an admin approved as PUBLIC — policy 2026-09-27)
-    // is seen by OTHER users, so it must NOT be deleted on the uploader's
-    // account deletion — anonymise it (re-point uploadedBy to the [deleted]
-    // sentinel, like forum content) and detach it from the bottle that is
-    // going, so the shared photo survives and stays managed. Only the user's
-    // own photos (pending, private, rejected, every label scan) are
-    // hard-deleted. Also clear this user's reviewedBy ref off OTHER users'
-    // images. Unlink the on-disk files for the user's own photos BEFORE
-    // deleting the docs — those docs are the only reference to the files, so
-    // deleting them first would orphan the files on disk forever. Kept photos
-    // are anonymised, not deleted, so their files stay. Returned as a single
-    // self-contained promise so the inner DB ops are awaited (an async fn
-    // returning an *array* would not await the queries inside it).
+    // picture, or any photo an admin approved as PUBLIC) is seen by OTHER
+    // users, so it must NOT be deleted on the uploader's account deletion —
+    // anonymise it (re-point uploadedBy to the [deleted] sentinel, like forum
+    // content) and detach it from the bottle that is going, so the shared
+    // photo survives and stays managed. Only the user's own photos (pending,
+    // private, rejected, every label scan) are hard-deleted. Also clear this
+    // user's reviewedBy ref off OTHER users' images. Unlink the on-disk files
+    // for the user's own photos BEFORE deleting the docs — those docs are the
+    // only reference to the files, so deleting them first would orphan the
+    // files on disk forever. Kept photos are anonymised, not deleted, so their
+    // files stay. Returned as a single self-contained promise so the inner DB
+    // ops are awaited (an async fn returning an *array* would not await the
+    // queries inside it).
     purge: async (ctx) => {
       const { OWN_PHOTO, REGISTRY_PHOTO } = require('../photoRetention');
       const own = await BottleImage.find({ uploadedBy: ctx.userId, ...OWN_PHOTO })
@@ -168,10 +168,10 @@ module.exports = [
           { 'reports.user': ctx.userId },
           { $pull: { reports: { user: ctx.userId } } }
         ),
-        // scanFieldConflicts goes with the pointers (release-audit L-4): the
-        // "front said X, back said Y" record is a statement ABOUT those photos,
-        // and evidence that outlives the images it refers to cannot be checked
-        // — same rule the retention sweep already applies.
+        // scanFieldConflicts goes with the pointers: the "front said X, back
+        // said Y" record is a statement ABOUT those photos, and evidence that
+        // outlives the images it refers to cannot be checked — the same rule
+        // the retention sweep (services/scanImageRetentionJob) applies.
         ownIds.length
           ? WineDefinition.updateMany({ scanImage: { $in: ownIds } }, { $set: { scanImage: null, scanFieldConflicts: [] } })
           : Promise.resolve(),
@@ -224,15 +224,14 @@ module.exports = [
   {
     model: Cellar, category: 'personal-data', userFields: ['user', 'members.user', 'userColors.user'],
     purge: async (ctx) => {
-      // GAP FIX: bottles inside the user's cellars that are OWNED BY OTHERS
-      // (legacy data — bottle.user is set to the cellar owner on every current
-      // creation path, but older/moved rows can differ) are missed by the
-      // user-scoped Bottle purge and would survive pointing at a deleted
-      // cellar. Delete them too, cleaning their images the same
-      // reference-safe way as the Bottle/BottleImage entries: ids collected
-      // before deleteMany, files unlinked before their only referencing docs
-      // go, registry photos (services/photoRetention) kept with the bottle
-      // ref detached.
+      // Bottles inside the user's cellars that are OWNED BY OTHERS (legacy
+      // data — bottle.user is set to the cellar owner on every creation path,
+      // but older/moved rows can differ) are missed by the user-scoped Bottle
+      // purge and would survive pointing at a deleted cellar. Delete them
+      // too, cleaning their images the same reference-safe way as the
+      // Bottle/BottleImage entries: ids collected before deleteMany, files
+      // unlinked before their only referencing docs go, registry photos
+      // (services/photoRetention) kept with the bottle ref detached.
       const orphanIds = await Bottle.find({ cellar: { $in: ctx.cellarIds }, user: { $ne: ctx.userId } }).distinct('_id');
       if (orphanIds.length > 0) {
         const { OWN_PHOTO, REGISTRY_PHOTO } = require('../photoRetention');
@@ -249,7 +248,7 @@ module.exports = [
         Cellar.deleteMany({ user: ctx.userId }),
         // Remove the user from cellars OWNED BY OTHERS that they were a member of.
         Cellar.updateMany({ 'members.user': ctx.userId }, { $pull: { members: { user: ctx.userId } } }),
-        // GAP FIX: also pull the matching userColors entry (was left dangling).
+        // Also pull the matching userColors entry, which would otherwise dangle.
         Cellar.updateMany({ 'userColors.user': ctx.userId }, { $pull: { userColors: { user: ctx.userId } } }),
       ]);
     },
@@ -269,7 +268,6 @@ module.exports = [
   {
     model: CellarLayout, category: 'via-cellar', userFields: ['(via cellar)'],
     purge: (ctx) => CellarLayout.deleteMany({ cellar: { $in: ctx.cellarIds } }),
-    // GAP FIX: was purged but never exported.
     exportFragment: async (ctx) => ({ cellarLayouts: markTrunc(ctx, 'cellarLayouts', await CellarLayout.find({ cellar: { $in: ctx.cellarIds } }).limit(EXPORT_MAX).lean()) }),
   },
   {
@@ -288,15 +286,15 @@ module.exports = [
   {
     model: WishlistItem, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => WishlistItem.deleteMany({ user: ctx.userId }),
-    // Trunc flag key kept as 'wishlistItems' to match the pre-refactor _truncated payload.
+    // Its _truncated key is 'wishlistItems' (not 'wishlist'): an export key keeps its name.
     exportFragment: async (ctx) => ({ wishlist: markTrunc(ctx, 'wishlistItems', await WishlistItem.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
-    // Registry lockdown (2026-09-06, L4): per-day distinct-wine read counters
-    // keyed `user:<id>` for signed-in readers. Operational telemetry with a
-    // 14-day TTL — purged with the account; the export carries the summary
-    // (day, reads, distinct count), not the wine ids, which are registry
-    // content rather than personal data.
+    // Registry lockdown: per-day distinct-wine read counters keyed `user:<id>`
+    // for signed-in readers. Operational telemetry with a 14-day TTL — purged
+    // with the account; the export carries the summary (day, reads, distinct
+    // count), not the wine ids, which are registry content rather than
+    // personal data.
     model: RegistryReadDay, category: 'personal-data', userFields: ['readerKey (user:<id>)'],
     purge: (ctx) => RegistryReadDay.deleteMany({ readerKey: `user:${ctx.userId}` }),
     exportFragment: async (ctx) => ({
@@ -312,7 +310,7 @@ module.exports = [
   {
     // Hard delete, not anonymise: unlike forum threads, an entry has no
     // multi-party thread to preserve — erasure removes the author's entries
-    // even where cellar co-members could see them (issue #986 requirement).
+    // even where cellar co-members could see them.
     model: PersonalDataEntry, category: 'personal-data', userFields: ['author'],
     // The owners whose cached cellar data (the cellar search's documents) can
     // hold these entries are read BEFORE the batch, which also removes the
@@ -328,28 +326,28 @@ module.exports = [
     exportFragment: async (ctx) => ({ personalDataEntries: markTrunc(ctx, 'personalDataEntries', await PersonalDataEntry.find({ author: ctx.userId }).populate('key', 'name type unit').limit(EXPORT_MAX).lean()) }),
   },
   {
-    // Analytics dashboards (#987): named per-user boards, pure preference
-    // data — hard delete, full export.
+    // Analytics dashboards: named per-user boards, pure preference data —
+    // hard delete, full export.
     model: SavedDashboard, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => SavedDashboard.deleteMany({ user: ctx.userId }),
     exportFragment: async (ctx) => ({ analyticsDashboards: markTrunc(ctx, 'analyticsDashboards', await SavedDashboard.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
-    // Pick lists (forum request 2026-10-13): the user's own named lists of
-    // bottle references — pure personal data, hard delete, full export.
+    // Pick lists: the user's own named lists of bottle references — pure
+    // personal data, hard delete, full export.
     model: PickList, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => PickList.deleteMany({ user: ctx.userId }),
     exportFragment: async (ctx) => ({ pickLists: markTrunc(ctx, 'pickLists', await PickList.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
-    // Saved analytics views + preset stars (#987 saved-views slice).
+    // Saved analytics views + preset stars.
     model: SavedView, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => SavedView.deleteMany({ user: ctx.userId }),
     exportFragment: async (ctx) => ({ analyticsSavedViews: markTrunc(ctx, 'analyticsSavedViews', await SavedView.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
-    // The PUBLIC vocabulary is shared content (#985): an accepted key belongs
-    // to the registry, not the proposer — anonymise provenance, keep the key.
+    // The PUBLIC vocabulary is shared content: an accepted key belongs to the
+    // registry, not the proposer — anonymise provenance, keep the key.
     model: RegistryDataKey, category: 'shared-content', userFields: ['proposedBy', 'decidedBy'],
     purge: (ctx) => [
       RegistryDataKey.updateMany({ proposedBy: ctx.userId }, { $set: { proposedBy: ctx.deletedUserId } }),
@@ -359,7 +357,7 @@ module.exports = [
   },
   {
     // Published values are registry content; suggestions carry attribution.
-    // Anonymise both — the record survives its contributor (#985).
+    // Anonymise both — the record survives its contributor.
     model: RegistryDataValue, category: 'shared-content', userFields: ['suggestedBy', 'decidedBy'],
     purge: (ctx) => [
       // instanceHost can name a household; bridgeKey survives as an opaque

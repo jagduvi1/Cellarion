@@ -58,8 +58,8 @@ Important rules:
 // of what the front extraction produced — CLIENT-SUPPLIED TEXT reaching a
 // prompt, so services/labelScan.scanLabelBack sanitises every value (control
 // chars stripped, whitespace collapsed, 200-char cap) and substitutes it with a
-// replacer FUNCTION, never a string replacement. See suggestProfile's put() for
-// why that distinction is load-bearing.
+// replacer FUNCTION, never a string replacement. See put() in services/labelScan
+// for why that distinction is load-bearing.
 //
 // The instruction that matters most is "do not copy the front values": a model
 // handed a filled-in object will happily echo it back, which would turn an
@@ -452,14 +452,14 @@ const defaults = {
   // restart resets the counter — acceptable for the pilot's bound).
   enrichmentSearchEnabled: true,
   enrichmentSearchDailyCap: 5,
-  // Who pays for a new wine's first profile. Adding a
-  // bottle fires an enrichment per newly-minted wine, and at ~120 new wines a
-  // day that drip — not the batch runs — is the steady API spend. It is also
-  // the LEAST reliable population: a freshly scanned label often has no
-  // region and no appellation, which is exactly where the generation gate now
-  // spends TWO calls (draft + corrective retry) and then publishes nothing.
+  // Who pays for a new wine's first profile. Adding a bottle fires an
+  // enrichment per newly-minted wine, and that drip — not the batch runs — is
+  // the steady API spend. It is also the LEAST reliable population: a freshly
+  // scanned label often has no region and no appellation, which is exactly
+  // where the generation gate spends TWO calls (draft + corrective retry) and
+  // then publishes nothing.
   //
-  //   'always'     — legacy behaviour: every new wine is enriched
+  //   'always'     — every new wine is enriched
   //   'sufficient' — only when the record can support a true statement
   //                  (region or appellation, AND grapes or type). Thin
   //                  records wait for a curator, who researches them anyway
@@ -470,52 +470,50 @@ const defaults = {
   //
   // Batch runs are unaffected — they are admin-triggered and simply not run.
   enrichmentOnAdd: 'sufficient',
-  // The sommelier's two AI helpers. Both answer questions
-  // the curator is already researching by hand — setting a drink window means
-  // reading the producer, the vintage and the style, which is the same work
-  // the suggestion does. The curator works on a flat-rate subscription, so
-  // moving these to them costs nothing per call.
+  // The sommelier's two AI helpers, each with its own switch. Both answer
+  // questions the curator is already researching by hand — setting a drink
+  // window means reading the producer, the vintage and the style, which is the
+  // same work the suggestion does — so turning them off leaves that work to a
+  // curator on a flat-rate subscription, at no per-call cost.
   //
   // Deliberately NOT bundled with the user-facing paths: label scan, AI wine
   // search and cellar chat stay on, because they ARE the add-bottle
   // experience and the product. These two are conveniences for one operator.
   sommMaturitySuggestEnabled: true,
   sommPriceSuggestEnabled: true,
-  // Prompt caching (2026-09-25): the label-scan instructions and the import
-  // lookup's fixed rules carry Anthropic's cache marker, so a repeat call
-  // within the cache lifetime pays 10% for that part. A pure cost switch: the
-  // prompt the model reads is the same whether it is on or off (SuperAdmin →
-  // AI, no deploy needed). See services/labelScan.systemBlock.
+  // Prompt caching: the label-scan instructions and the import lookup's fixed
+  // rules carry Anthropic's cache marker, so a repeat call within the cache
+  // lifetime pays 10% for that part. A pure cost switch: the prompt the model
+  // reads is the same whether it is on or off (SuperAdmin → AI, no deploy
+  // needed). See services/labelScan.systemBlock.
   promptCaching: true,
   // aiTextLanguage — the language for the AI-written wine texts — has no
-  // default on purpose: off is the ABSENT key, so a save of any other AI
-  // setting persists the document it always did. A code from
-  // utils/profileLanguage AI_TEXT_LANGUAGES turns it on
-  // (PATCH /api/superadmin/ai/text-language).
+  // default on purpose: off is the ABSENT key, so while it is off a save of any
+  // other AI setting writes no key for it. A code from utils/profileLanguage
+  // AI_TEXT_LANGUAGES turns it on (PATCH /api/superadmin/ai/text-language).
 };
 
 const ENRICHMENT_ON_ADD_MODES = ['always', 'sufficient', 'off'];
 
 let cache = { ...defaults };
 
-// Every save from SuperAdmin → AI persists the WHOLE settings object, so a
-// prompt nobody edited still sits in SiteConfig as a stored copy of that day's
-// default — and a later change to the default in code never reaches a running
-// instance (found 2026-10-26: all four stored prompts on the hosted instance
-// were byte-identical to the defaults). A stored prompt whose text IS a
-// retired default (hash below) is therefore not an admin's: load() drops it,
-// in memory and in the document, and the current default applies. Add the
-// old default's hash here whenever a DEFAULT_*_PROMPT changes; a prompt an
-// admin actually reworded never matches and is kept.
+// SiteConfig can hold a prompt nobody edited: a stored copy of the default of
+// the day it was saved (stripDefaultPrompts keeps a save from writing one).
+// Kept, such a copy would stop a later change to the default in code from
+// ever reaching the instance. So a stored prompt whose text IS a retired
+// default (hash below) is not an admin's: load() drops it, in memory and in
+// the document, and the current default applies. Add the old default's hash
+// here whenever a DEFAULT_*_PROMPT changes; a prompt an admin actually
+// reworded never matches and is kept.
 const PROMPT_KEYS = ['chatSystemPrompt', 'labelScanPrompt', 'labelScanBackPrompt', 'receiptScanPrompt', 'importLookupPrompt', 'maturitySuggestPrompt', 'maturitySuggestPromptNv', 'priceSuggestPrompt', 'enrichmentPrompt'];
 const promptHash = (text) => crypto.createHash('sha256').update(String(text), 'utf8').digest('hex');
 const RETIRED_DEFAULT_PROMPT_HASHES = new Set([
-  // 2026-10-26 (#1700): the appellation's regulatory mark is not a classification.
+  // The appellation's regulatory mark is not a classification.
   '0d4e8f1dae96b47b11040126a4124c310f05347b1644e2ea6d89f7f56019d9a7', // labelScanPrompt
   'ae00642894ef46438e048b550fabe78c8da2db679e77febe1ec43d5d5c27d967', // labelScanBackPrompt
   '5525d7d365ec912e6f26c7a6d3a4df3d74091bbc0e5791fcab85a658ddc41b1d', // importLookupPrompt
   'c5fff9ff7fea82cc635cb60874a0f5d4cf33eaabcd071f62e3245f52206dd2a6', // priceSuggestPrompt
-  // 2026-11-06 (#1696): a production method is neither the name nor the appellation.
+  // A production method is neither the name nor the appellation.
   '2a11a9b55c6b10d3b36911e74e2200ae4b5cf507c9733af256cbc5058863864c', // labelScanPrompt
   'c4a40b51e8c483c745161e843dea667be0b86c707269866107d96e3d8b9a26d8', // importLookupPrompt
 ]);
@@ -524,8 +522,8 @@ const RETIRED_DEFAULT_PROMPT_HASHES = new Set([
  * The settings object to PERSIST: a prompt equal to the shipped default is
  * left out, so the document holds only what an admin actually changed and a
  * later default reaches every instance on its next boot (load() reads an
- * absent key as the default). The hash list above covers documents written
- * before this rule.
+ * absent key as the default). The hash list above covers documents that
+ * still hold a copy of a default.
  */
 function stripDefaultPrompts(settings) {
   const out = { ...settings };
@@ -610,11 +608,10 @@ async function load() {
         }
       }
 
-      // One-time migration: a stored config from before the embedding-quality
-      // upgrade pins the old voyage-4-lite model. Force it to the new default
-      // (voyage-4-large @ 2048 dims) and persist, so every instance self-corrects
-      // on boot instead of silently embedding at the old quality. A full embedding
-      // job then rebuilds the wines_v1 collection at the new dimension.
+      // A stored config that pins voyage-4-lite is moved to the default
+      // (voyage-4-large @ 2048 dims) and persisted, so every instance
+      // self-corrects on boot instead of silently embedding at the lower
+      // quality. A FULL embedding job then rebuilds the vectors at 2048 dims.
       if (cache.embeddingModel === 'voyage-4-lite') {
         cache.embeddingModel = defaults.embeddingModel; // voyage-4-large
         try {

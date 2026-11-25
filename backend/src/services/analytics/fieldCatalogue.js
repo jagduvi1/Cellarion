@@ -1,5 +1,5 @@
 /**
- * The analytics field catalogue (#987 Phase 0).
+ * The analytics field catalogue.
  *
  * Every analysable attribute is declared here EXACTLY ONCE; the query engine,
  * the /api/analytics/catalogue endpoint, the table's column picker and the
@@ -16,8 +16,8 @@
  *   unit         display unit ('currency' is special: converted per query)
  *   role         'dimension' | 'measure' | 'both'
  *   aggregations measures only: subset of count|sum|avg|min|max
- *   sortable     server-side sortable in rows mode (KV + computed fields are
- *                honestly false until the $lookup work in R-B)
+ *   sortable     server-side sortable in rows mode (computed and rack fields,
+ *                and the array refs grapes/classifications, are not)
  *   groupable    usable as a grouped-mode dimension
  *   filterable   accepts filters (nearly everything)
  *   enumOptions  enum type only
@@ -26,6 +26,7 @@
  *                'taxonomy' — a ref on WineDefinition resolved by name
  *                             (taxonomyModel names the collection)
  *                'computed' — derived per page row after hydration
+ *                'rack'     — the rack holding the bottle (from Rack.slots)
  *                'personal' | 'registry' — typed key/value (dynamic entries)
  *   path         the Mongo path the source reads ('wd.' prefix = joined wine)
  *
@@ -63,9 +64,9 @@ const STATIC_FIELDS = [
   dim({ key: 'wine.type', label: 'Wine type', domain: 'wine', type: 'enum', source: 'wine', path: 'wd.type', enumOptions: ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'] }),
   dim({ key: 'wine.appellation', label: 'Appellation', domain: 'wine', type: 'text', source: 'wine', path: 'wd.appellation' }),
   dim({ key: 'wine.classification', label: 'Classification', domain: 'wine', type: 'text', source: 'wine', path: 'wd.classification' }),
-  // Taxonomy refs: the stored value is an ObjectId; sorting joins the name
-  // (R-B). Filters resolve the typed name to ids first. taxonomyCollection is
-  // the raw collection name the sort $lookup reads.
+  // Taxonomy refs: the stored value is an ObjectId; sorting joins the name.
+  // Filters resolve the typed name to ids first. taxonomyCollection is the raw
+  // collection name the sort $lookup reads.
   dim({ key: 'wine.country', label: 'Country', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.country', taxonomyModel: 'Country', taxonomyCollection: 'countries' }),
   dim({ key: 'wine.region', label: 'Region', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.region', taxonomyModel: 'Region', taxonomyCollection: 'regions' }),
   // Grapes is an ARRAY ref — a filter means "has this grape". Neither sortable
@@ -95,10 +96,9 @@ const STATIC_FIELDS = [
   dim({ key: 'rack.group', label: 'Rack group', domain: 'inventory', type: 'text', source: 'rack', path: 'group', sortable: false }),
   dim({ key: 'bottle.occasion', label: 'Occasion note', domain: 'inventory', type: 'text', source: 'bottle', path: 'occasion' }),
   dim({ key: 'bottle.reservedFor', label: 'Reserved for', domain: 'inventory', type: 'text', source: 'bottle', path: 'reservedFor' }),
-  // Date fields are not groupable (audit 2026-08-19 F9): without calendar
-  // bucketing, $group on a timestamp makes one bucket per bottle — 200 rows
-  // of count:1 is a wall, not an answer. Month bucketing is the dashboards
-  // slice's problem; until then the flag is honest.
+  // Date fields are not groupable: without calendar bucketing, $group on a
+  // timestamp makes one bucket per bottle — 200 rows of count:1 is a wall,
+  // not an answer.
   dim({ key: 'bottle.addedAt', label: 'Date added', domain: 'inventory', type: 'date', source: 'bottle', path: 'createdAt', groupable: false }),
 
   // Purchase
@@ -107,12 +107,12 @@ const STATIC_FIELDS = [
   dim({ key: 'purchase.date', label: 'Purchase date', domain: 'purchase', type: 'date', source: 'bottle', path: 'purchaseDate', groupable: false }),
   dim({ key: 'purchase.location', label: 'Purchase location', domain: 'purchase', type: 'text', source: 'bottle', path: 'purchaseLocation' }),
 
-  // Ratings live in ONE scale everywhere on this surface: stars (audit
-  // 2026-08-19 F3). Values are stored per-bottle in '5'/'20'/'100' scales —
-  // mixed after imports — so raw filter/sort/display made a 60-point Parker
-  // outrank a 5-star bottle. Filters take stars, sort orders by the
-  // star-converted expression, hydration returns stars, grouped measures
-  // aggregate stars — all generated from the same ratingUtils anchor table.
+  // Ratings live in ONE scale everywhere on this surface: stars, unless the
+  // request names the viewer's own. Values are stored per-bottle in
+  // '5'/'20'/'100' scales — mixed after imports — so a raw filter/sort/display
+  // would let a 60-point Parker outrank a 5-star bottle. Filters, the sort,
+  // hydration and grouped measures all convert through the same ratingUtils
+  // anchor table.
   measure({ key: 'rating.current', label: 'My rating (stars)', domain: 'rating', type: 'decimal', source: 'bottle', path: 'rating', scalePath: 'ratingScale', normalized: true, aggregations: ['avg', 'min', 'max'] }),
   measure({ key: 'rating.consumed', label: 'Rating at consumption (stars)', domain: 'rating', type: 'decimal', source: 'bottle', path: 'consumedRating', scalePath: 'consumedRatingScale', normalized: true, aggregations: ['avg', 'min', 'max'] }),
 
@@ -146,8 +146,8 @@ const STATIC_FIELDS = [
   dim({ key: 'maturity.windowPeakFrom', label: 'Effective peak from (year)', domain: 'maturity', type: 'integer', source: 'computed', path: null, sortable: false, groupable: false, filterable: false }),
   dim({ key: 'maturity.windowPeakUntil', label: 'Effective peak until (year)', domain: 'maturity', type: 'integer', source: 'computed', path: null, sortable: false, groupable: false, filterable: false }),
   dim({ key: 'maturity.windowSource', label: 'Window source', domain: 'maturity', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['personal', 'profile'] }),
-  // enumOptions mirror what classifyMaturity actually returns (audit F7) —
-  // 'unknown' is this module's own fallback for rows with no window at all.
+  // enumOptions mirror what classifyMaturity actually returns — 'unknown' is
+  // the query engine's own fallback for rows with no window at all.
   dim({ key: 'maturity.status', label: 'Drink status', domain: 'maturity', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['not-ready', 'early', 'peak', 'late', 'declining', 'unknown'] }),
 ];
 
@@ -166,7 +166,7 @@ function kvEntry(kind, doc) {
     unit: doc.unit || null,
     role: numeric ? 'both' : 'dimension',
     aggregations: numeric ? ['avg', 'min', 'max', 'sum'] : [],
-    // Sort and non-numeric grouping join the entries collection (R-B).
+    // Sort and non-numeric grouping join the entries collection.
     // Numeric KV stays measure-only as a dimension: every distinct reading
     // would be its own bucket — a wall, not an answer.
     sortable: true,

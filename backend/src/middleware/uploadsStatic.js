@@ -3,14 +3,11 @@
 //
 // CACHING: the immutable long cache belongs to a file we ACTUALLY SERVED, so
 // it is set by uploadsCacheHeaders below (passed to express.static's
-// setHeaders), never by this guard. The guard used to set it for any
-// image-looking path, including ones with no file behind them — the request
-// then fell through to the 404 handler carrying a one-year immutable header,
-// and Cloudflare cached the 404 for a year (confirmed 2026-09-15 on
-// /api/uploads/blog/*.webp requested moments before the files landed:
-// CF-Cache-Status HIT on a 404 that no purge was available for). The same trap
-// would pin a bottle photo requested a moment before its processing finished.
-// A miss is now explicitly uncacheable.
+// setHeaders), never by this guard. An image-looking path with no file behind
+// it falls through to the 404 handler, and a one-year immutable header on
+// that 404 lets Cloudflare cache it for a year with no purge available — a
+// blog image or a bottle photo requested a moment before its file lands would
+// stay missing. A miss is explicitly uncacheable.
 //
 // NOTE: this mount is INTENTIONALLY unauthenticated. Bottle images must load
 // from plain <img src> tags (which cannot send Authorization headers), and

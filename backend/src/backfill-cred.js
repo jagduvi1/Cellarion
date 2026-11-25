@@ -88,8 +88,8 @@ async function backfill() {
     const tier = getTier(totalScore);
     const specialty = getSpecialty(categories);
 
-    // Always write — including zero. Skipping totalScore===0 meant users whose
-    // contributions were since deleted/rejected kept a stale nonzero
+    // Always write — including zero: skipping totalScore===0 would leave a user
+    // whose contributions were since deleted or rejected with a stale nonzero
     // score/tier/specialty forever, contradicting the idempotency claim.
     await User.updateOne({ _id: uid }, {
       $set: {

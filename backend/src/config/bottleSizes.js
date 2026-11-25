@@ -4,7 +4,7 @@
  * The stored value on `Bottle.bottleSize` is a canonical CODE: the volume in
  * millilitres followed by "ml" (e.g. '750ml', '1500ml'). Display labels
  * ("Standard", "Magnum", "1.5 L") are derived in the frontend via i18n — we
- * never store a localized label, which is what produced the historical mess
+ * never store a localized label, which gives one size many stored spellings
  * ('750ml (Standard)', '750ml（標準）', '1.5L', …).
  *
  * Mirror of frontend/src/config/bottleSizes.js (kept in sync by hand, like

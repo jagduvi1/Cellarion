@@ -63,17 +63,17 @@ module.exports = [
     model: DiscussionReply, category: 'shared-content', userFields: ['author', 'quote.authorId'],
     // Besides re-pointing the user's own replies to the [deleted] sentinel,
     // scrub the user's display name from quote snapshots on OTHER users'
-    // replies (L-17): quote.authorName is a denormalised string set at
-    // reply-creation that any anonymous visitor can read. Rows are matched by
-    // quote.authorId; legacy rows created before authorId existed are resolved
-    // through quote.replyId → the user's own reply ids (collected BEFORE the
-    // author re-point runs). Residue: a legacy quote whose quoted reply was
-    // since hard-deleted cannot be attributed and keeps its name snapshot.
+    // replies: quote.authorName is a denormalised string set at reply-creation
+    // that any anonymous visitor can read. Rows are matched by quote.authorId;
+    // legacy rows created before authorId existed are resolved through
+    // quote.replyId → the user's own reply ids (collected BEFORE the author
+    // re-point runs). Residue: a legacy quote whose quoted reply was since
+    // hard-deleted cannot be attributed and keeps its name snapshot.
     purge: async (ctx) => {
       const ownReplyIds = await DiscussionReply.distinct('_id', { author: ctx.userId });
       await Promise.all([
         // deletedBody: the original text of the user's own soft-deleted
-        // replies does not survive their erasure (audit 2026-09 S3-3).
+        // replies does not survive their erasure.
         DiscussionReply.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId, deletedBody: null } }),
         DiscussionReply.updateMany(
           { 'quote.authorId': ctx.userId },
@@ -140,10 +140,10 @@ module.exports = [
   {
     model: ReviewVote, category: 'personal-data', userFields: ['user'],
     // Review.likesCount is $inc-maintained by the like/unlike route, so a bare
-    // deleteMany would leave phantom likes on public reviews forever
-    // (grand-audit M11). Reconcile the counter down per affected review BEFORE
-    // deleting — same discipline as the Follow entry below. Clamped at 0 so a
-    // pre-existing drift can't drive it negative.
+    // deleteMany would leave phantom likes on public reviews forever.
+    // Reconcile the counter down per affected review BEFORE deleting — same
+    // discipline as the Follow entry below. Clamped at 0 so a pre-existing
+    // drift can't drive it negative.
     purge: async (ctx) => {
       const votes = await ReviewVote.find({ user: ctx.userId }).select('review').lean();
       const perReview = {};
@@ -156,8 +156,7 @@ module.exports = [
       await Review.updateMany({ _id: { $in: Object.keys(perReview) }, likesCount: { $lt: 0 } }, [{ $set: { likesCount: 0 } }]);
       await ReviewVote.deleteMany({ user: ctx.userId });
     },
-    // BUG FIX: schema has no `vote` field (only user/review/createdAt); the old
-    // export emitted vote:undefined. Export the real fields.
+    // A vote is the row itself: ReviewVote holds only user, review and createdAt.
     exportFragment: async (ctx) => ({
       reviewVotes: markTrunc(ctx, 'reviewVotes', await ReviewVote.find({ user: ctx.userId }).select('review createdAt').limit(EXPORT_MAX).lean())
         .map(v => ({ review: v.review, createdAt: v.createdAt })),
@@ -171,7 +170,7 @@ module.exports = [
       // Reconcile the denormalized counters on the counterparties BEFORE removing
       // the edges — otherwise deleting a user leaves everyone they were connected
       // to with a permanently inflated followersCount / followingCount (the live
-      // follow/unfollow paths keep these in sync, but the hard-delete skipped it).
+      // follow/unfollow paths keep these in sync; a bare hard-delete does not).
       const edges = await Follow.find({ $or: [{ follower: ctx.userId }, { following: ctx.userId }] })
         .select('follower following').lean();
       const decFollowers = {}; // people this user followed → their followersCount drops
@@ -222,7 +221,7 @@ module.exports = [
       // ALSO scrub the departing user's OWN address where it sits as the
       // recipientEmail on OTHER users' sent recs — a recommendation sent to
       // this email before they ever signed up leaves recipient:null, so the
-      // two updates above never touch it (grand-audit M10). Match by email.
+      // two updates above never touch it. Match by email.
       ...(ctx.userEmail ? [Recommendation.updateMany({ recipientEmail: ctx.userEmail }, { $unset: { recipientEmail: '' } })] : []),
     ],
     exportFragment: async (ctx) => {

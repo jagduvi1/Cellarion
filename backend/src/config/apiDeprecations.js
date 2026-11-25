@@ -1,9 +1,9 @@
 /**
- * Token routes on their way out. A personal API token with the `read` scope
- * used to reach every GET under these prefixes; the public API
- * (openapi/document.js) documents only some of them, and the token allowlist
- * (middleware/apiTokenAuth.js) now lists exactly those. The rest keep
- * answering tokens until SUNSET, announced as the stability promise says:
+ * Token routes on their way out: the GETs under these prefixes that a
+ * personal API token with the `read` scope reaches although the public API
+ * (openapi/document.js) does not document them. The token allowlist
+ * (middleware/apiTokenAuth.js) lists exactly the documented ones; the rest
+ * keep answering tokens until SUNSET, announced as the stability promise says:
  *  - every such answer carries Deprecation (RFC 9745), Sunset (RFC 8594) and
  *    a Link to /developers;
  *  - every such use is counted per route and day (models/ApiDeprecatedUse),

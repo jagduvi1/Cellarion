@@ -17,7 +17,7 @@ const ORDERED_STATUS = 'ordered';
 
 // Every status that is NOT in the cellar right now. "In the cellar" queries
 // filter { status: { $nin: NOT_IN_CELLAR_STATUSES } }: a $nin rather than
-// 'active' so a legacy row without a status still counts, as it always has.
+// 'active' so a legacy row without a status still counts.
 const NOT_IN_CELLAR_STATUSES = [...CONSUMED_STATUSES, ORDERED_STATUS];
 
 // Milliseconds in a single day — used for drink-window calculations
@@ -105,8 +105,8 @@ const WINE_POPULATE_LIST = [
 // the cellar page's filters show: the name (the filters use the id); slug and
 // code kept for links and flags, colour for grape dots. The full rows carry
 // long descriptions, copied onto every bottle — most of a big grouped cellar
-// page (scaling audit 2026-09-25, item 11). The cellar page and the offline
-// copy use it: the offline screens render the very same components from it.
+// page. The cellar page and the offline copy use it: the offline screens
+// render the very same components from it.
 const WINE_POPULATE_CARDS = [
   {
     path: 'wineDefinition',
@@ -187,12 +187,12 @@ const DISCUSSION_MAX_LENGTHS = { title: 200, body: 5000, replyBody: 3000 };
 // The token scopes that reach the PERSONAL MCP surface (POST /api/mcp) — the
 // single source for the JWT-session grant, the OAuth grantable set, and the
 // admin usage-view connection filter, so adding a scope can't silently miss
-// one of the three (grand-audit M7). NOT the same as ApiToken.TOKEN_SCOPES,
-// which also includes 'climate' (device-only, never an MCP connection).
+// one of the three. NOT the same as ApiToken.TOKEN_SCOPES, which also
+// includes 'climate' (device-only, never an MCP connection).
 const MCP_PERSONAL_SCOPES = ['read', 'consume', 'write'];
 
 // Support-ticket categories — single source for the model enum, the
-// accountOps validation, and the MCP tool's input schema (grand-audit M9).
+// accountOps validation, and the MCP tool's input schema.
 // 'beta' is feedback on a feature in early access, sent from the feature's
 // own "Give feedback" button with the feature's key (config/featureFlags).
 const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other', 'beta'];
@@ -210,7 +210,7 @@ const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-v
 // sections and the cards with a title of their own (the frontend's
 // utils/collapsedBlocks.js keeps the same list). Remembered per account as
 // preferences.collapsedBlocks — so a fold follows the member to any device —
-// and validated in accountOps (beta feedback 2026-10-12).
+// and validated in accountOps.
 const COLLAPSIBLE_BLOCKS = [
   'vintage.wine', 'vintage.vintage', 'vintage.bottles',
   'vintage.tasting', 'vintage.record', 'vintage.personal', 'vintage.history', 'vintage.reviews',
@@ -223,10 +223,10 @@ const COLLAPSIBLE_BLOCKS = [
 // it into the field ("Riesling Kabinett trocken" → "Riesling Kabinett" +
 // trocken). OFF: no term is ever read off a name and no name is changed; only
 // an explicit term sets one (the display name stays right, because
-// appendSweetnessTerm appends a term only where it always did, and not even
-// there when the name carries it in a spelling the rule reads). Off while the stored names still carry their words: on before
-// those are migrated, new names would lose the word and old ones keep it — a
-// half-stripped registry. Read at call time.
+// appendSweetnessTerm appends a term only where the name does not already
+// carry it in a spelling the rule reads). Off while the stored names still
+// carry their words: on before those are migrated, new names would lose the
+// word and old ones keep it — a half-stripped registry. Read at call time.
 const SWEETNESS_EXTRACT_FROM_NAME = false;
 
 module.exports = {
