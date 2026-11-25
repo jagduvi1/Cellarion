@@ -45,6 +45,7 @@ const { getDataVersion } = require('../services/dataVersion');
 const { TRASH_DAYS, trashBottle } = require('../services/bottleTrash');
 const { queryUserBottles } = require('../services/bottleListQuery');
 const { attachBottleImageUrls } = require('../services/bottleImageUrls');
+const { attachSweetnessCategoriesIfReadable } = require('../services/sweetnessCategory');
 
 const router = express.Router();
 
@@ -117,6 +118,10 @@ router.get('/', async (req, res) => {
     } catch (err) {
       console.error('GET /api/bottles photo lookup failed:', err.message);
     }
+
+    // sweetnessCategory + sweetnessCategoryBasis on each wine, in one query
+    // for the page; the copies decorateGrapes makes below carry them.
+    await attachSweetnessCategoriesIfReadable(bottles.map((b) => b.wineDefinition), 'bottle list');
 
     const items = bottles.map(b => ({
       ...b,
@@ -377,6 +382,8 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       // The bottle page shows the translated prose while it is fresh; an API
       // token reads the English profile only (utils/profileLanguage).
       bottleObj.wineDefinition.aiProfile = displayProfile(bottleObj.wineDefinition.aiProfile, { token: !!req.apiToken });
+      // The wine record's Sweetness row shows the category the wine reads as.
+      await attachSweetnessCategoriesIfReadable(bottleObj.wineDefinition, 'bottle');
     }
     // The exchange-rate snapshot of the day this price was entered, as
     // priceCurrencyRates.

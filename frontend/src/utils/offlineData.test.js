@@ -93,6 +93,36 @@ describe('offline answers — cellar detail', () => {
     expect(ids(get(`/api/cellars/${C1}?reserved=1`).body.bottles.items)).toEqual([b3]);
   });
 
+  it('filters by the sweetness category the server put on each wine of the copy', () => {
+    const wine = (id, over) => ({ _id: id, name: id, type: 'white', ...over });
+    const copy = indexSnapshot({
+      ...SNAP,
+      wines: {
+        dry: wine('dry', { sweetnessCategory: 'dry', sweetnessCategoryBasis: 'label' }),
+        sweet: wine('sweet', { sweetnessCategory: 'sweet', sweetnessCategoryBasis: 'tier' }),
+        none: wine('none', { sweetnessCategory: null, sweetnessCategoryBasis: null }),
+        port: wine('port', { type: 'fortified', sweetnessCategory: null, sweetnessCategoryBasis: null }),
+      },
+      bottles: [
+        { _id: b1, cellar: C1, wineDefinition: 'dry', vintage: '2020' },
+        { _id: b2, cellar: C1, wineDefinition: 'sweet', vintage: '2020' },
+        { _id: b3, cellar: C1, wineDefinition: 'none', vintage: '2020' },
+        { _id: b4, cellar: C1, wineDefinition: 'port', vintage: '2020' },
+        { _id: b9, cellar: C1, wineDefinition: null, vintage: '2020' },
+      ],
+    });
+    const listed = (value) => answerOffline(copy, `/api/cellars/${C1}?sweetnessCategory=${value}`).body.bottles.items.map((b) => b._id).sort();
+    expect(listed('dry')).toEqual([b1]);
+    expect(listed('sweet,dry')).toEqual([b1, b2]);
+    expect(listed('not-stated')).toEqual([b3]);
+    // A fortified wine and a bottle without a wine are found by none of them.
+    expect(listed('dry,off-dry,medium-sweet,sweet,not-stated')).toEqual([b1, b2, b3]);
+  });
+
+  it('a copy saved before the category was sent lists nothing under a sweetness filter', () => {
+    expect(get(`/api/cellars/${C1}?sweetnessCategory=not-stated`).body.bottles.total).toBe(0);
+  });
+
   it('unplaced, by rack and by rack group', () => {
     expect(ids(get(`/api/cellars/${C1}?excludePlaced=1`).body.bottles.items)).toEqual([b3, b2]);
     expect(ids(get(`/api/cellars/${C1}?rack=${R1}`).body.bottles.items)).toEqual([b1]);

@@ -41,12 +41,14 @@ const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('.
 const { grapeSearchNames } = require('../utils/grapeDisplay');
 const { publishedValuesForBottles } = require('./registryDataOps');
 const { listForBottles } = require('./personalData');
+const { loadTerms } = require('./sweetnessOps');
+const { CATEGORY_WINE_SELECT, parseSweetnessFilter, sweetnessFilterValue } = require('./sweetnessCategory');
 
 // Searchable fields, most important first — the order is the field ranking.
 // `facts` sits below the wine's own fields and above the notes: a curated
 // fact says more about the bottle than free text does.
 const FIELDS = ['wineName', 'producer', 'appellation', 'countryName', 'regionName', 'grapeNames', 'type', 'facts', 'notes', 'location', 'vintage'];
-const FACETS = ['type', 'countryName', 'regionName', 'appellation', 'vintage', 'countryId', 'regionId', 'grapeIds'];
+const FACETS = ['type', 'countryName', 'regionName', 'appellation', 'vintage', 'countryId', 'regionId', 'grapeIds', 'sweetnessCategory'];
 // 'other' = the non-wine category (WineDefinition.nonWine): a cider in the
 // cellar is filtered and counted as Other, never as the type it was typed with.
 const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified', 'other'];
@@ -407,6 +409,9 @@ function buildSearchDoc(bottle, wine) {
       countryId: refId(w.country),
       regionId: refId(w.region),
       grapeIds: (w.grapes || []).filter(Boolean).map(refId),
+      // Worked out when the wine was loaded (loadWines): the category,
+      // "not-stated", or '' for a wine with no scale, which is not counted.
+      sweetnessCategory: w.sweetnessFacet || '',
     },
     sort: {
       wineName: values.wineName,
@@ -483,9 +488,11 @@ const splitList = (value) => String(value).split(',').map((v) => v.trim()).filte
  * the facets that test narrows: [{ facets: ['countryName', 'countryId'], test }, …].
  * A field's own counts leave its own test out (searchBottles). Values are
  * validated like the index's filter builder did: an invalid value is ignored,
- * and a list with no valid value filters nothing.
+ * and a list with no valid value filters nothing. The sweetness category
+ * reads its own value (services/sweetnessCategory parseSweetnessFilter): one
+ * with no valid word finds nothing, as on the bottle list.
  */
-function filterTests({ type, countryId, regionId, appellation, grapeIds, vintage }) {
+function filterTests({ type, countryId, regionId, appellation, grapeIds, vintage, sweetnessCategory }) {
   const tests = [];
   const setOf = (values) => (values.length > 0 ? new Set(values) : null);
   const types = type ? setOf(splitList(type).map((t) => t.toLowerCase()).filter((t) => VALID_TYPES.includes(t))) : null;
@@ -500,6 +507,8 @@ function filterTests({ type, countryId, regionId, appellation, grapeIds, vintage
   if (apps) tests.push({ facets: ['appellation'], test: (f) => apps.has(facetKey(f.appellation)) });
   const vintages = vintage ? setOf(splitList(vintage).filter((v) => /^[A-Za-z0-9]+$/.test(v)).map(facetKey)) : null;
   if (vintages) tests.push({ facets: ['vintage'], test: (f) => vintages.has(facetKey(f.vintage)) });
+  const sweetness = parseSweetnessFilter(sweetnessCategory);
+  if (sweetness) tests.push({ facets: ['sweetnessCategory'], test: (f) => sweetness.has(f.sweetnessCategory) });
   return tests;
 }
 
@@ -555,17 +564,35 @@ function facetMetaOf(wines) {
   return { countries, regions, grapes };
 }
 
+// The sweetness facet value of each wine, kept for as long as the term table
+// copy it was read with (a minute: services/sweetnessOps) — so as stale, at
+// most, as the search documents are. Reading a name costs more than a wine's
+// other facets together, and a plain cellar page counts every wine of the
+// cellar on every page of its scroll.
+let sweetnessFacets = new WeakMap(); // term table → Map(wine id + updatedAt → value)
+function sweetnessFacetOf(wine, terms) {
+  let kept = sweetnessFacets.get(terms);
+  if (!kept) { kept = new Map(); sweetnessFacets.set(terms, kept); }
+  const key = `${wine._id}:${wine.updatedAt ? new Date(wine.updatedAt).getTime() : ''}`;
+  if (!kept.has(key)) kept.set(key, sweetnessFilterValue(wine, terms));
+  return kept.get(key);
+}
+
 async function loadWines(ids) {
   const unique = [...new Set(ids.filter(Boolean).map(String))];
   if (unique.length === 0) return new Map();
   const wines = await WineDefinition.find({ _id: { $in: unique } })
     // pendingIdentity: such a wine's registry values are not searched (attachFacts).
-    .select('name producer appellation type nonWine pendingIdentity country region grapes')
+    // CATEGORY_WINE_SELECT is what the sweetness category reads (the terms
+    // stay ids, which the term table names); updatedAt keys its kept value.
+    .select(`${CATEGORY_WINE_SELECT} pendingIdentity grapes updatedAt`)
     .populate('country', 'name')
     .populate('region', 'name')
     // regionalNames feed grapeSearchNames (regional display names match too).
     .populate('grapes', 'name regionalNames')
     .lean();
+  const terms = await loadTerms();
+  for (const w of wines) w.sweetnessFacet = sweetnessFacetOf(w, terms);
   return new Map(wines.map((w) => [String(w._id), w]));
 }
 
@@ -795,6 +822,8 @@ function emptyResult() {
  * @param {string} [opts.appellation] comma-separated names
  * @param {string[]} [opts.grapeIds] any of these grapes
  * @param {string} [opts.vintage] comma-separated vintages
+ * @param {string} [opts.sweetnessCategory] comma-separated sweetness categories
+ *   (dry, off-dry, medium-sweet, sweet) and "not-stated" (services/sweetnessCategory)
  * @param {string} [opts.sort] name | createdAt | vintage | price | rating, '-' for descending
  * @param {number} [opts.limit=30]
  * @param {number} [opts.offset=0]
@@ -822,6 +851,7 @@ async function searchBottles(query, {
   appellation,
   grapeIds,
   vintage,
+  sweetnessCategory,
   sort,
   limit = 30,
   offset = 0,
@@ -835,7 +865,7 @@ async function searchBottles(query, {
   const parsed = parseQuery(query);
   const { docs, wines } = await loadScope(scope, statusFilter, { withText: !!parsed, version });
 
-  const tests = filterTests({ type, countryId, regionId, appellation, grapeIds, vintage });
+  const tests = filterTests({ type, countryId, regionId, appellation, grapeIds, vintage, sweetnessCategory });
   const memo = new Map();
   const rankOf = (doc) => {
     if (!parsed) return true;
@@ -928,6 +958,8 @@ module.exports = {
     MAX_QUERY_CHARS, MAX_WORD_CHARS, MAX_TYPO_WORD_CHARS,
     docBytes, factsText, FACT_TYPES, MAX_FACTS_CHARS,
     forgetAllDocs: () => { docsCache.clear(); bytesKept = 0; },
+    sweetnessFacetOf,
+    forgetSweetnessFacets: () => { sweetnessFacets = new WeakMap(); },
     setDocsMaxBytes: (n = DEFAULT_DOCS_MAX_BYTES) => { DOCS_MAX_BYTES = n; },
     keptScopes: () => docsCache.size,
     keptBytes: () => bytesKept,

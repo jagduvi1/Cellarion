@@ -12,6 +12,7 @@ const SweetnessTerm = require('../models/SweetnessTerm');
 const { TOKEN_SCOPES } = require('../models/ApiToken');
 const { TYPES: PERSONAL_TYPES } = require('../utils/personalDataTypes');
 const { CONSUMED_STATUSES } = require('../config/constants');
+const { CATEGORIES: SWEETNESS_CATEGORIES, BASES: SWEETNESS_BASES } = require('../services/sweetnessCategory');
 
 const doc = buildOpenApiDocument({ version: '9.9.9', serverUrl: 'https://cellar.example.org' });
 const v = createValidator(doc);
@@ -107,5 +108,9 @@ test('enums are the code\'s', () => {
   expect(values(S.SweetnessStyle.properties.source)).toEqual(WineDefinition.SWEETNESS_STYLE_SOURCES);
   expect(values(S.SweetnessStyle.properties.band)).toEqual(SweetnessTerm.ALL_BANDS);
   expect(values(S.SweetnessStyle.properties.scale)).toEqual(SweetnessTerm.SCALES);
+  for (const schema of [S.WineSummary, S.InventoryWine]) {
+    expect(values(schema.properties.sweetnessCategory)).toEqual(SWEETNESS_CATEGORIES);
+    expect(values(schema.properties.sweetnessCategoryBasis)).toEqual(SWEETNESS_BASES);
+  }
   for (const o of v.operations()) for (const s of o.scopes.flat()) expect(TOKEN_SCOPES).toContain(s);
 });

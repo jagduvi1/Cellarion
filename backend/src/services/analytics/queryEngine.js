@@ -52,6 +52,7 @@ const RATING_SCALES = ['5', '20', '100'];
 const RATING_MAX = { 5: 5, 20: 20, 100: 100 };
 const { getOrCreateDailySnapshot } = require('../../utils/exchangeRates');
 const { classifyMaturity, buildProfileMap, resolveEffectiveWindow } = require('../../utils/maturityUtils');
+const { readSweetnessCategories } = require('../sweetnessCategory');
 
 const MAX_TIME_MS = 5000;
 const ROWS_LIMIT_MAX = 200;
@@ -897,6 +898,12 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
     'maturity.windowSource': 'source',
   };
 
+  // The sweetness category only when asked for: one read for the page.
+  const wineIdOf = (b) => String(b.wineDefinition?._id || b.wineDefinition || '');
+  const sweetnessOf = fields.some((f) => f.key === 'wine.sweetnessCategory')
+    ? await readSweetnessCategories(ordered.map(wineIdOf))
+    : null;
+
   const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d ?? null);
   const extract = (b, f) => {
     switch (f.source) {
@@ -928,6 +935,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
       case 'computed': {
         if (f.key === 'bottle.cellar') return cellarNames.get(String(b.cellar)) ?? null;
         if (f.key === 'maturity.status') return classifyMaturity(b, profileMap) ?? 'unknown';
+        if (f.key === 'wine.sweetnessCategory') return sweetnessOf.get(wineIdOf(b))?.category ?? null;
         if (WINDOW_COLUMNS[f.key]) return effectiveWindow(b)?.[WINDOW_COLUMNS[f.key]] ?? null;
         return null;
       }

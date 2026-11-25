@@ -23,6 +23,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { classifyMaturity, buildProfileMap, buildMaturitySortKeys } = require('../utils/maturityUtils');
 const { NOT_IN_CELLAR_STATUSES, WINE_POPULATE_CARDS } = require('../config/constants');
 const { getDataVersion } = require('./dataVersion');
+const { attachSweetnessCategories } = require('./sweetnessCategory');
 
 const SNAPSHOT_SCHEMA = 1;
 
@@ -157,6 +158,8 @@ async function buildOfflineSnapshot(userId, { attachBottleImageUrls }) {
   const profileMap = await buildProfileMap(bottles);
   const maturity = new Map(bottles.map((b) => [String(b._id), classifyMaturity(b, profileMap) || null]));
   const maturitySort = buildMaturitySortKeys(bottles, profileMap, maturity);
+  // The offline filter and the wine record read the category off the copy.
+  await attachSweetnessCategories(bottles.map((b) => b.wineDefinition));
   const withImages = await attachBottleImageUrls(bottles, userId);
 
   return assembleSnapshot({ userId, cellars, bottles: withImages, racks, maturity, maturitySort });

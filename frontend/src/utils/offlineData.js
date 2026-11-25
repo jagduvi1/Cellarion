@@ -11,6 +11,8 @@
  * Pure: no storage, no network. utils/offlineSnapshot.js feeds it.
  */
 
+import { sweetnessFilterValueOf } from './sweetnessCategory';
+
 const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
 
 const idOf = (v) => (v && typeof v === 'object' ? String(v._id) : v != null ? String(v) : null);
@@ -81,6 +83,9 @@ function filterBottles(idx, cellarId, params) {
   if (grapes.length) list = list.filter((b) => (wineOf(b).grapes || []).some((g) => grapes.includes(idOf(g))));
   const appellation = params.get('appellation');
   if (appellation) list = list.filter((b) => norm(wineOf(b).appellation) === norm(appellation));
+  // The category the server put on each wine of the copy (utils/sweetnessCategory).
+  const sweetness = listParam(params, 'sweetnessCategory');
+  if (sweetness.length) list = list.filter((b) => sweetness.includes(sweetnessFilterValueOf(b.wineDefinition)));
   const maturity = listParam(params, 'maturity');
   if (maturity.length) list = list.filter((b) => maturity.includes(b.maturityStatus || 'unknown'));
   if (params.get('reserved') === '1' || params.get('reserved') === 'true') list = list.filter(isReserved);

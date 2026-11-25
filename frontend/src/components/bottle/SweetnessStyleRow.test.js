@@ -92,6 +92,45 @@ describe('what the row shows', () => {
     expect(within(sweetnessRow()).getByRole('button', { name: 'Suggest a fix for Sweetness' })).toHaveTextContent('Add');
   });
 
+  test('with no term to show, the row says what the record reads as and why; "not recorded" is for a wine that reads as nothing', async () => {
+    const read = async (over) => {
+      const { unmount } = render(<WineRecordSection wine={{ ...WINE, ...over }} canSuggest={false} apiFetch={vi.fn()} />);
+      await screen.findByText('Sweetness');
+      const text = sweetnessRow().querySelector('.wr-value').textContent;
+      unmount();
+      return text;
+    };
+    expect(await read({ name: 'Riesling trocken', sweetnessCategory: 'dry', sweetnessCategoryBasis: 'name' })).toBe('dry · from the name');
+    expect(await read({ name: 'Riesling Beerenauslese', sweetnessCategory: 'sweet', sweetnessCategoryBasis: 'tier' })).toBe('sweet · by its tier');
+    expect(await read({ type: 'dessert', sweetnessCategory: 'sweet', sweetnessCategoryBasis: 'type' })).toBe('sweet · dessert wine');
+    expect(await read({ sweetnessCategory: null, sweetnessCategoryBasis: null })).toBe('not recorded');
+    // A value this screen does not know is not shown as a category.
+    expect(await read({ sweetnessCategory: 'bone-dry', sweetnessCategoryBasis: 'name' })).toBe('not recorded');
+  });
+
+  test('the terms keep their place: a label term or a style is shown, not the category behind it', async () => {
+    const label = { name: 'trocken', band: 'dry', scale: 'still', regulated: true };
+    const { unmount } = render(<WineRecordSection wine={{ ...WINE, labelSweetness: label, sweetnessCategory: 'dry', sweetnessCategoryBasis: 'label' }} canSuggest={false} apiFetch={vi.fn()} />);
+    await screen.findByText('Sweetness');
+    expect(sweetnessRow().querySelector('.wr-value').textContent).toBe('trocken');
+    unmount();
+    render(<WineRecordSection wine={{ ...WINE, sweetnessStyle: STYLE, sweetnessCategory: 'off-dry', sweetnessCategoryBasis: 'style' }} canSuggest={false} apiFetch={vi.fn()} />);
+    await screen.findByText('Sweetness');
+    expect(within(sweetnessRow()).getByText(/known as/)).toBeInTheDocument();
+  });
+
+  test('a wine whose name carries the word takes no style; one that reads by its tier or type still does', async () => {
+    const { unmount } = render(<WineRecordSection wine={{ ...WINE, name: 'Riesling trocken', sweetnessCategory: 'dry', sweetnessCategoryBasis: 'name' }} canSuggest apiFetch={vi.fn()} />);
+    await screen.findByText('Sweetness');
+    fireEvent.click(screen.getByText('Suggest a fix'));
+    expect(screen.queryByLabelText('Suggest a fix for Sweetness')).not.toBeInTheDocument();
+    unmount();
+    render(<WineRecordSection wine={{ ...WINE, name: 'Riesling Beerenauslese', sweetnessCategory: 'sweet', sweetnessCategoryBasis: 'tier' }} canSuggest apiFetch={vi.fn()} />);
+    await screen.findByText('Sweetness');
+    fireEvent.click(screen.getByText('Suggest a fix'));
+    expect(within(sweetnessRow()).getByRole('button', { name: 'Suggest a fix for Sweetness' })).toHaveTextContent('Add');
+  });
+
   test('a fortified wine and a drink that is not wine have no sweetness row', async () => {
     const { unmount } = render(<WineRecordSection wine={{ ...WINE, type: 'fortified' }} canSuggest apiFetch={vi.fn()} />);
     await screen.findByText('Wine record');

@@ -182,6 +182,9 @@ describeWithMongo('public API contract', () => {
     // The sweetness style in its documented shape, never the stored one.
     expect(wine.sweetnessStyle).toEqual(STYLE);
     expect(first.body.wines[String(world.wines.white._id)].sweetnessStyle).toBeNull();
+    // The category each record reads as, and what it rests on.
+    expect(wine).toMatchObject({ sweetnessCategory: 'dry', sweetnessCategoryBasis: 'style' });
+    expect(first.body.wines[String(world.wines.white._id)]).toMatchObject({ sweetnessCategory: 'dry', sweetnessCategoryBasis: 'label' });
 
     await expectContract('getInventory', 304, { token: 'read', headers: { 'If-None-Match': first.headers.etag } });
     await expectContract('getInventory', 401, { token: 'revoked' });
@@ -240,6 +243,11 @@ describeWithMongo('public API contract', () => {
     expect(page.body.bottles).toMatchObject({ limit: 2, skip: 1, count: 2 });
     await expectContract('listBottles', 200, { token: 'read', query: '?maturity=late,declining' });
     await expectContract('listBottles', 200, { token: 'read', query: '?status=consumed&sort=-vintage' });
+    const dry = await expectContract('listBottles', 200, { token: 'read', query: '?sweetnessCategory=dry' });
+    expect(dry.body.bottles.items.length).toBeGreaterThan(0);
+    expect(dry.body.bottles.items.every((x) => x.wineDefinition.sweetnessCategory === 'dry')).toBe(true);
+    const sweet = await expectContract('listBottles', 200, { token: 'read', query: '?sweetnessCategory=sweet,not-stated' });
+    expect(sweet.body.bottles.total).toBe(0);
     await expectContract('listBottles', 401, { token: 'revoked' });
     await expectContract('listBottles', 403, { token: 'consume' });
 
@@ -248,6 +256,7 @@ describeWithMongo('public API contract', () => {
     // The sweetness style in its documented shape on the list (a lean read) and
     // the detail (a toObject() copy) alike.
     expect(one.body.bottle.wineDefinition.sweetnessStyle).toEqual(STYLE);
+    expect(one.body.bottle.wineDefinition).toMatchObject({ sweetnessCategory: 'dry', sweetnessCategoryBasis: 'style' });
     const all = await expectContract('listBottles', 200, { token: 'read' });
     const listed = all.body.bottles.items.find((x) => x._id === b('b1'));
     expect(listed.wineDefinition.sweetnessStyle).toEqual(STYLE);

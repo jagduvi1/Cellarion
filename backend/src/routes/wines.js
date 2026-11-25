@@ -32,6 +32,7 @@ const { MEMBER_WINE_HIDDEN_FIELDS, MEMBER_WINE_EXCLUDE_KEEP_CREATOR } = require(
 // regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
 // while `name` stays canonical. Storage/filters/stats are untouched.
 const { decorateGrapes } = require('../utils/grapeDisplay');
+const { attachSweetnessCategoriesIfReadable } = require('../services/sweetnessCategory');
 const { displayProfile } = require('../utils/profileLanguage');
 const { wineVisibilityFilter, isCurator: isCuratorRole } = require('../services/wineVisibility');
 const { normalizeBarcode } = require('../utils/barcode');
@@ -1245,6 +1246,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     }
 
     const payload = decorateGrapes(wine);
+    await attachSweetnessCategoriesIfReadable(payload, 'wine');
     // A draft says whose it is only as a boolean — never by id.
     if (wine.draft === true) payload.draftMine = String(wine.createdBy) === String(req.user.id);
     if (!isCurator) delete payload.createdBy;

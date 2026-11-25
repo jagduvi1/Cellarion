@@ -1011,6 +1011,9 @@
     "reservedOnly": "Reserved only",
     "grapeLabel": "Grapes",
     "vintageLabel": "Vintage",
+    "sweetnessLabel": "Sweetness",
+    "sweetnessNotStated": "Not stated",
+    "sweetnessNotStatedChip": "Sweetness not stated",
     "showMore": "+{{count}} more",
     "showLess": "Show less",
     "allRatings": "All Ratings",
@@ -3018,6 +3021,9 @@
     "styleBandOnScale": "{{band}} · {{scale}}",
     "styleGoesLive": "This wine has no such term yet, so yours goes live at once.",
     "styleReviewed": "A curator reviews this before it goes live.",
+    "categoryFromName": "from the name",
+    "categoryFromTier": "by its tier",
+    "categoryFromType": "dessert wine",
     "publicData": "More data",
     "suggestValue": "Add value",
     "suggestValueFor": "Suggest a value for {{field}}",
@@ -4249,6 +4255,25 @@
       "a5": "Cellarion supports CSV import. Export your collection from Vivino, CellarTracker, or any spreadsheet, then upload the CSV in Cellarion's import tool. Note that Vivino's \"full wine list\" download is your scan history, not your cellar — Cellarion detects this and offers to import it as drinking history (with your ratings, reviews and notes) instead of as bottles in stock. The shared wine registry deduplicates entries automatically so your data stays clean and consistent across the whole catalogue.",
       "q6": "Can I export my data and leave any time?",
       "a6": "Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON (or a ZIP with your images), plus CSV import for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR."
+    }
+  },
+  "sweetness": {
+    "band": {
+      "dry": "Dry",
+      "off-dry": "Off-dry",
+      "medium-sweet": "Medium sweet",
+      "sweet": "Sweet",
+      "brut-nature": "Brut nature",
+      "extra-brut": "Extra brut",
+      "brut": "Brut",
+      "extra-dry": "Extra dry",
+      "sec": "Sec",
+      "demi-sec": "Demi-sec",
+      "doux": "Doux"
+    },
+    "scale": {
+      "still": "Still wine",
+      "sparkling": "Sparkling wine"
     }
   },
   "maturity": {

@@ -50,6 +50,7 @@ const scopeVersion = (ownerIds) => [...new Set(ownerIds.map((id) => String(id &&
   .map((id) => `${id}:${getDataVersion(id)}`)
   .join(',');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
+const { sweetnessQueryValue, attachSweetnessCategoriesIfReadable } = require('../services/sweetnessCategory');
 // Which picture each card of a bottle list shows.
 const { attachBottleImageUrls } = require('../services/bottleImageUrls');
 
@@ -334,10 +335,11 @@ router.get('/:id/history', async (req, res) => {
     if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
 
     const { search, type, country, region, grapes, vintage, appellation } = req.query;
+    const sweetnessCategory = sweetnessQueryValue(req.query.sweetnessCategory) || undefined;
     const grapeIds = grapes
       ? String(grapes).split(',').map(g => g.trim()).filter(mongoose.isValidObjectId)
       : [];
-    const hasSearchFilters = !!(search || type || country || region || grapes || vintage || appellation);
+    const hasSearchFilters = !!(search || type || country || region || grapes || vintage || appellation || sweetnessCategory);
 
     // ?limit pages the history (see historyPaging), with the total and the
     // per-reason counts the page's summary shows. A history imported from
@@ -362,6 +364,7 @@ router.get('/:id/history', async (req, res) => {
         appellation,
         grapeIds,
         vintage,
+        sweetnessCategory,
         limit: 10000,
         offset: 0,
         version: scopeVersion([cellar.user]),
@@ -496,6 +499,8 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
       // Auxiliary, like the rack slots below: never 500 the page over it.
       console.error('Vintage page profile lookup failed:', err.message);
     }
+    // The wine record's Sweetness row shows the category the wine reads as.
+    await attachSweetnessCategoriesIfReadable(wine, 'vintage page');
 
     // Rack slots, answered here like the bottle page does: the page must not
     // download every rack to place a few bottles.
@@ -633,6 +638,8 @@ router.get('/:id', async (req, res) => {
     const type = one('type');
     const vintage = one('vintage');
     const appellation = one('appellation');
+    // One value, or the key repeated (services/sweetnessCategory).
+    const sweetnessCategory = sweetnessQueryValue(req.query.sweetnessCategory) || undefined;
     const minRating = one('minRating');
     const maxRating = one('maxRating');
     const ratingBandParam = one('ratingBand');
@@ -708,8 +715,8 @@ router.get('/:id', async (req, res) => {
     // Whether we need in-memory post-processing that neither the search nor MongoDB can do
     const needsMaturity = !!(maturityFilter || sortField === 'maturity');
 
-    // ── Search: free text or a wine filter (type, country, region, appellation, grapes, vintage) ──
-    const hasSearchFilters = !!(search || type || country || region || grapes || vintage || appellation);
+    // ── Search: free text or a wine filter (type, country, region, appellation, grapes, vintage, sweetness category) ──
+    const hasSearchFilters = !!(search || type || country || region || grapes || vintage || appellation || sweetnessCategory);
     let found = null;
     let bottles;
     let totalCount;
@@ -752,6 +759,7 @@ router.get('/:id', async (req, res) => {
         appellation,
         grapeIds,
         vintage,
+        sweetnessCategory,
         sort,
         limit: 10000,  // Every match — we paginate after the in-memory filters
         offset: 0,

@@ -24,6 +24,9 @@ const { servingAdvice, servingSentence } = require('../../utils/servingUtils');
 const { withoutLocalized } = require('../../utils/profileLanguage');
 const { openQuestionForRecipient } = require('../../services/ownerInquiryOps');
 const bottleSearch = require('../../services/bottleSearch');
+const {
+  FILTER_VALUES: SWEETNESS_FILTER_VALUES, readSweetnessCategories, parseSweetnessFilter, wineIdsMatching,
+} = require('../../services/sweetnessCategory');
 
 // The English profile only, or null for an empty one: a translated copy
 // (utils/profileLanguage) is for the member screens, never for MCP.
@@ -45,11 +48,14 @@ registerTool({
   description:
     'Searches the bottles in the cellars the user owns (pass cellar_id to search one specific cellar, including shared ' +
     'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | on_order | all), ' +
-    'vintage, wine type, reserved (only/exclude "spoken for" bottles). The query also reads each bottle\'s extra facts: ' +
+    'vintage, wine type, sweetness (one or several of dry | off-dry | medium-sweet | sweet, on one scale for still ' +
+    'and sparkling wines, read from the wine record; not-stated = wines that could state one and do not), reserved ' +
+    '(only/exclude "spoken for" bottles). The query also reads each bottle\'s extra facts: ' +
     'the text and list values (never the field names) of its wine\'s published public data and of the personal data ' +
     'entries shown on the bottle. Paginated and bounded; every item includes its ' +
     'rating, so filter by rating yourself from the results, and has_photo (own or published photo, or a registry ' +
-    'image — get_bottle → photos has the detail). wine carries grapes, region and country. maturity is the drink ' +
+    'image — get_bottle → photos has the detail). wine carries grapes, region, country and sweetness_category ' +
+    '(null = the record states none). maturity is the drink ' +
     'window that governs each active bottle — the user\'s own when set (source "own"), else the curated sommelier ' +
     'window (source "sommelier") — with its status; null = no window at all. drink_from/drink_to/peak_from/peak_until ' +
     'are ONLY the user\'s own overrides, so null there does NOT mean the bottle has no window. ' +
@@ -73,6 +79,13 @@ registerTool({
     vintage: z.string().regex(/^[A-Za-z0-9]{1,10}$/, 'alphanumeric, e.g. "2015" or "NV"').optional()
       .describe('e.g. "2015" or "NV"'),
     type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified', 'other']).optional().describe('"other" = drinks that are not wine (the Other category)'),
+    // One value or several (any of them matches), as the cellar filter takes
+    // them; a bare string is read as a list of one.
+    sweetness: z.preprocess(
+      (v) => (typeof v === 'string' ? [v] : v),
+      z.array(z.enum(SWEETNESS_FILTER_VALUES)).min(1).max(SWEETNESS_FILTER_VALUES.length),
+    ).optional()
+      .describe('One or more sweetness categories the wine record reads as (any of them matches); not-stated = a wine that could state one and does not (fortified wines and drinks that are not wine have no scale and match nothing here)'),
     reserved: z.enum(['only', 'exclude']).optional()
       .describe('only = just reserved ("spoken for") bottles; exclude = hide them'),
     limit: z.number().int().min(1).max(50).default(20),
@@ -84,6 +97,8 @@ registerTool({
     // Trimmed once, here: a whitespace-only query is no query — it must take
     // the "newest first" default, not the ranked path with nothing to rank by.
     const query = String(args.query || '').trim();
+    // The values as the search and the list read them: comma-separated.
+    const sweetness = Array.isArray(args.sweetness) && args.sweetness.length ? args.sweetness.join(',') : undefined;
 
     // Resolve the cellar scope first (access model in the header comment).
     let cellarIds;
@@ -106,7 +121,7 @@ registerTool({
     }
 
     // Search path — services/bottleSearch handles the text and the status /
-    // type / vintage filters with correct pagination (newest first when there
+    // type / vintage / sweetness filters with correct pagination (newest first when there
     // is no text to rank by). The reserved filter lives only on the bottle
     // document and filtering after pagination would shorten pages and inflate
     // totals — so a reserved filter takes the list path below, dropping
@@ -114,12 +129,13 @@ registerTool({
     if (query && args.reserved) {
       warnings.push('reserved filter runs on the database path — free-text matching was skipped for this query.');
     }
-    if ((query || args.type) && !args.reserved) {
+    if ((query || args.type || sweetness) && !args.reserved) {
       const res = await bottleSearch.searchBottles(query, {
         cellarIds: cellarIds.map(String),
         statusFilter: args.status === 'on_order' ? ORDERED_STATUS : (args.status || 'active'),
         type: args.type,
         vintage: args.vintage,
+        sweetnessCategory: sweetness,
         sort: query ? undefined : '-createdAt',
         limit,
         offset,
@@ -139,9 +155,11 @@ registerTool({
       });
     }
 
-    // List path: cellar/status/vintage/reserved are DB-filterable; type lives
-    // on the populated wine and the search cannot take the reserved filter, so
+    // List path: cellar/status/vintage/reserved are DB-filterable. The search
+    // cannot take the reserved filter and type lives on the populated wine, so
     // type is dropped here with an explicit warning rather than half-applied.
+    // Sweetness is applied: it narrows by wine before the page is cut, as the
+    // bottle list does (services/bottleListQuery).
     const filter = {
       cellar: { $in: cellarIds },
       ...statusToMongo(args.status),
@@ -161,6 +179,11 @@ registerTool({
       filter.reservedUntil = null;
     }
     if (args.type) warnings.push('type filter cannot be combined with reserved — ignored in this response.');
+    if (sweetness) {
+      const wineIds = await wineIdsMatching(
+        (await Bottle.distinct('wineDefinition', filter)).filter(Boolean), parseSweetnessFilter(sweetness));
+      filter.wineDefinition = { $in: wineIds };
+    }
     const [total, docs] = await Promise.all([
       Bottle.countDocuments(filter),
       Bottle.find(filter).populate(WINE_POPULATE_LIST)
@@ -189,7 +212,10 @@ async function withPhotoFlag(userId, docs, warnings) {
   return rows.map((r) => ({ ...r, has_photo: presence.get(String(r.bottle_id)) === true }));
 }
 
-// Grapes/region/country and the RESOLVED drink window on every list row.
+// Grapes/region/country, the sweetness category and the RESOLVED drink
+// window on every list row. The category comes from one read per page
+// (services/sweetnessCategory); a failed lookup degrades to rows without
+// the key, like the window.
 // drink_from/peak_from are the bottle's OWN overrides and read null on
 // nearly every bottle, which an assistant can take to mean "no drink
 // window" — while the curated sommelier window is there, one
@@ -207,6 +233,12 @@ async function withWineDetail(docs, warnings) {
   } catch (err) {
     warnings.push('Drink-window lookup failed for this page — maturity is omitted.');
   }
+  let sweetness = null;
+  try {
+    sweetness = await readSweetnessCategories(docs.map((d) => d.wineDefinition?._id).filter(Boolean));
+  } catch (err) {
+    warnings.push('Sweetness lookup failed for this page — sweetness_category is omitted.');
+  }
   return docs.map((d) => {
     const row = bottleSummary(d);
     const wd = d.wineDefinition;
@@ -214,6 +246,7 @@ async function withWineDetail(docs, warnings) {
       row.wine.grapes = (wd.grapes || []).map((g) => g?.name).filter(Boolean);
       row.wine.region = wd.region?.name || null;
       row.wine.country = wd.country?.name || null;
+      if (sweetness) row.wine.sweetness_category = sweetness.get(String(wd._id))?.category ?? null;
     }
     if (profileMap && !CONSUMED_STATUSES.includes(d.status)) {
       const w = resolveEffectiveWindow(d, profileMap);
@@ -311,13 +344,23 @@ async function buildBottleDetail(userId, bottleId) {
       console.warn('[mcp] open-question lookup failed for bottle %s: %s', b._id, err.message);
     }
   }
+  // The category the wine record reads as (null when it states none). A
+  // failing lookup leaves the two keys out; the dossier never fails over it.
+  let sweetness;
+  if (wd) {
+    try {
+      sweetness = (await readSweetnessCategories([wd._id])).get(String(wd._id)) ?? null;
+    } catch (err) {
+      console.warn('[mcp] sweetness category lookup failed for bottle %s: %s', b._id, err.message);
+    }
+  }
   return {
     summary: `${wd ? wd.name : 'Bottle'} ${b.vintage}`,
     data: {
       bottle_id: b._id,
       wine: wd ? {
         // WINE_POPULATE asked for the style and shaped it (config/constants).
-        ...wineSummary(wd, { termLoaded: true, styleLoaded: 'shaped' }),
+        ...wineSummary(wd, { termLoaded: true, styleLoaded: 'shaped', sweetness }),
         classification: wd.classification || null,
         classifications: classificationsOut(wd),
         // Skeleton subdocs (0 reviews / never-enriched all-null profile) are

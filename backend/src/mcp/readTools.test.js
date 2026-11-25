@@ -34,6 +34,13 @@ jest.mock('../models/WineCorrectionProposal', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
 }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
+// The sweetness category is read from real rows in
+// routes/sweetnessCategory.surfaces.mongo.test.js; here its reader answers
+// "nothing read", so the mocked wine model is not asked for it.
+jest.mock('../services/sweetnessCategory', () => ({
+  ...jest.requireActual('../services/sweetnessCategory'),
+  readSweetnessCategories: jest.fn(async () => new Map()),
+}));
 // get_bottle reads the vintage's window for its serving line (utils/servingUtils);
 // no profiles here, so the line carries the style's temperature only.
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(() => ({ lean: () => Promise.resolve([]) })) }));
@@ -173,6 +180,33 @@ describe('ownership scoping', () => {
   // A string-only isValidId gate made get_bottle/get_rack fail on every real
   // call while string-mocked tests stayed green. These success paths use real
   // ObjectIds so that class of bug can never pass the suite again.
+  test('get_bottle carries the wine\'s sweetness reading, and still answers when that lookup fails', async () => {
+    const { readSweetnessCategories } = require('../services/sweetnessCategory');
+    const cellarId = new mongoose.Types.ObjectId(oid('c'));
+    const bottle = () => chain({
+      _id: oid('d'), cellar: cellarId, vintage: '2015', status: 'active',
+      wineDefinition: { _id: oid('f'), name: 'Riesling Beerenauslese', producer: 'X', grapes: [] },
+      pours: [],
+    });
+    Cellar.findById.mockReturnValue(chain({ _id: cellarId, user: ME, members: [], deletedAt: null, name: 'Mine' }));
+    Rack.findOne.mockReturnValue(chain(null));
+
+    Bottle.findById.mockReturnValue(bottle());
+    readSweetnessCategories.mockResolvedValueOnce(new Map([[oid('f'), { category: 'sweet', basis: 'tier' }]]));
+    const read = parse(await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX));
+    expect(read.data.wine).toMatchObject({ sweetness_category: 'sweet', sweetness_category_basis: 'tier' });
+
+    Bottle.findById.mockReturnValue(bottle());
+    readSweetnessCategories.mockRejectedValueOnce(new Error('database away'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX);
+    warn.mockRestore();
+    expect(res.isError).toBeUndefined();
+    // Left out, never null: null would say the record states none.
+    expect(parse(res).data.wine).not.toHaveProperty('sweetness_category');
+    expect(parse(res).data.wine.name).toBe('Riesling Beerenauslese');
+  });
+
   test('get_bottle succeeds on the owner\'s own bottle with a real ObjectId cellar ref', async () => {
     const cellarId = new mongoose.Types.ObjectId(oid('c'));
     Bottle.findById.mockReturnValue(chain({

@@ -31,6 +31,18 @@ const DATE_TIME = { type: 'string', format: 'date-time' };
 const YEAR = { type: ['integer', 'null'], minimum: 1900, maximum: 2200 };
 const RATING_SCALE = { type: 'string', enum: ['5', '20', '100'], description: '"5" = stars, "20" = points out of 20, "100" = points out of 100.' };
 const WINE_TYPE = { type: ['string', 'null'], enum: ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified', null] };
+// The sweetness category and what it rests on (services/sweetnessCategory
+// CATEGORIES and BASES; a test keeps the enums equal to them).
+const SWEETNESS_CATEGORY = {
+  type: ['string', 'null'],
+  enum: ['dry', 'off-dry', 'medium-sweet', 'sweet', null],
+  description: 'The sweetness the wine reads as, on one scale for still and sparkling wines. Null when the record states none (a Kabinett or Spätlese without a term is not guessed), and for a fortified wine or a drink that is not wine, which have no scale. Read from the record for every answer, never stored: the label\'s term (`labelSweetness`), else a sweetness word that ends the wine\'s name (anywhere in the name of a sparkling wine), else `sweetnessStyle`, else a tier that settles it (one that is sweet by law, such as Beerenauslese, Trockenbeerenauslese or Eiswein, is sweet; a Grosses Gewächs is dry), else the type `dessert`. The sparkling terms fold onto the four: brut nature, extra brut and brut are dry; extra dry and sec off-dry; demi-sec medium-sweet; doux sweet. Values may be added, never renamed or removed.',
+};
+const SWEETNESS_CATEGORY_BASIS = {
+  type: ['string', 'null'],
+  enum: ['label', 'name', 'style', 'tier', 'type', null],
+  description: 'What `sweetnessCategory` rests on: `label` (the label\'s term), `name` (a sweetness word in the wine\'s name), `style` (`sweetnessStyle`), `tier` (a tier the name or the classification states) or `type` (the type `dessert`). Null when `sweetnessCategory` is null. Values may be added, never renamed or removed.',
+};
 const MATURITY = {
   type: ['string', 'null'],
   enum: ['not-ready', 'early', 'peak', 'late', 'declining', null],
@@ -95,6 +107,8 @@ const exampleWineSummary = {
   region: { _id: ID.region, name: 'Pauillac' },
   appellation: 'Pauillac',
   classification: null,
+  sweetnessCategory: null,
+  sweetnessCategoryBasis: null,
   grapes: [{ _id: ID.grape, name: 'Cabernet Sauvignon', displayName: 'Cabernet Sauvignon' }],
   image: PHOTO,
 };
@@ -191,7 +205,7 @@ const schemas = {
   },
   InventoryWine: {
     type: 'object',
-    required: ['name', 'displayName', 'producer', 'type', 'colour', 'country', 'region', 'appellation', 'classification', 'labelSweetness', 'grapes', 'image', 'profile'],
+    required: ['name', 'displayName', 'producer', 'type', 'colour', 'country', 'region', 'appellation', 'classification', 'labelSweetness', 'sweetnessCategory', 'sweetnessCategoryBasis', 'grapes', 'image', 'profile'],
     properties: {
       name: { type: ['string', 'null'] },
       displayName: { type: ['string', 'null'], description: 'The name as the label reads it: `name` followed by the label sweetness term when the wine has one ("Riesling Kabinett Trocken"). What to print when one line must carry the whole identity.' },
@@ -217,6 +231,8 @@ const schemas = {
         description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from `profile.sweetness`, the tasting estimate.',
       },
       sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade. Null when the wine has none, including a wine recorded before the field existed. Absent when this server cannot vouch for the style (its term row was removed, or a stored source or link fails the rules): never null for that. Descriptive, not part of the wine\'s identity.' },
+      sweetnessCategory: SWEETNESS_CATEGORY,
+      sweetnessCategoryBasis: SWEETNESS_CATEGORY_BASIS,
       grapes: { type: 'array', items: { type: 'string' }, description: 'Display names, as on the label.' },
       image: { type: ['string', 'null'], description: 'A thumbnail path on this server (see Images), or null.' },
       profile: {
@@ -381,6 +397,8 @@ const schemas = {
         description: 'The sweetness the LABEL states, as a curated term with its band, or null when the label states none. On a bottle this is the term for the bottle\'s vintage where one is published, otherwise the wine\'s. A different thing from the tasting profile\'s sweetness estimate.',
       },
       sweetnessStyle: { oneOf: [{ type: 'null' }, ref('SweetnessStyle')], description: 'The sweetness term the wine is known by when its label states none, named by the producer or the trade. Null when the wine has none, including a wine recorded before the field existed. Absent when this server cannot vouch for the style (its term row was removed, or a stored source or link fails the rules): never null for that. Descriptive, not part of the wine\'s identity.' },
+      sweetnessCategory: { ...SWEETNESS_CATEGORY, description: `${SWEETNESS_CATEGORY.description} Sent on the bottle list and the bottle read; the answer to a write carries no such key.` },
+      sweetnessCategoryBasis: SWEETNESS_CATEGORY_BASIS,
       grapes: { type: 'array', items: ref('Grape') },
       image: { type: ['string', 'null'], description: 'The registry image URL, or null.' },
       nonWine: { type: 'boolean', description: 'True for a drink that is not wine (cider, beer, spirits): the Other category, kept in the holder\'s cellar outside the shared wine registry; its type is then null.' },
@@ -753,6 +771,7 @@ const examples = {
       [ID.wine]: {
         name: 'Château Exemple', displayName: 'Château Exemple', producer: 'Château Exemple', type: 'red', colour: null,
         country: 'France', region: 'Pauillac', appellation: 'Pauillac', classification: null, labelSweetness: null, sweetnessStyle: null,
+        sweetnessCategory: null, sweetnessCategoryBasis: null,
         grapes: ['Cabernet Sauvignon', 'Merlot'], image: THUMB,
         profile: { body: 'full', acidity: 'medium', sweetness: 'dry', tannin: 'high', flavors: ['blackcurrant', 'cedar'], foodPairings: ['lamb'] },
       },
@@ -877,6 +896,7 @@ const paths = {
         { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Words that must all appear (accents ignored) in the wine name, producer, grapes, country, region, appellation, type, notes or location.' },
         { name: 'type', in: 'query', schema: { type: 'string' }, description: 'Wine type, e.g. `red`. Comma-separated for several.' },
         { name: 'vintage', in: 'query', schema: { type: 'string' }, description: 'One or more vintages, comma-separated.' },
+        { name: 'sweetnessCategory', in: 'query', schema: { type: 'string', examples: ['dry', 'off-dry,medium-sweet'] }, description: 'One or more of `dry`, `off-dry`, `medium-sweet`, `sweet`, comma-separated: the bottles whose wine reads as one of them (the wine\'s `sweetnessCategory`). `not-stated` finds the wines that could state one and do not. A fortified wine, a drink that is not wine and a bottle without a wine are found by none of them, and a value that names none of the five finds nothing.' },
         { name: 'sort', in: 'query', schema: { type: 'string', enum: ['createdAt', '-createdAt', 'vintage', '-vintage', 'price', '-price', 'rating', '-rating', 'name', '-name', 'maturity', '-maturity'], default: '-createdAt' }, description: 'A leading `-` sorts descending.' },
       ],
       responses: {
@@ -914,7 +934,7 @@ const paths = {
         content: json(ref('ConsumeRequest'), { reason: 'drank', rating: 4, consumedRatingScale: '5', note: 'With friends', ifActive: true }),
       },
       responses: {
-        200: ok('The bottle, now out of the cellar.', ref('ConsumeResponse'), { bottle: { ...exampleBottle, status: 'drank', consumedAt: '2026-10-22T19:30:00.000Z', consumedReason: 'drank' } }),
+        200: ok('The bottle, now out of the cellar.', ref('ConsumeResponse'), { bottle: { ...withoutImageUrls(exampleBottle), wineDefinition: ID.wine, status: 'drank', consumedAt: '2026-10-22T19:30:00.000Z', consumedReason: 'drank' } }),
         ...errors(400, 401, 403, 404, 409, 429),
       },
     },

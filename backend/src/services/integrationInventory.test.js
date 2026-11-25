@@ -130,6 +130,8 @@ describe('assembleInventory — the contract', () => {
       classification: null,
       labelSweetness: null,
       sweetnessStyle: null,
+      sweetnessCategory: null,
+      sweetnessCategoryBasis: null,
       grapes: ['Cabernet Sauvignon', 'Tinta Pauillac'],
       image: '/api/uploads/thumbs/processed/w1.webp.webp',
       profile: {
@@ -137,6 +139,12 @@ describe('assembleInventory — the contract', () => {
         flavors: ['blackcurrant', 'cedar'], foodPairings: ['lamb'],
       },
     });
+  });
+
+  test('the sweetness category the load attached is sent, with what it rests on', () => {
+    const w = { ...bottle().wineDefinition, sweetnessCategory: 'off-dry', sweetnessCategoryBasis: 'name' };
+    const s = inv({ bottles: [bottle({ wineDefinition: w })] });
+    expect(s.wines.w1).toMatchObject({ sweetnessCategory: 'off-dry', sweetnessCategoryBasis: 'name' });
   });
 
   test('a wine with a sweetness style sends it in its documented shape, beside the label term and out of the name', () => {

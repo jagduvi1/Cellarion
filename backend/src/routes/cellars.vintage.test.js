@@ -32,6 +32,15 @@ jest.mock('../models/CellarLayout', () => ({ findOne: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({ find: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
+// The sweetness category has its own load of the wine, checked on real rows in
+// routes/sweetnessCategory.surfaces.mongo.test.js. With the wine model mocked
+// it is stood in for: nothing read, and a read's wines left as they are.
+jest.mock('../services/sweetnessCategory', () => ({
+  ...jest.requireActual('../services/sweetnessCategory'),
+  readSweetnessCategories: jest.fn(async () => new Map()),
+  attachSweetnessCategories: jest.fn(async (wines) => wines),
+  attachSweetnessCategoriesIfReadable: jest.fn(async (wines) => wines),
+}));
 jest.mock('../models/User', () => ({}));
 jest.mock('../models/AuditLog', () => ({}));
 jest.mock('../models/PendingShare', () => ({}));
