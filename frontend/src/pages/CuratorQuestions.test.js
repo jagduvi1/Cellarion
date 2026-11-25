@@ -6,7 +6,7 @@
  * with the real card; an empty state; a retry; and a late answer never
  * replacing a newer one.
  */
-import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, within, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const auth = vi.hoisted(() => ({ apiFetch: null }));
@@ -162,8 +162,9 @@ test('an answer sent in place moves the question to "Answered" with the answer a
   expect(moved).toHaveTextContent('The back label says E. Pira e Figli.');
   expect(within(moved).getByRole('status')).toHaveTextContent('Thank you — your answer was sent to the curators and helps keep the shared registry accurate.');
   expect(within(moved).queryByRole('textbox')).toBeNull();
-  // The member lands on the moved question, not on the page body.
-  expect(moved).toHaveFocus();
+  // The member lands on the moved question, not on the page body. The page
+  // moves focus in an effect, which can run after the heading is found.
+  await waitFor(() => expect(moved).toHaveFocus());
   expect(within(moved).getByRole('link', { name: 'Open the bottle' })).toHaveAttribute('href', '/questions/q1');
 
   const waiting = screen.getByRole('heading', { name: 'Waiting for your answer' }).closest('section');
