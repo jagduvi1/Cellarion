@@ -5,7 +5,7 @@ import { useBackToClose, resetBackToCloseForTests, suspendBackToClose, pageEntry
 
 // The phone's Back (history.back) closes the open pop-up instead of leaving
 // the page — in the Android app it used to leave the page, and a half-filled
-// form with it (live walkthrough 2026-10-15).
+// form with it.
 
 function Dialog({ name, onClose, children }) {
   useBackToClose(onClose);
@@ -293,7 +293,7 @@ test('a form shown inside its picker from the start: Back closes the form first'
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-// Release audit 2026-10-16: another entry of the same page (the room's
+// Another entry of the same page (the room's
 // unsaved-changes guard) keeps the router's own state, or React Router counts
 // from NaN after a replace and Back-to-close goes dead everywhere after.
 test('pageEntryState keeps the router state and leaves a pop-up mark out', () => {

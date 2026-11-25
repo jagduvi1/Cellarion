@@ -7,7 +7,7 @@
  * Consumed tables have no Producer column, so the Wine value is the full
  * display name ("Domaine de la Romanée-Conti La Tâche") and the client-side
  * parser can only guess the producer. The registry-first import cascade
- * (audit M-2) relies on these rows still reaching the exact threshold
+ * relies on these rows still reaching the exact threshold
  * (>= 0.95) against their own registry wine — otherwise known wines are
  * missed and AI is called unnecessarily.
  *
@@ -132,7 +132,7 @@ describe('helpers', () => {
   });
 });
 
-// ── Appellation-first names + bracketed producers (registry backlog 2026-09-06) ──
+// ── Appellation-first names + bracketed producers ──
 //
 // Real rows from a CellarTracker re-import: 44 requests, every one for a wine
 // that already existed. CT composes "Wine" as producer + appellation +

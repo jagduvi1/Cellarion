@@ -98,7 +98,7 @@ describe('sameProducerAppellationGroups', () => {
     expect(g.wines.find(w => w._id === 'w1').vintages).toEqual(['2015']); // Unknown dropped
   });
 
-  // Audit 2026-08-10: a group with NO vintage evidence anywhere is vacuously
+  // A group with NO vintage evidence anywhere is vacuously
   // disjoint — seeded/import rows without bottles would flood page 1 wearing a
   // "no shared vintage" badge that rests on no data. Evidenced groups first.
   test('vacuously-disjoint zero-evidence groups rank below genuinely evidenced disjoint ones', async () => {

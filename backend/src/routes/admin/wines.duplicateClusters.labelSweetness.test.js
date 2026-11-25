@@ -1,6 +1,5 @@
 /**
- * GET /api/admin/wines/duplicate-clusters and the label sweetness term
- * (GitHub discussion #1754).
+ * GET /api/admin/wines/duplicate-clusters and the label sweetness term.
  *
  * WHY THIS TEST EXISTS:
  * The cluster scan skips a pair whose records state different styles (issue

@@ -110,7 +110,7 @@ describe('POST /api/wines/scan-label — the registry match', () => {
     expect(body.match.wine._id).toBe('64b0000000000000000000c2');
   });
 
-  // Release audit 2026-10-23: a row quarantined or made a canary while
+  // A row quarantined or made a canary while
   // Meilisearch was down keeps its stale index entry, so the ids the index
   // returns are filtered again.
   test('the Meilisearch candidates are re-filtered by the same visibility rule', async () => {

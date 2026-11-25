@@ -1,6 +1,5 @@
 /**
- * SuperAdmin → AI: the prompt-caching switch and the AI cost table
- * (2026-09-25).
+ * SuperAdmin → AI: the prompt-caching switch and the AI cost table.
  *
  * PATCH /api/superadmin/ai/prompt-caching is the instant way back from the
  * cached prompt layout — it must persist, apply immediately, and accept only a

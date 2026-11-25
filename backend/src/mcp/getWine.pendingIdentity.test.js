@@ -51,7 +51,7 @@ describe('get_wine — pendingIdentity is excluded in the QUERY', () => {
     await tool('get_wine').handler({ wine_id: WINE }, CTX);
 
     // A signed-in caller's clause carries both exclusions PLUS the one
-    // exception (2026-09-12): their OWN private draft, keyed on the creator in
+    // exception: their OWN private draft, keyed on the creator in
     // the query itself, so nobody else's draft can match.
     expect(WineDefinition.findOne).toHaveBeenCalledWith({
       _id: WINE,

@@ -169,7 +169,7 @@ describe('ownership scoping', () => {
     expect(parse(res).error.code).toBe('not_found');
   });
 
-  // REGRESSION (audit HIGH): document refs are ObjectId INSTANCES, not strings.
+  // REGRESSION: document refs are ObjectId INSTANCES, not strings.
   // A string-only isValidId gate made get_bottle/get_rack fail on every real
   // call while string-mocked tests stayed green. These success paths use real
   // ObjectIds so that class of bug can never pass the suite again.

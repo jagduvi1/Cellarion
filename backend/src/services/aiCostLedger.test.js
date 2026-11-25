@@ -1,5 +1,5 @@
 /**
- * services/aiCostLedger — the AI spend ledger (2026-09-25).
+ * services/aiCostLedger — the AI spend ledger.
  *
  * Pins: how a response's `usage` becomes counters (cache reads and the two
  * cache-write lifetimes are priced differently, so they must never be lumped

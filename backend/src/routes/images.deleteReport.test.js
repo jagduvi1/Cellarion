@@ -4,7 +4,7 @@
  * A user can remove a picture they took. Without these verbs a photo would
  * only ever be deleted as a SIDE EFFECT of deleting the bottle, the cellar or
  * the whole account, and label scans are excluded from the review queue by
- * design (audit L-6), so not even an admin could remove one.
+ * design, so not even an admin could remove one.
  *
  * The line between the two verbs is whether the photo is still ONLY the
  * uploader's. These tests pin that line, because getting it wrong in either

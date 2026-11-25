@@ -2,7 +2,7 @@
  * mapRow — the LWIN CSV row mapper, and specifically its DISPLAY_NAME
  * fallback. The old fallback trusted a 2-part split ("Bordeaux, Château
  * Margaux") and wrote the REGION into the producer field ~45 times across
- * four prod import waves (registry audit 2026-07-26, RC-2); it also truncated
+ * four prod import waves; it also truncated
  * "…Côtes de Bordeaux" names mid-appellation. These tests pin the repaired
  * rules: 3+ parts = trust producer+name, 2 parts = name only, 1 part = name
  * only — a missing producer is skipped-and-reported downstream, never minted.
@@ -113,7 +113,7 @@ describe('resolveImportAppellation', () => {
   });
 });
 
-// Audit 2026-09-19: LWIN states COLOUR beside SUB_TYPE, and the bulk upsert
+// LWIN states COLOUR beside SUB_TYPE, and the bulk upsert
 // never reaches the model hook — a sparkling rosé kept its style and lost its
 // colour. The colour is mapped only for the style types (utils/wineColour).
 describe('mapRow — colour of a sparkling, dessert or fortified row', () => {

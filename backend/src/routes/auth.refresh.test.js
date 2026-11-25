@@ -537,7 +537,7 @@ describe('POST /api/auth/refresh — rotation', () => {
 
 // 30 per 15 min for one refresh TOKEN — not one address, which many people
 // can share (a carrier's NAT, an office) — plus a per-address ceiling of 300
-// so made-up cookies can't flood the session lookup (scaling audit 2026-09-25).
+// so made-up cookies can't flood the session lookup.
 // The clock is frozen, so a window never resets: every test here uses cookies
 // and addresses no other test uses.
 describe('POST /api/auth/refresh — rate limits', () => {
@@ -557,7 +557,7 @@ describe('POST /api/auth/refresh — rate limits', () => {
     // The app's cold-start session probe. Signed-out visitors and crawlers
     // that execute the app send one per page view; none can guess a token.
     // Counted, a crawler on the public wine pages was answered 429 for most
-    // of its crawl (2026-10-27).
+    // of its crawl.
     mockFixedIp = '198.51.100.2';
     for (let i = 0; i < 31; i++) expect((await request({ path: '/api/auth/refresh' })).status).toBe(401);
     // And the address's own ceiling is untouched: a made-up cookie still gets the normal answer.
@@ -629,7 +629,7 @@ describe('POST /api/auth/logout', () => {
     expect(refreshCookies(res)).toHaveLength(0);
   });
 
-  // Offline mode (#1355): an offline session has no access token. A logout
+  // Offline mode: an offline session has no access token. A logout
   // that required one left the server session and cookie alive, and the next
   // online start signed the same account back in.
   test('without a bearer token the cookie alone identifies and ends this device\'s session', async () => {
@@ -657,7 +657,7 @@ describe('POST /api/auth/logout', () => {
     expect(user.sessions).toHaveLength(0);
   });
 
-  // Audit 2026-09-27 M5: the route needs no token, so another site can make a
+  // The route needs no token, so another site can make a
   // browser POST here top-level. SameSite=Lax keeps the cookie out of that
   // request — but a deletion header in the response would still be honoured,
   // signing the victim out at their next refresh (and wiping their offline
@@ -926,7 +926,7 @@ describe('POST /api/auth/reset-password', () => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/auth/verify-email — must NOT issue a session (security audit M-1)
+// POST /api/auth/verify-email — must NOT issue a session
 // ---------------------------------------------------------------------------
 describe('POST /api/auth/verify-email', () => {
   const withVerifyToken = (raw) => makeUserDoc({

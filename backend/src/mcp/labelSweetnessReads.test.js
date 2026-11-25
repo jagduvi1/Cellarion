@@ -1,5 +1,5 @@
 /**
- * The MCP wine reads and the label sweetness term (GitHub discussion #1754):
+ * The MCP wine reads and the label sweetness term:
  * the PROJECTION decides what is said.
  *
  * WHY THIS TEST EXISTS:

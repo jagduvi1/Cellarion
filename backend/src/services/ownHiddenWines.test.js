@@ -1,5 +1,5 @@
 /**
- * A member's own quarantined drinks (2026-10-13): a search finds the hidden
+ * A member's own quarantined drinks: a search finds the hidden
  * rows the caller created or holds a bottle of, and nobody else's.
  */
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findOne: jest.fn() }));

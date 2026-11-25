@@ -1,5 +1,5 @@
 /**
- * Appellation spelling adoption at mint (strategy 2026-07-29, R2).
+ * Appellation spelling adoption at mint.
  *
  * Pins: curated spelling wins over the typed variant (by name OR synonym), an
  * un-curated appellation passes through verbatim (reviewed, never rejected),

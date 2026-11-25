@@ -118,7 +118,7 @@ describe('GET /api/bottles/:id pending photo', () => {
     expect(BottleImage.find).toHaveBeenCalledTimes(1);
     expect(BottleImage.find).toHaveBeenCalledWith(expect.objectContaining({
       uploadedBy: USER,
-      // 'approved' is deliberate — see the cellar-list twin (#1227).
+      // 'approved' is deliberate — see the cellar-list twin.
       status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
       // `$ne`, not `kind: 'bottle'` — rows older than the field have no kind.
       kind: { $ne: 'label-scan' },

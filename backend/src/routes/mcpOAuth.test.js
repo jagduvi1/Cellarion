@@ -101,7 +101,7 @@ describe('POST /register (DCR)', () => {
     expect(OAuthClient.create).not.toHaveBeenCalled();
   });
 
-  // Security audit 2026-09-02 (D16-2): the COUNT was capped but each entry was
+  // The COUNT was capped but each entry was
   // stored verbatim — one anonymous registration could park ~2 MB in Mongo.
   test('an over-long redirect_uri is rejected before anything is stored', async () => {
     const r = await jsonPost('/register', { redirect_uris: [`https://a.example/${'x'.repeat(2100)}`] });
@@ -349,7 +349,7 @@ describe('POST /token — authorization_code', () => {
     expect(created).toMatchObject({ user: USER, origin: 'oauth', oauthClientId: CLIENT.clientId, scopes: ['read', 'write'] });
     expect(created.tokenHash).toBeTruthy();
     expect(created.expiresAt).toBeInstanceOf(Date);
-    // First successful exchange makes the client permanent: clear the never-used TTL (M-6).
+    // First successful exchange makes the client permanent: clear the never-used TTL.
     const upd = OAuthClient.updateOne.mock.calls[0];
     expect(upd[0]).toEqual({ _id: CLIENT._id });
     expect(upd[1].$unset).toEqual({ expiresAt: '' });
@@ -524,7 +524,7 @@ describe('POST /token — refresh_token (the grace window after a rotation)', ()
     // The successor the retrying client never received becomes the spent
     // one, so presenting it later (outside the window) trips reuse detection
     // like any replay; the rotation time is NOT moved, so a spent token cannot
-    // be kept alive by replaying it (release audit 2026-10-09, M2).
+    // be kept alive by replaying it.
     expect(update.$set.prevRefreshTokenHash).toBe(sha256('current'));
     expect(update.$set.refreshRotatedAt).toBeUndefined();
   });

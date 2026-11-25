@@ -31,7 +31,7 @@ describe('getMaturityStatus', () => {
     expect(getMaturityStatus({ status: 'reviewed' })).toBeNull();
   });
 
-  // Release audit 2026-10-13: a late phase with no end fell through to "Optimal maturity".
+  // A late phase with no end fell through to "Optimal maturity".
   test('a late phase with no end stays late once it has begun', () => {
     const profile = { status: 'reviewed', earlyFrom: 2020, earlyUntil: 2023, peakFrom: 2024, peakUntil: 2027, lateFrom: 2028 };
     expect(getMaturityStatus(profile, undefined, 2027).status).toBe('peak');

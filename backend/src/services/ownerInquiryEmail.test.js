@@ -3,7 +3,7 @@
  *
  * WHY THIS TEST EXISTS:
  * Owner questions used to reach the bell and push only, and none of 64 open
- * ones had an answer (2026-10-20). The email goes to every recipient EXCEPT
+ * ones had an answer. The email goes to every recipient EXCEPT
  * one without a verified address, one who unsubscribed from all email
  * (emailOptOutAt) or turned this category off, a demo visitor, and one who
  * already had a question emailed in the last 24 hours. Each send is recorded
@@ -92,7 +92,7 @@ test('a failed send is not recorded and does not throw', async () => {
   spy.mockRestore();
 });
 
-// Release audit 2026-10-23: the daily cap read the stamps, but a stamp was
+// The daily cap read the stamps, but a stamp was
 // written only after Mailgun answered and each run is a background job, so a
 // curator asking about three wines of one import seconds apart emailed the
 // same owner three times. Runs are now serialized in-process.
@@ -141,7 +141,7 @@ test('an account scheduled for deletion is not emailed', async () => {
   expect(sendOwnerInquiryEmail.mock.calls[0][0]).toBe('2@example.com');
 });
 
-// Release audit 2026-10-23: an account that unsubscribed from all email before
+// An account that unsubscribed from all email before
 // this category existed has no flag stored, so Settings showed it on and a save
 // withdrew the unsubscribe. The boot backfill stores it off.
 test('the boot backfill stores the category off for unsubscribed accounts with no flag, and only those', async () => {

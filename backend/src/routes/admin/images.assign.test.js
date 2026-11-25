@@ -97,7 +97,7 @@ beforeEach(() => {
   WineDefinition.findByIdAndUpdate.mockResolvedValue({});
 });
 
-// A bottle photo carries no wine of its own — the bottle does (2026-09-27).
+// A bottle photo carries no wine of its own — the bottle does.
 describe('PUT /api/admin/images/:id/assign-to-wine on a bottle photo with no wine of its own', () => {
   const BOTTLE_ID = '64b0000000000000000000b1';
 

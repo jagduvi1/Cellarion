@@ -1,5 +1,5 @@
 /**
- * The style guard reads the RECORD before the name (GitHub discussion #1754).
+ * The style guard reads the RECORD before the name.
  *
  * WHY THIS TEST EXISTS:
  * Label sweetness moved into WineDefinition.labelSweetness and the word is

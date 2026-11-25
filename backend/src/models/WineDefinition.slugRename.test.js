@@ -60,7 +60,7 @@ describe('shouldRegenerateSlug', () => {
   });
 
   test('a producer RE-ATTRIBUTION regenerates — the slug carried the wrong winery', () => {
-    // THE ROW (2026-08-12): La Orphica corrected Juan Gil → Bodegas Trenza but
+    // THE ROW: La Orphica corrected Juan Gil → Bodegas Trenza but
     // kept serving at /wines/bodegas-juan-gil-la-orphica-monastrell — the wrong
     // producer in the URL itself. The name-only guard is what produced it.
     const doc = loaded({

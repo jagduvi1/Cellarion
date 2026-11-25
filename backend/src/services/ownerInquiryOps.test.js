@@ -99,7 +99,7 @@ describe('buildRecipients', () => {
     // Newest-first sort feeds $first, so each user's entry is their latest bottle.
     expect(pipeline[3]).toEqual({ $sort: { createdAt: -1 } });
     expect(pipeline[4].$group._id).toBe('$user');
-    // Audit 2026-08-11: demo accounts can never respond (requireNonDemo) and
+    // Demo accounts can never respond (requireNonDemo) and
     // must not crowd real owners out of the cap — excluded BEFORE $limit; and
     // the cap must be deterministic (newest owners), so the group re-sorts on
     // the captured latest before limiting ($group emits undefined order).
@@ -511,7 +511,7 @@ describe('closeInquiriesForWineDelete', () => {
   });
 });
 
-// ── The OWNER side (2026-09-24): shared by routes/ownerInquiries.js and the
+// ── The OWNER side: shared by routes/ownerInquiries.js and the
 // MCP tools list_curator_questions / answer_curator_question. The route test
 // pins the HTTP contract; these pin the service the MCP path calls directly.
 describe('owner side', () => {

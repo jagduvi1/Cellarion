@@ -91,7 +91,7 @@ describe('preview', () => {
     expect(McpActionLog.find).toHaveBeenCalledWith({ user: ME, action: 'bulk_preview', reversed: false });
   });
 
-  // Security audit 2026-09-02 (D08-1): preview charged nothing and stored the
+  // Preview charged nothing and stored the
   // whole request (~250 KB at the caps) in a 90-day-TTL row, so a looping
   // client could fill the disk from one free account.
   test('preview charges a quarter of the batch BEFORE resolving anything, and refuses on an exhausted budget', async () => {
@@ -126,7 +126,7 @@ describe('preview', () => {
     expect(parse(res).data.plan[0].status).toBe('invalid');
   });
 
-  // Release audit 2026-10-13: an unsupported currency passed the preview, then
+  // An unsupported currency passed the preview, then
   // apply created the new wine before addBottle refused the bottle.
   test('an unsupported currency is flagged at preview', async () => {
     ownCellar();

@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import * as adminApi from '../api/admin';
 import AdminTaxonomy from './AdminTaxonomy';
 
-// The label sweetness terms tab (GitHub discussion #1754): the rows come from
+// The label sweetness terms tab: the rows come from
 // the admin route under the tab's own key, each shows its scale and band (and
 // "customary" for an unregulated word), a member-added row carries the review
 // badge and its approve verb calls the sweetness route, and the add form

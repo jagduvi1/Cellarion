@@ -76,7 +76,7 @@ test('nothing similar left → an alert with the registry\'s closest distinct wi
     user: 'u1', wine: 'wBarolo', vintage: '2016', similarWineIds: ['wBarolo', 'wBarbaresco'],
   }));
   expect(createNotification).toHaveBeenCalledWith('u1', 'restock_alert', 'Restock Suggestion', expect.stringContaining('Barolo'), '/restock');
-  // Hits are filtered to rows the registry shows (audit 2026-10-14).
+  // Hits are filtered to rows the registry shows.
   expect(WineDefinition.distinct).toHaveBeenCalledWith('_id', expect.objectContaining({
     _id: { $in: ['wBarolo', 'wBarbaresco'] }, nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true },
   }));

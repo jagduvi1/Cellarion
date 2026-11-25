@@ -29,7 +29,7 @@ describe('computeCabinetSlotPositions — bottles lying sideways', () => {
     expect(slots.map((s) => s.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
-  // Release audit 2026-10-13: targets spread along a pile, or a target at the
+  // Targets spread along a pile, or a target at the
   // front of the shelf, overlapped their neighbours — a click could pick the
   // wrong slot. Only the bottles move; the targets stay the ordinary grid.
   it('every click target is the ordinary cabinet\'s, so targets never overlap', () => {

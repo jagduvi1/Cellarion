@@ -46,7 +46,7 @@ describe('takeQuota', () => {
     BridgeUsageDay.findOneAndUpdate.mockReturnValue(lean({ searches: 600 }));
     const r = await q.takeQuota(key(), 'searches');
     // Keyed on the ACCOUNT: keys are re-mintable, so a per-key counter was an
-    // allowance multiplier (audit 2026-09-08). The key is recorded for
+    // allowance multiplier. The key is recorded for
     // attribution only.
     expect(BridgeUsageDay.findOneAndUpdate).toHaveBeenCalledWith(
       { user: 'u1', day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
@@ -128,8 +128,7 @@ describe('usageFor / openImportWindow', () => {
 
   test('the 30-day cooldown is per ACCOUNT — a freshly minted key does not reset it', async () => {
     // The cooldown lookup asks about the OWNER, not the key in hand: a brand
-    // new key with importWindowOpenedAt: null used to grant ×5 immediately
-    // (audit 2026-09-08).
+    // new key with importWindowOpenedAt: null used to grant ×5 immediately.
     openedAt(new Date(Date.now() - 10 * 86400e3));
     const again = await q.openImportWindow(key({ importWindowOpenedAt: null }));
     expect(again.ok).toBe(false);

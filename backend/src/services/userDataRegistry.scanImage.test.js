@@ -105,7 +105,7 @@ test('erasure unlinks the files, deletes the docs, and NULLS every wine pointing
   expect(BottleImage.deleteMany).toHaveBeenCalledWith({ uploadedBy: USER, ...OWN_PHOTO });
   // The dangling-pointer fix: keyed on the DELETED IDS, not the user, because a
   // wine created by someone else can legitimately carry this user's scan.
-  // scanFieldConflicts goes with the pointer (release-audit L-4): the
+  // scanFieldConflicts goes with the pointer: the
   // front/back disagreement record is a statement about those photos and must
   // not outlive them — same rule the retention sweep applies.
   expect(WineDefinition.updateMany).toHaveBeenCalledWith(

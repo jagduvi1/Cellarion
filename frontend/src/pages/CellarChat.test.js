@@ -120,7 +120,7 @@ describe('CellarChat → Claude guide', () => {
   });
 });
 
-// Release audit 2026-10-28: the wine card called t() without declaring it, so
+// The wine card called t() without declaring it, so
 // every answer that carried bottles threw during render and the whole app fell
 // to the error boundary. The card renders the real component with wines.
 describe('CellarChat → wine cards', () => {

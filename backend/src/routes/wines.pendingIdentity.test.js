@@ -67,7 +67,7 @@ beforeAll((done) => {
 afterAll((done) => { server.closeAllConnections(); server.close(done); });
 
 // The route now interposes .select() to keep the label-scan evidence fields
-// out of the general wine read (release-audit LOW-3).
+// out of the general wine read.
 const populateChain = (doc) => ({
   select: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(doc) }),
   populate: jest.fn().mockResolvedValue(doc),

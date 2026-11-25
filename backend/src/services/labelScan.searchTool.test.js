@@ -1,5 +1,5 @@
 /**
- * The web-search rescue's labelScan half (pilot 2026-08-19).
+ * The web-search rescue's labelScan half.
  *
  * suggestProfile with allowSearch must hand the Anthropic SERVER-SIDE
  * web_search tool to the API, capped at 2 uses — and WITHOUT allowSearch the

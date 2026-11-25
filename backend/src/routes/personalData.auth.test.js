@@ -1,5 +1,5 @@
 /**
- * Auth-matrix test for the REAL /api/personal-data router (#986), in the
+ * Auth-matrix test for the REAL /api/personal-data router, in the
  * discussions.auth.test.js style: introspect the exported router and verify
  * by function identity which middleware guards each route, then fire real
  * requests for the rejection paths.

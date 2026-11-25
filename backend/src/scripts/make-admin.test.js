@@ -3,7 +3,7 @@
  *
  * WHY THIS TEST EXISTS:
  * A fresh install had no way to make anyone admin: the only script was
- * hard-coded to one account (2026-10-20). This one takes a username or email,
+ * hard-coded to one account. This one takes a username or email,
  * matches it exactly, refuses an ambiguous match, keeps the other roles, is a
  * no-op when nothing needs changing, and writes an audit row when it changes.
  */

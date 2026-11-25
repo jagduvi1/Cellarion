@@ -1,7 +1,7 @@
 import { render, waitFor, fireEvent } from '@testing-library/react';
 import AuthImage from './AuthImage';
 
-// Audit 2026-09 S7-1 / F06-1 / F01-1: a registry wine.image is user-influenced
+// A registry wine.image is user-influenced
 // data. Only a same-origin /api/ path may ever be fetched with the bearer.
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch }) }));

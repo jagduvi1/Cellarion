@@ -43,7 +43,7 @@ describe('validatePendingFix — colour', () => {
   });
 });
 
-// Audit 2026-09-19: refused, not accepted-and-dropped by the model hook.
+// Refused, not accepted-and-dropped by the model hook.
 test('applyPendingFix refuses a colour on a wine that stays red/white/rosé, before any write', async () => {
   const wine = {
     _id: 'wine-2', name: 'Rich Ruby Red', producer: '', appellation: null, type: 'red',

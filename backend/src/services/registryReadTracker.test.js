@@ -84,7 +84,7 @@ describe('gateAnonymousRead', () => {
 
 test('a page of ids is one write: the set grows by all of them and the count by their number', async () => {
   // A bridge search hands out ten identities in a single call, and those are
-  // reads of the registry too (audit 2026-09-08).
+  // reads of the registry too.
   RegistryReadDay.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve({ wines: ['a', 'b', 'c'], count: 3 }) });
   const r = await recordRead({ key: 'user:u1', kind: 'user' }, ['a', 'b', 'c']);
   const [, update] = RegistryReadDay.findOneAndUpdate.mock.calls[0];

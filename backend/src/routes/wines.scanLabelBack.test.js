@@ -348,7 +348,7 @@ describe('POST /api/wines/scan-label — a half-read label keeps its photo', () 
   });
 });
 
-// ── The UI round-trip (release-audit HIGH-1) ────────────────────────────────
+// ── The UI round-trip ────────────────────────────────
 // The client forwards /scan-label's `extracted` object VERBATIM — including
 // `partial: true`, the very flag that makes the rescue worth offering. The
 // first validator looped over every key and 400'd on the boolean, so the
@@ -374,7 +374,7 @@ describe('POST /api/wines/scan-label-back — the UI round-trip (HIGH-1)', () =>
     expect(scanLabelBack).toHaveBeenCalledWith(expect.objectContaining({
       frontExtracted: { name: '', producer: 'Bodegas Trenza', grapes: [] },
     }));
-    // …and junk keys cannot ride mergeBackScan's spread back out (INFO-1).
+    // …and junk keys cannot ride mergeBackScan's spread back out.
     expect(body.merged.junk).toBeUndefined();
     expect(body.merged.confidence).toBeUndefined();
     expect(body.merged.name).toBe('La Orphica');

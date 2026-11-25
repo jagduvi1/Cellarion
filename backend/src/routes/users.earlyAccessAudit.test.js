@@ -4,7 +4,7 @@
  * WHY THIS TEST EXISTS:
  * Early access decides which screens a member sees, so switching it is
  * logged. The row must mean a real switch: a form re-sending the value the
- * account already has writes nothing (release audit 2026-10-10), and the
+ * account already has writes nothing, and the
  * other preferences stay unlogged as before.
  */
 process.env.JWT_SECRET = 'test-secret';

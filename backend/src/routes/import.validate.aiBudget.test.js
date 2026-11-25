@@ -1,6 +1,6 @@
 /**
  * POST /api/bottles/import/validate — registry-first cascade + shared AI
- * budget (SECURITY_AUDIT_2026-07-08 M-2 + L-14).
+ * budget.
  *
  * WHY THIS TEST EXISTS:
  * The guiding product constraint is that a legitimate 2,000-bottle import
@@ -80,7 +80,7 @@ jest.mock('../models/WineDefinition', () => {
         }
         return null;
       },
-      // The producer-prefix probe for producer-less rows (2026-09-14) — this
+      // The producer-prefix probe for producer-less rows — this
       // harness's registry never answers it, so those rows take the fuzzy path.
       select: () => ({ lean: async () => null }),
     })),

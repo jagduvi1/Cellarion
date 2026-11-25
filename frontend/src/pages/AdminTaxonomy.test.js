@@ -1,7 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminTaxonomy from './AdminTaxonomy';
 
-// Grape regional-names audit LOWs (2026-08-11), admin taxonomy page:
+// Grape regional names on the admin taxonomy page:
 //  1. the per-country region cache must start COLD on every tab entry — a
 //     region created on the Regions tab has to appear when returning to
 //     Grapes (previously the stale cache hid it until a full reload);

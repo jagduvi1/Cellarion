@@ -61,7 +61,7 @@ test('get_wine_public_data passes roles (visibility) and surfaces any-pending + 
   const body = parse(res);
   expect(ops.dataForWine).toHaveBeenCalledWith(WINE, ME, { roles: USER_CTX.user.roles });
   expect(body.data.fields[0]).toMatchObject({ key: 'ABV', value: 13.5, suggestion_pending: false });
-  // Who contributed a value is stored, never told to a reader (2026-09-18) —
+  // Who contributed a value is stored, never told to a reader —
   // not even if an older service layer were still to hand the name over. The
   // FIELD stays, always null: docs/mcp-versioning.md forbids removing a
   // response field in place, and it was nullable from the start.
@@ -205,7 +205,7 @@ describe('sommelier access to the review queues', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Per-vintage overrides (2026-09-04): the vintage rides through unchanged on
+// Per-vintage overrides: the vintage rides through unchanged on
 // read and suggest, and the reviewer's "publish as wine default" reaches the
 // service ONLY when asked for — the plain call shape is untouched.
 // ---------------------------------------------------------------------------

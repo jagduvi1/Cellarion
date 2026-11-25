@@ -37,7 +37,7 @@ describe('prepareImportItems', () => {
       consumedReason: 'drank',
       consumedAt: '2019-05-12',
       // Without dateAdded the backend stamps addedToCellarAt = import day →
-      // inverted journeys and negative daysHeld (audit 2026-07-24 H1).
+      // inverted journeys and negative daysHeld.
       dateAdded: '2019-05-12',
       consumedRating: 4,
       consumedRatingScale: '5',

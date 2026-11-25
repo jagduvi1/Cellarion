@@ -235,7 +235,7 @@ describe('attachOfficialWineImage', () => {
 // request) is born approved + public, BEFORE the background-removal worker is
 // handed the row — the worker keeps an approved row approved, while a row
 // approved after the hand-off raced it and usually settled 'processed', out
-// of every gallery (release audit 2026-10-09, H1).
+// of every gallery.
 describe('publish at ingest', () => {
   test('the row is saved approved, public, reviewed by the uploader and marked with its side before bg removal starts', async () => {
     const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'admin-1', userRoles: ['admin'], wineDefinitionId: 'w1', publish: { side: 'back' } }, REQ);

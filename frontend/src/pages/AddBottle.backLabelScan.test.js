@@ -111,7 +111,7 @@ describe('the offer appears only when the front label came back incomplete', () 
     expect(screen.getByText('addBottle.backScanPrompt')).toBeInTheDocument();
     expect(screen.getByText('addBottle.backScanCta')).toBeInTheDocument();
     // …and what WAS read is already on screen — in the EDITABLE form, not the
-    // read-only card (release-audit M-1: the card rendered a blank title and a
+    // read-only card (the card rendered a blank title and a
     // confirm that could only 400 on the missing fields).
     expect(screen.getByDisplayValue('Kaefferkopf')).toBeInTheDocument();
     expect(screen.queryByText('addBottle.scanNotRight')).not.toBeInTheDocument();
@@ -170,7 +170,7 @@ describe('the merged result never overwrites the user', () => {
     render(<AddBottle />);
     await deliverScan(PARTIAL);
 
-    // A partial scan lands directly in the editable form (audit M-1); the user
+    // A partial scan lands directly in the editable form; the user
     // types their own producer while the back scan is (notionally) in flight.
     fireEvent.change(screen.getByPlaceholderText('addBottle.scanProducerOptionalPlaceholder'), { target: { value: 'Typed Producer' } });
 
@@ -240,7 +240,7 @@ describe('both scan ids and the disagreement ride the commit', () => {
     fireEvent.click(screen.getByText('addBottle.backScanSkip'));
 
     // The partial scan left country blank, and the editable form requires it —
-    // the user supplies what the label could not (audit MEDIUM-1: the old
+    // the user supplies what the label could not (the old
     // read-only card would have 400'd here in untranslated English).
     const countryGroup = screen.getByText('addBottle.scanCountry', { exact: false }).closest('.form-group');
     fireEvent.change(countryGroup.querySelector('input'), { target: { value: 'France' } });

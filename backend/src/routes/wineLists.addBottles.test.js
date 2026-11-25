@@ -155,7 +155,7 @@ describe('POST /api/wine-lists/:id/add-bottles', () => {
     expect(twoSections.save).not.toHaveBeenCalled();
 
     // Target 'reds' (case-insensitive): W1 2019 sits in Whites, so it is a
-    // duplicate for the whole list, not just the target section (audit M3).
+    // duplicate for the whole list, not just the target section.
     res = await postJson(app(), `/api/wine-lists/${LIST}/add-bottles`, { bottleIds: [B(1), B(2)], section: 'reds' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ added: 1, skipped: [{ id: B(1), reason: 'already_on_list' }] });

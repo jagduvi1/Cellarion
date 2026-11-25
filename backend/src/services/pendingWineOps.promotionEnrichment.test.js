@@ -1,5 +1,5 @@
 /**
- * runPromotionFollowThrough under sommelier-owned wine data (2026-09-24).
+ * runPromotionFollowThrough under sommelier-owned wine data.
  *
  * enrichmentOnAdd 'off' has meant "the AI writes nothing automatically" since
  * 2026-08-22, but completing a pending wine or publishing a draft — both run

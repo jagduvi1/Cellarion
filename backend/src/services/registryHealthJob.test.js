@@ -1,5 +1,5 @@
 /**
- * Weekly registry-health check (strategy 2026-07-29, R6).
+ * Weekly registry-health check.
  *
  * Pins the alerting contract: first run writes a baseline and stays silent;
  * an increase notifies every admin ONCE and re-baselines (no weekly re-alert

@@ -1,5 +1,5 @@
 /**
- * Native bcrypt replaced pure-JS bcryptjs (scaling audit 2026-09-25): hash
+ * Native bcrypt replaced pure-JS bcryptjs: hash
  * and compare now run on libuv's thread pool instead of stalling the event
  * loop for every login. Every account's stored password was written by
  * bcryptjs, so these pin that nothing about signing in changes:

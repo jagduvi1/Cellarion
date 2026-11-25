@@ -141,7 +141,7 @@ test('a type change alone counts — the profile describes the wrong colour othe
   expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, true);
 });
 
-// classification joined the edit form (GitHub discussion #1696): absent leaves
+// classification joined the edit form: absent leaves
 // it alone, a value is normalised like the mint does it, and a change counts
 // as a profile input.
 describe('PUT classification', () => {

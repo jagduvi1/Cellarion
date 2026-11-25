@@ -190,7 +190,7 @@ describe('resolveGrapeIdsStrict (match-only)', () => {
     expect(Grape.findOne).toHaveBeenCalledTimes(2);
   });
 
-  // Audit 2026-08-10: names that normalize to '' (non-Latin scripts, bare
+  // Names that normalize to '' (non-Latin scripts, bare
   // percentages) were silently DROPPED — a set became a partial write, and an
   // all-such list became an accidental clear of wine.grapes.
   test('a name that normalizes to nothing is refused, never silently dropped', async () => {
@@ -380,7 +380,7 @@ describe('colour (record field)', () => {
   });
 });
 
-// Release audit 2026-10-28: the serving trait is a fact about service, not a
+// The serving trait is a fact about service, not a
 // review of the prose — a serving-only write must not vouch for the profile.
 describe('applyProfilePatch — the serving trait on its own', () => {
   test('stores the trait without stamping the profile curator-verified, ending its hold or marking it reviewed', () => {

@@ -1,6 +1,5 @@
 /**
- * services/aiBudget — shared per-user daily AI budget + global kill-switch
- * (SECURITY_AUDIT_2026-07-08 M-2/L-14).
+ * services/aiBudget — shared per-user daily AI budget + global kill-switch.
  *
  * Debit/refund semantics mirror routes/chat.js: the atomic $inc IS the gate
  * (no check-then-increment race), overshoot is refunded, and a transport-
@@ -195,7 +194,7 @@ describe('per-user override (admin-granted AiBudgetRequest)', () => {
 describe('isRefundableFailure', () => {
   test('transport-level failures are refundable', () => {
     expect(isRefundableFailure('rate_limit_exceeded')).toBe(true);
-    expect(isRefundableFailure('prompt_too_long')).toBe(true); // refused before any request (audit 2026-09-02 D10-9)
+    expect(isRefundableFailure('prompt_too_long')).toBe(true); // refused before any request
     expect(isRefundableFailure('exception: socket hang up')).toBe(true);
     expect(isRefundableFailure('no_api_key')).toBe(true);
   });

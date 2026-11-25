@@ -1,5 +1,5 @@
 /**
- * Analytics MCP tools (#987) — list_analytics_fields + analyze_cellar.
+ * Analytics MCP tools — list_analytics_fields + analyze_cellar.
  *
  * Pins: read scope on both; delegation to the SHARED analytics engine
  * (catalogue + runQuery — no second query path); the MCP row clamp (50,

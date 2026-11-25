@@ -1,7 +1,7 @@
 /**
  * PUT /api/admin/wine-requests/:id/resolve (createNew) — the image field.
  *
- * Audit 2026-09 F06-1: the request's `image` is chosen by ANY user, and the
+ * The request's `image` is chosen by ANY user, and the
  * approval used to store `image || wineRequest.image || null` — so a blanked
  * field silently fell back to the requester's value, and nothing checked its
  * shape. A protocol-relative `//attacker/x` then reached WineDefinition.image,
@@ -35,7 +35,7 @@ jest.mock('../../services/producerSpelling', () => ({ resolveCanonicalProducerSp
 jest.mock('../../services/imageOps', () => ({
   ...jest.requireActual('../../services/imageOps'),
   attachOfficialWineImage: jest.fn(async () => ({ image: { _id: 'img-1', processedUrl: '/api/uploads/originals/img-1.webp' } })),
-  // The back label (#1460) goes through the ordinary upload path and is
+  // The back label goes through the ordinary upload path and is
   // published by the route; the row's save is what the tests inspect.
   ingestBottleImage: jest.fn(async () => ({ image: { _id: 'img-2', status: 'uploaded', visibility: 'private', side: 'front', save: jest.fn(async () => {}) } })),
 }));
@@ -262,7 +262,7 @@ describe('the photo attached to the request', () => {
   });
 });
 
-// ── The back label on the request (#1460) — a public gallery photo, never the picture ──
+// ── The back label on the request — a public gallery photo, never the picture ──
 
 describe('the back label photo on the request', () => {
   const { ingestBottleImage, attachOfficialWineImage } = require('../../services/imageOps');
@@ -279,7 +279,7 @@ describe('the back label photo on the request', () => {
     expect(opts.buffer.equals(Buffer.from(PNG_1PX, 'base64'))).toBe(true);
     // Published AT INGEST (the row is born approved + public + back), never by
     // a save after the hand-off: that raced the background-removal worker,
-    // which settled the row 'processed' (release audit 2026-10-09, H1).
+    // which settled the row 'processed'.
     expect(opts.publish).toEqual({ side: 'back' });
     const row = (await ingestBottleImage.mock.results[0].value).image;
     expect(row.save).not.toHaveBeenCalled();

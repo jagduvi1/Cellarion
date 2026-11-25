@@ -6,7 +6,7 @@
  * bottle existed — an abandoned flow left an orphan row forever (31 zero-bottle
  * createdVia:'ui' rows on prod, 2026-08-10; the "Domaine de Riquewihr —
  * Kaefferkopf" case). It is now RESOLVE-ONLY (matchOnly), the same shape as
- * identify-text (v1.97) and import /validate (#899): creation moved to the
+ * identify-text (v1.97) and import /validate: creation moved to the
  * bottle/wishlist commit (services/wineCommit, covered by its own suites).
  *
  * These tests pin the guards (unchanged), and the new no-write contract:

@@ -1,6 +1,6 @@
 /**
  * appellationRefsError — the shared ref guard for every Appellation write
- * surface (code audit 2026-07-30: "appellation region not checked against
+ * surface ("appellation region not checked against
  * country").
  *
  * WHY THIS TEST EXISTS: the Appellation schema declares country and region

@@ -1,5 +1,5 @@
 /**
- * Personal-data MCP tools (#986) — list/add/update/delete + undo.
+ * Personal-data MCP tools — list/add/update/delete + undo.
  *
  * Pins: the read/write scope split; access gating through resolveBottleAccess
  * (foreign bottle → not_found, never forbidden); every handler delegating to

@@ -1,5 +1,5 @@
 /**
- * Prompt caching for the label scan and the import lookup (2026-09-25).
+ * Prompt caching for the label scan and the import lookup.
  *
  * On the Anthropic provider the fixed instructions always ride as the system
  * block; the caching switch only adds or drops Anthropic's cache marker. What

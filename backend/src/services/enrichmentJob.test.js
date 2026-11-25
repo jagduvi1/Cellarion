@@ -1,5 +1,5 @@
 /**
- * Enrichment persistence — the markdown boundary (#788).
+ * Enrichment persistence — the markdown boundary.
  *
  * aiProfile.description is served RAW by the MCP tools (get_wine, get_bottle),
  * so emphasis the model emits leaks as literal ** to any consumer that doesn't

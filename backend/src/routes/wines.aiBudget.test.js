@@ -1,6 +1,6 @@
 /**
- * Shared daily AI budget on the Anthropic-backed wine endpoints
- * (SECURITY_AUDIT_2026-07-08 L-14): scan-label / identify-text / ai-info.
+ * Shared daily AI budget on the Anthropic-backed wine endpoints:
+ * scan-label / identify-text / ai-info.
  *
  * Unlike the import pipeline (which degrades to fuzzy matching), these
  * endpoints have no non-AI fallback — over budget they must return
@@ -181,7 +181,7 @@ describe('POST /api/wines/scan-label — daily AI budget', () => {
     // scanLabelFull throws 422 for a billed Claude call that couldn't read the
     // label (JSON parse fail / {"error":…} / missing name+producer). That call
     // completed and was billed, so refunding it would let a user bypass the
-    // budget + global kill-switch with unreadable images (audit HIGH).
+    // budget + global kill-switch with unreadable images.
     const err = new Error('Could not read label');
     err.status = 422;
     scanLabelFull.mockRejectedValue(err);

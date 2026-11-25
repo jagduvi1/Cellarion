@@ -61,7 +61,7 @@ jest.mock('../models/WineVintagePrice', () => {
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), findOneAndDelete: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
-// The self-apply path (2026-08-21) reaches the admin route's own approveProposal
+// The self-apply path reaches the admin route's own approveProposal
 // rather than duplicating the write. Mocked so this suite stays a unit test of
 // the TOOL's routing; the apply itself is covered by wineProposals.test.js and
 // the direct/gated decision by services/proposalDirectApply.test.js.
@@ -100,7 +100,7 @@ jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WR
 // below exercise the caveat it adds around that scan, not the scan itself.
 jest.mock('../services/crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn(async () => ({ rows: [] })) }));
 // propose_wine_correction names the registry's other spellings of a proposed
-// producer (2026-09-28); the lookup itself is unit-tested in its own suite.
+// producer; the lookup itself is unit-tested in its own suite.
 jest.mock('../services/producerSpelling', () => ({
   ...jest.requireActual('../services/producerSpelling'),
   otherProducerSpellings: jest.fn(async () => []),
@@ -399,7 +399,7 @@ describe('set_vintage_maturity', () => {
     expect(body.error.code).toBe('invalid_input');
   });
 
-  // Audit 2026-08-10: profiles predating the relative-flag derivation hold
+  // Profiles predating the relative-flag derivation hold
   // absolute years under vintage 'NV'; a partial write flips relative=true on
   // save, silently reinterpreting retained years as offsets. Must refuse.
   test('a partial write on an NV profile carrying absolute years is refused, a full rewrite lands', async () => {
@@ -572,7 +572,7 @@ describe('set_wine_profile', () => {
     expect(w.save).not.toHaveBeenCalled();
   });
 
-  // Audit 2026-09-19: the model hook would drop it, so the tool used to report
+  // The model hook would drop it, so the tool used to report
   // a success that stored nothing.
   test('a colour on a wine that stays red/white/rosé is refused, nothing written', async () => {
     const w = wine({ type: 'red' });
@@ -1719,7 +1719,7 @@ describe('propose_wine_correction', () => {
     return w;
   };
 
-  // --- self-apply (2026-08-21) ---------------------------------------------
+  // --- self-apply ---------------------------------------------
   // The tool's job here is ROUTING: ask the classifier, and either apply
   // through the admin route's own approveProposal or leave the row pending.
   describe('self-apply', () => {
@@ -1846,7 +1846,7 @@ describe('propose_wine_correction', () => {
     });
   });
 
-  // Audit 2026-09-19: the somm path had no type check at filing, so an admin
+  // The somm path had no type check at filing, so an admin
   // could "approve" a colour that the apply step then skipped.
   test('a colour on a wine the proposal leaves red/white/rosé is refused at filing; with the type it files', async () => {
     mkWine({ type: 'red' });

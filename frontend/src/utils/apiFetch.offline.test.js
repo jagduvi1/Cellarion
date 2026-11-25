@@ -1,6 +1,6 @@
 import { createApiFetch, SLOW_GET_MS, SLOW_WRITE_MS } from './apiFetch';
 
-// Offline mode (#1355): reads the network can't answer come from the device's
+// Offline mode: reads the network can't answer come from the device's
 // copy (offlineFallback); nothing changes when there is no fallback answer.
 const live = (body = 'live') => ({ status: 200, ok: true, body, headers: new Headers() });
 const saved = () => ({ status: 200, ok: true, body: 'saved', headers: new Headers({ 'X-Cellarion-Offline': '2026-09-24T12:00:00Z' }) });

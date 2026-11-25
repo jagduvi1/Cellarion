@@ -4,7 +4,7 @@
  *
  * WHY THIS TEST EXISTS:
  * Turning review off publishes every member's contribution as it is made. On
- * a private server that is the point (discussion #1778); on cellarion.app it
+ * a private server that is the point; on cellarion.app it
  * would publish to a shared registry. So: where a super admin is configured,
  * only the super admin may switch it (any admin still sees it); on a server
  * without one, any admin may. Only a real true/false may change it, the new

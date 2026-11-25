@@ -1,5 +1,5 @@
 /**
- * Offline-queue preconditions on the bottle routes (#1355). A write queued
+ * Offline-queue preconditions on the bottle routes. A write queued
  * offline says what the user saw; if the bottle changed meanwhile the route
  * answers 409 instead of overwriting someone else's change. Absent → the
  * routes behave exactly as before. Harness cloned from bottles.consumeDate.test.js.

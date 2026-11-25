@@ -124,7 +124,7 @@ describe('updateWineCommunityRating (author dedup — M-3)', () => {
     expect(update.$set.updatedAt).toBeInstanceOf(Date);
   });
 
-  // Release audit 2026-10-23: on a self-hosted install a stamp on an ADOPTED
+  // On a self-hosted install a stamp on an ADOPTED
   // copy reads as "edited here" and the Bridge skips the registry's next
   // identity update; an install sends no rating anywhere. The rating still lands.
   it('an adopted copy (registryId) gets the rating without the updatedAt stamp', async () => {

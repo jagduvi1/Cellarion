@@ -1,8 +1,8 @@
 /**
- * The scan-label match and the label sweetness term (GitHub discussion #1754).
+ * The scan-label match and the label sweetness term.
  *
  * WHY THIS TEST EXISTS:
- * The style guard that keeps a producer's range apart (issue #1134) reads a
+ * The style guard that keeps a producer's range apart reads a
  * candidate's RECORDED term before its name. It can only do that when the
  * candidate load populates the term: with a bare id and a cold term table the
  * guard reads "no term", and once the word has left the names a scanned

@@ -1,5 +1,5 @@
 /**
- * Dedicated MCP protocol-endpoint rate limits (MCP-audit M8).
+ * Dedicated MCP protocol-endpoint rate limits.
  *
  * Hosted AI connectors (claude.ai, ChatGPT) egress from a small shared IP
  * pool, so the old setup — /api/mcp under the global per-IP apiLimiter — made

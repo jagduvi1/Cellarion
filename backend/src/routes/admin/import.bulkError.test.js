@@ -1,6 +1,5 @@
 /**
- * applyBulkWriteError — partial-success recovery for the LWIN import flush
- * (audit 2026-08-03 H1).
+ * applyBulkWriteError — partial-success recovery for the LWIN import flush.
  *
  * An UNORDERED bulkWrite commits every non-failing op even when the promise
  * rejects (e.g. two CSV rows normalizing to the same unique normalizedKey —

@@ -161,7 +161,7 @@ describe('unsubscribeAllNotifications', () => {
     expect(unsubscribeAllNotifications(undefined)).toBe(false);
   });
 
-  // Audit 2026-09-27 M7: a category missing from the stored record used to be
+  // A category missing from the stored record used to be
   // skipped — an account whose settings were saved before support replies
   // existed kept receiving them after "unsubscribe from all". Every channel
   // the schema defines is written, and only those (no email on follows).
@@ -189,7 +189,7 @@ describe('unsubscribeAllNotifications', () => {
   });
 });
 
-// Audit 2026-09-27 M7: the click is an objection to email as such, not to the
+// The click is an objection to email as such, not to the
 // categories that existed that day. It is recorded on the account
 // (emailOptOutAt) and every sender honours it on top of the per-category flags.
 describe('the objection itself — emailOptOutAt', () => {
@@ -225,7 +225,7 @@ describe('the objection itself — emailOptOutAt', () => {
   });
 });
 
-// Support answers are emailed by default (2026-09-26). "Unsubscribe from all
+// Support answers are emailed by default. "Unsubscribe from all
 // Cellarion emails" must stop them too, including on accounts whose stored
 // settings were saved before the category existed.
 describe('support-reply emails and the one-click unsubscribe', () => {
@@ -259,8 +259,8 @@ describe('support-reply emails and the one-click unsubscribe', () => {
   });
 });
 
-// Curators' questions about a wine you own are emailed by default
-// (2026-10-20). "Unsubscribe from all Cellarion emails" must stop them too,
+// Curators' questions about a wine you own are emailed by default.
+// "Unsubscribe from all Cellarion emails" must stop them too,
 // including on accounts stored before the category existed.
 describe('owner-question emails and the one-click unsubscribe', () => {
   it('turns the owner-question email off with everything else', () => {

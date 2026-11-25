@@ -1,7 +1,7 @@
 /**
- * The shared typed-value system (#986) — every type's accept/reject/cast
+ * The shared typed-value system — every type's accept/reject/cast
  * behaviour, plus key-definition validation. This module is reused by the
- * public-vocabulary work (#985) and the analytics catalogue (#987), so these
+ * public-vocabulary work and the analytics catalogue, so these
  * pins are contract tests, not implementation details.
  */
 const { TYPES, TEXT_MAX, validateValue, validateKeyDefinition } = require('./personalDataTypes');

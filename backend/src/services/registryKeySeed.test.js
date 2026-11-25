@@ -4,7 +4,7 @@
  * WHY THIS TEST EXISTS:
  * A fresh self-hosted server had no ABV field anywhere: the wine record showed
  * no ABV row until its admin proposed the field and accepted it, so a member
- * could not find where to put the alcohol percentage (discussion #1778). The
+ * could not find where to put the alcohol percentage. The
  * seed must give a registry cellarion.app's own definitions — the Registry
  * Bridge finds a field by name, and a different type or unit would clash — for
  * every standard field it LACKS, also on a registry that already has fields of

@@ -1,5 +1,5 @@
 /**
- * Label sweetness in the identity keys (GitHub discussion #1754).
+ * Label sweetness in the identity keys.
  *
  * WHY THIS TEST EXISTS:
  * Once the word leaves the names, "Riesling Kabinett" with the term trocken

@@ -47,7 +47,7 @@ describe('registration + scope split', () => {
     // full account export (email, audit history). See tool + ApiToken model.
     expect(t.scope).toBe('write');
     // And NOT read-only: minting the full-PII export link must go through the
-    // client's confirmation step, never silently (audit M02-1).
+    // client's confirmation step, never silently.
     expect(t.annotations.readOnlyHint).toBe(false);
   });
 });

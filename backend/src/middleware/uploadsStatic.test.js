@@ -9,8 +9,8 @@
  * smuggled .html or .svg that could execute script, or server config files).
  * This suite pins the real exported guard used by app.js — the allowlist and
  * the caching contract: only a file that was actually SERVED may carry the
- * immutable long cache. A 404 carrying it got cached by Cloudflare for a year
- * (2026-09-15), with no purge available.
+ * immutable long cache. A 404 carrying it got cached by Cloudflare for a year,
+ * with no purge available.
  */
 
 const { uploadsGuard, uploadsCacheHeaders, ALLOWED_EXTENSIONS, IMMUTABLE_CACHE } = require('../middleware/uploadsStatic');

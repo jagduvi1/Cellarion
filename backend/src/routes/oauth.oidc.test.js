@@ -1,5 +1,5 @@
 /**
- * Wiring tests for the generic OIDC provider (#1203).
+ * Wiring tests for the generic OIDC provider.
  *
  * WHY THIS TEST EXISTS, AND WHY GOOGLE IS UNSET HERE:
  * every other test in this directory configures Google, so an OIDC-only

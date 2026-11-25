@@ -283,7 +283,7 @@ test('bottles just added on order are announced with "Add another bottle"', asyn
   expect(screen.getByRole('status')).toHaveTextContent(/bottleNotice\.added|Barolo 2016/);
 });
 
-// Release audit 2026-10-16: after a raise that stopped part-way, Save waits
+// After a raise that stopped part-way, Save waits
 // until the list is read again — a retry on the stale count added the whole
 // difference again (2 → 7 ended at 10).
 test('a raise that stopped part-way waits for the list, then adds only the rest', async () => {

@@ -1,5 +1,5 @@
 /**
- * mark_not_wine (release audit 2026-10-28): every outcome answers the shared
+ * mark_not_wine: every outcome answers the shared
  * envelope (a string summary, an object data), and a move — applied or filed —
  * leaves a ledger row so the member's AI activity and the admin aggregate
  * show it. Refusals map the service's codes, the gate's included.

@@ -1,5 +1,5 @@
 /**
- * Label sweetness — the term table and its readers (GitHub discussion #1754).
+ * Label sweetness — the term table and its readers.
  *
  * WHY THIS TEST EXISTS:
  * The same word means two things on two scales (German "trocken" is the dry

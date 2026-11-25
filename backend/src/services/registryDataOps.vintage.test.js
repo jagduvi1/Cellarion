@@ -1,5 +1,5 @@
 /**
- * Per-vintage overrides on public values (2026-09-04).
+ * Per-vintage overrides on public values.
  *
  * `vintage: null` is the wine-wide default, 'YYYY' an override for that
  * bottling. A figure off a label or a one-year retailer page belongs in the

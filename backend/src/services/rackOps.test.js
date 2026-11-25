@@ -71,7 +71,7 @@ describe('createGridRack', () => {
     expect((await createGridRack(cellar, { name: 'B', type: 'modular' }, REQ)).error.status).toBe(400);
   });
 
-  // typeConfig arrived with the REST POST /racks delegation (MCP-audit H1) —
+  // typeConfig arrived with the REST POST /racks delegation —
   // the grid branch of the route now runs through here, double-height rows
   // included.
   test('valid typeConfig.doubleHeightRows is stored; invalid rows / non-grid type are 400', async () => {

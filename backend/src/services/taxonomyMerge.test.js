@@ -133,7 +133,7 @@ describe('mergeGrapes', () => {
     expect(searchService.indexWine).not.toHaveBeenCalled();
   });
 
-  // Audit 2026-08-11: regionalNames are display data about the VARIETY — a
+  // regionalNames are display data about the VARIETY — a
   // merge that dropped them silently lost curated labels.
   test('carries the duplicate\'s regionalNames, skipping (country, region) pairs the canonical doc already covers', async () => {
     const from = doc({
@@ -205,7 +205,7 @@ describe('mergeRegions', () => {
     expect(summary).toMatchObject({ winesUpdated: 1, childRegionsUpdated: 3, appellationsUpdated: 1 });
   });
 
-  // Audit 2026-08-11: grape regionalNames scope to regions — a merge must
+  // Grape regionalNames scope to regions — a merge must
   // re-point them like every other region ref or resolution silently stops.
   test('re-points Grape.regionalNames.region via arrayFilters', async () => {
     const from = rdoc({ _id: 'r-dup', name: 'Piemonte' });
@@ -270,7 +270,7 @@ describe('mergeCountries', () => {
     expect(from.deleteOne).toHaveBeenCalled();
     expect(summary).toMatchObject({ winesUpdated: 3, regionsMoved: 1, regionsMerged: 1 });
 
-    // Audit 2026-08-11: country-level grape regionalNames follow the merge —
+    // Country-level grape regionalNames follow the merge —
     // and the folded colliding region re-pointed its region-level entries too
     // (mergeRegionDocs runs for it).
     expect(Grape.updateMany).toHaveBeenCalledWith(

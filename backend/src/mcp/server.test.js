@@ -1,5 +1,5 @@
 /**
- * budgetedHandler — the per-tool-call gate (MCP-audit H2, M7).
+ * budgetedHandler — the per-tool-call gate.
  *
  * This wrapper decides: per-request cap, cross-request call budget, mutating
  * fail-closed for anonymous, the per-user/IP mutation budget, and the

@@ -1,5 +1,5 @@
 /**
- * resultCache — real-execution coverage (grand-audit M24).
+ * resultCache — real-execution coverage.
  *
  * Tool suites only asserted "no recompute on repeat" and dodged the shared
  * module-level cache via unique user ids, so TTL expiry, the evict-oldest-half

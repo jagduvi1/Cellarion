@@ -1,7 +1,7 @@
 /**
  * GET /api/stats/overview — the data-version cache.
  *
- * Scaling audit 2026-09-25: Home Assistant polls the overview every few
+ * Home Assistant polls the overview every few
  * minutes; the old 2-minute cache window almost never matched, so every poll
  * reloaded and recomputed the user's whole collection — the #1 database load.
  * Pinned here: an unchanged poll is answered from memory without touching the

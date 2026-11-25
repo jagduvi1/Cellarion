@@ -1,7 +1,7 @@
 /**
  * The analytics catalogue declares the label sweetness term once, as a
  * taxonomy dimension that GROUPS ("how many dry Rieslings") — a single ref,
- * unlike grapes and classifications (GitHub discussion #1754).
+ * unlike grapes and classifications.
  */
 const { STATIC_FIELDS, OPS_BY_TYPE } = require('./fieldCatalogue');
 

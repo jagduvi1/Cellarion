@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-// Per-vintage overrides on public values (2026-09-04). On a bottle page the
+// Per-vintage overrides on public values. On a bottle page the
 // section knows the vintage: values show which layer answered (this year's
 // override vs the wine-wide default), a wine-wide value invites the
 // year-specific figure, and the suggestion form asks ONE question — where the

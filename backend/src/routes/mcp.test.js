@@ -20,7 +20,7 @@ jest.mock('../services/bottleOps', () => ({ RESTORE_WINDOW_MS: 5 * 86400000 }));
 // mocked) so the route's revertible-action set — built from this at load — can
 // never drift from revert.js. A hand-copied 12-action list here silently
 // dropped the 5 newest write actions, making their timeline-revert tests
-// structurally impossible (grand-audit H7).
+// structurally impossible.
 jest.mock('../mcp/revert', () => ({
   ...jest.requireActual('../mcp/revert'),
   revertLedgerRow: jest.fn(),

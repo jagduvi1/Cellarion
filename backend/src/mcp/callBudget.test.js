@@ -1,5 +1,5 @@
 /**
- * MCP cross-request call budget (security audit M-4).
+ * MCP cross-request call budget.
  *
  * Bounds read amplification: the per-request cap and per-IP HTTP limiter count
  * requests, not tool calls, so without this a caller could drive thousands of

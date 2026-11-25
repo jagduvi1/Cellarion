@@ -43,7 +43,7 @@ test('the own-photo lookup excludes label scans, is scoped to the viewer, and in
   expect(BottleImage.find).toHaveBeenCalledWith(expect.objectContaining({
     uploadedBy: USER,
     // 'approved' is deliberate: approval must not drop a photo out of this
-    // lookup and blank the card (discussion #1227).
+    // lookup and blank the card.
     status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
     // `$ne`, not `kind: 'bottle'` — rows older than the field have no kind.
     kind: { $ne: 'label-scan' },

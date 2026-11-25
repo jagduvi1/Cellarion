@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-// SuperAdmin → AI (2026-09-25): the "AI Cost — Estimated" card, which renders
+// SuperAdmin → AI: the "AI Cost — Estimated" card, which renders
 // the spend ledger summary (GET /api/superadmin/ai/costs), and the prompt-caching
 // switch (PATCH /api/superadmin/ai/prompt-caching).
 

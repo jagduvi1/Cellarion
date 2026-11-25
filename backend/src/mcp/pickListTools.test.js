@@ -61,7 +61,7 @@ test('update_pick_list applies rename, add, remove and ticks in one call', async
   expect(parse(await tool('update_pick_list').handler({ pick_list_id: L }, CTX)).error.code).toBe('invalid_input');
 });
 
-// Release audit 2026-10-13: a later step failing hid the steps already applied.
+// A later step failing hid the steps already applied.
 test('update_pick_list: a failing later step says what was already applied', async () => {
   ops.renamePickList.mockResolvedValue({ list: { name: 'Friday' } });
   ops.addToPickList.mockResolvedValue({ error: { status: 400, message: 'A pick list holds at most 500 bottles' } });

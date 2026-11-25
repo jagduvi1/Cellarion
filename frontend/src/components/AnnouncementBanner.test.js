@@ -57,7 +57,7 @@ test('shows an enabled announcement', async () => {
 });
 
 /**
- * The bug this polling exists for (2026-08-17): a banner raised while people
+ * The bug this polling exists for: a banner raised while people
  * already had the app open reached nobody, because the component fetched only
  * on mount. An open tab must pick it up without a reload.
  */
@@ -90,8 +90,8 @@ test('returning to the tab re-checks without waiting for the interval', async ()
 });
 
 /**
- * Background tabs left open all day were most of this endpoint's traffic
- * (scaling audit 2026-09-25): no one can see a banner in a hidden tab, and
+ * Background tabs left open all day were most of this endpoint's traffic:
+ * no one can see a banner in a hidden tab, and
  * returning to it re-checks at once.
  */
 test('a hidden tab does not poll, and re-checks once when it is shown again', async () => {

@@ -1,7 +1,7 @@
 {
   "backend/src/mcp/sommTools.test.js": 2455,
   "backend/src/services/enrichmentJob.test.js": 1514,
-  "backend/src/services/findOrCreateWine.test.js": 1575,
+  "backend/src/services/findOrCreateWine.test.js": 1574,
   "frontend/src/pages/AddBottle.js": 1943,
   "frontend/src/pages/ImportBottles.js": 2826
 }

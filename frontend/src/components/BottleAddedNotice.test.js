@@ -35,7 +35,7 @@ test('without a wine name there is no quoted stand-in', () => {
   expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.addedUnnamed:{"count":3}');
 });
 
-// Release audit 2026-10-16: the next bottle is added the same way, and the
+// The next bottle is added the same way, and the
 // add page comes back to where the notice was.
 test('"Add another bottle" carries the way back and the mode of the bottle just added', () => {
   function Where() {

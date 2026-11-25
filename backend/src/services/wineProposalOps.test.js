@@ -252,8 +252,7 @@ describe('creation', () => {
   });
 
   // Joined, not an array: the admin modal compares the snapshot against its
-  // liveIdentity (joined names) to flag drift — an array read as permanent drift
-  // (audit 2026-09-12 L-2).
+  // liveIdentity (joined names) to flag drift — an array read as permanent drift.
   test('the snapshot records the live type and JOINED grape names, the shape the admin diff compares', async () => {
     findVisibleWine.mockResolvedValue({ ...wineDoc, type: 'white', grapes: [{ name: 'Chardonnay' }, { name: 'Pinot Blanc' }] });
     await ops.createFieldCorrection(ME, GOOD);

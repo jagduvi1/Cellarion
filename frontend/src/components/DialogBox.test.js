@@ -3,8 +3,8 @@ import DialogBox from './DialogBox';
 
 /**
  * DialogBox is the a11y shell the hand-rolled overlays (slot popups, room
- * consume/blocker, bottle-detail confirms) mount instead of a bare box div
- * (grand-audit H6). These tests pin the contract: dialog semantics, focus
+ * consume/blocker, bottle-detail confirms) mount instead of a bare box div.
+ * These tests pin the contract: dialog semantics, focus
  * moving in on open, Escape closing, and NOT stealing focus from an
  * autoFocus child.
  */

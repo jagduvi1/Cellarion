@@ -93,7 +93,7 @@ describe('BottleCard long-press', () => {
 });
 
 /**
- * Which photo a card shows (discussion #1227): the owner's chosen default,
+ * Which photo a card shows: the owner's chosen default,
  * else the owner's OWN photo — pending or approved — else the registry image.
  * The own-photo lookup must keep approved rows, or approval would leave the
  * card on the registry image, which most wines do not have, and so blank.
@@ -274,7 +274,7 @@ describe('BottleCard vintage', () => {
 /**
  * The list view's meta line puts a generated dot before its second span, so
  * the producer span must be left out when there is no producer — otherwise a
- * producer-less bottle reads "· 2019" (#1739).
+ * producer-less bottle reads "· 2019".
  */
 describe('BottleCard meta line without a producer', () => {
   const metaSpans = (container) => [...container.querySelectorAll('.bottle-meta > span')];

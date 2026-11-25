@@ -2,7 +2,7 @@
  * Every prompt builder inserts user text LITERALLY, and no assembled prompt
  * goes out oversized.
  *
- * Security audit 2026-09-02 (D10-9): suggestProfile and scanLabelBack had been
+ * suggestProfile and scanLabelBack had been
  * fixed in August, but identifyWineFromText, identifyWineFromQuery,
  * suggestDrinkWindow and suggestPrice still built their prompts with
  * String.prototype.replace(token, userString). A replacement STRING honours

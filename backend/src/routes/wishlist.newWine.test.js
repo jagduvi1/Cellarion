@@ -34,7 +34,7 @@ jest.mock('../models/WishlistItem', () => ({
 // Demo tokens make requireAuth confirm the account still exists.
 jest.mock('../models/User', () => ({ exists: jest.fn(async () => ({ _id: 'demo1' })) }));
 // The by-id path now checks the wine is visible to the caller before filing a
-// wish — it used to take the id on trust (security audit M-4).
+// wish — it used to take the id on trust.
 jest.mock('../models/WineDefinition', () => ({ findOne: jest.fn() }));
 
 const express = require('express');

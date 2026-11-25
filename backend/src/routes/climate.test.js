@@ -637,7 +637,7 @@ describe('cellar-facing reads + config', () => {
   });
 });
 
-// Release audit 2026-10-28: a template that emits `unit: null` when no unit is
+// A template that emits `unit: null` when no unit is
 // configured, or a lower-case letter, is not a rejection.
 describe('climate ingest — the unit field, leniently', () => {
   test('null means °C and a lower-case f is °F', async () => {

@@ -229,7 +229,7 @@ describe('cuvee-near-miss.v2', () => {
 
 /**
  * producer-echoes-name.v1 — the rule that took over the "Increíble" case from
- * the BLOCKING predicate (audit H-1/H-2), because that predicate could not tell
+ * the BLOCKING predicate, because that predicate could not tell
  * the echo from Château Margaux and refused both.
  */
 describe('producer-echoes-name.v1', () => {

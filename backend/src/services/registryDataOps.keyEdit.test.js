@@ -3,7 +3,7 @@
  * vocabulary itself.
  *
  * WHY THIS TEST EXISTS:
- * A self-hoster created "ABV" as a text field by mistake (discussion #1778)
+ * A self-hoster created "ABV" as a text field by mistake
  * and found no way to change its type or remove it: a key's definition was
  * fixed by its proposal. Changing it must never leave a stored value outside
  * its key's definition — every value is read again under the new type and

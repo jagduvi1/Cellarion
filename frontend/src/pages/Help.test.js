@@ -65,7 +65,7 @@ describe('the help text', () => {
     expect(Object.keys(sections).sort()).toEqual([...SECTION_KEYS].sort());
   });
 
-  // Help follows the app's words (2026-10-15): "Drink" / "Take out of the
+  // Help follows the app's words: "Drink" / "Take out of the
   // cellar" / "Taken out", "Recently deleted", every feature free.
   test('uses the current words: nothing paid, nothing "consumed", no old menu paths', () => {
     const all = JSON.stringify(sections);
@@ -76,7 +76,7 @@ describe('the help text', () => {
     expect(all).not.toMatch(/10-point/);
   });
 
-  // Release audit 2026-10-16: a rewritten English line left the old
+  // A rewritten English line left the old
   // translation behind ("Premium feature" in sv/de/fr).
   test('no language says a feature is paid', async () => {
     for (const lng of ['sv', 'de', 'fr', 'et']) {

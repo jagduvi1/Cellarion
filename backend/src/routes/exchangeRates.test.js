@@ -1,6 +1,6 @@
 /**
- * GET /api/exchange-rates — the browser-facing twin of the daily snapshot
- * (audit 2026-09 F03-4). Pins: public, served from the snapshot, cacheable,
+ * GET /api/exchange-rates — the browser-facing twin of the daily snapshot.
+ * Pins: public, served from the snapshot, cacheable,
  * and a clean 503 (not a hang) when the upstream is unavailable.
  */
 

@@ -368,7 +368,7 @@ describe('WineOwnerInquiry — recipient-entry erasure + asker nulling', () => {
   });
 });
 
-// Portability of wine corrections (pre-deploy audit 2026-09-18). `amendments`
+// Portability of wine corrections. `amendments`
 // was selected but never mapped into the export. It was an edge while
 // corrections came from a connector; the bottle page files ONE field at a
 // time, so fixing a second field IS an amendment — and the reason and the

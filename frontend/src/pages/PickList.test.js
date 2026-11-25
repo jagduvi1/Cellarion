@@ -93,7 +93,7 @@ test('"Mark picked as drunk" hands only the picked bottles still in the cellar t
   expect(await screen.findByTestId('consume')).toHaveTextContent('b2');
 });
 
-// Release audit 2026-10-13: a reload in between wiped a tick not yet sent, and
+// A reload in between wiped a tick not yet sent, and
 // the reload wiped the error it was meant to explain.
 test('a reload keeps a tick that is not sent yet', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

@@ -142,7 +142,7 @@ describe('GET /keys', () => {
     let body = await (await get('/keys?days=400', admin())).json();
     expect(body.days).toBe(90);
     // The distinct-wines half of the answer cannot go back further than the
-    // read counters live (audit 2026-09-08): 90 days of spend, 14 of reads.
+    // read counters live: 90 days of spend, 14 of reads.
     expect(body.readDays).toBe(14);
     body = await (await get('/keys?days=abc', admin())).json();
     expect(body.days).toBe(7);

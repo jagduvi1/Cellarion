@@ -1,6 +1,6 @@
 /**
- * services/scanImageRetentionJob — a daily run drains each clock
- * (scaling audit 2026-09-25). It used to take ONE batch of 500 per clock per
+ * services/scanImageRetentionJob — a daily run drains each clock.
+ * It used to take ONE batch of 500 per clock per
  * day, so once more than 500 rows lapsed in a day the backlog only grew and
  * the 30-day / 7-day retention promises quietly became weeks.
  *

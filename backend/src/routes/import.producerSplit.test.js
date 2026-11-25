@@ -1,5 +1,5 @@
 /**
- * Producer-less import rows (2026-09-14).
+ * Producer-less import rows.
  *
  * A CellarTracker export without a Producer column carries the producer
  * inside the Wine display name ("Louis Jadot Moulin-à-Vent Château des

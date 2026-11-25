@@ -1,5 +1,5 @@
 /**
- * list_maturity_queue and the label sweetness term (GitHub discussion #1754):
+ * list_maturity_queue and the label sweetness term:
  * the PROJECTION decides what is said.
  *
  * WHY THIS TEST EXISTS:
@@ -64,7 +64,7 @@ jest.mock('../models/WineVintagePrice', () => {
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
-// The self-apply path (2026-08-21) reaches the admin route's own approveProposal
+// The self-apply path reaches the admin route's own approveProposal
 // rather than duplicating the write. Mocked so this suite stays a unit test of
 // the TOOL's routing; the apply itself is covered by wineProposals.test.js and
 // the direct/gated decision by services/proposalDirectApply.test.js.
@@ -103,7 +103,7 @@ jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WR
 // below exercise the caveat it adds around that scan, not the scan itself.
 jest.mock('../services/crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn(async () => ({ rows: [] })) }));
 // propose_wine_correction names the registry's other spellings of a proposed
-// producer (2026-09-28); the lookup itself is unit-tested in its own suite.
+// producer; the lookup itself is unit-tested in its own suite.
 jest.mock('../services/producerSpelling', () => ({
   ...jest.requireActual('../services/producerSpelling'),
   otherProducerSpellings: jest.fn(async () => []),

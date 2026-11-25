@@ -1,7 +1,7 @@
 /**
  * Appellation input validation on the REST admin surface.
  *
- * WHY THIS TEST EXISTS (security audit 2026-07-30, L-1 + L-2):
+ * WHY THIS TEST EXISTS:
  *   L-1 — POST/PUT /api/admin/taxonomy/appellations accepted `synonyms` with
  *         no element-type check, no length cap and no array-size cap, while
  *         the MCP twin (promote_appellation) enforced `max(10)` × `max(200)`.

@@ -338,8 +338,8 @@ describe('POST /grapes regionalNames wiring', () => {
 });
 
 // ── Region DELETE guard ──────────────────────────────────────────────────────
-// A region referenced by a grape's regional display name must refuse deletion
-// (audit 2026-08-11): a dangling ref would silently drop curated display data.
+// A region referenced by a grape's regional display name must refuse deletion:
+// a dangling ref would silently drop curated display data.
 // Merge is the supported path — mergeRegions re-points regionalNames.region.
 
 describe('DELETE /regions/:id — grape regionalNames in-use guard', () => {
@@ -370,7 +370,7 @@ describe('DELETE /regions/:id — grape regionalNames in-use guard', () => {
 });
 
 // ── Country DELETE guard ─────────────────────────────────────────────────────
-// Same asymmetry the region guard closed (audit 2026-08-11 L-2): a country
+// Same asymmetry the region guard closed: a country
 // referenced only by a grape's country-level regional name must refuse
 // deletion — a dangling ref bricks that grape's next regionalNames save.
 

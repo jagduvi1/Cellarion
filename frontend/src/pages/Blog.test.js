@@ -1,7 +1,7 @@
 /**
  * Which tags the blog filter renders.
  *
- * The security-relevant rule (audit 2026-08-03, L-1): `activeTag` arrives from
+ * The security-relevant rule: `activeTag` arrives from
  * the query string, so rendering it unchecked let `?tag=<anything>` place an
  * attacker-chosen pill among the real ones. React escapes it, so this was never
  * XSS — but it was a convincing spot for "⚠ Verify your account here", and it

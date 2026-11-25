@@ -111,7 +111,7 @@ describe('applying it', () => {
     expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
   });
 
-  // Audit 2026-09-27 M6: every fix changes what the bottles' owners see in
+  // Every fix changes what the bottles' owners see in
   // their statistics and bottle lists — promoted or not — so their data
   // version moves (the read caches otherwise keep the old answer for up to
   // 30 minutes). Fire-and-forget: the fix never waits on it.
