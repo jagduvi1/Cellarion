@@ -1,7 +1,7 @@
 /**
- * Self-service cellar analytics (#987 Phase 0/1).
+ * Self-service cellar analytics.
  *
- * Two endpoints, both thin wrappers over services/analytics/*:
+ * Two analysis endpoints, both thin wrappers over services/analytics/*:
  *   GET  /api/analytics/catalogue — every field the caller may analyse
  *                                   (static core + their personal keys +
  *                                   the accepted public vocabulary)
@@ -10,8 +10,8 @@
  *
  * The engine treats the request as data, never code: field keys resolve
  * against the catalogue, operators against a per-type whitelist, values are
- * cast per declared type — see queryEngine.js for the invariants. Reads only;
- * no audit entries (nothing mutates).
+ * cast per declared type — see queryEngine.js for the invariants. These two
+ * only read, so they write no audit row; the dashboards and views below write.
  */
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
@@ -29,7 +29,7 @@ router.use(requireAuth);
 // is refused here, before a query turns it into a cast failure.
 router.param('id', (req, res, next, id) => (isValidId(id) ? next() : res.status(400).json({ error: 'Invalid ID' })));
 
-// ── Dashboards (#987, multi since the saved-views slice) ───────────────────
+// ── Dashboards ─────────────────────────────────────────────────────────────
 // Several NAMED dashboards per user; widgets' stored queries are DATA — the
 // engine revalidates on every render, so nothing here re-knows its rules.
 // The default 'My cellar' set still lives client-side for users with no row.
@@ -192,9 +192,9 @@ router.delete('/views/:id', async (req, res, next) => {
 });
 
 // The built-in preset keys, mirrored from frontend/src/utils/analyticsPresets.js
-// (an unvalidated presetKey allowed unbounded row
-// creation under arbitrary strings). Keep in sync when presets change — a
-// missing key here means "cannot star that preset", never data damage.
+// (an unvalidated presetKey would allow unbounded rows under arbitrary
+// strings). Keep in sync when presets change — a missing key here means
+// "cannot star that preset", never data damage.
 const ANALYTICS_PRESET_KEYS = new Set([
   'moneyByRegion', 'favouriteRegions', 'cellarByType', 'whatIDrink', 'agingRunway',
   'pastWindow', 'forgottenBottles', 'whereIShop', 'giftedVsDrunk',

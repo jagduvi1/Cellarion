@@ -6,8 +6,8 @@ const router = express.Router();
 // GET /api/exchange-rates — today's USD-based rates, served from the daily
 // snapshot the backend already keeps for price anchoring. Public and cheap:
 // at most ONE upstream call per day happens here, on the server, so the
-// browser no longer contacts open.er-api.com itself (audit 2026-09 F03-4:
-// every visitor's IP used to reach a provider the privacy policy never named).
+// browser never contacts open.er-api.com itself: a visitor's IP must not reach
+// a provider the privacy policy does not name.
 router.get('/', async (req, res) => {
   try {
     const snapshot = await getOrCreateDailySnapshot();

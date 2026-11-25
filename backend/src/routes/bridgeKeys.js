@@ -136,11 +136,11 @@ router.post('/', requireAuth, requireNonDemo, passwordConfirmLimiter, async (req
     if (activeCount >= MAX_ACTIVE_PER_USER) {
       return res.status(400).json({ error: `Maximum of ${MAX_ACTIVE_PER_USER} active bridge keys reached — revoke one first`, code: 'key_cap' });
     }
-    // Churn guard: the active-key cap alone is no cap at
-    // all, because revoking frees the slot immediately. Quotas and the import
-    // window now count per account, so re-minting no longer multiplies an
-    // allowance — this bounds the remaining nuisance (a fresh prefix per
-    // request to muddy attribution) and keeps a scripted loop out of the logs.
+    // Churn guard: the active-key cap alone is no cap at all, because revoking
+    // frees the slot immediately. Quotas and the import window count per
+    // account, so re-minting does not multiply an allowance — this bounds the
+    // remaining nuisance (a fresh prefix per request to muddy attribution) and
+    // keeps a scripted loop out of the logs.
     const mintedToday = await BridgeKey.countDocuments({
       user: req.user.id,
       createdAt: { $gte: new Date(Date.now() - KEY_CHURN_WINDOW_MS) },

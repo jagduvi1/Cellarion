@@ -208,10 +208,10 @@ router.post('/register', authLimiter, async (req, res) => {
     // Resolve any pending cellar shares for this email
     resolvePendingShares(user).catch(() => {});
 
-    // persistent, as /login and /refresh answer it: without it the app read the
-    // new account's session as browser-only and discarded the profile kept for
-    // an offline start (release audit 2026-09-27, L). Registration issues a
-    // "remember me" session (issueTokens' default).
+    // persistent, as /login and /refresh answer it: without it the app reads
+    // the new account's session as browser-only and discards the profile kept
+    // for an offline start. Registration issues a "remember me" session
+    // (issueTokens' default).
     res.status(201).json({
       token: accessToken,
       user: user.toJSON(),
@@ -389,7 +389,7 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 // POST /api/auth/verify-email - Verify email address
-// POST (not GET), security audit M-1. The email link points at the SPA page
+// POST, not GET. The email link points at the SPA page
 // /verify-email?token=…, which POSTs the token here from same-origin JS:
 //   - one-time-token burn by mail-security prefetchers: link scanners issue
 //     GETs, not the SPA's POST, so they do not consume the token.
@@ -493,7 +493,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
     // A system account answers like an unknown address: its links would only
     // land in an outgoing-mail log, where whoever reads it could sign in as it.
     if (!user || isReservedUsername(user.username) || user.emailVerified || !EMAIL_VERIFICATION_ENABLED) {
-      await equalizeLookupTiming(); // L-8: match the found-branch write cost
+      await equalizeLookupTiming(); // match the found-branch write cost
       return res.status(200).json(genericResponse);
     }
 
@@ -625,8 +625,8 @@ router.post('/refresh', noCookieIsNotAnAttempt, refreshIpLimiter, refreshLimiter
     // A server-side failure — the database mid-restart during a deploy, a
     // save racing a login on another device — says nothing about the
     // session. Answer "try again" and KEEP the cookie: nothing was rotated,
-    // so the token the client holds is still the live one. This used to
-    // clear the cookie and answer 401, signing people out on any hiccup.
+    // so the token the client holds is still the live one. Clearing it here
+    // would sign people out on any hiccup.
     console.error('Refresh error:', error);
     res.setHeader('Retry-After', '5');
     res.status(503).json({ error: 'Could not refresh the session right now, please try again' });
@@ -681,8 +681,8 @@ router.post('/change-password', requireAuth, requireNonDemo, authLimiter, async 
       client: clientHint(req),
     });
     // Revoke connected AI assistants (OAuth consent grants) — a third-party
-    // grant must not outlive the "secure my account" action (security report
-    // 2026-08-27). Personal API tokens (HA, climate) keep PAT semantics.
+    // grant must not outlive the "secure my account" action. Personal API
+    // tokens (HA, climate) keep PAT semantics.
     const revokedConnections = await revokeOAuthConnectionsForUser(user._id);
 
     logAudit(req, 'auth.change_password',
@@ -709,10 +709,10 @@ router.post('/logout', async (req, res) => {
   try {
     // Who is signing out: the bearer token when there is a valid one, else the
     // httpOnly refresh cookie itself. An offline session has no access
-    // token; when this route required one, logging out there wiped the device
-    // but left the server session and cookie alive — the next online start
-    // signed the same account straight back in. The cookie is SameSite=Lax,
-    // so another site cannot post this with it.
+    // token; requiring one would wipe the device but leave the server session
+    // and cookie alive, and the next online start would sign the same account
+    // straight back in. The cookie is SameSite=Lax, so another site cannot
+    // post this with it.
     const raw = req.cookies?.refreshToken;
     const hash = raw ? hashRefreshToken(raw) : null;
     let user = null;
@@ -807,7 +807,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 
     // A system account answers like an unknown address (see resend-verification).
     if (!user || isReservedUsername(user.username)) {
-      await equalizeLookupTiming(); // L-8: match the found-branch write cost
+      await equalizeLookupTiming(); // match the found-branch write cost
       return res.status(200).json(genericResponse);
     }
 
@@ -863,8 +863,8 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     await user.save();
     // Revoke connected AI assistants (OAuth consent grants): a password reset
     // is the user's explicit account-recovery signal, so a phished third-party
-    // grant must not survive it (security report 2026-08-27). Personal API
-    // tokens (HA, climate) carry a null oauthClientId and keep PAT semantics.
+    // grant must not survive it. Personal API tokens (HA, climate) carry a
+    // null oauthClientId and keep PAT semantics.
     const revokedConnections = await revokeOAuthConnectionsForUser(user._id);
 
     logAudit(req, 'auth.password_reset',

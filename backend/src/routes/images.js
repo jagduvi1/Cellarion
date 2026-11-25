@@ -67,11 +67,10 @@ const imageUploadLimiter = liveWindowLimiter({
   }
 });
 
-// Header-level magic-byte + dimension pre-checks used to live here. They are
-// gone: the /upload route now hands the bytes to services/imageOps, whose
-// sanitizeImageBuffer decodes-validates-and-strips in one fail-CLOSED step
-// (the old dimension check failed OPEN on unreadable headers). The per-request
-// MAX_IMAGES_PER_BOTTLE cap still lives here for the link-to-bottle route.
+// No header-level magic-byte or dimension pre-check here: the /upload route
+// hands the bytes to services/imageOps, whose sanitizeImageBuffer (imageSanitizer)
+// decodes-validates-and-strips in one fail-CLOSED step. The per-request
+// MAX_IMAGES_PER_BOTTLE cap lives here for the link-to-bottle route.
 
 const router = express.Router();
 
@@ -362,8 +361,8 @@ router.get('/:id', requireAuth, async (req, res) => {
     // only somm/admin, and only for an image tied to a wine that is still
     // pending (or the label scan itself, which exists for no other purpose and
     // is never public). It does NOT open ordinary users' bottle galleries to
-    // curators. The bytes themselves were always served by the unauthenticated
-    // random-UUID static mount (app.js), so this is the one gate that mattered.
+    // curators. The bytes themselves are served by the unauthenticated
+    // random-UUID static mount (app.js), so this is the one gate that matters.
     let curationRead = false;
     let curationWineId = null;
     if (!authorized && (req.user.roles?.includes('somm') || req.user.roles?.includes('admin'))) {
@@ -373,9 +372,8 @@ router.get('/:id', requireAuth, async (req, res) => {
         // wrong completion can still be corrected against the label, which is
         // the whole reason the scan outlives the queue at all. Outside that it
         // is an ordinary private photo of a wine nobody has been asked to
-        // identify, and this branch used to hand every one of them to any somm
-        // token. One definition, shared with the MCP tool
-        // (services/labelScanAccess).
+        // identify, which no somm token may read. One definition, shared with
+        // the MCP tool (services/labelScanAccess).
         const WineDefinition = require('../models/WineDefinition');
         const scanWine = image.wineDefinition
           ? await WineDefinition.findById(image.wineDefinition).select('pendingIdentity draft').lean()
@@ -543,7 +541,7 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
     }
 
     // Enforce the same per-bottle cap /upload applies — the normal AddBottle
-    // flow uploads bottleless images then links here, which used to bypass it.
+    // flow uploads bottleless images then links here, so this is where it binds.
     const existingCount = await BottleImage.countDocuments({ bottle: bottleId });
     if (existingCount + imageIds.length > MAX_IMAGES_PER_BOTTLE) {
       return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` });
@@ -593,7 +591,7 @@ router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
     }
     // Retry is for an image with NO processed file yet: a run that failed
     // ('uploaded'), or one an admin approved before rembg got to it
-    // ('approved' with no processedUrl) — the latter used to be stuck for good.
+    // ('approved' with no processedUrl) — without retry the latter is stuck.
     if (image.processedUrl || !['uploaded', 'approved'].includes(image.status)) {
       return res.status(400).json({ error: 'Image is not waiting to be processed' });
     }

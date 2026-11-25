@@ -32,23 +32,23 @@ const registerLimiter = rateLimit({
   message: { error: 'invalid_request', error_description: 'Too many client registrations from this address; try again later.' },
 });
 
-// Ceiling for the REST of the authorization server (security audit 2026-07-25
-// M-1). /authorize, /approve, /token and /revoke are exempt from the global
-// apiLimiter + writeLimiter (app.js `isMcp`) because a hosted platform's whole
-// user base refreshes hourly from one egress IP — but that exemption left them
-// with NO bound whatsoever, and frontend/nginx.conf carries no limit_req, so a
-// self-hosted instance had nothing at all in front of four unauthenticated
-// DB-touching endpoints.
+// Ceiling for the REST of the authorization server. /authorize, /approve,
+// /token and /revoke are exempt from the global apiLimiter + writeLimiter
+// (app.js `isMcp`) because a hosted platform's whole user base refreshes
+// hourly from one egress IP — but without this they would have NO bound
+// whatsoever, and frontend/nginx.conf carries no limit_req, so a self-hosted
+// instance would have nothing in front of four unauthenticated DB-touching
+// endpoints.
 //
 // This is a ceiling that EXISTS, not a tight one: the number is sized for
 // shared egress and admin-tunable (SuperAdmin → rate limits, mcp.oauthMax) so a
-// bad default is correctable without a deploy — the same lesson registerMax
-// learned on launch day. One shared bucket across the four endpoints keeps the
-// accounting simple; per-endpoint precision would buy nothing here because the
-// point is bounding aggregate load, not shaping it.
+// bad default is correctable without a deploy, like registerMax. One shared
+// bucket across the four endpoints keeps the accounting simple; per-endpoint
+// precision would buy nothing here because the point is bounding aggregate
+// load, not shaping it.
 //
 // Note this is NOT a credential-guessing control: auth codes and refresh tokens
-// are 256-bit random, so brute force was never the exposure. What it bounds is
+// are 256-bit random, so brute force is not the exposure. What it bounds is
 // unauthenticated DB load and unbounded OAuthAuthCode row creation.
 const oauthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -75,7 +75,7 @@ const {
   parseClientBasicAuth, rotateCredentials, tokenResponse,
 } = require('../services/mcpOAuth');
 
-// The OAuth 2.1 authorization server for the MCP connector (plan §2.4 Phase B).
+// The OAuth 2.1 authorization server for the MCP connector (docs/mcp-oauth.md).
 // Mounted at /api/mcp/oauth. Endpoints:
 //   POST /register   RFC 7591 Dynamic Client Registration (public, rate-limited)
 //   GET  /authorize  validate the request, then bounce the browser to the
@@ -86,7 +86,7 @@ const {
 //
 // The issued access token is a scoped, EXPIRING cel_ ApiToken (origin:'oauth'),
 // so /api/mcp auth, the SCOPE_ALLOWLIST, instant revoke and the connected-tokens
-// UI all work unchanged (middleware/apiTokenAuth.js).
+// UI treat it as any other token (middleware/apiTokenAuth.js).
 
 // /token and /revoke are application/x-www-form-urlencoded (RFC 6749 §4.1.3 /
 // RFC 7009). The global express.json() skips those content-types, so add a
@@ -116,10 +116,10 @@ const MAX_OAUTH_CONNECTIONS_PER_USER = 20; // Claude + ChatGPT + Desktop + … �
 // rotation. What the window gives up: a thief who replays a spent token
 // within a minute of the owner's rotation holds a live pair until the
 // owner's next refresh trips detection.
-// Usage check 2026-10-09: one connector replayed its revoked token every ten
-// minutes for a day and a half, because it never re-authorizes on
-// invalid_grant. An empty value means "unset" (compose forwards knobs as
-// ${X:-}), only an explicit 0 is strict.
+// A connector that never re-authorizes on invalid_grant replays a revoked
+// token indefinitely, so a lost rotation response must not end its connection.
+// An empty value means "unset" (compose forwards knobs as ${X:-}), only an
+// explicit 0 is strict.
 const REFRESH_REUSE_GRACE_MS = (process.env.OAUTH_REFRESH_GRACE_S === undefined || process.env.OAUTH_REFRESH_GRACE_S === ''
   ? 60
   : Math.max(0, parseInt(process.env.OAUTH_REFRESH_GRACE_S, 10) || 0)) * 1000;
@@ -400,10 +400,9 @@ async function authenticateClient(req) {
 
 // ── POST /token — code exchange + refresh rotation ───────────────────────────
 router.post('/token', oauthLimiter, async (req, res) => {
-  // Every refusal is logged — client, grant and reason, never a token value.
-  // A connector looping on a dead refresh token was invisible for a day and a
-  // half (usage check 2026-10-09). Request strings ride as log ARGUMENTS,
-  // never inside the format string.
+  // Every refusal is logged — client, grant and reason, never a token value —
+  // so a connector looping on a dead refresh token is visible. Request strings
+  // ride as log ARGUMENTS, never inside the format string.
   const grantType = typeof req.body?.grant_type === 'string' ? req.body.grant_type : undefined;
   // Whether the client sent its credentials in the Authorization header. The
   // log records that it did, never the header or the secret in it.
@@ -433,7 +432,7 @@ router.post('/token', oauthLimiter, async (req, res) => {
 
     if (grantType === 'authorization_code') {
       const { code, code_verifier, redirect_uri, resource } = req.body;
-      // typeof, not truthiness. The urlencoded parser below only ever
+      // typeof, not truthiness. The urlencoded parser above only ever
       // yields strings, but app.js mounts express.json() on the /api/mcp
       // PREFIX — which matches /api/mcp/oauth/* — so a caller sending
       // Content-Type: application/json can put an object here. hashCode()
@@ -472,7 +471,7 @@ router.post('/token', oauthLimiter, async (req, res) => {
         resource: codeDoc.resource || resourceUrl(),
         ...cred.fields,
       });
-      // Mark used → make the client permanent (drop the never-used TTL, M-6).
+      // Mark used → make the client permanent (drop the never-used TTL).
       OAuthClient.updateOne({ _id: client._id }, { $set: { lastUsedAt: new Date() }, $unset: { expiresAt: '' } }).catch(() => {});
       logAudit(req, 'oauth.token_issued', { type: 'apiToken', id: token._id }, { clientId: client.clientId, scopes: codeDoc.scopes });
       res.setHeader('Cache-Control', 'no-store');

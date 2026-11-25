@@ -86,12 +86,10 @@ router.get('/', optionalAuth, async (req, res) => {
       //
       // English ALSO matches threads with no language field at all. A Mongoose
       // default applies when a document is created, never to documents that
-      // already exist — so the release that added this field left every
-      // pre-existing thread unmatched, and the English forum rendered empty on
-      // production until the rows were backfilled. The backfill
-      // is done; this makes the query correct on its own, so a restored
-      // snapshot or a document written around the schema cannot empty the
-      // forum again. `null` matches missing fields in MongoDB.
+      // already exist, so a thread can lack the field. Matching the missing
+      // field keeps the query correct on its own: a restored snapshot or a
+      // document written around the schema cannot empty the English forum.
+      // `null` matches missing fields in MongoDB.
       filter.language = languageFilter === DEFAULT_LANGUAGE
         ? { $in: [DEFAULT_LANGUAGE, null] }
         : { $eq: languageFilter };
@@ -125,12 +123,12 @@ router.get('/', optionalAuth, async (req, res) => {
     // Meilisearch path: fuzzy match on title/body/authorName/wineName,
     // hydrate hits from MongoDB to keep the response shape consistent.
     //
-    // Skipped when a blogPost scope is present: the
-    // Meili index doesn't carry blogPost, so this branch used to ignore the
-    // filter and a q+blogPost request silently widened from "threads about
-    // this post" to "all threads matching q" — answering a different question
-    // than the one asked. Exact scope beats fuzzy relevance for a post's own
-    // thread list, and the Mongo path below applies both together honestly.
+    // Skipped when a blogPost scope is present: the Meili index doesn't carry
+    // blogPost, so this branch would ignore the filter and a q+blogPost request
+    // would silently widen from "threads about this post" to "all threads
+    // matching q" — answering a different question than the one asked. Exact
+    // scope beats fuzzy relevance for a post's own thread list, and the Mongo
+    // path below applies both together honestly.
     if (query && !filter.blogPost && searchService.getIsAvailable()) {
       try {
         const { ids, estimatedTotalHits } = await searchService.searchDiscussions(query, {
@@ -975,10 +973,10 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
       console.error('[discussions] mention/watcher resolution failed:', err.message);
     }
 
-    // Fire-and-forget, same as the old per-recipient calls — delivery must
-    // never block or fail the reply create. Every item here is triggered by the
-    // replier, so tag them with actor so GDPR erasure can remove notifications
-    // that name this user from other users' feeds on their deletion.
+    // Fire-and-forget: delivery must never block or fail the reply create.
+    // Every item here is triggered by the replier, so tag them with actor so
+    // GDPR erasure can remove notifications that name this user from other
+    // users' feeds on their deletion.
     createNotifications(notificationItems.map(i => ({ ...i, actor: req.user.id }))).catch(err =>
       console.error('[discussions] reply notification batch failed:', err.message)
     );

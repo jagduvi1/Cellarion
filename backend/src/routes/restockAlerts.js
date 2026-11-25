@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
     const VALID_STATUSES = ['active', 'dismissed', 'resolved'];
     const requestedStatus = String(req.query.status || 'active');
     // 400 on unknown values ('all' is the explicit everything selector) —
-    // a typo used to silently return every status mixed together.
+    // a typo must not silently return every status mixed together.
     if (requestedStatus !== 'all' && !VALID_STATUSES.includes(requestedStatus)) {
       return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}, all` });
     }

@@ -9,8 +9,7 @@ const { isDraining } = require('../services/shutdown');
 //
 // 503 while the process is shutting down (services/shutdown): a deploy's
 // health gate and the container healthcheck must read the process that is
-// going as not ready, not as fine — until 2026-09-27 it answered 200 to the
-// last (release audit, L).
+// going as not ready, not as fine.
 router.get('/', (req, res) => {
   const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
   if (isDraining()) {

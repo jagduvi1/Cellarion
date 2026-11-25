@@ -34,10 +34,10 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Key on the real client, as every other per-IP limiter does. Without it
-  // the key was req.ip — the Cloudflare edge on the hosted instance — so every
-  // visitor arriving through the same edge shared ONE 60-request bucket, and
-  // this router also serves /display-names, which the logged-in app loads
-  // (audit 2026-09-02, phase 1).
+  // the key would be req.ip — the Cloudflare edge on the hosted instance — so
+  // every visitor arriving through the same edge would share ONE 60-request
+  // bucket, and this router also serves /display-names, which the logged-in
+  // app loads.
   keyGenerator: rateLimitKey,
 });
 router.use(limiter);
@@ -64,9 +64,9 @@ async function countWinesBy(field, { unwind = false } = {}) {
   const pipeline = unwind
     ? [
         { $match: { nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true } } },
-        // $setUnion dedups the array first: the old countDocuments({grapes: id})
-        // counted a wine once however many times the grape appeared in its
-        // array; a bare $unwind would count every occurrence.
+        // $setUnion dedups the array first: a wine counts once however many
+        // times the grape appears in its array; a bare $unwind would count
+        // every occurrence.
         { $project: { values: { $setUnion: [`$${field}`, []] } } },
         { $unwind: '$values' },
         { $group: { _id: '$values', count: { $sum: 1 } } },
@@ -91,13 +91,13 @@ function clearTaxonomyListCache() {
 // Shared wine projection for public lists
 const WINE_PROJECTION = 'name producer slug type colour appellation region country image communityRating';
 
-// Registry lockdown (2026-09-06, L2): these four listings are the one
-// unauthenticated surface that pages through the registry. At 100 a page with
-// an offset up to a million they enumerated every wine in a single limiter
-// window; nobody legitimate reads page 400 of a country. 48 a page, 2,000
-// deep, `total` still returned so the client can show it.
+// Registry lockdown: these four listings are the one unauthenticated surface
+// that pages through the registry. Large pages with an unbounded offset would
+// enumerate every wine in a single limiter window; nobody legitimate reads
+// page 400 of a country. 48 a page, 2,000 deep, `total` still returned so the
+// client can show it.
 const WINE_PAGE = { limit: 24, maxLimit: 48, maxOffset: 2000 };
-// Canaries (L4) sit in the DEEP pages only — a customer browsing the first
+// Canaries sit in the DEEP pages only — a customer browsing the first
 // screens never meets one, a walker paging to the end does. `total` always
 // excludes them so the visible page count is honest.
 const CANARY_DEPTH = 480;

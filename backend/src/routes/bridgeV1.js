@@ -27,7 +27,7 @@ const { quota, usageFor, capsNow } = require('../services/bridgeQuota');
 const rateLimitsConfig = require('../config/rateLimits');
 const { CURRENT_REGISTRY_TERMS_VERSION } = require('../config/legal');
 
-// Registry Bridge, protocol v1 (REGISTRY_LOCKDOWN_PLAN §6). What a self-hosted
+// Registry Bridge, protocol v1 (docs/registry-bridge.md). What a self-hosted
 // Cellarion may do with the shared registry, one wine at a time:
 //   GET  /search?q=          up to 10 identities (no profiles)
 //   GET  /wines/:id          one wine in full: identity, profile, windows, values
@@ -91,7 +91,7 @@ const ipLimiter = rateLimit({
     res.status(429).json({ error: 'Too many bridge requests from this network — try again in a few minutes.', code: 'rate_limited' });
   },
 });
-// Per-key burst limiter (plan §6: 60 per minute by default). Tunable at
+// Per-key burst limiter (60 per minute by default). Tunable at
 // runtime together with the daily quotas (config/rateLimits.js `bridge`
 // group); read per request so a change needs no restart.
 const BURST_PER_MINUTE = 60;
@@ -196,8 +196,7 @@ function sendResult(res, r, ok) {
  *
  * The AUDIT row is written for every hit; the notification is throttled to one
  * per key per day. Canary ids are discoverable from public pages, so an
- * unthrottled notify was a way to bury admins in their own alarm (audit
- * 2026-09-08).
+ * unthrottled notify would be a way to bury admins in their own alarm.
  */
 async function reportCanaryFetch(req, wine) {
   try {
@@ -244,9 +243,9 @@ router.get('/me', async (req, res) => {
 });
 
 // GET /v1/search?q=  — identities only, capped like the web UI's add-bottle search.
-// Validation runs BEFORE the quota is spent: a malformed call used to cost a
-// unit, and with one change check a day that meant a single typo silenced the
-// weekly refresh until UTC midnight.
+// Validation runs BEFORE the quota is spent: with one change check a day, a
+// malformed call that cost a unit would let a single typo silence the weekly
+// refresh until UTC midnight.
 function validSearch(req, res, next) {
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   if (q.length < QUERY_MIN || q.length > QUERY_MAX) {
@@ -293,8 +292,8 @@ router.get('/search', validSearch, quota('searches'), async (req, res) => {
         .lean();
     }
     // A search is a read of the registry too — ten identities a call, hundreds
-    // of calls a day. Counting only single fetches left the copy detector
-    // blind to this path. Detection counts on the owner.
+    // of calls a day. Counting only single fetches would leave the copy
+    // detector blind to this path. Detection counts on the owner.
     if (wines.length) {
       recordRead({ key: `user:${req.user.id}`, kind: 'user' }, wines.map((w) => w._id)).catch(() => {});
     }
@@ -319,8 +318,8 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
     if (!wine || wine.nonWine) return res.status(404).json({ error: 'Wine not found', code: 'not_found' });
 
     // Detection counts on the OWNER: keys are re-mintable, so a per-key row
-    // let one account stay under the alert level by cycling keys (audit
-    // 2026-09-08). The per-key row stays for attribution on the admin page.
+    // would let one account stay under the alert level by cycling keys. The
+    // per-key row stays for attribution on the admin page.
     await recordRead({ key: `user:${req.user.id}`, kind: 'user' }, wine._id);
     recordRead({ key: `key:${req.bridge.key.id}`, kind: 'key' }, wine._id).catch(() => {});
     if (wine.canary) await reportCanaryFetch(req, wine);
@@ -342,7 +341,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
         // Published registry values only; who contributed them stays on the
         // hosted page.
         // A field whose figures exist only per vintage has a null wine-wide
-        // value; dropping it took its overrides with it.
+        // value; dropping it would take its overrides with it.
         values: values && values.ok
           ? values.fields.filter((f) => f.value !== null && f.value !== undefined || f.wineValue !== null && f.wineValue !== undefined || (f.overrides || []).length > 0)
             .map((f) => ({ key: f.key, value: f.value, wineValue: f.wineValue ?? null, overrides: f.overrides || [] }))
@@ -355,22 +354,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
   }
 });
 
-/**
- * The latest change to what a fetch carries BESIDES the wine record: its
- * reviewed drink windows and its published values. Neither touches the wine's
- * own updatedAt, so a change check on that alone never reported a window a
- * sommelier reviewed after an install copied the wine (the install would keep
- * "awaiting staff review" while the hosted wine has its window). A row's setAt / decidedAt counts as well as its updatedAt:
- * updates written with $set skip the pre-save hook that stamps updatedAt.
- *
- * A window withdrawn back to pending, or a value taken down, leaves nothing
- * here to report, and the install keeps what it copied: a fetch only adds and
- * replaces (services/registryBridge applyWindows / applyValues).
- *
- * @param {Array} wineIds
- * @returns {Promise<Map<string, Date>>}
- */
-// Windows and values count from this release on. An install whose watermark
+// Windows and values count from this date on. An install whose watermark
 // is older was never told about the ones reviewed between its copy and its
 // last check, and comparing them to that watermark would leave them missing
 // for good. So until its watermark passes this date it is told about every
@@ -380,6 +364,21 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
 // catch-up resumes next week.
 const ATTACHED_COUNTED_FROM = new Date('2026-10-14T00:00:00Z');
 
+/**
+ * The latest change to what a fetch carries BESIDES the wine record: its
+ * reviewed drink windows and its published values. Neither touches the wine's
+ * own updatedAt, so a check on that alone would miss a window reviewed after
+ * an install copied the wine (it would keep "awaiting staff review" while the
+ * hosted wine has its window). A row's setAt / decidedAt counts as well as its
+ * updatedAt: $set updates skip the pre-save hook that stamps updatedAt.
+ *
+ * A window withdrawn back to pending, or a value taken down, leaves nothing
+ * here to report, and the install keeps what it copied: a fetch only adds and
+ * replaces (services/registryBridge applyWindows / applyValues).
+ *
+ * @param {Array} wineIds
+ * @returns {Promise<Map<string, Date>>}
+ */
 async function latestAttachedChange(wineIds) {
   const latest = new Map();
   if (!wineIds.length) return latest;
@@ -446,7 +445,7 @@ router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, r
 
 // POST /v1/requests — { wineName, sourceUrl, sourceUrls?, image?, backImage?, follow? }
 // → the hosted wine-request queue. sourceUrls (up to three links, sourceUrl
-// first) and backImage arrived with #1460; an older install sends neither.
+// first) and backImage are optional; an older install sends neither.
 router.post('/requests', quota('contributions'), async (req, res) => {
   try {
     const r = await createWineRequest(req.user.id, {
@@ -454,10 +453,10 @@ router.post('/requests', quota('contributions'), async (req, res) => {
       image: req.body?.image, backImage: req.body?.backImage,
     }, { via: 'bridge', req });
     if (r.error) return res.status(r.error.status || 400).json({ error: r.error.message, code: 'invalid' });
-    // An install from v1.264.0 says it will follow the request (follow: true):
-    // it asks for the outcome and tells its own requester, so the decision
-    // here stays silent for the key owner (models/WineRequest installFollowsAt).
-    // An older one sends nothing and is marked on its first GET /requests.
+    // An install that will follow the request says so (follow: true): it asks
+    // for the outcome and tells its own requester, so the decision here stays
+    // silent for the key owner (models/WineRequest installFollowsAt). One that
+    // sends nothing is marked on its first GET /requests.
     if (req.body?.follow === true) {
       const WineRequest = require('../models/WineRequest');
       await WineRequest.updateOne({ _id: r.wineRequest._id }, { $set: { installFollowsAt: new Date() } })
@@ -473,7 +472,7 @@ router.post('/requests', quota('contributions'), async (req, res) => {
 });
 
 // GET /v1/requests?ids=a,b,… — what became of requests this install filed.
-// Before this existed a request answered here stayed "pending" on the install
+// Without it a request answered here would stay "pending" on the install
 // for good. Only the key owner's own bridge-filed requests answer (any of
 // their keys, so a rotated key still learns the outcome); any other id is
 // simply absent from the answer, never confirmed to exist. A resolved

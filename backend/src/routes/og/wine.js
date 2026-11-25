@@ -22,9 +22,9 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     const { idOrSlug } = req.params;
     const isId = isValidId(idOrSlug);
     // Quarantined non-wines are 404 to crawlers, matching the taxonomy listing
-    // routes below and the sitemap. #844 hid them from every discovery surface
-    // but left this detail page serving their title/OG/JSON-LD in full to
-    // anything that had the URL.
+    // routes (og/taxonomy.js) and the sitemap: hidden from every discovery
+    // surface, this detail page must not serve their title/OG/JSON-LD in full
+    // to anything that has the URL.
     const hidden = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
     // slugFilter resolves SUPERSEDED slugs too, so a crawler's index entry from
     // before a name correction still resolves — and is 301'd to the new slug
@@ -41,9 +41,9 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     if (!wine) {
       return res.status(404).send('Not found');
     }
-    // Registry lockdown (2026-09-06, L4): count the read per address so the
-    // daily readers report sees crawler and copier volume alike. Never gated
-    // here — this is the page verified search crawlers are routed to.
+    // Registry lockdown: count the read per address so the daily readers
+    // report sees crawler and copier volume alike. Never gated here — this is
+    // the page verified search crawlers are routed to.
     recordRead(readerFor(req), wine._id);
 
     // Canonicalise to the CURRENT slug URL when one exists — from an ObjectId
@@ -58,8 +58,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     // Keep the SEO <title> readable and ~under 60 chars: append the " — Cellarion"
     // brand when it fits, else use the bare wine title, else truncate on a word
-    // boundary with an ellipsis. (The old logic sliced mid-word at 57 and dropped
-    // the brand for any 48–57-char title.)
+    // boundary with an ellipsis.
     const fullTitle = `${wine.name} — ${wine.producer}`;
     const pageTitle = fullTitle; // og:/twitter: title — the clean wine name
     const BRAND = ' — Cellarion';

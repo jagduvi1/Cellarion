@@ -30,7 +30,7 @@ const { displayProfile } = require('../utils/profileLanguage');
 const mongoose = require('mongoose');
 const { isValidId } = require('../utils/validation');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
-// shared service so the REST routes and the MCP tools can never drift (§7).
+// shared service so the REST routes and the MCP tools can never drift.
 const {
   addBottle, validateBottleCommitFields, updateBottleFields, consumeBottle, restoreBottle, removeBottleCascade,
   openBottle, pourFromBottle, closeBottle, markArrived, changeBottleWine,
@@ -60,12 +60,12 @@ const tokenListCache = new Map(); // `${userId}|${query}` -> { at, version, body
 const TOKEN_LIST_MAX_AGE_MS = 30 * 60 * 1000;
 const TOKEN_LIST_CACHE_MAX_ENTRIES = 2000;
 // Bounded in bytes as well as entries: a big cellar's page is hundreds of KB,
-// and 2,000 of those would be most of the process's memory (release audit
-// 2026-09-27, L). One answer larger than the whole bound is not kept.
+// and 2,000 of those would be most of the process's memory. One answer larger
+// than the whole bound is not kept.
 const TOKEN_LIST_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 let tokenListCacheBytes = 0;
 // The params in a stable order, encoded so that no value can look like another
-// key (`a=1&b=2` typed as one value used to read like two params) and so that a
+// key (`a=1&b=2` typed as one value must not read like two params) and so that a
 // repeated param (?limit=10&limit=20 — parsePagination reads it) is part of the
 // key instead of dropped. The handler ignores everything else.
 const canonicalQuery = (query) => JSON.stringify(Object.keys(query).sort()
@@ -79,8 +79,8 @@ const MAX_CUSTOM_FIELDS = 20;
 
 // All routes require authentication
 router.use(requireAuth);
-// Writes sent with an Idempotency-Key (the offline queue, #1355) apply at
-// most once; without the header nothing changes.
+// Writes sent with an Idempotency-Key (the offline queue) apply at most once;
+// without the header nothing changes.
 router.use(idempotency);
 
 // GET /api/bottles — the bottles in the cellars the user owns, narrowed, sorted
@@ -170,19 +170,15 @@ router.get('/', async (req, res) => {
 //                      The three scan fields are curation evidence for a
 //                      pendingIdentity mint and are ignored otherwise — see
 //                      services/wineCommit.
-// The UI used to mint the WineDefinition in step 1 of the add flow (POST
-// /api/wines/find-or-create), before any bottle existed — a user who abandoned
-// the form left an orphan registry row forever. Measured on prod 2026-08-10:
-// 31 zero-bottle createdVia:'ui' rows; one user minted "Domaine de Riquewihr —
-// Kaefferkopf" (village-as-producer, likely fictitious) then attached their
-// bottle to a different existing wine two minutes later. The wine is now
-// resolved-or-minted HERE, inside the bottle create — the same commit-time
-// pattern as import /confirm and the MCP add_bottle tool, via the same
-// findOrCreateWine chokepoint (dedup, soft zone, taxonomy mint gates).
+// The wine is resolved-or-minted HERE, inside the bottle create, never in an
+// earlier step of the add flow: a user who abandons the form must not leave an
+// orphan registry row behind. Same commit-time pattern as import /confirm and
+// the MCP add_bottle tool, via the same findOrCreateWine chokepoint (dedup,
+// soft zone, taxonomy mint gates).
 // Soft-zone: when very similar wines already exist, this returns 200
 // { candidates } and creates NOTHING — the client re-submits with either an
-// existing wineDefinition id or newWine + confirmCreate:true (identical
-// semantics to the old find-or-create route, so the UI dialog is unchanged).
+// existing wineDefinition id or newWine + confirmCreate:true. The candidates
+// have the shape the step-1 lookup (POST /api/wines/find-or-create) answers.
 router.post('/', requireNonDemo, async (req, res) => {
   try {
     const { cellar, wineDefinition, newWine, price, personalData: customFields } = req.body;
@@ -251,7 +247,7 @@ router.post('/', requireNonDemo, async (req, res) => {
       wineDoc = minted.wine;
     }
 
-    // ONE shared implementation with the MCP add_bottle tool (plan §7):
+    // ONE shared implementation with the MCP add_bottle tool:
     // validation, defaults, priceSetAt + FX snapshot, journey seed, migration
     // helpers (dateAdded / addToHistory), indexing, vintage-profile seed,
     // audit and the gated AI side effects all live in bottleOps.addBottle.
@@ -279,8 +275,8 @@ router.post('/', requireNonDemo, async (req, res) => {
     if (Array.isArray(customFields) && customFields.length > 0) {
       // Say what was dropped. A silent truncation is the one failure mode the
       // caller cannot see: the bottle is 201 and the field simply is not there.
-      // One line for all of them: echoing one per dropped element let a 64 kB
-      // body come back as ~1.5 MB of repeats (release audit 2026-09-27, L).
+      // One line for all of them: one per dropped element would let a small
+      // body come back as megabytes of repeats.
       if (customFields.length > MAX_CUSTOM_FIELDS) {
         const dropped = customFields.length - MAX_CUSTOM_FIELDS;
         customFieldErrors.push({
@@ -362,8 +358,6 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     const { bottle, cellar, cellarRole: role } = req;
     await bottle.populate(WINE_POPULATE_KEEP_CREATOR);
 
-    // Join the historical rate snapshot for the date this price was entered.
-    // Exposed as priceCurrencyRates so the frontend needs no changes.
     const bottleObj = bottle.toObject();
     // Regional grape display names resolved against the wine's own
     // country/region (additive `displayName`; canonical `name` untouched).
@@ -384,6 +378,8 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       // token reads the English profile only (utils/profileLanguage).
       bottleObj.wineDefinition.aiProfile = displayProfile(bottleObj.wineDefinition.aiProfile, { token: !!req.apiToken });
     }
+    // The exchange-rate snapshot of the day this price was entered, as
+    // priceCurrencyRates.
     if (bottle.priceSetAt) {
       const date = bottle.priceSetAt.toISOString().slice(0, 10);
       const snapshot = await getSnapshotForDate(date);
@@ -418,19 +414,18 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       $or: pendingImgOr,
       uploadedBy: req.user.id,
       // Pending OR approved — the uploader's own photo must not vanish from
-      // the hero the moment it is approved (same rule as the cellar list,
-      // discussion #1227).
+      // the hero the moment it is approved (same rule as the cellar list).
       status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
-      // Never a label scan — same rule as the cellar list (routes/cellars.js
-      // attachBottleImageUrls): the scanner's raw
-      // frame is private curation evidence, not a bottle photo.
+      // Never a label scan — same rule as the cellar list
+      // (services/bottleImageUrls): the scanner's raw frame is private
+      // curation evidence, not a bottle photo.
       kind: { $ne: 'label-scan' },
     }).sort({ createdAt: -1 }).limit(OWN_PHOTO_CANDIDATES).lean();
-    // Same order as the cellar list (routes/cellars.js attachBottleImageUrls),
-    // so the card and the page agree: this
-    // bottle's own photo, else the viewer's photo of the same vintage, else
-    // the vintage's official photo, else the wine's registry image (client),
-    // and only then the viewer's photo of another vintage.
+    // Same order as the cellar list (services/bottleImageUrls), so the card
+    // and the page agree: this bottle's own photo, else the viewer's photo of
+    // the same vintage, else the vintage's official photo, else the wine's
+    // registry image (client), and only then the viewer's photo of another
+    // vintage.
     const thisVintage = photoVintage(bottle.vintage);
     const vintageOfPhoto = (img) => photoVintage(img.vintage) || (img.bottle ? vintageOfSibling.get(String(img.bottle)) : null) || null;
     const pendingImg = ownPhotos.find((img) => img.bottle && String(img.bottle) === String(bottle._id))
@@ -601,7 +596,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
 
-    // ifUnchanged (offline queue, #1355): the values of notes / rating /
+    // ifUnchanged (offline queue): the values of notes / rating /
     // ratingScale the user saw when they edited offline. A field someone else
     // has changed since — and not to the same new value — is a conflict: 409
     // with the current values, so the user chooses instead of one edit
@@ -620,7 +615,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       }
     }
 
-    // ONE shared implementation with the MCP update_bottle tool (plan §7):
+    // ONE shared implementation with the MCP update_bottle tool:
     // validation, vintage/size coercion, change detection, priceSetAt
     // anchoring, notifier-marker reset, re-index, vintage re-embed and the
     // { field: { from, to } } audit all live in bottleOps.updateBottleFields.
@@ -705,7 +700,7 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
     // today. The service validates it (a real date, not in the future);
     // absent → now. The bulk action takes the same field.
     const { reason = 'drank', note, rating, consumedRatingScale, consumedAt, ifActive } = req.body;
-    // ifActive (offline queue, #1355): only consume a bottle still in the
+    // ifActive (offline queue): only consume a bottle still in the
     // cellar — one consumed elsewhere meanwhile must not have its record
     // overwritten by a queued consume. Absent → unchanged behaviour.
     if (ifActive === true && req.bottle.status !== 'active') {
@@ -944,11 +939,11 @@ router.post('/:id/restore', requireBottleAccess('editor'), async (req, res) => {
 // The bottle disappears from cellar, racks, search, and stats as if it had
 // never been added — into the cellar's "Recently deleted" for TRASH_DAYS, like
 // any delete in the app (services/bottleTrash), so a slip on "Added by
-// mistake?" can be undone. It used to be gone for good. The audit log keeps the
-// original `bottle.add` row plus a `bottle.undo` row so admins can still tell
-// a mistaken add from a deletion. Active (or on-order) bottles only — consumed
-// bottles must use a different path. The MCP undo tools call the service
-// layer directly and are unchanged.
+// mistake?" can be undone. The audit log keeps the original `bottle.add` row
+// plus a `bottle.undo` row so admins can still tell a mistaken add from a
+// deletion. Active (or on-order) bottles only — consumed bottles must use a
+// different path. The MCP undo_last tool reverts through mcp/revert.js, not
+// through this route.
 // Response: { message, batchId, purgeAt } — batchId restores it (POST /trash/restore).
 router.post('/:id/undo', requireBottleAccess('editor'), async (req, res) => {
   try {

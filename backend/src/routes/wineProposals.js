@@ -1,8 +1,8 @@
 /**
- * User-facing wine-correction suggestions (#985 Slice A) — thin HTTP wrappers
- * over services/wineProposalOps.js (shared with the MCP tool
- * suggest_wine_correction). Regular users file field corrections into the
- * SAME admin queue the sommelier flow uses; nothing auto-applies.
+ * User-facing wine-correction suggestions — thin HTTP wrappers over
+ * services/wineProposalOps.js (shared with the MCP tool suggest_wine_correction).
+ * Field corrections go into the SAME admin queue the sommelier flow uses, and
+ * apply at once only where contributions are not reviewed (trustedContributions).
  */
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');

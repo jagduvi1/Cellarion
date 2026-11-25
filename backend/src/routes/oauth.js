@@ -228,7 +228,7 @@ async function upsertSsoUser(provider, claims, { trustEmailVerified = false, iss
  * Adapter: map a passport-google-oauth20 profile onto the neutral claim shape.
  * Google asserts email verification itself and is an open issuer, so it never
  * blanket-trusts — trustEmailVerified stays false and the email_verified claim
- * is authoritative. Behaviour is identical to the pre-refactor path.
+ * is authoritative.
  */
 async function upsertGoogleUser(profile) {
   const emailEntry = Array.isArray(profile.emails) ? profile.emails[0] : null;
@@ -381,8 +381,8 @@ if (OIDC_ENABLED) {
 // session. Registered for EITHER provider rather than only inside the Google
 // block, so an OIDC-only deployment is set up the same way a Google one is.
 // Defensive rather than load-bearing: passport 0.7 tolerates authenticate()
-// without initialize() when sessions are off, so the old placement works today
-// — but that is undocumented tolerance, not a promise.
+// without initialize() when sessions are off — but that is undocumented
+// tolerance, not a promise.
 if (GOOGLE_ENABLED || OIDC_ENABLED) {
   router.use(passport.initialize());
 }

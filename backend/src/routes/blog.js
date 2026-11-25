@@ -100,9 +100,9 @@ router.get('/', asyncHandler(async (req, res) => {
 // GET /api/blog/tags — Tags of the listed posts (the originals), most-used first
 //
 // Ordered by how many posts carry the tag rather than alphabetically. The blog
-// page shows only the first handful before a "show all" toggle, and with close
-// to a hundred tags the alphabetical head ("3d", "ai", "analytics") is close to
-// the least useful slice available. Ties break alphabetically so the order is
+// page shows only the first handful before a "show all" toggle, and with many
+// tags the alphabetical head ("3d", "ai", "analytics") is close to the least
+// useful slice available. Ties break alphabetically so the order is
 // stable. Response shape: an array of tag strings.
 router.get('/tags', asyncHandler(async (req, res) => {
   const rows = await BlogPost.aggregate([
