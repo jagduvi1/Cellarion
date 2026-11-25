@@ -1,6 +1,5 @@
 /**
  * Shared per-user daily AI budget + site-wide daily kill-switch.
- * (SECURITY_AUDIT_2026-07-08 M-2 / L-14.)
  *
  * One debit per actual Anthropic call across: import identify (per unique
  * wine that reaches the AI step), scan-label, identify-text, ai-info, and
@@ -129,9 +128,9 @@ async function tryDebitAi(userId, { isDemo = false } = {}) {
   // registry writes — throwaway accounts (no email, 3 per IP per hour, 2h TTL)
   // must never buy paid inference: ~40 demo sessions at the aiBurst rate would
   // drain the whole global daily cap. Do not weaken this on the grounds that a
-  // given AI route no longer writes to the registry (identify-text became
-  // read-only in 2026-08); the spend argument is independent of that, and this
-  // check is also what keeps demo accounts out of identify-text entirely.
+  // given AI route does not write to the registry (identify-text is
+  // read-only); the spend argument is independent of that, and this check is
+  // also what keeps demo accounts out of identify-text entirely.
   // Registry writes are guarded separately, by requireNonDemo on POST
   // /api/wines/find-or-create. The UI surfaces AI features as "sign up to use";
   // a direct API call gets this clean denial (`code:'demo_disabled'`).

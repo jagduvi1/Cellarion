@@ -34,8 +34,7 @@ async function attachBottleImageUrls(bottles, userId) {
   // Sibling bottles: the viewer's OTHER bottles of the same wines, whether or
   // not they are on this page. A photo uploaded while the bottle still waited
   // for its wine request carries no wineDefinition at all, so the by-wine
-  // arm never sees it — the photo's bottle is the only
-  // way to learn its wine.
+  // arm never sees it — the photo's bottle is the only way to learn its wine.
   const wineOfBottle = {};
   // …and each bottle's vintage, so a photo pinned to a sibling counts as a
   // photo of THAT bottle's vintage even before the row carries its own tag

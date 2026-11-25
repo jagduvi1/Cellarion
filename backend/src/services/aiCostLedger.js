@@ -2,10 +2,10 @@
  * AI spend ledger — records what every Claude call actually used,
  * and turns it into dollars for SuperAdmin → AI.
  *
- * Why: the AI bill is the platform's largest running cost, yet only Cellar Chat
- * ever recorded tokens. Every other call — label scans, import identification,
- * wine profiles — could only be estimated from prompt lengths, so a change meant
- * to lower the bill (prompt caching, a cheaper model) could not be measured.
+ * Why: the AI bill is the platform's largest running cost. Without a record per
+ * call, label scans, import identification and wine profiles can only be
+ * estimated from prompt lengths, and a change meant to lower the bill (prompt
+ * caching, a cheaper model) cannot be measured.
  *
  * Recording is fire-and-forget and never fails the caller: a ledger outage must
  * not cost a user their scan. It is a no-op without a live database connection
@@ -18,11 +18,11 @@
 const mongoose = require('mongoose');
 const AiCostStat = require('../models/AiCostStat');
 
-// Anthropic list prices, USD per million tokens — platform.claude.com pricing,
-// checked 2026-09-29 (Sonnet 5.5, released 2026-09-28, has Sonnet 5's prices,
-// caching included; Sonnet 5 kept its $2/$10 launch price). One entry per
-// model aiConfig can select (VALID_CHAT_MODELS). A model missing here (a
-// self-hosted AI_PROVIDER=openai install) is recorded but not priced.
+// Anthropic list prices, USD per million tokens — platform.claude.com pricing
+// as of PRICES_CHECKED_AT (Sonnet 5.5 has Sonnet 5's prices, caching
+// included). One entry per model aiConfig can select (VALID_CHAT_MODELS). A
+// model missing here (a self-hosted AI_PROVIDER=openai install) is recorded
+// but not priced.
 const PRICES_CHECKED_AT = '2026-09-29';
 const PRICES_PER_MTOK = {
   'claude-sonnet-5-5':         { input: 2, output: 10 },

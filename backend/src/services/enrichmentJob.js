@@ -111,11 +111,11 @@ function cleanDescriptor(field, raw) {
 
 // Bounds come from LIST_FIELDS rather than being repeated here, because the
 // curator path already enforces them on the same fields of the same collection.
-// Capping the array but not its elements meant a model could write unbounded
+// Capping the array but not its elements would let a model write unbounded
 // strings into the SHARED registry — which then feed the embedding text and are
 // served verbatim by the MCP profile tools — while a human editing the identical
-// field was held to 40/60 characters. Two write surfaces, one collection, one
-// set of limits.
+// field is held to maxLen. Two write surfaces, one collection, one set of
+// limits.
 function cleanStringList(raw, field) {
   if (!Array.isArray(raw)) return [];
   const { max, maxLen } = LIST_FIELDS[field];
@@ -257,29 +257,27 @@ function _resetSearchSlots() {
 //                      appellation-level note is honest and useful. PUBLISH,
 //                      with the doubt recorded on the row.
 //
-// Holding both was measurably wrong: ~47% of a 250-wine enrichment run was
-// withheld, almost all of it the second kind, and those held rows then blocked
-// the sommelier's maturity queue — a held profile shows no tasting note, and
-// a drink window cannot be judged without one.
+// Holding both is wrong: nearly every doubtful row is the second kind, and
+// held rows block the sommelier's maturity queue — a held profile shows no
+// tasting note, and a drink window cannot be judged without one.
 //
 // ONE case still holds an otherwise-fine unknown producer: prose that talks
 // about the house as an entity while admitting it cannot place it. The prompt
-// now forbids that directly, so this is a backstop rather than the main gate.
+// forbids that directly, so this is a backstop rather than the main gate.
 //
 // CONFIDENCE IS PART OF THE DECISION too — as a calibrated FLOOR, not a
 // hold-on-any-doubt. The split above is right about the flags, but the flags
-// alone never read confidence, and a profile at 0.2 would publish.
-// Calibrated on prod over 5,836 published AI profiles: the confidence mass
-// sits at 0.5–0.7, a 0.40 floor holds ~300 all-time, and 0.45 is measurably
-// too aggressive (1,158 — the mass sits in the 0.4 band). An UNKNOWN producer
-// additionally holds below a higher bar (0.55): unknown + weak confidence is
-// regional guesswork, while unknown + strong confidence is the honest
-// appellation-level majority the split released (171 of 190 unknown-flagged
-// rows sat under 0.55). A null confidence (old/custom prompt, unusable model
-// output) skips both checks — the same degrade-to-no-doubt rule as the flags;
-// the admin low-confidence queue still catches those rows. Thresholds live in
-// aiConfig (enrichmentHoldConfidenceFloor / enrichmentHoldUnknownConfidenceBar)
-// so tuning never needs a release.
+// alone never read confidence, and a profile at 0.2 would publish. Calibrated
+// on the published AI profiles: their confidence mass sits at 0.5–0.7, a 0.40
+// floor holds only the weak tail, and 0.45 already cuts into a well-filled
+// 0.4 band. An UNKNOWN producer additionally holds below a higher bar (0.55):
+// unknown + weak confidence is regional guesswork, while unknown + strong
+// confidence is the honest appellation-level note the split exists to
+// publish. A null confidence (old/custom prompt, unusable model output) skips
+// both checks — the same degrade-to-no-doubt rule as the flags; the admin
+// low-confidence queue still catches those rows. Thresholds live in aiConfig
+// (enrichmentHoldConfidenceFloor / enrichmentHoldUnknownConfidenceBar) so
+// tuning never needs a release.
 //
 // Words that only appear when a description is talking about the PRODUCER
 // rather than the wine. Deliberately generous: a false positive costs one
@@ -390,15 +388,15 @@ async function runJob(cfg) {
     // full mode — which is exactly the mode that would have destroyed the
     // most work. See WineDefinition.aiProfile.source.
     // A pendingIdentity row is never enriched — the SAME rule embeddingJob
-    // carries, and it was missed here. Its producer is ''
-    // and its region is often the misplaced string that made it pending, so
-    // the model would be asked to describe a wine nobody has identified yet:
+    // carries. Its producer is '' and its region is often the misplaced
+    // string that made it pending, so the model would be asked to describe a
+    // wine nobody has identified yet:
     // an AI spend on a row strangers cannot see, whose output would then be
     // presented as the registry's tasting note the moment it is promoted.
     // The promoting write re-enriches (runPromotionFollowThrough), which is
     // when the wine genuinely enters — unless wine data is somm-owned
     // (enrichmentOnAdd 'off'), when the sommelier writes that profile instead.
-    // Canaries (registry lockdown L4) carry hand-written profiles and are never regenerated.
+    // Canaries carry hand-written profiles and are never regenerated.
     // A wine copied from the shared registry (Registry Bridge, registryId set)
     // carries the registry's profile and is refreshed from there — the local
     // model must never write over it.
@@ -434,7 +432,7 @@ async function runJob(cfg) {
     // Filtered in JS, not Mongo: the snapshot is a JSON rendering of eight
     // fields including sorted grape ids, and expressing that as an aggregation
     // would encode the format twice and let the two drift apart. The candidate
-    // set is bounded — only rows enriched since the field shipped have one.
+    // set is only the rows that carry an inputsSnapshot.
     //
     // NOT gated on heldAt: a changed identity is exactly what can void a hold
     // ("Fabelhaft" → "Niepoort" and the doubt is gone), which is the same
@@ -521,7 +519,7 @@ async function runJob(cfg) {
 async function enrichWine(wine, model, { publishSuspect = false, curatorContext = null } = {}) {
   // The language for the translated copy (SuperAdmin → AI), read once so every
   // attempt below asks for the language the stored copy is labelled with.
-  // Off: no key at all, so each call is the call it always was.
+  // Off: no key at all, so the call asks for no language.
   const language = aiTextLanguageOf(aiConfig.get());
   const asked = language ? { language } : {};
   const { data, debugReason } = await suggestProfile({
@@ -852,12 +850,12 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
         },
       }
     );
-    // Re-embed on HOLD too: a force re-enrich that ends in
-    // a hold has just nulled a previously PUBLISHED profile, and without this
-    // the old description keeps living in the stored vectors — cellar chat
-    // would keep retrieving the wine by the very claims the hold silenced.
-    // embedSinglePair rebuilds from the now-profile-less text (textHash makes
-    // it a no-op for never-published rows). Best-effort, like the publish path.
+    // Re-embed on HOLD too: a force re-enrich that ends in a hold has just
+    // nulled a previously PUBLISHED profile, and without this the old
+    // description keeps living in the stored vectors — cellar chat would keep
+    // retrieving the wine by the very claims the hold silenced. embedSinglePair
+    // rebuilds from the now-profile-less text (textHash makes it a no-op for
+    // never-published rows). Best-effort, like the publish path.
     try {
       const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
       for (const v of vintages) {
@@ -909,7 +907,7 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
           // Markdown-stripped, not just trimmed (computed above, beside the
           // hold decision that reads it): the model reaches for emphasis even
           // when told not to, and the raw string is served un-rendered by the
-          // MCP tools. Load-bearing half of the fix — the prompt is only
+          // MCP tools. This is the load-bearing half — the prompt is only
           // advisory, and a self-hoster can override it via SiteConfig.
           description: a.description,
           ...a.meta,
@@ -1110,10 +1108,10 @@ function profileInputsSnapshot(wine) {
  * Does the stored profile still describe this record?
  *
  * Exact, not heuristic: compares the inputs the profile was generated from
- * against the record's current values. A row enriched before the snapshot
- * shipped has nothing to compare and is reported NOT stale — unknown is not
- * the same as wrong, and treating it as stale would queue the whole registry
- * for a re-spend.
+ * against the record's current values. A row with no inputsSnapshot has
+ * nothing to compare and is reported NOT stale — unknown is not the same as
+ * wrong, and treating it as stale would queue the whole registry for a
+ * re-spend.
  *
  * @param {object} wine  WineDefinition, populated or not
  */

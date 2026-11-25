@@ -28,7 +28,7 @@
  * change it call invalidateClassificationCache() (single-process, like the
  * other in-memory caches). Without a database connection (unit tests, a boot
  * before the seed) the taxonomy reads as empty and every write path keeps
- * the string it was given, exactly as before the taxonomy existed.
+ * the string it was given.
  */
 const mongoose = require('mongoose');
 const Classification = require('../models/Classification');

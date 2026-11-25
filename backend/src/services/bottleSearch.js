@@ -1,13 +1,12 @@
 /**
  * Cellar search, on MongoDB.
  *
- * Until 2026-09 a Meilisearch `bottles` index answered every cellar search. It
- * held a second copy of every bottle — private notes included — for queries
- * that are always about one user's own cellars, had to be written on every
- * bottle change (and drifted: 567 phantom documents on prod 2026-08-13), and
- * was three quarters of Meilisearch's documents. A cellar is small (at most a
- * few thousand bottles), so this module loads the cellars in scope from
- * MongoDB and matches in memory, the way the index did:
+ * There is no bottles search index: it would hold a second copy of every
+ * bottle — private notes included — for queries that are always about one
+ * user's own cellars, would have to be written on every bottle change, and
+ * would drift from the database. A cellar is small (at most a few thousand
+ * bottles), so this module loads the cellars in scope from MongoDB and
+ * matches in memory, with a search index's matching rules:
  *
  *  - case and accents are ignored, and words split on anything that is not a
  *    letter or a digit ("Châteauneuf-du-Pape" is chateauneuf / du / pape);
@@ -18,22 +17,21 @@
  *  - words typed apart match one written together ("chateau neuf") and one
  *    typed word matches two written apart ("pinotnoir");
  *  - several words: bottles matching all of them first, then bottles matching
- *    only the leading ones, dropping words from the end — the index's "last"
- *    matching strategy (the first word must always match);
+ *    only the leading ones, dropping words from the end — Meilisearch's
+ *    "last" matching strategy (the first word must always match);
  *  - ranking: more words matched, fewer typos, the words closer together, a
  *    more important field (FIELDS order), the requested sort, then earlier in
  *    the field and exact words over prefixes and typos.
  *
  * Facet counts come from the same pass (searchBottles) or, for a plain cellar
- * page with no search, from one grouping query (bottleFacets). Unlike the
- * index, every facet value is returned — Meilisearch stopped at 100 per facet.
+ * page with no search, from one grouping query (bottleFacets). Every facet
+ * value is returned, with no cap per facet.
  *
  * Besides the wine and the bottle's own text, a bottle is found by its extra
  * facts (attachFacts): the published registry values of its wine and the
  * personal data entries its page shows — their values, never their key names.
  *
- * Meilisearch still serves the shared wine registry and the forum
- * (services/search).
+ * Meilisearch serves the shared wine registry and the forum (services/search).
  */
 const mongoose = require('mongoose');
 const Bottle = require('../models/Bottle');
@@ -628,13 +626,12 @@ async function attachFacts(docs, scope, wines) {
 // ── The scope's documents, kept between requests ────────────────────────────
 // Typing a search and scrolling through its hits ask about the same cellar
 // several times a minute, and loading its bottles and wines and splitting
-// every field into words was most of each request (a 2,800-bottle cellar:
-// ~120 ms of ~170). A caller that knows the scope's data version passes it as
-// `version` — routes/cellars: its owners', which every audited bottle, cellar
-// and rack write moves (services/dataVersion), read BEFORE this load — and the
-// built documents are reused while it still matches, for at most DOCS_TTL_MS:
-// changes that bypass the audit (a registry wine renamed) wait that long. One
-// Node process, like the other read caches.
+// every field into words is most of each request. A caller that knows the
+// scope's data version passes it as `version` — routes/cellars: its owners',
+// which every audited bottle, cellar and rack write moves (services/dataVersion),
+// read BEFORE this load — and the built documents are reused while it still
+// matches, for at most DOCS_TTL_MS: changes that bypass the audit (a registry
+// wine renamed) wait that long. One Node process, like the other read caches.
 //
 // The extra facts follow the same rule. A personal data entry written, changed
 // or deleted, also by an account erasure, moves the version of the owners of
@@ -849,8 +846,8 @@ async function searchBottles(query, {
 
   // One pass: a document that passes every filter is a candidate; one that
   // fails exactly ONE filter still counts toward that field's own counts (a
-  // "disjunctive" facet — support report 2026-10-16: with Red chosen, picking
-  // France sent France back to the whole cellar's count, as if Red were off).
+  // "disjunctive" facet: each field's counts honour every OTHER filter, so with
+  // Red chosen, France counts only red bottles whether it is picked or not).
   const hits = [];
   const ownEntries = tests.map(() => []);
   // Without facets, a near-miss is never needed: one failure is enough.

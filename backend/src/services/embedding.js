@@ -1,10 +1,9 @@
 /**
  * Embedding service — Voyage AI by default, or any OpenAI-compatible
- * /v1/embeddings endpoint for self-hosters (issue #698, phase 2).
+ * /v1/embeddings endpoint for self-hosters.
  *
- *   EMBEDDING_PROVIDER=voyage (default) — Voyage AI REST API, exactly as
- *     before: voyage-4-large at 2048 dimensions (output_dimension requested
- *     explicitly).
+ *   EMBEDDING_PROVIDER=voyage (default) — Voyage AI REST API: voyage-4-large
+ *     at 2048 dimensions (output_dimension requested explicitly).
  *   EMBEDDING_PROVIDER=openai — POST {EMBEDDING_BASE_URL}/embeddings with
  *     EMBEDDING_MODEL. Self-hosted embedding models have fixed, per-model
  *     vector sizes, so EMBEDDING_DIMENSION is required and every returned
@@ -12,9 +11,9 @@
  *     stored vectors).
  *
  * The active dimension (getEmbeddingDimension) is the size vectorStore.js
- * stores and compares. Changing provider, model, or dimension therefore requires a
- * FULL embedding job (rewrites every stored vector) — same procedure as a
- * Voyage model upgrade.
+ * stores and compares. Changing provider, model, or dimension therefore
+ * requires a FULL embedding job (rewrites every stored vector) — same
+ * procedure as a Voyage model upgrade.
  *
  * Env (openai mode)
  * -----------------

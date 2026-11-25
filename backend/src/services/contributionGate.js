@@ -5,8 +5,8 @@
  * suggestions share a single pool, so "your daily limit" means one number
  * everywhere (the MCP tool descriptions promise exactly this).
  *
- * Extracted from wineProposalOps/registryDataOps after the 2026-08-17 audit
- * found three drifting copies and a shared-budget claim the code didn't keep.
+ * One gate, not a copy per suggestion kind: copies drift, and the shared
+ * budget the tools promise holds only when every kind counts through here.
  */
 const User = require('../models/User');
 

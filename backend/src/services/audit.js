@@ -16,7 +16,7 @@ const STATS_CHANGED_PREFIXES = ['bottle.', 'cellar.'];
 // the data version), MCP rack reads, the token bottle list. They move the data
 // version and the MCP caches like wine-data changes, without the stats push.
 // Climate device and bounds changes ride in the cellar list (cellar.climate),
-// which token polls read from memory (release audit 2026-10-09, L).
+// which token polls read from memory.
 const DATA_CHANGED_PREFIXES = [...STATS_CHANGED_PREFIXES, 'rack.', 'climate.'];
 
 // Rack changes send their own event, racks_changed: where bottles are has
@@ -42,13 +42,13 @@ function nudgeRacks(userId, action) {
   timer.unref?.();
 }
 
-// Invalidate a user's MCP read caches on any wine-data mutation (grand-audit
-// M3). Lazy-required so these MCP modules stay off audit's load path (they pull
-// the tool registry, whose search dep is ESM-only and unparseable by jest —
-// the #702 failure mode). Never throws: a cache miss must not fail a mutation.
+// Invalidate a user's MCP read caches on any wine-data mutation. Lazy-required
+// so these MCP modules stay off audit's load path (they pull the tool
+// registry, whose search dep is ESM-only and unparseable by jest). Never
+// throws: a cache miss must not fail a mutation.
 //
-// Debounced per user: a bulk_add of 24 bottles fires 24 bottle.
-// audits within milliseconds, each doing two full Map scans (up to ~4000 string
+// Debounced per user: a bulk_add of 24 bottles fires 24 bottle.* audits
+// within milliseconds, each doing two full Map scans (up to ~4000 string
 // compares) for the SAME user — the first bust already cleared everything, the
 // rest are pure waste. Collapse repeats within a short window; the cache already
 // tolerates a 60s stale window, so a sub-window skip can never serve stale data
@@ -139,8 +139,8 @@ function logAudit(req, action, resource = {}, detail = {}) {
     // Bust the MCP read caches and move the data version (services/dataVersion
     // — the REST stats and polling caches) for the affected user BEFORE the
     // push, so a client that re-reads on the nudge recomputes instead of being
-    // served the old answer. Lazy-require keeps the MCP
-    // modules off audit's load path. Same owner-resolution as the push below.
+    // served the old answer. Lazy-require keeps the MCP modules off audit's
+    // load path. Same owner-resolution as the push below.
     const statsChanged = STATS_CHANGED_PREFIXES.some(p => action.startsWith(p));
     const racksChanged = action.startsWith(RACK_PREFIX);
     const touch = (userId) => {
@@ -156,9 +156,8 @@ function logAudit(req, action, resource = {}, detail = {}) {
     // changed — invalidate and nudge them too. Prefer the cellar
     // requireBottleAccess already loaded onto the request; otherwise resolve
     // the owner from the audited cellarId. Always: the owner's caches must
-    // move even when nobody has a push stream open (until 2026-09 this lookup
-    // ran only while streams existed, which also left the owner's MCP caches
-    // stale for their 60 s window).
+    // move even when nobody has a push stream open, or the owner's MCP caches
+    // stay stale for their 60 s window.
     const ownerFromReq = req?.cellar?.user;
     if (ownerFromReq) {
       if (String(ownerFromReq) !== String(entry.actor.userId)) touch(ownerFromReq);

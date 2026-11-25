@@ -1,10 +1,10 @@
 /**
  * "Recently deleted" — the trash a bulk delete moves bottles to.
  *
- * Forum feedback 2026-10-12: an import came in without its prices, and the
- * only way to redo it was to delete the bottles one at a time. A bulk delete
- * fixes that, but deleting a hundred bottles for good with one tap is too easy
- * to regret, so a bulk delete keeps every bottle for TRASH_DAYS first:
+ * A bulk delete lets a member redo an import (one that came in without its
+ * prices, say) without deleting the bottles one at a time, but deleting a
+ * hundred bottles for good with one tap is too easy to regret, so a bulk
+ * delete keeps every bottle for TRASH_DAYS first:
  *
  *  - trashBottle stores the snapshot the MCP delete_bottle undo already uses
  *    (bottleOps.snapshotBottleForDelete), THEN runs the shared delete cascade

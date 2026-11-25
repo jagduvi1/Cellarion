@@ -21,11 +21,11 @@ function vintageDesc(a, b) {
  */
 async function getReleaseCurve(wineId, currency) {
   if (!wineId) return [];
-  // k-anonymity floor: a vintage backed by fewer than
-  // FIRM_MIN_OWNERS (3) distinct owners would publish what is essentially one
-  // or two identifiable users' exact purchase price on a public, unauthenticated
-  // endpoint. The aggregation job no longer stores such rows, but this read-side
-  // filter also suppresses low-sample rows persisted before the change.
+  // k-anonymity floor: a vintage backed by fewer than FIRM_MIN_OWNERS (3)
+  // distinct owners would publish what is essentially one or two identifiable
+  // users' exact purchase price on a public, unauthenticated endpoint. The
+  // aggregation job neither stores nor keeps such rows; this read-side filter
+  // holds the floor even if one exists.
   const docs = await CommunityWinePrice.find({
     wineDefinition: wineId,
     currency: normCurrency(currency),

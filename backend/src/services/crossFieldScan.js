@@ -49,7 +49,7 @@ const CUVEE_NEAR_MISS = 'cuvee-near-miss.v2';
  * 0.78, not 0.85, and the lower bar is only safe because of
  * NUMERIC_TOKEN_DIFF below: the extra pairs a looser threshold buys are
  * overwhelmingly vintage/lot digits ("Reserva 2010" ~ "Reserva 2011" = 0.92,
- * "Valbuena 5" ~ "Valbuena 3" = 0.90), and those are now disqualified outright.
+ * "Valbuena 5" ~ "Valbuena 3" = 0.90), and those are disqualified outright.
  *
  * STATED HONESTLY — 0.78 still does NOT reach the row this rule was written for.
  * Measured, not assumed:

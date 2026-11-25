@@ -252,8 +252,7 @@ async function clearCellarContents(cellarId) {
     // before deleting the bottles (else they dangle pointing at deleted bottles).
     // Registry photos (services/photoRetention: the wine's picture, or any
     // photo approved as public) are seen by other people: kept and detached,
-    // as every other cascade does. Until 2026-09-27 an overwrite import
-    // deleted even the wine's chosen picture.
+    // as every other cascade does.
     const images = await BottleImage.find({ bottle: { $in: bottleIds }, ...OWN_PHOTO });
     for (const img of images) await unlinkImageFiles(img); // reference-safe (dedup-shared files survive)
     await BottleImage.deleteMany({ bottle: { $in: bottleIds }, ...OWN_PHOTO });
@@ -404,12 +403,12 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
 
   try {
     const { wine, created, nearMiss } = await findOrCreateWine(
-      // producer is passed through AS GIVEN — no longer `producer || name`.
-      // That fallback fabricated a producer out of the wine's own name, which
-      // is precisely the junk identity the pending queue exists to catch: with
-      // allowPending a producerless row now files itself for curation instead
-      // of being minted as "Chardonnay — Chardonnay". Demo mode is matchOnly,
-      // so it never reaches the mint and can't create pending rows either.
+      // producer is passed through AS GIVEN, never as `producer || name`: that
+      // fallback fabricates a producer out of the wine's own name, precisely
+      // the junk identity the pending queue exists to catch. With allowPending
+      // a producerless row files itself for curation instead of being minted
+      // as "Chardonnay — Chardonnay". Demo mode is matchOnly, so it never
+      // reaches the mint and can't create pending rows either.
       { name, producer, country: item.country, region: item.region,
         appellation: item.appellation, type: item.type, colour: item.colour,
         grapes: Array.isArray(item.grapes) ? item.grapes : [] },
@@ -429,8 +428,8 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
         }
         // confirmCreate skips the soft-zone prompt by design (imports must not
         // stall) — but a creation that sailed past a >=0.85 candidate is the
-        // exact shape that used to mint duplicates, so leave an audit trail
-        // the admin can review.
+        // exact shape that mints duplicates, so leave an audit trail the admin
+        // can review.
         if (nearMiss) {
           result.winesCreatedNearMiss = (result.winesCreatedNearMiss || 0) + 1;
           logAudit(
@@ -643,10 +642,10 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
       // The record's hash is that of the STORED bytes, as the live upload path
       // stamps it: an export of this cellar carries exactly those bytes, so a
       // re-import of it matches on the first try instead of adding a copy
-      // (release audit 2026-09-27, L — hashing the archive bytes while storing
-      // a re-encode meant every export→import round wrote a new file). A
-      // repeat import of the SAME archive still dedupes: the encode is
-      // deterministic, so its stored bytes hash to the record's hash again.
+      // (hashing the archive bytes while storing a re-encode would write a new
+      // file on every export→import round). A repeat import of the SAME
+      // archive still dedupes: the encode is deterministic, so its stored
+      // bytes hash to the record's hash again.
       storedHash = crypto.createHash('sha256').update(stored).digest('hex');
       const twin = storedHash !== hash
         ? await BottleImage.findOne({ uploadedBy: userId, contentHash: storedHash }).select('originalUrl processedUrl').lean()
@@ -732,12 +731,12 @@ async function attachReviews(bottle, reviews, userId, wineDefinitionId, result) 
  *  the imported window is restored in full. Deduped per wine+vintage via `seen`
  *  so bottles that share a wine only trigger this once.
  *
- *  Status follows the IMPORTER, not the file: only a
- *  sommelier/admin — someone who could set the same window by hand — restores
- *  it as `reviewed`. utils/maturityUtils gates every reader on
- *  status === 'reviewed', so a reviewed row from anyone's file was
- *  indistinguishable from curated data and became the drink window every
- *  other user of that wine+vintage saw, with the file's notes shown as the
+ *  Status follows the IMPORTER, not the file: only a sommelier/admin —
+ *  someone who could set the same window by hand — restores it as
+ *  `reviewed`. utils/maturityUtils gates every reader on status ===
+ *  'reviewed', so a reviewed row from anyone's file would be
+ *  indistinguishable from curated data and become the drink window every
+ *  other user of that wine+vintage sees, with the file's notes shown as the
  *  sommelier's. Any other importer's window lands as a PENDING suggestion:
  *  numbers and notes kept for the sommelier queue, nothing published until a
  *  curator reviews it — the same path a hand-added bottle takes. */
@@ -1039,7 +1038,7 @@ async function importCellar(userId, cellar, opts) {
   //    swap it in once the import has fully succeeded (see swapCellarContents).
   //    That way a mid-import crash/OOM/throw can never destroy the user's
   //    existing bottles, photos, history or 3D layout. For a CREATE we build
-  //    straight into the user's new cellar, as before.
+  //    straight into the user's new cellar.
   let liveCellar = null;
   if (opts.mode === 'overwrite') {
     liveCellar = await Cellar.findOne({ user: userId, name: opts.targetName, deletedAt: null });
