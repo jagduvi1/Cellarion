@@ -21,8 +21,8 @@ import { Helmet } from 'react-helmet-async';
 //
 // Query strings and fragments are never reported (data-exclude-search /
 // data-exclude-hash): password-reset and e-mail-verification links carry a
-// one-time token in the query, and the OAuth consent page carries the request
-// (audit 2026-09 F03-6). Those routes are also excluded outright below, so the
+// one-time token in the query, and the OAuth consent page carries the request.
+// Those routes are also excluded outright below, so the
 // tracker is not even loaded on them.
 
 const EXCLUDED_PREFIXES = [

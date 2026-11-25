@@ -363,7 +363,7 @@ router.get('/grapes', async (req, res) => {
 router.get('/grape-names', requireAuth, async (req, res) => {
   // Set on the two success paths only: stamped up front, a 500 went out
   // cacheable for an hour too, and the picker's "Try again" would have been
-  // answered from the browser's cache (pre-deploy audit 2026-09-18).
+  // answered from the browser's cache.
   const cacheable = () => res.set('Cache-Control', 'private, max-age=3600');
   try {
     const cached = getCachedList('grape-names');
@@ -442,7 +442,7 @@ router.get('/classifications', requireAuth, async (req, res) => {
 
 /**
  * GET /api/taxonomy/sweetness-terms[?scale=still|sparkling] — the label
- * sweetness terms for the pickers (GitHub discussion #1754): every term with
+ * sweetness terms for the pickers: every term with
  * its scale, band, system, country, the regulated flag and accepted spellings,
  * plus how many wines carry it. A user-minted row nobody reviewed and no wine
  * uses is left out, as for classifications. Rows come from the in-memory copy

@@ -176,7 +176,7 @@ registerTool({
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
     const wine = await WineDefinition.findById(args.wine_id)
       .populate('country', 'name').populate('region', 'name').populate('grapes', 'name');
-    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    // A user's private draft is nobody's curation work.
     if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
 
     // A word two tier systems share is settled by the wine's country, the
@@ -233,7 +233,7 @@ registerTool({
         via: 'mcp',
       });
 
-    // SELF-APPLY (2026-08-21). A correction that only FILLS BLANKS on
+    // SELF-APPLY. A correction that only FILLS BLANKS on
     // reversible fields, and does not contradict the wine's own name, applies
     // on filing instead of waiting for an admin — see
     // services/proposalDirectApply for why that line and not another.
@@ -245,7 +245,7 @@ registerTool({
     // dedup key, the search/embed/IndexNow follow-through and the re-enrich
     // identical between the two doors.
     //
-    // A non-wine flag takes the same door (2026-10-13): the quarantine is one
+    // A non-wine flag takes the same door: the quarantine is one
     // reversible flag, and classifyProposal keeps the gate only for a row
     // several members hold.
     let applied = null;

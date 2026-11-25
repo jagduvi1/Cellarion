@@ -4,8 +4,8 @@ import safeUrl from './safeUrl';
  * A requester (any user) chose this value. Only three shapes are ever put into
  * an <img>, offered to an approval form or rendered as a link: one of our own
  * upload paths, an inline image, or an http(s) URL. Everything else — a
- * protocol-relative "//host", javascript:, a bare word — yields null
- * (audit 2026-09 F06-1 / F06-2 / F06-3). Mirrors validateImageRef on the server.
+ * protocol-relative "//host", javascript:, a bare word — yields null.
+ * Mirrors validateImageRef on the server.
  */
 const UPLOAD_PATH = /^\/api\/uploads\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 const DOT_SEGMENT = /\/\.\.?(?:\/|$)/;

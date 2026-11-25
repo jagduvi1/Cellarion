@@ -161,7 +161,7 @@ function CellarRacks() {
     return () => document.removeEventListener('keydown', onKey);
   }, [movingOn]);
 
-  // --- post-add placing mode (issue #1055) — HOOKS live up here, before the
+  // --- post-add placing mode — HOOKS live up here, before the
   // page's early `if (error) return` (audit 2026-09-14 H: hooks declared after
   // a conditional return crash the page on a load error). The handlers that
   // use them sit further down, next to the render.
@@ -793,7 +793,7 @@ function CellarRacks() {
   // Rack tools (⋮), for editors, in every view and whether or not the rack
   // holds bottles. Rename sits here too: the header pencil is missing in the
   // Shelf and 3D views of shelves and wine cabinets, and a rack you cannot
-  // find a way to rename gets deleted and rebuilt (forum feedback 2026-10-12).
+  // find a way to rename gets deleted and rebuilt.
   const rackToolsMenu = rack && canEdit ? (
     <div className="rack-tools">
       <button
@@ -837,7 +837,7 @@ function CellarRacks() {
     </div>
   ) : null;
 
-  // --- post-add placing mode (issue #1055): handlers ---
+  // --- post-add placing mode: handlers ---
   // The add flow hands over the ids of the bottles it just created as router
   // state (hooks declared with the others above); each tap on a free slot
   // places the next one, "auto-place" fills first-free slots, leaving the mode
@@ -1202,7 +1202,7 @@ function CellarRacks() {
               const handleClick = async (pos, slotData) => {
                 // Move mode consumes every tap while it is on.
                 if (moving && await handleMoveTap(rack, pos, slotData)) return;
-                // Placing mode consumes a tap on a free slot (issue #1055).
+                // Placing mode consumes a tap on a free slot.
                 if (placeQueue.length && await handlePlaceTap(rack, pos, slotData)) return;
                 const isDisabled = (rack.disabledPositions || []).includes(pos);
                 // Viewers can inspect filled or disabled slots, not empty ones
@@ -1245,7 +1245,7 @@ function CellarRacks() {
               onSlotClick={async (pos, slotData) => {
                 // Move mode consumes every tap while it is on.
                 if (moving && await handleMoveTap(rack, pos, slotData)) return;
-                // Placing mode consumes a tap on a free slot (issue #1055).
+                // Placing mode consumes a tap on a free slot.
                 if (placeQueue.length && await handlePlaceTap(rack, pos, slotData)) return;
                 // Viewers can only inspect filled or disabled slots, not interact with empty ones
                 const isDisabled = (rack.disabledPositions || []).includes(pos);

@@ -43,7 +43,7 @@ function absoluteImageUrl(path) {
   if (!path || typeof path !== 'string') return null;
   // An inline data: image (a registry image copied verbatim from a wine
   // request) can be half a megabyte; it never travels in a tool result
-  // (audit 2026-09-07) — the public wine page shows it.
+  // — the public wine page shows it.
   if (path.startsWith('data:')) return null;
   if (/^https?:\/\//i.test(path)) return path;
   return path.startsWith('/') ? `${apiBase()}${path}` : `${apiBase()}/api/uploads/${path}`;
@@ -84,7 +84,7 @@ async function photosForBottle(userId, bottle) {
   const wineId = wd && (wd._id || wd);
   // Two bounded queries, own rows first: one query with a shared cap let a
   // wine with many published photos push the viewer's own row past the cap
-  // — the very "did my upload land?" answer this exists for (audit 2026-09-07).
+  // — the very "did my upload land?" answer this exists for.
   const own = await BottleImage.find({
     ...NOT_SCAN, uploadedBy: userId,
     $or: [{ bottle: bottle._id }, ...(wineId ? [{ wineDefinition: wineId }] : [])],

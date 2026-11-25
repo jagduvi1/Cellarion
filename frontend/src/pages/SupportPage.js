@@ -40,7 +40,7 @@ function SupportPage() {
       if (ticketRes.ok) setTickets(ticketData.tickets || []);
       if (reportRes.ok) setWineReports(reportData.reports || []);
       // A non-ok response set no data AND no error, so a 500 looked like the
-      // normal "you have no tickets" empty state (grand-audit M20).
+      // normal "you have no tickets" empty state.
       if (!ticketRes.ok && !reportRes.ok) setError(t('support.failedLoad'));
     } catch {
       setError(t('support.failedLoad'));

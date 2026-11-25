@@ -147,7 +147,7 @@ function AdminImages() {
   // bottle: approve/visibility/unapprove/assign responses populate only
   // uploadedBy/reviewedBy/wineDefinition, so their `bottle` is a bare id —
   // taking them wholesale degraded the via-bottle wine display one click
-  // after it worked (audit 2026-08-16). Keep the previously populated bottle
+  // after it worked. Keep the previously populated bottle
   // whenever the response's isn't an object; a genuinely bottle-less image
   // (null) stays null.
   const adoptSelected = (img) => setSelected(prev => ({

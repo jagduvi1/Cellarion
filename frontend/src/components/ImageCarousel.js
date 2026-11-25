@@ -73,7 +73,7 @@ function ImageCarousel({ images, size = 'medium', vintage, defaultImageId, onSet
             picture in the shared registry, taking it down changes other
             people's pages, so it becomes a report an admin decides. */}
         {(onDelete || onReport) && (() => {
-          // The gallery now says `mine` itself (audit 2026-09 D05-1: uploader
+          // The gallery now says `mine` itself (uploader
           // ids no longer travel); the uploadedBy comparison stays for any
           // older payload shape.
           const mine = currentImage.mine === true || (currentUserId && currentImage.uploadedBy != null && String(currentImage.uploadedBy) === String(currentUserId));

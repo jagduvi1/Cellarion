@@ -16,7 +16,7 @@ import { API_URL } from '../api/apiConstants';
  * remembered in localStorage so a reload (or an offline start) shows the same
  * screens before the answer arrives. An open tab re-asks every few minutes
  * and whenever it comes back into view, so a flag switched off by a super
- * admin reaches sessions that stay open (release audit 2026-10-10). Without
+ * admin reaches sessions that stay open. Without
  * any answer every flag is off: the classic screens are the safe default.
  */
 

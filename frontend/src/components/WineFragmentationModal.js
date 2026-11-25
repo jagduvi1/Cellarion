@@ -80,7 +80,7 @@ function WineFragmentationModal({ apiFetch, onClose }) {
   const switchMode = (m) => {
     // Blocked while a dismiss is in flight (belt to the button-disable braces
     // below): its resolve would setItems a groups-shaped list under the pairs
-    // renderer → TypeError → app ErrorBoundary (audit 2026-08-10).
+    // renderer → TypeError → app ErrorBoundary.
     if (m === mode || pendingKey) return;
     dismissedDelta.current = 0;
     setMode(m);

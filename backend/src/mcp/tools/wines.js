@@ -126,7 +126,7 @@ registerTool({
   handler: async (args, ctx) => {
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
     // The exclusion is a QUERY clause, not a post-filter on the result. A
-    // post-filter here was DEAD CODE (security audit): SAFE_SELECT is an
+    // post-filter here was DEAD CODE: SAFE_SELECT is an
     // INCLUSIVE projection and does not list pendingIdentity, so under .lean()
     // the field is always undefined and `undefined === true` never fired —
     // this tool is 'public' scope, served by the UNAUTHENTICATED
@@ -134,7 +134,7 @@ registerTool({
     // an anonymous caller and a stranger's half-identified wine. nonWine rides
     // along in the same clause (it was never filtered here either). Compare
     // publicContent.js's drink_window_for, which selects the flag it tests.
-    // Registry lockdown (2026-09-06): every read is counted per reader per
+    // Registry lockdown: every read is counted per reader per
     // day; an anonymous address past the daily distinct cap is refused. The
     // anonymous surface gets the prose-only profile (L3) — the structured
     // dataset stays with signed-in connections.
@@ -255,7 +255,7 @@ registerTool({
     const data = { wine_id: String(args.wine_id), status: r.status, category: r.category, ...(r.holders !== undefined ? { holders: r.holders } : {}) };
     // The member's "Recent AI activity" and the admin aggregate read the
     // ledger: a registry move on the user's word shows there like every
-    // other write (release audit 2026-10-28). Not undo-eligible.
+    // other write. Not undo-eligible.
     if (r.status !== 'already') {
       await logAction(ctx, {
         tool: 'mark_not_wine', action: 'not_wine',

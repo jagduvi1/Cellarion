@@ -63,7 +63,7 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
   }
   // The schema's min/max fires only at save(), after validateCabinetConfig
   // has compared the shelf list against parseInt(rows) — so a rows of 5.5
-  // used to save as a cabinet with 5.5 shelves (audit 2026-09-16). MCP
+  // used to save as a cabinet with 5.5 shelves. MCP
   // already enforces this through zod; REST did not.
   if ((rows != null && !isRackDim(rows)) || (cols != null && !isRackDim(cols))) {
     return { error: { status: 400, message: `rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` } };
@@ -118,7 +118,7 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   // Consuming a bottle clears its rack slot (bottleOps.consumeBottle); the
   // reverse must hold too — a consumed bottle cannot be put into a slot, from
   // any surface (web slot picker, post-add placing queue, MCP place_bottle).
-  // Audit 2026-09-14: bottles added straight into the drinking history were
+  // Bottles added straight into the drinking history were
   // offered for placement and this accepted them.
   if (bottle.status === 'ordered') {
     return { error: { status: 400, message: 'This bottle is on order and has not arrived yet — mark it as arrived before placing it in a rack' } };

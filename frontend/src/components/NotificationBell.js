@@ -36,7 +36,7 @@ export default function NotificationBell() {
     setOpen(false);
     if (!n.read) await markRead(n._id);
     // The link is server-built, but it is data — only ever navigate within
-    // the app (audit 2026-09 F03-5).
+    // the app.
     const to = internalPath(n.link);
     if (to) navigate(to);
   }

@@ -76,7 +76,7 @@ async function withOffline(url, init, slowMs, offline) {
 }
 
 /**
- * Offline mode hooks (#1355), all optional:
+ * Offline mode hooks, all optional:
  *  - offlineFallback(url) → Promise<Response|null>: the device copy's answer
  *    to a GET the network can't give (see withOffline).
  *  - offlineWriteKey(url, method) → string|null: an Idempotency-Key for a

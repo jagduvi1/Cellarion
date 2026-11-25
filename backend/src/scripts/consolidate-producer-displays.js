@@ -88,7 +88,7 @@ const hasLegal = (s) => toks(s).some((t) => LEGAL.has(t));
   // The projection must carry every field profileInputsSnapshot() reads plus
   // aiProfile itself, or the snapshot refresh below never sees a current
   // snapshot and the next enrichment sweep regenerates every renamed
-  // profile as stale (release audit 2026-09-29).
+  // profile as stale.
   const wines = await WineDefinition.find({ pendingIdentity: { $ne: true } })
     .select(WINE_SELECT);
   const countries = await Country.find({}).select('name').lean();

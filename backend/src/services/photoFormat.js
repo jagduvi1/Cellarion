@@ -1,5 +1,5 @@
 /**
- * The two sizes Cellarion handles a bottle photo at (scaling audit 2026-09-25).
+ * The two sizes Cellarion handles a bottle photo at.
  *
  * - What rembg is sent: at most REMBG_MAX_EDGE on the long side. rembg holds
  *   several full-size copies of the frame while it works: a 24 MP phone photo

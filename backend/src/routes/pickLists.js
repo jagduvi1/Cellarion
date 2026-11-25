@@ -5,7 +5,7 @@ const {
   setPicked, deletePickList, getPickListView,
 } = require('../services/pickListOps');
 
-// Pick lists (forum request 2026-10-13): named lists of the user's own
+// Pick lists: named lists of the user's own
 // bottles to fetch, shown with cellar, rack and slot. Each route is a thin
 // wrapper over services/pickListOps, which the MCP tools share. Open to every
 // member: the early-access flag (pickLists) only decides who sees the screens.

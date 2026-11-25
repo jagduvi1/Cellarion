@@ -24,7 +24,7 @@ function ProtectedRoute({ children, requireAdmin = false, requireSomm = false, r
 
   if (!user) {
     // Carry where they were heading, so signing in finishes the journey they
-    // started instead of dumping them on /cellars (issue #1165). The case that
+    // started instead of dumping them on /cellars. The case that
     // makes it more than a nicety: NFC tags on a fridge shelf open Safari, not
     // the installed PWA, and iOS gives a standalone web app its own cookie
     // jar — so that Safari session has almost always expired by the next tap.

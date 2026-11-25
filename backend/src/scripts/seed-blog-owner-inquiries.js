@@ -8,7 +8,7 @@
  *
  * - Idempotent: upserts by slug, so re-running updates the post in place.
  * - Without --publish an already-published post STAYS published.
- * - ⚠️ Do not --publish before the release carrying owner inquiries (#930)
+ * - ⚠️ Do not --publish before the release carrying owner inquiries
  *   is deployed — the post tells people the question card exists.
  */
 const mongoose = require('mongoose');

@@ -39,7 +39,7 @@ export default function PickList() {
   const [consumeOpen, setConsumeOpen] = useState(false);
   // Ticks not yet confirmed by the server: waiting for the next batch, or
   // sent and not answered yet. A reload lays both over what it fetched, so a
-  // tick is never lost to a reload in between (release audit 2026-10-13).
+  // tick is never lost to a reload in between.
   const pending = useRef(new Map()); // bottleId → picked, not yet sent
   const inFlight = useRef(new Map()); // bottleId → picked, sent, not answered
   const flushing = useRef(Promise.resolve()); // batches go one at a time, in order
@@ -50,7 +50,7 @@ export default function PickList() {
   tRef.current = t;
 
   // The newest load wins: an older answer (history navigation between two
-  // lists on this same page) must not land over it (audit 2026-10-14).
+  // lists on this same page) must not land over it.
   const loadSeq = useRef(0);
 
   /** Loads the list; true when it worked. Never clears an error: the caller decides. */
@@ -72,7 +72,7 @@ export default function PickList() {
     } catch (err) {
       if (seq !== loadSeq.current) return false;
       // A dropped connection throws a TypeError with the browser's own text
-      // ("Failed to fetch"), not a message for the user (audit 2026-10-14).
+      // ("Failed to fetch"), not a message for the user.
       setError(err instanceof TypeError ? tRef.current('common.networkError', 'Network error') : err.message);
       return false;
     }
@@ -110,7 +110,7 @@ export default function PickList() {
   // moves to another list (history navigation) — only then: a ref, so a
   // re-render (a new flush) never sends a batch early. The ticks go to the
   // list they were made on (flush closes over its id); nothing of that list
-  // may then lie over the next one (audit 2026-10-14).
+  // may then lie over the next one.
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => () => {
@@ -131,7 +131,7 @@ export default function PickList() {
   };
 
   // Every action catches a network failure too, and shows its error AFTER
-  // the reload (release audit 2026-10-13: the reload wiped it).
+  // the reload (the reload wiped it).
   const remove = async (bottleIds) => {
     setError('');
     let ok = false;

@@ -3,7 +3,7 @@
  * it normalised. Anything that could leave the origin — an absolute URL, a
  * protocol-relative "//host", a backslash variant, javascript: — yields null.
  * Use it wherever a navigation target arrives as DATA (a notification's link,
- * a stored return path) rather than as code (audit 2026-09 F03-5).
+ * a stored return path) rather than as code.
  */
 export default function internalPath(value) {
   if (typeof value !== 'string') return null;

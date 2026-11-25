@@ -78,7 +78,7 @@ function resolveForVintage(rows, vintage) {
 }
 
 // The accepted vocabulary is global, tiny, and changes only on an admin
-// decision — cache it in-process (audit: dataForWine rides the hottest page).
+// decision — cache it in-process (dataForWine rides the hottest page).
 let vocabCache = null;
 let vocabCacheAt = 0;
 const VOCAB_TTL_MS = 60 * 1000;
@@ -307,7 +307,7 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
 /**
  * Everything the wine-record section needs for one wine: the accepted
  * vocabulary, published values, whether ANY suggestion occupies a key's
- * one-pending slot (audit: without this a second suggester dead-ends on a
+ * one-pending slot (without this a second suggester dead-ends on a
  * 409 the UI could not predict), and the caller's own pending suggestion.
  *
  * Gated on wine VISIBILITY like every other registry surface — a hidden

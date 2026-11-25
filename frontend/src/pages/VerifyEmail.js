@@ -31,7 +31,7 @@ function VerifyEmail() {
       return;
     }
     // The token has been read — drop it from the address bar so it is not
-    // kept in history or reported anywhere (audit 2026-09 F03-6).
+    // kept in history or reported anywhere.
     setSearchParams(new URLSearchParams(), { replace: true });
 
     verifyEmail(token).then(result => {
@@ -41,7 +41,7 @@ function VerifyEmail() {
         setTimeout(() => navigate('/cellars', { replace: true }), 1500);
       } else if (result.success) {
         setStatus('success');
-        // Anywhere else verification does not sign in (security audit M-1):
+        // Anywhere else verification does not sign in:
         // send them to log in. The flag lets the login page say why they are
         // there: on a phone this usually opens in the mail app's own browser,
         // where no session exists yet.

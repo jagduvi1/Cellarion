@@ -93,7 +93,7 @@ const REGISTRY = [
     model: AuditLog, category: 'personal-data', userFields: ['actor.userId'],
     // Also scrub identifier PII the free-form detail can carry — registration/
     // login events embed { username, email }, and cellar-sharing events embed
-    // the invitee's address as { sharedWith } / { invitedEmail } (L-15). $unset
+    // the invitee's address as { sharedWith } / { invitedEmail }. $unset
     // only touches docs that actually have those keys, so it's safe across the
     // heterogeneous detail shapes.
     purge: (ctx) => [

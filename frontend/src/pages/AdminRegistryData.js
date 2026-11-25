@@ -219,7 +219,7 @@ function AdminRegistryData() {
     let rejectReason;
     if (decision === 'reject') {
       // null = Cancel; '' = OK with no text — a reason is optional, so an
-      // empty OK must still send the rejection (audit: `|| undefined` made
+      // empty OK must still send the rejection (`|| undefined` made
       // the Reject button silently dead without a typed reason).
       const answer = window.prompt('Reason for rejecting (optional, shown to the proposer):');
       if (answer === null) return; // cancelled
@@ -234,7 +234,7 @@ function AdminRegistryData() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return setError(data.error || 'Decision failed');
       // The server returned the decided row — drop it locally instead of
-      // refetching both full queues per click (audit: O(N²) queue clearing).
+      // refetching both full queues per click (O(N²) queue clearing).
       if (kind === 'key') setKeys((prev) => prev.filter((k) => k._id !== id));
       else setValues((prev) => prev.filter((v) => v._id !== id));
     } catch {

@@ -255,7 +255,7 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       }
     }
 
-    // Audit 2026-09 D05-1: the gallery is read by every cellar member, viewers
+    // The gallery is read by every cellar member, viewers
     // included, and returned whole documents — uploader, reviewer and reporter
     // identities of every public wine photo. The page needs the picture, its
     // credit and state, and whether the photo is the caller's own.
@@ -307,7 +307,7 @@ router.get('/wine/:wineDefinitionId', requireAuth, async (req, res) => {
       ...(showAll
         // The admin branch deliberately keeps private/unapproved rows, but
         // never label scans — admin/images.js already removes them from every
-        // moderation surface (audit L-6) and refuses to promote them.
+        // moderation surface and refuses to promote them.
         ? { status: { $ne: 'rejected' } }
         : { status: 'approved', visibility: 'public' })
     };
@@ -392,7 +392,7 @@ router.get('/:id', requireAuth, async (req, res) => {
         }
         const WineDefinition = require('../models/WineDefinition');
         // A private draft is pending too, but its photos are not curation
-        // evidence — nobody has been asked to identify it (draft design 2026-09-12).
+        // evidence — nobody has been asked to identify it.
         if (wineId && await WineDefinition.exists({ _id: wineId, pendingIdentity: true, draft: { $ne: true } })) {
           authorized = true;
           curationRead = true;
@@ -401,7 +401,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       }
     }
     // A curator reading somebody's private photo or label scan leaves a
-    // record — same helper and action as the MCP twin (audit 2026-09 M03-4).
+    // record — same helper and action as the MCP twin.
     if (curationRead) {
       logCurationImageRead(req, {
         wineId: curationWineId || image.wineDefinition || null,
@@ -431,7 +431,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Image not found' });
     }
 
-    // PROJECT the response (audit L-4). Returning the whole document handed
+    // PROJECT the response. Returning the whole document handed
     // back uploadedBy — and the somm/admin branch above exists precisely so a
     // curator can read a stranger's label scan, which the pending-wine queue
     // goes to deliberate lengths to keep ANONYMOUS (services/pendingWineOps).
@@ -616,7 +616,7 @@ router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
 // A member must be able to remove one unwanted photo on its own, not only as a
 // SIDE EFFECT of deleting the bottle, the cellar or the whole account. An admin
 // is no fallback for this: label scans are deliberately excluded from the
-// review queue (audit L-6), so an admin has no surface that lists them.
+// review queue, so an admin has no surface that lists them.
 //
 // The line between the two verbs is whether the photo is still ONLY the
 // uploader's. A photo assigned to a wine has become registry content that other

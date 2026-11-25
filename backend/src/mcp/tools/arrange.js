@@ -31,7 +31,7 @@ const { ok, fail, objectId, resolveCellarAccess } = require('../toolUtil');
 const { logAction, trimOutstandingPreviews } = require('../actionLedger');
 const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
 
-// Unconsumed arrange previews kept per user (audit 2026-09-02 D08-1); the
+// Unconsumed arrange previews kept per user; the
 // plan for a full rack is small, but the row count was unbounded.
 const MAX_OUTSTANDING_PREVIEWS = 5;
 
@@ -80,7 +80,7 @@ registerTool({
   scope: 'write',
   // Charges the write budget ITSELF — one slot per bottle moved on apply,
   // nothing on preview — so the generic per-call charge in server.js must skip
-  // it or a 12-bottle arrange would cost 14 (MCP-audit M7).
+  // it or a 12-bottle arrange would cost 14.
   selfBudgeted: true,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -119,7 +119,7 @@ registerTool({
       const before = occupancyOf(rack);
       const moveList = changes.map((c) => ({ bottle: labelOf(c.bottle), from: c.from, to: c.to }));
       // A preview costs one write slot and evicts the oldest unconsumed ones
-      // (D08-1) — the early returns above (empty / already arranged /
+      // — the early returns above (empty / already arranged /
       // overflow) stay free because they store nothing.
       if (!takeMutationSlot(String(ctx.user.id), 1, ipKeyFor(ctx))) {
         return fail('rate_limited', 'Too many previews in a short time — wait a few minutes before previewing again, or apply the last one.');

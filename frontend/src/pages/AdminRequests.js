@@ -215,7 +215,7 @@ function AdminRequests() {
     setRegions([]);
     // The requester chose the image value. Only a link or one of our upload
     // paths is offered to the approval form — never an inline image (too big
-    // for the field) and never an unrecognised shape (audit 2026-09 F06-1).
+    // for the field) and never an unrecognised shape.
     const requestImage = displayableImage(request.image);
     const prefillImage = requestImage && !requestImage.startsWith('data:') ? requestImage : '';
     // A photo attached to the request (inline) is offered as a checkbox
@@ -223,7 +223,7 @@ function AdminRequests() {
     // list flags an inline photo rather than carrying it (hasInlineImage);
     // the bytes are loaded below, only to be shown.
     const hasRequestPhoto = !!request.hasInlineImage || (!!requestImage && requestImage.startsWith('data:'));
-    // A back label photo (#1460) is offered for the wine's public photos the
+    // A back label photo is offered for the wine's public photos the
     // same way — on by default, the server publishes it as a gallery photo.
     const hasBackPhoto = !!request.hasInlineBackImage || !!displayableImage(request.backImage)?.startsWith('data:');
     setResolveData({

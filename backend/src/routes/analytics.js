@@ -192,7 +192,7 @@ router.delete('/views/:id', async (req, res, next) => {
 });
 
 // The built-in preset keys, mirrored from frontend/src/utils/analyticsPresets.js
-// (audit 2026-08-19 F7: an unvalidated presetKey allowed unbounded row
+// (an unvalidated presetKey allowed unbounded row
 // creation under arbitrary strings). Keep in sync when presets change — a
 // missing key here means "cannot star that preset", never data damage.
 const ANALYTICS_PRESET_KEYS = new Set([

@@ -96,7 +96,7 @@ function startScheduler() {
     } catch (err) {
       console.error('[scheduler] Recently-deleted purge failed:', err);
     }
-    // Audit 2026-09 S3-3: the original text of a soft-deleted forum reply is
+    // The original text of a soft-deleted forum reply is
     // kept 30 days for moderation and was then kept forever — the purge
     // helper existed but nothing called it.
     try {
@@ -143,7 +143,7 @@ function startScheduler() {
   // Search-index reconciliation: daily at 02:37 (container clock; the whole
   // schedule assumes it). The old 02:15 slot leaned on "the Sunday 02:00 jobs
   // are done in 15 minutes", which nothing enforces on a 4 GB box
-  // (release-audit L-2) — 02:37 buys the margin without touching any other
+  // — 02:37 buys the margin without touching any other
   // slot, and the off-minute keeps fleet load off the :00/:15/:30 marks.
   // Deletes index documents whose Mongo row is gone; prod 2026-08-13 had 567
   // such rows in the bottles index after a restore, producing "0 of 14" over
@@ -340,7 +340,7 @@ function startScheduler() {
   });
 
   // Private-draft expiry: hourly, because the 24-hour warning before an empty
-  // draft is deleted cannot be honoured by a daily pass (draft design 2026-09-12).
+  // draft is deleted cannot be honoured by a daily pass.
   cron.schedule('23 * * * *', async () => {
     try {
       const r = await runWineDraftExpirySweep();

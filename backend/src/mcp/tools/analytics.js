@@ -1,4 +1,4 @@
-// Self-service analytics over MCP (#987): the same bounded query engine the
+// Self-service analytics over MCP: the same bounded query engine the
 // web table uses, exposed as a two-step pair the model can compose freely —
 // list_analytics_fields teaches the vocabulary (including THIS user's typed
 // personal keys and the public registry vocabulary), analyze_cellar runs one

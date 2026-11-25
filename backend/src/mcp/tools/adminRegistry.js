@@ -155,7 +155,7 @@ registerTool({
 
 module.exports = {};
 
-// ── Taxonomy review queues (strategy 2026-07-29 R2/R3) ───────────────────────
+// ── Taxonomy review queues ───────────────────────
 // The same queues as Admin → Taxonomy, so an admin can run a review session
 // from chat: list → judge → approve/promote. Same shared service as the REST
 // routes (services/taxonomyReview.js) — the two surfaces cannot drift. Same
@@ -285,7 +285,7 @@ registerTool({
     if (!isValidId(args.country_id)) return fail('invalid_input', 'country_id must be a 24-hex Mongo id.');
     if (args.region_id && !isValidId(args.region_id)) return fail('invalid_input', 'region_id must be a 24-hex Mongo id.');
     // The schema's "must belong to the same country" was documentation, not
-    // validation (code audit 2026-07-30) — enforce it via the shared guard so
+    // validation — enforce it via the shared guard so
     // this surface and the REST twin cannot drift.
     const { appellationRefsError } = require('../../services/taxonomyReview');
     const refsError = await appellationRefsError(args.country_id, args.region_id);

@@ -1,4 +1,4 @@
-// Personal typed key/value data (issue #986) — full MCP parity with the web
+// Personal typed key/value data — full MCP parity with the web
 // bottle page: list, add, update, delete. All semantics (visibility, typed
 // validation, key match-or-create, caps, discussion ban) live in
 // services/personalData.js, shared with routes/personalData.js — the two
@@ -155,7 +155,7 @@ registerTool({
     if (!result.ok) {
       // Only when the key is genuinely NEW and no type came along — a value
       // error on an existing key must not send the caller hunting for a
-      // duplicate key (audit 2026-09-14 L2).
+      // duplicate key.
       if (result.code === 'invalid' && !args.key_type && result.needsType) {
         return svcFail({ ...result, message: `${result.message}. If "${args.key}" is a new key, pass key_type (${TYPES.join(' | ')}).` });
       }
@@ -321,7 +321,7 @@ registerTool({
       action: 'personal_data',
       detail: { op: 'key_update', keyId: String(result.key._id), key: result.key.name },
       // Only the fields THIS call changed — undoing a rename must not touch a
-      // unit set elsewhere (audit 2026-09-14 M2).
+      // unit set elsewhere.
       prev: {
         ...(nameChanged ? { name: result.prev.name } : {}),
         ...(unitChanged ? { unit: result.prev.unit } : {}),

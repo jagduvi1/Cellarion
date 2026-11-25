@@ -31,7 +31,7 @@ const LOT_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'price', 'c
 // page's "Edit vintage" sends its note through the bulk route the same way.
 const LOT_FIELDS_ON_REQUEST = ['notes', 'purchaseDate', 'purchaseLocation', 'purchaseUrl'];
 // Same ceiling as the bulk route (BULK_MAX): each sibling costs a save, a
-// search index update and an audit row, sequentially (audit 2026-09-07).
+// search index update and an audit row, sequentially.
 const LOT_LIMIT = 500;
 
 async function lotSiblingQuery(userId, bottle) {

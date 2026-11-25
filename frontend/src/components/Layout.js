@@ -34,7 +34,7 @@ function Layout({ children }) {
   const unreadBlog = useUnreadBlog();
 
   const handleLogout = () => {
-    // Offline mode (#1355): logging out deletes changes made offline that
+    // Offline mode: logging out deletes changes made offline that
     // haven't reached the server yet — say so before they are lost.
     const { pending, attention } = getQueueStatus();
     const waiting = pending + attention;

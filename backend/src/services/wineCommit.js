@@ -8,7 +8,7 @@
  *   - v1.97: POST /api/wines/identify-text minted a WineDefinition per AI
  *     guess; measured on prod 2026-08-03, 85 of 162 createdVia:'ai' rows had
  *     zero bottles (52%). It is now read-only; see routes/wines.js.
- *   - v1.100.0 (#899): bottle import minted on /validate; /validate is now
+ *   - v1.100.0: bottle import minted on /validate; /validate is now
  *     registry-read-only and wines mint on /confirm. See routes/import.js.
  *   - This one: the AddBottle/AddToWishlist UI minted on step-1 confirm via
  *     POST /api/wines/find-or-create, before any bottle existed. Measured on
@@ -111,7 +111,7 @@ const MAX_SCAN_CONFLICTS = 8;
 // its MERGE_SCALARS plus 'grapes' (services/labelScan.js; mirrored rather
 // than imported so this module keeps its lazy-require test seams). A free-text
 // key here would be 4.8KB of attacker-chosen text rendered in the curator's
-// modal and model context (release-audit LOW-2).
+// modal and model context.
 const CONFLICT_FIELDS = ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type', 'grapes', 'classification'];
 
 /**
@@ -180,7 +180,7 @@ async function attachScanImage(wine, { scanImageId, scanImageBackId } = {}, req)
       // the guard). Authorization is still the uploadedBy term.
       if (!id || !isValidId(String(id))) return null;
       // For a wine born PROMOTED, the retention clock starts in the SAME
-      // atomic claim (release-audit LOW-1): stamping afterwards left a window
+      // atomic claim: stamping afterwards left a window
       // where a failed stamp produced an attached frame with retainUntil null
       // — skipped by the unattached sweep (it is attached) AND by the expiry
       // sweep (no date) — i.e. kept forever, unreadable. Claim-and-clock is
@@ -280,7 +280,7 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
 
   if (result.candidates) return { candidates: result.candidates };
 
-  // Release-audit LOW-2: findOrCreateWine's E11000 recovery re-queries by
+  // FindOrCreateWine's E11000 recovery re-queries by
   // normalizedKey only — a same-slug/different-key sub-second race can return
   // { wine: null }. Both consumers would deref it into a 500; a clean 409
   // self-heals on retry (the winner is committed by then).

@@ -1,5 +1,5 @@
 /**
- * Weekly registry-health check (registry strategy 2026-07-29, R6).
+ * Weekly registry-health check.
  *
  * Every detection net the registry has — name checks, canonical collisions,
  * the low-confidence queue, producer spelling splits, invariant drift — was
@@ -47,7 +47,7 @@ const METRIC_LABELS = {
   nameCheckFlags: 'name-check flags',
   canonicalCollisionSets: 'canonical-key collision sets',
   lowConfidenceQueue: 'low-confidence profiles',
-  // Replaced producerSpellingSplits (2026-08-14): the old metric grouped by
+  // Replaced producerSpellingSplits: the old metric grouped by
   // normalizeString, which does NOT fold estate titles — so all 130
   // "Philipp Kuhn" / "Weingut Philipp Kuhn" display splits counted ZERO and
   // the watchdog never rang. The new key groups by producerSegment + country
@@ -158,7 +158,7 @@ async function computeMetrics() {
       // producerSuspect branch is deliberately NOT here — that class counts
       // under its own key (producerSuspectProfiles) so this metric keeps its
       // baseline. Held rows are excluded the same way since the publication
-      // gate (2026-08-18): they count under heldProfiles, and this metric
+      // gate: they count under heldProfiles, and this metric
       // becomes what its label says — low-confidence profiles users can SEE.
       // Post-gate it should trend toward zero; excluding holds only shrinks
       // it, which never alerts.

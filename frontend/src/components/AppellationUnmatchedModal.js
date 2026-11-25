@@ -7,7 +7,7 @@ import {
 } from '../api/admin';
 
 /**
- * The appellation review queue (registry strategy 2026-07-29, R2).
+ * The appellation review queue.
  *
  * Wines carry appellations as free text; anything no curated Appellation doc
  * covers surfaces here with the majority spelling, wine count and suggested

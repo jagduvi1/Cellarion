@@ -485,7 +485,7 @@
   margin-bottom: 1rem;
 }
 
-/* Folding cards, as on the vintage page (2026-10-14). Each wrapper carries
+/* Folding cards, as on the vintage page. Each wrapper carries
    the 1rem gap: the shared folding rules zero a wrapped card's top margin
    (tasting profile and reviews had one), and the personal-data and history
    cards had none, so they sat flush against each other. A wrapper whose card
@@ -521,7 +521,7 @@
 
 /* The record keeps the divider and spacing every section of this card has.
    Inside its fold wrapper it is the only div, so it matched
-   .bd-section:last-of-type and lost them (audit 2026-10-14); the wrapper
+   .bd-section:last-of-type and lost them; the wrapper
    carries them now, folded or not. */
 .bd-details > .cblock--nested {
   margin-bottom: 1rem;
@@ -1460,7 +1460,7 @@
   cursor: help;
 }
 
-/* Curator-verified provenance (#985) — the trustworthy state reads green */
+/* Curator-verified provenance — the trustworthy state reads green */
 .bd-ai-tag--curator {
   background: var(--color-success-bg, rgba(46, 125, 50, 0.12));
   color: var(--color-success, #2e7d32);

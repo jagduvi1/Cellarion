@@ -5,7 +5,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* The other route outside <Layout> (issue #1145). The card is centred, so
+  /* The other route outside <Layout>. The card is centred, so
      it only reaches the iOS status bar when the form is taller than the
      screen — a tall viewport is not the failing case, a short one is.
      Resolves to plain 2rem everywhere else. */
@@ -261,7 +261,7 @@
     /* The insets have to be repeated here. A bare `padding: 1rem` reset the
        safe-area top and bottom from the base rule, on exactly the narrow
        screens the inset exists for — the same shorthand trap deltabeat found
-       on .landing-nav (issue #1145), in the other file that fix touched.
+       on .landing-nav, in the other file that fix touched.
        Found by looking for siblings once the first one was confirmed. */
     padding: calc(1rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom));
     gap: 1.25rem;

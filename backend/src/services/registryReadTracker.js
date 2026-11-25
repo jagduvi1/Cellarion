@@ -53,7 +53,7 @@ function limits() {
 async function recordRead(reader, wineId) {
   if (!reader || !wineId) return null;
   // One id or many: a search returns ten identities in a single call, and
-  // those are reads of the registry too (bridge audit 2026-09-08).
+  // those are reads of the registry too.
   const ids = (Array.isArray(wineId) ? wineId : [wineId]).filter(Boolean);
   if (!ids.length) return null;
   // No database, no counter (fail open, and fast): a disconnected model would

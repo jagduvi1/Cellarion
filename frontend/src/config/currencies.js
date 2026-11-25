@@ -17,7 +17,7 @@ export const CURRENCY_SYMBOLS = {
   ZAR: 'R'
 };
 // Spellings that mean a supported code but are not one. Chrome's page
-// translation turned the add form's "EUR" into "EURO" (2026-10-13), so some
+// translation turned the add form's "EUR" into "EURO", so some
 // bottles were stored that way; they read as the code they stand for.
 // Mirrors backend/src/config/currencies.js.
 export const CURRENCY_ALIASES = { EURO: 'EUR', EUROS: 'EUR', '€': 'EUR' };

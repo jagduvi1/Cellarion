@@ -258,7 +258,7 @@ export function computeCabinetSlotPositions(cab, width, depth) {
   // than a bottle is long; one bottle diameter (+ a hair) is the
   // front-to-back pitch of a pile. Only the BOTTLE moves to where it lies:
   // every slot keeps the ordinary cabinet's click target (x, z), so the
-  // targets never overlap (release audit 2026-10-13).
+  // targets never overlap.
   const sideScale = Math.max(0.2, Math.min(1, (width - 0.01) / BOTTLE_LENGTH));
   const sideR = BOTTLE_RADIUS * sideScale;
   const sideX = -(BOTTLE_LENGTH * sideScale) / 2;

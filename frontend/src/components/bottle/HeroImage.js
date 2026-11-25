@@ -63,7 +63,7 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vin
 
   // No image at all: a drawn bottle with the wine's name on its label — for a
   // bottle still waiting on its wine request, the name the member asked for
-  // (release audit 2026-10-13: it drew a blank label).
+  // (it drew a blank label).
   const request = bottle?.pendingWineRequest;
   const labelWine = wine || (request && {
     name: request.wineName,

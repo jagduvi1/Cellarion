@@ -104,7 +104,7 @@ async function runCheck(userId, bottleId, cellarId, { storedVectorOnly = false }
     });
     // Only wines the registry shows: a quarantined non-wine, a pending row
     // or a canary keeps its vectors but must not be named as a similar wine
-    // in the alert (audit 2026-10-14).
+    // in the alert.
     const hitIds = hits.map(h => h.wineDefinitionId);
     const similarWineIds = hitIds.length
       ? (await WineDefinition.distinct('_id', {

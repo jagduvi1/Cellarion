@@ -15,7 +15,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 /**
- * Read-time privacy gate for populated people[].user (audit L-5). A private
+ * Read-time privacy gate for populated people[].user. A private
  * profile's username/displayName must not be resolvable by tagging its
  * ObjectId in a journal entry — that would re-open the enumeration oracle
  * users.js GET /public/:userId closes. Private users (other than the
@@ -53,7 +53,7 @@ router.get('/wine-search', async (req, res) => {
     // mongoSearch): a quarantined non-wine row and a pendingIdentity row are
     // not pickable registry content. Without them this regex-over-the-whole-
     // registry picker was the one authenticated surface handing out pending
-    // wine IDS — which other tools then accept as a wine_id (security audit).
+    // wine IDS — which other tools then accept as a wine_id.
     const matchedWines = await WineDefinition.find({
       $or: [{ name: regex }, { producer: regex }],
       pendingIdentity: { $ne: true },

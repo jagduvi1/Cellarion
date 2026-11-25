@@ -20,7 +20,7 @@
  * REVIEWED (admin unmatched queue), never rejected — a user adding a bottle
  * must not be blocked by taxonomy.
  *
- * MEMBERSHIP-GATED DECORATION STRIPPING (2026-08-12). Some label decorations
+ * MEMBERSHIP-GATED DECORATION STRIPPING. Some label decorations
  * cannot be stripped BLINDLY by normalizeAppellation, because the tokens
  * collide with real place names: a trailing "do" is a Spanish/Portuguese tier
  * mark in "Yecla DO" and an ordinary word inside "Ribera del Duero"-style
@@ -114,7 +114,7 @@ async function lookupCanonical(key) {
   // that disagrees); .sort keeps the answer deterministic across query
   // plans. Adoption is re-capped at 200 chars — the doc name is admin
   // input with its own validation, but the mint chokepoint's field cap must
-  // hold regardless of where the string came from (audit A1).
+  // hold regardless of where the string came from.
   const docs = await Appellation.find({
     $or: [{ normalizedName: key }, { normalizedSynonyms: key }],
   }).select('name').sort({ _id: 1 }).limit(4).lean();
@@ -182,7 +182,7 @@ async function appellationHasGeography(rawAppellation) {
 
 // candidateKeys is exported for services/taxonomyReview: the unmatched queue
 // must consider a string COVERED when any of its stripped variants matches a
-// curated doc (release-audit F2) — otherwise "Yecla DO" sits in the queue,
+// curated doc — otherwise "Yecla DO" sits in the queue,
 // an admin promotes it, and the minted doc's exact-match hit permanently
 // disables the very stripping that would have folded it. One key function,
 // two consumers, no drift.

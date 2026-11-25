@@ -45,7 +45,7 @@
 
 /* Mobile: clear the bottom-nav so the FAB doesn't overlap the tab strip
    when the user is signed in. The nav's total height is
-   --bottom-nav-height + the iOS home-indicator inset (issue #861). */
+   --bottom-nav-height + the iOS home-indicator inset. */
 @media (max-width: 768px) {
   .jump-to-reply-btn {
     right: 1rem;

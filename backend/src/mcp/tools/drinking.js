@@ -93,7 +93,7 @@ registerTool({
     const urgentCount = data.filter((c) => c.readiness === 'declining' || c.readiness === 'late').length;
     return ok(
       // Same screened-total lead as pair_with_dish — and it must be the
-      // UNFILTERED total (release-audit M-2): with wine_type/max_price set,
+      // UNFILTERED total: with wine_type/max_price set,
       // `considered` is the post-filter pool, and leading with it re-created
       // the very "the AI can only see part of my cellar" misreading this line
       // exists to kill.

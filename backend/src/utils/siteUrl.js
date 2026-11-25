@@ -1,4 +1,4 @@
-// Single source for the public site base URL (MCP-audit M5). Every user-facing
+// Single source for the public site base URL. Every user-facing
 // link must derive from FRONTEND_URL so a self-hosted instance emits its OWN
 // origin, never a hardcoded https://cellarion.app (whose /wines and /blog paths
 // don't exist on someone else's deployment). Same fallback as routes/og/shared.js,

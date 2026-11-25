@@ -26,7 +26,7 @@ export function storeCardFields(fields) {
 const same = (values) => values.every((v) => v === values[0]);
 
 // Formatters are costly to build and a list draws hundreds of cards: one per
-// locale (and currency), made once (release audit 2026-10-12).
+// locale (and currency), made once.
 const priceFormats = new Map();
 function priceFormat(locale, currency) {
   const key = `${locale}|${currency}`;

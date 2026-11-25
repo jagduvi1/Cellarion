@@ -1,6 +1,6 @@
 /**
  * READ-ONLY sweep of the curated Appellation collection for ref integrity
- * (code audit 2026-07-30: "appellation region not checked against country").
+ * ("appellation region not checked against country").
  *
  * The write surfaces now enforce, via appellationRefsError, that an
  * appellation's region belongs to its country and that both refs exist — but

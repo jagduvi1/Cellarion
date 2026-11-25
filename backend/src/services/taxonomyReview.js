@@ -3,7 +3,7 @@
  * the admin MCP tools so the two surfaces cannot drift (the same reason
  * wineProfileOps/bottleOps exist).
  *
- * Two queues, one philosophy (strategy 2026-07-29): user writes are never
+ * Two queues, one philosophy: user writes are never
  * blocked by taxonomy — doubt is routed here instead.
  *   - Pending regions (R3): auto-minted by a user write, awaiting an admin's
  *     approve / merge / fix.
@@ -21,7 +21,7 @@ const { isValidId } = require('../utils/validation');
 const { stripHtml } = require('../utils/sanitize');
 
 /**
- * Ref validation for an Appellation write (code audit 2026-07-30: "appellation
+ * Ref validation for an Appellation write ("appellation
  * region not checked against country"). The schema declares country and region
  * refs but Mongoose verifies neither that the ids exist nor that the region
  * belongs to the country — listUnmatchedAppellations() below even drops
@@ -110,8 +110,8 @@ async function listUnmatchedAppellations() {
   for (const r of rows) {
     const cleaned = normalizeAppellation(r._id.ap || '') || r._id.ap || '';
     const key = normalizeAppellationKey(cleaned);
-    // Covered when ANY resolver candidate key matches, not just the exact one
-    // (release-audit F2): "Yecla DO" is governed by the curated "Yecla" — the
+    // Covered when ANY resolver candidate key matches, not just the exact one:
+    // "Yecla DO" is governed by the curated "Yecla" — the
     // resolver folds it at write time, and listing it here invites an admin to
     // promote the decorated form, whose exact-match hit would then permanently
     // beat the stripped variant and split the appellation in two. What remains

@@ -205,7 +205,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Provide wineDefinitionId or newWine (exactly one)' });
     }
 
-    // Item-field validation BEFORE any registry work (release-audit LOW-1):
+    // Item-field validation BEFORE any registry work:
     // a 400 on notes/priority/vintage after the mint would leave the exact
     // orphan the mint-at-commit change exists to prevent.
     const safeVintage = vintage != null ? String(vintage) : '';
@@ -233,7 +233,7 @@ router.post('/', async (req, res) => {
       if (req.user.isDemo) {
         return res.status(403).json({ error: 'This action is not available in the demo. Create a free account to use it.' });
       }
-      // Drafts are for bottles (draft design 2026-09-12): an empty draft is
+      // Drafts are for bottles: an empty draft is
       // deleted when its clock lapses, which would orphan a wishlist item.
       if (newWine.draft === true) {
         return res.status(400).json({ error: 'A wishlist wine cannot be a private draft — add it as a bottle first, or publish it.' });
@@ -254,7 +254,7 @@ router.post('/', async (req, res) => {
       }
       // The id was taken on trust — no existence check at all, so a wish could
       // be filed against any id, including a stranger's pending row, whose
-      // name then came back through the populate above (security audit M-4).
+      // name then came back through the populate above.
       const wine = await findVisibleWine(wineDefinitionId, {
         // noDrafts: a wishlist item on an empty draft would be orphaned by its expiry.
         userId: req.user.id, roles: req.user.roles, select: '_id', lean: true, noDrafts: true,
@@ -295,7 +295,7 @@ router.post('/', async (req, res) => {
     const populated = await WishlistItem.findById(item._id)
       .populate({
         path: 'wineDefinition',
-        // EXPLICIT select (security audit M-4). Without it the whole registry
+        // EXPLICIT select. Without it the whole registry
         // document came back — including createdBy, scanImage and
         // normalizedKey, and a pending row's normalizedKey IS
         // `pending~<creator-id>:…`, so the projection itself handed out
@@ -374,7 +374,7 @@ router.put('/:id', async (req, res) => {
     const populated = await WishlistItem.findById(item._id)
       .populate({
         path: 'wineDefinition',
-        // EXPLICIT select (security audit M-4). Without it the whole registry
+        // EXPLICIT select. Without it the whole registry
         // document came back — including createdBy, scanImage and
         // normalizedKey, and a pending row's normalizedKey IS
         // `pending~<creator-id>:…`, so the projection itself handed out

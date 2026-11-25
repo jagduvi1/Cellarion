@@ -41,7 +41,7 @@ function markRefreshInFlight(on) {
   } catch { /* storage blocked — no guard, as before */ }
 }
 
-// Offline mode (#1355): how long a start waits for a refresh / profile on a
+// Offline mode: how long a start waits for a refresh / profile on a
 // weak signal before opening offline from the kept profile.
 const START_WAIT_MS = 5000;
 const TIMED_OUT = Symbol('timed-out');
@@ -52,7 +52,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * (401, or another 4xx that no retry can change) ends it. A 429 or a 5xx says
  * the server can't answer right now — a deploy restarting it (502/503 for a
  * few seconds), a hiccup, a rate limit — and used to sign people out exactly
- * like a rejection (scaling audit 2026-09-25).
+ * like a rejection.
  * @returns {'ok' | 'rejected' | 'unavailable'}
  */
 export function refreshOutcome(status) {
@@ -224,7 +224,7 @@ export const AuthProvider = ({ children }) => {
   // had already rotated the cookie, the page that asked was gone before the
   // response (and its new cookie) arrived, and the reloaded page presented
   // the rotated-away token — which the server answers with 401 and a cleared
-  // cookie. Likely with offline mode (#1355): the app refreshes the moment the
+  // cookie. Likely with offline mode: the app refreshes the moment the
   // signal returns, which is exactly when people pull to refresh. Two guards:
   //  - keepalive: the request outlives the page, so its cookie still lands;
   //  - a timestamp in localStorage while a refresh is in flight: a page that
@@ -622,7 +622,7 @@ export const AuthProvider = ({ children }) => {
 
   const verifyEmail = async (token) => {
     try {
-      // POST the token (security audit M-1). The endpoint signs the member in
+      // POST the token. The endpoint signs the member in
       // only in the browser that registered the account (its httpOnly signup
       // binding cookie rides on this request); anywhere else it only verifies
       // and the member logs in normally afterward.

@@ -121,7 +121,7 @@ export function makeGetter(row) {
   };
   // Name by name, in the caller's order of preference: an earlier name
   // written loosely ("purchase_date") beats a later one written exactly
-  // ("date") — the order is the priority (release audit 2026-10-12).
+  // ("date") — the order is the priority.
   return (keys) => {
     for (const k of keys) {
       const val = row[k] || row[k.toLowerCase()] || loose(k);

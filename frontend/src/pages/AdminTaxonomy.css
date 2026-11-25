@@ -139,7 +139,7 @@
   }
 }
 
-/* ── Usage counts + merge (registry strategy 2026-07-29 R5) ── */
+/* ── Usage counts + merge ── */
 .taxonomy-usage {
   font-size: 0.75rem;
   color: var(--color-text-muted);

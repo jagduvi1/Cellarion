@@ -15,7 +15,7 @@ import { formatVintage } from '../../utils/vintage';
  * bottle).
  *
  * The data itself is nothing new: these are the same typed personal entries
- * the bottle page already writes (#986). This is an entry point at the moment
+ * the bottle page already writes. This is an entry point at the moment
  * people actually have the number in front of them — the label is in their
  * hand while they are adding the bottle, not a page-visit later.
  *

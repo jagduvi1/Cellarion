@@ -215,7 +215,7 @@ function typeFromFileGrapes(grapes, grapeColourOf) {
 
 // Estate names legitimately double as the wine name ("Château Talbot",
 // "Harlan Estate", "Schloss Johannisberg") — the estate word may lead or
-// trail (audit 2026-09-07).
+// trail.
 const ESTATE_WORD_RE = /\b(ch[âa]teau|domaine|clos|quinta|tenuta|castello|weingut|bodegas?|mas|cascina|fattoria|azienda|cantina|villa|podere|poderi|finca|casa|ch\.|estate|winery|vineyards?|cellars?|schloss|maison|weinbau|abbazia|marchesi|vignobles|adega|herdade)\b/i;
 function producerMirroredFromName(aiData, item) {
   const str = (v) => (typeof v === 'string' ? v.trim() : '');

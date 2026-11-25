@@ -47,7 +47,7 @@ function nudgeRacks(userId, action) {
 // the tool registry, whose search dep is ESM-only and unparseable by jest —
 // the #702 failure mode). Never throws: a cache miss must not fail a mutation.
 //
-// Debounced per user (MCP-audit M10): a bulk_add of 24 bottles fires 24 bottle.
+// Debounced per user: a bulk_add of 24 bottles fires 24 bottle.
 // audits within milliseconds, each doing two full Map scans (up to ~4000 string
 // compares) for the SAME user — the first bust already cleared everything, the
 // rest are pure waste. Collapse repeats within a short window; the cache already
@@ -106,7 +106,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
     userAgent: req?.headers?.['user-agent']
   };
 
-  // Structured stdout log — visible in docker logs. REDACTED (L-16): the
+  // Structured stdout log — visible in docker logs. REDACTED: the
   // container/log-aggregation stream is an independent copy of the audit trail
   // with no TTL and no erasure path, so it must never carry identifiers. Only
   // actor userId + role, the action, and the resource type/ids are emitted
@@ -139,7 +139,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
     // Bust the MCP read caches and move the data version (services/dataVersion
     // — the REST stats and polling caches) for the affected user BEFORE the
     // push, so a client that re-reads on the nudge recomputes instead of being
-    // served the old answer (grand-audit M3). Lazy-require keeps the MCP
+    // served the old answer. Lazy-require keeps the MCP
     // modules off audit's load path. Same owner-resolution as the push below.
     const statsChanged = STATS_CHANGED_PREFIXES.some(p => action.startsWith(p));
     const racksChanged = action.startsWith(RACK_PREFIX);

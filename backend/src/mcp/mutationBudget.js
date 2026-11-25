@@ -3,7 +3,7 @@
 // (which charges one slot per mutating tool call) and batch tools like bulk_add
 // (which charge one slot PER ITEM upfront) can use it without a circular require.
 //
-// In-memory like express-rate-limit. Two dimensions (security audit L-18):
+// In-memory like express-rate-limit. Two dimensions:
 //   - per USER  — the write throughput of one account.
 //   - per IP    — bounds the ~60×accounts amplification a per-user-only budget
 //                 allowed (many accounts behind one NAT). Generous multiple of
@@ -20,7 +20,7 @@ const WINDOWS_MAX = 5000;
 // Hosted connectors (claude.ai, ChatGPT) egress from a SMALL shared pool, so
 // for them one "IP" is hundreds of users: at 4× four busy accounts blocked
 // every other user on that egress from all MCP writes for the rest of the
-// window (audit 2026-09 M02-2). 25× still bounds many-accounts-behind-one-
+// window. 25× still bounds many-accounts-behind-one-
 // address abuse (1,500 writes / 15 min is trivial load) without pooling
 // strangers; the per-user cap is the real fairness layer.
 const IP_WRITE_MULTIPLIER = 25;

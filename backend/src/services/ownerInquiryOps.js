@@ -5,7 +5,7 @@
  * the lazy expiry sweep every queue read runs (the bottleOps pattern: REST
  * and MCP must not drift on recipient building or conflict semantics).
  *
- * The OWNER side lives here too (2026-09-24): the recipient view and the
+ * The OWNER side lives here too: the recipient view and the
  * single-shot answer are shared by routes/ownerInquiries.js (the bottle-page
  * card) and the MCP tools list_curator_questions / answer_curator_question
  * (mcp/tools/ownerQuestions.js), so the privacy projection and the claim
@@ -209,7 +209,7 @@ async function liveBottleLink(userId, wineId, preferBottleId) {
   const cellarIds = await Cellar.find(reachableCellars(userId)).distinct('_id');
   if (!cellarIds.length) return null;
   // The original bottle by id: found however many bottles of the wine there
-  // are, not only among the newest of them (pre-release audit 2026-10-14).
+  // are, not only among the newest of them.
   const preferred = preferBottleId && isValidId(String(preferBottleId))
     ? await Bottle.findOne({ _id: preferBottleId, wineDefinition: wineId, cellar: { $in: cellarIds } }).select('cellar').lean()
     : null;
@@ -372,7 +372,7 @@ async function buildRecipients(wineId) {
     { $match: { 'liveCellar.0': { $exists: true } } },
     { $sort: { createdAt: -1 } },
     // latest makes the cap DETERMINISTIC ($group emits undefined order —
-    // audit 2026-08-11 L-3: without the re-sort the 20 kept were arbitrary).
+    // Without the re-sort the 20 kept were arbitrary).
     { $group: { _id: '$user', bottle: { $first: '$_id' }, cellar: { $first: '$cellar' }, latest: { $first: '$createdAt' } } },
     // Demo visitors hold clones of real registry wines but can never answer
     // (respond is requireNonDemo) — without this exclusion they crowd real
@@ -428,7 +428,7 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
 
   const wine = await WineDefinition.findById(wineId).select('name producer pendingIdentity draft');
   // A private draft answers not_found: nobody but its creator knows it exists,
-  // and the creator IS the owner (draft design 2026-09-12). `draft` is in the
+  // and the creator IS the owner. `draft` is in the
   // projection above, so the check can see it.
   if (!wine || wine.draft === true) {
     return { ok: false, code: 'not_found', message: 'No registry wine with that id.' };

@@ -253,7 +253,7 @@ async function resolveGrapeIdsStrict(names) {
     // A name that normalizes to nothing (non-Latin scripts — normalizeString
     // strips non-ASCII word chars — or a bare percentage) is UNRESOLVABLE, not
     // ignorable: silently dropping it turned a set into a partial write, and an
-    // all-such list into an accidental CLEAR of wine.grapes (audit 2026-08-10).
+    // all-such list into an accidental CLEAR of wine.grapes.
     if (!normalizedName) { unmatched.push(raw); continue; }
     if (seen.has(normalizedName)) continue;
     seen.add(normalizedName);

@@ -11,7 +11,7 @@ const FAILURE_BACKOFF = 5 * 60 * 1000;     // negative-cache window after a fail
  * Fetch USD-based exchange rates from OUR backend (GET /api/exchange-rates),
  * which keeps one daily snapshot from its upstream provider. The browser no
  * longer talks to the provider itself, so no visitor IP leaves the site for
- * this (audit 2026-09 F03-4).
+ * this.
  * Returns a rates object like { USD: 1, EUR: 0.92, SEK: 10.5, ... }
  * Returns null on error — callers should degrade gracefully.
  */

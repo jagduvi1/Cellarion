@@ -168,7 +168,7 @@ export default function TabUsers() {
 
   async function changeRoles(userId, newRoles) {
     // Granting or revoking a privileged role is one checkbox click away from
-    // a mis-tap — confirm it first (audit 2026-09 F05-1).
+    // a mis-tap — confirm it first.
     const target = data?.users?.find(u => u._id === userId);
     const before = new Set(target?.roles || []);
     const after = new Set(newRoles);

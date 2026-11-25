@@ -1,6 +1,6 @@
 import { JSON_HEADERS } from './apiConstants';
 
-// Personal typed key/value data on wines and bottles (issue #986).
+// Personal typed key/value data on wines and bottles.
 // Mirrors backend routes/personalData.js.
 
 export const getPersonalData = (apiFetch, bottleId) =>

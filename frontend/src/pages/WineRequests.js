@@ -6,7 +6,7 @@ import { requestImageFor } from '../utils/requestImage';
 import safeUrl from '../utils/safeUrl';
 import './WineRequests.css';
 
-// Links a request may carry (#1460): the required source plus two more — a
+// Links a request may carry: the required source plus two more — a
 // winery page and a review give the reviewer different evidence. The same
 // bound as the server's (services/accountOps MAX_SOURCE_URLS).
 const MAX_LINKS = 3;
@@ -29,7 +29,7 @@ function WineRequests() {
   const [imageFile, setImageFile] = useState(null);
   const [imageBgRemoved, setImageBgRemoved] = useState(null);
   const [processingBg, setProcessingBg] = useState(false);
-  // The back label (#1460): a photo or a link, like the front. Never the
+  // The back label: a photo or a link, like the front. Never the
   // wine's picture and no background removal here; after review the admin
   // may publish it among the wine's gallery photos (the notice says so).
   const [backImageFile, setBackImageFile] = useState(null);
@@ -182,8 +182,7 @@ function WineRequests() {
     setShowForm(false);
   };
   // Closing the form forgets its photos and links: a photo taken for one wine
-  // used to ride along into the next request after the form was reopened
-  // (release audit 2026-10-09, F2).
+  // used to ride along into the next request after the form was reopened.
   const toggleForm = () => (showForm ? handleCancel() : setShowForm(true));
 
   const setExtraUrl = (index, value) => setExtraUrls(extraUrls.map((u, i) => (i === index ? value : u)));

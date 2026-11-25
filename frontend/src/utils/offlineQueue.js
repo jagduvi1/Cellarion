@@ -1,5 +1,5 @@
 /**
- * Offline write queue (#1355). A queueable write (utils/offlineOps) that the
+ * Offline write queue. A queueable write (utils/offlineOps) that the
  * network can't take is stored on the device, applied to the device's copy at
  * once (the page carries on as if it had succeeded), and sent — in order, with
  * its Idempotency-Key and the preconditions of what the user saw — once the

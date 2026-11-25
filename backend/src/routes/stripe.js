@@ -198,7 +198,7 @@ router.post('/checkout', requireAuth, async (req, res) => {
     // first — a subscription completed on an overwritten customer would be
     // invisible to /portal (scoped to the persisted id) and immune to the
     // customer.subscription.deleted reconcile, so the user could never cancel
-    // it (audit 2026-07-08, L-6).
+    // it.
     let customerId = user.stripeCustomerId;
     if (!customerId) {
       const customer = await s.customers.create({

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
-// Audit 2026-09 S2-3: the write routes are demo-blocked like their MCP twins —
+// The write routes are demo-blocked like their MCP twins —
 // an anonymous demo session must not publish a public, branded wine list or
 // consume disk with logos and duplicates. Reads stay open for the demo tour.
 const { requireAuth, requireNonDemo } = require('../middleware/auth');

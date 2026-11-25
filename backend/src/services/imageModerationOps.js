@@ -67,7 +67,7 @@ async function approveImage({ imageId, actorId, visibility = 'public', official 
   if (!['processed', 'uploaded'].includes(image.status)) {
     return fail('invalid_input', 'Image cannot be approved in current state');
   }
-  // Never a label scan (audit L-6): it is a private frame kept only so a
+  // Never a label scan: it is a private frame kept only so a
   // curator can read an unreadable label. Promoting one to a wine's official
   // image makes it public AND sets assignedToWine, which moves it out of the
   // delete branch of account deletion into the anonymise branch, so the
@@ -266,7 +266,7 @@ async function setOfficialImage({ imageId, actorId, replaceMain = true, clearRep
   const image = await BottleImage.findById(imageId).populate('bottle', 'wineDefinition');
   if (!image) return fail('not_found', 'Image not found');
   if (image.status === 'rejected') return fail('invalid_input', 'Rejected images cannot be set as official');
-  // Never a label scan (audit L-6) — see approveImage.
+  // Never a label scan — see approveImage.
   if (image.kind === 'label-scan') return fail('invalid_input', LABEL_SCAN_MSG);
 
   const imageUrl = image.processedUrl || image.originalUrl;

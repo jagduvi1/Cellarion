@@ -6,7 +6,7 @@ function MaturityPhaseTable({ profile, anchorYear }) {
   const { t } = useTranslation();
   const CURRENT_YEAR = new Date().getFullYear();
   // The row marked as now is the phase the maturity status names, so the
-  // table and the status can never disagree (release audit 2026-10-13: an
+  // table and the status can never disagree (an
   // open-ended phase, a phase with only an end year, or a gap between phases
   // marked two rows or none). Before the first phase and past prime, no row
   // is marked. Without a reviewed status, a row is marked by its own years.

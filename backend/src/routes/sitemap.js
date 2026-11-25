@@ -19,7 +19,7 @@ const { countWinesBy } = require('./taxonomy');
  *
  * The single file this replaces listed at most 5,000 wines (the most recently
  * updated) and 5,000 threads — with ~10.7k wines, over half of the public wine
- * pages were never offered to search engines (scaling audit 2026-09-25). The
+ * pages were never offered to search engines. The
  * parts stay on the /sitemap.xml path so they may list any URL of the site
  * (a sitemap only covers URLs under its own directory), and so no proxy change
  * is needed: nginx already forwards /sitemap.xml with its query string.

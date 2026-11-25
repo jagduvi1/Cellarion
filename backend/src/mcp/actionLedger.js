@@ -10,7 +10,7 @@
 // shape (findOne → mutate → create, duplicate-key swallowed) let both twins
 // mutate and only deduplicated the ledger row afterwards.
 //
-// Idempotency keys are scoped PER TOOL (MCP-audit M2): the stub records the
+// Idempotency keys are scoped PER TOOL: the stub records the
 // claiming tool, and a key seen on a DIFFERENT tool is refused (invalid_input)
 // rather than replaying the first tool's result — so an agent that recycles one
 // key across `update_bottle` then `add_bottle` can't be told the add "succeeded"
@@ -36,7 +36,7 @@ const inProgress = () => ({
 });
 
 // A key already used by a DIFFERENT tool. Not retryable with this key — the
-// client must use a fresh key for the new operation (MCP-audit M2).
+// client must use a fresh key for the new operation.
 const crossToolConflict = (otherTool) => ({
   isError: true,
   content: [{ type: 'text', text: JSON.stringify({ error: { code: 'invalid_input', message: `That idempotency_key was already used for a different tool (${otherTool}). Use a fresh idempotency_key per distinct operation.` } }) }],
@@ -166,7 +166,7 @@ async function releaseClaim(ctx, idempotencyKey, toolName) {
  * ~250 KB for a 24-item bulk_add at the field caps. Preview never consumed a
  * write slot (it changes nothing), so a looping client could park an
  * unbounded number of those blobs in McpActionLog under a 90-day TTL — a
- * disk-fill from one free account (audit 2026-09-02 D08-1). Consumed previews
+ * disk-fill from one free account. Consumed previews
  * already drop `prev` at claim time; this bounds the unconsumed ones.
  */
 async function trimOutstandingPreviews(userId, action, keep) {

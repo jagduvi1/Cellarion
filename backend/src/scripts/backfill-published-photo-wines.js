@@ -1,5 +1,5 @@
 /**
- * One-time backfill (2026-09-27): link every published bottle photo to its wine.
+ * One-time backfill: link every published bottle photo to its wine.
  *
  * A photo uploaded on a bottle carries no wine of its own — the bottle does.
  * Publishing it (approved + public) is meant to make it a photo OF THE WINE:

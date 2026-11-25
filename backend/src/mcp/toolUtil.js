@@ -31,7 +31,7 @@ function ok(summary, data, extra = {}) {
  * forbidden_scope | budget_exhausted | conflict | rate_limited | busy |
  * unavailable. Messages are written for the calling MODEL to self-correct from,
  * not for humans.
- * `busy` (MCP-audit M1) = an identical idempotency_key request is mid-flight;
+ * `busy` = an identical idempotency_key request is mid-flight;
  * retry the SAME key shortly (distinct from `conflict`, which is not retryable).
  * `unavailable` (MCP-audit M3-low) = a backend dependency (vector search/embeddings/
  * image service) is temporarily down or rebuilding — retry later; slowing the
@@ -228,7 +228,7 @@ function pageParams(args, defLimit, maxLimit) {
 }
 
 // What belongs in the three registry fields every add/correct tool takes —
-// one text, so no tool schema drifts from the rule (GitHub discussion #1696).
+// one text, so no tool schema drifts from the rule.
 const FIELD_DESCRIPTIONS = {
   region: 'The wine region NAME where THIS wine is grown (e.g. "Piedmont", "Barossa Valley") — never assumed from where the producer is based.',
   appellation: 'The appellation as its register names it, WITHOUT the regulatory mark: "Barolo" not "Barolo DOCG", "Pauillac" not "Pauillac AOC". Premier/Grand Cru stays only where it is part of the legal name ("Chablis Premier Cru", "Saint-Émilion Grand Cru"). Never a quality tier, and never a production method ("Méthode Traditionnelle", "Metodo Classico", "Méthode Cap Classique"): the appellation is the origin, null when the label names none.',

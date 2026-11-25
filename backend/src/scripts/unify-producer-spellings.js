@@ -56,7 +56,7 @@ const { initSearch } = require('./lib/scriptSearch');
     // oldest seeds null and is only ever set by VOTING rows — seeding it from
     // whichever row happens to iterate first let a quarantined row's ancient
     // createdAt flip the tie-break against producerSpelling.js's identical
-    // rule (audit 2026-07-29 F1).
+    // rule.
     if (!s) { s = { count: 0, oldest: null, wines: [] }; g.set(spelling, s); }
     // Quarantined rows get rewritten too (consistency) but no vote (their
     // data is exactly what we don't want to canonize) — mirror producerSpelling.js.
@@ -90,7 +90,7 @@ const { initSearch } = require('./lib/scriptSearch');
         // leave it for a human rather than silently altering identity keys.
         // Always compute BOTH sides fresh: a stored canonicalKey stamped by an
         // older algorithm (the tier-token list grows, #842) would false-skip a
-        // pure spelling variant as "key drift" (audit 2026-07-29 F2).
+        // pure spelling variant as "key drift".
         const before = computeCanonicalKey(w.name, spelling, w.appellation);
         const after = computeCanonicalKey(w.name, target, w.appellation);
         if (before !== after) {

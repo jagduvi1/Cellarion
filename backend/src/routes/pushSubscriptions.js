@@ -67,7 +67,7 @@ router.post('/test', async (req, res) => {
   }
 });
 
-// Audit 2026-09 S4-3: devices per account; the oldest is evicted past this.
+// Devices per account; the oldest is evicted past this.
 const MAX_PUSH_SUBSCRIPTIONS = 10;
 
 // POST /api/push-subscriptions — save a new push subscription
@@ -80,7 +80,7 @@ router.post('/', async (req, res) => {
 
     const safeEndpoint = String(endpoint);
     const safeKeys = { p256dh: String(keys.p256dh), auth: String(keys.auth) };
-    // Audit 2026-09 S4-3: every notification fans out to every subscription,
+    // Every notification fans out to every subscription,
     // each a VAPID-signed HTTPS POST to a host the CLIENT chose. Push
     // services are https-only, and a person has a handful of devices — keep
     // the newest MAX_PUSH_SUBSCRIPTIONS and evict the oldest beyond that.

@@ -50,7 +50,7 @@ const router = express.Router();
 
 // Machine polling: Home Assistant asks `?maturity=…&limit=…` every few minutes
 // and again after every change nudge, and the maturity path loads and
-// classifies the whole collection per request (scaling audit 2026-09-25).
+// classifies the whole collection per request.
 // API-token requests are answered from memory while the user's data version
 // (services/dataVersion, moved by every audited bottle./cellar. change) is the
 // one the answer was computed at; the max age bounds registry edits, curated
@@ -177,7 +177,7 @@ router.get('/', async (req, res) => {
 // Kaefferkopf" (village-as-producer, likely fictitious) then attached their
 // bottle to a different existing wine two minutes later. The wine is now
 // resolved-or-minted HERE, inside the bottle create — the same commit-time
-// pattern as import /confirm (#899) and the MCP add_bottle tool, via the same
+// pattern as import /confirm and the MCP add_bottle tool, via the same
 // findOrCreateWine chokepoint (dedup, soft zone, taxonomy mint gates).
 // Soft-zone: when very similar wines already exist, this returns 200
 // { candidates } and creates NOTHING — the client re-submits with either an
@@ -228,7 +228,7 @@ router.post('/', requireNonDemo, async (req, res) => {
         return res.status(404).json({ error: 'Wine definition not found' });
       }
     } else {
-      // Commit-field validation BEFORE the mint (release-audit LOW-1): a
+      // Commit-field validation BEFORE the mint: a
       // vintage/rating/notes 400 after resolveOrMintWine would leave the
       // exact orphan mint-at-commit exists to prevent. Checks-only — addBottle
       // still validates and resolves values itself below.
@@ -783,7 +783,7 @@ router.post('/:id/arrive', requireBottleAccess('editor'), async (req, res) => {
 // POST /api/bottles/:id/open — mark an active bottle as opened (owner or editor)
 router.post('/:id/open', requireBottleAccess('editor'), async (req, res) => {
   try {
-    // openedAt: when it was really opened — an open queued offline (#1355) is
+    // openedAt: when it was really opened — an open queued offline is
     // sent later. Validated by the service (not future, at most 90 days back).
     // takeOutOfRack: the bottle leaves its slot (on the counter, not back in
     // the rack); takenOutOf names the slot it left, null when it stayed.
@@ -836,8 +836,8 @@ router.delete('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
     // Same invariant closeBottle enforces: on a consumed bottle the pours are
-    // preserved drinking history on the consumption record, not a live tally
-    // (security audit 2026-07-30 M-1). This handler is inline rather than a
+    // preserved drinking history on the consumption record, not a live tally.
+    // This handler is inline rather than a
     // bottleOps call, so it needs its own copy of the guard.
     if (CONSUMED_STATUSES.includes(bottle.status)) {
       return res.status(409).json({

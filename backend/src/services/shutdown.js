@@ -1,5 +1,5 @@
 /**
- * Graceful shutdown (scaling audit 2026-09-25).
+ * Graceful shutdown.
  *
  * A deploy recreates the backend container: Docker sends SIGTERM, waits 10 s,
  * then SIGKILLs. Node runs as PID 1 in the container, and PID 1 ignores a

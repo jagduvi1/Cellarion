@@ -1,8 +1,8 @@
 /**
  * Re-derive normalizedName/normalizedSynonyms for every Appellation doc using
- * normalizeAppellationKey (audit 2026-07-29 A2).
+ * normalizeAppellationKey.
  *
- * Docs created before the appellation system (#858) carry keys computed with
+ * Docs created before the appellation system carry keys computed with
  * plain normalizeString, which DELETES hyphens — so "Châteauneuf-du-Pape" is
  * stored as 'chateauneufdupape' while every lookup now folds to
  * 'chateauneuf du pape'. Those legacy docs are unmatchable by the resolver,

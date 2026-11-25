@@ -97,7 +97,7 @@ async function purgeCellarPermanently(cellarId) {
     WineList.deleteMany({ cellar: cellarId }),
     // Detach any climate device that was assigned to this cellar — the device
     // itself belongs to the user, not the cellar, so it survives; leaving the
-    // ref would point it at a nonexistent cellar (grand-audit M12). Same as the
+    // ref would point it at a nonexistent cellar. Same as the
     // member-remove/downgrade detach paths in routes/cellars.js.
     ClimateDevice.updateMany({ cellar: cellarId }, { $set: { cellar: null } }),
   ]);

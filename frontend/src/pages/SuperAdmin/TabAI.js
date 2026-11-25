@@ -38,7 +38,7 @@ const usd = (v) => {
 };
 const pct = (v) => (v === null || v === undefined ? '—' : `${Math.round(v * 100)}%`);
 
-// Vector search (2026-09): the wine vectors live on the WineEmbedding rows in
+// Vector search: the wine vectors live on the WineEmbedding rows in
 // MongoDB and are compared in memory — no vector database. Shows what is
 // stored and whether the registry-wide copy is loaded right now.
 export function VectorSearchPanel({ vectors, onRefresh }) {
@@ -346,7 +346,7 @@ export default function TabAI() {
   const [enrichMsg, setEnrichMsg] = useState(null);
 
   async function startJob() {
-    // A full run re-sends the whole registry to the provider (audit 2026-09 F05-2).
+    // A full run re-sends the whole registry to the provider.
     if (jobMode === 'full' && !window.confirm('Re-embed EVERY registry wine? This re-sends the whole registry to the embedding provider and can take hours. Continue?')) return;
     setJobBusy(true); setJobMsg(null);
     try {
@@ -377,7 +377,7 @@ export default function TabAI() {
   }
 
   async function startEnrich() {
-    // A full run is one AI call per registry wine (audit 2026-09 F05-2).
+    // A full run is one AI call per registry wine.
     if (enrichMode === 'full' && !window.confirm('Re-enrich EVERY registry wine? This calls the AI provider once per wine — hours of runtime and real cost. Continue?')) return;
     setEnrichBusy(true); setEnrichMsg(null);
     try {

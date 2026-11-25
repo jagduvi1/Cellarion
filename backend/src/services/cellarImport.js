@@ -430,7 +430,7 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
         // confirmCreate skips the soft-zone prompt by design (imports must not
         // stall) — but a creation that sailed past a >=0.85 candidate is the
         // exact shape that used to mint duplicates, so leave an audit trail
-        // the admin can review (dup analysis 2026-07-22, RC5).
+        // the admin can review.
         if (nearMiss) {
           result.winesCreatedNearMiss = (result.winesCreatedNearMiss || 0) + 1;
           logAudit(
@@ -503,7 +503,7 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     vintage: canonicalVintage,
     price: item.price || undefined,
     // File data: a code the app knows, else the import's default (the
-    // importer's profile currency), as the CSV path does (audit 2026-10-14).
+    // importer's profile currency), as the CSV path does.
     currency: currencyOrFallback(item.currency, currencyOrFallback(defaultCurrency, 'USD')),
     priceSetAt,
     bottleSize: normalizeBottleSize(item.bottleSize) || DEFAULT_SIZE,
@@ -732,7 +732,7 @@ async function attachReviews(bottle, reviews, userId, wineDefinitionId, result) 
  *  the imported window is restored in full. Deduped per wine+vintage via `seen`
  *  so bottles that share a wine only trigger this once.
  *
- *  Status follows the IMPORTER, not the file (audit 2026-09-02 D09-4): only a
+ *  Status follows the IMPORTER, not the file: only a
  *  sommelier/admin — someone who could set the same window by hand — restores
  *  it as `reviewed`. utils/maturityUtils gates every reader on
  *  status === 'reviewed', so a reviewed row from anyone's file was

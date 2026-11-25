@@ -1,4 +1,4 @@
-// Pick lists (forum request 2026-10-13): named lists of the user's own bottles
+// Pick lists: named lists of the user's own bottles
 // to fetch, each with its cellar, rack and slot. The same service as REST
 // /api/pick-lists (services/pickListOps), so an assistant and the app see and
 // change the same lists. Not undoable through undo_last: every change here is
@@ -139,7 +139,7 @@ registerTool({
     if (!Object.keys(done).length) return fail('invalid_input', 'Nothing to change: pass name, add/remove bottle ids, or picked/unpicked ids.');
     const view = await getPickListView(ctx.user.id, args.pick_list_id);
     // Deleted by another connection between the last step and this read:
-    // the steps above still applied (audit 2026-10-14).
+    // the steps above still applied.
     if (view.error) return failAfter(view.error);
     const list = view.list;
     return ok(`"${list.name}" — ${list.count} bottle(s), ${list.picked} picked`, { pick_list_id: list.id, ...done });

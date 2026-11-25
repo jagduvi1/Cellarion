@@ -47,7 +47,7 @@ export default function PickLists() {
       navigate(`/pick-lists/${data.list.id}`);
     } catch (err) {
       // A dropped connection throws a TypeError with the browser's own text
-      // ("Failed to fetch"), not a message for the user (audit 2026-10-14).
+      // ("Failed to fetch"), not a message for the user.
       setError(err instanceof TypeError ? t('common.networkError', 'Network error') : err.message);
       setCreating(false);
     }

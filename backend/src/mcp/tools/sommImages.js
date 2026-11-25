@@ -20,7 +20,7 @@
 //   - the uploader is never named: a pseudonymous uploader_ref groups one
 //     person's photos, and nothing else about them crosses this surface;
 //   - every read leaves an audit row naming the image ids (never the bytes),
-//     like the curation reads of label scans (audit 2026-09 M03-4);
+//     like the curation reads of label scans;
 //   - label scans are never listed (private curation evidence, audit L-6), and
 //     photos with no bottle and no wine — uploads abandoned before the bottle
 //     was saved — are left to the 30-day sweep (services/scanImageRetentionJob).

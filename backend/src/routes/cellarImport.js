@@ -154,7 +154,7 @@ function readExportZip(buffer) {
 
 // data.json must be byte-capped BEFORE the synchronous JSON.parse — the
 // count caps inside parseCellarExport only run after a parse has already
-// paid the memory + event-loop cost (SECURITY_AUDIT_2026-07-08 L-12).
+// paid the memory + event-loop cost.
 function assertDataJsonSize(byteLength) {
   if (byteLength > MAX_DATA_JSON_BYTES) {
     throw Object.assign(
@@ -266,7 +266,7 @@ router.post('/', gateImport, handleUpload, async (req, res) => {
         getFileBuffer,
         defaultCurrency,
         // Only a sommelier/admin restores a file's drink windows as REVIEWED
-        // registry data; anyone else's land as pending suggestions (D09-4).
+        // registry data; anyone else's land as pending suggestions.
         canCurate: req.user.roles.includes('somm') || req.user.roles.includes('admin'),
         audit: (action, resource, detail) => logAudit(req, action, resource, detail),
       });

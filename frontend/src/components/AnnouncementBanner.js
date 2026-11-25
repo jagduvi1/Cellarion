@@ -64,7 +64,7 @@ function AnnouncementBanner() {
     // a tab that is switched to repeatedly cannot spam the endpoint. A hidden
     // tab doesn't ask: no one would see the answer, and coming back to it
     // re-checks at once (below). Background tabs left open all day were most
-    // of this endpoint's traffic (scaling audit 2026-09-25).
+    // of this endpoint's traffic.
     const timer = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     // Returning to the tab is the moment a stale banner is most likely and
     // most wanted — a user coming back after an hour gets the current state

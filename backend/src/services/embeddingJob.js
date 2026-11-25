@@ -189,7 +189,7 @@ async function runJob(cfg) {
         // A canary (registry lockdown L4) is never embedded either: it must
         // not become anyone's "similar wine".
         // A quarantined non-wine neither: the registry does not show it, so
-        // neither may semantic search (audit 2026-10-14).
+        // neither may semantic search.
         if (!wine || wine.pendingIdentity === true || wine.canary === true || wine.nonWine === true) {
           neverEmbedded.add(String(wineDefId));
           job.skipped++;

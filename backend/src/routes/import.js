@@ -169,7 +169,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // ONE probe per distinct display name, not per row (a 2000-row file of
     // the same six wines is six probes), and a sentinel producer ("Unknown",
     // "-") counts as none — the CT mapper already sends '' for it, generic
-    // CSV/Vivino rows did not (audit 2026-09-14 M2/L4).
+    // CSV/Vivino rows did not.
     const splitByName = new Map(); // normalized display name → split result | null
     for (const pr of preResults) {
       if (clientDisconnected) break;
@@ -233,7 +233,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // A row still without a producer after the registry split runs the
       // cascade too: (a) and (c) need a producer and simply return null, but
       // (b)'s query variants were built for exactly this display-name shape
-      // (registry backlog 2026-09-06) and resolve a known wine at >= 0.95
+      // and resolve a known wine at >= 0.95
       // with zero AI. Only an unknown wine then reaches the model.
       // forceAi bypasses the cascade only when there is an AI to reach; with
       // no key configured the shared cascade is the best available outcome.
@@ -267,7 +267,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // A producer the REGISTRY supplied (splitKnownProducerPrefix) is not a
       // file-stated identity: such a row may match (a)/(b) above, but an
       // unknown wine goes to the model rather than being minted from the
-      // guess (audit 2026-09-14 L3).
+      // guess.
       const identity = pr.producerFromRegistry ? null : fileCompleteIdentity(
         pr.item,
         needsColourMap ? await getGrapeColourOf() : null
@@ -279,7 +279,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     }
 
     // ── Pass 1b: AI fan-out for the remaining unique wines ─────────────────
-    // Guarded by (audit M-2): a per-request fan-out cap, the shared per-user
+    // Guarded by: a per-request fan-out cap, the shared per-user
     // daily AI budget + global daily cap (debited per actual Anthropic call,
     // refunded on transport failure), and a client-disconnect check that
     // stops LAUNCHING new calls once the requester has gone away. All three
@@ -407,7 +407,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       (typeof v === 'string' && v.trim()) ? normalizeString(resolveCountryName(v)) : '';
     for (const rows of aiRowsByProducer.values()) {
       // The FILE is the anchor, and its STATED VALUE is the anchor value —
-      // not the AI's echo of it (audit 2026-08-16: anchoring on the echo let
+      // not the AI's echo of it (anchoring on the echo let
       // an AI that contradicted the file spread the contradiction to the
       // whole group). Step one: any anchored row whose AI disagrees with its
       // own file column is corrected back to the file's value, which is also
@@ -436,8 +436,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         adopted = anchors[0].item.country;
       } else {
         // Highest-confidence row THAT HAS a country decides — a countryless
-        // 0.9 row must not null the adoption and silently no-op the pass
-        // (audit 2026-08-16).
+        // 0.9 row must not null the adoption and silently no-op the pass.
         const withCountry = rows.filter((pr) => rowKey(pr));
         const best = withCountry.reduce((a, b) =>
           ((b.aiIdentified.confidence ?? 0) > (a.aiIdentified.confidence ?? 0) ? b : a));
@@ -476,7 +475,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // wine key. findOrCreateWine internally does fuzzy matching using the
     // AI-refined name/producer, which is more accurate than matching raw import
     // data. matchOnly — /validate is a PREVIEW and must never write to the
-    // shared registry (security audit 2026-08-03 H-1: every cancelled, re-run
+    // shared registry (every cancelled, re-run
     // or column-remapped validate minted rows, and this route has no demo
     // gate). When nothing matches, the canonical AI identification rides back
     // to the client as `aiProposed`; /confirm creates the wine only for rows
@@ -686,7 +685,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       const price = Number(r.item?.price);
       if (!isFinite(price) || price <= 0) continue;
       // A currency the app does not know ("kr", "€ EUR") is told here and
-      // replaced by the import's default on confirm (audit 2026-10-14).
+      // replaced by the import's default on confirm.
       const rawCurrency = typeof r.item?.currency === 'string' ? r.item.currency.trim() : '';
       const currency = currencyOrFallback(rawCurrency, 'USD');
       const m = userMedians[currency];
@@ -772,7 +771,7 @@ router.post('/confirm', async (req, res) => {
     // own, or one the app does not know. The user's choice on the confirm
     // screen (their profile currency by default): a supported code or an
     // alias of one, as every other write path demands — this used to accept
-    // any three letters (audit 2026-10-14). Falls back to USD when unset.
+    // any three letters. Falls back to USD when unset.
     const defaultCurrencyCheck = parseCurrency(rawDefaultCurrency);
     if (!defaultCurrencyCheck.ok) {
       return res.status(400).json({ error: defaultCurrencyCheck.error });
@@ -929,7 +928,7 @@ router.post('/confirm', async (req, res) => {
             // findOrCreateWine can return { wine: null, candidates } — the soft
             // zone: similar wines exist, none close enough to be this one.
             // Unguarded, `wine._id` threw and took the whole /confirm batch
-            // with it (audit L-7). The row used to be skipped as an error,
+            // with it. The row used to be skipped as an error,
             // which LOST the bottle — typically a Syrah cuvée sitting next to
             // the Grenache one the same file had just minted.
             // Instead the bottle lands on a pending wine request under the
@@ -961,7 +960,7 @@ router.post('/confirm', async (req, res) => {
                 { via: 'import', name: wine.name, producer: wine.producer || null,
                   ...(wine.pendingIdentity ? { pendingIdentity: true } : {}),
                   // What the CSV actually said, when the gate refused it
-                  // (audit MED-1) — the pending row itself stores ''.
+                  // — the pending row itself stores ''.
                   ...(producerRejected
                     ? { rejectedProducer: producerRejected.producer, rejectedByCheck: producerRejected.check }
                     : {}) });
@@ -1007,7 +1006,7 @@ router.post('/confirm', async (req, res) => {
             errors.push({ index: i, reason: 'Invalid wine definition ID' });
             continue;
           }
-          // Audit 2026-09 D02-3: the registry's pendingIdentity visibility
+          // The registry's pendingIdentity visibility
           // rule applies here as everywhere else (services/wineVisibility.js).
           const wishWine = await findVisibleWine(item.wineDefinition, { userId: req.user.id, roles: req.user.roles, noDrafts: true });
           if (!wishWine) {
@@ -1307,7 +1306,7 @@ router.post('/confirm', async (req, res) => {
       wishlistCreated,
       skipped: skipped.length,
       errors: errors.length,
-      // WHY rows failed, not just how many (2026-08-21). A real import
+      // WHY rows failed, not just how many. A real import
       // rejected 15 of 46 rows at 06:05; the user fixed their file and re-ran
       // the 15 six minutes later. The audit recorded the COUNT and threw the
       // reasons away, so afterwards the cause could only be guessed at — four

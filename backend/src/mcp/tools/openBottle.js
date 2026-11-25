@@ -106,7 +106,7 @@ registerTool({
       return consumedConflict(bottle, 'A consumed bottle cannot be opened.');
     }
 
-    // Idempotent by state (issue #835): a repeat call reports the existing
+    // Idempotent by state: a repeat call reports the existing
     // open state instead of erroring — and records nothing new to undo.
     if (bottle.openedAt) {
       return ok(
@@ -180,7 +180,7 @@ registerTool({
       return consumedConflict(bottle, 'A consumed bottle cannot be poured from.');
     }
 
-    // Implicit open (issue #835): "I just poured a glass of X" should not
+    // Implicit open: "I just poured a glass of X" should not
     // require a separate open_bottle round-trip.
     let implicitOpen = false;
     let takenOutOf = null;

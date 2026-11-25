@@ -1,5 +1,5 @@
 /**
- * Device storage for offline mode (#1355), in IndexedDB — not localStorage: a
+ * Device storage for offline mode, in IndexedDB — not localStorage: a
  * large cellar's snapshot runs to megabytes, and localStorage is small and
  * synchronous.
  *   snapshots — one record per account (the cellar copy)

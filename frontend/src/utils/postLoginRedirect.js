@@ -3,7 +3,7 @@
  *
  * ProtectedRoute carries the destination in router state, which survives the
  * client-side hop to /login but not the full-page redirect out to an SSO
- * provider and back — so the password path lands correctly (#1165) while the
+ * provider and back — so the password path lands correctly while the
  * Google path always ended on /cellars.
  *
  * The destination is stashed here instead, in sessionStorage: scoped to this

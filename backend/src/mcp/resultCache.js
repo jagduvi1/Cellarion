@@ -29,8 +29,8 @@ async function cachedResult(tool, userId, variant, compute) {
 }
 
 /**
- * Drop every cached entry for one user — called when their cellar mutates
- * (grand-audit M3), so the next read recomputes instead of serving a stale
+ * Drop every cached entry for one user — called when their cellar mutates,
+ * so the next read recomputes instead of serving a stale
  * 60s window (e.g. a just-consumed bottle still ranked as a "tonight"
  * candidate). Keys are `${tool}:${userId}:${variant}`.
  */

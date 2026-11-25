@@ -23,7 +23,7 @@ async function claim(last) {
 }
 
 /**
- * Release a claim so a failed structural undo stays retryable (MCP-audit H3).
+ * Release a claim so a failed structural undo stays retryable.
  * Every branch here claims BEFORE the mutating rackOps call, and that call can
  * still fail after the pre-claim checks pass — a concurrent placement (the
  * unique slots.bottle index → E11000), a VersionError, or a slot disabled since
@@ -118,7 +118,7 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     const pos = last.detail?.position;
     // Verify EVERYTHING before claiming (the move branch's discipline), so a
     // reversal that would fail doesn't burn the ledger row:
-    //  - the bottle must still be active (grand-audit M2: without this, a
+    //  - the bottle must still be active (without this, a
     //    bottle consumed via the web since the unplace would be re-slotted,
     //    breaking "consume frees the slot" — dead bottle in fill counts/3D);
     //  - it must still live in this rack's cellar;

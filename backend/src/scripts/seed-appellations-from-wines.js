@@ -1,6 +1,6 @@
 /**
  * Seed the Appellation taxonomy from the appellation strings wines already
- * carry (registry strategy 2026-07-29, R2).
+ * carry.
  *
  * The Appellation collection has been vestigial (8 docs) while ~4k wines
  * carry >1k distinct free-text strings. This script promotes the strings the

@@ -21,7 +21,7 @@ function vintageDesc(a, b) {
  */
 async function getReleaseCurve(wineId, currency) {
   if (!wineId) return [];
-  // k-anonymity floor (security audit L-18): a vintage backed by fewer than
+  // k-anonymity floor: a vintage backed by fewer than
   // FIRM_MIN_OWNERS (3) distinct owners would publish what is essentially one
   // or two identifiable users' exact purchase price on a public, unauthenticated
   // endpoint. The aggregation job no longer stores such rows, but this read-side

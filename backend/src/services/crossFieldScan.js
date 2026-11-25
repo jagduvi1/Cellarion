@@ -46,7 +46,7 @@ const CUVEE_NEAR_MISS = 'cuvee-near-miss.v2';
  * ("Chardonnay" / "Chardonnay Reserve"), which is the opposite of what this
  * rule wants.
  *
- * 0.78, not 0.85 (audit M-6), and the lower bar is only safe because of
+ * 0.78, not 0.85, and the lower bar is only safe because of
  * NUMERIC_TOKEN_DIFF below: the extra pairs a looser threshold buys are
  * overwhelmingly vintage/lot digits ("Reserva 2010" ~ "Reserva 2011" = 0.92,
  * "Valbuena 5" ~ "Valbuena 3" = 0.90), and those are now disqualified outright.
@@ -134,7 +134,7 @@ function detectCuveeNearMiss(wines) {
         const b = list[j];
         if (a.norm === b.norm) continue;                       // identical is the duplicate scanner's problem
         if (a.norm.includes(b.norm) || b.norm.includes(a.norm)) continue;
-        // A vintage or lot number is a real distinction, never a misread (M-6).
+        // A vintage or lot number is a real distinction, never a misread.
         if (NUMERIC_TOKEN_DIFF(a.norm, b.norm)) continue;
         if (calculateSimilarity(a.norm, b.norm) < NEAR_MISS_MIN_SIMILARITY) continue;
         // BOTH rows are flagged, each naming the other: a curator cannot tell
@@ -149,7 +149,7 @@ function detectCuveeNearMiss(wines) {
 
 /**
  * One round-trip per taxonomy collection; refs + id→name maps from the same
- * rows. MEMOIZED for 45s (release-audit MED-2): the mint gate calls this once
+ * rows. MEMOIZED for 45s: the mint gate calls this once
  * per CREATED wine, and a 300-row import paid the four collection loads 300
  * times. The rules already tolerate taxonomy staleness by design (module
  * header, residual 2), so a sub-minute cache changes no verdict that matters —
@@ -377,7 +377,7 @@ async function detectScanSuspectProducer(values) {
   // A producer the Latin fold cannot represent ("獺祭", "Мукузани") is the
   // documented non-Latin KNOWN LIMIT, not a placeholder — isUnknownName reads
   // the empty fold as one and producer-placeholder.v1 would hard-flag every
-  // such scan (release-audit HIGH-1). The extraction is fine; the mint path
+  // such scan. The extraction is fine; the mint path
   // already files these pending via its own length gate. No flag, no lookup.
   const { normalizeString } = require('../utils/normalize');
   if (flat.producer.trim() && !normalizeString(flat.producer)) return null;

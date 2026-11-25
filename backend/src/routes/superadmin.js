@@ -337,7 +337,7 @@ router.get('/backups', async (req, res) => {
     const stale = ageHours == null || ageHours > 26;
     // The job records the repository string it used. If an operator ever puts
     // credentials in it (rest:https://user:pass@host/…) they must not reach the
-    // browser (audit 2026-09 F05-5) — the script redacts too, this is the backstop.
+    // browser — the script redacts too, this is the backstop.
     res.json({ configured: true, stale, ageHours, ...doc, repo: redactUrlCredentials(doc.repo) });
   } catch (error) {
     console.error('[superadmin] backups error:', error);
@@ -519,7 +519,7 @@ router.patch('/ai/enrichment-on-add', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/enrichment-search
-// The web-search rescue pilot's two knobs (2026-08-19): kill-switch + daily
+// The web-search rescue pilot's two knobs: kill-switch + daily
 // cap. Same aiConfig storage as the gate above — turning the pilot off never
 // needs a release, and load() clamps junk back to the defaults (on / 5).
 // ---------------------------------------------------------------------------
@@ -546,7 +546,7 @@ router.patch('/ai/enrichment-search', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/prompt-caching
-// The prompt-caching switch (2026-09-25): on, the label-scan instructions and
+// The prompt-caching switch: on, the label-scan instructions and
 // the import lookup's fixed rules carry Anthropic's cache marker (see
 // services/labelScan.systemBlock); off, they are billed at the full price. A
 // pure cost switch — the prompt the model reads is the same either way.

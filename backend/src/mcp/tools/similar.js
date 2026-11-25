@@ -78,8 +78,8 @@ registerTool({
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), maxHere);
     let ranked;
     // One guard for the whole lookup — a failure must not escape as a raw
-    // error. `unavailable` is the honest code for a backend outage
-    // (MCP-audit M3): an agent must NOT self-throttle as if rate_limited.
+    // error. `unavailable` is the honest code for a backend outage:
+    // an agent must NOT self-throttle as if rate_limited.
     try {
       // The reference's stored vector: the same vintage when given, else the
       // newest vintage with one (a deterministic pick).
@@ -98,7 +98,7 @@ registerTool({
     if (ranked.length === 0) return ok('No similar wines found', []);
 
     // This tool is public scope: a quarantined non-wine must never be
-    // anyone's "similar wine", whatever vectors it still has (audit 2026-10-14).
+    // anyone's "similar wine", whatever vectors it still has.
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, canary: { $ne: true }, nonWine: { $ne: true } })
       .select('name producer slug country region appellation classification labelSweetness sweetnessStyle grapes type colour communityRating')
       .populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }])

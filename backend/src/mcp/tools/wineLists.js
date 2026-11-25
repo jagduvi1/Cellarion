@@ -20,7 +20,7 @@ const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, pageParams, wineSummary } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
-// Single source for the glass-price rule (MCP-audit M4) — identical to the web
+// Single source for the glass-price rule — identical to the web
 // editor's, and now floored at one step so a cheap wine no longer suggests 0.
 const { suggestGlassPrice } = require('../../utils/glassPrice');
 // get_wine_list reads the SAME rendered structure the app and the PDF use —
@@ -55,7 +55,7 @@ const entryOut = (e) => ({
 });
 
 // Find every entry for a wine in the ACTIVE container only — the same set
-// get_wine_list renders (grand-audit M4). Scanning both containers made a
+// get_wine_list renders. Scanning both containers made a
 // wine present in both (a list mode-flipped from auto to custom) look like a
 // duplicate with identical disambiguators (permanently un-editable), and let
 // update_list_pricing edit an entry hidden from the rendered menu. The
@@ -245,7 +245,7 @@ registerTool({
     // Trim to match the schema (trim: true) BEFORE we save and record the
     // ledger detail — otherwise the saved entry is "2019" while the undo
     // detail keeps "2019 ", and winelist_add undo's strict compare misses the
-    // entry (grand-audit L7/L11), and the dupe check leaks near-duplicates.
+    // entry, and the dupe check leaks near-duplicates.
     const vintage = (args.vintage || 'NV').trim() || 'NV';
     const bottleSize = (args.bottle_size || '750ml').trim() || '750ml';
     const dupes = findEntries(list, wine._id, { vintage, bottleSize });

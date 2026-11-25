@@ -1,5 +1,5 @@
 /**
- * Offline mode (#1355): keep the app and the signed-in session usable when the
+ * Offline mode: keep the app and the signed-in session usable when the
  * device has no network (a cellar in a basement).
  *
  * Off until the user chooses it — nothing is stored on a device before they

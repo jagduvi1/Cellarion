@@ -30,7 +30,7 @@ const {
 // tools ride services/pendingWineOps, so REST and MCP cannot drift on
 // projection, taxonomy resolution or conflict semantics.
 //
-// ANONYMISED like the owner inquiries (#930): the curator gets the wine, its
+// ANONYMISED like the owner inquiries: the curator gets the wine, its
 // bottle count and its IMAGES — never who added it.
 const { renderImage } = require('../../../services/photoBytes');
 // ONE definition of "may curation read this label scan" — shared with the REST
@@ -154,8 +154,8 @@ registerTool({
     //                  web page already serves these to anybody with the URL,
     //                  so serving them here is ZERO new exposure, and refusing
     //                  them while claiming privacy is simply false.
-    //   private photos — the owners' own bottle photos. STILL pending-only
-    //                  (security audit M-1): shipping somebody's private
+    //   private photos — the owners' own bottle photos. STILL pending-only:
+    // shipping somebody's private
     //                  gallery to an external model is justified by a curator
     //                  reading a label they were asked to identify, and by
     //                  nothing else. Unchanged.
@@ -180,7 +180,7 @@ registerTool({
     // is.
     const scanBack = await loadScan(wine.scanImageBack);
 
-    // PER-IMAGE readability, not the pair's (release-audit M-2): each frame
+    // PER-IMAGE readability, not the pair's: each frame
     // carries its own retainUntil, and if they ever diverge (the retention job
     // explicitly anticipates a back scan added later) the expired one must not
     // ride the other's grace window.
@@ -201,7 +201,7 @@ registerTool({
     // wine page renders both — the somm's very example (Wynns "The Original",
     // credited to its owner) is bottle-linked and was still refused. The
     // distinct() runs for any wine because it only feeds this approved+public
-    // query; the PRIVATE both-ways owner query above stays pending-only (M-1).
+    // query; the PRIVATE both-ways owner query above stays pending-only.
     const galleryBottleIds = (await Bottle.distinct('_id', { wineDefinition: wine._id })) || [];
     const gallery = await BottleImage.find({
       $or: [
@@ -322,7 +322,7 @@ registerTool({
 
     // Somebody's private photo is about to leave the platform for the
     // curator's model provider — that leaves a record on this surface exactly
-    // as on the REST twin (audit 2026-09 M03-4).
+    // as on the REST twin.
     logCurationImageRead(ctx.req, {
       wineId: wine._id,
       imageIds: included.map(i => i.image_id),

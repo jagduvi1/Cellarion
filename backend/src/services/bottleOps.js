@@ -344,7 +344,7 @@ async function closeBottle(bottle, req) {
   // longer current state, so clearing them destroys the record rather than
   // undoing a mistake. openBottle/pourFromBottle already gate on this; the
   // guard belongs here rather than in the callers so REST and MCP inherit one
-  // implementation (security audit 2026-07-30 M-1: #866 fixed the MCP tools
+  // implementation (#866 fixed the MCP tools
   // one at a time, which left DELETE /api/bottles/:id/open with no guard at
   // all). To reverse the consume itself, restore the bottle first.
   if (CONSUMED_STATUSES.includes(bottle.status)) {
@@ -396,7 +396,7 @@ async function closeBottle(bottle, req) {
  * Checks-only validation of the bottle-create field surface — no values are
  * produced and nothing is written. Exists so the POST /api/bottles newWine
  * branch can validate the COMMIT fields BEFORE resolveOrMintWine runs
- * (release-audit LOW-1: a field 400 after the mint would leave the exact
+ * (a field 400 after the mint would leave the exact
  * orphan mint-at-commit exists to prevent). addBottle still runs its own
  * inline validation+resolution afterwards — this is a pre-mint gate, not a
  * replacement, and the parsers are pure so double-parsing is free.
@@ -647,7 +647,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     } catch (err) { /* profile bookkeeping must never fail the add */ }
   }
   // A bottle added to the creator's private draft is a "touch": the draft's
-  // untouched clock restarts (draft design 2026-09-12). Best-effort.
+  // untouched clock restarts. Best-effort.
   if (wineDoc.draft === true) {
     try { await require('./wineDraftOps').touchDraft(wineDoc._id); } catch { /* never fails the add */ }
   }
@@ -739,7 +739,7 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
   // An UNCHANGED vintage is never re-validated: the web form sends the whole
   // form on every save, and a bottle stored under an older rule (2028 was
   // legal when the cap was harvest year + 5) must stay editable — a price
-  // change is not the moment to argue about its vintage (audit 2026-09-07).
+  // change is not the moment to argue about its vintage.
   if (fields.vintage !== undefined && String(fields.vintage).trim() === String(bottle.vintage ?? '').trim()) {
     delete fields.vintage;
   } else if (fields.vintage !== undefined) {
@@ -868,7 +868,7 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
   // even when it isn't supported (an older import): the web form sends the
   // whole form on every save.
   // An undo (restoringPrev) puts back the bottle's previous code, supported or
-  // not (release audit 2026-10-13: undoing a change away from an old import's
+  // not (undoing a change away from an old import's
   // code was refused).
   if (fields.currency !== undefined && fields.currency !== null && fields.currency !== '') {
     const own = normalizeCurrency(bottle.currency || '');

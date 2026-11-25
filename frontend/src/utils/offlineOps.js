@@ -1,5 +1,5 @@
 /**
- * Offline writes (#1355) — the pure part. Recognises the writes that may be
+ * Offline writes — the pure part. Recognises the writes that may be
  * made offline, turns one into a queued operation carrying what the user saw
  * (the server's preconditions), applies it to the device's snapshot the way the
  * server will, and shapes the response the page expects.

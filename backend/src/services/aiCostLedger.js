@@ -1,5 +1,5 @@
 /**
- * AI spend ledger (2026-09-25) — records what every Claude call actually used,
+ * AI spend ledger — records what every Claude call actually used,
  * and turns it into dollars for SuperAdmin → AI.
  *
  * Why: the AI bill is the platform's largest running cost, yet only Cellar Chat

@@ -117,7 +117,7 @@ async function run() {
   // meant a throw mid-loop (or a Ctrl-C, or the 4GB host OOM-killing us) exited
   // through the top-level catch with the file never written — leaving the rows
   // already renamed with no pre-image on disk, exactly when a partial apply had
-  // happened and the backup mattered most (code audit 2026-07-27, M3).
+  // happened and the backup mattered most.
   let backupFile = null;
   const backupRows = [];
   const appendBackup = (row) => {
@@ -164,7 +164,7 @@ async function run() {
           // follows. Left stale it would still encode the vintage-suffixed
           // name, and findOrCreateWine's canonical lookup would miss this row
           // and mint a twin: the exact duplicate this cleanup exists to
-          // prevent (code audit 2026-07-27, M1).
+          // prevent.
           canonicalKey: computeCanonicalKey(stripped, w.producer, w.appellation, { sweetness }),
           updatedAt: new Date(),
         } }

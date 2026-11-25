@@ -74,7 +74,7 @@
   .dash-grid { grid-template-columns: 1fr; }
 }
 
-/* Audit UX-4: containment for the mini table + the board selector. */
+/* Containment for the mini table + the board selector. */
 .dash-mini-scroll { overflow-x: auto; }
 .dash-mini-scroll table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 .dash-mini-scroll td { padding: 4px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }

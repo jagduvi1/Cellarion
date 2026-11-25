@@ -1,5 +1,5 @@
 /**
- * Offline snapshot manager (#1355). Keeps the signed-in user's cellars, racks
+ * Offline snapshot manager. Keeps the signed-in user's cellars, racks
  * and bottles on the device and answers the app's reads from them when the
  * network does not (utils/apiFetch → offlineAnswer).
  *

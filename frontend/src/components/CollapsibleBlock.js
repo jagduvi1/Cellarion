@@ -54,14 +54,14 @@ export default function CollapsibleBlock({ id, label, collapsed, onToggle, neste
   const domId = `cblock-${id.replace(/\./g, '-')}`;
   // A control left visible in a folded card's title row ("+ Add", "Suggest
   // a fix") opens something in the folded part: using it unfolds the card
-  // first, so what it opens can be seen (release audit 2026-10-13).
+  // first, so what it opens can be seen.
   const onClickCapture = (e) => {
     if (!collapsed) return;
     const control = e.target instanceof Element ? e.target.closest('button, a, [role="button"]') : null;
     if (!control || control.closest('.cblock-toggle') || control.closest('.modal-overlay')) return;
     // A link that leaves for another page ("Open the vintage page →") opens
     // nothing in this card: following it must not unfold the card for the
-    // account (audit 2026-10-14). An in-page "#…" link still unfolds.
+    // account. An in-page "#…" link still unfolds.
     const href = control.tagName === 'A' ? control.getAttribute('href') : null;
     if (href && !href.startsWith('#')) return;
     onToggle();

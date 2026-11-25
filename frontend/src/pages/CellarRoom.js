@@ -464,7 +464,7 @@ export default function CellarRoom() {
     // It carries the router's own state (usr/key/idx): without it, "Leave"
     // (a replace) copied an undefined index and every later page counted
     // from NaN — which switched off Back-to-close (utils/useBackToClose)
-    // everywhere after the room (release audit 2026-10-16). A pop-up's mark
+    // everywhere after the room. A pop-up's mark
     // is not carried over: the sentinel is the page's, not the pop-up's.
     const sentinel = () => pageEntryState({ __roomUnsavedSentinel: true });
     origPushState(sentinel(), '', window.location.href);

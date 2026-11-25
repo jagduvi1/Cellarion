@@ -125,7 +125,7 @@ router.get('/:userId/followers', async (req, res) => {
     const myFollows = await Follow.find({ follower: req.user.id, following: { $in: userIds } }).select('following');
     const followingSet = new Set(myFollows.map(f => f.following.toString()));
 
-    // Audit 2026-09 O01-3: only a public profile shows its bio here; the
+    // Only a public profile shows its bio here; the
     // visibility flag itself never leaves the server.
     const enriched = users.map(u => {
       const { profileVisibility, ...rest } = u.toObject();
@@ -168,7 +168,7 @@ router.get('/:userId/following', async (req, res) => {
     const myFollows = await Follow.find({ follower: req.user.id, following: { $in: userIds } }).select('following');
     const followingSet = new Set(myFollows.map(f => f.following.toString()));
 
-    // Audit 2026-09 O01-3: only a public profile shows its bio here; the
+    // Only a public profile shows its bio here; the
     // visibility flag itself never leaves the server.
     const enriched = users.map(u => {
       const { profileVisibility, ...rest } = u.toObject();

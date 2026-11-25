@@ -241,7 +241,7 @@ registerTool({
           'Very similar wines already exist — use one of these wine_ids, or call again with confirm_new_wine:true ONLY if the user confirms it is genuinely different: ' +
           result.candidates.map((c) => `${c.wine.name} — ${c.wine.producer} (wine_id ${c.wine._id}, score ${c.score})`).join('; '));
       }
-      // A no-wine result with no candidates either (audit L-7): the branch
+      // A no-wine result with no candidates either: the branch
       // above only covers the candidates case, so this fell through to
       // `wineDoc.name` and threw a 500. bulk.js:224 already handles it as a
       // failure rather than a crash — mirror that.
@@ -258,7 +258,7 @@ registerTool({
             // keeps meaning "the producer was missing".
             ...(wineDoc.pendingIdentity && !wineDoc.draft ? { pendingIdentity: true } : {}),
             ...(wineDoc.draft ? { draft: true } : {}),
-            // The refused producer string survives ONLY here (audit MED-1) —
+            // The refused producer string survives ONLY here —
             // the pending row stores '', and a curator needs what the label
             // scan / caller actually said.
             ...(result.producerRejected
@@ -484,7 +484,7 @@ registerTool({
     const prevById = primaryChanged ? { [String(bottle._id)]: result.prev } : {};
     const warnings = [];
     // The lot is the caller's OWN bottles; from a bottle in someone else's
-    // cellar that would be the wrong lot (audit 2026-09-07), so say so.
+    // cellar that would be the wrong lot, so say so.
     if (args.apply_to_lot && !Object.keys(lotFields).length) {
       warnings.push(`apply_to_lot ignored: none of the fields in this call are lot-level (${MCP_LOT_PARAMS})`);
     } else if (args.apply_to_lot && !ownCellar) {
@@ -506,7 +506,7 @@ registerTool({
     if (!primaryChanged && !lot.applied.length) {
       // No mutation → logAction never runs, so the claim replay() took above
       // would stay pending and turn every same-key retry into a bogus `busy`
-      // for CLAIM_STALE_MS (audit 2026-07-24 M11). Release it: a retry simply
+      // for CLAIM_STALE_MS. Release it: a retry simply
       // re-runs and no-ops again.
       await releaseClaim(ctx, args.idempotency_key, 'update_bottle');
       return ok('No changes — every value already matched', withLot({ bottle_id: bottle._id, changes: {} }), extra);

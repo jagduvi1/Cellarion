@@ -1,5 +1,5 @@
 /**
- * Personal typed key/value data (issue #986) — ONE implementation shared by
+ * Personal typed key/value data — ONE implementation shared by
  * the REST routes (routes/personalData.js) and the MCP tools
  * (mcp/tools/personalData.js), following the ownerInquiryOps pattern so the
  * two surfaces cannot drift on visibility or validation semantics.
@@ -338,7 +338,7 @@ async function resolveKey(userId, { keyId, newKey }) {
   if (existing) {
     const suppliedType = newKey && newKey.type;
     // A type that is not a type at all is still the old message, not a
-    // "keeps one type" conflict (audit 2026-09-14 L4).
+    // "keeps one type" conflict.
     if (suppliedType && !TYPES.includes(suppliedType)) {
       return fail('invalid', `Key type must be one of: ${TYPES.join(', ')}`);
     }
@@ -354,7 +354,7 @@ async function resolveKey(userId, { keyId, newKey }) {
   const checked = validateKeyDefinition(newKey || {});
   // needsType lets the MCP layer add its "pass key_type" hint ONLY here —
   // where the key is genuinely new — and not on a value error for an
-  // existing key (audit 2026-09-14 L2).
+  // existing key.
   if (!checked.ok) return { ...fail('invalid', checked.error), needsType: !(newKey && newKey.type) };
   // A genuinely new key is NOT written here: the caller validates the value
   // against the definition and checks the room on the target first, then
@@ -563,8 +563,7 @@ async function updateKey(userId, keyId, { name, unit, enumOptions } = {}) {
     if (!cleanName) return fail('invalid', 'Key name is required');
     if (cleanName.length > KEY_NAME_MAX) return fail('invalid', `Key name too long (max ${KEY_NAME_MAX} characters)`);
     // A key's name is visible to shared-cellar members on every entry that
-    // carries it — the same surface the discussion ban protects on writes
-    // (audit 2026-09-14 M1).
+    // carries it — the same surface the discussion ban protects on writes.
     if (await isBanned(userId)) {
       return fail('banned', 'You are banned from posting content visible to other users');
     }
@@ -644,7 +643,7 @@ async function deleteKey(userId, keyId) {
   }
   // A saved board or table view may filter or group on `personal.<id>`; the
   // analytics engine answers "Unknown field" for a deleted key and the board
-  // silently stops opening (audit 2026-09-14 L3). Refuse while referenced.
+  // silently stops opening. Refuse while referenced.
   const fieldRef = `personal.${String(key._id)}`;
   const [boards, views] = await Promise.all([
     SavedDashboard.find({ user: userId }).select('name query').lean(),
@@ -660,7 +659,7 @@ async function deleteKey(userId, keyId) {
   };
   await PersonalDataKey.deleteOne({ _id: key._id, user: userId });
   // Compensate the count→delete window: an entry written in between would
-  // otherwise dangle without a key (audit 2026-09-14 L1). Put the key back
+  // otherwise dangle without a key. Put the key back
   // under its id and report the key as in use.
   const late = await PersonalDataEntry.countDocuments({ key: key._id });
   if (late > 0) {

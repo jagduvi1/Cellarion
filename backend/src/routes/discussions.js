@@ -88,7 +88,7 @@ router.get('/', optionalAuth, async (req, res) => {
       // default applies when a document is created, never to documents that
       // already exist — so the release that added this field left every
       // pre-existing thread unmatched, and the English forum rendered empty on
-      // production until the rows were backfilled (2026-08-31). The backfill
+      // production until the rows were backfilled. The backfill
       // is done; this makes the query correct on its own, so a restored
       // snapshot or a document written around the schema cannot empty the
       // forum again. `null` matches missing fields in MongoDB.
@@ -125,7 +125,7 @@ router.get('/', optionalAuth, async (req, res) => {
     // Meilisearch path: fuzzy match on title/body/authorName/wineName,
     // hydrate hits from MongoDB to keep the response shape consistent.
     //
-    // Skipped when a blogPost scope is present (audit 2026-08-21 M-2): the
+    // Skipped when a blogPost scope is present: the
     // Meili index doesn't carry blogPost, so this branch used to ignore the
     // filter and a q+blogPost request silently widened from "threads about
     // this post" to "all threads matching q" — answering a different question
@@ -501,7 +501,7 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
       // response, baked into the anonymously-searchable discussion Meili index
       // and rendered for CRAWLERS by routes/og/discussions.js. So even the row's own
       // creator must not be able to publish it: attaching is what would make a
-      // hidden half-identified wine public (security audit). Refused at WRITE
+      // hidden half-identified wine public. Refused at WRITE
       // time, which closes every downstream read path at once.
       const wineExists = await WineDefinition.exists({ _id: wineOid, pendingIdentity: { $ne: true } });
       if (!wineExists) return res.status(400).json({ error: 'Wine not found' });
@@ -601,7 +601,7 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
     const replyIdList = replyIds.map(r => r._id);
 
     // Collect the Cellar-Cred these documents awarded BEFORE deleting them so
-    // the hard delete reverses the awards symmetrically (L-19): +2 to the
+    // the hard delete reverses the awards symmetrically: +2 to the
     // discussion author, +1 per live reply to its author, +1 per non-self
     // reaction to the reacted reply's author. Soft-deleted replies already had
     // their reply-created point reversed at soft-delete time, so they are
@@ -793,7 +793,7 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
           : quotedPlain;
         // authorId is persisted alongside the denormalised name snapshot so
         // GDPR erasure can find and anonymise quote.authorName on OTHER
-        // users' replies when the quoted author deletes their account (L-17).
+        // users' replies when the quoted author deletes their account.
         quotedAuthorId = quotedReply.author?._id || null;
         quoteData = {
           replyId: quotedReply._id,
@@ -1058,7 +1058,7 @@ router.delete('/:discussionId/replies/:replyId', requireAuth, async (req, res) =
     reply.deletedAt = new Date();
     await reply.save();
 
-    // Reverse the +1 the reply's creation awarded (L-19) — a create/delete
+    // Reverse the +1 the reply's creation awarded — a create/delete
     // cycle nets zero. The isDeleted guard above makes this once-only (there
     // is no un-delete). Reaction cred is NOT reversed here: reactions stay on
     // the soft-deleted reply and remain toggleable, so their accounting stays
@@ -1128,7 +1128,7 @@ router.post('/:discussionId/replies/:replyId/reactions', requireAuth, requireNon
 
     if (existing) {
       const del = await DiscussionReaction.deleteOne({ _id: existing._id });
-      // Symmetric cred (L-19): the reaction awarded +1 to the reply author, so
+      // Symmetric cred: the reaction awarded +1 to the reply author, so
       // removing it takes the point back — a react/un-react toggle loop nets
       // zero instead of +1 per cycle (×8 kinds). Guarded by deletedCount so a
       // concurrent double-un-react can't double-reverse; self-reactions never

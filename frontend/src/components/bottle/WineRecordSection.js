@@ -151,7 +151,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   // The counter is an EVENT, not a state: only a CHANGE acts. The page keeps it
   // for the whole visit and this section remounts whenever the edit form has
   // been shown — acting on the mounted value re-opened the mode and scrolled
-  // the page after every later edit (pre-deploy audit 2026-09-18).
+  // the page after every later edit.
   const seenSignal = useRef(suggestSignal);
   useEffect(() => {
     if (suggestSignal === seenSignal.current) return;

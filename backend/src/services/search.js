@@ -60,7 +60,7 @@ async function initialize({ sync = true } = {}) {
       // discussion_replies index) keeps the search query simple — Meilisearch
       // returns one hit per thread regardless of which field matched.
       searchableAttributes: ['title', 'body', 'replyContent', 'authorName', 'wineName'],
-      // `language`: the forum's language sections (2026-08-31). NOTE for
+      // `language`: the forum's language sections. NOTE for
       // deploys — adding a filterable attribute makes Meili re-index, but the
       // stored documents only gain the field once they are re-uploaded, so a
       // release that adds one needs MEILI_FORCE_REINDEX=1 (or an empty index)
@@ -513,7 +513,7 @@ async function searchDiscussions(query, { category, language, limit = 20, offset
   if (language && /^[a-z]{2,3}(-[a-z]{2,4})?$/.test(String(language))) {
     // English also matches documents indexed before the field existed, whose
     // `language` is NOT SET rather than 'en' — the same legacy-row problem
-    // that emptied the English forum on the MongoDB path (2026-08-31). A
+    // that emptied the English forum on the MongoDB path. A
     // reindex fills them in, but search must not depend on one having run.
     filters.push(language === 'en'
       ? '(language = "en" OR language NOT EXISTS)'

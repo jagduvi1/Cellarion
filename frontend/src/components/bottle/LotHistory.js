@@ -115,7 +115,7 @@ function LotBlock({ lot, currentBottleId, heading }) {
 // vintage there are, so the counts would only repeat it. What stays is what
 // the page does not show — the bottles of this vintage already drunk, with
 // their dates, ratings and notes — and the other vintages of the wine as
-// rows that open their own vintage pages (beta feedback 2026-10-10). Each
+// rows that open their own vintage pages. Each
 // opens in the cellar the lot names: where bottles of it are left, else
 // where it was drunk; this cellar when it is one of them.
 //

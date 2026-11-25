@@ -146,7 +146,7 @@ function GrapeTokenInput({ options, value = [], onChange, max = 12, allowNew = f
   // invites junk: "sauv" is the start of two varieties, not a third one.
   // "Nothing" is judged against the WHOLE list: `hits` leaves out what is
   // already chosen, so with Zinfandel picked, "Zinf" had no hits and was
-  // offered as a new variety (pre-deploy audit 2026-09-18).
+  // offered as a new variety.
   const hiddenMatch = useMemo(
     () => (hits.length === 0 && typedId ? (searchGrapes(index, query, NONE_TAKEN, 1)[0] || null) : null),
     [hits.length, typedId, index, query]

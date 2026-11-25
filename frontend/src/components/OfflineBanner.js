@@ -21,7 +21,7 @@ function formatSavedAt(iso, lang) {
 }
 
 /**
- * Offline mode status (#1355), shown with offline mode on:
+ * Offline mode status, shown with offline mode on:
  *  - "Offline — showing your cellar as saved at …" while the app works from
  *    the device's copy (no network, an offline start, or a read the network
  *    didn't answer);

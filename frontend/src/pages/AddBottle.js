@@ -193,7 +193,7 @@ function AddBottle() {
   // bottle of the batch — tracked here rather than by loop index, which a
   // retry resuming mid-batch would read as "already sent" when it never was.
   const wineFieldsSentRef = useRef(false);
-  // Post-add placing offer (issue #1055): { ids, count } once the save landed
+  // Post-add placing offer: { ids, count } once the save landed
   // in a cellar that has racks. Skippable, never blocking — "Not now" goes to
   // the cellar page exactly as before.
   const [placePrompt, setPlacePrompt] = useState(null);
@@ -266,8 +266,8 @@ function AddBottle() {
     suspectProducerValueRef.current = data.extracted?.producer_suspect
       ? (data.extracted.producer || '') : null;
     if (partial) {
-      // Straight to the EDITABLE form, prefilled — never the read-only card
-      // (release-audit M-1): the card renders a blank title and its confirm
+      // Straight to the EDITABLE form, prefilled — never the read-only card:
+      // the card renders a blank title and its confirm
       // button can only 400 on the missing name/country. The form's own
       // validation speaks the user's language, producer stays optional, and
       // the back-label offer sits right above it.
@@ -348,7 +348,7 @@ function AddBottle() {
         if (!typed && fromMerged[key]) next[key] = fromMerged[key];
       }
       // A SUSPECT front producer is the one prefill the back label may
-      // REPLACE (audit M-1: fill-blanks-only left the flagged string in the
+      // REPLACE (fill-blanks-only left the flagged string in the
       // box and made the rescue inert) — but only while the box still holds
       // the exact prefilled string; any edit by the user outranks both labels.
       if (suspectValue
@@ -508,7 +508,7 @@ function AddBottle() {
     imagesLinkedRef.current = false;
     wineFieldsSentRef.current = false;
     // A fresh new-wine choice starts with the draft toggle off — the earlier
-    // answer belonged to a different wine (audit 2026-09-12).
+    // answer belonged to a different wine.
     setCreateAsDraft(false);
     setPendingNewWine(wineData);
     // colour rides along: step 2 draws the wine the user just described.
@@ -567,7 +567,7 @@ function AddBottle() {
       // resolve did not (the scan matcher looks from 0.75, the resolver's
       // "did you mean?" floor is 0.85). Ask instead of minting a duplicate.
       // The scan's match NEVER links by itself: it is one more candidate the
-      // user picks, exactly like the resolver's own (issue #1134).
+      // user picks, exactly like the resolver's own.
       if (opts.fallback?.wine) {
         setSoftCandidates([{ wine: opts.fallback.wine, score: opts.fallback.confidence || 0 }]);
         setSoftPending({ wineData, carriedVintage, queryLabel });
@@ -588,7 +588,7 @@ function AddBottle() {
   // ignored it, and it must not bloat the bottle commit): bottle photos go
   // through the separate /api/images upload + link-to-bottle flow.
   //
-  // Resolve on WHAT THE LABEL SAID — never on the matched row (issue #1134).
+  // Resolve on WHAT THE LABEL SAID — never on the matched row.
   // This used to substitute `match.wine`'s name/producer/appellation wholesale
   // whenever the scan matcher returned anything at all, which it does from
   // 0.75. The card above still showed `extracted.name`, so a wine filed under
@@ -945,7 +945,7 @@ function AddBottle() {
   // Where the bottles now are, said there. Opened from that very list (its
   // add buttons pass `cameFrom`), the page goes BACK to it — the list keeps
   // its place and Back from it leaves it, where a second copy of the list
-  // made the first Back dead (release audit 2026-10-16) — and the notice is
+  // made the first Back dead — and the notice is
   // handed over through sessionStorage. Otherwise the add page is replaced,
   // so Back never lands on an emptied form.
   // From a closing pop-up ("Place them now?", "did you mean?", the custom-
@@ -1141,7 +1141,7 @@ function AddBottle() {
             partialError(data.error || t('addBottle.addFailed'), createdBottles.length),
             ...fieldWarnings,
           ].join(' — '));
-          // Release-audit MEDIUM: a mint-gate 400 ("Riquewihr is a village,
+          // A mint-gate 400 ("Riquewihr is a village,
           // not a producer") lands here AFTER the wine form is gone. When the
           // failed POST carried newWine and nothing was created yet, reopen
           // step 1's manual form seeded with the typed fields so the user
@@ -1152,7 +1152,7 @@ function AddBottle() {
             setStep(1);
           }
           // The alert renders at the top of a long form — without the scroll
-          // a failed submit reads as "the button did nothing" (audit LOW).
+          // a failed submit reads as "the button did nothing".
           window.scrollTo(0, 0);
           linkUploadedImages();
           return;

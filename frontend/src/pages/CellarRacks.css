@@ -1247,7 +1247,7 @@
 .edit-rack-form .edit-rack-sideways-row select { width: auto; min-width: 11rem; }
 .edit-rack-form .edit-rack-sideways .edit-rack-option-help { margin: 0.35rem 0 0; }
 
-/* Post-add placing mode bar (issue #1055): progress on the left, actions on
+/* Post-add placing mode bar: progress on the left, actions on
    the right; wraps to two rows on phones. Colours come from .alert-info /
    .alert-warning in common.css. */
 .place-queue-bar {

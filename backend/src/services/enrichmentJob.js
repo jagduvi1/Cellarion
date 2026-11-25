@@ -390,7 +390,7 @@ async function runJob(cfg) {
     // full mode — which is exactly the mode that would have destroyed the
     // most work. See WineDefinition.aiProfile.source.
     // A pendingIdentity row is never enriched — the SAME rule embeddingJob
-    // carries, and it was missed here (security audit M-3). Its producer is ''
+    // carries, and it was missed here. Its producer is ''
     // and its region is often the misplaced string that made it pending, so
     // the model would be asked to describe a wine nobody has identified yet:
     // an AI spend on a row strangers cannot see, whose output would then be
@@ -949,8 +949,8 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
  * profile or AI isn't configured. Never throws.
  *
  * When triggered by a user action (bottle-add), pass `budgetUserId` so the
- * Anthropic call is debited against that user's shared daily AI budget
- * (SECURITY_AUDIT_2026-07-08 L-14). Over budget → skip silently (the profile
+ * Anthropic call is debited against that user's shared daily AI budget.
+ * Over budget → skip silently (the profile
  * arrives with the next admin batch run instead — graceful degradation, the
  * user's own action still succeeds). The admin-run batch job calls
  * enrichWine() directly and is exempt.
