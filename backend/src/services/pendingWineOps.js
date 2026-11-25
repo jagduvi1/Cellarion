@@ -10,10 +10,10 @@
  * into the producer box (models/WineDefinition.pendingIdentity). They are
  * invisible to everyone but their creator until a curator completes them.
  *
- * ANONYMISED, deliberately (the #930 rule): the row carries the wine, its
- * bottle count and its IMAGES — never the creator's id, username or email. A
- * curator fixes a record; who owns the bottle is not part of that judgement,
- * and the queue is reachable over MCP, where the payload leaves the building.
+ * ANONYMISED, deliberately: the row carries the wine, its bottle count and its
+ * IMAGES — never the creator's id, username or email. A curator fixes a
+ * record; who owns the bottle is not part of that judgement, and the queue is
+ * reachable over MCP, where the payload leaves the building.
  *
  * The FIX is a plain field write. Promotion is not done here and must not be:
  * the WineDefinition pre-validate hook flips pendingIdentity off as soon as
@@ -484,7 +484,7 @@ async function applyPendingFix(wine, clean, userId) {
       wine.region = null;
     } else {
       // Lazy require: findOrCreateWine top-requires services/search → the
-      // ESM-only meilisearch package jest cannot parse (the #702 failure mode).
+      // ESM-only meilisearch package jest cannot parse.
       const { findOrCreateRegion } = require('./findOrCreateWine');
       const regionDoc = await findOrCreateRegion(clean.regionName, countryDoc?._id || wine.country, userId);
       wine.region = regionDoc?._id || null;
@@ -499,14 +499,14 @@ async function applyPendingFix(wine, clean, userId) {
   // …but ONLY when the row is actually leaving. `wine.pendingIdentity` is still
   // true at this point (the pre-validate hook flips it during save below), so
   // this must PREDICT the hook with the hook's own predicate rather than read
-  // the flag. Using generateWineKey unconditionally dropped the creator id out
-  // of a STILL-PENDING row's key, breaking the documented
-  // namespace invariant: two curator-renamed pending rows by different users
-  // could then land on the same ordinary key and E11000 into a "merge them
-  // instead" 409 that is simply false.
-  // …computed once above (it also decides whether the cross-field gate runs),
-  // and it now carries the hook's implausibility term too — a row the hook
-  // refuses to promote must keep its per-creator pending key.
+  // the flag. Using generateWineKey unconditionally would drop the creator id
+  // out of a STILL-PENDING row's key, breaking the documented namespace
+  // invariant: two curator-renamed pending rows by different users could then
+  // land on the same ordinary key and E11000 into a "merge them instead" 409
+  // that is simply false. willPromote is computed once above (it also decides
+  // whether the cross-field gate runs) and carries the hook's implausibility
+  // term — a row the hook refuses to promote must keep its per-creator
+  // pending key.
   if (clean.name || clean.producer || clean.appellation !== undefined) {
     wine.normalizedKey = willPromote
       ? generateWineKey(wine.name, wine.producer, wine.appellation)
@@ -532,8 +532,8 @@ async function applyPendingFix(wine, clean, userId) {
 
   // The bottles' owners see this wine's new identity in their statistics and
   // bottle lists: move their data version so no read cache keeps the old one
-  // (services/dataVersion; audit 2026-09-27 M6). Lazy so the tests that mock
-  // Bottle without `distinct` are unaffected — the helper never throws.
+  // (services/dataVersion). Lazy so the tests that mock Bottle without
+  // `distinct` are unaffected — the helper never throws.
   require('./dataVersion').bumpWineOwners([wine._id]);
 
   const promoted = wine.pendingIdentity !== true;
@@ -569,19 +569,18 @@ async function applyPendingFix(wine, clean, userId) {
 async function runPromotionFollowThrough(wine) {
   // The label scan's clock starts HERE. While the row was pending the scan was
   // curation evidence with a live purpose; promotion ends that purpose, but not
-  // instantly — a wrong completion has to be correctable against the label,
-  // which under the old rule became unreadable the moment the row left the
-  // queue (services/labelScanAccess). So the scan stays readable for
+  // instantly — a wrong completion has to be correctable against the label
+  // (services/labelScanAccess). So the scan stays readable for
   // PROMOTED_SCAN_GRACE_DAYS and is then deleted, file and doc, by the daily
-  // sweep. GDPR: this REDUCES retention — a promoted wine's scan was previously
-  // kept indefinitely, reachable by nobody.
+  // sweep. GDPR: this bounds retention — without a deadline a promoted wine's
+  // scan would be kept indefinitely, reachable by nobody.
   //
-  // The stamp itself now lives on the TRANSITION — a post('save') hook on
-  // WineDefinition — because "every promoting caller runs this follow-through"
-  // was simply false: the admin PUT and /strip-producer promote by setting a
-  // producer and saving, and called nothing. Kept here as well,
-  // deliberately: the update matches `retainUntil: null` and so cannot extend a
-  // live deadline, and this call is what the curation path's own test asserts.
+  // The stamp itself lives on the TRANSITION — a post('save') hook on
+  // WineDefinition — because not every promoting caller runs this
+  // follow-through: the admin PUT and /strip-producer promote by setting a
+  // producer and saving. Kept here as well, deliberately: the update matches
+  // `retainUntil: null` and so cannot extend a live deadline, and this call is
+  // what the curation path's own test asserts.
   await stampPromotedScanRetention(wine);
   const searchService = require('./search');
   // indexWine owns index membership in BOTH directions — this is the call that
@@ -599,12 +598,10 @@ async function runPromotionFollowThrough(wine) {
   // at, and this is the opposite — a curator has just supplied the identity
   // by hand. Same family as reenrichAfterRecordEdit: chosen, not incidental.
   //
-  // …except under 'off', which since 2026-08-22 means wine data is somm-owned
-  // and the AI writes NOTHING automatically — reenrichAfterRecordEdit honours
-  // it, and this hook, a day older than the rule, did not. On prod the
-  // sommelier had already replaced 106 of the 113 AI profiles generated in the
-  // 30 days to 2026-09-24. The draft-publish paths (services/wineDraftOps) run
-  // this same function, so this one check covers them too.
+  // …except under 'off', which means wine data is somm-owned and the AI
+  // writes NOTHING automatically — reenrichAfterRecordEdit honours it too.
+  // The draft-publish paths (services/wineDraftOps) run this same function,
+  // so this one check covers them too.
   if (require('../config/aiConfig').get().enrichmentOnAdd !== 'off') {
     require('./enrichmentJob').enrichWineById(wine._id).catch?.(() => {});
   }
@@ -620,7 +617,7 @@ async function runPromotionFollowThrough(wine) {
   } catch (err) {
     console.warn('Maturity re-seed after pending promotion failed (non-fatal):', err.message);
   }
-  // The wine now has a public page worth announcing (it 404'd while pending).
+  // The wine now has a public page worth announcing (it is a 404 while pending).
   try {
     require('./indexNow').submitUrls(`/wines/${wine.slug || wine._id}`);
   } catch { /* non-fatal */ }

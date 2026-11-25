@@ -16,16 +16,15 @@
  * left for the next cleanup pass:
  *
  *   1. SAME normalized string (accent/case/punctuation variants): adopt the
- *      majority spelling. Unchanged from R1.
+ *      majority spelling.
  *
  *   2. SAME producer comparison key, SAME country (decoration variants:
  *      "Philipp Kuhn" vs "Weingut Philipp Kuhn", "Felton Road Wines Ltd" vs
- *      "Felton Road"). This is the split class stage 1 is blind to — the
- *      2026-08-14 consolidation found 130 such clusters, minted mostly by the
- *      LWIN import (whose PRODUCER_NAME column drops the estate title that
- *      label scans include). Guarded three ways, because the key
- *      DELIBERATELY over-folds (Domaine vs Bodegas Chandon share one; so do
- *      Napa's two Stags Leap estates):
+ *      "Felton Road"). This is the split class stage 1 is blind to, minted
+ *      mostly by the LWIN import (whose PRODUCER_NAME column drops the
+ *      estate title that label scans include). Guarded three ways, because
+ *      the key DELIBERATELY over-folds (Domaine vs Bodegas Chandon share
+ *      one; so do Napa's two Stags Leap estates):
  *        - country must match — "Weingut Jordan" (DE) never captures a new
  *          "Jordan Winery" (US) wine;
  *        - the bucket must hold exactly ONE existing spelling group — a
@@ -47,13 +46,12 @@
  *
  * ...except that a producer can also change on an EXISTING wine, and there
  * the resolver never runs. otherProducerSpellings / planProducerRename below
- * serve that path (approving a producer correction, routes/admin/
- * wineProposals.js): 9 of the 51 producer corrections approved in the week
- * to 2026-09-28 gave one wine a spelling the rest of its producer did not
- * use, and each became a display split the weekly registry-health check
- * rang for. They only REPORT and PLAN — which spelling wins stays a human's
- * call, because the bucket deliberately over-folds (two real Bordeaux
- * estates can share one).
+ * serve that path (approving a producer correction,
+ * services/wineProposalDecisionOps.js): a correction can give one wine a
+ * spelling the rest of its producer does not use, and each such wine is a
+ * display split the weekly registry-health check rings for. They only REPORT
+ * and PLAN — which spelling wins stays a human's call, because the bucket
+ * deliberately over-folds (two real Bordeaux estates can share one).
  */
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
@@ -78,8 +76,8 @@ const decorationOnlyDiff = (aNorm, bNorm) => {
  * @param {string} producerNorm  normalizeString(rawProducer) — caller already has it
  * @param {object} [opts]
  * @param {*}      [opts.countryId] the wine's resolved Country _id. Enables
- *   stage 2; without it only the same-string stage runs (the pre-2026-08-14
- *   behavior), because cross-estate safety needs the country fence.
+ *   stage 2; without it only the same-string stage runs, because
+ *   cross-estate safety needs the country fence.
  * @returns {Promise<string>} the spelling to store (the registry's canonical
  *   one, or the input when this producer is new / contested / not a pure
  *   decoration variant). Never throws — on lookup failure the input spelling

@@ -50,9 +50,9 @@ const wineLabel = (wine) => [wine?.producer, wine?.name].filter(Boolean).join(' 
 // An inquiry a recipient may still see/answer: open or answered, and not
 // expired. Expired rows are excluded query-time on the owner paths (they run
 // no global writes); the curator queue reads run the closing sweep for the
-// open ones, and keeps the answered ones until a curator resolves them. Until
-// 2026-09-27 an answered inquiry had no expiry here, so other recipients could
-// keep adding answers to a months-old question (release audit, L).
+// open ones, and keeps the answered ones until a curator resolves them. An
+// answered inquiry expires here too, so other recipients cannot keep adding
+// answers to a months-old question.
 const activeFor = (now) => ([
   { status: 'answered', expiresAt: { $gt: now } },
   { status: 'open', expiresAt: { $gt: now } },
@@ -371,12 +371,12 @@ async function buildRecipients(wineId) {
     { $lookup: { from: 'cellars', localField: 'cellar', foreignField: '_id', as: 'liveCellar', pipeline: [{ $match: { deletedAt: null } }, { $project: { _id: 1 } }] } },
     { $match: { 'liveCellar.0': { $exists: true } } },
     { $sort: { createdAt: -1 } },
-    // latest makes the cap DETERMINISTIC ($group emits undefined order —
-    // Without the re-sort the 20 kept were arbitrary).
+    // latest makes the cap DETERMINISTIC: $group emits undefined order, and
+    // without the re-sort on it the RECIPIENT_CAP kept would be arbitrary.
     { $group: { _id: '$user', bottle: { $first: '$_id' }, cellar: { $first: '$cellar' }, latest: { $first: '$createdAt' } } },
     // Demo visitors hold clones of real registry wines but can never answer
-    // (respond is requireNonDemo) — without this exclusion they crowd real
-    // owners out of the cap (audit 2026-08-11 frontend MEDIUM).
+    // (respond is requireNonDemo) — without this exclusion they would crowd
+    // real owners out of the cap.
     { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'owner' } },
     { $match: { 'owner.isDemo': { $ne: true } } },
     { $sort: { latest: -1 } },
@@ -428,20 +428,19 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
 
   const wine = await WineDefinition.findById(wineId).select('name producer pendingIdentity draft');
   // A private draft answers not_found: nobody but its creator knows it exists,
-  // and the creator IS the owner. `draft` is in the
-  // projection above, so the check can see it.
+  // and the creator IS the owner. `draft` is in the projection above, so the
+  // check can see it.
   if (!wine || wine.draft === true) {
     return { ok: false, code: 'not_found', message: 'No registry wine with that id.' };
   }
-  // Pending-identity wines are deliberately ASKABLE. This used to be refused on
-  // the reasoning that the only owner is the creator, so asking them adds
-  // nothing over reading the scan — but those two things don't connect. When the
-  // scan is unreadable (a washed-out producer line, a label that simply doesn't
-  // print the producer, a photo of a screen), the owner is holding the bottle
-  // and can read the BACK label, which carries "Mis en bouteille par…". That is
-  // strictly more information than the curator has, and it is the only path that
-  // resolves the row at all. Refusing it left such wines stuck in the queue
-  // forever with no escalation (found in use, 2026-08-12).
+  // Pending-identity wines are deliberately ASKABLE, even though the only owner
+  // is often the creator, whose scan the curator already has. When the scan is
+  // unreadable (a washed-out producer line, a label that simply doesn't print
+  // the producer, a photo of a screen), the owner is holding the bottle and
+  // can read the BACK label, which carries "Mis en bouteille par…". That is
+  // strictly more information than the curator has, and it is the only path
+  // that resolves the row at all: refusing it would leave such wines stuck in
+  // the queue forever with no escalation.
 
   const { recipients, fallbackUsed } = await buildRecipients(wine._id);
   if (recipients.length === 0) {
@@ -715,8 +714,8 @@ async function repointInquiriesForWineMerge(sourceId, targetId, keeperLabel, req
 }
 
 /**
- * Wine-delete lifecycle (#916 pattern): with the wine gone there is nothing
- * left to verify — close every active inquiry with the reason on the row.
+ * Wine-delete lifecycle: with the wine gone there is nothing left to verify
+ * — close every active inquiry with the reason on the row.
  */
 async function closeInquiriesForWineDelete(wineId, req = null) {
   const res = await WineOwnerInquiry.updateMany(

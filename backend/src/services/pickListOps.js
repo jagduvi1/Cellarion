@@ -1,7 +1,7 @@
 /**
  * Pick lists — the ONE implementation behind REST /api/pick-lists and the
- * MCP pick-list tools (forum request 2026-10-13: "a pick list … with the rack
- * and bottle position for each wine, so you don't have to open every wine").
+ * MCP pick-list tools: wines listed with the rack and bottle position of
+ * each, so the user does not have to open every wine to find it.
  *
  * A list holds references to the user's own bottles; where each one sits is
  * read live when the list is shown (rack, slot, whether the rack is placed
@@ -254,9 +254,9 @@ async function getPickListView(userId, id) {
     const inRoom = new Set();
     for (const l of layouts) for (const rp of l.rackPlacements || []) inRoom.add(String(rp.rack?._id || rp.rack));
     // Walk order within a cellar, as the rack page groups racks (frontend
-    // utils/rackGroups): groups in the order of their first rack, racks in the
-    // order they were made, ungrouped racks after the groups (release audit
-    // 2026-10-13: groups were ordered by their first rack ON THE LIST).
+    // utils/rackGroups): groups in the order of their first rack in the
+    // cellar (not on the list), racks in the order they were made, ungrouped
+    // racks after the groups.
     const sectionsOf = new Map(); // cellar → Map(groupKey → rack ids)
     for (const r of allRacks) {
       const c = String(r.cellar);

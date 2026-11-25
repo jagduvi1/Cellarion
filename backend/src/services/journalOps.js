@@ -38,8 +38,8 @@ function sanitizeEntry(body) {
     const m = parseInt(mood, 10);
     if (Number.isInteger(m) && m >= 1 && m <= 5) clean.mood = m;
     else {
-      // Reject instead of silently nulling — a PUT with mood: 7 used to
-      // erase the stored value without any indication.
+      // Reject instead of silently nulling — a PUT with mood: 7 would
+      // otherwise erase the stored value without any indication.
       const err = new Error('Mood must be a whole number between 1 and 5');
       err.status = 400;
       throw err;

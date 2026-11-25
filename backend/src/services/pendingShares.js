@@ -1,8 +1,8 @@
 const PendingShare = require('../models/PendingShare');
 const Cellar = require('../models/Cellar');
 const { createNotification } = require('./notifications');
-// Nothing here is audited; the owner's cached token list carries the members
-// (release audit 2026-10-09, L).
+// Nothing here is audited (logAudit would bump it), so the data version moves
+// by hand: the owner's cached token list carries the members.
 const { bumpDataVersion } = require('./dataVersion');
 
 /**

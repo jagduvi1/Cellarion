@@ -695,9 +695,9 @@ async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticket
 
 /**
  * A curator's question about a wine the recipient owns a bottle of
- * (services/ownerInquiryEmail). Until 2026-10-20 these reached the in-app bell
- * and push only, and almost nobody answered. Sent unless the recipient turned
- * it off (preferences.notifications.ownerInquiry) or unsubscribed; the caller
+ * (services/ownerInquiryEmail): the in-app bell and push alone are rarely
+ * answered. Sent unless the recipient turned it off
+ * (preferences.notifications.ownerInquiry) or unsubscribed; the caller
  * checks both, and rations it to one a day.
  *
  * The question is in the email itself, so an owner can read the label first;

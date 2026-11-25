@@ -12,7 +12,7 @@
  * a bottle read needs: which photos apply to this bottle, and whether a list
  * row has any photo at all. Visibility matches the web gallery: a viewer sees
  * their own rows in every state (rejected included — that is the answer they
- * were missing), and other people's rows only once published.
+ * need), and other people's rows only once published.
  */
 const BottleImage = require('../models/BottleImage');
 

@@ -3,19 +3,17 @@
  *
  * - What rembg is sent: at most REMBG_MAX_EDGE on the long side. rembg holds
  *   several full-size copies of the frame while it works: a 24 MP phone photo
- *   peaked at ~1.35 GB of its 1.5 GB memory cap (the scaling audit saw one
- *   killed, so that photo was never processed); the same frame at 2048 px
- *   peaks at ~0.78 GB and is done ~2.7× sooner. The kept image has the same
- *   cap, so a bottle that fills most of the frame loses nothing; one that
- *   fills less of it is kept smaller than before (the cut-out is taken from
- *   the 2048 px frame).
+ *   comes close to its 1.5 GB memory cap (docker-compose.yml), and a run that
+ *   crosses it is killed and the photo never processed; the same frame at
+ *   2048 px needs about half that and is done several times sooner. The kept
+ *   image has the same cap, so a bottle that fills most of the frame loses
+ *   nothing; one that fills less of it is kept smaller (the cut-out is taken
+ *   from the 2048 px frame).
  * - What Cellarion keeps and serves: WebP, at most KEPT_MAX_EDGE on the long
- *   side, transparency kept losslessly. rembg returns a lossless PNG (≈430 KB
- *   on average on prod, 2026-09). Real processed photos came out about 8×
- *   smaller as WebP q82, at a median PSNR of 42 dB against the PNG and with
- *   the alpha channel identical. 2048 rather than a smaller cap keeps the
- *   small print on a label readable when zoomed, and cost only ~3% more than
- *   1600.
+ *   side, transparency kept losslessly. rembg returns a lossless PNG; as WebP
+ *   q82 a processed photo is several times smaller, visually the same and
+ *   with the alpha channel identical. 2048 rather than a smaller cap keeps the
+ *   small print on a label readable when zoomed, at little cost over 1600.
  *
  * sharp is already a backend dependency (services/imageSanitizer).
  */

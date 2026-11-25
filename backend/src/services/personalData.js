@@ -337,8 +337,8 @@ async function resolveKey(userId, { keyId, newKey }) {
   });
   if (existing) {
     const suppliedType = newKey && newKey.type;
-    // A type that is not a type at all is still the old message, not a
-    // "keeps one type" conflict.
+    // A type that is not a type at all gets the plain invalid-type message,
+    // not a "keeps one type" conflict.
     if (suppliedType && !TYPES.includes(suppliedType)) {
       return fail('invalid', `Key type must be one of: ${TYPES.join(', ')}`);
     }
@@ -359,7 +359,7 @@ async function resolveKey(userId, { keyId, newKey }) {
   // A genuinely new key is NOT written here: the caller validates the value
   // against the definition and checks the room on the target first, then
   // creates it (createKey) — so a refused value never leaves a typed key
-  // behind with no entry (release audit 2026-09-27, L).
+  // behind with no entry.
   return { ok: true, key: null, def: checked.def };
 }
 
@@ -378,8 +378,8 @@ async function createKey(userId, def) {
  * Caller has already resolved bottle access for userId.
  *
  * `dedupe` returns the caller's existing entry for the same key and target
- * slot instead of writing a second one. Off by default — the bottle page has
- * always allowed a repeat and nothing should change under it — and ON for the
+ * slot instead of writing a second one. Off by default — the bottle page
+ * allows a repeat and nothing should change under it — and ON for the
  * add-bottle form, where a six-bottle batch posts the same WINE-level field
  * once per bottle and a retry re-posts what the first attempt already wrote.
  */
@@ -390,8 +390,8 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
   if (level === 'wine' && !bottle.wineDefinition) {
     return fail('invalid', 'This bottle has no wine record to attach wine-level data to');
   }
-  // "Every bottle of this vintage": a wine-level entry
-  // narrowed to THE BOTTLE'S vintage — derived server-side, never client text.
+  // "Every bottle of this vintage": a wine-level entry narrowed to THE
+  // BOTTLE'S vintage — derived server-side, never client text.
   if (vintageScoped && level !== 'wine') {
     return fail('invalid', 'vintage scope only applies to wine-level entries — a bottle-level entry already has its vintage');
   }
@@ -584,9 +584,9 @@ async function updateKey(userId, keyId, { name, unit, enumOptions } = {}) {
   }
 
   // The allowed values of a list key can change after its creation, so a
-  // list can grow. The new list replaces the old one under
-  // the creation rules; a value some entry still holds must stay on it, so
-  // no stored value ever falls outside its key's definition.
+  // list can grow. The new list replaces the old one under the creation
+  // rules; a value some entry still holds must stay on it, so no stored
+  // value ever falls outside its key's definition.
   let cleanOptions = key.enumOptions ? [...key.enumOptions] : null;
   if (wantsOptions) {
     if (key.type !== 'enum') {

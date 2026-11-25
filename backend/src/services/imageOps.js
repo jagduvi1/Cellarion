@@ -232,9 +232,9 @@ async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null
 /**
  * Persist the ORIGINAL frame a label scan was run on, so a curator working the
  * pending-identity queue can read the label instead of guessing from three
- * broken strings. Until now the scan bytes lived only in the request handler
- * and were garbage-collected with it — which is exactly why an unreadable
- * label produced an unfixable registry row.
+ * broken strings. Bytes that live only in the request handler are
+ * garbage-collected with it, and an unreadable label then leaves an
+ * unfixable registry row.
  *
  * Deliberately NOT ingestBottleImage: no per-bottle cap applies (there is no
  * bottle), no background removal is kicked off (the scan flow already ran one

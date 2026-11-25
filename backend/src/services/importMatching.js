@@ -104,14 +104,14 @@ const PRODUCER_PREFIX_MAX_TOKENS = 6;
  * Split a producer-less display name on a producer the REGISTRY already knows.
  *
  * A CellarTracker export without a Producer column carries "Louis Jadot
- * Moulin-à-Vent Château des Jacques" in its Wine column. The client used to
- * guess the first word ("Louis"), which minted 285 wines under one-word
- * producers on 2026-09-12 and cost 121 curator corrections. The registry is
- * the better oracle: the longest leading token run that equals an existing
- * producer (normalizedKey is `<producer>:<name>:<appellation>`, so an
- * anchored prefix on the unique index is one cheap read per length) is the
- * producer, and the rest is the wine's own name. Nothing matches → null, and
- * the row goes to the model with the full display name instead.
+ * Moulin-à-Vent Château des Jacques" in its Wine column. Guessing the first
+ * word ("Louis") mints wines under one-word producers that a curator then
+ * has to correct one by one. The registry is the better oracle: the longest
+ * leading token run that equals an existing producer (normalizedKey is
+ * `<producer>:<name>:<appellation>`, so an anchored prefix on the unique
+ * index is one cheap read per length) is the producer, and the rest is the
+ * wine's own name. Nothing matches → null, and the row goes to the model
+ * with the full display name instead.
  *
  * Pending and draft rows are excluded by construction (their key namespaces
  * start with `pending~` / `draft~`), non-wine records explicitly.
@@ -125,11 +125,11 @@ async function splitKnownProducerPrefix(displayName) {
     const filter = { normalizedKey: new RegExp(`^${escapeRegex(prefixKey)}:`), nonWine: { $ne: true } };
     const hit = await WineDefinition.findOne(filter).select('producer').lean();
     if (!hit || !hit.producer) continue;
-    // A ONE-word producer is the shape the 2026-09-12 first-word guess left
-    // behind ("Kim", "Louis", "19"), and those junk rows are still in the
-    // registry until their purge. A single wine under a one-word producer is
-    // not corroboration; two or more is (Hugel, Penfolds, Ridge all qualify).
-    // Anything longer than one word is trusted as before.
+    // A ONE-word producer is the shape a first-word guess leaves behind
+    // ("Kim", "Louis", "19"), and such junk rows can sit in the registry. A
+    // single wine under a one-word producer is not corroboration; two or more
+    // is (Hugel, Penfolds, Ridge all qualify). Anything longer than one word
+    // is trusted outright.
     if (n === 1) {
       const siblings = await WineDefinition.countDocuments(filter, { limit: 2 });
       if (siblings < 2) continue;
@@ -150,12 +150,12 @@ async function splitKnownProducerPrefix(displayName) {
  * resolver does. It matters here more than anywhere: a CellarTracker row with
  * no producer scores 1.0 against a PENDING row, whose stored producer is ''
  * — so without the gate an import would offer, and then attach bottles to,
- * ANOTHER USER's hidden half-identified wine. Strategy 3 was
- * the worst of the three: `normalizedKey: /:<name>:/` is unanchored, and the
- * pending namespace `pending~<uid>:<name>:` contains that substring by
- * construction. The creator still matches their OWN pending rows, which is
- * what keeps /validate's preview honest about what /confirm will do (the
- * commit path passes allowPending and resolves to the same row).
+ * ANOTHER USER's hidden half-identified wine. Strategy 3 needs it most:
+ * `normalizedKey: /:<name>:/` is unanchored, and the pending namespace
+ * `pending~<uid>:<name>:` contains that substring by construction. The
+ * creator still matches their OWN pending rows, which is what keeps
+ * /validate's preview honest about what /confirm will do (the commit path
+ * passes allowPending and resolves to the same row).
  */
 async function findWineMatches(item, viewer = {}) {
   const candidates = new Map(); // id -> { wine, score }
@@ -166,8 +166,8 @@ async function findWineMatches(item, viewer = {}) {
     try {
       // Search with combined producer + name for best fuzzy results — then,
       // if that found nothing worth scoring, with the appellation prefix and
-      // the producer's parenthetical removed (registry backlog 2026-09-06: a
-      // CellarTracker re-import missed 44 known wines on those two habits).
+      // the producer's parenthetical removed (CellarTracker exports carry both
+      // habits, and the plain query misses known wines on them).
       const queries = importQueryVariants(item);
       const searchOpts = { limit: 15 };
 
@@ -268,10 +268,10 @@ async function findWineMatches(item, viewer = {}) {
   }
 
   // Sort by score descending, return top 5. Each match carries the style
-  // verdict (issue #1134 follow-up): where the import row and the candidate
-  // NAME a different Prädikat or sweetness they are two wines from one range,
-  // and no similarity score may auto-link them — a Trocken/Halbtrocken pair
-  // from one vineyard measures 0.9543 through this scorer. Annotated here,
+  // verdict: where the import row and the candidate NAME a different
+  // Prädikat or sweetness they are two wines from one range, and no
+  // similarity score may auto-link them — a Trocken/Halbtrocken pair from one
+  // vineyard can clear the exact threshold through this scorer. Annotated here,
   // at the single place all three consumers get their matches, so the
   // >= EXACT_THRESHOLD gates and the client's preselection read one verdict.
   // colourConflict rides alongside for the same consumers (rowColourConflict).
