@@ -1,10 +1,10 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 
 // The "Sweetness" row of the wine record. Two facts can stand in it and must
 // not look alike: the term the LABEL prints, and the term the wine is KNOWN
 // by (the style), which always says who names it and links the page. Only the
-// style is suggested here — as a term, a source and a link in one field — and
-// on a wine that has none the server applies it at once.
+// style is suggested here — as a term, a source and a link in one field. Who
+// names the term is the member's own statement: the form never chooses it.
 
 vi.mock('../../api/wineProposals', () => ({ createWineProposal: vi.fn(), getMyWineProposals: vi.fn() }));
 vi.mock('../../api/taxonomy', () => ({ getGrapeNames: vi.fn(), getSweetnessTerms: vi.fn() }));
@@ -37,14 +37,18 @@ const TERMS = [
   { _id: 't4', name: 'fruchtsüß', scale: 'still', band: 'medium-sweet', regulated: false },
 ];
 const URL = 'https://merchant.example/riesling-kabinett';
+const TRADE = 'A merchant, critic or wine database';
+const PRODUCER = 'The producer';
+const STYLE = { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: URL };
 
 const sweetnessRow = () => screen.getByText('Sweetness').closest('.wr-row');
 const openForm = async (wine = WINE, props = {}) => {
-  render(<WineRecordSection wine={wine} canSuggest apiFetch={vi.fn()} {...props} />);
+  const view = render(<WineRecordSection wine={wine} canSuggest apiFetch={vi.fn()} {...props} />);
   await screen.findByText('Sweetness');
   fireEvent.click(screen.getByText('Suggest a fix'));
   fireEvent.click(screen.getByLabelText('Suggest a fix for Sweetness'));
-  await screen.findByLabelText('The term');
+  await waitFor(() => expect(screen.getByLabelText('The term')).toBeEnabled());
+  return view;
 };
 const fill = ({ term, source, url = URL }) => {
   fireEvent.change(screen.getByLabelText('The term'), { target: { value: term } });
@@ -60,9 +64,8 @@ beforeEach(() => {
 });
 
 describe('what the row shows', () => {
-  test('a style reads as the term, "known as", and who names it — linked to the page', async () => {
-    const wine = { ...WINE, sweetnessStyle: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: URL } };
-    render(<WineRecordSection wine={wine} canSuggest={false} apiFetch={vi.fn()} />);
+  test('a style reads as "known as" the term, and who names it — linked to the page', async () => {
+    render(<WineRecordSection wine={{ ...WINE, sweetnessStyle: STYLE }} canSuggest={false} apiFetch={vi.fn()} />);
     const row = (await screen.findByText('Sweetness')).closest('.wr-row');
     expect(within(row).getByText(/feinherb/)).toBeInTheDocument();
     expect(within(row).getByText(/known as/)).toBeInTheDocument();
@@ -81,8 +84,8 @@ describe('what the row shows', () => {
     expect(screen.queryByLabelText('Suggest a fix for Sweetness')).not.toBeInTheDocument();
   });
 
-  test('a wine with neither says "not recorded" and offers Add', async () => {
-    render(<WineRecordSection wine={WINE} canSuggest apiFetch={vi.fn()} />);
+  test('a wine with neither says "not recorded" and offers Add; a label term that is only an id reads as none', async () => {
+    render(<WineRecordSection wine={{ ...WINE, labelSweetness: '64b0000000000000000000aa' }} canSuggest apiFetch={vi.fn()} />);
     await screen.findByText('Sweetness');
     expect(within(sweetnessRow()).getByText('not recorded')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Suggest a fix'));
@@ -98,23 +101,54 @@ describe('what the row shows', () => {
     await screen.findByText('Wine record');
     expect(screen.queryByText('Sweetness')).not.toBeInTheDocument();
   });
+
+  test('the member\'s own waiting style shows from the first read, and takes the place of the action', async () => {
+    getMyWineProposals.mockResolvedValue(ok({
+      proposals: [{ status: 'pending', proposedFields: { sweetnessStyle: { term: 'fruchtsüß', source: 'producer', url: URL } } }],
+      pending: { mine: true, fields: ['sweetnessStyle'] },
+    }));
+    render(<WineRecordSection wine={{ ...WINE, sweetnessStyle: STYLE }} canSuggest apiFetch={vi.fn()} />);
+    expect(await screen.findByText('fruchtsüß (named by the producer)')).toBeInTheDocument();
+    expect(within(sweetnessRow()).getByText('suggestion pending')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Suggest a fix'));
+    expect(screen.queryByLabelText('Suggest a fix for Sweetness')).not.toBeInTheDocument();
+  });
+
+  test('while another member\'s suggestion holds the wine\'s review slot, no style can be suggested', async () => {
+    getMyWineProposals.mockResolvedValue(ok({ proposals: [], pending: { mine: false, fields: ['producer'] } }));
+    render(<WineRecordSection wine={WINE} canSuggest apiFetch={vi.fn()} />);
+    await screen.findByText('Sweetness');
+    fireEvent.click(screen.getByText('Suggest a fix'));
+    expect(await screen.findByText(/Another member’s suggestion for this wine is waiting/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Suggest a fix for Sweetness')).not.toBeInTheDocument();
+  });
 });
 
 describe('suggesting a style', () => {
-  test('the terms offered are the ones of the wine\'s scale, grouped by band', async () => {
+  test('the terms offered are the ones of the wine\'s scale, grouped by band, dry first', async () => {
     await openForm();
     expect(getSweetnessTerms).toHaveBeenCalledWith(expect.any(Function), 'still');
     const select = screen.getByLabelText('The term');
-    // Dry first. (The band ids stand in here for the words the locale gives them.)
+    // (The band ids stand in here for the words the locale gives them.)
     expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['dry', 'off-dry', 'medium-sweet']);
     expect(within(select).getByRole('option', { name: 'feinherb' })).toBeInTheDocument();
+  });
+
+  test('a wine with no type is offered the terms of both scales, each group saying its scale', async () => {
+    getSweetnessTerms.mockResolvedValue(ok({ terms: [...TERMS, { _id: 't9', name: 'Brut', scale: 'sparkling', band: 'brut', regulated: true }] }));
+    await openForm({ ...WINE, type: null });
+    expect(getSweetnessTerms).toHaveBeenCalledWith(expect.any(Function), null);
+    const labels = [...screen.getByLabelText('The term').querySelectorAll('optgroup')].map((g) => g.label);
+    expect(labels).toEqual(['dry · still', 'off-dry · still', 'medium-sweet · still', 'brut · sparkling']);
   });
 
   test('a term, a source and a link are sent as one field, with the link as the evidence', async () => {
     createWineProposal.mockResolvedValue(ok({ applied: true, proposal: { _id: 'p1', status: 'approved' } }));
     const onWineChanged = vi.fn();
     await openForm(WINE, { onWineChanged });
-    fill({ term: 'feinherb', source: 'A merchant, critic or wine database' });
+    fill({ term: 'feinherb', source: TRADE });
+    // A customary term on a typed wine that has none: said before it is sent.
+    expect(screen.getByText('This wine has no such term yet, so yours goes live at once.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Send suggestion'));
 
     await waitFor(() => expect(createWineProposal).toHaveBeenCalledTimes(1));
@@ -124,16 +158,16 @@ describe('suggesting a style', () => {
       reason: 'feinherb: the term this wine is known by, named by the trade on the linked page.',
       evidenceUrl: URL,
     });
-    // On a wine that had none the server applied it: live, and the wine is read again.
+    // The server applied it: live, and the wine is read again.
     expect(await screen.findByText('Thank you — your change is live.')).toBeInTheDocument();
     expect(onWineChanged).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('suggestion pending')).not.toBeInTheDocument();
   });
 
-  test('a note of the member\'s own replaces the composed reason', async () => {
+  test('a note of the member\'s own replaces the composed reason; a short one rides behind it', async () => {
     createWineProposal.mockResolvedValue(ok({ applied: true, proposal: { _id: 'p1' } }));
-    await openForm();
-    fill({ term: 'feinherb', source: 'The producer' });
+    const first = await openForm();
+    fill({ term: 'feinherb', source: PRODUCER });
     fireEvent.change(screen.getByLabelText('Anything a curator should know (optional)'), { target: { value: 'The estate’s own list calls the 2019 feinherb.' } });
     fireEvent.click(screen.getByText('Send suggestion'));
     await waitFor(() => expect(createWineProposal).toHaveBeenCalledTimes(1));
@@ -141,43 +175,71 @@ describe('suggesting a style', () => {
       fields: { sweetnessStyle: { term: 'feinherb', source: 'producer', url: URL } },
       reason: 'The estate’s own list calls the 2019 feinherb.',
     });
+    first.unmount();
+
+    await openForm();
+    fill({ term: 'feinherb', source: PRODUCER });
+    fireEvent.change(screen.getByLabelText('Anything a curator should know (optional)'), { target: { value: 'p. 4' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledTimes(2));
+    expect(createWineProposal.mock.calls[1][1].reason).toBe('feinherb: the term this wine is known by, named by the producer on the linked page. p. 4');
   });
 
-  test('nothing can be sent without a term, a source and a link', async () => {
+  test('nothing can be sent without a term, a source the member chose and a link', async () => {
     await openForm();
     const send = screen.getByText('Send suggestion');
     expect(send).toBeDisabled();
     fill({ term: 'feinherb', source: null, url: null });
     expect(send).toBeDisabled();
-    fireEvent.click(screen.getByRole('radio', { name: 'The producer' }));
+    // No source is chosen for the member.
+    expect(screen.getByRole('radio', { name: PRODUCER })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('radio', { name: TRADE })).toHaveAttribute('aria-checked', 'false');
+    fireEvent.change(screen.getByLabelText('The page that names it'), { target: { value: URL } });
     expect(send).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: PRODUCER }));
+    expect(send).toBeEnabled();
     fireEvent.change(screen.getByLabelText('The page that names it'), { target: { value: 'not a link' } });
     expect(send).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('The page that names it'), { target: { value: URL } });
-    expect(send).toBeEnabled();
   });
 
-  test('a term with a legal definition can only be named by the producer', async () => {
-    createWineProposal.mockResolvedValue(ok({ applied: true, proposal: { _id: 'p1' } }));
+  test('a term with a legal definition is never sent as the producer\'s unless the member said so', async () => {
+    createWineProposal.mockResolvedValue(ok({ applied: false, proposal: { _id: 'p1', status: 'pending', proposedFields: { sweetnessStyle: { term: 'halbtrocken', source: 'producer', url: URL } } } }));
     await openForm();
-    fill({ term: 'halbtrocken', source: null });
-    expect(screen.getByRole('radio', { name: 'A merchant, critic or wine database' })).toBeDisabled();
-    expect(screen.getByRole('radio', { name: 'The producer' })).toHaveAttribute('aria-checked', 'true');
+    // The member says "a merchant": refused in the form, and nothing is switched for them.
+    fill({ term: 'halbtrocken', source: TRADE });
     expect(screen.getByText(/has a legal definition/)).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: TRADE })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: PRODUCER })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText('Send suggestion')).toBeDisabled();
+    // Such a term waits for a curator, and the form says so.
+    expect(screen.getByText('A curator reviews this before it goes live.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: PRODUCER }));
     fireEvent.click(screen.getByText('Send suggestion'));
     await waitFor(() => expect(createWineProposal).toHaveBeenCalledTimes(1));
-    expect(createWineProposal.mock.calls[0][1].fields.sweetnessStyle.source).toBe('producer');
+    expect(createWineProposal.mock.calls[0][1].fields.sweetnessStyle).toEqual({ term: 'halbtrocken', source: 'producer', url: URL });
+  });
+
+  test('the arrow keys move between the two sources', async () => {
+    await openForm();
+    const group = screen.getByRole('radiogroup', { name: 'Who calls it that?' });
+    fireEvent.keyDown(group, { key: 'ArrowRight' });
+    expect(screen.getByRole('radio', { name: PRODUCER })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.keyDown(group, { key: 'ArrowRight' });
+    expect(screen.getByRole('radio', { name: TRADE })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: TRADE })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('radio', { name: PRODUCER })).toHaveAttribute('tabindex', '-1');
   });
 
   test('a second opinion on a recorded style waits: it shows as the member\'s own pending suggestion', async () => {
-    const wine = { ...WINE, sweetnessStyle: { name: 'feinherb', band: 'off-dry', scale: 'still', regulated: false, source: 'trade', sourceUrl: URL } };
     createWineProposal.mockResolvedValue(ok({
       applied: false, amended: false,
       proposal: { _id: 'p1', status: 'pending', proposedFields: { sweetnessStyle: { term: 'fruchtsüß', source: 'trade', url: 'https://critic.example/note' } } },
     }));
-    await openForm(wine);
+    await openForm({ ...WINE, sweetnessStyle: STYLE });
     expect(screen.getByText('feinherb (named by the trade)')).toBeInTheDocument(); // currently recorded
-    fill({ term: 'fruchtsüß', source: 'A merchant, critic or wine database', url: 'https://critic.example/note' });
+    fill({ term: 'fruchtsüß', source: TRADE, url: 'https://critic.example/note' });
+    expect(screen.getByText('A curator reviews this before it goes live.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Send suggestion'));
 
     expect(await screen.findByText(/your suggestion is in the review queue/)).toBeInTheDocument();
@@ -191,7 +253,7 @@ describe('suggesting a style', () => {
   test('a refusal from the server is shown in the form, which stays open', async () => {
     createWineProposal.mockResolvedValue(refused(400, { error: 'The style was not written: the label states "trocken", the style named is "feinherb".' }));
     await openForm();
-    fill({ term: 'feinherb', source: 'The producer' });
+    fill({ term: 'feinherb', source: PRODUCER });
     fireEvent.click(screen.getByText('Send suggestion'));
     expect(await screen.findByText(/the label states "trocken"/)).toBeInTheDocument();
     expect(screen.getByLabelText('The term')).toBeInTheDocument();
@@ -204,8 +266,40 @@ describe('suggesting a style', () => {
     fireEvent.click(screen.getByText('Suggest a fix'));
     fireEvent.click(screen.getByLabelText('Suggest a fix for Sweetness'));
     expect(await screen.findByText('Couldn’t load the list of sweetness terms.')).toBeInTheDocument();
+    expect(screen.getByLabelText('The term')).toBeDisabled();
     fireEvent.click(screen.getByText('Retry'));
-    expect(await screen.findByLabelText('The term')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('The term')).toBeEnabled());
     expect(getSweetnessTerms).toHaveBeenCalledTimes(2);
+  });
+
+  test('a list that arrives for a form that has closed is dropped', async () => {
+    let release;
+    getSweetnessTerms.mockReturnValueOnce(new Promise((resolve) => { release = () => resolve(ok({ terms: [{ _id: 'x', name: 'stale', scale: 'still', band: 'dry', regulated: false }] })); }));
+    render(<WineRecordSection wine={WINE} canSuggest apiFetch={vi.fn()} />);
+    await screen.findByText('Sweetness');
+    fireEvent.click(screen.getByText('Suggest a fix'));
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Sweetness'));
+    fireEvent.click(screen.getByText('Cancel'));
+    // Opened again: the second request answers first, with the real list.
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Sweetness'));
+    await waitFor(() => expect(screen.getByLabelText('The term')).toBeEnabled());
+    await act(async () => { release(); });
+    expect(within(screen.getByLabelText('The term')).queryByRole('option', { name: 'stale' })).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('The term')).getByRole('option', { name: 'feinherb' })).toBeInTheDocument();
+  });
+
+  test('an answer that arrives after the page moved to another wine changes nothing there', async () => {
+    let answer;
+    createWineProposal.mockReturnValueOnce(new Promise((resolve) => { answer = () => resolve(ok({ applied: false, proposal: { _id: 'p1', status: 'pending', proposedFields: { sweetnessStyle: { term: 'feinherb', source: 'trade', url: URL } } } })); }));
+    const view = await openForm();
+    fill({ term: 'feinherb', source: TRADE });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledTimes(1));
+
+    view.rerender(<WineRecordSection wine={{ ...WINE, _id: 'w2', name: 'Riesling Spätlese' }} canSuggest apiFetch={vi.fn()} />);
+    await act(async () => { answer(); });
+    expect(screen.queryByText('suggestion pending')).not.toBeInTheDocument();
+    expect(screen.queryByText(/your suggestion is in the review queue/)).not.toBeInTheDocument();
+    expect(within(sweetnessRow()).getByText('not recorded')).toBeInTheDocument();
   });
 });

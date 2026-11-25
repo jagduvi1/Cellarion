@@ -56,10 +56,15 @@
  * never written without the page that names it, and cleared with one edit.
  * What decides is the write rule itself (services/sweetnessWrite
  * assignSweetnessStyle), asked without writing: only a style the rule would
- * WRITE AS FILED on a wine that has none applies. A style the label's own
- * term contradicts, a second opinion on a recorded style, a term with a legal
- * definition named by the trade — the rule holds or refuses those, and they
- * go to a person.
+ * WRITE AS FILED on a wine that has none applies. What the rule refuses — a
+ * style the label's own term contradicts, a term with a legal definition
+ * named by the trade — is not filed at all (services/proposalFields
+ * settleSweetnessStyle); a second opinion on a recorded style is filed for a
+ * person. Two more cases wait, because nothing mechanical can settle them:
+ * a wine with no type, on which the rule cannot hold the style against a
+ * sweetness word in the name, and — from a member — a term with a legal
+ * definition, since "the producer says so" is the member's own statement
+ * about the link.
  */
 const Appellation = require('../models/Appellation');
 const Bottle = require('../models/Bottle');
@@ -283,7 +288,7 @@ async function classifyProposal(wine, kind, proposedFields) {
 
   if (proposedFields[STYLE_FIELD]) {
     const style = await styleWritesAsFiled(wine, proposedFields);
-    if (!style.direct) return style;
+    if (!style.direct) return { direct: false, reason: style.reason };
   }
 
   return { direct: true, reason: 'Blank identity fields, reversible, consistent with the name.' };
@@ -293,15 +298,23 @@ async function classifyProposal(wine, kind, proposedFields) {
  * Would the write rule write this proposed sweetness style exactly as filed?
  * Asked without writing (services/proposalFields probeSweetnessStyle); `wine`
  * must be loaded with sweetnessStyle. Anything the rule holds, refuses or
- * leaves to a person is not direct.
+ * leaves to a person is not direct, and neither is a style on a wine with no
+ * type: without a scale the rule cannot hold the style against a sweetness
+ * word in the wine's name. Returns { direct, reason, regulated } — regulated
+ * when the term has a legal definition.
  */
 async function styleWritesAsFiled(wine, proposedFields) {
   const probe = await probeSweetnessStyle(wine, proposedFields);
+  const regulated = !!(probe.term && probe.term.regulated);
+  if (probe.ok && probe.verdict === 'applied' && probe.scale === null) {
+    return { direct: false, regulated, reason: 'The wine has no type yet, so the style cannot be held against its name — an admin reads it.' };
+  }
   if (probe.ok && probe.verdict === 'applied') {
-    return { direct: true, reason: 'A sourced sweetness style on a wine that has none: reversible, and no part of its identity.' };
+    return { direct: true, regulated, reason: 'A sourced sweetness style on a wine that has none: reversible, and no part of its identity.' };
   }
   return {
     direct: false,
+    regulated,
     reason: probe.message
       || 'The wine already carries a sweetness term this style has to be weighed against — an admin reads that.',
   };
@@ -310,7 +323,9 @@ async function styleWritesAsFiled(wine, proposedFields) {
 /**
  * May a MEMBER's field correction apply on filing, on a server that reviews
  * contributions? One case: the pending suggestion holds a sweetness style and
- * nothing else, the wine has no style recorded, and the write rule would
+ * nothing else, the wine has no style recorded, the term is a customary one
+ * (a term with a legal definition is taken from the producer only, and who
+ * the page belongs to is for a curator to see), and the write rule would
  * write it as filed. Every other member correction waits for a curator.
  * `proposedFields` is the WHOLE pending row (an amendment included), `wine`
  * loaded with sweetnessStyle. Returns { direct, reason } like classifyProposal.
@@ -326,7 +341,11 @@ async function memberAppliesOnFiling(wine, proposedFields) {
   if (!fieldIsEmpty(wine, STYLE_FIELD)) {
     return { direct: false, reason: 'The wine already has a sweetness style — replacing it is reviewed.' };
   }
-  return styleWritesAsFiled(wine, proposedFields);
+  const verdict = await styleWritesAsFiled(wine, proposedFields);
+  if (verdict.direct && verdict.regulated) {
+    return { direct: false, reason: 'A term with a legal definition is read by a curator before it goes live.' };
+  }
+  return { direct: verdict.direct, reason: verdict.reason };
 }
 
 module.exports = {

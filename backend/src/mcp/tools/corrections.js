@@ -6,15 +6,13 @@
 const { z } = require('zod');
 const { registerTool } = require('../registry');
 const ops = require('../../services/wineProposalOps');
-const { ok, fail, objectId, FIELD_DESCRIPTIONS } = require('../toolUtil');
+const { ok, fail, objectId, FIELD_DESCRIPTIONS, proposalFieldName } = require('../toolUtil');
 const { STYLE_TERM_MAX } = require('../../services/proposalFields');
 // A suggestion cannot be withdrawn, so a retry after an ambiguous transport
 // failure must be safe: idempotency_key claims/replays through the ledger.
 const { logAction, replay } = require('../actionLedger');
 // The replayable body stored on the ledger row: what ok() serialises.
 const envelopeOf = (summary, data) => ({ summary, data });
-// A stored field name as this tool's arguments spell it.
-const toolFieldName = (f) => (f === 'sweetnessStyle' ? 'sweetness_style' : f);
 const RETRY_NOTE = 'Cannot be unsent. Pass an idempotency_key (any unique string) so a retry after a transport error ' +
   'replays the original result instead of filing twice; on a transport error WITHOUT a key, read back ' +
   '(get_wine → pending_correction) before retrying.';
@@ -46,9 +44,13 @@ registerTool({
     'pending_correction first: it says whether a suggestion is pending, which fields it covers and whether it is ' +
     'the caller\'s. NOT undoable via undo_last — an admin reads and decides. Sommeliers proposing merges or ' +
     'non-wine flags use propose_wine_correction instead. ALSO `sweetness_style`: the sweetness term a wine is known ' +
-    'by when its label prints none, with who names it and the page that does. Suggested on its own, on a wine that ' +
-    'has no style yet, it APPLIES AT ONCE (the reply says applied, and get_wine → sweetness_style shows it); a ' +
-    'different style on a wine that has one, or a style sent with other fields, is reviewed like the rest. ' + RETRY_NOTE,
+    'by when its label prints none, with who names it and the page that does. A customary term (regulated: false ' +
+    'in list_sweetness_terms — feinherb, fruchtsüß …) suggested on its own, on a typed wine that has no style yet, ' +
+    'APPLIES AT ONCE (the reply says applied, and get_wine → sweetness_style shows it). Everything else is reviewed ' +
+    'like the rest: a term with a legal definition, a different style on a wine that has one, a wine with no type, ' +
+    'a style sent with other fields, and a style added while the user\'s own suggestion on that wine is still ' +
+    'waiting (it is merged into it). A style the label\'s own term or a sweetness word in the wine\'s name stands ' +
+    'against is refused, with the reason. ' + RETRY_NOTE,
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -106,7 +108,7 @@ registerTool({
       return fail(FAIL_CODE[result.code] || 'invalid_input', result.message + hint);
     }
     const pf = result.proposal.proposedFields;
-    const allFields = Object.keys(pf && typeof pf.toObject === 'function' ? pf.toObject() : pf || {}).map(toolFieldName);
+    const allFields = Object.keys(pf && typeof pf.toObject === 'function' ? pf.toObject() : pf || {}).map(proposalFieldName);
     const label = `${result.wine.producer || '?'} — ${result.wine.name}`;
     const envelope = result.applied && result.appliedBecause === 'sweetness_style'
       // A sourced style on a wine that had none applies on filing.
@@ -135,7 +137,7 @@ registerTool({
       )
       : result.amended
       ? envelopeOf(
-        `Your pending suggestion for ${label} was amended with ${result.amendedFields.join(', ')} — it now covers ${allFields.join(', ')} (admin will review)`,
+        `Your pending suggestion for ${label} was amended with ${result.amendedFields.map(proposalFieldName).join(', ')} — it now covers ${allFields.join(', ')} (admin will review)`,
         {
           proposal_id: result.proposal._id,
           status: 'pending',

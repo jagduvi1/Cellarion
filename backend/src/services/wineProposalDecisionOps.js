@@ -9,8 +9,9 @@
 //   - a proposal that applies without review, as decided by
 //     services/proposalDirectApply: the sommelier's propose_wine_correction
 //     (mcp/tools/somm/corrections.js), a member's not-wine flag
-//     (services/nonWineOps) and a member's field correction on a server that
-//     does not review (services/trustedContributions).
+//     (services/nonWineOps), a member's sweetness style that fills a blank
+//     (services/wineProposalOps) and a member's field correction on a server
+//     that does not review (services/trustedContributions).
 // It is deliberately the ONE write path. Canonicalization, the dedup-key
 // regeneration, the search, embedding and IndexNow follow-through and the
 // re-enrich all live in approveProposal; a second implementation would drift
@@ -39,10 +40,8 @@ const { otherProducerSpellings, planProducerRename, displaySpelling } = require(
 const { termNameForWine } = require('./sweetnessOps');
 const { assignSweetnessStyle } = require('./sweetnessWrite');
 const { WITH_SWEETNESS_STYLE } = require('../config/constants');
-const { TEXT_FIELDS, EXTRA_FIELDS, STYLE_FIELD } = require('./proposalFields');
-
-// Every field a field correction may hold (services/proposalFields).
-const PROPOSABLE_FIELDS = [...TEXT_FIELDS, ...EXTRA_FIELDS, STYLE_FIELD];
+const { PROPOSABLE_FIELDS } = require('./proposalFields');
+const { cachedTermName } = require('./sweetnessOps');
 const { performWineMerge } = require('./wineMergeOps');
 const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName } = require('../utils/normalize');
 const { assignClassification } = require('./classificationOps');
@@ -321,12 +320,28 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
       // a tier that is sweet by law, a term the table lacks.
       if (pf.sweetnessStyle) {
         const want = { term: pf.sweetnessStyle.term, source: pf.sweetnessStyle.source, url: pf.sweetnessStyle.url, strict: true };
+        // What the wine carries now, for the note when it is replaced.
+        const before = wine.sweetnessStyle
+          ? { term: wine.sweetnessStyle.term, source: wine.sweetnessStyle.source, url: wine.sweetnessStyle.url }
+          : null;
+        const needsReview = { status: 409, body: {
+          error: 'The wine already has a sweetness style — an admin decides which one stands',
+          code: 'sweetness_style_needs_review',
+        } };
+        // A filing that applies itself (a member's, a curator's) was judged
+        // on a wine WITHOUT a style. If one arrived before this claim, the
+        // rule would let a stronger source replace it; a filing never does
+        // that by itself, whatever its source.
+        const selfApplied = Array.isArray(onlyFields);
+        if (selfApplied && before) {
+          await revertClaim();
+          return needsReview;
+        }
         let style = await assignSweetnessStyle(wine, want);
         // A different term from an equal or weaker source than the recorded
         // one is the rule's "a person decides", and an admin approving it is
-        // that person. A filing that applies itself (a member's, a
-        // curator's) is not: it never replaces a recorded style.
-        const reviewer = Array.isArray(req.user.roles) && req.user.roles.includes('admin');
+        // that person.
+        const reviewer = !selfApplied && Array.isArray(req.user.roles) && req.user.roles.includes('admin');
         if (style.ok && style.verdict === 'needs_review' && reviewer) {
           wine.sweetnessStyle = null;
           style = await assignSweetnessStyle(wine, want);
@@ -335,16 +350,23 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
           await revertClaim();
           return { status: 400, body: { error: style.message } };
         }
-        if (style.verdict === 'needs_review' || style.verdict === 'dropped') {
+        if (style.verdict === 'needs_review') {
+          await revertClaim();
+          return needsReview;
+        }
+        if (style.verdict === 'dropped') {
           await revertClaim();
           return { status: 409, body: {
-            error: style.verdict === 'dropped'
-              ? 'The sweetness terms are not loaded on this server — nothing was applied'
-              : 'The wine already has a sweetness style from an equal or stronger source — a curator decides which one stands',
-            code: 'sweetness_style_needs_review',
+            error: 'The sweetness terms are not loaded on this server — nothing was applied',
+            code: 'sweetness_terms_unavailable',
           } };
         }
-        applied.push(style.verdict === 'applied' ? 'sweetness style'
+        // The replaced style is named: the proposal row and the audit row
+        // are the only record of it.
+        const replaced = before && style.verdict === 'applied'
+          ? ` (replaced ${cachedTermName(before.term) || 'a term'}, named by the ${before.source}: ${before.url})`
+          : '';
+        applied.push(style.verdict === 'applied' ? `sweetness style${replaced}`
           : style.verdict === 'redundant' ? 'sweetness style (not kept: the label already states this sweetness)'
             : 'sweetness style (already recorded)');
       }

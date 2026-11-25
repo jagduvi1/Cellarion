@@ -7,7 +7,7 @@ const { z } = require('zod');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
-const { ok, fail, wineSummary, hasContent, objectId, classificationsOut } = require('../toolUtil');
+const { ok, fail, wineSummary, hasContent, objectId, classificationsOut, proposalFieldName } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
@@ -209,7 +209,12 @@ registerTool({
       // record. Neither does an own quarantined drink.
       public_url: w.draft === true || ownHidden ? null : (w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null),
       ...(ownHidden ? { only_in_your_cellar: true, note: OWN_HIDDEN_NOTE } : {}),
-      ...(anonymous ? {} : { pending_correction: w.draft === true ? null : pendingCorrection }),
+      // The fields in the correction tools' own spelling (sweetness_style).
+      ...(anonymous ? {} : {
+        pending_correction: w.draft === true || !pendingCorrection
+          ? (w.draft === true ? null : pendingCorrection)
+          : { ...pendingCorrection, fields: (pendingCorrection.fields || []).map(proposalFieldName) },
+      }),
       // (a draft answers null above: nothing to read, nothing to file)
       ...(w.draft === true ? {
         draft: true,

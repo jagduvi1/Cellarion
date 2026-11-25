@@ -14,8 +14,9 @@
  */
 const ops = require('./sweetnessOps');
 const {
-  STYLE_FIELD, readProposedFields, probeSweetnessStyle, settleSweetnessStyle,
+  STYLE_FIELD, PROPOSABLE_FIELDS, readProposedFields, probeSweetnessStyle, settleSweetnessStyle,
 } = require('./proposalFields');
+const WineCorrectionProposal = require('../models/WineCorrectionProposal');
 const { classifyProposal, memberAppliesOnFiling } = require('./proposalDirectApply');
 const seed = require('../data/sweetness-terms.json');
 
@@ -55,6 +56,17 @@ describe('reading a proposed style', () => {
     expect(await read({ sweetnessStyle: ['feinherb'] })).toEqual({ ok: false, code: 'style_shape' });
     expect(await read({ sweetnessStyle: { term: '  ', source: 'trade', url: TRADE_URL } })).toEqual({ ok: false, code: 'style_shape' });
     expect(await read({ sweetnessStyle: { term: 'x'.repeat(61), source: 'trade', url: TRADE_URL } })).toEqual({ ok: false, code: 'style_shape' });
+  });
+
+  test('the term is the word as printed: never a row id, never anything but a string', async () => {
+    expect(await read({ sweetnessStyle: { term: id('feinherb'), source: 'trade', url: TRADE_URL } })).toEqual({ ok: false, code: 'style_shape' });
+    expect(await read({ sweetnessStyle: { term: { toString: 1 }, source: 'trade', url: TRADE_URL } })).toEqual({ ok: false, code: 'style_shape' });
+    expect(await read({ sweetnessStyle: { term: 42, source: 'trade', url: TRADE_URL } })).toEqual({ ok: false, code: 'style_shape' });
+  });
+
+  test('the fields a self-applying filing is held to are exactly the paths a proposal can store', () => {
+    const paths = Object.keys(WineCorrectionProposal.schema.path('proposedFields').schema.paths);
+    expect([...PROPOSABLE_FIELDS].sort()).toEqual(paths.sort());
   });
 
   test('only the producer or the trade names a style, and only a real link is accepted', async () => {
@@ -119,6 +131,24 @@ describe('holding a proposed style against the wine at filing', () => {
     expect((await probeSweetnessStyle(held, second)).verdict).toBe('needs_review');
   });
 
+  test('an amendment is judged with the type and the name its waiting row already holds', async () => {
+    // The waiting row turns the wine into a sparkling one: feinherb is a still term.
+    const typed = await settleSweetnessStyle(feinherb(), wine(), { type: 'sparkling' });
+    expect(typed).toMatchObject({ ok: false, code: 'style_refused', reason: 'type_mismatch' });
+    // The waiting row renames it with a dry word.
+    const named = await settleSweetnessStyle(feinherb(), wine(), { name: 'Riesling Kabinett trocken' });
+    expect(named).toMatchObject({ ok: false, code: 'style_refused', reason: 'term_contradiction' });
+    // What this filing itself sets comes first.
+    expect(await settleSweetnessStyle({ type: 'white', ...feinherb() }, wine(), { type: 'sparkling' })).toEqual({ ok: true });
+  });
+
+  test('the answer names the scale and the term, for the caller that decides what applies on filing', async () => {
+    expect(await probeSweetnessStyle(wine(), feinherb())).toMatchObject({ verdict: 'applied', scale: 'still', term: { name: 'feinherb', regulated: false } });
+    const dry = { sweetnessStyle: { term: 'trocken', source: 'producer', url: PRODUCER_URL } };
+    expect(await probeSweetnessStyle(wine(), dry)).toMatchObject({ verdict: 'applied', term: { name: 'trocken', regulated: true } });
+    expect(await probeSweetnessStyle(wine({ type: null }), feinherb())).toMatchObject({ verdict: 'applied', scale: null });
+  });
+
   test('holding a style against a wine writes nothing to it', async () => {
     const w = wine();
     await settleSweetnessStyle(feinherb(), w);
@@ -161,6 +191,22 @@ describe('which styles apply on filing', () => {
     const held = wine({ sweetnessStyle: { term: id('fruchtsüß'), source: 'trade', url: TRADE_URL } });
     expect(await memberAppliesOnFiling(held, feinherb())).toMatchObject({ direct: false });
     expect(await memberAppliesOnFiling(wine(), {})).toMatchObject({ direct: false });
+  });
+
+  test('a term with a legal definition waits for a curator when a member files it, and applies when the curator does', async () => {
+    const dry = { sweetnessStyle: { term: 'trocken', source: 'producer', url: PRODUCER_URL } };
+    const member = await memberAppliesOnFiling(wine(), dry);
+    expect(member.direct).toBe(false);
+    expect(member.reason).toMatch(/legal definition/);
+    expect(await classifyProposal(wine(), 'field_correction', dry)).toMatchObject({ direct: true });
+  });
+
+  test('on a wine with no type nothing applies on filing: the style cannot be held against the name', async () => {
+    const untyped = wine({ type: null, name: 'Riesling trocken' });
+    const member = await memberAppliesOnFiling(untyped, feinherb());
+    expect(member.direct).toBe(false);
+    expect(member.reason).toMatch(/has no type yet/);
+    expect(await classifyProposal(untyped, 'field_correction', feinherb())).toMatchObject({ direct: false });
   });
 
   test('a member\'s style the rule would hold does not apply: a tier that is sweet by law against a dry-side term', async () => {

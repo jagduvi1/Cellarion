@@ -104,9 +104,18 @@ async function applyStyleOnFiling(result, userId, { via, req } = {}) {
   if (!result.proposal || via === 'bridge') return result;
   const pending = plain(result.proposal.proposedFields);
   if (!pending[STYLE_FIELD]) return result;
-  // Lazy: the classifier loads the registry models only a style needs.
-  const { memberAppliesOnFiling } = require('./proposalDirectApply');
-  const verdict = await memberAppliesOnFiling(result.wine, pending);
+  let verdict;
+  try {
+    // Lazy: the classifier loads the registry models only a style needs.
+    const { memberAppliesOnFiling } = require('./proposalDirectApply');
+    verdict = await memberAppliesOnFiling(result.wine, pending);
+  } catch (err) {
+    // The suggestion is filed: a judgement that fails leaves it waiting for a
+    // curator, never an error on a filing that succeeded.
+    const { logger } = require('./audit');
+    logger.warn({ err: err.message, proposalId: String(result.proposal._id) }, 'sweetness style: could not judge the filing for an immediate apply; it waits for review');
+    return result;
+  }
   if (!verdict.direct) return result;
   // Judged on the style alone: a field amended into the row before the apply
   // claims it keeps the whole row waiting (approveProposal onlyFields).
@@ -185,7 +194,9 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
   await settleClassificationByCountry(proposedFields, classificationTier, wine);
   // A sweetness style is held against the wine now, so the member learns at
   // once what the write rule would refuse at approval.
-  const style = await settleSweetnessStyle(proposedFields, wine);
+  // An amendment is judged with the name, type and classification its
+  // waiting row already holds: approval applies the whole row.
+  const style = await settleSweetnessStyle(proposedFields, wine, amending ? plain(existing.proposedFields) : null);
   if (!style.ok) return fieldFailure(style);
 
   // A colour only means something on a style type — judged against the type
@@ -327,7 +338,7 @@ function fieldFailure(refusal) {
     case 'taxonomy_changed':
       return fail('conflict', 'The grape taxonomy changed while filing — please try again.');
     case 'style_shape':
-      return fail('invalid', 'sweetnessStyle needs the term the wine is known by, who names it and the page that does: { term, source, url }.');
+      return fail('invalid', 'A sweetness style needs the term as the sweetness list has it, who names it (the producer or the trade) and the link to the page that does.');
     case 'style_source':
       return fail('invalid', 'The source of a sweetness style is "producer" (the producer\'s own wording) or "trade" (a merchant, a critic, a wine database).');
     case 'style_url_required':

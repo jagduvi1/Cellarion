@@ -190,6 +190,27 @@ describe('the sweetness style', () => {
     }, { via: 'mcp', req: CTX.req });
   });
 
+  test('without source_url the style goes on with no link of its own, for the service to take evidence_url', async () => {
+    ops.createFieldCorrection.mockResolvedValue({
+      ok: true, amended: false, wine,
+      proposal: { _id: 'p1', proposedFields: { sweetnessStyle: { term: 'feinherb', source: 'trade', url: 'https://other.example/a' } } },
+    });
+    await tool().handler({ wine_id: WINE, fields: { sweetness_style: { term: 'feinherb', source: 'trade' } }, reason: 'The merchant calls it feinherb.', evidence_url: 'https://other.example/a' }, CTX);
+    const sent = ops.createFieldCorrection.mock.calls[0][1];
+    expect(sent.fields).toEqual({ sweetnessStyle: { term: 'feinherb', source: 'trade', url: undefined } });
+    expect(sent.evidenceUrl).toBe('https://other.example/a');
+  });
+
+  test('a style merged into the caller\'s own waiting suggestion is named as the tool takes it', async () => {
+    ops.createFieldCorrection.mockResolvedValue({
+      ok: true, amended: true, amendedFields: ['sweetnessStyle'], wine,
+      proposal: { _id: 'p1', amendments: [{}], proposedFields: { grapes: ['Riesling'], sweetnessStyle: { term: 'feinherb', source: 'trade', url: STYLE.source_url } } },
+    });
+    const body = parse(await tool().handler({ wine_id: WINE, fields: { sweetness_style: STYLE }, reason: 'The merchant calls it feinherb.' }, CTX));
+    expect(body.summary).toMatch(/was amended with sweetness_style — it now covers grapes, sweetness_style/);
+    expect(JSON.stringify(body)).not.toMatch(/sweetnessStyle/);
+  });
+
   test('a style that waits for review is reported under the tool\'s own field name', async () => {
     ops.createFieldCorrection.mockResolvedValue({
       ok: true, amended: false, wine,
@@ -215,5 +236,7 @@ describe('the sweetness style', () => {
     expect(tool().description).toMatch(/sweetness_style/);
     expect(tool().description).toMatch(/APPLIES AT ONCE/);
     expect(tool().description).toMatch(/reviewed like the rest/);
+    expect(tool().description).toMatch(/a term with a legal definition/);
+    expect(tool().description).toMatch(/is merged into it/);
   });
 });

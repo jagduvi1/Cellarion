@@ -7,7 +7,7 @@ const { z } = require('zod');
 const WineDefinition = require('../../../models/WineDefinition');
 const WineCorrectionProposal = require('../../../models/WineCorrectionProposal');
 const { registerTool } = require('../../registry');
-const { ok, fail, objectId, FIELD_DESCRIPTIONS, SOMM_ROLES, requireSomm } = require('../../toolUtil');
+const { ok, fail, objectId, FIELD_DESCRIPTIONS, SOMM_ROLES, requireSomm, proposalFieldsOut } = require('../../toolUtil');
 const { logAudit } = require('../../../services/audit');
 const { logAction } = require('../../actionLedger');
 const { isValidId } = require('../../../utils/validation');
@@ -36,13 +36,6 @@ const PROPOSAL_KINDS = ['field_correction', 'merge', 'non_wine'];
 // The proposable fields, their limits and how a proposed value is read are
 // the member path's too (services/proposalFields).
 const PROPOSAL_ALL_FIELDS = [...TEXT_FIELDS, ...EXTRA_FIELDS, 'sweetness_style'];
-// The filed fields as this tool's arguments spell them: the style travels as
-// sweetness_style { term, source, source_url }.
-const toolFields = (pf) => {
-  if (!pf || !pf[STYLE_FIELD]) return pf;
-  const { [STYLE_FIELD]: s, ...rest } = pf;
-  return { ...rest, sweetness_style: { term: s.term, source: s.source, source_url: s.url } };
-};
 
 const quoted = (names) => names.map((g) => `"${g}"`).join(', ');
 
@@ -62,6 +55,8 @@ function fieldRefusal(refusal) {
       return 'proposed_fields.grapes needs at least one variety name in plain text.';
     case 'no_fields':
       return `field_correction needs at least one non-empty field in proposed_fields (${PROPOSAL_ALL_FIELDS.join(', ')}).`;
+    case 'style_shape':
+      return 'proposed_fields.sweetness_style needs term (the word, as list_sweetness_terms has it), source and source_url.';
     case 'style_source':
       return 'proposed_fields.sweetness_style.source is "producer" (the producer\'s own wording) or "trade" (a merchant, a critic, a wine database).';
     case 'style_url_required':
@@ -82,8 +77,9 @@ registerTool({
   description:
     'Files a correction on a registry wine. A correction that only FILLS BLANK appellation, region or classification '
     + 'fields, and does not contradict the wine\'s own name, APPLIES IMMEDIATELY — the reply says "Applied" and gives '
-    + 'the applied_note. So does a sweetness_style on a wine that has none, when the write rule would write it as '
-    + 'filed (not when the label\'s own term or a tier that is sweet by law stands against it). A non-wine flag applies immediately too, unless more than three members hold bottles of the '
+    + 'the applied_note. So does a sweetness_style on a typed wine that has none. A sweetness_style that the label\'s own term, a '
+    + 'sweetness word in the wine\'s name or a tier that is sweet by law stands against is REFUSED with the reason, '
+    + 'not filed; one on a wine that already has a style, or on a wine with no type, is filed for an admin. A non-wine flag applies immediately too, unless more than three members hold bottles of the '
     + 'row. Everything else is filed for an admin and the reply says "awaiting admin review" with '
     + 'why_reviewed: producer and name (they drive the dedup key and the public URL), country, any OVERWRITE of a '
     + 'field that already has a value, merges, and any appellation that disagrees with an appellation '
@@ -296,7 +292,13 @@ registerTool({
         // fallback keeps unit contexts (ctx.req: null) working.
         const asReq = ctx.req && ctx.req.user ? ctx.req : { user: { id: ctx.user.id } };
         try {
-          const outcome = await approveProposal(proposal._id, asReq);
+          // A field correction applies only while the row holds the fields
+          // judged above (approveProposal onlyFields): nothing amended in
+          // between rides along, and a style never replaces one that arrived
+          // meanwhile.
+          const outcome = args.kind === 'field_correction'
+            ? await approveProposal(proposal._id, asReq, { onlyFields: Object.keys(proposedFields) })
+            : await approveProposal(proposal._id, asReq);
           if (outcome.status === 200) {
             applied = outcome.body?.appliedNote || 'Applied';
           } else {
@@ -308,7 +310,8 @@ registerTool({
           console.error(`[somm] self-apply threw for proposal ${proposal._id}:`, err.message);
         }
       } else {
-        reviewReason = verdict.reason;
+        // In this tool's own field name.
+        reviewReason = String(verdict.reason || '').replace(/sweetnessStyle/g, 'sweetness_style');
       }
     }
 
@@ -343,7 +346,7 @@ registerTool({
         wine_id: wine._id,
         kind: args.kind,
         status: 'approved',
-        ...(proposedFields ? { proposed_fields: toolFields(proposedFields) } : {}),
+        ...(proposedFields ? { proposed_fields: proposalFieldsOut(proposedFields) } : {}),
         evidence_url: evidenceUrl || null,
         applied_note: applied,
         ...(args.kind === 'non_wine' ? {
@@ -352,7 +355,8 @@ registerTool({
             + 'with your reason so an admin can review it afterwards.',
           undo: 'This is already applied — an admin restores it as wine in Admin → Wines → Proposals (Decided).',
         } : {
-          note: 'Live on the wine now. Blank identity fields that agree with the name apply on filing; '
+          note: 'Live on the wine now. Blank identity fields that agree with the name, and a sweetness style on a '
+            + 'wine that has none, apply on filing; '
             + 'the proposal is kept with your reason so an admin can review it afterwards.',
           undo: 'This is already applied — file a further correction to change it again.',
         }),
@@ -364,7 +368,7 @@ registerTool({
         wine_id: wine._id,
         kind: args.kind,
         status: 'pending',
-        ...(proposedFields ? { proposed_fields: toolFields(proposedFields) } : {}),
+        ...(proposedFields ? { proposed_fields: proposalFieldsOut(proposedFields) } : {}),
         ...(target ? { merge_target: { wine_id: target._id, name: target.name, producer: target.producer || null } } : {}),
         evidence_url: evidenceUrl || null,
         ...(reviewReason ? { why_reviewed: reviewReason } : {}),

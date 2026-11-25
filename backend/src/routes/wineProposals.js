@@ -1,8 +1,9 @@
 /**
  * User-facing wine-correction suggestions — thin HTTP wrappers over
  * services/wineProposalOps.js (shared with the MCP tool suggest_wine_correction).
- * Field corrections go into the SAME admin queue the sommelier flow uses, and
- * apply at once only where contributions are not reviewed (trustedContributions).
+ * Field corrections go into the SAME admin queue the sommelier flow uses. One
+ * applies at once where contributions are not reviewed (trustedContributions),
+ * and so does a sweetness style that fills a blank (services/wineProposalOps).
  */
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
@@ -38,8 +39,10 @@ router.post('/', requireNonDemo, async (req, res, next) => {
     // absorbed these fields instead.
     res.status(result.amended ? 200 : 201).json({
       amended: !!result.amended,
-      // true on a server that does not review contributions: already applied
-      // to the wine (services/trustedContributions), nothing is pending.
+      // true when it is already applied to the wine and nothing is pending:
+      // a server that does not review contributions
+      // (services/trustedContributions), or a sweetness style that filled a
+      // blank (services/wineProposalOps applyStyleOnFiling).
       applied: !!result.applied,
       proposal: {
         _id: result.proposal._id,

@@ -655,7 +655,8 @@ router.put('/:id', async (req, res) => {
     // path is select: false), as its write rule requires.
     const styleSent = Object.prototype.hasOwnProperty.call(req.body, 'sweetnessStyle');
     const styleBody = req.body.sweetnessStyle;
-    if (styleSent && styleBody !== null && (typeof styleBody !== 'object' || Array.isArray(styleBody))) {
+    if (styleSent && styleBody !== null
+      && (typeof styleBody !== 'object' || Array.isArray(styleBody) || typeof styleBody.term !== 'string' || !styleBody.term.trim())) {
       return res.status(400).json({ error: 'sweetnessStyle must be null or { term, source, url }' });
     }
 
@@ -768,18 +769,24 @@ router.put('/:id', async (req, res) => {
     // The sweetness style through its write rule, strict
     // (services/sweetnessWrite), after the name, type and classification this
     // save sets: the rule reads all three. An admin is the person the rule
-    // leaves a second opinion to, so a different term replaces the recorded
-    // one whatever its source.
+    // leaves a second opinion to, so what an admin sets replaces the recorded
+    // style whatever its source — also the same term with another link.
+    let styleChange = null;
     if (styleSent) {
+      const told = (s) => (s ? { term: String(s.term), source: s.source, url: s.url } : null);
+      const before = told(wine.sweetnessStyle);
       const want = styleBody === null
         ? { term: null }
         : { term: styleBody.term, source: styleBody.source, url: styleBody.url, strict: true };
       let style = await assignSweetnessStyle(wine, want);
-      if (style.ok && style.verdict === 'needs_review') {
+      if (style.ok && before && (style.verdict === 'needs_review' || style.verdict === 'unchanged')) {
         wine.sweetnessStyle = null;
         style = await assignSweetnessStyle(wine, want);
       }
       if (!style.ok) return res.status(400).json({ error: style.message });
+      // Term ids, sources and links: the audit row is the only record of a
+      // style an admin replaced or cleared.
+      styleChange = { from: before, to: told(wine.sweetnessStyle), verdict: style.verdict };
     }
 
     // Image handling. When the admin clears the default image, look for an
@@ -839,7 +846,7 @@ router.put('/:id', async (req, res) => {
 
     logAudit(req, 'admin.wine.update',
       { type: 'wine', id: wine._id },
-      { fields: Object.keys(req.body) }
+      { fields: Object.keys(req.body), ...(styleChange ? { sweetnessStyle: styleChange } : {}) }
     );
 
     // An edit that changed any profile-feeding field (identity, geography,

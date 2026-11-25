@@ -1743,7 +1743,7 @@ describe('propose_wine_correction', () => {
       expect(body.summary).toMatch(/^Applied to/);
       // Applied through the ONE write path, with the proposal id — not a
       // second implementation that could drift from canonicalization.
-      expect(approveProposal).toHaveBeenCalledWith('prop-2', expect.anything());
+      expect(approveProposal).toHaveBeenCalledWith('prop-2', expect.anything(), { onlyFields: ['appellation', 'region'] });
       // The row is still written first: review-after, not no-review.
       expect(WineCorrectionProposal.create).toHaveBeenCalled();
     });

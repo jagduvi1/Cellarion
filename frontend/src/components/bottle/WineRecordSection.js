@@ -364,7 +364,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     // `stored` is authoritative when present: after an amendment it holds
     // every field; after a FRESH filing (my earlier suggestion was decided
     // while this page was open) it holds only the new ones — merging the
-    // stale local fields back in kept showing a decided suggestion as
+    // stale local fields back in would show a decided suggestion as
     // pending. The local merge is only the fallback for a bare answer.
     setMine((prev) => {
       const before = prev.find((p) => p.status === 'pending')?.proposedFields || {};

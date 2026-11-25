@@ -227,6 +227,18 @@ function pageParams(args, defLimit, maxLimit) {
   return { limit, offset };
 }
 
+// A correction proposal's fields as the tools' arguments spell them. The
+// proposal stores the sweetness style as sweetnessStyle { term, source, url };
+// the tools take and answer sweetness_style { term, source, source_url }, so
+// what one tool reports can be sent to another as it stands.
+const proposalFieldName = (f) => (f === 'sweetnessStyle' ? 'sweetness_style' : f);
+function proposalFieldsOut(pf) {
+  const plain = pf && typeof pf.toObject === 'function' ? pf.toObject() : pf;
+  if (!plain || !plain.sweetnessStyle) return plain || null;
+  const { sweetnessStyle: s, ...rest } = plain;
+  return { ...rest, sweetness_style: { term: s.term, source: s.source, source_url: s.url } };
+}
+
 // What belongs in the three registry fields every add/correct tool takes —
 // one text, so no tool schema drifts from the rule.
 const FIELD_DESCRIPTIONS = {
@@ -244,6 +256,8 @@ module.exports = {
   sweetnessStyleFields,
   wineDisplayName,
   FIELD_DESCRIPTIONS,
+  proposalFieldName,
+  proposalFieldsOut,
   ok,
   fail,
   objectId,

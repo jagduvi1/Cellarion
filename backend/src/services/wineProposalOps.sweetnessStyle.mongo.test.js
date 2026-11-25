@@ -131,6 +131,48 @@ describeWithMongo('a sweetness style from filing to the wine (real MongoDB)', ()
     expect(outcome.status).toBe(200);
     const after = (await stored(w._id)).sweetnessStyle;
     expect(after).toEqual({ term: (await term('fruchtsüß'))._id, source: 'trade', url: CRITIC_URL });
+    // The replaced style is named: the note is the only record of it.
+    expect(outcome.body.appliedNote).toBe(`Applied: sweetness style (replaced feinherb, named by the trade: ${TRADE_URL})`);
+  });
+
+  test('a filing from a STRONGER source does not replace a style that arrived before its apply either', async () => {
+    const w = await wine();
+    // Judged on a wine without a style, as the producer's own wording…
+    const relayed = await file(await fresh(), w._id, style('feinherb', 'producer', TRADE_URL), { via: 'bridge' });
+    const row = await WineCorrectionProposal.findById(relayed.proposal._id).lean();
+    // …and a trade style lands before the claim. The rule alone would let the producer win.
+    const fruchtsuess = await term('fruchtsüß');
+    await WineDefinition.updateOne({ _id: w._id }, { $set: { sweetnessStyle: { term: fruchtsuess._id, source: 'trade', url: CRITIC_URL } } });
+
+    const outcome = await approveProposal(relayed.proposal._id, asUser(row.proposer), { onlyFields: ['sweetnessStyle'] });
+    expect(outcome).toMatchObject({ status: 409, body: { code: 'sweetness_style_needs_review' } });
+    expect((await stored(w._id)).sweetnessStyle).toEqual({ term: fruchtsuess._id, source: 'trade', url: CRITIC_URL });
+    expect((await WineCorrectionProposal.findById(relayed.proposal._id).lean()).status).toBe('pending');
+
+    // An admin who files and applies in one go is held to the same line…
+    const again = await approveProposal(relayed.proposal._id, asUser(admin, ['user', 'admin']), { onlyFields: ['sweetnessStyle'] });
+    expect(again.status).toBe(409);
+    // …and replaces it by approving it as a reviewer.
+    expect((await approveProposal(relayed.proposal._id, asUser(admin, ['user', 'admin']))).status).toBe(200);
+    expect((await stored(w._id)).sweetnessStyle.source).toBe('producer');
+  });
+
+  test('a term with a legal definition waits for a curator, also from "the producer" and on a wine that has none', async () => {
+    const w = await wine();
+    const res = await file(await fresh(), w._id, style('halbtrocken', 'producer', TRADE_URL));
+    expect(res.ok).toBe(true);
+    expect(res.applied).toBeFalsy();
+    expect((await stored(w._id)).sweetnessStyle).toBeNull();
+    expect((await approveProposal(res.proposal._id, asUser(admin, ['user', 'admin']))).status).toBe(200);
+    expect((await stored(w._id)).sweetnessStyle.term).toEqual((await term('halbtrocken'))._id);
+  });
+
+  test('on a wine with no type a style waits: the rule cannot hold it against a sweetness word in the name', async () => {
+    const w = await wine({ type: undefined, name: 'Riesling trocken' });
+    const res = await file(await fresh(), w._id, style('feinherb'));
+    expect(res.ok).toBe(true);
+    expect(res.applied).toBeFalsy();
+    expect((await stored(w._id)).sweetnessStyle).toBeNull();
   });
 
   test('a filing never replaces a recorded style by itself, even when the wine changed before its apply', async () => {

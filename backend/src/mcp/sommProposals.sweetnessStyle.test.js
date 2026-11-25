@@ -74,7 +74,10 @@ test('a style is filed as sweetnessStyle { term, source, url } under the table\'
   const body = await propose({ sweetness_style: { term: 'Feinherb', source: 'trade', source_url: TRADE_URL } });
   expect(filed().proposedFields).toEqual({ sweetnessStyle: { term: 'feinherb', source: 'trade', url: TRADE_URL } });
   expect(filed().currentSnapshot.sweetnessStyle).toBeNull();
-  expect(approveProposal).toHaveBeenCalledWith('prop-s', SOMM_CTX.req);
+  // Applied only while the row holds the field that was judged.
+  expect(approveProposal).toHaveBeenCalledWith('prop-s', SOMM_CTX.req, { onlyFields: ['sweetnessStyle'] });
+  // The wine is asked for with its style: the path is select: false.
+  expect(WineDefinition.findById.mock.results[0].value.select).toHaveBeenCalledWith('+sweetnessStyle');
   expect(body.data).toMatchObject({
     status: 'approved', applied_note: 'Applied: sweetness style',
     proposed_fields: { sweetness_style: { term: 'feinherb', source: 'trade', source_url: TRADE_URL } },
@@ -114,9 +117,28 @@ test('a different style on a wine that has one is filed for an admin, with the r
   expect(approveProposal).not.toHaveBeenCalled();
   expect(filed().currentSnapshot.sweetnessStyle).toBe('fruchtsüß (trade)');
   expect(body.data).toMatchObject({ status: 'pending' });
-  expect(body.data.why_reviewed).toMatch(/sweetnessStyle already has a value/);
+  // In the tool's own field name, so it can be sent back as it stands.
+  expect(body.data.why_reviewed).toMatch(/sweetness_style already has a value/);
+  expect(body.data.why_reviewed).not.toMatch(/sweetnessStyle/);
 });
 
-test('the description says a style on a wine that has none applies immediately', () => {
-  expect(tool().description).toMatch(/So does a sweetness_style on a wine that has none/);
+test('a style on a wine with no type is filed for an admin: nothing can hold it against the name', async () => {
+  mkWine({ type: null });
+  const body = await propose({ sweetness_style: { term: 'feinherb', source: 'trade', source_url: TRADE_URL } });
+  expect(approveProposal).not.toHaveBeenCalled();
+  expect(body.data).toMatchObject({ status: 'pending' });
+  expect(body.data.why_reviewed).toMatch(/has no type yet/);
+});
+
+test('a term that is blank once cleaned is refused in the tool\'s own words', async () => {
+  const body = await propose({ sweetness_style: { term: '<b></b>', source: 'trade', source_url: TRADE_URL } });
+  expect(body.error.code).toBe('invalid_input');
+  expect(body.error.message).toMatch(/proposed_fields\.sweetness_style needs term/);
+  expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+});
+
+test('the description says which styles apply, which are refused and which are filed', () => {
+  expect(tool().description).toMatch(/So does a sweetness_style on a typed wine that has none/);
+  expect(tool().description).toMatch(/is REFUSED with the reason, not filed/);
+  expect(tool().description).toMatch(/on a wine with no type, is filed for an admin/);
 });

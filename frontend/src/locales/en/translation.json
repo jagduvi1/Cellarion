@@ -3014,23 +3014,10 @@
     "styleUrlHelp": "A page that uses this term for this wine. Another vintage of the same wine is fine. Your own impression of the taste is not a source.",
     "styleNoteLabel": "Anything a curator should know (optional)",
     "styleReasonDefault": "{{term}}: the term this wine is known by, {{source}} on the linked page.",
-    "sweetnessBand": {
-      "dry": "Dry",
-      "off-dry": "Off-dry",
-      "medium-sweet": "Medium-sweet",
-      "sweet": "Sweet",
-      "brut-nature": "Brut nature",
-      "extra-brut": "Extra brut",
-      "brut": "Brut",
-      "extra-dry": "Extra dry",
-      "sec": "Sec",
-      "demi-sec": "Demi-sec",
-      "doux": "Doux"
-    },
-    "sweetnessScale": {
-      "still": "still wines",
-      "sparkling": "sparkling wines"
-    },
+    "styleWithSource": "{{term}} ({{source}})",
+    "styleBandOnScale": "{{band}} · {{scale}}",
+    "styleGoesLive": "This wine has no such term yet, so yours goes live at once.",
+    "styleReviewed": "A curator reviews this before it goes live.",
     "publicData": "More data",
     "suggestValue": "Add value",
     "suggestValueFor": "Suggest a value for {{field}}",
