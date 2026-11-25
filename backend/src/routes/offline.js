@@ -1,6 +1,6 @@
 /**
  * GET /api/offline/snapshot — the signed-in user's cellars, bottles and racks
- * in one document, for offline use on their device (#1355; services/offlineSnapshot).
+ * in one document, for offline use on their device (services/offlineSnapshot).
  *
  * Read-only and scoped to cellars the user can already open. The client asks
  * for it on app start, every 15 minutes while open, and a few seconds after
@@ -32,7 +32,7 @@ router.get('/snapshot', requireAuth, snapshotLimiter, async (req, res) => {
     // app keeps its own copy, and only when offline mode is on.
     res.setHeader('Cache-Control', 'no-store');
     // The app sends back the tag of the copy it holds: when nothing in it has
-    // changed, 304 without building anything (scaling audit 2026-09-25, item 11).
+    // changed, 304 without building anything.
     const tag = await snapshotTag(req.user.id);
     res.setHeader('ETag', tag);
     if (req.get('If-None-Match') === tag) return res.status(304).end();

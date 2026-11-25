@@ -138,23 +138,15 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // wines (e.g. single vineyard vs generic Barolo), but for wines the
     // registry ALREADY knows, the AI's canonicalized result would dedup to
     // the same registry wine anyway — so a confident registry match skips the
-    // AI call with an outcome-identical result (audit M-2 cost defense).
+    // AI call: the same outcome, without the AI spend.
     //
     // The dedup-by-wine-key + Pass 1a cascade run regardless of whether AI is
-    // configured: a no-AI self-hosted install still gets ONE shared registry
-    // lookup per unique wine — previously every row of a keyless install fell
-    // through to a sequential per-row findWineMatches in Pass 3, defeating
-    // the cascade's own "zero AI for known wines" intent. Only the AI fan-out
-    // itself (Pass 1b) is gated on availability.
+    // configured: a no-AI self-hosted install also gets ONE shared registry
+    // lookup per unique wine, not a sequential per-row findWineMatches in
+    // Pass 3 — the cascade's "zero AI for known wines" intent holds there too.
+    // Only the AI fan-out itself (Pass 1b) is gated on availability.
     const aiConfigured = aiProvider.isConfigured(); // invariant for the whole request
 
-    // A row that names the wine but not the producer (a CellarTracker export
-    // without a Producer column: "Kim Crawford Pinot Gris" in one cell) is
-    // split on a producer the registry already knows BEFORE any lookup, so it
-    // joins the cascade as an ordinary row. The client no longer guesses the
-    // first word (2026-09-12: 285 wines minted under "Louis", "Kim", "19"…);
-    // rows the registry cannot split keep the full display name and go to
-    // the model, which is told the producer is embedded in it.
     // Latch a client disconnect as EARLY as possible — before the split
     // probes and the Pass 1a cascade — so a requester that has gone away
     // stops us spending reads and, below, launching (and debiting) AI calls.
@@ -166,10 +158,17 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     let clientDisconnected = false;
     res.on('close', () => { if (!res.writableEnded) clientDisconnected = true; });
 
+    // A row that names the wine but not the producer (a CellarTracker export
+    // without a Producer column: "Kim Crawford Pinot Gris" in one cell) is
+    // split on a producer the registry already knows BEFORE any lookup, so it
+    // joins the cascade as an ordinary row. The client never guesses the first
+    // word as the producer (a first name or a number would be minted as one);
+    // rows the registry cannot split keep the full display name and go to
+    // the model, which is told the producer is embedded in it.
     // ONE probe per distinct display name, not per row (a 2000-row file of
     // the same six wines is six probes), and a sentinel producer ("Unknown",
     // "-") counts as none — the CT mapper already sends '' for it, generic
-    // CSV/Vivino rows did not.
+    // CSV/Vivino rows do not.
     const splitByName = new Map(); // normalized display name → split result | null
     for (const pr of preResults) {
       if (clientDisconnected) break;
@@ -314,9 +313,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
             country: pr.item.country,
             // The file's own geography, as hints. Asking the model to place a
             // wine while withholding the appellation the user's export states
-            // was making it infer what we had already been handed — and the
-            // confidence floor then deleted the inference. Precedence still
-            // lives in buildProposedWine; this only stops the blind guess.
+            // makes it infer what we were already handed — and the confidence
+            // floor then deletes the inference. Precedence lives in
+            // buildProposedWine; this only stops the blind guess.
             appellation: pr.item.appellation,
             region: pr.item.region,
           });
@@ -379,14 +378,14 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       }
     }
 
-    // ── Post-AI hygiene — BEFORE any matching, so the
-    // cleaned values feed Pass 2, the client preview, and /confirm alike. ──
+    // ── Post-AI hygiene — BEFORE any matching, so the cleaned values feed
+    // Pass 2, the client preview, and /confirm alike. ──
     //
     // A) One producer, one country per batch. Rows are identified one at a
     //    time, so an obscure producer can come back with a different guessed
-    //    country per row (South Africa on one, Australia on
-    //    another — both minted, and the different-country guard then keeps
-    //    them apart forever). Rows whose FILE stated a country are anchors
+    //    country per row (South Africa on one, Australia on another — both
+    //    minted, and the different-country guard then keeps them apart
+    //    forever). Rows whose FILE stated a country are anchors
     //    and are never overwritten; when the file is silent, every row of a
     //    producer adopts one country — the anchors' (when they agree), else
     //    the highest-confidence AI row's.
@@ -400,16 +399,16 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     }
     // Countries compare through the SAME fold the mint uses — alias resolve
     // then normalize — so "USA" and "United States" are one country here
-    // exactly as they become one Country doc there (audit 2026-08-16:
-    // normalizeString alone treated aliases as two countries and the pass
-    // silently no-opped on the very splits it exists to prevent).
+    // exactly as they become one Country doc there (normalizeString alone
+    // treats aliases as two countries, and the pass would silently no-op on
+    // the very splits it exists to prevent).
     const countryKey = (v) =>
       (typeof v === 'string' && v.trim()) ? normalizeString(resolveCountryName(v)) : '';
     for (const rows of aiRowsByProducer.values()) {
       // The FILE is the anchor, and its STATED VALUE is the anchor value —
-      // not the AI's echo of it (anchoring on the echo let
-      // an AI that contradicted the file spread the contradiction to the
-      // whole group). Step one: any anchored row whose AI disagrees with its
+      // not the AI's echo of it (anchoring on the echo would let an AI that
+      // contradicts the file spread the contradiction to the whole group).
+      // Step one: any anchored row whose AI disagrees with its
       // own file column is corrected back to the file's value, which is also
       // what /confirm then mints.
       for (const pr of rows) {
@@ -464,22 +463,19 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // B) Low-confidence geography never MINTS — but it still MATCHES. The
     //    strip is applied when the PROPOSAL is built in Pass 2, never to
     //    aiIdentified itself: the exact/canonical dedup keys embed the
-    //    appellation, and stripping before matching made precisely the
+    //    appellation, and stripping before matching would make precisely the
     //    low-confidence rows most likely to duplicate lose their registry
-    //    match and mint a twin (audit 2026-08-16 — an anti-fragmentation
-    //    change causing fragmentation). Matching with an uncertain
-    //    appellation is resolution, not assertion; nothing below the floor
-    //    is ever WRITTEN.
+    //    match and mint a twin. Matching with an uncertain appellation is
+    //    resolution, not assertion; nothing below the floor is ever WRITTEN.
 
     // Pass 2: resolve AI-identified items against the registry, deduplicated by
     // wine key. findOrCreateWine internally does fuzzy matching using the
     // AI-refined name/producer, which is more accurate than matching raw import
     // data. matchOnly — /validate is a PREVIEW and must never write to the
-    // shared registry (every cancelled, re-run
-    // or column-remapped validate minted rows, and this route has no demo
-    // gate). When nothing matches, the canonical AI identification rides back
-    // to the client as `aiProposed`; /confirm creates the wine only for rows
-    // the user actually imports.
+    // shared registry (every cancelled, re-run or column-remapped validate
+    // would mint rows). When nothing matches, the canonical AI identification
+    // rides back to the client as `aiProposed`; /confirm creates the wine
+    // only for rows the user actually imports.
     const matchedWineCache = new Map(); // normalizedKey -> { wine } | { proposed } | { error }
     for (const pr of preResults) {
       if (pr.registryWine || !pr.aiIdentified) continue;
@@ -507,12 +503,12 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
             // findOrCreateWine throws 'Country is required' and the row
             // error would silently cost the user their bottle (the exact
             // shape allowPending exists to prevent, with no escape hatch for
-            // country; audit 2026-08-16). Demote to the no-match flow, where
-            // the user picks an existing wine or files a request instead of
-            // being offered a create that is guaranteed to fail.
+            // country). Demote to the no-match flow, where the user picks an
+            // existing wine or files a request instead of being offered a
+            // create that is guaranteed to fail.
             //
             // Tested against the PROPOSAL, not the AI object: the file's own
-            // country column is a legitimate fallback now, so a row the model
+            // country column is a legitimate fallback, so a row the model
             // could not place but the user could is minted instead of refused.
             const proposedCountry = buildProposedWine(wineData, pr.item).country;
             if (!(typeof proposedCountry === 'string' && proposedCountry.trim())) {
@@ -770,16 +766,16 @@ router.post('/confirm', async (req, res) => {
     // Currency to apply when an import item has no Currency column of its
     // own, or one the app does not know. The user's choice on the confirm
     // screen (their profile currency by default): a supported code or an
-    // alias of one, as every other write path demands — this used to accept
-    // any three letters. Falls back to USD when unset.
+    // alias of one, as every other write path demands — never just any three
+    // letters. Falls back to USD when unset.
     const defaultCurrencyCheck = parseCurrency(rawDefaultCurrency);
     if (!defaultCurrencyCheck.ok) {
       return res.status(400).json({ error: defaultCurrencyCheck.error });
     }
     const defaultCurrency = defaultCurrencyCheck.value || 'USD';
 
-    // Whole-import comment/occasion: typed once on
-    // the confirm screen, they land on every BOTTLE this import creates.
+    // Whole-import comment/occasion: typed once on the confirm screen, they
+    // land on every BOTTLE this import creates.
     // Fill-blank only — a row that carries its own note from the file keeps it
     // (imports never overwrite file data). Wishlist rows are deliberately
     // excluded: "bought at the estate sale" describes bottles owned, not wines
@@ -885,7 +881,7 @@ router.post('/confirm', async (req, res) => {
 
         // AI-identified NEW wine, confirmed by the user at review. This is the
         // single place the import flow may write to the shared registry —
-        // /validate is read-only (matchOnly) since the 2026-08-03 H-1 fix.
+        // /validate is read-only (matchOnly).
         // findOrCreateWine still matches first, so a wine minted meanwhile (a
         // parallel import, another user) dedupes instead of duplicating.
         if (!item.wineDefinition && !item.requestWine && item.aiWine) {
@@ -896,11 +892,11 @@ router.post('/confirm', async (req, res) => {
           // findOrCreateWine .trim()s name/producer before consulting any
           // option — a non-string must become a row error here, not a throw.
           const str = (v) => (typeof v === 'string' && v.trim() ? v : undefined);
-          // Name only. A row whose producer the file/AI could not supply used
-          // to die here — the strict mint gate 400'd, the catch turned it into
-          // a row error, and the user SILENTLY LOST the bottle. With
-          // allowPending the bottle lands and the wine goes to the somm queue,
-          // which is the exact friction this feature exists to remove.
+          // Name only. A row whose producer the file/AI could not supply must
+          // not die here: the strict mint gate would 400, the catch would turn
+          // it into a row error, and the user would SILENTLY LOSE the bottle.
+          // With allowPending the bottle lands and the wine goes to the somm
+          // queue.
           if (typeof ai !== 'object' || !str(ai.name)) {
             errors.push({ index: i, reason: 'AI wine data is missing its name' });
             continue;
@@ -927,15 +923,15 @@ router.post('/confirm', async (req, res) => {
             });
             // findOrCreateWine can return { wine: null, candidates } — the soft
             // zone: similar wines exist, none close enough to be this one.
-            // Unguarded, `wine._id` threw and took the whole /confirm batch
-            // with it. The row used to be skipped as an error,
-            // which LOST the bottle — typically a Syrah cuvée sitting next to
-            // the Grenache one the same file had just minted.
-            // Instead the bottle lands on a pending wine request under the
-            // proposal the member confirmed, and a curator links it to one of
-            // the near matches or creates the wine — the same path a row the
-            // member marked "request" takes. The file's geography wins over
-            // the AI's guess as the curator's hints.
+            // Unguarded, `wine._id` would throw and take the whole /confirm
+            // batch with it, and skipping the row as an error would LOSE the
+            // bottle — typically a Syrah cuvée sitting next to the Grenache
+            // one the same file had just minted. Instead the bottle lands on
+            // a pending wine request under the proposal the member confirmed,
+            // and a curator links it to one of the near matches or creates
+            // the wine — the same path a row the member marked "request"
+            // takes. The file's geography wins over the AI's guess as the
+            // curator's hints.
             if (!resolved) {
               nearMatchRequest = {
                 wineName: ai.name.trim(),
@@ -954,8 +950,8 @@ router.post('/confirm', async (req, res) => {
             if (created) {
               outcome = 'created';
               if (wine.pendingIdentity) pendingIdentityCount++;
-              // Same action name as the MCP/admin/find-or-create surfaces so
-              // registry writes read as one audit stream (2026-08-03 M-1).
+              // Same action name as the MCP tools and services/wineCommit, so
+              // registry writes read as one audit stream.
               logAudit(req, 'wine.create', { type: 'wine', id: wine._id },
                 { via: 'import', name: wine.name, producer: wine.producer || null,
                   ...(wine.pendingIdentity ? { pendingIdentity: true } : {}),
@@ -1065,12 +1061,11 @@ router.post('/confirm', async (req, res) => {
         if (item.requestWine || nearMatchRequest) {
           // No match — create a pending WineRequest and bottle without wineDefinition.
           // A near-match AI proposal (above) arrives here with its own identity.
-          // wineName is REQUIRED, not wineName-or-producer: the old fallback
-          // filed the PRODUCER as the wine's name, and one broken export did
-          // that 131 times in one import — junk requests no curator can
-          // resolve, since many distinct cuvées sit behind one producer
-          // string. The frontend mapper now skips nameless rows before they
-          // get here; this is the API-side mirror for other clients.
+          // wineName is REQUIRED, not wineName-or-producer: a fallback would
+          // file the PRODUCER as the wine's name — junk requests no curator
+          // can resolve, since many distinct cuvées sit behind one producer
+          // string. The frontend mapper skips nameless rows before they get
+          // here; this is the API-side mirror for other clients.
           const requestIdentity = nearMatchRequest || {
             wineName: item.wineName,
             producer: item.producer,
@@ -1083,7 +1078,7 @@ router.post('/confirm', async (req, res) => {
           }
 
           // One request per user + wine + producer, REUSED across imports
-          // (a re-import used to mint a second pending request for every
+          // (a re-import must not mint a second pending request for every
           // wine still waiting), carrying the file's geography/type as hints
           // for the curator. Import-supplied grape names ride along as
           // suggestions — the admin decides which taxonomy grapes the new

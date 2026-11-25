@@ -61,14 +61,12 @@ function getUserColor(cellar, userId) {
   return entry?.color || null;
 }
 
-// Machine polling (usage check 2026-10-09): the Home Assistant integration
-// asks for the cellar list every few minutes per install, about 2,200 reads a
-// day from some thirty installs, and it runs on about one active user in
-// four. API-token requests are answered from memory while the user's data
-// version (services/dataVersion) is unchanged — every audited cellar.* change
-// moves the actor's and the owner's, and the membership routes move the
-// member's, whose list changes without them acting. Browser reads are never
-// cached.
+// Machine polling: the Home Assistant integration asks for the cellar list
+// every few minutes per install. API-token requests are answered from memory
+// while the user's data version (services/dataVersion) is unchanged — every
+// audited cellar.* change moves the actor's and the owner's, and the
+// membership routes move the member's, whose list changes without them
+// acting. Browser reads are never cached.
 const tokenListCache = createTokenReadCache();
 
 // The people whose cellar list changes when this cellar changes hands, name
@@ -122,7 +120,7 @@ router.post('/', async (req, res) => {
     // colour is a UI-only preference the tool doesn't set, applied here after.
     const result = await createCellar({ name, description }, req);
     if (result.error) {
-      // Preserve the REST route's historical 400 on duplicate name.
+      // The REST contract answers a duplicate name with 400 (the service: 409).
       const status = result.error.code === 'duplicate' ? 400 : result.error.status;
       return res.status(status).json({ error: result.error.message });
     }
@@ -667,9 +665,9 @@ router.get('/:id', async (req, res) => {
       : [];
 
     // Build the exclusion set once for both paths. ?excludePlaced=1 resolves
-    // rack-placed bottles server-side — the slot pickers previously sent every
-    // placed bottle ID in the query string, which overflows the URL length
-    // limit once a few hundred bottles are placed.
+    // rack-placed bottles server-side: every placed bottle ID in the query
+    // string would overflow the URL length limit once a few hundred bottles
+    // are placed.
     const excludeSet = new Set(exclude ? String(exclude).split(',').filter(isValidObjectId) : []);
     if (req.query.excludePlaced === '1' || req.query.excludePlaced === 'true') {
       const racks = await Rack.find({ cellar: req.params.id, deletedAt: null })
@@ -900,10 +898,9 @@ router.get('/:id', async (req, res) => {
       bottles = bottles.slice(skip, skip + limit);
     }
 
-    // Image resolution is attachBottleImageUrls' job — this route used to carry
-    // its own copy of the same logic, which is exactly how the two drifted apart
-    // (the copy matched pending photos on bottle only, the helper's sibling route
-    // on bottle or wine). One implementation, one behaviour.
+    // Image resolution is attachBottleImageUrls' job (services/bottleImageUrls),
+    // never a local copy of it: one implementation, so every bottle list picks
+    // the same photo.
     const withImages = await attachBottleImageUrls(bottles, req.user.id);
     const bottleItems = withImages.map(b => ({
       ...b,
@@ -1041,7 +1038,7 @@ router.patch('/:id/color', async (req, res) => {
 
     await cellar.save();
     // Not audited (a personal preference), but userColor rides in the cached
-    // token list of this user (release audit 2026-10-09, L).
+    // token list of this user.
     bumpDataVersion(req.user.id);
     res.json({ userColor: color || null });
   } catch (error) {
@@ -1073,7 +1070,7 @@ router.delete('/:id', async (req, res) => {
     // the user already soft-deleted individually keep their own (earlier)
     // deletedAt — restamping "now" would reset their 30-day purge clock, and a
     // later restore would flip them back as zombie racks the user had removed.
-    // Restore below re-activates only racks stamped with
+    // Restore (routes/admin/cellars.js) re-activates only racks stamped with
     // this exact timestamp, so the two sets never mix.
     // Also free NFC tags: the rfidTag unique index has no deletedAt filter, so
     // a soft-deleted rack would keep its tag claimed (blocking re-link on
@@ -1087,10 +1084,9 @@ router.delete('/:id', async (req, res) => {
     // (services/cellarPurge.js) — and the public wine-list routes 404 while
     // the cellar is soft-deleted, so nothing stays reachable meanwhile.
 
-    // Withdraw the cellar's pending wine requests from the admin queue. A
-    // deleted cellar's requests used to linger as ghosts a curator could
-    // spend real time on (131 of them after one abandoned import,
-    // 2026-08-28) — and resolving one would have bound bottles the user had
+    // Withdraw the cellar's pending wine requests from the admin queue. Left
+    // pending, a deleted cellar's requests are ghosts a curator could spend
+    // real time on — and resolving one would bind bottles the user has
     // already thrown away. Withdrawn, not rejected: rejection notifies the
     // user and detaches their bottles; a user deleting their own cellar has
     // asked for neither. Stamped with the cellar's own deletedAt (the rack

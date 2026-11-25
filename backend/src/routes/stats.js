@@ -14,12 +14,12 @@ router.use(requireAuth);
 
 // Server-side cache for the overview. Computing it loads the user's entire
 // bottle set. Home Assistant polls it every few minutes and is nudged after
-// every change, so the old 2-minute window almost never matched and every poll
-// recomputed everything — the #1 database load.
-// Now an entry stays valid while the user's data version (services/dataVersion,
-// moved by every audited bottle./cellar. change) is the one it was computed
-// at. The max age bounds what the version cannot see: registry edits, curated
-// drink windows, exchange rates, jobs and scripts.
+// every change, so a short time window would almost never match and every poll
+// would recompute everything. An entry stays valid while the user's data
+// version (services/dataVersion, moved by every audited bottle./cellar.
+// change) is the one it was computed at. The max age bounds what the version
+// cannot see: registry edits, curated drink windows, exchange rates, jobs and
+// scripts.
 const overviewCache = new Map(); // userId -> { at, key, version, stats }
 const OVERVIEW_MAX_AGE_MS = 30 * 60 * 1000;
 const OVERVIEW_CACHE_MAX_ENTRIES = 5000;
@@ -29,8 +29,7 @@ router.get('/overview', async (req, res) => {
   try {
     // Read BEFORE anything is loaded: a change landing while this computes
     // moves the version on, so the entry stored below can never outlive it.
-    // (The old change signature was taken after the load, so a write in
-    // between was cached as current.)
+    // (Read after the load, a write in between would be cached as current.)
     const version = getDataVersion(req.user.id);
 
     const dbUser = await User.findById(req.user.id)

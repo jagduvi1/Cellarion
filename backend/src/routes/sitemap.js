@@ -219,9 +219,9 @@ function createSitemapRouter({
   };
 
   const notFound = (res) => res.status(404).set({ 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }).send('Not found');
-  // A part past the last file is remembered too, for the cache's lifetime:
+  // A part past the last file is remembered too, for the cache's lifetime, so
   // a crawler that keeps asking for ?part=wines-9 after the catalogue shrank
-  // used to run the filtered scan on every hit (release audit 2026-09-27, L).
+  // does not run the filtered scan on every hit.
   const NO_SUCH_PART = '<!-- no such part -->';
 
   // GET /sitemap.xml[?part=…]

@@ -134,7 +134,7 @@ const REVERSIBLE_ACTIONS = new Set(reversibleActionsFor(MCP_PERSONAL_SCOPES));
 // Scopes a caller has when talking to the MCP endpoint. For a personal API token
 // (`cel_…`) these are the token's OWN scopes — so a read-only token sees and can
 // call only read tools. A JWT session is the user themselves and gets the full
-// personal set including `write` (Phase 2b, conscious): the UI already lets a
+// personal set including `write`, deliberately: the UI already lets a
 // logged-in user add/edit/consume, and every mutating tool ships with the
 // write-safety stack (registry-safe two-step add, conflict guards, idempotency
 // keys, the McpActionLog undo ledger, per-user mutation budget). Demo sessions
@@ -151,10 +151,10 @@ const JWT_SCOPES = MCP_PERSONAL_SCOPES;
 // only other way in). A `cel_` token never carries isDemo, so requireNonDemo is a
 // no-op for it and blocks only demo JWT sessions.
 router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, requireNonDemo, mcpUserLimiter, async (req, res, next) => {
-  // Diagnostics (usage check 2026-10-09): one connector had 7% of its posts
-  // answered 400 by the transport, and nothing said why. Log what the access
-  // log cannot see — the JSON-RPC method, whether a session was named and the
-  // client — never the body. 401 and 429 are answered before this handler.
+  // Diagnostics: a refusal by the transport (a 400) says nothing about why.
+  // Log what the access log cannot see — the JSON-RPC method, whether a
+  // session was named and the client — never the body. 401 and 429 are
+  // answered before this handler.
   res.on('finish', () => {
     if (res.statusCode < 400) return;
     const body = req.body;
@@ -181,8 +181,8 @@ router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, req
     if (session && session.transport) {
       // Per-REQUEST call budget: reset the session's shared counter. Two
       // CONCURRENT posts on one session share it (same user; the apiLimiter
-      // counts the requests and the mutation budget is independent) — accepted,
-      // see audit LOW-1.
+      // counts the requests and the mutation budget is independent) — an
+      // accepted trade-off.
       session.callState.calls = 0;
       // Attribution follows the actual caller; the request body does NOT
       // stay pinned in the session.
@@ -212,7 +212,7 @@ router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, req
 
 // GET opens the session's standalone SSE stream (server→client pushes:
 // notifications/resources/updated). Without a session header there is no
-// stream to open — 405 keeps the old stateless contract for those callers.
+// stream to open — those callers get 405, the stateless contract.
 // mcpChallenge: an OAuth client probing with a stale token must get the RFC
 // 9728 WWW-Authenticate pointer here too, not only on POST.
 router.get('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, requireNonDemo, mcpUserLimiter, async (req, res, next) => {
@@ -239,7 +239,7 @@ router.delete('/', requireMcpEnabled, mcpIpLimiter, requireAuth, requireNonDemo,
   }
 });
 
-// ── Anonymous public MCP (plan Phase 6, §2.1) ───────────────────────────────
+// ── Anonymous public MCP ────────────────────────────────────────────────────
 // POST /api/mcp/public — NO auth: the shared wine registry + guides as an MCP
 // any AI can call (growth/AEO). The anonymous ctx carries scopes [] and
 // user null, so the registry's structural filter exposes ONLY 'public'-scoped
@@ -251,7 +251,7 @@ router.delete('/', requireMcpEnabled, mcpIpLimiter, requireAuth, requireNonDemo,
 // apiLimiter. requireNonDemo is irrelevant here (no auth at all).
 const publicMcpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 60, // strict by design (plan decision #4); each request ≤20 tool calls
+  max: 60, // strict by design; each request ≤20 tool calls
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
@@ -302,7 +302,7 @@ router.get('/export/:token', async (req, res, next) => {
   }
 });
 
-// ── Recent AI activity timeline (Phase 2d) ──────────────────────────────────
+// ── Recent AI activity timeline ─────────────────────────────────────────────
 // The in-app view of what a connected AI changed, with one-click revert. These
 // routes are JWT-ONLY: they live under /api/mcp but are NOT in apiTokenAuth's
 // SCOPE_ALLOWLIST, so a `cel_` token (which can reach POST /api/mcp) is rejected

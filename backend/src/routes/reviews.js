@@ -55,7 +55,7 @@ router.post('/', requireNonDemo, async (req, res) => {
     // Validate wine exists AND is visible to this user — a pendingIdentity row
     // is a wine nobody but its creator and curation may see, so for everyone
     // else "exists" must answer the same 404 a missing id does
-    // (services/wineVisibility, security audit M-4).
+    // (services/wineVisibility).
     // noDrafts: a review is public content; a private draft is published first.
     const wine = await findVisibleWine(wineDefinition, { userId: req.user.id, roles: req.user.roles, noDrafts: true });
     if (!wine) {

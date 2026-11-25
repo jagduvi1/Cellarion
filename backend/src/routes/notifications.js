@@ -9,17 +9,16 @@ const { createTokenReadCache } = require('../services/tokenReadCache');
 // All routes require auth
 router.use(requireAuth);
 
-// Machine polling (usage check 2026-10-09): the Home Assistant integration
-// asks for the list every few minutes per install — about 2,200 reads a day
-// from some thirty installs, two database queries each, and the integration
-// runs on about one active user in four, so the reads grow with the users.
-// API-token requests are answered from memory while the user's notifications
-// version (services/dataVersion) is unchanged: services/notifications moves
-// it for every recipient of a new row, and the two mark-read routes below
-// move it for the reader. Its own version, not the data version, so marking
-// a notification read never makes the next poll recompute the statistics.
-// The max age is short because rows also leave through the TTL index, which
-// nothing announces. Browser requests are never cached.
+// Machine polling: the Home Assistant integration asks for the list every few
+// minutes per install, two database queries each, so the reads grow with the
+// users. API-token requests are answered from memory while the user's
+// notifications version (services/dataVersion) is unchanged:
+// services/notifications moves it for every recipient of a new row, and the
+// two mark-read routes below move it for the reader. Its own version, not the
+// data version, so marking a notification read never makes the next poll
+// recompute the statistics. The max age is short because rows also leave
+// through the TTL index, which nothing announces. Browser requests are never
+// cached.
 const tokenCache = createTokenReadCache({ maxAgeMs: 10 * 60 * 1000 });
 
 // GET /api/notifications - fetch the 30 most recent notifications for the current user
@@ -36,7 +35,7 @@ router.get('/', async (req, res) => {
     const [notifications, unreadCount] = await Promise.all([
       // _id breaks ties between rows created in the same millisecond (a burst
       // of notifications), so the order — and the probe's newestId below — is
-      // stable between reads (release audit 2026-09-27, L).
+      // stable between reads.
       Notification.find({ user: req.user.id })
         .sort({ createdAt: -1, _id: -1 })
         .limit(30)

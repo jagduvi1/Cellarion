@@ -68,8 +68,8 @@ function importBusy(res) {
   });
 }
 
-// Gate BEFORE multer buffers the upload (audit BUG 8): acquiring the slot only
-// inside the route handler let N concurrent uploads each buffer up to 64 MB into
+// Gate BEFORE multer buffers the upload: acquiring the slot only inside the
+// route handler would let N concurrent uploads each buffer up to 64 MB into
 // memory before N−2 were 429'd — the exact stacking the gate exists to prevent.
 // Placed ahead of handleUpload so an over-limit request is rejected before its
 // body is read. The slot is released once, on whichever response event fires

@@ -5,9 +5,9 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { logAudit } = require('../services/audit');
 const { isValidId } = require('../utils/validation');
-// The row below is written straight to the model; services/notifications is
-// what moves the recipient's notifications version for the cached token polls
-// (release audit 2026-10-09, L).
+// The row below is written straight to the model, past services/notifications,
+// which is what moves the recipient's notifications version for the cached
+// token polls — so this route moves it itself.
 const { bumpNotificationsVersion } = require('../services/dataVersion');
 
 const router = express.Router();

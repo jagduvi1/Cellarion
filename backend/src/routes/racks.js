@@ -26,12 +26,12 @@ const router = express.Router();
 // What a rack view needs of each placed bottle: the bottle, and its wine as
 // the cellar list sends it (WINE_LIST_SELECT — never the AI profile, internal
 // keys, the wine's creator or another user's label-scan evidence) with only the
-// NAMES of its country, region and grapes. Until 2026-09 every rack response
-// populated whole documents: a large cellar came to about 5 MB, most of it
-// taxonomy descriptions, and every shared wine's scan evidence rode along.
-// Lean: thousands of bottles as plain objects,
-// while the rack itself stays a document, so schema defaults (zones,
-// disabledPositions, …) still fill racks saved before those fields existed.
+// NAMES of its country, region and grapes. Whole populated documents would
+// make a large cellar's rack response megabytes, most of it taxonomy
+// descriptions, with every shared wine's scan evidence riding along.
+// Lean: thousands of bottles as plain objects, while the rack itself stays a
+// document, so schema defaults (zones, disabledPositions, …) still fill racks
+// saved before those fields existed.
 const SLOT_BOTTLES = {
   path: 'slots.bottle',
   options: { lean: true },
@@ -225,14 +225,14 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
       });
       await rack.save();
       // cellarId so this rack appears in the cellar's audit page (which
-      // filters on resource.cellarId) — grand-audit M6.
+      // filters on resource.cellarId).
       logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { name: rack.name });
       return res.status(201).json({ rack });
     }
 
-    // Grid family: ONE shared implementation with the MCP create_rack tool
-    // (plan §7) — type/typeConfig validation, ownership, duplicate-name 409
-    // and the rack.create audit all live in rackOps.createGridRack.
+    // Grid family: ONE shared implementation with the MCP create_rack tool —
+    // type/typeConfig validation, ownership, duplicate-name 409 and the
+    // rack.create audit all live in rackOps.createGridRack.
     const result = await createGridRack(req.cellar, { name, type, rows, cols, typeConfig, group }, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     res.status(201).json({ rack: result.rack });
@@ -296,10 +296,9 @@ router.put('/:id', async (req, res) => {
 
     // Dimensions are validated HERE, before any geometry runs on them. The
     // schema's min/max only fires at save(), but getMaxPosition() below runs
-    // on the request's values first — and a rows of "1e308" used to park the
-    // event loop in the hex slot count for every tenant (security audit
-    // 2026-09-02 D14-1). The closed-form hex count removed the loop; this keeps
-    // nonsense out of every other formula too.
+    // on the request's values first, and a rows of "1e308" in a per-row loop
+    // would park the event loop for every tenant. The hex count is closed-form
+    // (utils/rackGeometry); this keeps nonsense out of every other formula too.
     if ((rows !== undefined && !isRackDim(rows)) || (cols !== undefined && !isRackDim(cols))) {
       return res.status(400).json({ error: `rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` });
     }
@@ -325,10 +324,10 @@ router.put('/:id', async (req, res) => {
     }
     // A cabinet's shelf lists must keep matching its shape: changing rows or
     // switching to cabinet without a fresh shelfRows is rejected, and so is a
-    // cols narrower than a stored per-shelf width (audit 2026-09-16 — a
-    // cols-only PUT used to slip past and leave a cabinet no later edit
-    // could save). Only when the SHAPE is in the request — a rename, group,
-    // zone or NFC edit must never trip over a stored list.
+    // cols narrower than a stored per-shelf width (a cols-only PUT must not
+    // leave a cabinet no later edit could save). Only when the SHAPE is in the
+    // request — a rename, group, zone or NFC edit must never trip over a
+    // stored list.
     if (type !== undefined || rows !== undefined || cols !== undefined || typeConfig !== undefined) {
       const effType = type !== undefined ? type : rack.type;
       const effRows = rows !== undefined ? rows : rack.rows;

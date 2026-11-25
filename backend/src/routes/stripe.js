@@ -107,14 +107,14 @@ async function applyStripePlan(userId, plan, subscriptionId) {
   const planExpired = user.planExpiresAt && new Date(user.planExpiresAt) < new Date();
 
   // A Stripe-granted plan always leaves planExpiresAt null (set below); a
-  // time-limited admin / Cellar-Cred grant sets planExpiresAt in the future. So
-  // an UNEXPIRED planExpiresAt is the only thing that should hold off this
-  // webhook — and only while that grant outranks the incoming Stripe plan. When
+  // time-limited admin grant sets planExpiresAt in the future. So an UNEXPIRED
+  // planExpiresAt is the only thing that should hold off this webhook — and
+  // only while that grant outranks the incoming Stripe plan. When
   // the current plan is itself the Stripe entitlement (planExpiresAt null), the
   // webhook is authoritative for the user's own subscription and MUST honour a
-  // paid-tier DOWNGRADE (patron → supporter), not only an upgrade. The previous
-  // `newRank >= currentRank` guard silently dropped every downgrade, leaving the
-  // user on the higher tier they no longer pay for.
+  // paid-tier DOWNGRADE (patron → supporter), not only an upgrade. A
+  // `newRank >= currentRank` guard would silently drop every downgrade, leaving
+  // the user on the higher tier they no longer pay for.
   const activeGrantOutranks = !!user.planExpiresAt && !planExpired && currentRank > newRank;
 
   const update = { stripeSubscriptionId: subscriptionId };

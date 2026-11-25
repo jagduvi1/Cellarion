@@ -294,15 +294,14 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
     // owner. The /search sibling already filters on 'public'; this endpoint
     // must not become a private-profile read oracle by ObjectId enumeration.
     //
-    // …with one exception, because the blanket 404 told a lie the rest of the
-    // app contradicted: a forum post shows its author's username and links to
-    // this page, so clicking a visible name answered "User not found" for
-    // a good share of accounts. Where the member has ALREADY
-    // published content under this identity, their existence is public by
-    // their own action and the 404 protects nothing — so they get a stub
-    // saying the profile is private, and nothing else. A member who never
-    // posted stays fully indistinguishable from a non-existent id, which is
-    // the enumeration property #519 actually bought.
+    // …with one exception, because a blanket 404 would tell a lie the rest of
+    // the app contradicts: a forum post shows its author's username and links
+    // to this page, so clicking a visible name would answer "User not found".
+    // Where the member has ALREADY published content under this identity,
+    // their existence is public by their own action and the 404 protects
+    // nothing — so they get a stub saying the profile is private, and nothing
+    // else. A member who never posted stays fully indistinguishable from a
+    // non-existent id, which is the enumeration property that matters.
     const isOwner = req.user.id === req.params.userId;
     if (user.profileVisibility === 'private' && !isOwner) {
       if (!(await hasPublicFootprint(user._id))) {
@@ -437,7 +436,7 @@ router.get('/me/full-export', requireAuth, async (req, res) => {
   const scope = parseExportScope(req, res);
   if (scope === null) return;
   // Claim bookkeeping hoisted out of the try so the catch can refund: a
-  // transient build failure used to consume the weekly allowance and lock
+  // transient build failure must not consume the weekly allowance and lock
   // the user out of full export for 7 days. The claim/refund/stream cores are
   // shared with the MCP export-link redeem route (services/cellarExport.js).
   let claimStamp = null;
@@ -610,12 +609,11 @@ router.get('/unsubscribe', async (req, res) => {
     }
 
     // Walk every notification category and flip its outbound channels
-    // (email + push) to false. Earlier code assigned to non-existent
-    // `notifications.email` / `notifications.push` paths — Mongoose's
-    // strict mode silently dropped those writes and the user kept
-    // receiving every category. See utils/notifications.js for the
-    // canonical category list, and notifications.test.js for the
-    // regression coverage that locks this in.
+    // (email + push) to false, category by category: a write to a path the
+    // schema lacks (`notifications.email`) is silently dropped by Mongoose's
+    // strict mode, and the user would keep receiving every category.
+    // utils/notifications.js holds the canonical category list, and
+    // utils/notifications.test.js pins this.
     const { unsubscribeAllNotifications } = require('../utils/notifications');
     const changed = unsubscribeAllNotifications(user);
     if (changed) {
@@ -638,7 +636,7 @@ router.get('/unsubscribe', async (req, res) => {
 // One click, no login: stop ONE email category and nothing else. The email
 // links it beside "unsubscribe from all". Its token is scoped
 // (utils/unsubscribe), so it can't turn off any other category; the bell
-// still carries what the email used to.
+// still carries what the email would have.
 function scopedUnsubscribe(scope, only) {
   const flag = `preferences.notifications.${scope}.email`;
   return async (req, res) => {
@@ -674,8 +672,8 @@ function scopedUnsubscribe(scope, only) {
 router.get('/unsubscribe/support-replies', scopedUnsubscribe('supportReply', 'support'));
 
 // GET /api/users/unsubscribe/owner-questions?token=:token — stop emailing me
-// curators' questions about wines I own (2026-10-20; they stay on the bell
-// and the bottle page).
+// curators' questions about wines I own (they stay on the bell and the
+// bottle page).
 router.get('/unsubscribe/owner-questions', scopedUnsubscribe('ownerInquiry', 'owner-questions'));
 
 // GET /api/users/unsubscribe/drink-window?token=:token — stop emailing me

@@ -213,8 +213,8 @@ router.post('/', requireAuth, chatBurstLimiter, asyncHandler(async (req, res) =>
   const { message, useQueryExpansion, history, previousWines, cellarIds, date, usedBefore, limit, period } = validated;
 
   // Count this chat request toward the site-wide daily AI cap (the SuperAdmin
-  // kill-switch) — chat has its own per-user quota (ChatUsage) but previously
-  // escaped the global brake entirely. If the site cap is hit, don't consume the
+  // kill-switch) — chat has its own per-user quota (ChatUsage), and the global
+  // brake applies on top of it. If the site cap is hit, don't consume the
   // user's chat quota that validateAndCheckLimit already reserved.
   const globalDebit = await tryDebitGlobalAi();
   if (!globalDebit.ok) {

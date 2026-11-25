@@ -1,6 +1,6 @@
 /**
- * Public key vocabulary + values, user surface (#985 Slice B) — thin HTTP
- * wrappers over services/registryDataOps.js (shared with the MCP tools).
+ * Public key vocabulary + values, user surface — thin HTTP wrappers over
+ * services/registryDataOps.js (shared with the MCP tools).
  */
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');

@@ -106,8 +106,8 @@ router.get('/:shareToken/pdf', async (req, res) => {
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
     if (!(await cellarIsActive(wineList))) return res.status(404).json({ error: 'Wine list not found or not published' });
 
-    // Defence-in-depth for the synchronous, heap-buffered render (security
-    // audit H1): the write-side pre-save cap stops any NEW list exceeding
+    // Defence-in-depth for the synchronous, heap-buffered render: the
+    // write-side pre-save cap stops any NEW list exceeding
     // MAX_ENTRIES_PER_LIST, but refuse to render a pre-existing over-cap list
     // here too rather than block the event loop / OOM the worker.
     const totalEntries = (wineList.autoGroupEntries?.length || 0) +

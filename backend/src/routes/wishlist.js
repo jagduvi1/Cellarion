@@ -189,11 +189,9 @@ router.get('/', async (req, res) => {
  * registry row (the schema references WineDefinition, and the whole list UI
  * populates it), so wishing for a not-yet-registered wine is a legitimate
  * zero-bottle registry write — but the mint belongs HERE, at the commit,
- * not in step 1 of the AddToWishlist flow. The step-1 mint (via the old
- * find-or-create route) left an orphan whenever the user confirmed the wine
- * and then abandoned the form — the same leak POST /api/bottles closed for
- * bottles (31 zero-bottle createdVia:'ui' rows on prod, 2026-08-10; the
- * "Domaine de Riquewihr — Kaefferkopf" case). Shared implementation:
+ * not in step 1 of the AddToWishlist flow: a step-1 mint would leave an
+ * orphan whenever the user confirms the wine and then abandons the form, the
+ * same rule POST /api/bottles keeps for bottles. Shared implementation:
  * services/wineCommit (dedup soft zone → 200 { candidates }, nothing created;
  * wine.create audit + IndexNow on a real mint).
  */
@@ -205,9 +203,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Provide wineDefinitionId or newWine (exactly one)' });
     }
 
-    // Item-field validation BEFORE any registry work:
-    // a 400 on notes/priority/vintage after the mint would leave the exact
-    // orphan the mint-at-commit change exists to prevent.
+    // Item-field validation BEFORE any registry work: a 400 on
+    // notes/priority/vintage after the mint would leave the exact orphan
+    // mint-at-commit exists to prevent.
     const safeVintage = vintage != null ? String(vintage) : '';
     if (notes != null && typeof notes !== 'string') {
       return res.status(400).json({ error: 'Notes must be text' });
@@ -226,7 +224,7 @@ router.post('/', async (req, res) => {
 
     let resolvedWineId;
     if (newWine) {
-      // Registry write — same demo bar the old find-or-create route had
+      // Registry write — the same demo bar POST /api/bottles has
       // (requireNonDemo): purgeUserData only reassigns createdBy on reap, so a
       // demo-minted row would persist forever. The by-id path stays open to
       // demo accounts (it references existing wines, writing nothing shared).
