@@ -44,7 +44,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   const [saving, setSaving] = useState(false);
   // Keyed by wine id, NOT a single string: the error renders inside every
   // non-editing row, so one shared value paints the same red paragraph under
-  // all 25 rows and follows the curator through paging (audit HIGH-1).
+  // all 25 rows and follows the curator through paging.
   const [rowErrors, setRowErrors] = useState({});
   // What the last write answered. It stays through the reload that follows the
   // write, and goes when the curator pages, changes a filter or writes again.
@@ -107,7 +107,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
    * index would show "nothing waiting" while rows sit on page 1).
    */
   const refetchAfterWrite = async () => {
-    const rowLeavesList = !showUnavailable;   // with the filter on, a dispositioned row stays visible (audit LOW-5)
+    const rowLeavesList = !showUnavailable;   // with the filter on, a dispositioned row stays visible
     const stepBack = rowLeavesList && wines.length === 1 && page > 1;
     // A new page number is loaded by the effect above; loading it here as
     // well would ask the server twice.
@@ -389,7 +389,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                                (one click vs reading a photo and typing), and a
                                queue emptied this way is a queue that stopped
                                working. Muted link styling marks it an escape
-                               hatch (audit MEDIUM-2). */
+                               hatch. */
                             className="btn btn-sm"
                             style={{
                               background: 'none',

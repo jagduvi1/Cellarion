@@ -3,9 +3,9 @@
  * Phantom design-token guard.
  *
  * Fails the build if any `var(--x)` references a custom property that is never
- * defined anywhere in src/ — the class of bug fixed in audit Batch 3 (PR #689),
- * where a parallel `--bg-secondary`/`--text-*`/`--accent` namespace was used but
- * never declared, so those styles rendered transparent / broke in dark mode.
+ * defined anywhere in src/. A style that uses an undeclared token (a parallel
+ * `--bg-secondary`/`--text-*`/`--accent` namespace, say) renders transparent
+ * or breaks in dark mode, and nothing else reports it.
  *
  * A token counts as "defined" if it appears as:
  *   - a CSS declaration            `--x: value;`

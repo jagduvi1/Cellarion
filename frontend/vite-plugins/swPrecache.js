@@ -38,7 +38,7 @@ export function buildManifest(fileNames, indexHtml) {
  * Stamps the build manifest into dist/service-worker.js (copied verbatim from
  * public/). Two effects:
  *  - the worker knows exactly which hashed files make up THIS build, so it can
- *    precache the app for offline use (#1355) without guessing;
+ *    precache the app for offline use without guessing;
  *  - the worker's bytes change on every deploy, so browsers pick up the new
  *    worker (and with it the new file list) instead of keeping the old one.
  * The dev server never runs it: there the marker stays null and the worker
