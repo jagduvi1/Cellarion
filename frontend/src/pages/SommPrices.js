@@ -302,8 +302,8 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
 
             <div className="form-group sp-currency-field">
               <label>{t('common.currency')}</label>
-              {/* A value per option, never translated: page translation turned
-                  "EUR" into "EURO" in an option without a value (2026-10-13). */}
+              {/* A value per option, never translated: page translation turns
+                  "EUR" into "EURO" in an option without a value. */}
               <select translate="no" value={form.currency} onChange={set('currency')}>
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>

@@ -23,7 +23,7 @@ const NUMERIC = ['integer', 'decimal'];
  * Redefine one key: its type, its unit (numbers) or its allowed values (a
  * list). The name stays — it is the identifier. The server reads every value
  * the key holds again under the new definition and refuses, naming them,
- * when one would not fit (discussion #1778: ABV made as text had no way back).
+ * when one would not fit, so a key given the wrong type has a way back.
  */
 function KeyDefinitionEditor({ k, onSaved, onCancel }) {
   const { apiFetch } = useAuth();
@@ -89,10 +89,10 @@ function KeyDefinitionEditor({ k, onSaved, onCancel }) {
 }
 
 /**
- * Review the public data vocabulary (#985 Slice B): user-proposed KEYS join
- * the shared vocabulary on accept; user-suggested VALUES publish onto the
- * wine record on approve. Creating a public key is deliberately a curated
- * act — one field, one meaning, one type.
+ * Review the public data vocabulary: user-proposed KEYS join the shared
+ * vocabulary on accept; user-suggested VALUES publish onto the wine record
+ * on approve. Creating a public key is deliberately a curated act — one
+ * field, one meaning, one type.
  */
 function AdminRegistryData() {
   const { apiFetch } = useAuth();

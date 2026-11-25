@@ -109,7 +109,7 @@ export default function Journal() {
   };
 
   // A refused or failed delete throws, so the confirm dialog stays open and
-  // says why — it used to close as if the entry had gone.
+  // says why instead of closing as if the entry had gone.
   const handleDelete = async (id) => {
     const res = await deleteJournalEntry(apiFetch, id);
     if (!res.ok) throw httpError(res, await res.json().catch(() => null));

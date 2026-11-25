@@ -18,11 +18,10 @@ const BulkConsumeModal = lazy(() => import('../components/BulkConsumeModal'));
 const TICK_FLUSH_MS = 700;
 
 /**
- * One pick list (early access, flag pickLists; forum request 2026-10-13):
- * the bottles to fetch, grouped by cellar and rack in walking order, each
- * with its slot, a tick box, and a way out to the rack. Rendered outside the
- * app Layout, like Cellar Book, so Print gives a clean sheet to take down to
- * the cellar.
+ * One pick list (early access, flag pickLists): the bottles to fetch, grouped
+ * by cellar and rack in walking order, each with its slot, a tick box, and a
+ * way out to the rack. Rendered outside the app Layout, like Cellar Book, so
+ * Print gives a clean sheet to take down to the cellar.
  */
 export default function PickList() {
   const { t } = useTranslation();
@@ -217,7 +216,7 @@ export default function PickList() {
       ) : (
         <div className="pick-list-title">
           {/* The button sits beside the heading, not in it: a screen reader
-              would read "Saturday dinner Rename" as the heading (audit 2026-10-14). */}
+              would read "Saturday dinner Rename" as the heading. */}
           <h1 className="pick-list-title-text">{list.name}</h1>
           <button type="button" className="pick-list-icon-btn no-print" onClick={() => { setNewName(list.name); setRenaming(true); }} aria-label={t('pickLists.rename', 'Rename')} title={t('pickLists.rename', 'Rename')}>✎</button>
         </div>

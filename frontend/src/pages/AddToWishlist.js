@@ -120,7 +120,7 @@ function AddToWishlist() {
   }, [clearAi]);
 
   // Resolve confirmed wine data against the registry (READ-ONLY — nothing is
-  // created here any more): matched wine, soft-zone candidates, or no match
+  // created here): matched wine, soft-zone candidates, or no match
   // (→ the fields ride to the save, which mints).
   const resolveSelectedWine = useCallback(async (wineData, opts = {}) => {
     setError(null);
@@ -144,8 +144,7 @@ function AddToWishlist() {
       // noMatch — but the label scan may have found a registry row this
       // resolve did not (the scan matcher looks from 0.75, the resolver's
       // "did you mean?" floor is 0.85). Ask instead of minting a duplicate;
-      // the scan's match never links on its own (issue #1134, mirrors
-      // AddBottle).
+      // the scan's match never links on its own (mirrors AddBottle).
       if (opts.fallback?.wine) {
         setSoftCandidates([{ wine: opts.fallback.wine, score: opts.fallback.confidence || 0 }]);
         setSoftPending({ wineData, queryLabel: opts.queryLabel });
@@ -185,7 +184,7 @@ function AddToWishlist() {
       ? (data.extracted.producer || '') : null;
     if (partial) {
       // Straight to the EDITABLE form, prefilled — never the read-only card
-      // (release-audit M-1; see AddBottle for the full argument).
+      // (see AddBottle for the full argument).
       const e = data.extracted || {};
       setPendingWineData({
         name: e.name || '',
@@ -322,19 +321,17 @@ function AddToWishlist() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Confirm scan result — resolve the wine, then add details. The label
-  // image is NOT part of the wine payload (the old find-or-create route
-  // ignored it, and it must not bloat the wishlist commit). ──
+  // image is NOT part of the wine payload (the resolve route ignores it, and
+  // it must not bloat the wishlist commit). ──
   //
-  // Resolve on WHAT THE LABEL SAID — never on the matched row. Same silent
-  // substitution AddBottle carried, and worse here: this page
-  // never rendered the matched wine at all, so there was nothing on screen
-  // that could have shown the swap.
+  // Resolve on WHAT THE LABEL SAID — never on the matched row: a substituted
+  // identity files the wine under its neighbour with nothing on screen
+  // saying so (see AddBottle for the full argument).
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
     // country/type GAP-FILL from the matched row — never identity (mirrors
-    // AddBottle; see the comment there). Restores the healing the old
-    // matched branch provided for countryless/typeless extractions without
-    // reintroducing the identity substitution.
+    // AddBottle; see the comment there): it heals countryless and typeless
+    // extractions without substituting the identity.
     await resolveSelectedWine(
       {
         name: extracted.name,
@@ -394,9 +391,8 @@ function AddToWishlist() {
     clearAi();
   }, [clearAi]);
 
-  // ── Text search. Registry search ONLY — the parallel AI call that used to
-  // run here spent budget on every search and (before identify-text became
-  // read-only) minted a registry wine per guess. AI is opt-in below. ──
+  // ── Text search. Registry search ONLY — an AI call here would spend budget
+  // on every search. AI is opt-in below. ──
   const handleSearch = useCallback(() => {
     if (!search.trim()) { setWines([]); return; }
     const query = search.trim();
@@ -603,10 +599,10 @@ function AddToWishlist() {
       }
       if (!res.ok) {
         setError(messageForResponse(res, data, t('addToWishlist.failedAdd'), t));
-        // Release-audit MEDIUM (same as AddBottle): a mint-gate 400 arrives
-        // after the wine form is gone — when the failed save carried newWine,
-        // reopen the manual form seeded with the typed fields so the user
-        // fixes the named field instead of retyping the wine.
+        // Same as AddBottle: a mint-gate 400 arrives after the wine form is
+        // gone — when the failed save carried newWine, reopen the manual form
+        // seeded with the typed fields so the user fixes the named field
+        // instead of retyping the wine.
         if (newWinePayload) {
           setPendingWineData({ ...newWinePayload, grapes: (newWinePayload.grapes || []).join(', ') });
           setShowManualForm(true);
@@ -724,7 +720,7 @@ function AddToWishlist() {
             </p>
           )}
 
-          {/* WHY the scan is partial with filled boxes (audit M-2). */}
+          {/* WHY the scan is partial with filled boxes: the producer looks like label text. */}
           {producerSuspect && (
             <p className="scan-back-conflicts">
               {t('addToWishlist.producerSuspectNote')}
@@ -741,9 +737,8 @@ function AddToWishlist() {
                 }
               </div>
               <div className="scan-wine-body">
-                {/* Names the registry row the scan matched (issue #1134).
-                    This page showed no sign of a match at all while quietly
-                    committing to it. */}
+                {/* Names the registry row the scan matched: a match the
+                    page does not show could not be seen to be wrong. */}
                 {scanResult.match?.wine && (
                   <div className="ai-result-badge scan-wine-badge">
                     {t('addToWishlist.scanRegistryMatch', {
@@ -991,7 +986,7 @@ function AddToWishlist() {
                 </div>
               )}
 
-              {/* Search results list — no longer hidden behind the AI card */}
+              {/* Search results list — never hidden behind the AI card */}
               {!aiSearching && wines.length > 0 && (
                 <div className="wines-list">
                   {wines

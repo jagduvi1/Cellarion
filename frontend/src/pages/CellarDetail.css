@@ -215,8 +215,7 @@
 
 /* "Show on cards": the same dropdown, holding checkboxes. It hangs from the
    toolbar's right edge, not its button's: in list view the button sits ~200px
-   in, and a menu opening leftward from there ran off a 360px phone (release
-   audit 2026-10-12). */
+   in, and a menu opening leftward from there would run off a 360px phone. */
 .card-fields-wrap { position: static; }
 .more-menu-dropdown.card-fields-menu { min-width: 190px; }
 .card-fields-title {

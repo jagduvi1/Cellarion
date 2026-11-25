@@ -61,11 +61,10 @@ function AdminBlogEditor() {
 
   // Load the post ONCE per id. This deliberately does not depend on `editor`:
   // useEditor hands back a fresh reference on re-render, so an `editor` dep
-  // made this callback — and the effect below — re-run after every state
-  // update it caused, refetching in a tight loop (221 requests in 1.2 s in the
-  // regression test) until a call landed on a replaced editor instance and
-  // threw, leaving the page stuck on its spinner behind a "Failed to load
-  // post" alert. No existing post could be opened.
+  // would make this callback — and the effect below — re-run after every
+  // state update it causes, refetching in a tight loop until a call lands on
+  // a replaced editor instance and throws, leaving the page stuck on its
+  // spinner behind a "Failed to load post" alert.
   const loadPost = useCallback(async () => {
     if (isNew) return;
     setLoading(true);

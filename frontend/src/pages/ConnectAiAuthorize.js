@@ -6,12 +6,12 @@ import { approveOAuthConnection } from '../api/mcp';
 import './Login.css';
 import './ConnectAiAuthorize.css';
 
-// OAuth 2.1 consent screen for the MCP connector (plan §2.4 Phase B). The
-// backend's GET /api/mcp/oauth/authorize validates the request, then redirects
-// the browser here carrying the (validated) params. The user approves, we POST
-// back to /approve which mints the code, and we send the browser to the
-// client's redirect_uri with ?code. Everything is re-validated server-side —
-// this page is UX, not a trust boundary.
+// OAuth 2.1 consent screen for the MCP connector. The backend's GET
+// /api/mcp/oauth/authorize validates the request, then redirects the browser
+// here carrying the (validated) params. The user approves, we POST back to
+// /approve which mints the code, and we send the browser to the client's
+// redirect_uri with ?code. Everything is re-validated server-side — this page
+// is UX, not a trust boundary.
 //
 // Login is rendered INLINE when logged out (rather than bouncing to /login),
 // so the OAuth params stay in the URL through authentication — the standard

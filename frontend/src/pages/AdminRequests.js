@@ -536,7 +536,7 @@ function AdminRequests() {
                 ) : (selected.sourceUrl || selected.sourceUrls?.length > 0) && (
                   <p className="request-links">
                     <strong>{t('common.source')}:</strong>{' '}
-                    {/* Every link the requester gave (#1460); older requests know one. */}
+                    {/* Every link the requester gave; older requests know one. */}
                     {(Array.isArray(selected.sourceUrls) && selected.sourceUrls.length ? selected.sourceUrls : [selected.sourceUrl])
                       .filter(Boolean)
                       .map((url, index) => (
@@ -583,7 +583,7 @@ function AdminRequests() {
                         {displayableImage(selected.backImage) && <figcaption>{t('admin.requests.frontLabel', 'Front')}</figcaption>}
                       </figure>
                     )}
-                    {/* The back label (#1460): evidence for the reviewer, never the wine's picture. */}
+                    {/* The back label: evidence for the reviewer, never the wine's picture. */}
                     {displayableImage(selected.backImage) && (
                       <figure>
                         <img src={displayableImage(selected.backImage)} alt={t('admin.requests.backLabel', 'Back label')} className="wine-image-preview" />

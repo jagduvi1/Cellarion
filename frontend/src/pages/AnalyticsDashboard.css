@@ -1,6 +1,6 @@
-/* Analytics dashboard (#987 R-E). Two-column grid on desktop; ONE column on
-   mobile — a scrollable feed of answers is the phone-first surface the wide
-   table cannot be.
+/* Analytics dashboard. Two-column grid on desktop; ONE column on mobile — a
+   scrollable feed of answers is the phone-first surface the wide table cannot
+   be.
    Class prefix is "dash-", never "ad-": ad blockers hide .ad-widget,
    .ad-grid, .ad-head … and the whole page goes blank. */
 

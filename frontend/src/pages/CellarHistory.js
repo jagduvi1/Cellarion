@@ -45,9 +45,9 @@ const reasonOf = (bottle) => {
 const cursorOf = (bottle) => `${bottle.consumedAt || ''}|${bottle._id}`;
 
 // What the history view was showing — search, filters and scope — kept per
-// cellar for this tab, so Back from a bottle finds the same list (it used to
-// start over: everything in component state only). Only Back/Forward (or a
-// reload) restores it — a link to the history opens it fresh.
+// cellar for this tab, so Back from a bottle finds the same list instead of
+// starting over. Only Back/Forward (or a reload) restores it — a link to the
+// history opens it fresh.
 const HISTORY_VIEW_PREFIX = 'cellarion.historyView.';
 const DEFAULT_HISTORY_FILTERS = {
   search: '',
@@ -324,8 +324,8 @@ function CellarHistory() {
   (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
 
   // Something narrows the list — a filter chip or the search box (which has
-  // no chip, so a search that found nothing used to show the empty-history
-  // note). Read from the answer on screen (shownNarrowed).
+  // no chip, so without it a search that found nothing would show the
+  // empty-history note). Read from the answer on screen (shownNarrowed).
   const narrowed = shownNarrowed;
 
   const removeChip = (chip) => {
@@ -656,8 +656,8 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false, canEdit 
             </Link>
           )}
           {/* "Add again": new bottles of this wine and vintage, copied from
-              this one, straight into the cellar — the visible way back used to
-              be the wishlist, which never adds a bottle. */}
+              this one, straight into the cellar — the wishlist never adds a
+              bottle. */}
           {onAddAgain && (
             <button
               type="button"

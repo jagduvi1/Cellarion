@@ -13,10 +13,9 @@ import './Login.css';
 // its session-restore on mount BEFORE this renders (the app gates on `loading`),
 // so by the time we get here `user` is populated on success — no token ever
 // travels in the URL.
-// These are shared by every SSO provider, so they must not name one. Until
-// #1203 there was only Google and naming it was accurate; a Pocket ID user
-// being told their "Google account" has no verified email address is worse
-// than saying nothing, because it sends them to look at the wrong account.
+// These are shared by every SSO provider, so they must not name one: telling
+// an OIDC user that their "Google account" has no verified email address is
+// worse than saying nothing, because it sends them to look at the wrong account.
 const ERROR_MESSAGES = {
   no_verified_email: "That account doesn't have a verified email address, so we couldn't sign you in.",
   access_denied: 'Sign-in was cancelled.',

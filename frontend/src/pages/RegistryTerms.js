@@ -3,13 +3,13 @@ import { SHIPPED_CODES } from 'virtual:locale-coverage';
 import SITE_URL from '../config/siteUrl';
 import './PrivacyPolicy.css';
 
-// Registry Data Terms (registry lockdown 2026-09-06, layer L6). The code is
-// AGPL; the shared registry's curated content — tasting profiles, drink
-// windows, sommelier notes, curated values — is not, and this page is where
-// that is said, in plain language: house rules for an open-source project,
-// not a contract drafted by counsel. The mechanics it
-// describes (per-reader budgets, terms-bound keys) are what actually holds.
-// Reuses the privacy page's layout so the two legal pages read as one set.
+// Registry Data Terms. The code is AGPL; the shared registry's curated
+// content — tasting profiles, drink windows, sommelier notes, curated values
+// — is not, and this page is where that is said, in plain language: house
+// rules for an open-source project, not a contract drafted by counsel. The
+// mechanics it describes (per-reader budgets, terms-bound keys) are what
+// actually holds. Reuses the privacy page's layout so the two legal pages
+// read as one set.
 function RegistryTerms() {
   return (
     <div className="privacy-page">

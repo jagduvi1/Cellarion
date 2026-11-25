@@ -82,8 +82,8 @@ function CellarVintage() {
   const reviewed = useContributionReviewed();
   const { id, wineId, vintage: vintageParam } = useParams();
   const { apiFetch, user } = useAuth();
-  // Blocks the member folded away, remembered on the account (beta feedback
-  // 2026-10-12): the three sections, and the cards with a title of their own.
+  // Blocks the member folded away, remembered on the account: the three
+  // sections, and the cards with a title of their own.
   const { isCollapsed, toggle, expand } = useCollapsedBlocks();
   const blockProps = (blockId, label) => ({ id: blockId, label, collapsed: isCollapsed(blockId), onToggle: () => toggle(blockId) });
   const [data, setData] = useState(null);
@@ -202,9 +202,8 @@ function CellarVintage() {
   const cellar = data?.cellar || null;
   const canEdit = !!cellar && ['owner', 'editor'].includes(cellar.userRole);
   // Early access (flag pickLists): put bottles of this wine and year on a
-  // pick list from here, not only from each bottle's own page (beta feedback
-  // 2026-10-14). Same rule as the bottle page: an owner or editor, bottles
-  // still in the cellar.
+  // pick list from here, not only from each bottle's own page. Same rule as
+  // the bottle page: an owner or editor, bottles still in the cellar.
   const pickListsOn = useFeature('pickLists');
   const timelineOn = useFeature('maturityTimeline');
   const pickable = bottles.filter((b) => b.status === 'active');
@@ -261,9 +260,8 @@ function CellarVintage() {
     .join(' + ');
   const pricedCount = bottles.filter((b) => Number(b.price) > 0).length;
 
-  // The stock line at the head of the bottle list: where they sit, what is
-  // on order or was drunk, what was paid — in the singular for one ("slot
-  // 147", "Paid", beta feedback 2026-10-10).
+  // The stock line at the head of the bottle list: where they sit, what is on
+  // order or was drunk, what was paid — singular for one ("slot 147", "Paid").
   const stockItems = [
     ...placements.map((r) => (
       <span key={`rack-${r.id}`} className="cvb-summary-item">
@@ -313,8 +311,8 @@ function CellarVintage() {
   // An NV window is meaningful only in relative mode (offsets from purchase)
   // and with a year to measure from — the bottle page's rule (ViewDetails).
   // An old absolute NV profile waits for review; a relative one with no
-  // bottle left to anchor it shows no years at all (release audit 2026-10-16:
-  // offsets read as years said "Declining", "0–1").
+  // bottle left to anchor it shows no years at all (offsets read as years
+  // would say "Declining", "0–1").
   const isNv = String(vintage || '').toUpperCase() === 'NV';
   const nvUnanchored = isNv && !!profile?.relative && !Number.isFinite(anchorYear);
   const profileReviewed = profile?.status === 'reviewed' && (!isNv || !!profile.relative);
@@ -520,8 +518,7 @@ function CellarVintage() {
       />
 
       {/* No cellar menu here: it belongs to the cellar, not to the wine, and
-          "Back to the cellar" above already leads there (beta feedback
-          2026-10-10). */}
+          "Back to the cellar" above already leads there. */}
 
       {notice && (
         <div className="alert alert-success cellar-vintage-notice" role="status">
@@ -583,9 +580,9 @@ function CellarVintage() {
                         <BottlePlaceholder wine={wine} vintage={vintage} title={title} />
                       </div>
                     )}
-                    {/* With a photo shown, "Add a photo" is in the ⋮ menu: the
-                        button under it only took room from the wine (beta
-                        feedback 2026-11-04). With none, it is the way in. */}
+                    {/* With a photo shown, "Add a photo" is in the ⋮ menu: a
+                        button under it would only take room from the wine.
+                        With none, it is the way in. */}
                     {canPhoto && !showsPhoto && (
                       <button type="button" className="btn btn-secondary btn-small cvb-add-photo" onClick={() => setPhotoOpen(true)}>
                         <span aria-hidden="true">🖼️</span> {t('cellarVintageBeta.addPhotoShort', 'Add a photo')}
@@ -792,7 +789,7 @@ function CellarVintage() {
                   paid — once, at the head of the list (the page label above
                   already says how many) — then one row each with what differs
                   between them. A long list starts folded: the stock line is
-                  the glance, the rows are a tap away (beta feedback 2026-10-10). */}
+                  the glance, the rows are a tap away. */}
               <section aria-labelledby="cvb-bottles-title">
                 <div className="cvb-h2-row">
                   <h2 id="cvb-bottles-title" className="cvb-h2">{t('cellarVintage.bottlesTitle', 'Your bottles')}</h2>

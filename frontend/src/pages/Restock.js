@@ -156,9 +156,9 @@ export default function Restock() {
   };
 
   // Auto-clear dismisses whose stock has since increased (user bought more).
-  // Runs as an effect, NOT during render: the old in-filter version called
-  // setState/localStorage per item from the same stale snapshot, so clearing
-  // two items in one pass stomped each other's updates.
+  // Runs as an effect, NOT during render: clearing inside the filter would
+  // call setState/localStorage per item from the same stale snapshot, so
+  // clearing two items in one pass would stomp each other's updates.
   useEffect(() => {
     const stale = allCategories.filter(item => {
       const key = `${item.category}:${item.name}`;

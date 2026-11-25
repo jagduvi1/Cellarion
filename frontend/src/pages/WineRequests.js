@@ -34,7 +34,7 @@ function WineRequests() {
   // may publish it among the wine's gallery photos (the notice says so).
   const [backImageFile, setBackImageFile] = useState(null);
   // One submission at a time: the photo encodes take a moment, and a second
-  // tap used to file the same request twice.
+  // tap would file the same request twice.
   const [submitting, setSubmitting] = useState(false);
   const [backImageUrl, setBackImageUrl] = useState('');
 
@@ -181,8 +181,8 @@ function WineRequests() {
     resetForm();
     setShowForm(false);
   };
-  // Closing the form forgets its photos and links: a photo taken for one wine
-  // used to ride along into the next request after the form was reopened.
+  // Closing the form forgets its photos and links, so a photo taken for one
+  // wine never rides along into the next request after the form is reopened.
   const toggleForm = () => (showForm ? handleCancel() : setShowForm(true));
 
   const setExtraUrl = (index, value) => setExtraUrls(extraUrls.map((u, i) => (i === index ? value : u)));
@@ -228,7 +228,7 @@ function WineRequests() {
               />
             </div>
 
-            {/* More links (#1460): a winery page AND a review, each worth having */}
+            {/* More links: a winery page AND a review, each worth having */}
             <div className="form-group">
               <label>{t('wineRequests.moreLinksLabel', 'More links')} <span className="label-optional">({t('common.optional', 'optional')})</span></label>
               <p className="field-hint">{t('wineRequests.linksHint', 'A winery page and a review each give the reviewer something different.')}</p>
@@ -288,7 +288,7 @@ function WineRequests() {
               </p>
             </div>
 
-            {/* Back label (#1460): never the wine's picture, but after review it may
+            {/* Back label: never the wine's picture, but after review it may
                 join the wine's public photos — said here, like the notice above. */}
             <div className="form-group">
               <label>{t('wineRequests.backImageLabel', 'Back label')} <span className="label-optional">({t('common.optional', 'optional')})</span></label>

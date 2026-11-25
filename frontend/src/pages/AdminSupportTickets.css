@@ -189,8 +189,8 @@
   background: var(--color-surface);
   padding: 20px;
   /* A flex child defaults to min-width:auto, so an unbreakable token in the
-     subject ("suggest_wine_correction") widened the panel past the phone
-     screen and clipped the badges and every line below (Johan, 2026-09-07). */
+     subject ("suggest_wine_correction") would widen the panel past the phone
+     screen and clip the badges and every line below. */
   min-width: 0;
   overflow-wrap: anywhere;
   /* Target of the phone scroll-into-view in AdminSupportTickets.js. The navbar

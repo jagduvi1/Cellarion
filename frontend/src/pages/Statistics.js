@@ -184,11 +184,10 @@ function Statistics() {
             grapes: overview.totalGrapes,
           })}
         </p>
-        {/* Ten charts have deep-linked to a filtered bottle list since they
-            were built, but the only affordance was a cursor change and a hover
-            tint — a forum user with 63 bottles asked for a feature that was
-            already there (turbulent3964 2026-08-29). One hint under the
-            subtitle beats repeating a note on every clickable card. */}
+        {/* The charts deep-link to a filtered bottle list, but their only
+            affordance is a cursor change and a hover tint, easy to miss. One
+            hint under the subtitle beats repeating a note on every clickable
+            card. */}
         <p className="stats-hint">{t('statistics.clickHint')}</p>
         <p className="stats-hint"><Link to="/dashboard">{t('statistics.dashboardLink', 'Build your own tables and charts in the Dashboard →')}</Link></p>
       </div>
