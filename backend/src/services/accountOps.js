@@ -20,8 +20,8 @@ const { stripHtml } = require('../utils/sanitize');
 const { SUPPORTED_CURRENCIES } = require('../config/currencies');
 const featureFlags = require('../config/featureFlags');
 
-// Allow-lists — the single source of truth the REST routes previously kept
-// inline. Kept here so the MCP tools validate byte-for-byte identically.
+// Allow-lists — the single source of truth for the REST routes and the MCP
+// tools, so both validate byte-for-byte identically.
 const ALLOWED_CURRENCIES = SUPPORTED_CURRENCIES;
 // Validated by SHAPE, not by membership: the set of UI languages lives in the
 // frontend (one directory per locale, shipped by Weblate) and the backend image
@@ -366,11 +366,11 @@ function validateSourceUrl(url) {
     return 'URLs pointing to private/internal addresses are not allowed';
   }
   // For IP-literal hosts, reuse the structural private/reserved classifier the
-  // image-fetch SSRF guard uses. WHATWG `new URL` already
-  // canonicalizes decimal/hex/octal IPv4 to dotted-quad; isPrivateAddress adds
-  // the IPv6 / ULA / link-local / v4-mapped forms the old lexical denylist
-  // missed. DNS names are intentionally left as-is: this value is stored and
-  // rendered as a link, never fetched by the server, so no DNS resolution here.
+  // image-fetch SSRF guard uses. WHATWG `new URL` already canonicalizes
+  // decimal/hex/octal IPv4 to dotted-quad; isPrivateAddress adds the IPv6 /
+  // ULA / link-local / v4-mapped forms a lexical denylist misses. DNS names
+  // are intentionally left as-is: this value is stored and rendered as a
+  // link, never fetched by the server, so no DNS resolution here.
   if (net.isIP(host) && isPrivateAddress(host)) {
     return 'URLs pointing to private/internal addresses are not allowed';
   }
@@ -387,9 +387,9 @@ function validateSourceUrl(url) {
  *     FRONTEND_URL origin — what the request form sends after background
  *     removal).
  * Anything else — a protocol-relative `//host/x`, `javascript:`, a bare word
- * — is refused. Until audit 2026-09 such a value flowed verbatim into
- * WineDefinition.image on approval, where every viewer's AuthImage would have
- * fetched it with the bearer token attached.
+ * — is refused: on approval it would flow verbatim into
+ * WineDefinition.image, where every viewer's AuthImage fetches it with the
+ * bearer token attached.
  * Returns an error string, or null when the value is acceptable (empty is fine).
  */
 const MAX_IMAGE_REF_LENGTH = 500000;
@@ -413,8 +413,8 @@ function isOwnUploadUrl(value) {
 }
 
 // A wine record never stores its picture inline (allowInline: false): a
-// data: URI of up to half a megabyte rode along in every list and page that
-// showed the wine. A photo attached to a request becomes a file at approval
+// data: URI of up to half a megabyte would ride along in every list and page
+// that shows the wine. A photo attached to a request becomes a file at approval
 // (routes/admin/wineRequests.js).
 function validateImageRef(image, { allowInline = true } = {}) {
   const shapes = allowInline ? 'an http(s) link or an inline image' : 'an http(s) link or an uploaded file';
@@ -443,10 +443,10 @@ const MAX_SOURCE_URLS = 3;
 function collectSourceUrls(sourceUrl, sourceUrls) {
   if (sourceUrls != null && !Array.isArray(sourceUrls)) return { error: 'sourceUrls must be a list of links' };
   // Refuse the length BEFORE the loop: the route accepts megabytes of JSON,
-  // and the repeat check below is quadratic in the list (release audit
-  // 2026-10-09, H2 — a 5 MB list of one-character strings pinned the event
-  // loop for minutes). The form sends sourceUrl inside sourceUrls too, so the
-  // list itself is capped at the maximum, repeats included.
+  // and the repeat check below is quadratic in the list, so a long list of
+  // tiny strings pins the event loop for minutes. The form sends sourceUrl
+  // inside sourceUrls too, so the list itself is capped at the maximum,
+  // repeats included.
   if (sourceUrls && sourceUrls.length > MAX_SOURCE_URLS) return { error: `At most ${MAX_SOURCE_URLS} source links` };
   const links = [];
   for (const raw of [sourceUrl, ...(sourceUrls || [])]) {

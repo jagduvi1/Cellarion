@@ -1,6 +1,6 @@
 // Shared bottle mutations — ONE implementation for the REST routes and the MCP
-// tools (plan §7), so validation, rack-slot freeing, re-indexing, audit and
-// SSE nudges can never drift between the two surfaces.
+// tools, so validation, rack-slot freeing, re-indexing, audit and SSE nudges
+// can never drift between the two surfaces.
 //
 // Contract: each op takes a LOADED, ACCESS-CHECKED bottle document (the caller
 // owns authorization — requireBottleAccess on REST, resolveBottleAccess on
@@ -11,7 +11,7 @@
 // services/restockChecker is required LAZILY inside the functions. Anything
 // that reaches the ESM-only meilisearch package (services/search) must never be
 // a top-level require here: jest cannot parse it, and it would break every
-// suite that loads the MCP tool registry (the #702 failure mode).
+// suite that loads the MCP tool registry.
 const { CONSUMED_STATUSES, ORDERED_STATUS } = require('../config/constants');
 const { resolveRating } = require('../utils/ratingUtils');
 const resolveRatingUtil = resolveRating;
@@ -54,18 +54,12 @@ async function removeFromRacks(bottleId) {
   );
 }
 
-/**
- * Mark a bottle consumed (drank/gifted/sold/other), free its rack slot,
- * re-index, audit (which also emits the stats_changed SSE nudge), and fire the
- * restock-gap check. Mirrors POST /api/bottles/:id/consume exactly.
- */
 // A bare calendar date (YYYY-MM-DD — what <input type="date">, the bulk
 // action and the MCP tool send) names a DAY, not an instant. Parse it as NOON
 // UTC so it renders as that same day in every zone from UTC-12 to UTC+11:
 // `new Date('2026-09-13')` is UTC midnight, which toLocaleDateString shows as
-// the 12th to everyone west of Greenwich (audit 2026-09-14 H1 — the default
-// "today" would have been a day off for the whole Americas cohort). A full
-// timestamp passes through unchanged.
+// the 12th to everyone west of Greenwich, so even the default "today" would
+// read a day off across the Americas. A full timestamp passes through unchanged.
 const DAY_ONLY_RX = /^\d{4}-\d{2}-\d{2}$/;
 // "Not in the future" slack: a UTC+14 user at 00:01 local is 26 h before
 // their own day's noon UTC, so 36 h rather than 24.
@@ -75,6 +69,11 @@ function parseConsumedAt(value) {
   return new Date(typeof raw === 'string' && DAY_ONLY_RX.test(raw) ? `${raw}T12:00:00Z` : raw);
 }
 
+/**
+ * Mark a bottle consumed (drank/gifted/sold/other), free its rack slot,
+ * re-index, audit (which also emits the stats_changed SSE nudge), and fire the
+ * restock-gap check. Mirrors POST /api/bottles/:id/consume exactly.
+ */
 async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingScale, consumedAt, skipRestockCheck = false } = {}, req) {
   if (bottle.status === ORDERED_STATUS) return { error: { ...NOT_ARRIVED_ERROR } };
   if (!CONSUMED_STATUSES.includes(reason)) {
@@ -154,8 +153,8 @@ async function restoreBottle(bottle, req) {
   }
   // The window counts from when the consume was LOGGED, not from the date the
   // user put on it — a bulk "drunk last Saturday" entered today is still an
-  // accidental log for two days. Rows from before consumedLoggedAt existed
-  // fall back to consumedAt, which was always "now" then.
+  // accidental log for two days. Rows written before consumedLoggedAt existed
+  // fall back to consumedAt, which on those rows is the time of logging.
   const loggedAt = bottle.consumedLoggedAt || bottle.consumedAt;
   if (loggedAt && (Date.now() - new Date(loggedAt).getTime()) > RESTORE_WINDOW_MS) {
     return {
@@ -344,9 +343,9 @@ async function closeBottle(bottle, req) {
   // longer current state, so clearing them destroys the record rather than
   // undoing a mistake. openBottle/pourFromBottle already gate on this; the
   // guard belongs here rather than in the callers so REST and MCP inherit one
-  // implementation (#866 fixed the MCP tools
-  // one at a time, which left DELETE /api/bottles/:id/open with no guard at
-  // all). To reverse the consume itself, restore the bottle first.
+  // implementation: a guard added caller by caller leaves the next caller
+  // (DELETE /api/bottles/:id/open) unguarded. To reverse the consume itself,
+  // restore the bottle first.
   if (CONSUMED_STATUSES.includes(bottle.status)) {
     return { error: {
       status: 409,
@@ -381,26 +380,6 @@ async function closeBottle(bottle, req) {
   return { bottle, prevOpenState, putBack };
 }
 
-/**
- * Create a bottle in an ACCESS-CHECKED cellar for an EXISTING registry wine —
- * the ONE implementation behind REST POST /api/bottles and the MCP add_bottle
- * tool (the route delegates here; H1 of the 2026-07-17 MCP audit). Covers the
- * full REST field surface including the migration helpers (dateAdded backdate,
- * addToHistory + consumed-* fields) and fires the same post-save side effects.
- * The enrichment/embedding calls inherit their internal kill-switch + per-user
- * budget gates.
- *
- * Returns { error: { status, message } } | { bottle }.
- */
-/**
- * Checks-only validation of the bottle-create field surface — no values are
- * produced and nothing is written. Exists so the POST /api/bottles newWine
- * branch can validate the COMMIT fields BEFORE resolveOrMintWine runs
- * (a field 400 after the mint would leave the exact
- * orphan mint-at-commit exists to prevent). addBottle still runs its own
- * inline validation+resolution afterwards — this is a pre-mint gate, not a
- * replacement, and the parsers are pure so double-parsing is free.
- */
 /**
  * Validate the optional personal peak (peakFrom/peakUntil) against its
  * enclosing drink window. Returns { error } on a fault, or the parsed
@@ -442,6 +421,15 @@ function parseOnOrderFields({ onOrder, expectedArrival, addToHistory } = {}) {
   return { onOrder: true, expectedArrival: ea.value };
 }
 
+/**
+ * Checks-only validation of the bottle-create field surface — no values are
+ * produced and nothing is written. Exists so the POST /api/bottles newWine
+ * branch can validate the COMMIT fields BEFORE resolveOrMintWine runs (a
+ * field 400 after the mint would leave the exact orphan mint-at-commit exists
+ * to prevent). addBottle still runs its own inline validation+resolution
+ * afterwards — this is a pre-mint gate, not a replacement, and the parsers
+ * are pure so double-parsing is free.
+ */
 function validateBottleCommitFields(fields = {}) {
   const currencyCheck = parseCurrency(fields.currency);
   if (!currencyCheck.ok) return { error: { status: 400, message: currencyCheck.error } };
@@ -498,6 +486,17 @@ function validateBottleCommitFields(fields = {}) {
   return { ok: true };
 }
 
+/**
+ * Create a bottle in an ACCESS-CHECKED cellar for an EXISTING registry wine —
+ * the ONE implementation behind REST POST /api/bottles and the MCP add_bottle
+ * tool (the route delegates here). Covers the full REST field surface
+ * including the migration helpers (dateAdded backdate, addToHistory +
+ * consumed-* fields) and fires the same post-save side effects. The
+ * enrichment/embedding calls inherit their internal kill-switch + per-user
+ * budget gates.
+ *
+ * Returns { error: { status, message } } | { bottle }.
+ */
 async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   const {
     vintage, price, currency, bottleSize,
@@ -651,9 +650,8 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   if (wineDoc.draft === true) {
     try { await require('./wineDraftOps').touchDraft(wineDoc._id); } catch { /* never fails the add */ }
   }
-  // Include wineName so the Cellar Audit page shows what was added, matching
-  // the REST POST /bottles audit (grand-audit M5 — AI-added bottles showed a
-  // bare vintage with no wine name). wineDoc is the resolved registry wine.
+  // Include wineName so the Cellar Audit page shows what was added, not a bare
+  // vintage. wineDoc is the resolved registry wine.
   logAudit(req, addToHistory ? 'bottle.addToHistory' : 'bottle.add',
     { type: 'bottle', id: bottle._id, cellarId: cellarDoc._id },
     { wineName: wineDoc.name, vintage: bottle.vintage, ...(order.onOrder ? { onOrder: true } : {}) });
@@ -701,13 +699,13 @@ function normForCompare(v) {
 /**
  * Diff-based partial update of an access-checked bottle — the ONE
  * implementation behind REST PUT /api/bottles/:id and the MCP update_bottle
- * tool (the route delegates here; H1 of the 2026-07-17 MCP audit). Handles
- * the full REST field surface: vintage coercion (+ re-embed on change),
- * bottle-size canonicalization, rating resolution against the bottle's own
- * scale, drink-window ordering + notifier-marker reset, priceSetAt
- * re-anchoring, HTML stripping, re-index, and the { field: { from, to } }
- * audit shape CellarAudit renders.
- * Returns { error } | { bottle, changes, prev }. `restoringPrev` (undo) lets a bottle's previous currency back even when it is not a supported code.
+ * tool (the route delegates here). Handles the full REST field surface:
+ * vintage coercion (+ re-embed on change), bottle-size canonicalization,
+ * rating resolution against the bottle's own scale, drink-window ordering +
+ * notifier-marker reset, priceSetAt re-anchoring, HTML stripping, re-index,
+ * and the { field: { from, to } } audit shape CellarAudit renders.
+ * Returns { error } | { bottle, changes, prev }. `restoringPrev` (undo) lets
+ * a bottle's previous currency back even when it is not a supported code.
  */
 async function updateBottleFields(bottle, fields, req, { restoringPrev = false } = {}) {
   fields = { ...(fields || {}) }; // shallow copy — REST passes req.body
@@ -737,9 +735,9 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
 
   // Vintage: coerce to canonical form ('NV' / 'Unknown' / 'YYYY') or reject.
   // An UNCHANGED vintage is never re-validated: the web form sends the whole
-  // form on every save, and a bottle stored under an older rule (2028 was
-  // legal when the cap was harvest year + 5) must stay editable — a price
-  // change is not the moment to argue about its vintage.
+  // form on every save, and a bottle whose stored vintage the current rule
+  // would refuse must stay editable — a price change is not the moment to
+  // argue about its vintage.
   if (fields.vintage !== undefined && String(fields.vintage).trim() === String(bottle.vintage ?? '').trim()) {
     delete fields.vintage;
   } else if (fields.vintage !== undefined) {
@@ -868,8 +866,7 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
   // even when it isn't supported (an older import): the web form sends the
   // whole form on every save.
   // An undo (restoringPrev) puts back the bottle's previous code, supported or
-  // not (undoing a change away from an old import's
-  // code was refused).
+  // not, so a change away from an old import's code can always be undone.
   if (fields.currency !== undefined && fields.currency !== null && fields.currency !== '') {
     const own = normalizeCurrency(bottle.currency || '');
     const sent = typeof fields.currency === 'string' ? normalizeCurrency(fields.currency) : null;
@@ -908,9 +905,9 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
   // A price/currency CHANGE re-anchors the price date (or clears it when the
   // price itself is gone). Deliberately change-based, not presence-based: the
   // web form re-sends every field on save, and a presence-based re-anchor
-  // moved the FX anchor date on every unrelated edit. The snapshot is awaited
-  // so an immediate read can time-anchor (non-fatal — returns null, never
-  // throws, when the rates API is down).
+  // would move the FX anchor date on every unrelated edit. The snapshot is
+  // awaited so an immediate read can time-anchor (non-fatal — returns null,
+  // never throws, when the rates API is down).
   if ('price' in changes || 'currency' in changes) {
     if (bottle.price !== null && bottle.price !== undefined && bottle.price !== '') {
       bottle.priceSetAt = new Date();
@@ -962,8 +959,7 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
       // The new (wine, vintage) is a pair a sommelier may never have seen:
       // queue it for a drink window exactly as adding a bottle of it would
       // (addBottle), and with the same exception — a bottle on order is
-      // queued the day it arrives (markArrived). Until 2026-10-09 an edited
-      // vintage never reached the queue, from the app or over MCP.
+      // queued the day it arrives (markArrived).
       if (bottle.status !== ORDERED_STATUS) {
         try {
           await require('../utils/vintageProfile').ensurePendingVintageProfile(wineId, bottle.vintage);
@@ -978,11 +974,9 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
       }
     }
   }
-  // Audit in the SAME { field: { from, to } } shape the REST PUT /bottles/:id
-  // route emits, so CellarAudit renders both surfaces identically (a bare
-  // { field: newValue } here made the page crash when a value was cleared —
-  // grand-audit H2). `prev` holds the old value, `changes` the new (null on
-  // clear); both carry exactly the keys that changed.
+  // Audit in the { field: { from, to } } shape CellarAudit renders — one shape
+  // for every caller, REST and MCP alike. `prev` holds the old value, `changes`
+  // the new (null on clear); both carry exactly the keys that changed.
   const auditChanges = {};
   for (const key of Object.keys(changes)) {
     auditChanges[key] = { from: prev[key] ?? null, to: changes[key] };
@@ -996,9 +990,9 @@ async function updateBottleFields(bottle, fields, req, { restoringPrev = false }
 
 /**
  * Reverse an incorrectly-added ACTIVE bottle — the full cleanup cascade of
- * REST POST /api/bottles/:id/undo (rack slots, own images +
- * file unlink, wine-assigned image unassignment, pending wine request, then
- * the bottle document itself). auditAction distinguishes 'bottle.undo' from
+ * REST POST /api/bottles/:id/undo (rack slots, own images + file unlink,
+ * wine-assigned image unassignment, pending wine request, then the bottle
+ * document itself). auditAction distinguishes 'bottle.undo' from
  * 'bottle.delete', which run the identical cascade.
  * options.anyStatus also removes a consumed bottle (a duplicate history row
  * from an import is deleted the same way); options.auditDetail replaces the
@@ -1043,17 +1037,15 @@ async function removeBottleCascade(bottle, req, auditAction, options = {}) {
   // Only remove the request if THIS was the last bottle waiting on it.
   //
   // One request covers every bottle of a wine in an import — /confirm dedups
-  // by (wineName, producer) — so deleting the request outright took the whole
-  // group down with a single bottle. The siblings kept a pendingWineRequest
-  // pointing at nothing: no wineDefinition, no live request, nameless in the
-  // cellar AND invisible to the admin queue that would have named them.
-  // Observed on prod 2026-08-30, where removing a few duplicate bottles
-  // orphaned four others and dropped the user's request count by eight.
+  // by (wineName, producer) — so deleting the request outright would take the
+  // whole group down with a single bottle. The siblings would keep a
+  // pendingWineRequest pointing at nothing: no wineDefinition, no live
+  // request, nameless in the cellar AND invisible to the admin queue that
+  // would have named them.
   //
   // Counted AFTER the bottle is deleted, so this row cannot count itself.
-  // A request nobody is waiting on any more is still deleted — that is the
-  // behaviour this preserves, and it is what keeps the admin queue free of
-  // requests for bottles that no longer exist.
+  // A request nobody is waiting on any more is deleted, which keeps the admin
+  // queue free of requests for bottles that no longer exist.
   if (pendingRequestId) {
     const stillWaiting = await Bottle.countDocuments({ pendingWineRequest: pendingRequestId });
     if (stillWaiting === 0) {
@@ -1143,7 +1135,7 @@ async function restoreDeletedBottle(snapshot, req, { via = 'undo' } = {}) {
   }
   // The stored document as it was: same id, same dates, no defaults re-run —
   // except a currency alias, which the raw insert would bypass the schema's
-  // setter for ("EURO" → "EUR"; release audit 2026-10-13).
+  // setter for ("EURO" → "EUR").
   if (typeof raw.currency === 'string') raw.currency = normalizeCurrency(raw.currency);
   await Bottle.collection.insertOne(raw);
   if (raw.barcode) learnBarcodeSoon(raw.barcode, { via: 'restore' });
@@ -1247,9 +1239,8 @@ async function markArrived(bottle, { arrivedAt } = {}, req) {
  * "Change wine": the bottle was saved under the wrong registry wine (a red
  * filed under the estate's white, a twin picked from the search). It moves to
  * `wineDoc` and keeps everything that is the owner's own: dates, price,
- * notes, rating, rack slot, journey, personal data and barcode (which from
- * now on counts for the right wine). Before this existed the only way out was
- * remove + add again, which lost all of that.
+ * notes, rating, rack slot, journey, personal data and barcode (which then
+ * counts for the right wine): everything a remove + add again would lose.
  *
  * Also: the bottle's own photos follow it (an official registry picture of
  * the old wine stays put: that is curation); a bottle still waiting on an

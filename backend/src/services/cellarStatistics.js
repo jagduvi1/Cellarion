@@ -101,7 +101,7 @@ async function computeCellarStatistics(cellarId, targetCurrency) {
   ]).allowDiskUse(true);
 
   // The wines' type and country name, once per wine. A reference to a wine
-  // that no longer exists resolves to nothing, as a populate did.
+  // that no longer exists resolves to nothing, as a populate would.
   const wineIds = [...new Set(groups.map(g => g._id.wine).filter(Boolean).map(String))];
   const wineById = new Map((wineIds.length
     ? await WineDefinition.find({ _id: { $in: wineIds } })

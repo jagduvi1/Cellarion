@@ -65,9 +65,9 @@ function uniqueWineIds(entries) {
  *
  * `totalActive` is the UNFILTERED live-bottle count in scope — what "screened
  * the cellar" honestly means. `considered` is what survived the reserved/type/
- * price filters. The tools' summaries must lead with totalActive (release-audit
- * M-2: leading with the filtered count on a wine_type call re-created the
- * "the AI can only see part of my cellar" misreading #946 exists to kill).
+ * price filters. The tools' summaries must lead with totalActive: leading with
+ * the filtered count on a wine_type call reads as "the AI can only see part of
+ * my cellar".
  */
 async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency } = {}) {
   if (!cellarIds.length) return { ranked: [], profileMap: new Map(), totalActive: 0, considered: 0, notReady: 0, reservedExcluded: 0, priceWarning: null };

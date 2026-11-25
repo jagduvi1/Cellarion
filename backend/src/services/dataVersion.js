@@ -8,12 +8,12 @@
  * changed through the app, so it can answer from memory. A change landing while
  * it computes moves the version on, so a stale answer never outlives the change.
  *
- * Why: Home Assistant polls the stats overview and
- * the maturity list every few minutes, and every poll recomputed the user's
- * whole collection — the #1 database load.
+ * Why: Home Assistant polls the stats overview and the maturity list every few
+ * minutes, and without a cache every poll recomputes the user's whole
+ * collection.
  *
  * In memory, like the MCP caches and the event bus: one Node process. A second
- * API process (scaling plan Phase C) moves this to MongoDB with the rest.
+ * API process would move this to MongoDB with the rest.
  * Changes that bypass logAudit — registry edits, jobs, scripts — are not seen
  * here; every cache also caps its age. A curator's or admin's write that
  * changes what a user's statistics say (a wine request resolved or rejected, a
@@ -51,7 +51,7 @@ function createClock() {
 // The wine-data version: bottles, cellars, racks — everything the statistics,
 // the bottle lists and the offline copy are built from.
 const data = createClock();
-// The notifications version, kept apart on purpose (usage check 2026-10-09):
+// The notifications version, kept apart on purpose:
 // routes/notifications answers API-token polls from memory while it holds,
 // and marking a notification read must not make the next poll recompute the
 // user's whole statistics. Moved by services/notifications for every

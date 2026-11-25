@@ -4,7 +4,7 @@ const BridgeUsageDay = require('../models/BridgeUsageDay');
 const rateLimitsConfig = require('../config/rateLimits');
 
 /**
- * Daily quotas per Registry Bridge key (REGISTRY_LOCKDOWN_PLAN §6).
+ * Daily quotas per Registry Bridge key.
  *
  * The numbers are generous for a household and tight for a copier: 300 wine
  * fetches a day is a big cellar's whole import, and a full copy of the
@@ -68,7 +68,7 @@ function capFor(kind, keyDoc, now = Date.now()) {
  * number of concurrent requests, never silently underspent.
  *
  * Keyed on the account, not the key: keys are freely re-mintable, so a per-key
- * counter was an allowance multiplier.
+ * counter would be an allowance multiplier.
  */
 async function takeQuota(keyDoc, kind) {
   if (!KINDS.includes(kind)) throw new Error(`Unknown bridge quota kind: ${kind}`);
@@ -135,11 +135,10 @@ async function usageFor(keyDoc, now = Date.now()) {
 
 /**
  * Open the ×5 window for 24 hours. Once per 30 days per ACCOUNT: the point is a
- * cellar import, not a standing raise, and a per-KEY cooldown was simply a
- * mint-a-new-key away. The window is written to every active
- * key of the owner, so the sync `capFor(kind, keyDoc)` above stays correct
- * whichever key makes the request. Returns { ok, until } or
- * { ok: false, nextAvailableAt }.
+ * cellar import, not a standing raise, and a per-KEY cooldown would be only a
+ * mint-a-new-key away. The window is written to every active key of the
+ * owner, so the sync `capFor(kind, keyDoc)` above stays correct whichever key
+ * makes the request. Returns { ok, until } or { ok: false, nextAvailableAt }.
  */
 async function openImportWindow(keyDoc, now = Date.now()) {
   const since = new Date(now - IMPORT_COOLDOWN_MS);

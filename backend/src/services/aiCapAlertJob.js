@@ -1,6 +1,5 @@
 /**
- * Early warning before the site-wide daily AI cap is reached (scaling audit
- * 2026-09-25, item 5).
+ * Early warning before the site-wide daily AI cap is reached.
  *
  * At the cap (rateLimits.aiGlobalDailyCap) every AI feature switches off for
  * everyone until 00:00 UTC. This emails the site contact address the first
@@ -81,7 +80,7 @@ async function runAiCapAlertCheck(now = new Date()) {
       topUsers(ChatUsage, date),
     ]);
     // Bounded like the support-reply mail: a hung Mailgun call must not hold
-    // the threshold claim for the rest of the day (release audit 2026-09-27, L).
+    // the threshold claim for the rest of the day.
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => reject(new Error('timed out')), SEND_TIMEOUT_MS);
     });

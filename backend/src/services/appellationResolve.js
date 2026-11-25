@@ -1,14 +1,12 @@
 /**
- * Canonical appellation SPELLING at mint time (registry strategy 2026-07-29,
- * R2 — the write-time half; the seed script and the unmatched review queue
- * are the other halves).
+ * Canonical appellation SPELLING at mint time — the write-time half; the seed
+ * script (scripts/seed-appellations-from-wines.js) and the unmatched review
+ * queue are the other halves.
  *
- * Wines store the appellation as a free string, and `appellation_wrong` was
- * the single largest category of the 2026-07-26 registry audit (231 rows):
- * with no membership list, every writer invents its own spelling and every
- * rule that reasons about appellations has to guess grammatically (the
- * "Clairette de Die" false positive — "Die" read as a German article instead
- * of the Drôme town, PR #850).
+ * Wines store the appellation as a free string: with no membership list,
+ * every writer invents its own spelling and every rule that reasons about
+ * appellations has to guess grammatically ("Die" in "Clairette de Die" read
+ * as a German article instead of the Drôme town).
  *
  * This resolver is the Grape treatment, not the Country treatment: when the
  * typed appellation matches a curated Appellation doc (by normalized name or
@@ -20,9 +18,9 @@
  * REVIEWED (admin unmatched queue), never rejected — a user adding a bottle
  * must not be blocked by taxonomy.
  *
- * MEMBERSHIP-GATED DECORATION STRIPPING. Some label decorations
- * cannot be stripped BLINDLY by normalizeAppellation, because the tokens
- * collide with real place names: a trailing "do" is a Spanish/Portuguese tier
+ * MEMBERSHIP-GATED DECORATION STRIPPING. Some label decorations cannot be
+ * stripped BLINDLY by normalizeAppellation, because the tokens collide with
+ * real place names: a trailing "do" is a Spanish/Portuguese tier
  * mark in "Yecla DO" and an ordinary word inside "Ribera del Duero"-style
  * names, and "Appellation … Contrôlée" wraps a name that is itself the
  * appellation. utils/normalize therefore leaves them alone on purpose — a
@@ -32,14 +30,14 @@
  * own: a stripped variant is only ever ADOPTED when it matches a curated doc,
  * and what gets stored is the DOC's canonical spelling, never the stripped raw
  * string. Membership is the safety net — a real name that happens to end in a
- * stripped token simply matches nothing and passes through verbatim, exactly
- * as before. That asymmetry is why the stripping lives here and not in
- * utils/normalize, whose output is stored unconditionally.
+ * stripped token simply matches nothing and passes through verbatim. That
+ * asymmetry is why the stripping lives here and not in utils/normalize, whose
+ * output is stored unconditionally.
  *
- * Found in prod: a somm proposal wrote appellation "Yecla DO" through the
- * proposal-approval path — the trailing "DO" survived normalizeAppellation
- * (deliberately) and no resolver ran, so a decorated variant of the curated
- * "Yecla" landed on the wine and fragmented it from every sibling.
+ * Every path that writes an appellation runs this resolver, proposal approval
+ * included: the trailing "DO" survives normalizeAppellation (deliberately), so
+ * a write that skips the resolver lands "Yecla DO" beside the curated "Yecla"
+ * and splits the wine from every sibling.
  */
 const Appellation = require('../models/Appellation');
 const { normalizeAppellationKey } = require('../utils/normalize');
@@ -109,12 +107,12 @@ async function lookupCanonical(key) {
   // Docs can share a name across countries (the unique index is per-country);
   // adopt only when EVERY curated doc agrees on the display spelling — when
   // even the curated docs disagree, the typed spelling is not obviously
-  // wrong and is left alone. limit(4) with an agree-all check (audit
-  // 2026-07-29 A5: limit(2) could see two agreeing docs and miss a third
-  // that disagrees); .sort keeps the answer deterministic across query
-  // plans. Adoption is re-capped at 200 chars — the doc name is admin
-  // input with its own validation, but the mint chokepoint's field cap must
-  // hold regardless of where the string came from.
+  // wrong and is left alone. limit(4) with an agree-all check, because
+  // limit(2) could see two agreeing docs and miss a third that disagrees;
+  // .sort keeps the answer deterministic across query plans. Adoption is
+  // re-capped at 200 chars — the doc name is admin input with its own
+  // validation, but the mint chokepoint's field cap must hold regardless of
+  // where the string came from.
   const docs = await Appellation.find({
     $or: [{ normalizedName: key }, { normalizedSynonyms: key }],
   }).select('name').sort({ _id: 1 }).limit(4).lean();
@@ -153,10 +151,10 @@ async function resolveCanonicalAppellation(rawAppellation) {
  * The test is deliberately about the CURATED ENTRY's geography, not about
  * the field being populated: "Vin de France" is curated but nationwide
  * (region null) → false; "Qualitätswein" is a quality tier, not curated →
- * false — both are rows a naive non-empty check would wrongly clear. Multi-doc keys (same name across countries) must agree:
- * EVERY matched doc needs a region, mirroring lookupCanonical's
- * all-must-agree stance — suppressing a suspicion is a publish decision, so
- * ambiguity counts as no.
+ * false — both are rows a naive non-empty check would wrongly clear.
+ * Multi-doc keys (same name across countries) must agree: EVERY matched doc
+ * needs a region, mirroring lookupCanonical's all-must-agree stance —
+ * suppressing a suspicion is a publish decision, so ambiguity counts as no.
  *
  * Never throws; a lookup failure returns false — a flag must not be
  * suppressed over taxonomy trouble.
@@ -180,10 +178,10 @@ async function appellationHasGeography(rawAppellation) {
   }
 }
 
-// candidateKeys is exported for services/taxonomyReview: the unmatched queue
-// must consider a string COVERED when any of its stripped variants matches a
-// curated doc — otherwise "Yecla DO" sits in the queue,
-// an admin promotes it, and the minted doc's exact-match hit permanently
-// disables the very stripping that would have folded it. One key function,
-// two consumers, no drift.
+// candidateKeys is exported so every membership check reads the same keys
+// (services/taxonomyReview, findOrCreateWine, scripts/align-cru-appellations).
+// The unmatched queue must consider a string COVERED when any of its stripped
+// variants matches a curated doc — otherwise "Yecla DO" sits in the queue, an
+// admin promotes it, and the minted doc's exact-match hit permanently disables
+// the very stripping that would have folded it.
 module.exports = { resolveCanonicalAppellation, candidateKeys, appellationHasGeography };

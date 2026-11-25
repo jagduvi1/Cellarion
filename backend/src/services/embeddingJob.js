@@ -186,8 +186,8 @@ async function runJob(cfg) {
         // would pollute semantic search AND the similar-wines graph with a row
         // strangers must not see anyway. The promoting write re-embeds
         // (reembedActiveVintages), which is when the pair genuinely enters.
-        // A canary (registry lockdown L4) is never embedded either: it must
-        // not become anyone's "similar wine".
+        // A canary is never embedded either: it must not become anyone's
+        // "similar wine".
         // A quarantined non-wine neither: the registry does not show it, so
         // neither may semantic search.
         if (!wine || wine.pendingIdentity === true || wine.canary === true || wine.nonWine === true) {
@@ -257,10 +257,9 @@ async function runJob(cfg) {
 
     // A completed full run: the rows it didn't write are stale (another
     // model, a pair no longer in any cellar, a wine that must not be
-    // embedded) — what dropping the whole index used to achieve, minus the
-    // outage. Except a pair that became active DURING the run, after the
-    // snapshot above: its vector was already current, so embedSinglePair left
-    // the row as it was (review 2026-09-27).
+    // embedded) and are deleted here, with no outage for search. Except a
+    // pair that became active DURING the run, after the snapshot above: its
+    // vector was already current, so embedSinglePair left the row as it was.
     if (job.mode === 'full') {
       const activeNow = new Set((await collectPairs()).map((p) => `${p.wineDefinition}|${p.vintage}`));
       const unwritten = await WineEmbedding.find({ indexVersion: vectorIndex, embeddedAt: { $lt: runStartedAt } })
@@ -357,8 +356,8 @@ async function embedSinglePair(wineDefId, vintage) {
  * write that changes what buildEmbeddingText produces (curator profile
  * corrections; enrichment already inlines the same loop). Without it the
  * stored vector keeps matching on the OLD profile until someone manually
- * runs the batch job — for the Sandeman case that motivated #853, the wrong
- * character would live on in semantic search after the curator fixed it.
+ * runs the batch job, so a wrong character the curator fixed would live on
+ * in semantic search.
  * Best-effort by design: embedding lag must never fail a curation write.
  */
 async function reembedActiveVintages(wineDefId) {

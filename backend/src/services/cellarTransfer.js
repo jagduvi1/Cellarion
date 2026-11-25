@@ -2,12 +2,12 @@
  * Cellar ownership transfer — hand a cellar, its bottles and its racks to
  * another account, keeping the outgoing owner on as an editor.
  *
- * WHY THIS EXISTS (#1055-adjacent; asked for by a professional managing client
- * cellars, 2026-09-01). The workflow it unblocks: someone builds a cellar
- * completely under their own account — import, racks, placement — and then
- * hands it to the person who actually owns the wine, staying on as an editor to
- * keep adding stock. Without transfer, the choice was to own your client's data
- * for ever or to make the client do the setup themselves.
+ * WHY THIS EXISTS. The workflow it unblocks: someone (a professional managing
+ * client cellars, say) builds a cellar completely under their own account —
+ * import, racks, placement — and then hands it to the person who actually owns
+ * the wine, staying on as an editor to keep adding stock. Without transfer, the
+ * choice is to own your client's data for ever or to make the client do the
+ * setup themselves.
  *
  * WHY IT MOVES THREE COLLECTIONS, NOT ONE
  *
@@ -95,9 +95,9 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
 
   const newOwner = await User.findById(newOwnerId).select('_id username email isDemo').lean();
   if (!newOwner) throw fail(404, 'New owner account not found');
-  // A demo account is hard-deleted within hours, taking
-  // everything just transferred into it. Refuse rather than let a mistaken
-  // click (or a phished session) make a cellar vanish.
+  // A demo account is hard-deleted within hours, taking everything just
+  // transferred into it. Refuse rather than let a mistaken click (or a
+  // phished session) make a cellar vanish.
   if (newOwner.isDemo) throw fail(400, 'A demo account cannot own a cellar');
 
   // ── 0. Can the cellar actually LAND? A cellar name is unique per owner
@@ -107,9 +107,9 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
   //       prevents is the one this service exists to prevent: the bottles and
   //       racks would already have changed hands, leaving a collection owned by
   //       one account inside a cellar owned by another — and a re-run cannot
-  //       repair it, since the bottles no longer match the old owner. On the
-  //       hosted service 30 cellar names are already held by more than one
-  //       account, so this is an ordinary case, not a corner.
+  //       repair it, since the bottles no longer match the old owner. Two
+  //       accounts holding the same cellar name is common, so this is an
+  //       ordinary case, not a corner.
   const clash = await Cellar.exists({ user: newOwner._id, name: cellar.name, deletedAt: null });
   if (clash) {
     throw fail(409, `The new owner already has a cellar named "${cellar.name}". Rename one of them first — one account cannot hold two cellars with the same name.`);
@@ -151,7 +151,7 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
   //       The outgoing owner becomes an editor so they keep working access —
   //       the whole point of the professional workflow — and the incoming owner
   //       leaves the member list, because owner is not a membership row.
-  // Also drop any stray row for the CURRENT owner: owner was never a
+  // Also drop any stray row for the CURRENT owner: owner is never a
   // membership row, but if a data anomaly ever put one there, pushing below
   // would duplicate it.
   const previousMembers = cellar.members;

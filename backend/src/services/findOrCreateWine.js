@@ -56,10 +56,10 @@ const POPULATE = ['country', 'region', 'grapes', { path: 'labelSweetness', selec
 // ── Pending identity ─────────────────────────────────────────────────────────
 //
 // The pending key namespace (PENDING_KEY_PREFIX / pendingProducerKey /
-// pendingWineKey) now lives in utils/normalize.js, beside generateWineKey — the
+// pendingWineKey) lives in utils/normalize.js, beside generateWineKey — the
 // curation queue (services/pendingWineOps) has to build the same key and must
-// not drag this module's dependency tree along to do it. Re-exported below, so
-// existing importers are unchanged.
+// not drag this module's dependency tree along to do it. The two key helpers
+// are re-exported below for importers of this module.
 
 // ── Taxonomy helpers ─────────────────────────────────────────────────────────
 
@@ -76,10 +76,10 @@ async function findOrCreateCountry(name, userId) {
   if (country) return country;
   // Mint gate: a garbled label scan can produce a country like "Espalda" (a
   // misread "España"), and minting it would let any user's add pollute the
-  // shared taxonomy. Only a recognized
-  // real-world country may be minted; everything else is rejected loudly so
-  // the caller can correct it, instead of silently growing a junk Country the
-  // whole registry then trusts. Existing docs (matched above) are unaffected.
+  // shared taxonomy. Only a recognized real-world country may be minted;
+  // everything else is rejected loudly so the caller can correct it, instead
+  // of silently growing a junk Country the whole registry then trusts.
+  // Existing docs (matched above) are unaffected.
   if (!isRecognizedCountry(canonicalName)) {
     const err = new Error(
       `Unrecognized country "${String(name).trim().slice(0, 80)}" — use the country's English name (e.g. "Spain")`
@@ -142,28 +142,27 @@ async function findOrCreateRegion(rawName, countryId, userId) {
     $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
   });
   if (region) return region;
-  // An appellation in the region column resolves to the region the
-  // appellation belongs to — "Fleurie" lands on Beaujolais, never on a new
-  // region called Fleurie. An appellation the taxonomy has not placed yet
-  // yields null: the string IS an appellation, so minting a region named
-  // after it would be wrong regardless (see appellationInRegionColumn). The wine's appellation field is filled by
-  // the create path, which knows whether it was empty.
+  // An appellation in the region column resolves to the region it belongs
+  // to — "Fleurie" lands on Beaujolais, never on a new region called Fleurie.
+  // An appellation the taxonomy has not placed yet yields null: the string IS
+  // an appellation, so minting a region named after it would be wrong
+  // regardless (see appellationInRegionColumn). The wine's appellation field
+  // is filled by the create path, which knows whether it was empty.
   const appellation = await appellationInRegionColumn(name, countryId);
   if (appellation) {
     return appellation.region ? Region.findOne({ _id: appellation.region }) : null;
   }
-  // Mint gates. A comma means the caller
-  // packed a hierarchy into one string ("Bordeaux, Haut-Médoc", "Niagara
-  // Peninsula, Ontario") — never a region name; and a region that IS a
-  // recognized country name belongs in the country field, not here (a region
-  // "Scotland" under country "England"). A null region is the honest
-  // state — the schema allows it, and an admin can add real taxonomy
-  // deliberately. (Cost: a US wine can't auto-mint a "Georgia" region — the
-  // one state that collides with a country name; an existing doc still
-  // matches above.)
+  // Mint gates. A comma means the caller packed a hierarchy into one string
+  // ("Bordeaux, Haut-Médoc", "Niagara Peninsula, Ontario") — never a region
+  // name; and a region that IS a recognized country name belongs in the
+  // country field, not here (a region "Scotland" under country "England"). A
+  // null region is the honest state — the schema allows it, and an admin can
+  // add real taxonomy deliberately. (Cost: a US wine can't auto-mint a
+  // "Georgia" region — the one state that collides with a country name; an
+  // existing doc still matches above.)
   if (String(name).includes(',') || isRecognizedCountry(name)) return null;
   // createdByUser records WHERE this came from: a permanent fact, visible to
-  // admins (R3) and never blocking the user. Whether a human has reviewed it
+  // admins and never blocking the user. Whether a human has reviewed it
   // is a separate field — see models/Region.
   region = new Region({ name: name.trim(), normalizedName, country: countryId, createdBy: userId, createdByUser: true });
   await region.save();
@@ -191,12 +190,11 @@ async function regionForAppellation(appellationName, countryId) {
   const normalizedName = normalizeString(appellationName);
   if (!normalizedName) return null;
   // TWO docs answering one key means the taxonomy holds a duplicate — never
-  // pick one arbitrarily (the same doctrine as the canonical-identity match
-  // stages, and the same rows the batch normalize script holds out and
-  // reports; audit 2026-08-16: a bare findOne here silently adopted whichever
-  // doc natural order yielded while the script refused the identical rows).
-  // Falling back to the caller-supplied region is the honest state until the
-  // taxonomy is fixed.
+  // pick one arbitrarily, as a bare findOne would (whichever doc natural order
+  // yields). Same doctrine as the canonical-identity match stages, and the
+  // same rows the batch normalize script holds out and reports. Falling back
+  // to the caller-supplied region is the honest state until the taxonomy is
+  // fixed.
   const hits = await Region.find({
     country: countryId,
     $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
@@ -297,14 +295,13 @@ async function findOrCreateGrapes(rawNames, userId) {
  *   registry wine (exact/sibling/fuzzy>=threshold); if nothing confident matches, return
  *   { wine: null, noMatch: true } instead of minting a WineDefinition + taxonomy.
  *   Consumers: the registry-safe ephemeral-demo clone (so a throwaway account can't pollute
- *   the shared registry), POST /api/wines/identify-text, the MCP resolve_wine tool, and —
- *   since the UI went mint-at-commit — POST /api/wines/find-or-create, which resolves in
- *   step 1 of the add flows and leaves creation to the bottle/wishlist commit
- *   (services/wineCommit).
+ *   the shared registry), POST /api/wines/identify-text, the MCP resolve_wine tool, and
+ *   POST /api/wines/find-or-create, which resolves in step 1 of the add flows and
+ *   leaves creation to the bottle/wishlist commit (services/wineCommit).
  *   ⚠️ Do NOT combine with confirmCreate outside the demo clone. The soft-zone candidate
  *   return sits ABOVE the matchOnly gate, so confirmCreate collapses every 0.85–0.95
  *   near-match into noMatch — for identify-text that would hide exactly the existing wines
- *   the user should have picked, which is the duplication the read-only change exists to stop.
+ *   the user should have picked, the duplication a read-only lookup exists to prevent.
  *   ⚠️ Not throw-free: the .trim() on name/producer runs before any option is consulted, so
  *   callers passing model output must normalize types first (identify-text does).
  * @param {boolean} [opts.allowPending=false] - COMMIT paths only. When the identity is
@@ -397,14 +394,12 @@ async function unpolluteEstateName({ name, producer, appellation, classification
 async function findOrCreateWine({ name, producer, country, region, appellation, type, colour, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null, nonWine = false } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
-  // "Wrights Estate" would otherwise coexist as two display spellings forever
-  // (found by the unify script's first prod-data dry run).
+  // "Wrights Estate" would otherwise coexist as two display spellings forever.
   let trimmedName = name.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD);
   // A sentinel producer is MISSING information, not a producer — storing
   // "Unknown" would put it in the shared registry for everyone else's wines to
-  // match against (prod grew a producer literally named "Unknown" that way).
-  // Only consulted when the caller allows pending: without it the `.trim()`
-  // below keeps its exact historical behaviour, including on non-strings.
+  // match against. Only consulted when the caller allows pending; every other
+  // caller goes straight to the `.trim()` below, non-strings included.
   let producerMissing = allowPending && isIdentitySentinel(producer);
   let trimmedProducer = producerMissing
     ? ''
@@ -413,12 +408,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // "Barolo" and "Barolo DOCG" resolve to / create ONE registry appellation
   // instead of two. The tier belongs in classification.
   // Then adopt the curated spelling when the Appellation taxonomy knows this
-  // one (strategy R2) — BEFORE key generation, so a synonym ("Chateauneuf du
-  // Pape") produces the same normalizedKey as the canonical form and the
+  // one — BEFORE key generation, so a synonym ("Chateauneuf du Pape")
+  // produces the same normalizedKey as the canonical form and the
   // exact-match stage collapses them instead of minting a sibling.
   // A ripeness Prädikat is not a place: a bare "Kabinett"/"Auslese" typed or
   // scanned as the appellation must not become one, whichever path mints the
-  // wine (the import paths route it too, PR #1173). Same rule for every mint: the word
+  // wine, the import paths included. Same rule for every mint: the word
   // leaves the appellation, and moves to classification only when the name
   // does not contradict it (a Trockenbeerenauslese on a "Trocken" is dropped).
   let appellationIn = typeof appellation === 'string' ? appellation.trim() : '';
@@ -443,19 +438,18 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Registry canon: a wine's name never embeds its producer. Cellar-format
   // imports and the occasional non-compliant AI response arrive as
   // name "Amisfield Pinot Noir" + producer "Amisfield" — or as a SUFFIX,
-  // "Fiano di Avellino Mastroberardino" (the launch-day admin report) —
-  // canonicalize BEFORE any matching so that input resolves to (or creates)
-  // the producer-free entry instead of minting a producer-in-name duplicate
-  // the admin tool has to clean up later. The key-prefix twin also catches
-  // producer VARIANTS — name "Felton Road Block 3 Pinot Noir" with producer
-  // "Felton Road Wines Ltd" — which the exact-string strip can't see (the
-  // shape behind most July-2026 prod duplicates).
+  // "Fiano di Avellino Mastroberardino" — canonicalize BEFORE any matching so
+  // that input resolves to (or creates) the producer-free entry instead of
+  // minting a producer-in-name duplicate the admin tool has to clean up later.
+  // The key-prefix twin also catches producer VARIANTS — name "Felton Road
+  // Block 3 Pinot Noir" with producer "Felton Road Wines Ltd" — a common
+  // duplicate shape the exact-string strip can't see.
   trimmedName = canonicalizeWineName(trimmedName, trimmedProducer);
 
   // Registry canon, name-field twin of the misplaced-producer gate below:
-  // shift a classification/appellation out of the name
-  // BEFORE any matching, so the corrected identity drives dedup keys instead
-  // of minting a wine named "Grand Cru Classé". See unpolluteEstateName.
+  // shift a classification/appellation out of the name BEFORE any matching,
+  // so the corrected identity drives dedup keys instead of minting a wine
+  // named "Grand Cru Classé". See unpolluteEstateName.
   if (!producerMissing && trimmedProducer) {
     const shifted = await unpolluteEstateName({
       name: trimmedName, producer: trimmedProducer,
@@ -549,8 +543,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     !conflictsCountry(candidate) && !conflictsStyle(candidate) && !sweetnessOneSided(candidate);
   // A sole hit refused ONLY for a one-sided sweetness is not dropped: it is
   // carried to the soft zone so the member is asked (score 1 — the identity is
-  // the same, only the term differs). Dropped, it left the add to create a twin
-  // whenever search was down and the fuzzy stage never saw the row.
+  // the same, only the term differs). Dropped, it would leave the add to create
+  // a twin whenever search is down and the fuzzy stage never sees the row.
   const askAbout = [];
   const consider = (candidate) => {
     if (!candidate || conflictsCountry(candidate) || conflictsStyle(candidate) || !sweetnessOneSided(candidate)) return;
@@ -573,12 +567,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       (excludeId != null && String(candidate._id) === String(excludeId)) ||
       (candidate.pendingIdentity === true && String(candidate.createdBy) !== String(userId))
     );
-  // The same isolation as a QUERY clause, for the capped stages below:
-  // a `.limit(2)` that ran BEFORE the post-filter could
-  // be filled by two strangers' drafts of the same canonical identity — a
-  // draft keeps a producer, so it shares the published wine's canonicalKey —
-  // and the real published row was then never fetched, sending the add on to
-  // fuzzy scoring and a duplicate mint. Blocked rows never reach the cap now;
+  // The same isolation as a QUERY clause, for the capped stages below: a
+  // `.limit(2)` that ran BEFORE the post-filter could be filled by two
+  // strangers' drafts of the same canonical identity — a draft keeps a
+  // producer, so it shares the published wine's canonicalKey — and the real
+  // published row would never be fetched, sending the add on to fuzzy scoring
+  // and a duplicate mint. With the clause, blocked rows never reach the cap;
   // the post-filter stays as the belt to this brace.
   const isolation = {
     $or: [{ pendingIdentity: { $ne: true } }, { pendingIdentity: true, createdBy: userId }],
@@ -607,9 +601,9 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // producer-in-name embeds and appellation tiers, so ANY spelling of an
   // already-registered wine lands here before fuzzy scoring ever runs — a
   // canonical duplicate cannot be minted because this lookup finds the
-  // original first (dup analysis 2026-07-22, phase 1). ≥2 hits mean the
-  // registry ALREADY holds a duplicate cluster for this identity — never pick
-  // one arbitrarily; fall through so the soft zone / admin queue handles it.
+  // original first. ≥2 hits mean the registry ALREADY holds a duplicate
+  // cluster for this identity — never pick one arbitrarily; fall through so
+  // the soft zone / admin queue handles it.
   // Deliberately not gated on skipSiblingMatch: like the exact key above, an
   // identity-level hit is the same wine (the different-country guard covers
   // the distinct-winery collisions).
@@ -640,11 +634,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // kept as a fallback for rows that predate canonicalKey on instances that
   // haven't run the backfill. Convergence is NOT organic beyond that: the
   // pre-validate hook rekeys a row only when name/producer/appellation change,
-  // so after any change to key DERIVATION (e.g. the 2026-08-10 Saint fold /
-  // year strip) stored keys stay stale until backfill-canonical-key.js --apply
-  // is rerun — until then new-style lookups can only MISS old rows, never
+  // so after any change to key DERIVATION (e.g. the Saint fold or the year
+  // strip) stored keys stay stale until backfill-canonical-key.js --apply is
+  // rerun — until then new-style lookups can only MISS old rows, never
   // mis-match them (folded query keys are a strict subset of fold-class
-  // spellings; audit 2026-08-10).
+  // spellings).
   if (!skipSiblingMatch) {
     // Same isolation gate as the two stages above — a sibling scan on a
     // producerless query keys ':name:' and would otherwise sweep in every other
@@ -772,29 +766,28 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // item instead of minting a WineDefinition + taxonomy per use.
   if (matchOnly) return { wine: null, noMatch: true };
 
-  // 3. Create new wine — producer sanity gate first (registry audit
-  // 2026-07-26, RC-2): a producer that IS a place is never right — the LWIN
-  // import's comma-split wrote "Bordeaux" / "California" / "Tuscany" into the
-  // producer field ~45 times, and every add matching such a string would
-  // compound it. Exact normalized full-string match only, so "Marchesi di
-  // Barolo" and "La Rioja Alta" pass while bare "Barolo" / "La Rioja" do not.
-  // Mint-time only (like the country gate): existing rows keep resolving
-  // above until the data cleanup re-points them.
+  // 3. Create new wine — producer sanity gate first: a producer that IS a
+  // place is never right — an import's comma-split can write "Bordeaux" /
+  // "California" / "Tuscany" into the producer field, and every add matching
+  // such a string would compound it. Exact normalized full-string match only,
+  // so "Marchesi di Barolo" and "La Rioja Alta" pass while bare "Barolo" /
+  // "La Rioja" do not. Mint-time only (like the country gate): existing rows
+  // keep resolving above until a data cleanup re-points them.
   //
   // With allowPending each of these gates has a SECOND outcome: instead of
   // 400-ing away the user's bottle, the wine mints pendingIdentity and a
-  // curator finishes it. Without allowPending the gates throw exactly as they
-  // always have, byte-identical messages included — the deliberate
-  // shared-registry curation surfaces must keep being told.
+  // curator finishes it. Without allowPending the gates throw a 400 with the
+  // messages below — the deliberate shared-registry curation surfaces must be
+  // told.
   let producerNorm = normalizeString(trimmedProducer);
   // KNOWN LIMIT — a NON-LATIN producer ("Мукузани", "獺祭", "ქართული ღვინო")
   // reaches this gate with producerNorm === '' and is therefore filed pending,
-  // even though isIdentitySentinel now correctly says it is real information.
-  // That is deliberate for now, not an oversight: the
-  // registry's normalizedKey is `normalizeString(producer):…`, so STORING such
-  // a producer would key it as `:<name>:<appellation>` — indistinguishable from
-  // every other non-Latin producer of a same-named wine, and the E11000
-  // recovery below would then silently attach one user's wine to another's.
+  // even though isIdentitySentinel correctly says it is real information.
+  // That is deliberate, not an oversight: the registry's normalizedKey is
+  // `normalizeString(producer):…`, so STORING such a producer would key it as
+  // `:<name>:<appellation>` — indistinguishable from every other non-Latin
+  // producer of a same-named wine, and the E11000 recovery below would then
+  // silently attach one user's wine to another's.
   // The pending namespace is per-creator and has no such collision. Promotion
   // works correctly (the model hook consults isIdentitySentinel alone), so a
   // curator CAN complete these rows; storing the original at mint needs a
@@ -824,8 +817,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       // querying with plain normalizeString would MISS every hyphenated
       // appellation doc ("Châteauneuf-du-Pape") and silently reopen the
       // place-as-producer hole for exactly the places the seed script promotes.
-      // Both keys queried: legacy docs may still carry
-      // the old fold until the backfill script has run.
+      // Both keys queried: legacy docs may still carry the old fold until
+      // scripts/backfill-appellation-keys.js has run.
       Appellation.exists({ normalizedName: { $in: [producerNorm, normalizeAppellationKey(trimmedProducer)] } }),
     ]);
     if (placeCountry || placeRegion || placeAppellation) {
@@ -863,14 +856,14 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // share ONE definition, with the same two outcomes as the gates above:
   // pending for commit paths, a 400 for the deliberate curation surfaces.
   //
-  // DELIBERATELY ALMOST EMPTY. It used to also refuse producer == name and
-  // house-word-stripped containment, which condemned Château Margaux, Petrus,
-  // Krug, Domaine de la Romanée-Conti / "Romanée-Conti" and 64 other real
-  // wines — see the predicate's own comment. What survives here is the
-  // all-house-words producer ("Domaine", "The Wine Estate"); the sub-2-char
-  // case is already refused by the length gate above with its own message.
-  // The echo is now a cross-field FLAG (producer-echoes-name.v1), reviewed by a
-  // human with the label in front of them, never a refusal.
+  // DELIBERATELY ALMOST EMPTY. Refusing producer == name or house-word-stripped
+  // containment would condemn Château Margaux, Petrus, Krug, Domaine de la
+  // Romanée-Conti / "Romanée-Conti" and many other real wines — see the
+  // predicate's own comment. What it refuses is the all-house-words producer
+  // ("Domaine", "The Wine Estate"); the sub-2-char case is already refused by
+  // the length gate above with its own message. The echo is a cross-field
+  // FLAG (producer-echoes-name.v1), reviewed by a human with the label in
+  // front of them, never a refusal.
   if (!draft && !producerMissing && isImplausibleIdentity(trimmedProducer, trimmedName)) {
     if (!allowPending) {
       const err = new Error(
@@ -889,15 +882,15 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // six rules the same DB-backed way
   // (utils/crossFieldChecks.IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS).
   //
-  // WHY, when the place gate above already asks three of these questions: prod
-  // 2026-08-13 minted an ordinary, published registry wine from producer "Pays
-  // d'Oc Organic Wine" / name "Chardonnay Reserve". The extraction was wrong but
-  // COMPLETE-LOOKING, so nothing here had anything to complain about — a missing
-  // producer is caught, a nonsense one was not. The rules close that: they read
-  // the taxonomy's SYNONYMS as well as its canonical names (the place gate reads
-  // only normalizedName), and they add the three shapes mint time never asked
-  // about at all — a grape, a style term ("Roșu Demidulce"), and the multi-word
-  // placeholders ("Domaine unknown") that isIdentitySentinel does not cover.
+  // WHY, when the place gate above already asks three of these questions: a
+  // wrong but COMPLETE-LOOKING extraction (producer "Pays d'Oc Organic Wine",
+  // name "Chardonnay Reserve") gives the gates above nothing to complain
+  // about — a missing producer is caught, a nonsense one is not. The rules
+  // close that: they read the taxonomy's SYNONYMS as well as its canonical
+  // names (the place gate reads only normalizedName), and they add three
+  // shapes the gates above never ask about — a grape, a style term ("Roșu
+  // Demidulce"), and the multi-word placeholders ("Domaine unknown") that
+  // isIdentitySentinel does not cover.
   //
   // ONE evaluation, on the CREATE path only: every resolve stage returns above
   // this line, so an add that matches an existing wine pays nothing. The
@@ -952,9 +945,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   }
 
   // Adopt the registry's spelling for this producer — accent/case/punctuation
-  // variants ("Cave de Ribeauville" → "Cave de Ribeauvillé") and, same
-  // country only, decoration variants ("Philipp Kuhn" → "Weingut Philipp
-  // Kuhn"; the 130-cluster class the 2026-08-14 consolidation cleaned up).
+  // variants ("Cave de Ribeauville" → "Cave de Ribeauvillé") and, same country
+  // only, decoration variants ("Philipp Kuhn" → "Weingut Philipp Kuhn").
   // SILENT and fail-open by contract: on any ambiguity the typed spelling is
   // kept and the add proceeds — this stage can only ever change what string
   // is stored, never whether the bottle saves.
@@ -975,11 +967,6 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       ? pendingWineKey(trimmedName, userId, trimmedAppellation)
       : generateWineKey(trimmedName, producerToStore, trimmedAppellation);
 
-  // Region canon: the appellation's own region wins when the taxonomy knows
-  // it (see regionForAppellation) — this is what keeps one producer's wines
-  // from splitting across "Hunter Valley" and "New South Wales" depending on
-  // which granularity the AI/import happened to supply per row. Only when the
-  // appellation names no known region does the supplied region string count.
   // ── Label-variant stage ───────────────────────────────────────────────────
   //
   // Last chance to NOT create a duplicate. The same wine often arrives under
@@ -1003,12 +990,6 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // measured on the pairs a curator merged by hand, 0.58 to 0.85. So the row
   // it finds was never offered, and a user cannot have rejected what they were
   // never shown.
-  //
-  // Proven the hard way: HALL "The North End Cabernet Sauvignon" was minted
-  // five hours after this guard shipped, through the UI (the majority path —
-  // 46 wines to MCP's 18 in that window), duplicating "The North End" at a
-  // score of 0.748. The user clicked "create new" against a candidate list
-  // that could not contain the wine they were duplicating.
   if (!producerMissing) {
     try {
       const siblings = (await WineDefinition.find({ producer: producerToStore, nonWine: { $ne: true } })
@@ -1050,6 +1031,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     }
   }
 
+  // Region canon: the appellation's own region wins when the taxonomy knows
+  // it (see regionForAppellation) — this is what keeps one producer's wines
+  // from splitting across "Hunter Valley" and "New South Wales" depending on
+  // which granularity the AI/import happened to supply per row. Only when the
+  // appellation names no known region does the supplied region string count.
   let regionDoc = await regionForAppellation(trimmedAppellation, countryDoc._id);
   if (!regionDoc) regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
   let grapeIds = await findOrCreateGrapes(grapes, userId);
@@ -1078,7 +1064,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // identity fields, so a scanned "Grand  Cru Classé" can't store raggedly.
   // The appellation's regulatory mark (DOCG, AOC, …) is no tier: dropped here
   // (and again by the model hook), so a scan that read "DOCG" off the label
-  // stores no classification at all — GitHub discussion #1696.
+  // stores no classification at all.
   const trimmedClassification = (typeof classification === 'string' && classification.trim())
     ? normalizeClassification(classification.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD))
     : null;
@@ -1117,7 +1103,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     // carries its 7-day untouched clock (services/wineDraftExpiryJob).
     draft,
     draftExpiresAt: draft ? new Date(Date.now() + DRAFT_TTL_MS) : null,
-    // Only when the caller asked: every other create stays exactly as it was.
+    // Only when the caller asked: every other create carries no nonWine field.
     ...(nonWine === true ? { nonWine: true } : {}),
   });
 

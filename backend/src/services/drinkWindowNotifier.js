@@ -26,9 +26,8 @@ const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun
  *
  * The switch lives at `preferences.notifications.drinkWindow.email` — there is
  * NO top-level `notifications.email` flag (see utils/notifications.js). Reading
- * the wrong leaf previously evaluated to `undefined` for everyone and silently
- * disabled the entire digest. Extracted as a pure, testable predicate so that
- * regression is caught by a unit test rather than only in production.
+ * that one yields `undefined` for everyone and silently disables the entire
+ * digest, so this is a pure predicate a unit test pins.
  *
  * An objection to all Cellarion email (emailOptOutAt, the one-click
  * unsubscribe) wins over the per-category opt-in.
@@ -54,9 +53,9 @@ async function runDrinkWindowCheck() {
   const isFirstRun = !seeded;
 
   // All users with drink-window notifications not explicitly turned off. The
-  // preference is an OBJECT ({ enabled, email, push }), so the old
-  // `drinkWindow: { $ne: false }` matched every user (an object is never === false)
-  // and the master opt-out did nothing — check the `.enabled` leaf instead.
+  // preference is an OBJECT ({ enabled, email, push }), and an object is never
+  // === false, so `drinkWindow: { $ne: false }` alone matches every user and
+  // ignores the master opt-out — the `.enabled` leaf carries it.
   const users = await User.find({
     // Exclude both opt-out shapes: the current object form ({ enabled: false })
     // AND a legacy scalar `drinkWindow: false` from the pre-object schema (whose
@@ -80,22 +79,22 @@ async function runDrinkWindowCheck() {
     }
     try {
       // Open-bottle expiry alerts share the drinkWindow category (and its
-      // opt-outs) but not the maturity seed — a bottle can only be open
-      // after the feature shipped, so there is nothing to silently seed.
+      // opt-outs) but not the maturity seed — every open bottle was opened
+      // with these alerts in place, so there is nothing to silently seed.
       totalNotified += await processOpenBottles(user);
     } catch (err) {
       console.error(`[drinkWindowNotifier] Open-bottle check failed for user ${user._id}:`, err.message);
     }
     try {
       // Reservation ("spoken for") alerts: same category and no seed, for the
-      // same reason — reservations can only exist after the feature shipped.
+      // same reason — every reservation was made with these alerts in place.
       totalNotified += await processReservations(user);
     } catch (err) {
       console.error(`[drinkWindowNotifier] Reservation check failed for user ${user._id}:`, err.message);
     }
     try {
-      // Orders past their expected month: same category, no seed (bottles on
-      // order can only exist after the feature shipped).
+      // Orders past their expected month: same category, no seed (every order
+      // was entered with these alerts in place).
       totalNotified += await processArrivals(user);
     } catch (err) {
       console.error(`[drinkWindowNotifier] Arrival check failed for user ${user._id}:`, err.message);
@@ -221,12 +220,11 @@ async function processUser(user, isFirstRun) {
     }
 
     if (!notifType) {
-      // No notifiable transition — leave prevStatus alone. Silently
-      // rewriting it here used to flip a "sticky" marker like 'ending'
-      // back to 'peak' on no-op cron passes (because effectiveStatus
-      // falls back to maturityStatus when notifType is null), which then
-      // let the ending check re-fire the next day and produced duplicate
-      // notifications for the same bottle every other day.
+      // No notifiable transition — leave prevStatus alone. Rewriting it here
+      // would flip a "sticky" marker like 'ending' back to 'peak' on no-op
+      // cron passes (effectiveStatus falls back to maturityStatus when
+      // notifType is null), letting the ending check re-fire the next day and
+      // send duplicate notifications for the same bottle every other day.
       continue;
     }
 
@@ -281,8 +279,8 @@ async function processUser(user, isFirstRun) {
   for (const alert of uniqueAlerts) {
     const { title, message, type } = buildNotification(alert);
     // The vintage page of the cellar: its drink window, its bottles and Drink.
-    // A ?search= link on the cellar list matched other wines with the same name
-    // and other vintages, and did nothing when that cellar was already open.
+    // Not a ?search= link on the cellar list: that matches other wines of the
+    // same name and other vintages, and does nothing when the cellar is open.
     const link = `/cellars/${alert.cellarId}/vintages/${alert.wdId}/${encodeURIComponent(alert.vintage || 'NV')}`;
     // Pass the 'drinkWindow' category so the push gate honours the
     // drinkWindow.push preference. Without it, createNotification falls back to
