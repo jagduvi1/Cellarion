@@ -31,17 +31,17 @@ const defaults = {
   aiBurst: { max: 10, windowMs: 60 * 1000 },
   // Shared per-user DAILY budget of actual Anthropic calls across import
   // identify, scan-label, identify-text, ai-info, and user-triggered wine
-  // enrichment (SECURITY_AUDIT_2026-07-08 M-2/L-14). aiBurst is the speed
-  // limit; this is the spend cap — chat keeps its own separate quota
-  // (aiConfig.chatDailyLimit). Sized so a legitimate 2,000-bottle import
-  // (~350 AI lookups after dedup + registry-first matching) fits in one day
-  // with headroom. 0 = unlimited. Enforced by services/aiBudget.js; when
-  // exhausted, imports degrade gracefully to fuzzy matching (never error)
-  // and the single-shot AI endpoints return 429 ai_budget_exhausted.
+  // enrichment. aiBurst is the speed limit; this is the spend cap — chat keeps
+  // its own separate quota (aiConfig.chatDailyLimit). Sized so a legitimate
+  // 2,000-bottle import (~350 AI lookups after dedup + registry-first
+  // matching) fits in one day with headroom. 0 = unlimited. Enforced by
+  // services/aiBudget.js; when exhausted, imports degrade gracefully to fuzzy
+  // matching (never error) and the single-shot AI endpoints return 429
+  // ai_budget_exhausted.
   aiDailyBudget: { max: 500 },
   // Cap on AI identify calls a single POST /api/bottles/import/validate
-  // request may fan out (M-2: one request used to mean up to 2,000 Sonnet
-  // calls). The frontend validates in batches of 25 items, so legitimate
+  // request may fan out — without it, one request could mean up to 2,000 AI
+  // calls. The frontend validates in batches of 25 items, so legitimate
   // clients never come near this. Excess unique wines in one request fall
   // through to fuzzy matching with aiSkipped: true.
   aiImportPerRequestCap: { max: 50 },
@@ -54,46 +54,39 @@ const defaults = {
   // stored on disk; without this cap a logged-in user could script a loop and
   // fill the disk. The per-bottle MAX_IMAGES_PER_BOTTLE cap limits per-resource
   // growth but doesn't stop a user creating bottles + uploading in a loop.
-  // 60/hour, raised from 30 on 2026-08-12: prod audit logs showed nine users
-  // hitting the old cap, every one in a single-day burst — the "new user
-  // photographing their whole cellar" onboarding session (one added 216
-  // bottles + 96 photos on day one and was blocked NINE times). The cap
-  // punished exactly the most engaged first-day behaviour. Worst-case disk
-  // bound doubles to ~14 GB/day per user, still sweepable and tunable below.
+  // 60/hour leaves room for the most engaged first-day behaviour — a new
+  // member photographing their whole cellar in one sitting — which a tighter
+  // cap blocks again and again. Worst-case disk bound is ~14 GB/day per user,
+  // still sweepable and tunable below.
   imageUploadBurst: { max: 60, windowMs: 60 * 60 * 1000 },
   // ANONYMOUS registry reads: GET /api/wines/:idOrSlug/public, the only wine
   // endpoint that needs no account. It exists so wine pages are public and
-  // indexable, which is worth keeping — but it sat under the general /api/
-  // limiter, so one address could walk the whole registry in about forty
-  // minutes. (That limiter was raised to 2500/15min on 2026-08-23 for a
-  // legitimate editing case, which incidentally made bulk reading faster.)
+  // indexable, which is worth keeping — but under the general /api/ limiter
+  // alone, one address could walk the whole registry quickly.
   //
-  // Sized against MEASURED traffic rather than a guess: this endpoint served
-  // FIVE requests in 24 hours across the entire site, from one address, all
-  // real browsers — and no search crawler touched it at all, so a tight cap
-  // costs nothing in indexing. 120 per 15 minutes is a wine page every 7.5
-  // seconds sustained, far beyond any human session, while taking a
-  // single-address scrape of the full registry from ~40 minutes to ~14 hours.
+  // Search crawlers never read it: nginx serves them the server-rendered page
+  // (routes/og), so a tight cap costs nothing in indexing. 120 per 15 minutes
+  // is a wine page every 7.5 seconds sustained, far beyond any human session,
+  // while a single-address scrape of the full registry takes many hours.
   //
   // This does NOT stop a determined actor spreading across many addresses;
   // nothing that also serves public pages can. It makes casual scraping not
   // worth the trouble, which is the achievable goal.
   publicWineRead: { max: 120, windowMs: 15 * 60 * 1000 },
-  // Registry lockdown (2026-09-06, L4): DISTINCT wines per reader per UTC day.
-  // Limiters count requests in a window and cannot tell a person browsing
-  // from a copier; this can. Anonymous addresses over the cap are refused for
-  // the rest of the day on the public wine endpoint and the anonymous MCP;
-  // members are never refused, only listed in the daily readers report when
-  // they pass the alert level. Sized far above real use (measured ~5 public
-  // reads per address per day) and below any useful copy (8.7k wines).
+  // Registry lockdown: DISTINCT wines per reader per UTC day. Limiters count
+  // requests in a window and cannot tell a person browsing from a copier; this
+  // can. Anonymous addresses over the cap are refused for the rest of the day
+  // on the public wine endpoint and the anonymous MCP; members are never
+  // refused, only listed in the daily readers report when they pass the alert
+  // level. Sized far above real use (a few public reads per address per day)
+  // and far below any useful copy of the registry.
   registryRead: { anonymousDailyDistinct: 300, memberAlertDistinct: 1000 },
-  // Registry Bridge (plan §6): what one self-hosted install may do with the
-  // shared registry per key per UTC day, and its per-minute burst. Generous
-  // for a household, tight for a copier: a full copy at 300 fetches a day
-  // takes a month and is reported every day of it. The owner's monthly
-  // import window multiplies the four daily caps by five;
-  // services/bridgeQuota.js and routes/bridgeV1.js read this group per
-  // request.
+  // Registry Bridge: what one self-hosted install may do with the shared
+  // registry per key per UTC day, and its per-minute burst. Generous for a
+  // household, tight for a copier: a full copy at 300 fetches a day takes
+  // weeks and is reported every day of it. The owner's monthly import window
+  // multiplies the four daily caps by five; services/bridgeQuota.js and
+  // routes/bridgeV1.js read this group per request.
   // `enabled: 0` closes the whole /api/bridge/v1 protocol with a 503 — the
   // same kill switch the MCP surface has. Key management and the self-hosted
   // client's own Settings card stay up; only registry access stops.
@@ -119,10 +112,10 @@ const defaults = {
   // stay up either way — the switch cuts AI protocol access, not the human's
   // review tools. Checked per request from this in-memory cache: zero DB cost.
   //
-  // Protocol-endpoint rate limits (MCP-audit M8): hosted AI connectors
-  // (claude.ai, ChatGPT) egress from a SMALL shared IP pool, so the global
-  // per-IP apiLimiter made every hosted user share one 15-minute bucket. The
-  // personal endpoint instead runs its own two-layer limit (routes/mcp.js):
+  // Protocol-endpoint rate limits: hosted AI connectors (claude.ai, ChatGPT)
+  // egress from a SMALL shared IP pool, so under the global per-IP apiLimiter
+  // every hosted user would share one 15-minute bucket. The personal endpoint
+  // instead runs its own two-layer limit (routes/mcp.js):
   //   userMax — fair-share ceiling per 15 min, keyed by the AUTHENTICATED
   //             user id (one chatty agent can only starve itself);
   //   ipMax   — pre-auth per-IP flood/credential-probe guard, sized for many
@@ -130,21 +123,19 @@ const defaults = {
   //   registerMax — Dynamic Client Registration (RFC 7591) per IP per HOUR.
   //             Same shared-egress problem, one step earlier: every NEW
   //             connection from a hosted platform registers a client first, and
-  //             they all arrive from that platform's egress pool. At 10/hour the
-  //             eleventh person to connect that hour got a 429 with no way to
-  //             diagnose it — and a real launch day already reached 6/10 with
-  //             almost no users. It still has to stay bounded (each call
-  //             persists an OAuthClient row), so this is a raise, not a removal,
-  //             and it is now tunable without a deploy.
+  //             they all arrive from that platform's egress pool, so a tight
+  //             cap gives the next person to connect that hour a 429 with no
+  //             way to diagnose it. It still has to stay bounded (each call
+  //             persists an OAuthClient row), and it is tunable without a
+  //             deploy.
   //   oauthMax — per-IP ceiling per 15 min across the REST of the OAuth
   //             authorization server (/authorize, /approve, /token, /revoke).
   //             Those four are exempt from the global apiLimiter/writeLimiter
-  //             for the shared-egress reason above — but the exemption left
-  //             them with NO bound at all (security audit 2026-07-25 M-1), and
-  //             nginx carries no limit_req either, so a self-hosted instance
-  //             had nothing. This restores a ceiling that EXISTS without
-  //             reintroducing a tight one: sized so a whole platform's user
-  //             base can refresh hourly from one egress IP and never see it.
+  //             for the shared-egress reason above, and nginx carries no
+  //             limit_req, so without this a self-hosted instance would have
+  //             no bound on them at all. A ceiling that EXISTS without being
+  //             a tight one: sized so a whole platform's user base can
+  //             refresh hourly from one egress IP and never see it.
   //             registerMax stays separate — DCR persists a row per call and
   //             needs the stricter, per-HOUR bound.
   mcp: { enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200, oauthMax: 2000 },

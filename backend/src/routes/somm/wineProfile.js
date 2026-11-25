@@ -79,7 +79,7 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
     }
 
     const wine = await WineDefinition.findById(req.params.wineId);
-    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    // A user's private draft is nobody's curation work.
     if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
 
     // A colour the wine's (resulting) type cannot carry is refused, not
@@ -92,10 +92,10 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
     await wine.save();
 
     // The structured descriptors feed buildEmbeddingText, so both indexes are
-    // now stale. Meili is nudged directly; the vectors are re-embedded inline —
-    // relying on "the next incremental run" was wrong because NO run is
-    // scheduled, so a correction stayed invisible to semantic search until a
-    // manual job (mirrors enrichmentJob's own post-write re-embed).
+    // now stale. Meili is nudged directly; the vectors are re-embedded inline,
+    // so a correction reaches semantic search at once rather than at the weekly
+    // incremental sweep (services/scheduler) — mirrors enrichmentJob's own
+    // post-write re-embed.
     searchService.indexWine(wine._id).catch(() => {});
     require('../../services/embeddingJob').reembedActiveVintages(wine._id).catch(() => {});
 

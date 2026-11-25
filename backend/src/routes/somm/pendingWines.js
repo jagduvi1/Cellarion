@@ -8,7 +8,7 @@
  *                       queue is a list of WORK). Envelope: { wines, total,
  *                       page, pages, pendingTotal, unavailableTotal }.
  *                       ANONYMISED: no creator id, username or email — a
- *                       curator fixes a record, not a person (the #930 rule).
+ *                       curator fixes a record, not a person.
  *   PATCH /:id        — { producer?, name?, appellation?, regionName?,
  *                       countryName?, grapeNames?[], type?,
  *                       identityUnavailable?, crossFieldOverride? }.
@@ -100,7 +100,7 @@ router.patch('/:id', async (req, res) => {
       promoted,
       // Only present when a curator actually overrode a cross-field refusal —
       // with the rules and matched strings, so the decision is reviewable
-      // afterwards rather than a bare boolean (audit L-10b).
+      // afterwards rather than a bare boolean.
       ...(crossFieldOverridden ? { crossFieldOverridden } : {}),
     });
 

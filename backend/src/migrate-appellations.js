@@ -8,8 +8,8 @@
  * Run via:
  *   docker exec cellarion-backend node src/migrate-appellations.js
  *
- * Safe to run multiple times — uses findOneAndUpdate with upsert:false logic
- * so it only inserts documents that are genuinely missing.
+ * Safe to run multiple times — it looks up each (country + normalizedName)
+ * first and only inserts the documents that are genuinely missing.
  */
 
 'use strict';

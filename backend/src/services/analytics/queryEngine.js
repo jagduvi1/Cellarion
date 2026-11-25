@@ -1,5 +1,5 @@
 /**
- * The analytics query engine (#987 Phase 0).
+ * The analytics query engine.
  *
  * One entry point, runQuery(), consumed by every analytics surface (table,
  * CSV, charts, saved views). Two modes:
@@ -19,18 +19,18 @@
  *             silent editorial default.
  *  MONEY      Monetary measures convert per-row (USD-based rates snapshot)
  *             before aggregating and report the target currency plus how many
- *             rows could not convert — convertCurrency() returning null used
- *             to silently shrink totals while counts stayed whole.
- *  RATINGS    5/20/100-scale ratings normalize to 0–100 per-row before any
- *             aggregation, via an expression GENERATED from ratingUtils'
- *             anchor table so pipeline math can never drift from
- *             toNormalized() (a parity test pins them together).
+ *             rows could not convert — an unconvertible row must never
+ *             silently shrink a total while the count stays whole.
+ *  RATINGS    5/20/100-scale ratings convert per-row to one scale (stars, or
+ *             the viewer's own) before any filter, sort or aggregation, via an
+ *             expression GENERATED from ratingUtils' anchor table so pipeline
+ *             math can never drift from toNormalized() (parity tests pin them).
  *  BOUNDS     maxTimeMS on every aggregation; hard row/bucket caps; at most
  *             two dimensions; every applied cap reported in the envelope.
  *             No allowDiskUse — prod runs a 640 MB backend.
  *  IDENTITY   Aggregate for identity and ordering, find() for hydration
- *             (the routes/cellars.js pattern), with _id as sort tiebreaker so
- *             pagination never duplicates or skips on tied values.
+ *             (the services/cellarGroupedPage.js pattern), with _id as sort
+ *             tiebreaker so pagination never duplicates or skips on tied values.
  */
 
 const mongoose = require('mongoose');
@@ -116,7 +116,7 @@ function castStatic(field, raw) {
     }
     case 'integer': {
       // Number('') and Number(null) are both 0 — an absent value must be a
-      // 400, never a silent zero bound (audit 2026-08-19 F8).
+      // 400, never a silent zero bound.
       if (raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
         throw new QueryError(400, `Filter on ${field.key}: a value is required`);
       }
@@ -164,10 +164,9 @@ function castKv(field, raw) {
 /**
  * STATIC date fields hold real event timestamps (createdAt, consumedAt,
  * openedAt), while the filter value names a calendar DAY. Comparing the raw
- * midnight instant made 'eq' match nothing and inclusive upper bounds drop
- * the entire named day (audit 2026-08-19 F2) — so date predicates expand to
- * day ranges. KV date values are canonical 'YYYY-MM-DD' strings and never
- * come through here.
+ * midnight instant would make 'eq' match nothing and an inclusive upper bound
+ * drop the entire named day — so date predicates expand to day ranges. KV
+ * date values are canonical 'YYYY-MM-DD' strings and never come through here.
  */
 function datePredicate(field, op, value, castOne) {
   const dayAfter = (d) => new Date(d.getTime() + 86400000);
@@ -201,7 +200,7 @@ function predicate(field, op, value, castOne) {
   // exactly as the taxonomy path does; a byte-exact typed Producer "="
   // filter looks broken.
   // Only 'text' takes this path: enum values are whitelisted already, and
-  // numbers, dates and booleans compare as before.
+  // numbers, dates and booleans compare exactly (the switch below).
   if (field.type === 'text' && (op === 'eq' || op === 'neq')) {
     const rx = { $regex: `^${escapeRegex(castOne(value))}$`, $options: 'i' };
     return op === 'eq' ? rx : { $not: rx };
@@ -256,6 +255,9 @@ async function taxonomyIds(field, op, value) {
   return docs.map((d) => d._id);
 }
 
+// Mirrors predicate(): text compares case-insensitively, everything else strictly.
+const looseEq = (a, b) => (typeof a === 'string' && typeof b === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b);
+
 /**
  * Evaluate one whitelisted operator against an already-cast entry value in
  * JS — the personal-KV filter resolves precedence before Mongo ever sees a
@@ -263,9 +265,6 @@ async function taxonomyIds(field, op, value) {
  * semantics exactly; a mismatch between the two is a bug the KV filter tests
  * exist to catch.
  */
-// Mirrors predicate(): text compares case-insensitively, everything else strictly.
-const looseEq = (a, b) => (typeof a === 'string' && typeof b === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b);
-
 function evalKvPredicate(op, castValue, entryValue) {
   switch (op) {
     case 'eq': return looseEq(entryValue, castValue);
@@ -309,12 +308,12 @@ function castKvForEval(field, op, value) {
  * match — never a $lookup per filter.
  *
  * Personal entries apply the SAME precedence the display, sort, group and
- * measure paths apply — bottle entry beats wine-vintage beats wine-null
- * (audit 2026-08-19 F1: filtering on any-level matches admitted rows whose
- * EFFECTIVE value contradicted the user's own filter). So: all of the
- * caller's entries for the key are fetched predicate-free, the predicate
- * runs in JS per entry, and the condition is layered — a failing
- * higher-precedence entry vetoes a matching lower one:
+ * measure paths apply — bottle entry beats wine-vintage beats wine-null — or
+ * a match at any level would admit rows whose EFFECTIVE value contradicts
+ * the user's own filter. So: all of the caller's entries for the key are
+ * fetched predicate-free, the predicate runs in JS per entry, and the
+ * condition is layered — a failing higher-precedence entry vetoes a matching
+ * lower one:
  *   include: matching bottle entries; matching wine-vintage entries;
  *            matching wine-null entries MINUS vintages a failing
  *            wine-vintage entry overrides
@@ -382,11 +381,6 @@ async function kvCondition(field, op, value, userId) {
 }
 
 /**
- * Compile the request's filters into pipeline conditions, split by where they
- * apply: before the wine $lookup (bottle paths, KV pre-resolutions) or after
- * it (wd.* paths).
- */
-/**
  * Bottles placed in the racks of the scope whose name / group matches. One
  * rack query, then an id set — the same shape the cellar list route uses for
  * ?rack= / ?rackGroup=. Unplaced bottles never match.
@@ -409,8 +403,8 @@ async function rackBottleIds(field, op, value, scopeCellars) {
  */
 function rackJoinStages() {
   // The concise correlated form: localField/foreignField lets the unique
-  // multikey index on slots.bottle answer the join, where an $expr $in had
-  // to scan every rack of every tenant per bottle (audit 2026-09-07).
+  // multikey index on slots.bottle answer the join, where an $expr $in would
+  // scan every rack of every tenant per bottle.
   return [
     {
       $lookup: {
@@ -429,6 +423,11 @@ function rackJoinStages() {
   ];
 }
 
+/**
+ * Compile the request's filters into pipeline conditions, split by where they
+ * apply: before the wine $lookup (bottle paths, rack and KV pre-resolutions)
+ * or after it (wd.* paths, and the rating expressions in exprFilters).
+ */
 async function compileFilters(filters, userId, scopeCellars = null) {
   if (filters === undefined) return { pre: [], post: [], exprFilters: [], needsWine: false };
   if (!Array.isArray(filters) || filters.length > MAX_FILTERS) {
@@ -447,8 +446,8 @@ async function compileFilters(filters, userId, scopeCellars = null) {
     if (!field.filterable) throw new QueryError(400, `Field "${f.field}" is not filterable`);
 
     if (field.normalized) {
-      // Ratings filter against the converted expression (audit F3): the raw
-      // stored values mix three scales, so a raw comparison ranks a 60-point
+      // Ratings filter against the converted expression: the raw stored
+      // values mix three scales, so a raw comparison would rank a 60-point
       // Parker above a 5-star bottle. In stars unless the filter names the
       // scale its value is in (f.scale: '5' | '20' | '100').
       const scale = f.scale === undefined || f.scale === null ? '5' : f.scale;
@@ -463,7 +462,7 @@ async function compileFilters(filters, userId, scopeCellars = null) {
         return n;
       };
       // Rounded to the scale's step, as the rows display it, so a bottle
-      // shown as 83pts is found by "≥ 83" (release audit 2026-10-12).
+      // shown as 83pts is found by "≥ 83".
       exprFilters.push({
         expr: { $round: [ratingConversionExpr(field.path, field.scalePath, scale), scale === '100' ? 0 : 1] },
         pred: predicate({ ...field, type: 'decimal' }, f.op, f.value, castRating),
@@ -514,16 +513,15 @@ function exprFilterStages(exprFilters) {
  * Piecewise-linear rating conversion as an aggregation expression, generated
  * from ratingUtils.ANCHORS — the same table toNormalized/fromNormalized read.
  * `toKey` picks the target column: 'norm' (0–100), '5' (stars — the default
- * this surface speaks since audit F3), or '20' / '100' when a request asks
- * for the viewer's own scale. A direct from→to piecewise
- * equals the toNormalized∘fromNormalized composition because both walk the
- * same anchor rows; the parity tests pin that.
+ * this surface speaks), or '20' / '100' when a request asks for the viewer's
+ * own scale. A direct from→to piecewise equals the toNormalized∘fromNormalized
+ * composition because both walk the same anchor rows; the parity tests pin
+ * that.
  */
 function ratingConversionExpr(valuePath, scalePath, toKey = '5') {
   const perScale = (scaleKey) => {
     // Already in the target scale: the value as entered, never clamped to the
-    // anchor range (a 5/20 stays 5, as the rows show it — release audit
-    // 2026-10-12).
+    // anchor range (a 5/20 stays 5, as the rows show it).
     if (scaleKey === toKey) return `$${valuePath}`;
     const fromCol = COL[scaleKey];
     const toCol = COL[toKey];
@@ -616,7 +614,7 @@ const WINE_LOOKUP = [
 ];
 
 /**
- * R-B: join ONE key/value field's resolved value into the pipeline as
+ * Join ONE key/value field's resolved value into the pipeline as
  * `$<alias>`, so KV fields can be sorted, grouped and aggregated server-side.
  * Personal entries apply the same precedence as the bottle page — bottle
  * entry beats a vintage-scoped wine entry beats a vintage-null wine entry —
@@ -717,7 +715,7 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
   const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId, scopeCellars);
 
   // Sort: one field, validated; default = newest first. _id tiebreaker always.
-  // Taxonomy and KV sorts join their value in first (R-B) — the join stages
+  // Taxonomy and KV sorts join their value in first — the join stages
   // run after the filters so they touch only the surviving rows.
   let sortStage = { createdAt: -1, _id: 1 };
   let sortJoin = [];
@@ -737,8 +735,8 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
       sortJoin = kvJoinStages(sortField, '_sortVal', userId);
       sortStage = { _sortVal: dir, _id: 1 };
     } else if (sortField.normalized) {
-      // Ratings order by the star-converted value (audit F3), same scale as
-      // the filter and the displayed column.
+      // Ratings order by the star-converted value: the scales are monotone,
+      // so the order is the same in whichever scale the column displays.
       sortJoin = [{ $addFields: { _sortVal: ratingConversionExpr(sortField.path, sortField.scalePath, '5') } }];
       sortStage = { _sortVal: dir, _id: 1 };
     } else {
@@ -813,7 +811,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
   if (fields.some((f) => f.source === 'rack')) {
     rackOf = new Map();
     // Only the racks holding a bottle of this page (indexed), not every slot
-    // of every rack in scope (audit 2026-09-07).
+    // of every rack in scope.
     const racks = await Rack.find({ cellar: { $in: scopeCellars.map((c) => c._id) }, deletedAt: null, 'slots.bottle': { $in: pageIds } })
       .select('name group slots.bottle').lean();
     for (const r of racks) {
@@ -848,9 +846,9 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
       wineDefinition: { $in: wineIds },
     }).lean();
   }
-  // Per-vintage overrides (2026-09-04): a bottle reads its vintage's row when
-  // one is published, else the wine-wide default — the bottle-page rule,
-  // shared via registryDataOps.resolveForVintage so the two never drift.
+  // Per-vintage overrides: a bottle reads its vintage's row when one is
+  // published, else the wine-wide default — the bottle-page rule, shared via
+  // registryDataOps.resolveForVintage so the two never drift.
   const registryRows = new Map();
   for (const v of registryValues) {
     const k = `${v.wineDefinition}:${v.key}`;
@@ -905,10 +903,10 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
       case 'bottle': {
         const v = f.path.split('.').reduce((o, k) => (o == null ? o : o[k]), b);
         if (f.normalized) {
-          // Ratings display in one scale for the whole table (audit F3) —
-          // stars unless the request asks for the viewer's own — honest
-          // across a cellar whose rows mix 5/20/100-scale entries. A rating
-          // already in that scale is shown exactly as entered.
+          // Ratings display in one scale for the whole table — stars unless
+          // the request asks for the viewer's own — honest across a cellar
+          // whose rows mix 5/20/100-scale entries. A rating already in that
+          // scale is shown exactly as entered.
           if (v == null) return null;
           const stored = b[f.scalePath] || '5';
           if (stored === ratingScale && Number.isFinite(Number(v))) return Number(v);
@@ -962,7 +960,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale
 async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensions, measures, ratingScale = '5' }) {
   const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId, scopeCellars);
 
-  // ZERO dimensions is the KPI shape (dashboards, R-E): one bucket holding
+  // ZERO dimensions is the KPI shape (dashboards): one bucket holding
   // the whole scoped set — "total bottles", "total value", "average rating".
   if (!Array.isArray(dimensions) || dimensions.length > MAX_DIMENSIONS) {
     throw new QueryError(400, `grouped mode takes 0–${MAX_DIMENSIONS} dimensions (0 = one summary bucket)`);
@@ -985,7 +983,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       if (!rackJoined) { joinStages.push(...rackJoinStages()); rackJoined = true; }
       dimExprs.push(`$_rack.${f.path}`);
     } else if (f.source === 'personal' || f.source === 'registry') {
-      // R-B: group by the joined KV value (non-numeric keys only, per the
+      // Group by the joined KV value (non-numeric keys only, per the
       // catalogue flag — numeric readings would bucket per distinct value).
       joinStages.push(...kvJoinStages(f, `_d${i}v`, userId));
       dimExprs.push(`$_d${i}v`);
@@ -1012,7 +1010,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       throw new QueryError(400, `Field "${m.field}" does not support "${m.agg}"`);
     }
     if (f.source === 'personal' || f.source === 'registry') {
-      // R-B: numeric KV measures aggregate the joined value. The $isNumber
+      // Numeric KV measures aggregate the joined value. The $isNumber
       // guard keeps a stray non-numeric entry (possible on rows written
       // before a key existed, or via import) out of the accumulator instead
       // of poisoning it.
@@ -1031,7 +1029,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       valueExpr = null; // filled in below once the target currency is known
     } else if (f.normalized) {
       // Stars (or the viewer's own scale when asked), not the 0–100 normal
-      // form (audit F3) — the same scale the column displays.
+      // form — the same scale the column displays.
       valueExpr = ratingConversionExpr(f.path, f.scalePath, ratingScale);
     }
     measureSpecs.push({ out: `m${i}`, label: `${m.agg}(${f.key})`, agg: m.agg, valueExpr, field: f });
@@ -1049,8 +1047,8 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       { $sort: { n: -1, _id: 1 } },
       { $limit: 1 },
     ]).option({ maxTimeMS: MAX_TIME_MS });
-    // An alias as the most common stored spelling reads as its code (release
-    // audit 2026-10-13: a cellar mostly stored as "EURO" got no rate at all).
+    // An alias as the most common stored spelling reads as its code, or a
+    // cellar mostly stored as "EURO" would get no rate at all.
     targetCurrency = normalizeCurrency(top?._id) || 'USD';
     for (const cf of currencyMeta.fields) {
       const { expr } = convertedPriceExpr(cf.path, cf.currencyPath, rates, targetCurrency);
@@ -1058,8 +1056,8 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       spec.valueExpr = expr; // null when no rates → measure yields null
     }
     // Count rows whose price exists but cannot convert — over the SAME
-    // filtered population as the buckets (audit F5: counting before the
-    // wine-side and expression filters overstated the exclusions).
+    // filtered population as the buckets: counting before the wine-side and
+    // expression filters would overstate the exclusions.
     if (rates && rates[targetCurrency]) {
       // Every spelling convertedPriceExpr converts counts as known (aliases too).
       const known = Object.keys(rates).flatMap((code) => currencySpellings(code));
@@ -1105,7 +1103,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
     const f = dimFields[i];
     // The cellar dimension groups by the cellar ObjectId — resolve to names
     // from the scope set, which by construction contains every id that can
-    // appear (audit F4: raw hex ids were the bucket labels).
+    // appear, so no bucket is labelled with a raw hex id.
     if (f.key === 'bottle.cellar') {
       const names = new Map(scopeCellars.map((c) => [String(c._id), c.name]));
       for (const b of buckets) {

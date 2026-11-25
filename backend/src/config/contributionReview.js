@@ -6,10 +6,10 @@
  *
  * ON (the default, and cellarion.app): every contribution waits for an admin
  * or curator, because a shared registry shows it to everyone.
- * OFF: a small private server (a household on its own install, discussion
- * #1778) trusts its members, so each contribution is applied as it is made,
- * through the same code an admin's approval runs. A contribution that needs a
- * human choice (a merge, a producer spelled two ways) still waits.
+ * OFF: a small private server (a household on its own install) trusts its
+ * members, so each contribution is applied as it is made, through the same
+ * code an admin's approval runs. A contribution that needs a human choice (a
+ * merge, a producer spelled two ways) still waits.
  *
  * This is an install setting, not a feature flag: it changes how
  * contributions are decided, the same for every member of the server.

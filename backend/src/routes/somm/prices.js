@@ -160,7 +160,7 @@ router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
       .populate('region', 'name')
       .populate('grapes', 'name');
 
-    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    // A user's private draft is nobody's curation work.
     if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine definition not found' });
     }

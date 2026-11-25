@@ -55,8 +55,8 @@ function windowRefusal(refusal) {
  *        ?limit / ?offset — pagination (default 100, max 500)
  *
  * Paginated + lean: every added/imported bottle seeds a pending profile, so
- * this collection grows one row per wine+vintage forever — unpaginated it
- * deep-populated the whole set into one response per queue visit.
+ * this collection grows one row per wine+vintage forever — unpaginated, every
+ * queue visit would deep-populate the whole set into one response.
  */
 router.get('/', requireSommOrAdmin, async (req, res) => {
   try {
@@ -72,10 +72,9 @@ router.get('/', requireSommOrAdmin, async (req, res) => {
       WineVintageProfile.find(filter)
         .populate({
           // aiProfile rides along so a curator can see the generated tasting
-          // note next to the drink window they are about to set — the ticket's
-          // point being that a somm who spots wrong prose currently works
-          // around it silently and the bad data survives. appellation feeds
-          // the same judgement (a Vintage Port's style follows from Porto).
+          // note next to the drink window they are about to set, and wrong
+          // prose is caught instead of surviving unseen. appellation feeds the
+          // same judgement (a Vintage Port's style follows from Porto).
           path: 'wineDefinition',
           select: 'name producer type colour image country region appellation aiProfile',
           populate: [
@@ -167,7 +166,7 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
       return res.status(checked.code === 'conflict' ? 409 : 400).json({ error: windowRefusal(checked) });
     }
     const { next } = checked;
-    // String() coercion: a truthy non-string threw on .trim() → 500.
+    // String() coercion: a truthy non-string would throw on .trim() → 500.
     const sommNotes = req.body.sommNotes !== undefined
       ? (req.body.sommNotes ? String(req.body.sommNotes).trim() : '')
       : undefined;

@@ -108,7 +108,7 @@ module.exports = [
               // identity, under which the resolver would treat EVERY erased
               // user's pending row as "own" — so the surviving member's
               // bottles may only move onto a genuinely published wine, never
-              // onto some other erased user's pending row (audit 2026-09-12).
+              // onto some other erased user's pending row.
               const published = await WineDefinition.exists({ _id: r.match.wine_id, pendingIdentity: { $ne: true }, draft: { $ne: true } });
               if (published) {
                 await ops.attachDraftBottles(wine, r.match.wine_id, { userId: ctx.deletedUserId, roles: [], req: null, auto: true, reason: 'erasure' });

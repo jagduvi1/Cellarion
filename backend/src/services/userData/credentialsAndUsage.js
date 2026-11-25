@@ -91,7 +91,7 @@ module.exports = [
     exportFragment: null,
   },
 
-  // ── Idempotent-write records (offline queue, #1355) ──────────────────────
+  // ── Idempotent-write records (offline queue) ───────────────────────────
   {
     model: IdempotencyRecord, category: 'personal-data', userFields: ['user'],
     // Hard-delete on erasure. The stored outcome of a write sent with an
@@ -122,8 +122,8 @@ module.exports = [
     // after a restore, the user's consumed note/rating snapshot may exist only
     // here for up to the TTL. Never the idempotency keys or stored result
     // payloads (operational plumbing). Excludes preview + pending claim stubs
-    // (MCP-audit M1/F4) — data-minimisation: those changed nothing and are the
-    // same rows hidden from the timeline.
+    // — data-minimisation: those changed nothing and are the same rows hidden
+    // from the timeline.
     exportFragment: async (ctx) => ({
       mcpActions: markTrunc(ctx, 'mcpActions', await McpActionLog.find({ user: ctx.userId, action: { $nin: McpActionLog.NON_ACTIVITY_ACTIONS } })
         .select('tool action bottle cellar detail prev reversed createdAt').limit(EXPORT_MAX).lean())
@@ -239,8 +239,6 @@ module.exports = [
   {
     model: ChatUsage, category: 'personal-data', userFields: ['userId'],
     purge: (ctx) => ChatUsage.deleteMany({ userId: ctx.userId }),
-    // BUG FIX: schema fields are count/inputTokens/outputTokens — the old export
-    // selected promptTokens/completionTokens which don't exist (always undefined).
     exportFragment: async (ctx) => ({
       chatUsage: markTrunc(ctx, 'chatUsage', await ChatUsage.find({ userId: ctx.userId }).select('date count inputTokens outputTokens').limit(EXPORT_MAX).lean())
         .map(c => ({ date: c.date, count: c.count, inputTokens: c.inputTokens, outputTokens: c.outputTokens })),
@@ -258,7 +256,6 @@ module.exports = [
   {
     model: CellarValueSnapshot, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => CellarValueSnapshot.deleteMany({ user: ctx.userId }),
-    // GAP FIX: was purged but never exported.
     exportFragment: async (ctx) => ({
       cellarValueSnapshots: markTrunc(ctx, 'cellarValueSnapshots', await CellarValueSnapshot.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()),
     }),

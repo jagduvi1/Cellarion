@@ -101,19 +101,18 @@ const app = express();
 
 // How many reverse-proxy hops sit in front of Express, i.e. how many trailing
 // X-Forwarded-For entries Express may trust when resolving req.ip (the per-IP
-// rate-limit + audit key when CF-Connecting-IP is absent). Security audit M-3:
-// this MUST match the actual chain — trusting MORE hops than exist lets a client
-// forge req.ip via a spoofed XFF prefix and get a fresh bucket on every limiter.
+// rate-limit + audit key when CF-Connecting-IP is absent). This MUST match the
+// actual chain — trusting MORE hops than exist lets a client forge req.ip via
+// a spoofed XFF prefix and get a fresh bucket on every limiter.
 //   - Shipped compose (nginx → backend): 1 hop. This is the default.
 //   - Hosted prod (Cloudflare → Traefik → nginx → backend): set TRUST_PROXY_HOPS=2
 //     so req.ip resolves to the Cloudflare edge IP and getClientIp() can trust
 //     CF-Connecting-IP. Without it, req.ip collapses to Traefik's internal IP and
 //     every per-IP limiter shares one bucket. See utils/clientIp.js.
-// Audit 2026-09 D16-1: the shipped compose hands an EMPTY TRUST_PROXY_HOPS
-// through, and Number('') is 0 — so a default self-host ran `trust proxy 0`
-// and every per-IP limiter shared one bucket. Empty means unset; anything
-// that is not a whole non-negative number is refused loudly rather than
-// silently becoming 0 or 1.
+// The shipped compose hands an EMPTY TRUST_PROXY_HOPS through, and
+// Number('') is 0 — `trust proxy 0` would make every per-IP limiter share one
+// bucket. So empty means unset; anything that is not a whole non-negative
+// number is refused loudly rather than silently becoming 0 or 1.
 const rawHops = process.env.TRUST_PROXY_HOPS;
 const trustProxyHops = rawHops === undefined || String(rawHops).trim() === '' ? 1 : Number(rawHops);
 if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
@@ -163,7 +162,7 @@ app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 // coordinated batch-wide), so the limit must hold a large import — up to
 // MAX_IMPORT_SIZE (2000) items with notes. 8mb leaves comfortable headroom.
 app.use('/api/bottles/import', express.json({ limit: '8mb' }));
-// Mint-at-commit: POST /api/bottles may now carry a `newWine` object (name/
+// Mint-at-commit: POST /api/bottles may carry a `newWine` object (name/
 // producer/taxonomy strings, all capped at 200 chars) alongside the bottle
 // fields — a worst-case legitimate payload (5000-char notes + 20 grapes)
 // passes the 10kb default. No images ever ride here. AFTER the /import rules
@@ -172,7 +171,7 @@ app.use('/api/bottles', express.json({ limit: '64kb' }));
 app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
 app.use('/api/wine-lists', express.json({ limit: '1mb' }));
 // Pick lists: up to 500 bottle ids per request (~14 kB of JSON) — past the
-// 10 kb default (release audit 2026-10-13: 379+ ids answered 413).
+// 10 kb default.
 app.use('/api/pick-lists', express.json({ limit: '32kb' }));
 // MCP: the anonymous public surface stays tiny (no image tool) — registered
 // BEFORE the personal /api/mcp rule so /api/mcp/public matches it first (the
@@ -182,8 +181,7 @@ app.use('/api/pick-lists', express.json({ limit: '32kb' }));
 app.use('/api/mcp/public', express.json({ limit: '10kb' }));
 // The OAuth endpoints (dynamic client registration, token, revocation) carry
 // small metadata bodies and are reachable ANONYMOUSLY — they must not inherit
-// the 2 MB image budget below (security audit 2026-09-02 D16-2: a 2 MB
-// registration body was accepted and, with uncapped redirect URIs, stored).
+// the 2 MB image budget below.
 app.use('/api/mcp/oauth', express.json({ limit: '10kb' }));
 app.use('/api/mcp', express.json({ limit: '2mb' }));
 // Registry Bridge v1: a change check carries up to 5,000 wine ids (~130 kB
@@ -191,8 +189,8 @@ app.use('/api/mcp', express.json({ limit: '2mb' }));
 // 10 kb default rule below (first express.json to parse wins).
 app.use('/api/bridge/v1/wines/changes', express.json({ limit: '256kb' }));
 // A forwarded wine request may carry the requester's label photos inline —
-// front and, since #1460, back — each up to the same 500,000-character cap a
-// request has here (services/accountOps).
+// front and back — each up to the same 500,000-character cap a request has
+// here (services/accountOps).
 app.use('/api/bridge/v1/requests', express.json({ limit: '1200kb' }));
 // A contributed wine carries one label photo inline under the same cap, plus
 // its identity and up to 30 drink windows (services/registryContributionIntake).
@@ -251,12 +249,12 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 // write protection. Per-tool authorization (registry scope filter) and, for
 // write tools, the write-safety layers govern MCP mutations instead.
 //
-// The MCP endpoints are ALSO exempt from the global per-IP apiLimiter
-// (MCP-audit M8): hosted AI connectors (claude.ai, ChatGPT) egress from a
-// small shared IP pool, so a per-IP bucket here made every hosted user share
-// one 15-minute allowance — one chatty agent starved the rest. The personal
-// endpoint carries its own TWO dedicated limiters in routes/mcp.js (a high
-// per-IP pre-auth flood guard + a per-USER fair-share ceiling after auth);
+// The MCP endpoints are ALSO exempt from the global per-IP apiLimiter: hosted
+// AI connectors (claude.ai, ChatGPT) egress from a small shared IP pool, so a
+// per-IP bucket here would make every hosted user share one 15-minute
+// allowance — one chatty agent would starve the rest. The personal endpoint
+// carries its own TWO dedicated limiters in routes/mcp.js (a high per-IP
+// pre-auth flood guard + a per-USER fair-share ceiling after auth);
 // /api/mcp/public keeps its own strict per-IP limiter there (60/15min, far
 // below the global cap — anonymous callers have no user to key on).
 //
@@ -265,19 +263,17 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 // That amplification is capped in mcp/server.js at TWO layers: the per-request
 // tool-call budget (MAX_CALLS_PER_REQUEST) and, for MUTATING tools, a per-user
 // budget sharing the SAME admin-tunable number as this writeLimiter — so an
-// agent looping consumes hits exactly the wall a looping REST client would.
-// Revisit again before AI-spending tools ship (enrichment adds cost beyond DB).
+// agent looping writes hits exactly the wall a looping REST client would.
+// Revisit before AI-spending tools ship (enrichment adds cost beyond DB).
 //
 // The OAuth endpoints under /api/mcp/oauth/ are exempt for the SAME shared-egress
-// reason. They were left behind when M8 exempted the protocol endpoint, so
-// /token, /authorize, /register and /revoke still rode both the per-IP apiLimiter
-// and the writeLimiter. Access tokens live one hour, so every connected client
-// refreshes at least hourly — and a hosted platform's entire user base does that
-// from one egress IP, which is exactly the bucket-sharing M8 removed next door.
-// A user whose refresh is 429'd is silently disconnected mid-conversation, and
-// the 429 body isn't OAuth-shaped either, so clients report it as a broken server.
-// Registration keeps its own dedicated per-IP limiter in routes/mcpOAuth.js —
-// the anti-flood guard that actually needs to be per-IP.
+// reason. Access tokens live one hour, so every connected client refreshes at
+// least hourly — and a hosted platform's entire user base does that from one
+// egress IP, the same bucket-sharing as above. A user whose refresh is 429'd
+// is silently disconnected mid-conversation, and the 429 body isn't
+// OAuth-shaped either, so clients report it as a broken server. Registration
+// and the rest of the authorization server keep their own per-IP limiters in
+// routes/mcpOAuth.js (mcp.registerMax and mcp.oauthMax in config/rateLimits).
 const isMcp = (req) => {
   const p = req.originalUrl.split('?')[0];
   return p === '/api/mcp' || p === '/api/mcp/' || p === '/api/mcp/public'
@@ -311,9 +307,9 @@ app.use('/api/', apiLimiter);
 // every cold start to learn whether a session exists, so every signed-out
 // visitor and every crawler that executes the app sends one per page view.
 // It cannot guess a token (there is none to guess) and answers 401 before the
-// route touches anything, so it never counts here. Before this, a crawler
-// rendering ~900 public wine pages in 25 minutes hit the write ceiling, got
-// 663 × 429 on nothing, and left an audit row for each (2026-10-27).
+// route touches anything, so it never counts here — counted, a crawler
+// rendering public pages would hit the write ceiling and leave a 429 and an
+// audit row per page.
 const isCookielessRefresh = (req) =>
   req.method === 'POST' && req.originalUrl.split('?')[0] === '/api/auth/refresh' && !req.cookies?.refreshToken;
 
@@ -324,10 +320,9 @@ const writeLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
-  // /api/analytics/query is a READ that uses POST for its body (audit
-  // 2026-08-19 F9): counting it here let a dashboard's widget fan-out burn
-  // the shared write budget until real writes 429'd. It stays under
-  // apiLimiter like every other read.
+  // /api/analytics/query is a READ that uses POST for its body: counting it
+  // here would let a dashboard's widget fan-out burn the shared write budget
+  // until real writes 429. It stays under apiLimiter like every other read.
   skip: (req) => isStripeWebhook(req) || isMcp(req) || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     || (req.method === 'POST' && req.path === '/analytics/query')
     || isCookielessRefresh(req),
@@ -426,7 +421,7 @@ app.use('/api/push-subscriptions', pushSubscriptionsRoute);
 app.use('/api/blog', blogRoute);
 app.use('/api/taxonomy', taxonomyRoute);
 // Exchange rates for the price UI — served from the backend's daily snapshot so
-// the browser never contacts the upstream provider itself (audit 2026-09 F03-4).
+// the browser never contacts the upstream provider itself.
 app.use('/api/exchange-rates', exchangeRatesRoute);
 app.use('/api/wishlist', wishlistRoute);
 app.use('/api/recommendations', recommendationsRoute);
@@ -461,11 +456,11 @@ app.use((req, res) => {
 // Centralized error handler — catches errors passed via next(err)
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  // Log through pino with field discipline (security audit L-4): a raw
-  // console.error(err) dumped the full error + stack — potentially carrying
-  // request PII — onto the un-TTL'd stdout stream that audit.js is careful to
-  // keep PII out of. Log only the method/path/status + pino's err serializer
-  // (type/message/stack), never req.body/headers.
+  // Log through pino with field discipline: a raw console.error(err) would
+  // dump the full error + stack — potentially carrying request PII — onto the
+  // un-TTL'd stdout stream that audit.js is careful to keep PII out of. Log
+  // only the method/path/status + pino's err serializer (type/message/stack),
+  // never req.body/headers.
   //
   // A body that failed to parse IS the request's content (a password at
   // sign-in, a client secret or refresh token at the OAuth token endpoint):

@@ -15,9 +15,9 @@ const connectDB = async () => {
     Review.syncIndexes().catch(err =>
       console.warn('[db] Review.syncIndexes failed:', err.message)
     );
-    // AuditLog: existing DBs hold a plain {timestamp:1} index that conflicts
+    // AuditLog: a database can hold a plain {timestamp:1} index that conflicts
     // with the TTL index (same key pattern, different options) and silently
-    // blocked its creation — the sync drops the stale one so TTL expiry works.
+    // blocks its creation — the sync drops the stale one so TTL expiry works.
     const AuditLog = require('../models/AuditLog');
     AuditLog.syncIndexes().catch(err =>
       console.warn('[db] AuditLog.syncIndexes failed:', err.message)
@@ -26,26 +26,25 @@ const connectDB = async () => {
     WineList.syncIndexes().catch(err =>
       console.warn('[db] WineList.syncIndexes failed:', err.message)
     );
-    // ImportSession: the TTL index dropped its dead {status:'draft'} partial
-    // filter (every session is a draft) — sync replaces the old conflicting
-    // index (same key, different options) on existing databases.
+    // ImportSession: the TTL index has no partial filter (every session is a
+    // draft). A database can hold an index on the same key with a
+    // {status:'draft'} filter (different options); the sync replaces it.
     const ImportSession = require('../models/ImportSession');
     ImportSession.syncIndexes().catch(err =>
       console.warn('[db] ImportSession.syncIndexes failed:', err.message)
     );
-    // RegistryDataValue: the one-published-per-slot unique index gained a
-    // `vintage` key (per-vintage overrides, 2026-09-04). The old
-    // { wineDefinition, key, status } partial unique index would otherwise
-    // still forbid a default AND an override on the same wine+key — the sync
-    // drops it and creates the four-key one.
+    // RegistryDataValue: the one-published-per-slot unique index includes
+    // `vintage`, so a wine+key can hold a default AND a per-vintage override.
+    // A narrower { wineDefinition, key, status } partial unique index would
+    // forbid that — the sync drops it and creates the four-key one.
     const RegistryDataValue = require('../models/RegistryDataValue');
     RegistryDataValue.syncIndexes().catch(err =>
       console.warn('[db] RegistryDataValue.syncIndexes failed:', err.message)
     );
-    // WineEmbedding: the vectors moved from Qdrant into the rows (2026-09).
-    // The sync drops the old unique { qdrantPointId } index (new rows have no
-    // point id, so it would reject the second one) and creates the
-    // { model, indexVersion, dim, embeddedAt } index the search reads.
+    // WineEmbedding: the vectors live on the rows. The sync drops any unique
+    // { qdrantPointId } index (a new row has no point id, so it would reject
+    // the second one) and creates the { model, indexVersion, dim, embeddedAt }
+    // index the search reads.
     const WineEmbedding = require('../models/WineEmbedding');
     WineEmbedding.syncIndexes().catch(err =>
       console.warn('[db] WineEmbedding.syncIndexes failed:', err.message)

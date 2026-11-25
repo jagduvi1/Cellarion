@@ -181,8 +181,8 @@ const requireModeratorOrAdmin = (req, res, next) => {
 
 /**
  * Convenience predicate used by handlers to branch on "is the requester a
- * forum moderator OR admin?". Centralised here so the four+ inline copies
- * across route handlers stop drifting (one of them used to forget admin).
+ * forum moderator OR admin?". Centralised here so every handler shares one
+ * definition, admin included, instead of inline copies that drift.
  *
  * @param {{roles?: string[]}|null} user — typically req.user from optionalAuth
  * @returns {boolean}
