@@ -185,7 +185,7 @@ describe('snapshotTag', () => {
   });
 });
 
-// The copy's size (scaling audit 2026-09-25, item 11): taxonomy rows cut to
+// The copy's size: taxonomy rows cut to
 // what the offline screens show, and inline data: images left out.
 describe('a slim copy', () => {
   const { SNAPSHOT_WINE_POPULATE } = require('./offlineSnapshot');

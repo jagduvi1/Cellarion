@@ -269,7 +269,7 @@ describe('GET /api/cellars/multi/bottles', () => {
   });
 });
 
-// ── Only the page is loaded (scaling audit 2026-09-25, item 10) ──────────────
+// ── Only the page is loaded ──────────────
 // A search used to load and populate every hit (a big cellar: ~800 bottles,
 // ~4 MB) to show 30. With nothing left to filter in memory, the route pages
 // over the search's hits and loads just the page's bottles.
