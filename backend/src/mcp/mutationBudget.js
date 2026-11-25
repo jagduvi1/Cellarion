@@ -5,9 +5,9 @@
 //
 // In-memory like express-rate-limit. Two dimensions:
 //   - per USER  — the write throughput of one account.
-//   - per IP    — bounds the ~60×accounts amplification a per-user-only budget
-//                 allowed (many accounts behind one NAT). Generous multiple of
-//                 the per-user cap so a few colocated real users aren't throttled.
+//   - per IP    — bounds the amplification a per-user-only budget would allow
+//                 (many accounts behind one NAT). Generous multiple of the
+//                 per-user cap so a few colocated real users aren't throttled.
 // All-or-nothing across BOTH dimensions and across a batch: a batch never
 // half-charges before being refused, and a call that would breach either
 // dimension takes nothing.
@@ -18,16 +18,16 @@ const WINDOWS_MAX = 5000;
 // A single NAT/office may host several Cellarion users, each with their own AI
 // connection; the per-IP write ceiling is a multiple of the per-user cap.
 // Hosted connectors (claude.ai, ChatGPT) egress from a SMALL shared pool, so
-// for them one "IP" is hundreds of users: at 4× four busy accounts blocked
-// every other user on that egress from all MCP writes for the rest of the
-// window. 25× still bounds many-accounts-behind-one-
-// address abuse (1,500 writes / 15 min is trivial load) without pooling
+// for them one "IP" is hundreds of users: a small multiple lets a few busy
+// accounts block every other user on that egress from all MCP writes for the
+// rest of the window. 25× still bounds many-accounts-behind-one-address abuse
+// (1,500 writes / 15 min at the default cap is trivial load) without pooling
 // strangers; the per-user cap is the real fairness layer.
 const IP_WRITE_MULTIPLIER = 25;
 
-// Evict the oldest half (insertion order) instead of clearing everyone (the old
-// `.clear()` wiped every in-flight window when a burst of distinct keys hit the
-// cap, resetting all limiters — security audit L-18).
+// Evict the oldest half (insertion order) instead of clearing everyone: a
+// `.clear()` would wipe every in-flight window when a burst of distinct keys
+// hits the cap, resetting all limiters.
 function evictOldestHalf(map) {
   let drop = Math.ceil(WINDOWS_MAX / 2);
   for (const k of map.keys()) { if (drop-- <= 0) break; map.delete(k); }

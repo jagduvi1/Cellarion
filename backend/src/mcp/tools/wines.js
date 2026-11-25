@@ -37,7 +37,7 @@ const TAXONOMY_POPULATE = ['country', 'region', 'grapes', { path: 'classificatio
 // pendingIdentity rows are not registry content until they are completed.
 // (Pending rows are not in Meilisearch either; this covers the Mongo paths.)
 const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
-// Search never returns a canary (registry lockdown L4: a customer must not be
+// Search never returns a canary (registry lockdown: a customer must not be
 // able to find a wine that does not exist); get_wine by id still serves one,
 // because a direct fetch is the path a copier walks.
 const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
@@ -53,7 +53,7 @@ registerTool({
     'listed first with only_in_your_cellar: true, so they can add more of them.',
   // 'public': registry data is public-site content (every wine has a public
   // URL) — served to ANY authenticated token and to the anonymous
-  // /api/mcp/public surface (Phase 6).
+  // /api/mcp/public surface.
   scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
@@ -125,19 +125,17 @@ registerTool({
   inputSchema: { wine_id: z.string().describe('Registry wine id from search_registry or a bottle\'s wine') },
   handler: async (args, ctx) => {
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
-    // The exclusion is a QUERY clause, not a post-filter on the result. A
-    // post-filter here was DEAD CODE: SAFE_SELECT is an
-    // INCLUSIVE projection and does not list pendingIdentity, so under .lean()
-    // the field is always undefined and `undefined === true` never fired —
-    // this tool is 'public' scope, served by the UNAUTHENTICATED
-    // /api/mcp/public surface, so that gate was the only thing standing between
-    // an anonymous caller and a stranger's half-identified wine. nonWine rides
-    // along in the same clause (it was never filtered here either). Compare
-    // publicContent.js's drink_window_for, which selects the flag it tests.
-    // Registry lockdown: every read is counted per reader per
-    // day; an anonymous address past the daily distinct cap is refused. The
-    // anonymous surface gets the prose-only profile (L3) — the structured
-    // dataset stays with signed-in connections.
+    // The exclusion is a QUERY clause, not a post-filter on the result:
+    // SAFE_SELECT is an INCLUSIVE projection without pendingIdentity, so under
+    // .lean() a post-filter would read undefined and never fire — and this
+    // tool is 'public' scope, served by the UNAUTHENTICATED /api/mcp/public
+    // surface, where this clause stands between an anonymous caller and a
+    // stranger's half-identified wine. nonWine rides along in the same clause.
+    // Compare publicContent.js's drink_window_for, which selects the flag.
+    // Registry lockdown: every read is counted per reader per day; an
+    // anonymous address past the daily distinct cap is refused. The anonymous
+    // surface gets the prose-only profile — the structured dataset stays with
+    // signed-in connections.
     const anonymous = !!ctx?.anonymous || !ctx?.user;
     // A signed-in caller may read their OWN private draft — the one exception to the absolute pending exclusion, and
     // it is in the QUERY, keyed on the creator, so nobody else's draft can

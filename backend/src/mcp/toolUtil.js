@@ -1,5 +1,5 @@
 // Shared helpers for MCP tool handlers: uniform response envelope, the error
-// taxonomy from MCP plan §5.4, and the standalone access checks (the service-
+// code taxonomy (fail), and the standalone access checks (the service-
 // context equivalents of middleware/cellarAccess + middleware/bottleAccess —
 // same semantics, no req/res).
 const { z } = require('zod');
@@ -19,7 +19,7 @@ const objectId = z.string().regex(/^[a-f0-9]{24}$/i, 'must be a 24-hex id');
 const MSG_CELLAR_NOT_FOUND = 'No such cellar, or you have no access to it. Use list_cellars for valid ids.';
 const MSG_BOTTLE_NOT_FOUND = 'No such bottle, or you have no access to it. Find ids via search_bottles.';
 
-/** Success envelope (§7): { summary, data, warnings?, page? } as one text part. */
+/** Success envelope: { summary, data, warnings?, page? } as one text part. */
 function ok(summary, data, extra = {}) {
   return {
     content: [{ type: 'text', text: JSON.stringify({ summary, data, ...extra }) }],
@@ -27,13 +27,13 @@ function ok(summary, data, extra = {}) {
 }
 
 /**
- * Error envelope. `code` is from the §5.4 taxonomy: invalid_input | not_found |
+ * Error envelope. `code` is from one fixed taxonomy: invalid_input | not_found |
  * forbidden_scope | budget_exhausted | conflict | rate_limited | busy |
  * unavailable. Messages are written for the calling MODEL to self-correct from,
  * not for humans.
  * `busy` = an identical idempotency_key request is mid-flight;
  * retry the SAME key shortly (distinct from `conflict`, which is not retryable).
- * `unavailable` (MCP-audit M3-low) = a backend dependency (vector search/embeddings/
+ * `unavailable` = a backend dependency (vector search/embeddings/
  * image service) is temporarily down or rebuilding — retry later; slowing the
  * call cadence does NOT help (distinct from `rate_limited`, which it is not).
  */

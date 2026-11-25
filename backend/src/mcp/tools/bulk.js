@@ -1,4 +1,4 @@
-// bulk_add — the batch write with the plan's §5.7-L2 PREVIEW → APPLY contract:
+// bulk_add — the batch write with the PREVIEW → APPLY contract:
 // a hallucinated "add 60 bottles" is caught at the preview, before a single
 // row changes. Two calls:
 //
@@ -108,7 +108,7 @@ async function planItem(item, userId, roles) {
     return { status: 'invalid', error: 'new_wine.type is required unless category is "other" (a drink that is not wine)' };
   }
   const { findOrCreateWine } = require('../../services/findOrCreateWine');
-  // producer is optional on NEW_WINE_SHAPE now; findOrCreateWine's .trim() runs
+  // producer is optional on NEW_WINE_SHAPE; findOrCreateWine's .trim() runs
   // before any option is consulted, so a preview must hand it '' not undefined.
   const res = await findOrCreateWine(
     { ...item.new_wine, producer: item.new_wine.producer || '' },

@@ -13,10 +13,10 @@ const { ok } = require('../toolUtil');
 const topN = (v, n) => (Array.isArray(v) ? v.slice(0, n) : v);
 
 // Computing stats loads the user's entire bottle set — the REST route shields
-// that with a 2-min cache. MCP callers are automated and can repeat identical
+// that with its own cache. MCP callers are automated and can repeat identical
 // calls, so a short TTL cache here removes the recompute amplification (a 60s
-// stale window is irrelevant for portfolio numbers). No invalidation signature:
-// reads-only Phase 1 can't change the data through MCP anyway.
+// stale window is irrelevant for portfolio numbers). An audited mutation drops
+// the user's entries (bustStats below, called from services/audit.js).
 const statsCache = new Map(); // `${userId}:${currency}:${scale}` -> { at, result }
 const STATS_TTL_MS = 60 * 1000;
 const STATS_CACHE_MAX = 2000;

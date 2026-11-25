@@ -1,4 +1,4 @@
-// Self-service account tools (plan §3.18): the settings, profile, support and
+// Self-service account tools: the settings, profile, support and
 // wine-request surfaces the web app's Settings page exposes — so a user running
 // their cellar entirely through an AI never has to open the site for the small
 // stuff. All validation and writes delegate to services/accountOps, the same

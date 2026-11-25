@@ -14,13 +14,10 @@ const { consumeBottle, restoreBottle, RESTORE_WINDOW_MS } = require('../services
 const { logAction } = require('./actionLedger');
 const { resolveBottleAccess } = require('./toolUtil');
 
-// Actions a caller may reverse given their scopes. Reversing a write-class
-// action needs the write grant (a consume-only token must never gain
-// delete-a-bottle power through undo).
 // Release a claim made before a mutation that then failed, so the ledger row
-// stays un-reversed and the undo can be retried (claiming
-// reversed:true and then hitting a VersionError on save() left the row marked
-// undone while nothing was actually restored — the retry then found nothing).
+// stays un-reversed and the undo can be retried: a row left reversed:true
+// after a failed save() (a VersionError) would read as undone while nothing
+// was restored, and the retry would find nothing.
 // The idempotencyKey was nulled at claim time and stays null; that only means
 // the ORIGINAL action can't idempotency-replay, which is fine — it already ran.
 async function unclaim(rowId) {
@@ -40,6 +37,9 @@ async function bumpPersonalData(userId, audience, keyId = null) {
 }
 const entryAudienceOf = (level, bottle) => (level === 'wine' ? { wineLevel: true } : { bottleIds: [bottle] });
 
+// Actions a caller may reverse given their scopes. Reversing a write-class
+// action needs the write grant (a consume-only token must never gain
+// delete-a-bottle power through undo).
 const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'lot_update', 'bulk_add', 'arrive', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
@@ -849,9 +849,9 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const ids = Object.keys(prevById);
     if (!ids.length) return fail('conflict', 'That lot update has no recorded previous values; nothing was changed.');
     // The bottles are independent: one removed since (added by mistake, then
-    // undone) has nothing to restore and must not block the rest (audit
-    // 2026-09-07). A bottle that still exists but is no longer editable does
-    // block — restoring around it would leave the lot uneven on purpose.
+    // undone) has nothing to restore and must not block the rest. A bottle
+    // that still exists but is no longer editable does block — restoring
+    // around it would leave the lot uneven on purpose.
     const resolved = [];
     const missing = [];
     for (const id of ids) {
@@ -874,10 +874,10 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       } catch (err) { failures.push({ bottle_id: String(b._id), error: err.message }); }
     }
     if (failures.length) {
-      // Keep the row undoable for exactly what is still outstanding (audit
-      // 2026-09-07: a claimed-but-partial undo could never be retried).
-      // Nothing restored → plain unclaim; some restored → prev shrinks to the
-      // failed bottles so the next undo touches only those.
+      // Keep the row undoable for exactly what is still outstanding, so a
+      // claimed-but-partial undo can be retried. Nothing restored → plain
+      // unclaim; some restored → prev shrinks to the failed bottles so the
+      // next undo touches only those.
       const outstanding = {};
       for (const f of failures) outstanding[f.bottle_id] = prevById[f.bottle_id];
       await McpActionLog.updateOne({ _id: row._id }, { $set: { reversed: false, prev: outstanding } }).catch(() => {});
@@ -912,7 +912,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     // Consumed since the action: the open-bottle fields on a consumed record
     // are preserved DRINKING HISTORY (consume deliberately keeps them) — an
     // undo must never rewrite or erase them. Same invariant the restore-undo
-    // branch enforces on status (2026-07-30 audit).
+    // branch enforces on status.
     if (CONSUMED_STATUSES.includes(bottle.status)) {
       return fail('conflict', 'That cannot be undone: the bottle has been consumed since, and its open-bottle history is part of the consumption record now. Use restore_bottle first if the consume itself was the mistake. Nothing was changed.');
     }

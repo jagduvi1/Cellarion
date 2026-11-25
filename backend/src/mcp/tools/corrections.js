@@ -1,5 +1,5 @@
-// User-facing registry correction suggestions (#985 Slice A) — the regular-
-// user counterpart of the sommelier's propose_wine_correction (somm.js).
+// User-facing registry correction suggestions — the regular-user
+// counterpart of the sommelier's propose_wine_correction (somm/corrections.js).
 // Field corrections only; merge / non-wine stay sommelier tools. All
 // semantics (validation, tier budget, ban, one-pending conflict) live in
 // services/wineProposalOps.js, shared with routes/wineProposals.js.

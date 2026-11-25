@@ -4,8 +4,8 @@
 //
 // Tool modules may require Mongoose models freely, but must NEVER top-require
 // services/search or anything else that pulls the ESM-only meilisearch package
-// — lazy-require those inside handlers (jest cannot parse the ESM dist; the
-// same chain broke auth.refresh.test.js, fixed in PR #702).
+// — lazy-require those inside handlers (jest cannot parse the ESM dist, so
+// every suite that loads this chain would fail).
 require('./meta');
 require('./cellars');
 require('./bottles');

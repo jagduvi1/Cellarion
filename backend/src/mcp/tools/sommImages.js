@@ -1,8 +1,7 @@
 // Sommelier MCP tools for the PHOTO REVIEW queue (list_image_queue /
 // review_image): the photos members upload on their bottles wait for a curator
 // before they join the wine's public gallery, and reported photos wait for an
-// answer. Until now only an admin could work this queue, on the web; a curator
-// routine can now do it from the connector.
+// answer. A curator works this queue from the connector, an admin on the web.
 //
 // Role gating is STRUCTURAL (requireRole, same as tools/somm.js) with a re-check
 // inside each handler. The REST twin, /api/admin/images, stays admin-only: that
@@ -21,7 +20,7 @@
 //     person's photos, and nothing else about them crosses this surface;
 //   - every read leaves an audit row naming the image ids (never the bytes),
 //     like the curation reads of label scans;
-//   - label scans are never listed (private curation evidence, audit L-6), and
+//   - label scans are never listed (private curation evidence), and
 //     photos with no bottle and no wine — uploads abandoned before the bottle
 //     was saved — are left to the 30-day sweep (services/scanImageRetentionJob).
 const crypto = require('crypto');

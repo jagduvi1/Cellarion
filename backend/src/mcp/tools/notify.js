@@ -1,14 +1,14 @@
-// Proactive-sommelier companions (plan §3.12 + §4): the PULL side of the
-// event-bus pushes. A session subscribed to cellarion://alerts gets nudged
-// when something lands; these tools are how the model then reads and clears
-// the alerts — and how a climate excursion is inspected.
+// Proactive-sommelier companions: the PULL side of the event-bus pushes. A
+// session subscribed to cellarion://alerts gets nudged when something lands;
+// these tools are how the model then reads and clears the alerts — and how a
+// climate excursion is inspected.
 const { z } = require('zod');
 const Notification = require('../../models/Notification');
 const { registerTool } = require('../registry');
 const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess } = require('../toolUtil');
 const { isValidId } = require('../../utils/validation');
 // Marking read changes what a token poll of /api/notifications answers from
-// memory (release audit 2026-10-09, M1 — the REST routes bumped, this did not).
+// memory, so this bumps the version exactly as the REST routes do.
 const { bumpNotificationsVersion } = require('../../services/dataVersion');
 
 const serialize = (n) => ({

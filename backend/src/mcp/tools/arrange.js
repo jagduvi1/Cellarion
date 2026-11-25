@@ -1,4 +1,4 @@
-// auto_arrange (plan Phase 3) — server-side auto-arrange for one rack, using
+// auto_arrange — server-side auto-arrange for one rack, using
 // the SAME decision engine as the web app's Arrange modal (utils/rackArrange,
 // the backend twin of frontend/src/utils/rackArrange.js) under the bulk-style
 // preview → apply write-safety contract:
@@ -31,8 +31,8 @@ const { ok, fail, objectId, resolveCellarAccess } = require('../toolUtil');
 const { logAction, trimOutstandingPreviews } = require('../actionLedger');
 const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
 
-// Unconsumed arrange previews kept per user; the
-// plan for a full rack is small, but the row count was unbounded.
+// Unconsumed arrange previews kept per user: the plan for a full rack is
+// small, but without a cap the row count would be unbounded.
 const MAX_OUTSTANDING_PREVIEWS = 5;
 
 const PREVIEW_FRESH_MS = 15 * 60 * 1000;

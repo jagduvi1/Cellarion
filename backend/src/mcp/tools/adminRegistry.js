@@ -4,10 +4,10 @@
 //
 // Role gating is STRUCTURAL (requireRole, same pattern as tools/somm.js): for
 // any non-admin connection this tool is UNREGISTERED, not hidden. Creation
-// still runs through findOrCreateWine — the same #674-hardened dedup
-// chokepoint as everything else — so an admin's AI gets "did you mean?"
-// candidates rather than minting duplicates; the image path shares
-// attachOfficialWineImage with the admin REST route (no drift).
+// still runs through findOrCreateWine — the same dedup chokepoint as
+// everything else — so an admin's AI gets "did you mean?" candidates rather
+// than minting duplicates; the image path shares attachOfficialWineImage
+// with the admin REST route (no drift).
 //
 // Registry actions are NOT personal-cellar actions: they are audited
 // (wine.create / admin.wine.image.set) but deliberately NOT written to the
@@ -284,9 +284,8 @@ registerTool({
   handler: async (args, ctx) => {
     if (!isValidId(args.country_id)) return fail('invalid_input', 'country_id must be a 24-hex Mongo id.');
     if (args.region_id && !isValidId(args.region_id)) return fail('invalid_input', 'region_id must be a 24-hex Mongo id.');
-    // The schema's "must belong to the same country" was documentation, not
-    // validation — enforce it via the shared guard so
-    // this surface and the REST twin cannot drift.
+    // The schema does not check that the region belongs to the same country:
+    // the shared guard does, so this surface and the REST twin cannot drift.
     const { appellationRefsError } = require('../../services/taxonomyReview');
     const refsError = await appellationRefsError(args.country_id, args.region_id);
     if (refsError) return fail('invalid_input', refsError);

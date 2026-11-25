@@ -2,8 +2,8 @@
  * client over Streamable HTTP. Run:  node src/mcp/smoke.js
  *
  * NOT part of the jest suite: the SDK is ESM-only and jest's CJS transform can't
- * load it via import(), so end-to-end transport coverage lives here (and, later,
- * in the eval harness — MCP plan §9). Auth/DB are bypassed with an injected ctx
+ * load it via import(), so end-to-end transport coverage lives here (and,
+ * against a live stack, in e2e.js). Auth/DB are bypassed with an injected ctx
  * so this exercises the MCP layer (registry, scope filtering, transport,
  * stateful sessions + subscriptions) in isolation, exactly as the /api/mcp
  * route wires it. */
@@ -85,7 +85,7 @@ async function main() {
   if (!about.contents[0].text.includes('AGPL-3.0')) throw new Error('about resource payload wrong');
   console.log('[smoke] cellarion://about read OK');
 
-  // Prompts (the third primitive, Phase 3): list is scope-filtered — a read
+  // Prompts (the third primitive): list is scope-filtered — a read
   // ctx must see the read prompts but NOT the write-workflow one — and
   // prompts/get renders the template with its arguments interpolated.
   const { prompts } = await client.listPrompts();
@@ -97,7 +97,7 @@ async function main() {
   if (!rendered.messages[0].content.text.includes('pair_with_dish')) throw new Error('prompt lost its workflow');
   console.log('[smoke] prompts round-trip OK (scope-filtered, args interpolated)');
 
-  // Stateful session + subscriptions (Phase 4): the SDK client keeps the
+  // Stateful session + subscriptions: the SDK client keeps the
   // Mcp-Session-Id from initialize, resources/subscribe registers interest,
   // an event-bus nudge becomes notifications/resources/updated on the GET
   // stream, and DELETE tears the session down.
@@ -124,7 +124,7 @@ async function main() {
   if (sessionCounts().total !== 0) throw new Error(`session not torn down on DELETE (${sessionCounts().total} left)`);
   console.log('[smoke] session terminated (DELETE) + store empty');
 
-  // Anonymous public surface (Phase 6): scopes [] + user null exposes exactly
+  // Anonymous public surface: scopes [] + user null exposes exactly
   // the public tool set, the about resource, no prompts, and the distinct
   // server identity/instructions.
   app.post('/api/mcp/public', (req, res, next) =>

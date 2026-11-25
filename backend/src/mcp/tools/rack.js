@@ -1,5 +1,5 @@
-// Cellar / rack / placement write tools (plan Phase 2c). Grid racks only in
-// v1 (modular racks, zones, disabled-slot management, auto-arrange deferred).
+// Cellar / rack / placement write tools; auto-arrange is in arrange.js. Grid
+// racks only (modular racks, zones, disabled-slot management: the web app).
 // All mutations run through services/rackOps — the SAME code the REST routes
 // use, so the procedural one-bottle-per-slot invariant and the move ordering
 // can't drift between surfaces.

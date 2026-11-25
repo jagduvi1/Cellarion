@@ -1,6 +1,6 @@
-// Wine-list MCP tools (plan §3.13, Phase 7): the restaurant/sommelier menu
-// feature over MCP. list_wine_lists / get_wine_list [read] +
-// add_to_list / update_list_pricing [write].
+// Wine-list MCP tools: the restaurant/sommelier menu feature over MCP.
+// list_wine_lists / get_wine_list [read] + add_to_list / update_list_pricing
+// [write].
 //
 // Wine lists are USER-OWNED documents (routes/wineLists.js is requireAuth
 // only, no somm role) — so these are scope-gated personal tools, not
@@ -21,7 +21,7 @@ const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, pageParams, wineSummary } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
 // Single source for the glass-price rule — identical to the web
-// editor's, and now floored at one step so a cheap wine no longer suggests 0.
+// editor's, and floored at one step so a cheap wine never suggests 0.
 const { suggestGlassPrice } = require('../../utils/glassPrice');
 // get_wine_list reads the SAME rendered structure the app and the PDF use —
 // nested auto-mode headings and live per-entry stock, so a client sees the

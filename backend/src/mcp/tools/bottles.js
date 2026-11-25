@@ -61,7 +61,7 @@ registerTool({
   // (5/20/100) and the bottle carries the RAW value, so a server-side
   // threshold would compare across scales incorrectly (REST normalizes in
   // memory). Ratings ship in every result; the calling model filters better
-  // than a wrong query would. A normalized filter can come with Phase 3.
+  // than a wrong query would.
   inputSchema: {
     query: z.string().max(200).optional().describe('Free-text search (name, producer, region, grape…)'),
     cellar_id: objectId.optional().describe('Restrict to one cellar (any cellar you own or are a member of)'),
@@ -82,8 +82,7 @@ registerTool({
     const { limit, offset } = pageParams(args, 20, 50);
     const warnings = [];
     // Trimmed once, here: a whitespace-only query is no query — it must take
-    // the "newest first" default, not the ranked path with nothing to rank by
-    // (release audit 2026-09-27, L: it returned oldest-first).
+    // the "newest first" default, not the ranked path with nothing to rank by.
     const query = String(args.query || '').trim();
 
     // Resolve the cellar scope first (access model in the header comment).
@@ -97,10 +96,9 @@ registerTool({
     }
 
     // A user with no owned cellar has nothing to search: answer before either
-    // backend is touched. searchBottles now refuses to run unscoped as well,
-    // but this tool must not depend on that — an empty scope once reached the
-    // search index unfiltered and returned every tenant's bottles (security
-    // audit 2026-09-02, D10-5).
+    // backend is touched. searchBottles answers an empty scope with no hits as
+    // well, but this tool must not depend on that: an unscoped search would
+    // return every tenant's bottles.
     if (cellarIds.length === 0) {
       return ok('0 bottles — you own no cellar yet (pass cellar_id to search a cellar shared with you)', [], {
         page: { limit, offset, total: 0 },

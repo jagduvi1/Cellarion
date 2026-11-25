@@ -1,5 +1,5 @@
-// Data-portability export tools (plan §3.3 export_cellar, §3.18 get_account_export,
-// Appendix A "Cellar export + GDPR account export" → Phase 1).
+// Data-portability export tools: export_cellar and get_account_export (the
+// GDPR account export).
 //
 // These tools do NOT return the export inline — an export is a file, not model
 // context (the cellar payload caps at 50k documents, the account export spans
@@ -7,9 +7,9 @@
 // caller's context window and, for the account export, hand the user's full PII
 // to the third-party AI. So each tool returns a compact summary + a short-lived
 // download URL (services/exportLinks.js): the user opens it, the bytes go from
-// us to their disk, and the model never sees them. Plan principle #7.
+// us to their disk, and the model never sees them.
 //
-// Scope split is deliberate and stricter than the plan's casual annotations:
+// Scope split is deliberate:
 //   export_cellar      → read   (cellar data — already reachable via read tools)
 //   get_account_export → write  (account-wide PII: email, audit log, support
 //                                tickets, discussions — a superset the `read`

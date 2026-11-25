@@ -1,4 +1,4 @@
-// semantic_search_wines (plan §3.17, the Phase-3 half of the RAG split):
+// semantic_search_wines (the retrieval half of the RAG split):
 // free-text meaning search over the EXISTING wine embeddings. Unlike
 // find_similar_wines ($0 — reuses a stored vector), a free-text query needs ONE
 // Voyage query-embed, so this is the only MCP read with a real (fractional-cent)
@@ -9,7 +9,7 @@
 //   3. a query-vector cache, so repeats and rephrasings-into-identical-text
 //      are free and never re-debited.
 // Retrieval is cheap here; generation (the actual recommendation prose) happens
-// in the CALLER's model for free — never proxy an LLM for this (§5.2).
+// in the CALLER's model for free — never proxy an LLM for this.
 const { z } = require('zod');
 const Cellar = require('../../models/Cellar');
 const Bottle = require('../../models/Bottle');

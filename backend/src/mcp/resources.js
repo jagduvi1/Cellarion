@@ -1,8 +1,8 @@
-// MCP resources — read-only context a client attaches to the conversation
-// (plan §3.14/§3.16). Same scope model as tools; handlers receive
-// (uri, params, ctx) and return { contents: [{ uri, mimeType, text }] }.
-// Errors are returned as an error JSON body (a resource read has no isError
-// envelope), keeping the §5.4 taxonomy visible to the model either way.
+// MCP resources — read-only context a client attaches to the conversation.
+// Same scope model as tools; handlers receive (uri, params, ctx) and return
+// { contents: [{ uri, mimeType, text }] }. Errors are returned as an error
+// JSON body (a resource read has no isError envelope), keeping the tools'
+// error codes visible to the model either way.
 const pkg = require('../../package.json');
 const { isHostedCellarion } = require('../config/hostedInstance');
 const { registerResource } = require('./registry');

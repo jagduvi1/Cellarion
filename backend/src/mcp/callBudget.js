@@ -1,4 +1,4 @@
-// Cross-request MCP tool-call budget (security audit M-4 / prior audit M5).
+// Cross-request MCP tool-call budget.
 //
 // The per-request cap (MAX_CALLS_PER_REQUEST) and the per-IP HTTP limiters
 // count REQUESTS, not tool calls — one request fans out to up to 20 calls
@@ -15,7 +15,7 @@
 const WINDOW_MS = 15 * 60 * 1000;
 
 // Authenticated: ~2.2 calls/sec sustained for 15 min — far above any real
-// agent session, far below the ~4,000 the request cap alone allowed.
+// agent session, far below the default request limit × per-request cap (6,000).
 const USER_CALL_MAX = 2000;
 // Anonymous per-IP: the public request limiter is 60/15min × up to 10 calls =
 // 600 possible; this tightens the actual work to 200 tool calls/15min/IP.
@@ -49,14 +49,12 @@ function takeCallSlot(key, max) {
  * The budget key + cap for a request context (anon → IP, else → user id).
  *
  * The anonymous key uses rateLimitKey, NOT getClientIp: a client is routinely
- * assigned a whole IPv6 /64, so keying on the full /128 let one rotate the low
- * 64 bits for a fresh budget per request. This was the last per-IP key in the
- * codebase still on the unmasked address after the L-10 sweep (security audit
- * 2026-07-25 L-1) — and it mattered here because the HTTP limiter in front
- * (publicMcpLimiter) IS /64-masked, so the two disagreed on what "one client"
- * means and the effective anonymous ceiling was ~3x the intended one.
- * (middleware/superAdmin.js keeps getClientIp on purpose — an IP allowlist
- * needs the exact address.)
+ * assigned a whole IPv6 /64, so keying on the full /128 would let one rotate
+ * the low 64 bits for a fresh budget per request. It must also agree with the
+ * HTTP limiter in front (publicMcpLimiter), which IS /64-masked: if the two
+ * disagreed on what "one client" means, the effective anonymous ceiling would
+ * be a multiple of the intended one. (middleware/superAdmin.js keeps
+ * getClientIp on purpose — an IP allowlist needs the exact address.)
  */
 function budgetFor(ctx) {
   if (ctx.anonymous || !ctx.user) {

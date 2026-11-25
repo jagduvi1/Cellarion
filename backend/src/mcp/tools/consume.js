@@ -1,17 +1,17 @@
-// The first MUTATING MCP tools (plan §5.7 write-safety ships WITH them):
-// consume_bottle / restore_bottle / undo_last, scope `consume` — the same
-// scope the Home Assistant integration already uses for its consume button.
+// The consume-scoped MUTATING tools, with the full write-safety stack:
+// consume_bottle / restore_bottle / undo_last, scope `consume` (undo_last also
+// `write`) — the scope Home Assistant's consume button uses.
 //
 // Write-safety layers active here:
 //  - L1 structural: only `consume`-scoped callers ever see these tools; the
-//    worst outcome is a reversible soft status change (no deletes exist).
+//    worst outcome is a reversible soft status change (none of them deletes).
 //  - L2 client confirmation: destructiveHint + concrete summaries let clients
 //    prompt "consume the 2015 Barolo?" before executing.
 //  - L3 server checks: editor-level access re-verified per call, an already-
 //    consumed bottle is a conflict (a looping agent can't double-log), and an
 //    optional idempotency_key replays the ORIGINAL result instead of re-acting.
 //  - L4 reversibility + ledger: every action lands in McpActionLog (undo_last,
-//    the future activity timeline) and in the normal audit log (which also
+//    the activity timeline) and in the normal audit log (which also
 //    emits the stats_changed SSE nudge the HA integration listens to).
 //
 // bottleOps is the SAME implementation the REST routes run — validation, rack

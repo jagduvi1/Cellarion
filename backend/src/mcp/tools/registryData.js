@@ -1,5 +1,5 @@
-// Public key vocabulary + values over MCP (#985 Slice B). All semantics live
-// in services/registryDataOps.js, shared with routes/registryData.js and
+// Public key vocabulary + values over MCP. All semantics live in
+// services/registryDataOps.js, shared with routes/registryData.js and
 // routes/admin/registryData.js. Users propose keys and suggest values;
 // admins decide — nothing auto-applies to the registry.
 const { z } = require('zod');
@@ -60,9 +60,9 @@ registerTool({
       wine_value: f.wineValue,
       overrides: f.overrides,
       // Who supplied a value is not something a reader is told (services/
-      // registryDataOps no longer even loads it). The FIELD stays, always null:
-      // docs/mcp-versioning.md forbids removing a response field in place, it
-      // was nullable from the start, and an agent wired against it keeps
+      // registryDataOps does not even load it). The FIELD stays, always null:
+      // docs/mcp-versioning.md forbids removing a response field within a
+      // major line, it is nullable, and an agent wired against it keeps
       // parsing. Drop it only with the next major line.
       contributed_by: null,
       // A pending suggestion (anyone's) holds this slot's one review slot —

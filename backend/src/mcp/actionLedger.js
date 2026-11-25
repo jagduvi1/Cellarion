@@ -2,13 +2,13 @@
 // idempotency claim/replay + the McpActionLog row every mutation records for
 // undo_last / the activity timeline. See models/McpActionLog.js.
 //
-// Concurrency contract (prior-audit M2): the idempotency decision is an ATOMIC
-// CLAIM, not a read. replay() upserts a `pending` stub row on the unique
+// Concurrency contract: the idempotency decision is an ATOMIC CLAIM, not a
+// read. replay() upserts a `pending` stub row on the unique
 // {user, idempotencyKey} index BEFORE the caller mutates — of two concurrent
 // same-key twins exactly one wins the insert; the loser gets the stored result
-// (replay) or an in-progress conflict, and never reaches the mutation. The old
-// shape (findOne → mutate → create, duplicate-key swallowed) let both twins
-// mutate and only deduplicated the ledger row afterwards.
+// (replay) or an in-progress conflict, and never reaches the mutation. A read
+// (findOne → mutate → create, duplicate-key swallowed) would let both twins
+// mutate and only deduplicate the ledger row afterwards.
 //
 // Idempotency keys are scoped PER TOOL: the stub records the
 // claiming tool, and a key seen on a DIFFERENT tool is refused (invalid_input)
@@ -26,9 +26,9 @@ const CLAIM_STALE_MS = 2 * 60 * 1000;
 // `idempotencyBusy` tells the server's release-on-error wrapper that this
 // error DOESN'T mean "my claim failed" — a concurrent twin owns the key and
 // its live pending claim must not be deleted out from under it. The `busy`
-// code (distinct from `conflict`, MCP-audit M1) tells the CLIENT this is
-// transient: retry the SAME idempotency_key shortly, don't rotate it (rotating
-// would bypass the claim and double-execute).
+// code (distinct from `conflict`) tells the CLIENT this is transient: retry
+// the SAME idempotency_key shortly, don't rotate it (rotating would bypass
+// the claim and double-execute).
 const inProgress = () => ({
   isError: true,
   idempotencyBusy: true,
@@ -121,10 +121,10 @@ async function replay(ctx, idempotencyKey, toolName) {
     if (!existing) return inProgress(); // deleted in the same instant — treat as busy, retry works
   }
 
-  // Cross-tool reuse guard (M2): the key belongs to another tool — refuse
-  // BEFORE any replay/steal so we never return the wrong tool's result and
-  // never steal a different tool's live claim. Legacy stubs (tool:'pending')
-  // predate per-tool scoping and fall through to the stale-steal path.
+  // Cross-tool reuse guard: the key belongs to another tool — refuse BEFORE
+  // any replay/steal so we never return the wrong tool's result and never
+  // steal a different tool's live claim. A stub claimed without a tool name
+  // (tool:'pending') names no owner and falls through to the stale-steal path.
   if (toolName && existing.tool && existing.tool !== 'pending' && existing.tool !== toolName) {
     return crossToolConflict(existing.tool);
   }

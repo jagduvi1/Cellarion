@@ -1,4 +1,4 @@
-// Golden tool-selection cases (plan §9): natural phrasings a real user would
+// Golden tool-selection cases: natural phrasings a real user would
 // type into their assistant, with the tool a well-instructed model SHOULD
 // reach for first. `anyOf` marks cases where more than one first move is
 // legitimately correct (e.g. resolving a cellar id before a per-cellar tool).
@@ -22,15 +22,15 @@ const CASES = [
   {
     id: 'portfolio-value',
     prompt: 'What is my wine collection worth right now?',
-    // value_report (Phase 3) answers collection-worth questions at least as
+    // value_report answers collection-worth questions at least as
     // well as the stats overview — both are correct first moves.
     expect: { anyOf: ['cellar_stats', 'value_report'] },
   },
   {
     id: 'drink-soon-urgency',
     prompt: 'Which of my wines should I drink soon, before they go past their peak?',
-    // Phase 3 added two tools that answer this directly (urgency ladder in the
-    // health check; readiness ranking in tonight's candidates).
+    // Two tools answer this directly as well (urgency ladder in the health
+    // check; readiness ranking in tonight's candidates).
     expect: { anyOf: ['cellar_stats', 'search_bottles', 'cellar_health_check', 'what_should_i_open_tonight'] },
   },
   {
@@ -74,7 +74,7 @@ const CASES = [
   { id: 'no-tool-smalltalk', prompt: 'Hi! How are you today?', expect: { none: true } },
 
 
-  // ── Phase 3: sommelier intelligence ──────────────────────────────────────
+  // ── Sommelier intelligence ───────────────────────────────────────────────
   {
     id: 'health-check',
     prompt: 'Give my cellar a health check — am I buying faster than I drink?',
@@ -127,7 +127,7 @@ const CASES = [
     expect: { anyOf: ['auto_arrange', 'list_racks', 'list_cellars'] }, // may resolve ids first; apply still needs a preview
   },
 
-  // ── Phase 4: proactive sommelier ─────────────────────────────────────────
+  // ── Proactive sommelier ──────────────────────────────────────────────────
   {
     id: 'any-alerts',
     prompt: 'Anything in my cellar that needs my attention right now?',
@@ -145,7 +145,7 @@ const CASES = [
     args: (a) => a.all === true || a.notification_id !== undefined,
   },
 
-  // ── Phase 6: public registry/guides tools (also on the personal surface) ──
+  // ── Public registry/guides tools (also on the personal surface) ──
   {
     id: 'when-to-drink-vintage',
     prompt: 'When should a 2016 Barolo Monfortino be drunk? Is it ready now?',
@@ -165,7 +165,7 @@ const CASES = [
     args: (a) => (a.image_url === undefined || /barolo-label/.test(a.image_url)) && a.label_only !== true,
   },
 
-  // ── Phase 7: self-service account tools ──
+  // ── Self-service account tools ──
   {
     id: 'read-preferences',
     prompt: 'What currency and rating scale is my account set to?',
@@ -219,7 +219,7 @@ const CASES = [
     expect: { anyOf: ['request_wine_addition', 'resolve_wine', 'search_registry'] },
   },
 
-  // ── Writes (Phase 2, consume/write scope) ────────────────────────────────
+  // ── Writes (consume/write scope) ─────────────────────────────────────────
   // Many writes legitimately open with a READ to resolve an id from the user's
   // words ("my 2015 Barolo" → search_bottles → consume), so those cases accept
   // the lookup-first move via anyOf. The registry-safe add is the exception:

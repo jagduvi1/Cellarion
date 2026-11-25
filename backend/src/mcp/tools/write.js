@@ -1,13 +1,13 @@
-// Registry-safe write tools (plan §5.1 — the two-step resolve→add contract):
+// Registry-safe write tools (the two-step resolve→add contract):
 // resolve_wine [read] / add_bottle [write] / update_bottle [write].
 //
 // Registry integrity is the design center here. add_bottle can only reference
 // an EXISTING registry wine (wine_id) or go through findOrCreateWine — the
-// same #674-hardened chokepoint every other surface uses (producer-in-name
-// strip, sibling match, fuzzy scoring, soft-zone). MCP is deliberately
-// STRICTER than REST: sibling matching stays ON even for confirmed creates,
-// and every wine minted here is stamped createdVia:'mcp' + audited
-// (wine.create), so admins can review AI-created wines as a class.
+// same chokepoint every other surface uses (producer-in-name strip, sibling
+// match, fuzzy scoring, soft-zone). MCP is deliberately STRICTER than REST:
+// sibling matching stays ON even for confirmed creates, and every wine minted
+// here is stamped createdVia:'mcp' + audited (wine.create), so admins can
+// review AI-created wines as a class.
 //
 // AI cost: creating a bottle fires the same fire-and-forget embed/enrich calls
 // as the web app, which carry their own kill-switch + per-user budget gates —
@@ -17,9 +17,8 @@ const { z } = require('zod');
 const { findVisibleWine } = require('../../services/wineVisibility');
 const { registerTool } = require('../registry');
 // findOrCreateWine is required LAZILY inside handlers: it top-requires
-// services/search → the ESM-only meilisearch package, which jest cannot parse
-// — a top-level require here would break every suite that loads the tool
-// registry (the #702 failure mode).
+// services/search → the ESM-only meilisearch package, which jest cannot parse;
+// a top-level require here breaks every suite that loads the tool registry.
 const { addBottle, updateBottleFields, markArrived } = require('../../services/bottleOps');
 const { parseExpectedArrival } = require('../../utils/onOrder');
 const { ORDERED_STATUS } = require('../../config/constants');
@@ -39,8 +38,8 @@ const { logAction, replay, releaseClaim } = require('../actionLedger');
 const NEW_WINE_SHAPE = {
   name: z.string().trim().min(1).max(200).describe('Wine name WITHOUT the producer in it (e.g. "Sauvignon Blanc", not "Cloudy Bay Sauvignon Blanc")'),
   // Optional, NOT because a producerless wine is fine — it is the single most
-  // valuable identity field — but because refusing the add was worse: the
-  // bottle was simply lost. Omitting it mints a pendingIdentity registry row a
+  // valuable identity field — but because refusing the add is worse: the
+  // bottle would simply be lost. Omitting it mints a pendingIdentity row a
   // sommelier completes; the model should still ask the user first.
   producer: z.string().trim().max(200).optional()
     .describe('Omit ONLY when the user genuinely cannot tell you (unreadable label). The wine is then filed for sommelier completion and stays invisible to other users until then — never guess a producer to fill this in.'),
@@ -164,8 +163,7 @@ registerTool({
       return fail('invalid_input', 'draft:true applies to new_wine only — an existing registry wine cannot become a draft.');
     }
     // Before any wine is created: addBottle refuses an unsupported currency,
-    // and a new_wine would otherwise be left without its bottle (release
-    // audit 2026-10-13).
+    // and a new_wine would otherwise be left without its bottle.
     const currencyCheck = parseCurrency(args.currency);
     if (!currencyCheck.ok) return fail('invalid_input', currencyCheck.error);
     // The same for an order's month (a real month, not too far off): checked
@@ -199,9 +197,8 @@ registerTool({
     if (args.wine_id) {
       if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
       // Visible-to-this-caller (services/wineVisibility): the creator may add
-      // more bottles of their own pending row (that is how a case of one
-      // unreadable label works), a stranger gets the same not_found a missing
-      // id gets — security audit M-4.
+      // more bottles of their own pending row (how a case of one unreadable
+      // label works); a stranger gets the same not_found as a missing id.
       wineDoc = await findVisibleWine(args.wine_id, {
         userId: ctx.user.id, roles: ctx.user.roles,
         select: '+sweetnessStyle',
@@ -474,9 +471,8 @@ registerTool({
     // Notes and the purchase travel too, but only here, on an explicit
     // apply_to_lot — the app's own lot paths keep them per bottle.
     const lotFields = lotFieldsRequested;
-    // A price is meaningless without its currency: carry this bottle's
-    // (audit 2026-09-07 — siblings kept their own, default USD, so "350"
-    // landed as 350 USD next to 350 SEK).
+    // A price is meaningless without its currency: carry this bottle's, or a
+    // sibling would read the same number in its own (USD by default).
     if (lotFields.price !== undefined && lotFields.currency === undefined && bottle.currency) lotFields.currency = bottle.currency;
     const lot = { count: 0, applied: [], unchanged: 0, skipped: [] };
     const primaryChanged = Object.keys(result.changes).length > 0;
