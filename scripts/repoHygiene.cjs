@@ -15,17 +15,23 @@
 //   hex-id        a bare 8-hex token with both letters and digits in a comment
 //                 or a test title (24-hex ObjectIds, UUID parts, #rrggbbaa
 //                 colours and 0x literals do not match)
+//   history-mark  a comment that cites where a rule came from instead of
+//                 stating it: an audit with its date or finding id, an issue,
+//                 pull request or discussion number, a date or a dated source
+//                 alone in a parenthesis, a finding id alone in a parenthesis
 //   control-byte  a byte below 0x20 other than tab, CR and LF
 //
-// JavaScript files get all three. Stylesheets, server and workflow
-// configuration, shell and Python files are read as plain text: ticket-id
-// and control-byte only, because their comment syntax is not parsed.
+// JavaScript files get all four. Stylesheets get ticket-id, history-mark and
+// control-byte. Server and workflow configuration, shell and Python files are
+// read as plain text: ticket-id and control-byte only, because their comment
+// syntax is not parsed.
 //
 // Why: support-ticket ids, user handles and user data stay out of the public
-// repo. A comment that cites a ticket is rewritten as the rule it was about;
-// history goes to git. The baseline holds counts per file, never ids, and
-// only goes down: --update lowers entries and refuses to add one. Control
-// bytes are never allowed, so they are not baselined.
+// repo, and a comment says what holds now. A comment that cites a ticket, an
+// audit or an issue is rewritten as the rule it was about; history goes to
+// git. The baseline holds counts per file, never ids, and only goes down:
+// --update lowers entries and refuses to add one. Control bytes are never
+// allowed, so they are not baselined.
 //
 // Known limits: the files are walked on disk, so an untracked file counts on
 // a developer machine and not in CI; a comment opener inside a regex literal
@@ -49,6 +55,9 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '__snaps
 const SKIP_FILES = new Set(['scripts/repoHygiene.cjs', 'backend/src/repoHygiene.test.js', 'frontend/src/repoHygiene.test.js']);
 // Vendored bundles are not ours to reword.
 const SKIP_PREFIXES = ['frontend/public/developers/'];
+// An archived script is a finished one-time run kept as a record: the date and
+// the outcome of the run in its header are what it is kept for.
+const RECORD_PREFIXES = ['backend/src/scripts/archive/'];
 
 // "ticket" followed within 24 characters by an 8-hex id or by a 2026-09(-13) style date.
 const TICKET_RE = /\btickets?\b[^\n]{0,24}?\b(?:[0-9a-f]{8}|20\d\d-\d\d(?:-\d\d)?)\b/i;
@@ -59,6 +68,42 @@ const LEADER_RE = /^\s*(?:\*+|\/\/+|#+)?\s*/;
 const HEX_RE = /(?<![\w#\-/.])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{8}(?![\w\-])/;
 const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
 const TITLE_RE = /\b(?:describe|it|test)(?:\.(?:only|skip))?\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
+
+// The shapes of a reference mark. A finding id is what an audit numbers its
+// findings with (M-2, L14, D08-1, HIGH); a source is who or what raised the
+// point. An audit counts only with a date, an id or a severity beside it:
+// "(audit)" and "Audit: one row per write" are about the audit log.
+const MARK_ID = String.raw`(?:[A-Z]{1,4}\d{0,2}-\d{1,2}[a-z]?|[A-Z]{1,2}\d{1,2}[a-z]?|(?:LOW|MED|MEDIUM|HIGH|INFO|CRIT)(?:-\d+)?|R\d-#\d+|RC-?\d+|#\d{1,2})`;
+const MARK_IDS = `${MARK_ID}(?:\\s?[/,+&]\\s?${MARK_ID})*`;
+const MARK_FINDING = String.raw`(?:(?:[MLHI]|UX|LOW|MED|HIGH|INFO|CRIT)-\d{1,2}[a-z]?|[A-Z]{1,2}\d{1,2}-\d{1,2})`;
+const MARK_KIND = '(?:security|release|scaling|grand|mcp|pre-deploy|pre-release|prod|registry|code|whole-system|bridge|privacy)';
+const MARK_DATE = String.raw`20\d\d-\d\d(?:-\d\d)?`;
+const MARK_SOURCE = '(?:forum request|forum feedback|beta feedback|user report|user request|support ticket|walkthrough|live walkthrough|newcomer walkthrough|usability pass|usability plan|bug audit|registry backlog|registry lockdown|strategy|decided|found|measured|confirmed|pilot)';
+const AUDIT = String.raw`(?:${MARK_KIND}[- ])?audits?(?:[ ,]+(?:of )?${MARK_DATE})?(?:[ ,:]+(?:item |finding )?${MARK_IDS})?`;
+const AUDIT_MARK_RES = [
+  new RegExp(String.raw`\((?:see |cf\. )?(?:the )?${AUDIT}\)`, 'i'),      // (release audit 2026-09-27, L)
+  new RegExp(String.raw`\((?:the )?${AUDIT}: `, 'i'),                     // (audit M-2: the box holds …
+  new RegExp(String.raw`(?:^|[.!?]\s+)${AUDIT}: (?=\w)`, 'i'),            // Audit 2026-09 D01-4: the cell …
+];
+const AUDIT_CITES_RE = /\d|\b(?:LOW|MED|MEDIUM|HIGH|INFO|CRIT)\b/;
+const MARK_RES = [
+  new RegExp(String.raw`\([A-Z_]*AUDIT_\d{4}-\d{2}-\d{2}(?: ${MARK_IDS})?\)`),
+  // A parenthesis that holds an audit and its date, whatever stands between and after.
+  new RegExp(String.raw`\([^()]{0,40}\baudits?\b[^()]{0,20}${MARK_DATE}[^()]{0,12}\)`, 'i'),
+  // A number with its word, or four digits and more: "(#333)" is a colour.
+  /\((?:see )?(?:GitHub )?(?:issues?|PR|pull request|discussion)\s?#\d{2,5}(?:\s?(?:,|and|&|\/)\s?#\d{2,5})*\)/i,
+  /\((?:see )?#\d{4,5}(?:\s?(?:,|and|&|\/)\s?#\d{4,5})*\)/,
+  new RegExp(String.raw`\(${MARK_DATE}\)`),
+  new RegExp(String.raw`\(${MARK_SOURCE}[ ,]+${MARK_DATE}(?:[ ,]+${MARK_IDS})?\)`, 'i'),
+  new RegExp(String.raw`\(${MARK_FINDING}(?:\s?\/\s?${MARK_FINDING})*\)`),
+];
+
+/** Whether one line of comment text carries a reference mark. */
+function hasHistoryMark(text) {
+  const body = text.replace(LEADER_RE, '');
+  if (MARK_RES.some((re) => re.test(body))) return true;
+  return AUDIT_MARK_RES.some((re) => { const m = re.exec(body); return !!m && AUDIT_CITES_RE.test(m[0]); });
+}
 
 function listFiles(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -126,8 +171,10 @@ function commentLines(lines) {
 /**
  * Findings for one file's text: [{ line, kind, excerpt }]. `code: false` reads
  * the file as plain text (no hex-id pass, which needs JavaScript comments).
+ * `comments` says whether its comments can be told from its code (JavaScript
+ * and stylesheets): only then is there a history-mark pass.
  */
-function findings(text, { code = true } = {}) {
+function findings(text, { code = true, comments = code } = {}) {
   const found = [];
   const lines = text.split('\n');
   const ticketLines = new Set();
@@ -147,11 +194,13 @@ function findings(text, { code = true } = {}) {
       ticketLines.add(i + 1).add(i + 2); // the next line holds the id: counted here, once
     }
   });
-  if (!code) return found;
+  if (!comments) return found;
   for (const c of commentLines(lines)) {
     if (ticketLines.has(c.line)) continue; // already counted once
-    if (HEX_RE.test(c.text)) found.push({ line: c.line, kind: 'hex-id', excerpt: c.text.trim().slice(0, 100) });
+    if (code && HEX_RE.test(c.text)) found.push({ line: c.line, kind: 'hex-id', excerpt: c.text.trim().slice(0, 100) });
+    else if (hasHistoryMark(c.text)) found.push({ line: c.line, kind: 'history-mark', excerpt: c.text.trim().slice(0, 100) });
   }
+  if (!code) return found;
   for (const m of text.matchAll(TITLE_RE)) {
     const title = m[2];
     if (HEX_RE.test(title) && !TICKET_RE.test(title)) {
@@ -171,7 +220,10 @@ function scanTrees(trees) {
     for (const full of listFiles(dir)) {
       const rel = path.relative(ROOT, full).split(path.sep).join('/');
       if (SKIP_FILES.has(rel) || SKIP_PREFIXES.some((p) => rel.startsWith(p))) continue;
-      const f = findings(fs.readFileSync(full, 'utf8'), { code: CODE_EXTENSIONS.has(path.extname(rel)) });
+      const ext = path.extname(rel);
+      const isRecord = RECORD_PREFIXES.some((p) => rel.startsWith(p));
+      const f = findings(fs.readFileSync(full, 'utf8'), { code: CODE_EXTENSIONS.has(ext), comments: CODE_EXTENSIONS.has(ext) || ext === '.css' })
+        .filter((x) => !(isRecord && x.kind === 'history-mark'));
       if (f.length) result[rel] = f;
     }
   }
@@ -195,9 +247,9 @@ function compare(scanned, baseline, trees) {
     const allowed = baseline[file] || 0;
     if (ids.length > allowed) {
       const where = ids.map((f) => `${f.line} (${f.kind})`).join(', ');
-      problems.push(`${file}: ${ids.length} ticket-shaped id(s), baseline ${allowed}: lines ${where}. Write the rule, not the ticket.`);
+      problems.push(`${file}: ${ids.length} finding(s), baseline ${allowed}: lines ${where}. Write the rule, not the ticket, audit or issue it came from.`);
     } else if (ids.length < allowed) {
-      problems.push(`${file}: ${ids.length} id(s) left, baseline says ${allowed}: run node scripts/repoHygiene.cjs --update`);
+      problems.push(`${file}: ${ids.length} finding(s) left, baseline says ${allowed}: run node scripts/repoHygiene.cjs --update`);
     }
   }
   for (const [file, allowed] of Object.entries(baseline)) {
@@ -237,8 +289,8 @@ function main(argv) {
     const { next, unlisted } = nextBaseline(scanned, readBaseline(), { seed });
     fs.writeFileSync(BASELINE_PATH, JSON.stringify(next, null, 2) + '\n');
     const total = Object.values(next).reduce((a, b) => a + b, 0);
-    console.log(`Baseline written: ${Object.keys(next).length} file(s), ${total} id(s) still to scrub.`);
-    for (const file of unlisted) console.error(`${file}: has findings and is not in the baseline. --update never adds an entry: write the rule, not the ticket.`);
+    console.log(`Baseline written: ${Object.keys(next).length} file(s), ${total} finding(s) still to scrub.`);
+    for (const file of unlisted) console.error(`${file}: has findings and is not in the baseline. --update never adds an entry: write the rule, not the ticket, audit or issue it came from.`);
     return unlisted.length ? 1 : 0;
   }
   if (argv.includes('--check')) {

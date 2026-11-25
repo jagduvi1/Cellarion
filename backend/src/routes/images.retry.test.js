@@ -1,6 +1,5 @@
 /**
- * POST /api/images/:id/retry — who and what may be re-run through rembg
- * (post-ship audit 2026-09-03).
+ * POST /api/images/:id/retry — who and what may be re-run through rembg.
  *
  *  - Never a label scan: it is curation evidence kept as received, and since
  *    originals are discarded after rembg, a retry would delete the frame the

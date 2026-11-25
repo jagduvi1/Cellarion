@@ -568,7 +568,7 @@ describe('owner side', () => {
       // Addressed to me; answered, or open-and-not-expired, or recently resolved.
       const filter = WineOwnerInquiry.find.mock.calls[0][0];
       expect(filter['recipients.user']).toBe(ME);
-      // An answered inquiry expires like an open one (release audit 2026-09-27, L).
+      // An answered inquiry expires like an open one.
       expect(filter.$or[0]).toMatchObject({ status: 'answered' });
       expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
       expect(filter.$or[1].status).toBe('open');
@@ -859,7 +859,7 @@ describe('owner side', () => {
       const filter = WineOwnerInquiry.findOne.mock.calls[0][0];
       expect(filter.wineDefinition).toBe(WINE);
       expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
-      // An answered inquiry expires like an open one (release audit 2026-09-27, L).
+      // An answered inquiry expires like an open one.
       expect(filter.$or[0]).toMatchObject({ status: 'answered' });
       expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
       expect(filter.$or[1].expiresAt.$gt).toBeInstanceOf(Date);
@@ -894,7 +894,7 @@ describe('owner side', () => {
       const [filter, update] = WineOwnerInquiry.findOneAndUpdate.mock.calls[0];
       expect(filter._id).toBe(I1);
       expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
-      // An answered inquiry expires like an open one (release audit 2026-09-27, L).
+      // An answered inquiry expires like an open one.
       expect(filter.$or[0]).toMatchObject({ status: 'answered' });
       expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
       expect(update.$set['recipients.$.response']).toBe('The label says E. Pira e Figli.');

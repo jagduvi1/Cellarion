@@ -458,7 +458,7 @@ describe('privilege parity & bounds', () => {
     Bottle.find.mockReturnValue(chain([]));
     await tool('search_bottles').handler({ query: 'barolo', status: 'all', vintage: '2015' }, CTX);
     // Scope lives INSIDE the search (owned cellarIds) and hydration
-    // re-asserts exactly that scope (defence in depth, audit 2026-09-02 D10-5).
+    // re-asserts exactly that scope (defence in depth).
     // Nothing ELSE may be re-filtered here — status/vintage/type after
     // pagination would put holes in pages and make totals lie.
     const hydrate = Bottle.find.mock.calls[0][0];

@@ -152,7 +152,7 @@ describe('pending offline changes over the saved copy', () => {
   });
 });
 
-// Asking whether anything changed (scaling audit 2026-09-25, item 11): the copy
+// Asking whether anything changed: the copy
 // keeps the server's ETag and sends it back; a 304 keeps the copy without the
 // server building a new one, and counts as confirmed current.
 describe('the 304 check', () => {

@@ -2,7 +2,7 @@ import { render, act } from '@testing-library/react';
 import OfflineSync, { changesOfflineCopy } from './OfflineSync';
 
 // The device's offline copy used to be rebuilt 4 s after ANY write, marking a
-// notification read included (scaling audit 2026-09-25, item 11). Only writes
+// notification read included. Only writes
 // that change what the copy holds (cellars, bottles, racks, photos) refresh it
 // now, and a write the event doesn't name (the offline queue's own sends)
 // still counts as a change.

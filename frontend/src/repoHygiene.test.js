@@ -1,9 +1,10 @@
 // Support-ticket ids, user handles and user data stay out of the public repo
-// (CONTRIBUTING.md, "Personal data"). This test keeps new ticket-shaped ids
-// out of the frontend: its source, its stylesheets, the service worker and
-// the nginx configuration. The counts in scripts/repo-hygiene-baseline.json
-// only go down; lower them with `node scripts/repoHygiene.cjs --update` after
-// a scrub.
+// (CONTRIBUTING.md, "Personal data"), and a comment states the rule, not the
+// audit, issue or date it came from (CONTRIBUTING.md, "Comments"). This test
+// keeps new ticket-shaped ids and reference marks out of the frontend: its
+// source, its stylesheets, the service worker and the nginx configuration.
+// The counts in scripts/repo-hygiene-baseline.json only go down; lower them
+// with `node scripts/repoHygiene.cjs --update` after a scrub.
 import { describe, test, expect } from 'vitest';
 import { createRequire } from 'node:module';
 
@@ -13,7 +14,7 @@ const { scanTrees, readBaseline, compare } = createRequire(import.meta.url)('../
 const TREES = ['frontend'];
 
 describe('repo hygiene', () => {
-  test('the frontend carries no ticket ids or control bytes beyond the baseline', () => {
+  test('the frontend carries no ticket ids, reference marks or control bytes beyond the baseline', () => {
     const problems = compare(scanTrees(TREES), readBaseline(), TREES);
     expect(problems).toEqual([]);
   });
