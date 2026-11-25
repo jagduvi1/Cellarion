@@ -44,7 +44,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   const [saving, setSaving] = useState(false);
   // Keyed by wine id, NOT a single string: the error renders inside every
   // non-editing row, so one shared value paints the same red paragraph under
-  // all 25 rows and follows the curator through paging (audit HIGH-1).
+  // all 25 rows and follows the curator through paging.
   const [rowErrors, setRowErrors] = useState({});
   // What the last write answered. It stays through the reload that follows the
   // write, and goes when the curator pages, changes a filter or writes again.
@@ -107,7 +107,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
    * index would show "nothing waiting" while rows sit on page 1).
    */
   const refetchAfterWrite = async () => {
-    const rowLeavesList = !showUnavailable;   // with the filter on, a dispositioned row stays visible (audit LOW-5)
+    const rowLeavesList = !showUnavailable;   // with the filter on, a dispositioned row stays visible
     const stepBack = rowLeavesList && wines.length === 1 && page > 1;
     // A new page number is loaded by the effect above; loading it here as
     // well would ask the server twice.
@@ -237,7 +237,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       {loading && <p>{t('common.loading')}</p>}
       {/* "every wine has a usable identity" is only true of an UNFILTERED
           empty queue. With a source filter on, or with dispositioned rows
-          hidden, it asserts the exact opposite of the truth (audit M-3). */}
+          hidden, it asserts the exact opposite of the truth. */}
       {wines !== null && !loading && wines.length === 0 && !error && (
         <p>{(viaFilter || unavailableTotal > 0)
           ? t('admin.wines.pendingIdentity.emptyFiltered', { n: unavailableTotal })
@@ -311,7 +311,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                         <>
                           {/* Deliberately NOT a link: /wines/:id renders from
                               the public route, which excludes pending rows — so
-                              every link here would 404 (audit H-1). The row's
+                              every link here would 404. The row's
                               own edit form + photos are the working surface. */}
                           <strong>{w.name}</strong>
                           <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #666)' }}>
@@ -389,7 +389,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                                (one click vs reading a photo and typing), and a
                                queue emptied this way is a queue that stopped
                                working. Muted link styling marks it an escape
-                               hatch (audit MEDIUM-2). */
+                               hatch. */
                             className="btn btn-sm"
                             style={{
                               background: 'none',

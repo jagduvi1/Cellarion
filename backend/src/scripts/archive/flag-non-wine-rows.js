@@ -77,7 +77,7 @@ async function run() {
       // indexWine reads the flag just written and drops the row's document.
       if (searchOk) await searchService.indexWine(id);
       // Vectors too: semantic search and the similar-wines graph read the
-      // WineEmbedding rows, not the flag (audit 2026-10-14).
+      // WineEmbedding rows, not the flag.
       await WineEmbedding.deleteMany({ wineDefinition: id });
     }
     stats.flagged += 1;

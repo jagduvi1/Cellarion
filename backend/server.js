@@ -112,9 +112,9 @@ connectDB().then(async () => {
     // Collection doesn't exist yet (first deploy) — nothing to do
   }
 
-  // Migration: remove explicit rfidTag nulls written by the old unlink flow.
-  // The unique sparse index indexes explicit nulls, so a second null would
-  // fail with E11000; the unlink route now $unsets the field instead.
+  // Migration: remove explicit rfidTag nulls from stored racks. The unique
+  // sparse index indexes explicit nulls, so a second null would fail with
+  // E11000; the unlink route $unsets the field, it never writes null.
   try {
     const mongoose = require('mongoose');
     const res = await mongoose.connection.collection('racks')
@@ -164,8 +164,8 @@ connectDB().then(async () => {
   // scan is an unanchored regex over the whole registry, so it runs ONCE: a
   // SiteConfig marker records a complete run (names created since get their
   // keys at creation), and a run with failures leaves no marker and retries
-  // next boot (audit 2026-10-14). A restore from backup brings the marker
-  // back with the data it describes.
+  // next boot. A restore from backup brings the marker back with the data it
+  // describes.
   try {
     const SiteConfig = require('./src/models/SiteConfig');
     const MARKER = 'migration.starGradeRekey';
