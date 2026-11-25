@@ -1,10 +1,12 @@
 // Support-ticket ids, user handles and user data stay out of the public repo
-// (CONTRIBUTING.md, "Personal data"). This test keeps new ticket-shaped ids
-// out of everything outside the frontend (the backend, cellarion-mcp, the
-// scripts, rembg and the workflows; frontend/src/repoHygiene.test.js holds
-// the frontend), and keeps the two files that once held a literal NUL byte
-// readable as text. The counts in scripts/repo-hygiene-baseline.json only go
-// down; lower them with `node scripts/repoHygiene.cjs --update` after a scrub.
+// (CONTRIBUTING.md, "Personal data"), and a comment states the rule, not the
+// audit, issue or date it came from (CONTRIBUTING.md, "Comments"). This test
+// keeps new ticket-shaped ids and reference marks out of everything outside
+// the frontend (the backend, cellarion-mcp, the scripts, rembg and the
+// workflows; frontend/src/repoHygiene.test.js holds the frontend), and keeps
+// control bytes out of the source. The counts in
+// scripts/repo-hygiene-baseline.json only go down; lower them with
+// `node scripts/repoHygiene.cjs --update` after a scrub.
 const { scanTrees, readBaseline, compare, findings, nextBaseline } = require('../../scripts/repoHygiene.cjs');
 
 const TREES = ['backend', 'cellarion-mcp', 'scripts', 'rembg', '.github'];
@@ -15,7 +17,7 @@ const date = '2026' + '-09-13';
 const kinds = (text, options) => findings(text, options).map((f) => f.kind);
 
 describe('repo hygiene', () => {
-  test('nothing outside the frontend carries ticket ids or control bytes beyond the baseline', () => {
+  test('nothing outside the frontend carries ticket ids, reference marks or control bytes beyond the baseline', () => {
     const problems = compare(scanTrees(TREES), readBaseline(), TREES);
     expect(problems).toEqual([]);
   });
@@ -56,6 +58,44 @@ describe('repo hygiene', () => {
   test('a file read as plain text reports ticket references and control bytes, never a bare hex token', () => {
     expect(kinds(`/* Stacked actions (support ticket ${date}) */\n.a { color: #${id}; }\n`, { code: false })).toEqual(['ticket-id']);
     expect(kinds(`# cache key ${id}\nlocation / { }\n`, { code: false })).toEqual([]);
+  });
+
+  test('a comment that cites where a rule came from is a finding; the rule itself, and the same words in code, are not', () => {
+    const marks = [
+      `// Two taps would file it twice (release audit ${date}, L).\n`,
+      `// Audit ${date} M7: the click is an objection to email as such.\n`,
+      '// The scan is partial (audit M-2: the producer looks like label text).\n',
+      '/* Offline mode (#1355) */\nconst a = 1;\n',
+      '// Sort by quantity (issue #987).\n',
+      '// The tier is one field (GitHub discussion #1696): absent leaves it alone.\n',
+      `// One column on a phone (${date}).\n`,
+      `<p>text</p> {/* The name wraps (newcomer walkthrough ${date}). */}\n`,
+      '// The gate refuses it (M-2).\n',
+    ];
+    for (const text of marks) expect(kinds(text)).toEqual(['history-mark']);
+
+    const fine = [
+      '// Every mutation writes one row (audit).\n',
+      '// Audit: the row is written after the response.\n',
+      '// Muted text (#666) on the dark card.\n',
+      `// Deprecated routes answer until ${date}.\n`,
+      '// The last page starts at offset (N-1) * limit.\n',
+      "const title = 'Sort by quantity (issue #987)';\n",
+    ];
+    for (const text of fine) expect(findings(text)).toEqual([]);
+
+    // A stylesheet's comments are read; a file whose comments cannot be told from its code is not.
+    const sheet = `/* Stacked on a phone (audit ${date}) */\n.a { color: red; }\n`;
+    expect(kinds(sheet, { code: false, comments: true })).toEqual(['history-mark']);
+    expect(kinds(`# keep-alive (audit ${date})\nlisten 80;\n`, { code: false })).toEqual([]);
+  });
+
+  test('an archived script keeps the record of its run: no history mark is reported there', () => {
+    // The shape is a mark in any other file.
+    expect(kinds(`/**\n * Finished: the bounded run recorded below (${date}) is done.\n */\n`)).toEqual(['history-mark']);
+    const scanned = scanTrees(['backend/src/scripts/archive']);
+    const marks = Object.values(scanned).flat().filter((f) => f.kind === 'history-mark');
+    expect(marks).toEqual([]);
   });
 
   test('--update lowers an entry, never raises one and never adds one; --seed takes the counts as they are', () => {

@@ -4,6 +4,8 @@
 //   node --test scripts/guards.test.mjs
 //
 // The scanner (repoHygiene.cjs) is tested from backend/src/repoHygiene.test.js.
+// The JSX cases of the comment-only proof need esbuild and run with the
+// frontend's tests (frontend/src/commentOnlyProof.test.js).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

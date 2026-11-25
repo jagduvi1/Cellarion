@@ -78,6 +78,8 @@ The long files are being split one extraction at a time. A move pull request fol
 
 A comment-only pull request (no code changes at all) proves it with `node scripts/check-comment-only.mjs origin/main`; add `--test-titles` when test names were reworded.
 
+The test suites refuse a new comment that cites where a rule came from instead of stating it: an audit with its date or finding id, an issue, pull request or discussion number, or a date alone in a parenthesis (`node scripts/repoHygiene.cjs` lists what it finds). Write what holds and why; the commit message is where the audit or the issue belongs.
+
 ## Personal data
 
 Cellarion stores people's cellars, notes and photos, and it takes GDPR seriously. If your change stores, processes or shares anything personal, it must also cover:
