@@ -1,13 +1,12 @@
 /**
  * strip-markdown-ai-descriptions.js
  *
- * One-off cleanup for issue #788: AI enrichment used to be told "light Markdown
- * allowed" for WineDefinition.aiProfile.description, so already-enriched rows
- * carry literal ** ... ** (and the odd link/bullet). The field is served raw by
- * the MCP tools get_wine / get_bottle, where it renders verbatim.
+ * Strips Markdown from WineDefinition.aiProfile.description: a stored row can
+ * carry literal ** ... ** (and the odd link/bullet), and the field is served
+ * raw by the MCP tools get_wine / get_bottle, where it renders verbatim.
  *
- * The prompt now forbids markdown and enrichmentJob strips it at the write
- * point, so this only has to clean up history. Re-running is idempotent:
+ * The enrichment prompt forbids markdown and enrichmentJob strips it at the
+ * write point; this cleans the stored rows. Re-running is idempotent:
  * stripMarkdown is a no-op on text that is already plain.
  *
  * Scope: aiProfile.description ONLY. Deliberately does NOT touch the taxonomy

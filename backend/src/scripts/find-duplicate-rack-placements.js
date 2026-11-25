@@ -1,11 +1,11 @@
 /**
  * find-duplicate-rack-placements — pre-flight for the unique slots.bottle index.
  *
- * The Rack model declares a unique multikey index on slots.bottle (prior-audit
- * M4: one slot per bottle, enforced across racks). Mongo can only BUILD that
- * index if no bottle currently sits in two racks — historical races or bugs
- * could have left such rows, in which case the index build fails on boot
- * (mongoose logs it and the app keeps running WITHOUT the protection).
+ * The Rack model declares a unique multikey index on slots.bottle (one slot
+ * per bottle, enforced across racks). Mongo can only BUILD that index if no
+ * bottle currently sits in two racks — a race or a bug can leave such rows,
+ * in which case the index build fails on boot (mongoose logs it and the app
+ * keeps running WITHOUT the protection).
  *
  * This script lists every bottle placed in more than one active rack, with the
  * racks/cellars involved, so the stray placement can be removed by hand (or by

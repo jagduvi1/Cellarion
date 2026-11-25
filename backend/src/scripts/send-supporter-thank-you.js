@@ -62,10 +62,9 @@ const APPLY = process.argv.includes('--apply');
   console.log(`done — sent ${sent}, skipped ${skipped}`);
 
   // logAudit persists fire-and-forget (AuditLog.create(...).catch()), which is
-  // right for a long-lived server and wrong for a script that exits. On the
-  // 2026-08-17 backfill the disconnect below raced the last write and one of
-  // three audit rows never reached MongoDB — the emails and the stamps were
-  // all correct, but the trail was short a row. Give the in-flight writes a
+  // right for a long-lived server and wrong for a script that exits: the
+  // disconnect below can race the last write, and an audit row is lost while
+  // the email and the stamp it records are real. Give the in-flight writes a
   // moment to settle before pulling the connection out from under them.
   await new Promise(resolve => setTimeout(resolve, 1000));
 

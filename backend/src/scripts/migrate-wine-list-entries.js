@@ -110,7 +110,7 @@ async function migrate() {
   await mongoose.connect(MONGO_URI);
   console.log('[migrate-wine-list-entries] Connected to MongoDB');
 
-  // Raw collections: the new schema no longer knows `entry.bottle` or
+  // Raw collections: the schema does not know `entry.bottle` or
   // `layout.showGlassPrice`, so reads must bypass schema filtering.
   const wineLists = mongoose.connection.collection('winelists');
   const bottles = mongoose.connection.collection('bottles');

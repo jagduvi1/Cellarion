@@ -1,12 +1,11 @@
 /**
  * Re-key the registry wines whose NAME carries a star grade.
  *
- * Wine names used to be keyed with every '*' stripped, so "Auslese**" and
- * "Auslese***" (two of Markus Molitor's wines) built one dedup key. A name's
- * star grade is now a word ("***" → "3star", utils/normalize
- * normalizeWineName); keys stored before that change still carry the stripped
- * form, and a lookup by the new key would miss them. This brings normalizedKey
- * and canonicalKey up to date for exactly those wines.
+ * A name's star grade is a word in its keys ("***" → "3star", utils/normalize
+ * normalizeWineName), so "Auslese**" and "Auslese***" (two of Markus Molitor's
+ * wines) build two dedup keys. A stored key built with every '*' stripped
+ * carries neither grade, and a lookup by the graded key misses it. This brings
+ * normalizedKey and canonicalKey up to date for exactly those wines.
  *
  * Runs at every boot (server.js) and is idempotent: once the keys are current
  * it finds nothing to do. Also runnable by hand:
@@ -45,10 +44,10 @@ function keyFor(w, nameNorm, sweetness = null) {
 }
 
 async function run({ apply }) {
-  // A STRING pattern, so JavaScript turns ★ into the ★ itself: a RegExp
-  // literal reaches MongoDB as its source text, and the server's PCRE2
-  // rejects the \u escape ("Regular expression is invalid") — the whole run
-  // failed on every boot (release audit 2026-10-13, caught on prod data).
+  // The ★ is written as itself, in a string: a RegExp literal reaches MongoDB
+  // as its source text, and the server's PCRE2 rejects a \u escape in it
+  // ("Regular expression is invalid"), which fails the whole run on every
+  // boot.
   const wines = await WineDefinition.find({ name: { $regex: '[*★]' } })
     .select('name producer appellation normalizedKey canonicalKey labelSweetness')
     .lean();

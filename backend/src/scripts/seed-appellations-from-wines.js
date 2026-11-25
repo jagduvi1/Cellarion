@@ -56,9 +56,9 @@ const { normalizeAppellationKey, normalizeAppellation } = require('../utils/norm
   // normalized → { spellings: Map<raw,{count,oldest}>, countries: Map<id,count>, regionsByCountry: Map<id, Map<regionId,count>>, total }
   const groups = new Map();
   for (const w of wines) {
-    // Tier-strip BEFORE grouping: strings stored before the write-path guard
-    // ("Ribera del Duero DO") must fold into their clean form, not become a
-    // tier-suffixed taxonomy doc — found on the first prod-data dry run.
+    // Tier-strip BEFORE grouping: a stored string the write-path guard never
+    // saw ("Ribera del Duero DO") must fold into its clean form, not become a
+    // tier-suffixed taxonomy doc.
     const cleaned = normalizeAppellation(w.appellation) || w.appellation;
     const key = normalizeAppellationKey(cleaned);
     if (!key || matched.has(key)) continue;

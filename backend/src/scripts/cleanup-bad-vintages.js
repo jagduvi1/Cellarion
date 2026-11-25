@@ -1,9 +1,9 @@
 /**
  * cleanup-bad-vintages.js
  *
- * One-off cleanup for WineVintageProfile and Bottle records whose `vintage`
- * value falls outside the validated range (e.g. typos like "1001" that
- * predate the validation added in the same change).
+ * Cleanup for WineVintageProfile and Bottle records whose stored `vintage`
+ * fails parseAndValidateVintage (e.g. a typo like "1001": the write paths
+ * refuse one, but a stored row can still hold it).
  *
  * Behaviour:
  *   - DRY-RUN by default: prints what would be touched, changes nothing.

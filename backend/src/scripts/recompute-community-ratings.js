@@ -1,15 +1,14 @@
 /**
  * recompute-community-ratings.js
  *
- * One-off recompute of WineDefinition.communityRating for every wine, using
- * the forgery-resistant author-dedup aggregation (SECURITY_AUDIT_2026-07-08
- * M-3): each distinct author contributes only their LATEST public review, and
+ * Recomputes WineDefinition.communityRating for every wine, using the
+ * forgery-resistant author-dedup aggregation (services/reviewAggregation):
+ * each distinct author contributes only their LATEST public review, and
  * reviewCount becomes the distinct-author count.
  *
- * Without this script, ratings inflated under the old per-review aggregation
- * self-correct only on each wine's next review event (create/update/delete/
- * visibility change). Run it once after deploying the fix to correct all
- * wines immediately.
+ * A wine's rating is recomputed only on a review event (create/update/delete/
+ * visibility change), so a stored rating another aggregation computed stays
+ * as it is until the next one. This corrects every wine at once.
  *
  * Behaviour:
  *   - DRY-RUN by default: prints what would change, changes nothing.

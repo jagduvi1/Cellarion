@@ -1,16 +1,15 @@
 /**
  * cleanup-taxonomy-2026-07.js
  *
- * One-shot remediation for the taxonomy audit of 2026-07-18
- * (TAXONOMY_AUDIT_2026-07-18.md): merges duplicate/wrong grape and region
- * documents into their canonical counterparts, renames a few regions to their
- * canonical form, fixes the sake wine filed under country "Unknown", and
- * deletes zero-usage countries (label scan recreates any of them on demand).
+ * Merges duplicate/wrong grape and region documents into their canonical
+ * counterparts, renames a few regions to their canonical form, fixes the
+ * sake wine filed under country "Unknown", and deletes zero-usage countries
+ * (label scan recreates any of them on demand).
  *
- * Only HIGH-CONFIDENCE items from the audit are encoded here. Judgment calls
- * (Tinta Roriz→Tempranillo display question, generic Muscat/Malvasía/
- * Trebbiano docs, the seven "X or Y" AI-junk regions, spirits-in-registry)
- * are intentionally left for a manual admin pass.
+ * Only HIGH-CONFIDENCE items are encoded here. Judgment calls (Tinta
+ * Roriz→Tempranillo display question, generic Muscat/Malvasía/Trebbiano
+ * docs, the seven "X or Y" AI-junk regions, spirits-in-registry) are left
+ * to the manual pass, cleanup-taxonomy-manual-2026-07.js.
  *
  * Every merge goes through services/taxonomyMerge, so all references are
  * rewritten before deletion and old names become synonyms on the canonical

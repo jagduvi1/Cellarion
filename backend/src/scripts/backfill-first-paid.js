@@ -1,6 +1,6 @@
 /**
- * One-time backfill: fill User.firstPaidAt for the accounts that paid for
- * support before the field existed, from Stripe's invoices.
+ * Fills User.firstPaidAt from Stripe's invoices for the accounts that paid
+ * for support but carry no stamp.
  *
  * Per account with a Stripe customer and no firstPaidAt: the moment its
  * earliest paid invoice with an amount above zero was paid. A customer record

@@ -4,14 +4,14 @@
  * Seeds the analytics-beta launch post:
  *   "Ask Your Cellar Anything: Analytics Comes to Cellarion (Beta)"
  *
- * Why: the #987 analytics view (table, filters incl. personal/registry data,
- * grouping, charts, 14 presets, CSV) shipped as beta in v1.136.0 and the
- * Dashboard page + AI-connector tools ship in v1.137.0. The post's whole
- * point is the beta framing: we shipped early on purpose and want feedback —
- * forum, support ticket, or GitHub issue.
+ * Why: the post presents the analytics view (table, filters incl.
+ * personal/registry data, grouping, charts, presets, CSV) as a beta, with the
+ * Dashboard page and the AI-connector tools. Its whole point is that framing:
+ * shipped early on purpose, feedback wanted — forum, support ticket, or
+ * GitHub issue.
  *
- * ⚠️ Publish AFTER v1.137.0 is on prod: the post mentions the Dashboard page
- * and the connector tools, which do not exist on v1.136.0.
+ * ⚠️ Publish only on a server that has the Dashboard page and the connector
+ * tools: the post mentions both.
  *
  * Behaviour:
  *   - Idempotent: upserts by slug, so re-running updates the post in place.

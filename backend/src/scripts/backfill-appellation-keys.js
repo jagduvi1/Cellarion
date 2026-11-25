@@ -2,14 +2,13 @@
  * Re-derive normalizedName/normalizedSynonyms for every Appellation doc using
  * normalizeAppellationKey.
  *
- * Docs created before the appellation system carry keys computed with
- * plain normalizeString, which DELETES hyphens — so "Châteauneuf-du-Pape" is
- * stored as 'chateauneufdupape' while every lookup now folds to
- * 'chateauneuf du pape'. Those legacy docs are unmatchable by the resolver,
- * keep appearing in the unmatched review queue next to the doc that nominally
- * covers them, and a re-run of the seed script could mint a competing twin.
- * The model has no hook that re-derives normalizedName from name (only
- * synonyms are hook-maintained), so a one-off backfill is the fix.
+ * A doc whose keys were computed with plain normalizeString, which DELETES
+ * hyphens, stores "Châteauneuf-du-Pape" as 'chateauneufdupape' while every
+ * lookup folds to 'chateauneuf du pape'. Such a doc is unmatchable by the
+ * resolver, keeps appearing in the unmatched review queue next to the doc that
+ * nominally covers it, and a re-run of the seed script could mint a competing
+ * twin. The model has no hook that re-derives normalizedName from name (only
+ * synonyms are hook-maintained), so this script re-derives it.
  *
  * Collision guard: if two docs in the same country fold to the same NEW key
  * (the unique index would reject the second), both are SKIPPED and reported —

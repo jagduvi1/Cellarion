@@ -4,8 +4,8 @@
  *
  * The rule itself lives in the enrichment write path (fourth branch of the
  * suspect downgrade chain, DOWNGRADE_RULES.APPELLATION_GEOGRAPHY) and runs on
- * every new generation from v1.177. This is the one-off backfill for rows
- * flagged before it existed — the same shape as apply-epistemic-downgrade.js.
+ * every new generation. This applies it to rows flagged without it — the
+ * same shape as apply-epistemic-downgrade.js.
  *
  * WHY. A producer-suspect flag here is a false positive: a
  * record whose appellation resolves to a curated entry WITH geography — a

@@ -7,7 +7,7 @@
  *   docker compose exec -e QDRANT_URL=http://qdrant:6333 backend node src/scripts/migrate-vectors-from-qdrant.js --apply
  * The first is a dry run (counts only); --apply writes. If the old container
  * required an API key (QDRANT_API_KEY), pass it as well:
- * `-e QDRANT_API_KEY=<the key>` (the new compose no longer hands it to the
+ * `-e QDRANT_API_KEY=<the key>` (the compose file does not hand it to the
  * backend). Then remove the old container:
  * docker compose up -d --remove-orphans (its volume can go too).
  *

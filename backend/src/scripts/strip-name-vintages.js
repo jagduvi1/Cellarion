@@ -1,18 +1,18 @@
 /**
  * strip-name-vintages.js
  *
- * Registry audit 2026-07-26 (B2): 19 wines carry a trailing vintage year in
- * their NAME ("Reserve Cabernet Sauvignon 2023") even though the registry is
- * vintage-neutral by construction — the year belongs on Bottle.vintage. The
- * write paths now strip it on create (utils/normalize.stripTrailingVintage,
- * wired into findOrCreateWine step 0); this cleans up existing rows.
+ * Registry wines that carry a trailing vintage year in their NAME ("Reserve
+ * Cabernet Sauvignon 2023") even though the registry is vintage-neutral by
+ * construction — the year belongs on Bottle.vintage. The write paths strip it
+ * on create (utils/normalize.stripTrailingVintage, wired into findOrCreateWine
+ * step 0); this cleans up the stored rows.
  *
  * For each wine whose name ends in a plausible vintage (1950–2049, TRAILING
  * only — leading years are brand names like "1924 Double Black"):
  *   - compute the stripped name and the new normalizedKey (name is part of
  *     the dedup key). Because normalizedKey is UNIQUE:
- *       no collision → update name + normalizedKey, re-index Meili (wine AND
- *       its bottles — bottle documents denormalize wineName);
+ *       no collision → update name, normalizedKey and canonicalKey, and
+ *       re-index the wine in Meili;
  *       collision → SKIP and report for manual merge (the year was the only
  *       thing distinguishing two rows = a genuine duplicate).
  *   - write the stripped year to Bottle.vintage for the wine's bottles, but
@@ -63,16 +63,13 @@ const tag = APPLY ? '✔' : '[dry]';
  *
  * Bottle.vintage is a STRING with `default: 'NV'`, and parseAndValidateVintage
  * maps undefined/null/'' to 'NV' on every write path — so an undated bottle is
- * stored as 'NV' and essentially never as null. Matching only null (as this
- * script originally did) found nothing while the rename ran anyway, quietly
- * dropping the year instead of moving it onto the bottle (code audit
- * 2026-07-27, H4). Verified on prod 2026-07-28: 0 bottles at null, 535 at 'NV'.
+ * stored as 'NV' and essentially never as null. Matching only null would find
+ * nothing while the rename runs anyway, quietly dropping the year instead of
+ * moving it onto the bottle.
  *
  * Matched case-INSENSITIVELY, and 'Unknown' counts too:
- *   - prod holds 26 bottles at 'Nv' next to 268 at 'NV' (sparkling alone), so
- *     some write path is not going through parseAndValidateVintage, which
- *     upper-cases. An exact-string list would repeat this script's original
- *     mistake in a smaller way.
+ *   - a stored vintage can read 'Nv' (written past parseAndValidateVintage,
+ *     which upper-cases), so an exact-string list would miss those bottles.
  *   - 'Unknown' means "there IS a year, the owner can't read it" (see the
  *     validator's docstring) — precisely the bottle a year recovered from the
  *     wine name should fill in. 'NV' is more ambiguous, since it doubles as
@@ -113,11 +110,10 @@ async function run() {
 
   const stats = { candidates: 0, changed: 0, collisions: 0, bottlesDated: 0 };
 
-  // Backup is flushed after EVERY mutation, not once at the end. Buffering it
-  // meant a throw mid-loop (or a Ctrl-C, or the 4GB host OOM-killing us) exited
-  // through the top-level catch with the file never written — leaving the rows
-  // already renamed with no pre-image on disk, exactly when a partial apply had
-  // happened and the backup mattered most.
+  // Backup is flushed after EVERY mutation, not once at the end: a buffered
+  // backup is lost when a throw mid-loop (or a Ctrl-C, or an OOM kill) exits
+  // through the top-level catch, leaving rows already renamed with no
+  // pre-image on disk exactly when a partial apply makes the backup matter.
   let backupFile = null;
   const backupRows = [];
   const appendBackup = (row) => {

@@ -1,9 +1,9 @@
 /**
  * backfill-grape-normalized-synonyms.js
  *
- * One-off: computes Grape.normalizedSynonyms from Grape.synonyms for documents
- * that predate the field (the pre-save hook maintains it going forward, but
- * only fires on .save()). Idempotent — safe to re-run.
+ * Recomputes Grape.normalizedSynonyms from Grape.synonyms wherever the stored
+ * value disagrees (the pre-save hook maintains it, but only fires on .save()).
+ * Idempotent — safe to re-run.
  *
  * Usage (containers must be running):
  *   docker exec cellarion-backend node src/scripts/backfill-grape-normalized-synonyms.js

@@ -1,6 +1,6 @@
 /**
- * One-time backfill: fill User.lastActiveAt for accounts that have not been
- * seen since the field was added, from the evidence that still exists.
+ * Fills User.lastActiveAt for the accounts that carry none, from the evidence
+ * that still exists.
  *
  * The latest of, per account:
  *   • the day it was created

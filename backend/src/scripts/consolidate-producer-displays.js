@@ -1,13 +1,12 @@
 /**
- * Consolidate producer DISPLAY splits across the registry — the productized
- * form of the 2026-08-14 cleanup (130 clusters → 22, 199 rows), for the
- * periodic sweep the display-split watchdog metric rings for.
+ * Consolidate producer DISPLAY splits across the registry, for the periodic
+ * sweep the display-split watchdog metric rings for.
  *
  * A "display split" is one estate stored under several producer strings that
  * all fold to the same comparison key: "Philipp Kuhn" / "Weingut Philipp
  * Kuhn" / "Felton Road Wines Ltd" vs "Felton Road". The mint-time resolver
  * (services/producerSpelling.js) prevents NEW splits; this script folds the
- * ones that predate it — or that its deliberate ambiguity guards let through.
+ * stored ones, including those its deliberate ambiguity guards let through.
  *
  * TARGET RULE ("fullest estate form", hardened against
  * the single-outlier trap):
@@ -16,8 +15,8 @@
  *   3. otherwise majority, ties → the spelling whose earliest wine is oldest
  *   4. a 1-v-1 tie neither rule settles is a COIN FLIP → held for a human
  *
- * HELD, never auto-consolidated (each guard caught a real different-estate
- * pair on prod): clusters spanning >1 country (Taylors AU=Clare Valley vs
+ * HELD, never auto-consolidated (each guard keeps a real different-estate
+ * pair apart): clusters spanning >1 country (Taylors AU=Clare Valley vs
  * PT=Port) · different CORE tokens · two DIFFERENT estate titles (Domaine de
  * Bellevue vs Château Bellevue) · sentinel producers ("Unknown") ·
  * unresolvable ties (Stag's Leap Wine Cellars vs Stags Leap — two real Napa
@@ -226,7 +225,7 @@ const hasLegal = (s) => toks(s).some((t) => LEGAL.has(t));
   let written = 0, failed = 0;
   // A spelling is not a new identity: a profile that described the record
   // still does, so its input snapshot follows the spelling — otherwise the
-  // next enrichment sweep regenerates it as stale (review 2026-09-28).
+  // next enrichment sweep regenerates it as stale.
   const { profileInputsSnapshot } = require('../services/enrichmentJob');
   for (const p of planned) {
     if (p.blocked) continue;
@@ -252,8 +251,7 @@ const hasLegal = (s) => toks(s).some((t) => LEGAL.has(t));
 
   // logAudit persists fire-and-forget, which suits a long-lived server and not
   // a script that exits: disconnecting immediately races the last writes and
-  // silently drops audit rows for work that really happened (observed on the
-  // 2026-08-17 supporter backfill). Let them settle first.
+  // silently drops audit rows for work that really happened. Let them settle.
   await new Promise(resolve => setTimeout(resolve, 1000));
 
   await mongoose.disconnect();

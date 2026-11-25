@@ -1,12 +1,12 @@
 /**
- * Carry `pendingReview` across to the two fields that replaced it.
+ * Carry `pendingReview` across to the two fields that replace it.
  *
- * The old boolean conflated two facts: that a user write minted the document,
- * and that nobody had reviewed it. Every row still carrying `pendingReview:
+ * The boolean conflates two facts: that a user write minted the document,
+ * and that nobody has reviewed it. Every row still carrying `pendingReview:
  * true` means BOTH — so it becomes `createdByUser: true` with `reviewedAt`
- * left null. Rows where an admin had already approved (pendingReview false or
- * absent) carry no origin information at all: the old approve DELETED it. That
- * is unrecoverable, so those rows are left with createdByUser absent rather
+ * left null. A row an admin approved (pendingReview false or absent) carries
+ * no origin information at all: that approval erased it. That is
+ * unrecoverable, so those rows are left with createdByUser absent rather
  * than guessed either way — absent means "not recorded", which is true.
  *
  *   node src/scripts/migrate-taxonomy-provenance.js            # dry run
@@ -30,8 +30,8 @@ async function main() {
       { pendingReview: true },
       { $set: { createdByUser: true, reviewedAt: null, reviewedBy: null } }
     );
-    // Drop the retired field everywhere, including the approved rows whose
-    // origin the old verb had already erased.
+    // Drop the retired field everywhere, including on the approved rows,
+    // which have no origin left to carry across.
     const unset = await coll.updateMany({ pendingReview: { $exists: true } }, { $unset: { pendingReview: '' } });
     console.log(`  set createdByUser on ${set.modifiedCount}; removed pendingReview from ${unset.modifiedCount}`);
     console.log(`  now: createdByUser=true -> ${await coll.countDocuments({ createdByUser: true })}, ` +

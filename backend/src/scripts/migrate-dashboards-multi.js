@@ -1,9 +1,9 @@
 /**
- * migrate-dashboards-multi.js — one-off for the multi-dashboard release.
+ * migrate-dashboards-multi.js — several dashboards per user.
  *
- * The first dashboard release (v1.137.0) shipped one-per-user with a UNIQUE
- * index on `user` alone. Multi-dashboard needs that index GONE (second
- * insert per user would E11000) and every existing row named.
+ * A database that still holds the UNIQUE index on `user` alone (one dashboard
+ * per user) refuses a user's second dashboard with E11000. This drops that
+ * index and names every row that has no name.
  *
  * Idempotent: dropping a missing index is reported and skipped; the $set
  * only touches rows without a name.

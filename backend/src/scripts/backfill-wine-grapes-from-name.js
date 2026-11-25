@@ -1,12 +1,12 @@
 /**
  * backfill-wine-grapes-from-name.js
  *
- * Ticket #2A: registry wines whose grape is explicit in the name
- * ("Felton Road Block 3 Pinot Noir", "Bannockburn Chardonnay") but whose
- * grapes[] is empty — so they silently drop out of the Statistics "by grape"
- * breakdown and the /api/wines?grapes= filter. This tags them using the same
- * name-inference the create path now runs (services/grapeInference.js), which
- * only ever assigns grapes ALREADY in the taxonomy and never mints one.
+ * Registry wines whose grape is explicit in the name ("Felton Road Block 3
+ * Pinot Noir", "Bannockburn Chardonnay") but whose grapes[] is empty — so
+ * they silently drop out of the Statistics "by grape" breakdown and the
+ * /api/wines?grapes= filter. This tags them using the same name-inference the
+ * create path runs (services/grapeInference.js), which only ever assigns
+ * grapes ALREADY in the taxonomy and never mints one.
  *
  * Safe by construction (see grapeInference.js): longest-first span consumption
  * (so "Cabernet Sauvignon" is never also tagged Sauvignon Blanc), word-boundary
