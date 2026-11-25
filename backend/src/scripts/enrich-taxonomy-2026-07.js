@@ -1,9 +1,7 @@
 /**
  * enrich-taxonomy-2026-07.js
  *
- * Fills the empty enrichment fields found by the 2026-07-18 taxonomy audit
- * (304/307 grapes had no color/origin/description; 2/69 countries had a
- * description; 6/338 regions had any data).
+ * Fills empty enrichment fields on the grape, country and region taxonomy.
  *
  *   Grapes    — color + origin for every known variety; description,
  *               characteristics and agingPotential for the most-used ~60.
@@ -393,7 +391,7 @@ const R = {
     'Provence': 'The world\'s rosé benchmark, plus Bandol\'s serious Mourvèdre reds beneath the Mediterranean light.',
     'Jura': 'A tiny mountain region of huge originality — oxidative Vin Jaune from Savagnin, ethereal Poulsard and Trousseau reds, and Vin de Paille.',
     'Southwest France': 'A federation of characterful appellations between Bordeaux and the Pyrenees: Cahors Malbec, Madiran Tannat and Jurançon\'s Manseng whites.',
-    'Beaujolais': null, // description already curated on prod
+    'Beaujolais': null, // description curated by hand
     'Bordeaux': null,
   },
   'Italy': {
@@ -515,7 +513,7 @@ const R = {
     'West Sussex': 'South Downs chalk mirroring Champagne\'s geology; home to several of England\'s flagship sparkling estates.',
   },
   'Sweden': {
-    'Skåne': null, // curated on prod
+    'Skåne': null, // curated by hand
   },
 };
 

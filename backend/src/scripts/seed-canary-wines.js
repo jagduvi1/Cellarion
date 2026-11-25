@@ -1,5 +1,5 @@
 /**
- * seed-canary-wines.js — registry lockdown (2026-09-06, layer L4).
+ * seed-canary-wines.js — the canary rows of the registry lockdown.
  *
  * Loads the canary wines from a PRIVATE file that is never committed: the
  * canaries are plausible wines that do not exist, from producers that do not

@@ -7,11 +7,9 @@
  * country), the region field holds THAT region — the most specific
  * granularity — not a parent ("New South Wales") or the producer's home
  * region. The mint-time half is services/findOrCreateWine.regionForAppellation
- * (all four mint surfaces); this script folds the rows that predate it.
- * Measured on prod 2026-08-16: 506 published rows, led by
- * California→Napa Valley (51), South Australia→Barossa Valley (25),
- * New South Wales→Hunter Valley (24) — plus 6 rows whose region was null
- * while the appellation named a known region.
+ * (all four mint surfaces); this script folds the stored rows (region
+ * "California" → "Napa Valley" on a Napa Valley wine), including a row whose
+ * region is null while the appellation names a known region.
  *
  * SHARED RESOLUTION, by construction: each row is resolved through the SAME
  * regionForAppellation the mint path uses, so this script and the chokepoint
@@ -24,9 +22,9 @@
  * pick one arbitrarily, and taxonomy dedup should have removed these).
  *
  * Region is NOT part of normalizedKey/canonicalKey/slug, so a plain
- * updateOne is safe (no hook-managed derivations move). Search docs DO
- * denormalize the region name for both wines and bottles → --apply reindexes
- * the changed wines and their bottles. Region is also in the embedding text →
+ * updateOne is safe (no hook-managed derivations move). Wine search docs DO
+ * denormalize the region name → --apply reindexes the changed wines. Region
+ * is also in the embedding text →
  * run an incremental embed job afterwards (reminder printed).
  *
  * Dry-run by default (prints the grouped rewrite plan). --apply writes.
@@ -139,8 +137,7 @@ const { logAudit } = require('../services/audit');
 
   // logAudit persists fire-and-forget, which suits a long-lived server and not
   // a script that exits: disconnecting immediately races the last writes and
-  // silently drops audit rows for work that really happened (observed on the
-  // 2026-08-17 supporter backfill). Let them settle first.
+  // silently drops audit rows for work that really happened. Let them settle.
   await new Promise(resolve => setTimeout(resolve, 1000));
 
   await mongoose.disconnect();

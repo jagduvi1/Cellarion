@@ -1,18 +1,16 @@
 /**
- * One-time backfill: record the objection of everyone who clicked
- * "unsubscribe from all Cellarion email" before User.emailOptOutAt existed.
+ * Records the objection of every account that clicked "unsubscribe from all
+ * Cellarion email" but carries no User.emailOptOutAt stamp.
  *
- * The one-click unsubscribe used to turn off only the notification flags the
- * account had stored at the time. Support answers are emailed since
- * 2026-09-26 (a new category, on by default), so an account that unsubscribed
- * earlier had no supportReply flag and would have been emailed anyway (audit
- * 2026-09-27 M7). utils/notifications.js now stamps emailOptOutAt and writes
- * every category; this does the same for the earlier clicks.
+ * Such an account has only the notification flags it had stored turned off:
+ * supportReply (support answers, on by default) is not among them, so the
+ * account would be emailed anyway. utils/notifications.js stamps emailOptOutAt
+ * and writes every category on a click; this does the same for those clicks.
  *
- * Who: the user each `user.unsubscribe.all` audit entry is ABOUT (resource.id —
- * the route is unauthenticated, a token link, so the entry's actor is null;
- * the first run of this script keyed on the actor and found nobody) (kept AUDIT_TTL_DAYS,
- * 90 by default — clicks older than that are not recoverable from the log).
+ * Who: the user each `user.unsubscribe.all` audit entry is ABOUT (resource.id:
+ * the route is unauthenticated, a token link, so the entry's actor is null,
+ * and keying on the actor finds nobody). The log keeps AUDIT_TTL_DAYS, 90 by
+ * default; clicks older than that are not recoverable from it.
  * With --all-off, also every account whose stored flags are ALL off: email and
  * push of every category present, including push, which defaults to on — a
  * state nobody reaches without meaning it.
@@ -36,7 +34,7 @@ const AuditLog = require('../models/AuditLog');
 // turned email back on AFTER the click: a withdrawn objection, which is also
 // what clears emailOptOutAt (services/accountOps.js) — so "no stamp" alone
 // cannot tell a never-withdrawn click from a withdrawn one. supportReply is
-// not evidence: it did not exist when these clicks happened and defaults on.
+// not evidence: these clicks never wrote it, and it defaults on.
 const RE_ENABLE_CATEGORIES = ['drinkWindow', 'communityReply', 'communityMention'];
 
 function hasEmailBackOn(user) {

@@ -4,7 +4,7 @@
  * Registry wines whose `name` holds an appellation or a
  * Bordeaux classed-growth phrase instead of the wine's name ("Grand Cru
  * Classé de Graves" — Château Pape Clément; "Margaux" — Château du Tertre).
- * Prevention now lives in findOrCreateWine.unpolluteEstateName (the mint
+ * Prevention lives in findOrCreateWine.unpolluteEstateName (the mint
  * chokepoint); this applies the SAME shared guard to existing rows, so the
  * backfill and the mint rule cannot drift.
  *

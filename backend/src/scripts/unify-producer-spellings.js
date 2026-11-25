@@ -89,8 +89,8 @@ const { initSearch } = require('./lib/scriptSearch');
         // untouched. If it would change, this was NOT a trivial variant —
         // leave it for a human rather than silently altering identity keys.
         // Always compute BOTH sides fresh: a stored canonicalKey stamped by an
-        // older algorithm (the tier-token list grows, #842) would false-skip a
-        // pure spelling variant as "key drift".
+        // earlier algorithm (the tier-token list grows) would false-skip a pure
+        // spelling variant as "key drift".
         const before = computeCanonicalKey(w.name, spelling, w.appellation);
         const after = computeCanonicalKey(w.name, target, w.appellation);
         if (before !== after) {

@@ -3,9 +3,9 @@
  * Apply the epistemic-only downgrade to rows already in the registry.
  *
  * The rule itself lives in utils/producerSuspectCheck and runs on every new
- * generation from v1.145. This is the one-off backfill for rows enriched
- * before it existed — the same shape as reclassify-producer-suspect.js, which
- * backfilled the sibling ASSERTS_PRODUCER rule on 2026-08-19.
+ * generation. This applies it, in the write path's order with its sibling
+ * note rules, to rows enriched without it — the same shape as
+ * reclassify-producer-suspect.js, which applies ASSERTS_PRODUCER alone.
  *
  * WHY. producer_suspect asserts a positive suspicion: the
  * value is a brand, a range, a retailer, a place. An epistemic note asserts no

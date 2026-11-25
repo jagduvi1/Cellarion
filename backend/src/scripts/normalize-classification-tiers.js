@@ -4,11 +4,10 @@
  * The appellation's regulatory mark (DOCG, DOC, AOC, IGT, AVA — as an
  * acronym, dotted, bracketed, or spelled out, and the French "Appellation …
  * Contrôlée" line) is not a classification: it follows from the appellation.
- * The scan and import prompts nevertheless asked for "the official
- * classification" and the model answered with the mark, which was stored as
- * the tier (GitHub discussion #1696 — about 310 registry rows). The write
- * paths now drop it (utils/normalize.normalizeClassification, applied by the
- * WineDefinition pre-validate hook); this cleans up the existing rows.
+ * A model asked for "the official classification" can answer with the mark,
+ * and a stored row can hold it as the tier. The write paths drop it
+ * (utils/normalize.normalizeClassification, applied by the WineDefinition
+ * pre-validate hook); this cleans up the stored rows.
  *
  * Classification is not part of any key, so there is nothing to collide
  * with: each affected row gets the normalised tier (or null) and a fresh

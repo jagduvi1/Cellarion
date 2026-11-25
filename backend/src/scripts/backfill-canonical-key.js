@@ -1,8 +1,7 @@
 /**
- * Backfill canonicalKey for every WineDefinition (dup analysis 2026-07-22,
- * phase 1). Safe to re-run: rows whose stored key already matches are skipped,
- * and the pre-validate hook keeps keys current for all save-based writes after
- * this one-time pass.
+ * Backfill canonicalKey for every WineDefinition. Safe to re-run: rows whose
+ * stored key already matches are skipped. The pre-validate hook keeps keys
+ * current for every save-based write; this covers the rows it has not seen.
  *
  * Dry-run by default — prints what would change plus every collision set the
  * canonical grouping reveals (the admin merge queue). Pass --apply to write.

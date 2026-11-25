@@ -1,11 +1,11 @@
 /**
- * One-time cleanup of duplicate wine images.
+ * Cleanup of duplicate wine images.
  *
- * Imports and re-uploads historically created several BottleImage records for
- * the SAME photo (identical contentHash) on the same wine — cluttering the
- * admin by-wine curation view and the wine's gallery. New imports no longer do
- * this (import-time dedup), and admins can delete stragglers by hand; this
- * script clears the existing backlog in one pass.
+ * A wine can hold several BottleImage records for the SAME photo (identical
+ * contentHash), left by imports and re-uploads — cluttering the admin by-wine
+ * curation view and the wine's gallery. Imports dedup at import time and
+ * admins can delete stragglers by hand; this script clears the rest in one
+ * pass.
  *
  * For every (wine, contentHash, uploader) group with more than one
  * non-rejected, file-backed record, it keeps ONE copy and deletes the rest,
@@ -19,9 +19,8 @@
  *   - file removal is reference-safe (a file shared with a surviving record is
  *     kept); records are hard-deleted, no notifications
  *
- * Only same-uploader duplicates are touched: distinct users who happened to
- * upload the same photo keep their own records (none exist today, but the
- * script must stay safe if they ever do).
+ * Only same-uploader duplicates are touched: distinct users who upload the
+ * same photo keep their own records.
  *
  * Usage (inside the backend container):
  *   node src/scripts/cleanup-duplicate-images.js           # dry-run (default)

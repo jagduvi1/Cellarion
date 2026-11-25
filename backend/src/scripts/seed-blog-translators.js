@@ -4,11 +4,10 @@
  * Seeds the call-for-translators announcement:
  *   "Cellarion in Your Language — Help Translate It"
  *
- * Why: Weblate approved Cellarion for their free Libre plan on 2026-08-03, and
- * an Estonian translator turned up unprompted a few days before that. This post
- * is the public ask. Its central point is that "we need translators" is the
- * wrong request for French and German — both were machine-drafted, so every
- * field is already filled and what they need is reviewers.
+ * Why: this post is the public ask for translators on Weblate. Its central
+ * point is that "we need translators" is the wrong request for French and
+ * German — both were machine-drafted, so every field is already filled and
+ * what they need is reviewers.
  *
  * Behaviour:
  *   - Idempotent: upserts by slug, so re-running updates the post in place.

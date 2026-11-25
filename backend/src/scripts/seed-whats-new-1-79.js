@@ -1,16 +1,10 @@
 /**
  * seed-whats-new-1-79.js
  *
- * Seeds the "What's New in Cellarion 1.77–1.79" release blog post — the
- * follow-up to whats-new-cellarion-1-76. Covers what shipped since 1.76:
- *   - v1.77.0: restore a mistakenly-consumed bottle; Open-bottle button
- *     restored to the mobile bar
- *   - v1.78.0: unified CellarNav view switcher + tidied bottle/cellar actions,
- *     dead onboarding-tour markers removed
- *   - v1.79.0: nav made to read/behave like navigation — underline tab bar,
- *     shared CellarPageHeader (constant nav position), responsive Cellar Book
+ * Seeds the "What's New in Cellarion 1.77–1.79" release blog post (its text
+ * is in the constants below).
  *
- * Behaviour (mirrors seed-howto-article.js):
+ * Behaviour (mirrors archive/seed-howto-article.js):
  *   - Idempotent: upserts by slug, so re-running updates the post in place.
  *   - Defaults to DRAFT so you can review it in the admin editor first.
  *     Pass --publish to publish it (sets publishedAt on first publish).

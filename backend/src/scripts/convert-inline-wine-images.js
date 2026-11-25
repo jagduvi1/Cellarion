@@ -1,15 +1,14 @@
 /**
- * One-time conversion of wine pictures stored inline (scaling audit
- * 2026-09-25).
+ * Converts wine pictures stored inline (a data: URI in the wine's record)
+ * into files.
  *
- * Until 2026-09-06, approving a wine request copied the photo attached to it
- * into the new wine's record as a data: URI: up to half a megabyte of text
- * that rode along in every list, page and copy that showed the wine, and
- * could not be cached on its own. Pictures are files now: an approval stores
- * the requester's photo as the wine's official picture
- * (routes/admin/wineRequests.js), and wine records refuse inline images.
+ * An inline picture is up to half a megabyte of text that rides along in every
+ * list, page and copy that shows the wine, and cannot be cached on its own.
+ * Pictures are files: an approval stores the requester's photo as the wine's
+ * official picture (routes/admin/wineRequests.js), and the wine write paths
+ * refuse inline images (services/accountOps validateImageRef).
  *
- * This moves the ones stored before that into files the same way, through
+ * This moves the inline ones into files the same way, through
  * attachOfficialWineImage: a BottleImage row (approved, public, the wine's
  * official picture, the credit kept), the file stored as a kept WebP photo, and
  * wine.image pointing at it. A cut-out (transparent pixels: what the request

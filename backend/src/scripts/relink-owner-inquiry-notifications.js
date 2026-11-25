@@ -1,14 +1,13 @@
 /**
- * One-time relink: point older curator-question notifications at the
- * question itself.
+ * Relink: point curator-question notifications that carry a bottle link at
+ * the question itself.
  *
- * An older owner_inquiry / owner_inquiry_resolved notification links to the
- * recipient's bottle as it was when the question went out
- * (/cellars/<cellar>/bottles/<bottle>). Once that bottle or its cellar is
- * deleted the link leads to "bottle not found". New notifications link to
- * /questions/<inquiryId>, which finds a bottle page the owner can open at click
- * time (services/ownerInquiryOps.inquiryForRecipient). This rewrites the old
- * links the same way.
+ * An owner_inquiry / owner_inquiry_resolved notification whose link is the
+ * recipient's bottle (/cellars/<cellar>/bottles/<bottle>) leads to "bottle not
+ * found" once that bottle or its cellar is deleted. A question link
+ * (/questions/<inquiryId>) finds a bottle page the owner can open at click
+ * time (services/ownerInquiryOps.inquiryForRecipient), and is what a
+ * notification carries; this rewrites the bottle links the same way.
  *
  * Which: a notification of those two types whose link is a bottle link, for
  * which an inquiry exists with a recipient row of the SAME user and the SAME

@@ -7,7 +7,7 @@
  *
  *   Champagne. Premier Cru and Grand Cru rate the village, not the
  *   appellation: the appellation is "Champagne" and the cru is a
- *   classification. The write paths now store it that way
+ *   classification. The write paths store it that way
  *   (utils/champagneCru, the WineDefinition pre-validate hook, every key
  *   builder); this moves the existing rows and takes "Champagne Grand Cru"
  *   and "Champagne Premier Cru" off the curated appellation list.
@@ -55,7 +55,7 @@
  *
  * A value that names a village beside the cru ("Champagne Grand Cru (Bouzy)")
  * is listed under "needs a person" and left as typed. So is a producer typed
- * exactly as a vineyard's name: the name is now an appellation spelling, and
+ * exactly as a vineyard's name: the name becomes an appellation spelling, and
  * the cross-field rule that reads a place in the producer box
  * (utils/crossFieldChecks, producer-is-appellation) will name it.
  *
@@ -513,8 +513,8 @@ async function alignCruAppellations({ apply = false, log = console.log, searchOk
     return true;
   };
 
-  // A producer typed exactly as one of the names that are now appellation
-  // spellings: read with both folds, as the cross-field rule reads it.
+  // A producer typed exactly as one of the spellings the list accepts after
+  // step 1: read with both folds, as the cross-field rule reads it.
   if (accepted.size) {
     const producers = await WineDefinition.aggregate([
       { $match: { producer: { $nin: [null, ''] }, canary: { $ne: true } } },

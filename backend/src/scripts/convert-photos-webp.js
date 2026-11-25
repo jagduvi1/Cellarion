@@ -1,10 +1,9 @@
 /**
- * One-time conversion of the kept photos to WebP.
+ * Converts the kept photos to WebP.
  *
- * New photos are stored as WebP of at most 2048 px (services/photoFormat).
- * Every photo processed before that is a full-resolution lossless PNG — or,
- * for an imported one, whatever the export carried. This converts those kept
- * files next to themselves:
+ * Photos are stored as WebP of at most 2048 px (services/photoFormat). A kept
+ * photo that is not — a full-resolution lossless PNG or, for an imported one,
+ * whatever the export carried — is converted next to itself:
  *
  *   processed/<name>.png|jpg  →  processed/<name>.webp
  *   originals/<name>.png|jpg  →  originals/<name>.webp   (only where the original

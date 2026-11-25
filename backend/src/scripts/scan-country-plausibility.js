@@ -5,8 +5,8 @@
  *
  * For every Country document, reports:
  *   - whether the name is a recognized real-world country
- *     (utils/normalize.js isRecognizedCountry — same gate findOrCreateCountry
- *     now enforces at mint time; this script finds what predates the gate)
+ *     (utils/normalize.js isRecognizedCountry — the gate findOrCreateCountry
+ *     enforces at mint time; this script finds stored names it would refuse)
  *   - whether the ISO code is missing
  *   - how many registry wines and regions hang off it (cleanup blast radius)
  *
@@ -43,9 +43,9 @@ async function run() {
   let missingCode = 0;
   for (const c of countries) {
     const flags = [];
-    // "Unknown" placeholders predate the null-country convention; recognized
-    // real countries may still legitimately lack their ISO code (data gap,
-    // not junk) — report the two conditions separately.
+    // A country named "Unknown" stands in for a null country and is not junk;
+    // recognized real countries may still legitimately lack their ISO code
+    // (data gap, not junk) — report the two conditions separately.
     if (!isRecognizedCountry(c.name) && !isUnknownName(c.name)) flags.push('NOT-A-KNOWN-COUNTRY');
     if (!c.code) { missingCode += 1; flags.push('NO-ISO-CODE'); }
     if (flags.length) {

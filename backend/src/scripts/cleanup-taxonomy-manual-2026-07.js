@@ -1,10 +1,10 @@
 /**
  * cleanup-taxonomy-manual-2026-07.js
  *
- * The "manual pass" of the 2026-07-18 taxonomy audit — every item here was
+ * The taxonomy fixes that each needed a judgment — every item here was
  * individually verified against the referencing wines and, where needed,
- * outside sources (see TAXONOMY_AUDIT_2026-07-18.md §4/§6 and the evidence
- * notes inline below). Complements cleanup-taxonomy-2026-07.js.
+ * outside sources (see the evidence notes inline below). Complements
+ * cleanup-taxonomy-2026-07.js, which holds the high-confidence items.
  *
  * What it does:
  *   1. Wine grape retags (generic Muscat/Malvasía/Trebbiano → the precise
@@ -22,7 +22,7 @@
  *   - "Anavren" grape (Arba Wine, KZ) — no such variety documented anywhere
  *   - "Alicante" grape (Cairossa blend unverifiable: Grenache vs A. Bouschet)
  *   - "Cabernet" grape (Veneto "Ruare Cabernet" — honest label-level term)
- *   - jhr "Night for Rights Gala" wine (stays under country "Unknown")
+ *   - one event wine with no identifiable country (stays under "Unknown")
  *   - spirits in the registry (product decision)
  *
  * Usage:

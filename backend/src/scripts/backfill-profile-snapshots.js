@@ -1,26 +1,25 @@
 #!/usr/bin/env node
 /**
- * Stamp aiProfile.inputsSnapshot on rows enriched before the field existed.
+ * Stamp aiProfile.inputsSnapshot on enriched rows that carry none.
  *
- * WHY. From v1.145 every generation records the identity it was generated
- * from, so a later bulk write that bypasses reenrichAfterRecordEdit is
- * detectable as staleness (a row whose identity was rewritten otherwise keeps
- * a profile describing the wine it used to be). Without a backfill that
- * protection only covers rows re-enriched from now on, and the existing
- * profiles stay unguarded indefinitely.
+ * WHY. Every generation records the identity it was generated from, so a
+ * later bulk write that bypasses reenrichAfterRecordEdit is detectable as
+ * staleness (a row whose identity was rewritten otherwise keeps a profile
+ * describing its old identity). A profile without a snapshot has no such
+ * guard until it is re-enriched.
  *
  * ⚠️ WHAT THIS CANNOT DO. The snapshot is the identity the profile was
- * generated from, and for an existing row that value was never recorded — so
+ * generated from, and for these rows that value was never recorded — so
  * this stamps the CURRENT identity, which asserts "this profile matches this
  * record". For a row that is already stale that assertion is wrong, and
  * stamping it hides the staleness permanently.
  *
  * Therefore: run this AFTER re-enriching the rows already known to be stale.
- * It is a baseline, not a repair, and it is deliberately not retroactive —
- * pre-v1.145 staleness is not recoverable from stored data, because nothing
- * stored what the profile was generated from. --skip-suspect (default) leaves
- * the producer-suspect population alone, since that is where the known-stale
- * rows are concentrated and where a wrong baseline would cost the most.
+ * It is a baseline, not a repair: the staleness of a row without a snapshot
+ * is not recoverable from stored data, because nothing stored what the
+ * profile was generated from. By default it leaves the producer-suspect
+ * population alone (--include-suspect takes it in), since that is where
+ * known-stale rows concentrate and where a wrong baseline costs the most.
  *
  * DRY BY DEFAULT. Pass --apply to write.
  */

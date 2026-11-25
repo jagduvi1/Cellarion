@@ -5,7 +5,7 @@
  * THE HOLE: findOrCreateWine's mint gate asks
  *   Region.exists({ $or: [{ normalizedName }, { normalizedSynonyms }] })
  * — an EXACT match. "Tokaji" is what a Hungarian label prints, the Region doc
- * is "Tokaj", and the two strings are not equal, so "Tokaji" walked into the
+ * is "Tokaj", and the two strings are not equal, so "Tokaji" passes into the
  * producer field of a shared-registry wine. Every adjectival label form has the
  * same hole: "Bordelais", "Riojano", "Alentejano", "Egri", "Wachauer" are how
  * their regions appear IN PRINT, and none of them matches its Region doc.
@@ -13,7 +13,7 @@
  * The fix is data, not code: they are synonyms of regions the taxonomy already
  * holds, and `normalizedSynonyms` is exactly the field the gate already
  * queries. Adding them widens the gate, the cross-field producer-is-region
- * rule, and findOrCreateRegion's dedup (a label scan can no longer mint
+ * rule, and findOrCreateRegion's dedup (a label scan then cannot mint
  * "Tokaji" as a second region beside "Tokaj") in one write.
  *
  * INVENTS NOTHING. Every entry names a region that must ALREADY exist — the

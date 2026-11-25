@@ -1,14 +1,13 @@
 /**
- * One-time backfill: link every published bottle photo to its wine.
+ * Links every published bottle photo that has no wine to its bottle's wine.
  *
  * A photo uploaded on a bottle carries no wine of its own — the bottle does.
  * Publishing it (approved + public) is meant to make it a photo OF THE WINE:
  * every owner of that wine sees it in their gallery and can pick it as their
- * bottle's picture, and it can become the wine's registry image. Until
- * 2026-09-27 "approve public" left the wine reference empty, so a published
- * bottle photo was visible on that one bottle only and never reached the wine.
- * routes/admin/images.js now links the wine at approval; this links the photos
- * approved before.
+ * bottle's picture, and it can become the wine's registry image. A published
+ * photo with an empty wine reference is visible on that one bottle only and
+ * never reaches the wine. Approval links the wine (services/imageModerationOps
+ * linkWineViaBottle); this links the published photos that still lack it.
  *
  *   node src/scripts/backfill-published-photo-wines.js                    # dry run: counts only
  *   node src/scripts/backfill-published-photo-wines.js --apply            # link the photos
