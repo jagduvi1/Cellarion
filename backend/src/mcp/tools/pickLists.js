@@ -108,8 +108,8 @@ registerTool({
   },
   handler: async (args, ctx) => {
     const done = {};
-    // A later step failing must not hide the steps already applied (release
-    // audit 2026-10-13): the error says what was done before it.
+    // A later step failing must not hide the steps already applied: the
+    // error says what was done before it.
     const failAfter = (error) => (Object.keys(done).length
       ? fail(CODE[error.status] || 'error', `${error.message} (already applied: ${JSON.stringify(done)})`)
       : failFrom(error));

@@ -1,9 +1,9 @@
 // Open-bottle (Coravin / preservation) tracking over MCP — the WRITE side of
-// the open_bottle state that get_bottle and what_should_i_open_tonight already
-// read (issue #835: the ranking logic depended on data MCP clients could not
-// produce). Scope `consume`, like consume_bottle — opening and pouring are
-// drinking actions, and the HA integration's consume token covers the fridge
-// workflow ("I opened the Riesling, put a vacuum stopper in").
+// the open_bottle state that get_bottle and what_should_i_open_tonight read:
+// the ranking depends on it, so MCP clients must be able to produce it.
+// Scope `consume`, like consume_bottle — opening and pouring are drinking
+// actions, and the HA integration's consume token covers the fridge workflow
+// ("I opened the Riesling, put a vacuum stopper in").
 //
 // The ops are the SAME implementation the REST routes run (services/bottleOps
 // openBottle/pourFromBottle/closeBottle), so validation, freshness bookkeeping
@@ -40,7 +40,7 @@ const TAKE_OUT_OF_RACK = z.boolean().optional()
  * Consumed bottles KEEP openedAt/preservationMethod/pours as drinking history
  * (Bottle schema), so every handler here must gate on status BEFORE trusting
  * openedAt — otherwise open_bottle would report a drunk bottle as "open and
- * drinkable" and close_bottle would erase preserved history (2026-07-30 audit).
+ * drinkable" and close_bottle would erase preserved history.
  */
 function consumedConflict(bottle, hint) {
   const when = bottle.consumedAt ? ` on ${new Date(bottle.consumedAt).toISOString().slice(0, 10)}` : '';
@@ -194,11 +194,11 @@ registerTool({
       takenOutOf = opened.takenOutOf;
     }
 
-    // ONE all-or-nothing service call for the whole batch (single save): the
-    // per-glass loop this replaces committed up to 10 separate saves before
-    // the ledger row, so a mid-batch failure left pours (and the implicit
-    // open) persisted but unledgered — invisible to undo_last, and re-poured
-    // by a same-key retry after the claim was released (2026-07-30 audit).
+    // ONE all-or-nothing service call for the whole batch (single save): a
+    // per-glass loop of separate saves before the ledger row would leave pours
+    // (and the implicit open) persisted but unledgered on a mid-batch failure
+    // — invisible to undo_last, and re-poured by a same-key retry after the
+    // claim is released.
     const glasses = args.glasses || 1;
     let result;
     try {

@@ -1,9 +1,9 @@
-// Semantic similarity via the EXISTING wine embeddings (plan §3.17).
+// Semantic similarity via the EXISTING wine embeddings.
 // find_similar_wines costs Cellarion $0 per call: the reference wine is already
 // embedded (on add / by the batch job), so this is a stored-vector lookup + one
 // in-memory vector search (services/vectorStore) — no Voyage call, no LLM call.
-// Free-text semantic_search_wines (which DOES embed the query) is
-// deliberately Phase 3, not here.
+// Free-text semantic_search_wines (which DOES embed the query) lives apart,
+// in semantic.js.
 //
 // vectorStore is lazy-required to keep the tool registry's load path lean.
 const { z } = require('zod');
@@ -23,8 +23,8 @@ registerTool({
     '"more like this", "what else is like my favourite Barolo", or to seed purchase ideas from a wine the user loves. ' +
     'Only wines that have been embedded are searchable — an empty result does not mean nothing similar exists. ' +
     `Ids must be 24-hex Mongo ids from search_registry or search_bottles — a name or slug is not an id. Returns at most ${MAX_SIMILAR}.`,
-  // 'public' (plan §3.17): the reference wine is already embedded, so this is
-  // a stored-vector lookup — $0 per call and safe on the anonymous
+  // 'public': the reference wine is already embedded, so this is a
+  // stored-vector lookup — $0 per call and safe on the anonymous
   // /api/mcp/public surface. The bottle_id input is guarded below (anonymous
   // callers have no bottles).
   scope: 'public',
@@ -35,12 +35,11 @@ registerTool({
     // Deliberately UNBOUNDED at the schema layer, unlike the mutating tools'
     // numeric inputs. A strict .min/.max here makes the SDK reject the whole
     // call with -32602 before the handler runs — and an over-large `limit` is
-    // not a malformed request, it is a request to be capped. The handler clamps
-    // (that clamp was previously unreachable for out-of-range values), so
-    // "20 similar wines" now returns 10 instead of failing. z.coerce absorbs
+    // not a malformed request, it is a request to be capped. The handler clamps,
+    // so "20 similar wines" returns the cap instead of failing. z.coerce absorbs
     // the string-number an agent may send. Counting note: an SDK-level -32602
     // never reaches budgetedHandler, so it lands in NO McpUsageStat counter —
-    // rejections here were invisible in the usage stats, not merely uncounted.
+    // such rejections would be invisible in the usage stats.
     limit: z.coerce.number().int().optional().describe(`How many to return (1-${MAX_SIMILAR}, default 8; larger values are capped, not rejected)`),
   },
   handler: async (args, ctx) => {
@@ -71,8 +70,8 @@ registerTool({
     const cfg = aiConfig.get();
     const scope = { model: cfg.embeddingModel, indexVersion: cfg.vectorIndex };
 
-    // Registry lockdown (2026-09-06, L3): the anonymous surface walks the
-    // neighbour graph five wines at a time — enough for "more like this",
+    // Registry lockdown: the anonymous surface walks the neighbour graph
+    // five wines at a time — enough for "more like this",
     // too slow to map the registry by adjacency.
     const maxHere = ctx?.anonymous || !ctx?.user ? 5 : MAX_SIMILAR;
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), maxHere);

@@ -1,6 +1,6 @@
-// undo_last reversals for the Phase-2c structural actions (create_cellar,
-// create_rack, place_bottle, unplace_bottle, move_bottle). Kept out of
-// consume.js to hold that file's size down. Every reversal:
+// undo_last reversals for the structural actions (create_cellar, create_rack,
+// place_bottle, unplace_bottle, move_bottle, auto_arrange). Kept apart from
+// revert.js (the dispatcher) to hold its size down. Every reversal:
 //   - re-checks access (a lost role/ownership since the action = refuse),
 //   - claims the ledger row atomically BEFORE mutating (McpActionLog has no
 //     optimistic concurrency; plain save is not a guard),
@@ -118,12 +118,11 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     const pos = last.detail?.position;
     // Verify EVERYTHING before claiming (the move branch's discipline), so a
     // reversal that would fail doesn't burn the ledger row:
-    //  - the bottle must still be active (without this, a
-    //    bottle consumed via the web since the unplace would be re-slotted,
-    //    breaking "consume frees the slot" — dead bottle in fill counts/3D);
+    //  - the bottle must still be active (without this, a bottle consumed via
+    //    the web since the unplace would be re-slotted, breaking "consume
+    //    frees the slot" — dead bottle in fill counts/3D);
     //  - it must still live in this rack's cellar;
-    //  - the position must still exist (rack resized smaller since — the
-    //    previously-computed-but-unused maxPos check);
+    //  - the position must still exist (the rack may have shrunk since);
     //  - the slot must be free.
     const bottle = await Bottle.findById(bottleId);
     if (!bottle) return fail('conflict', 'That bottle no longer exists; nothing was changed.');

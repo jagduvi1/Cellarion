@@ -281,8 +281,7 @@ registerTool({
     // A producer spelled unlike the rest of that producer in the registry
     // (same key, same country) — said now, while the curator can still
     // re-file with the registry's spelling; otherwise the admin has to pick
-    // one at approval (routes/admin/wineProposals, 2026-09-28: curator
-    // corrections split 9 producers in one week this way).
+    // one at approval (routes/admin/wineProposals), or the producer splits.
     // Judged where the wine will BE: a proposed country moves it into that
     // country's spellings (the same bucket the approve checks).
     let registrySpellings = [];

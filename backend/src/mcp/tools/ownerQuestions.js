@@ -2,10 +2,8 @@
 //
 // A sommelier or admin asks a wine's bottle owners a record question they
 // cannot settle from research ("what does the back label say the producer
-// is?"; services/ownerInquiryOps, asked with ask_bottle_owner). Until now an
-// owner could only answer from the bottle page, behind a notification that
-// was easy to miss; over MCP the notification carried no inquiry id and
-// get_bottle said nothing. These two tools put the question in front of the
+// is?"; services/ownerInquiryOps, asked with ask_bottle_owner). Besides the
+// card on the bottle page, these two tools put the question in front of the
 // owner where they already talk about their bottles, and carry the answer
 // back through the SAME service function the web card uses — so the privacy
 // projection (only the caller's own recipient entry, never who else owns the

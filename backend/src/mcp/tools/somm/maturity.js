@@ -53,9 +53,9 @@ registerTool({
     if (denied) return denied;
     const { limit, offset } = pageParams(args, 20, 50);
     // A wine-scoped call defaults to 'all': the curator asking "what is
-    // curated for THIS wine" wants reviewed rows, and 5,600+ reviewed
-    // profiles made reaching one by pagination ~113 calls (curator feedback
-    // on v1.101.0). Unscoped calls keep the pending-queue default.
+    // curated for THIS wine" wants reviewed rows, and reaching one by paging
+    // through thousands of reviewed profiles takes over a hundred calls.
+    // Unscoped calls keep the pending-queue default.
     const status = args.status || (args.wine_id ? 'all' : 'pending');
     const filter = status === 'all' ? {} : { status };
     if (args.wine_id) {

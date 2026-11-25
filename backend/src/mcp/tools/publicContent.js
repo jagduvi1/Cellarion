@@ -1,9 +1,9 @@
-// Public/growth tools (plan Phase 6 §3.9): the blog guides (cornerstone AEO
-// content), data the public website already serves, never user data and never
-// an AI call ($0 rule for the anonymous endpoint is absolute). Curated drink
-// windows live here too but are for signed-in connections only (scope 'read'):
-// they are the registry data most worth protecting, so the anonymous surface
-// does not list the tool.
+// Public/growth tools: the blog guides (cornerstone AEO content), data the
+// public website already serves, never user data and never an AI call ($0
+// rule for the anonymous endpoint is absolute). Curated drink windows live
+// here too but are for signed-in connections only (scope 'read'): they are
+// the registry data most worth protecting, so the anonymous surface does not
+// list the tool.
 const { z } = require('zod');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
@@ -34,7 +34,7 @@ registerTool({
       return fail('invalid_input', 'wine_id must be a 24-hex id from search_registry.');
     }
     // labelSweetness rides along: a curator reading windows wants to know a
-    // "Spätlese" is the trocken one, and the name no longer says so.
+    // "Spätlese" is the trocken one, and the name does not say so.
     const wine = await WineDefinition.findById(args.wine_id).select('name producer type pendingIdentity labelSweetness sweetnessStyle')
       .populate('labelSweetness', 'name band scale regulated -_id')
       .populate('sweetnessStyle.term', 'name band scale regulated').lean();

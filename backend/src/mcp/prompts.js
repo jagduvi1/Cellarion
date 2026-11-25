@@ -1,4 +1,4 @@
-// MCP prompts (plan §3, the third primitive): user-invokable workflow templates
+// MCP prompts (the third primitive): user-invokable workflow templates
 // that turn the calling model into a competent Cellarion sommelier for one
 // well-defined job. Each is a STATIC template — arguments are interpolated into
 // text, the handler never touches the DB — so prompts are $0 and always fresh:

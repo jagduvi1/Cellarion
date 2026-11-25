@@ -7,9 +7,8 @@
  *
  * Checks auth negatives (401/405/demo-403/foreign-probe), the initialize
  * handshake, every read tool against seeded data, and both resource kinds.
- * NOT part of jest (needs a live stack). First ran as the pre-merge Docker
- * verification of PRs #705/#707 — kept in-repo so every future MCP change can
- * re-run it in minutes (plan §9; the release checklist should include it).
+ * NOT part of jest (needs a live stack). Kept in-repo so every MCP change can
+ * re-run it in minutes as its pre-merge Docker verification.
  */
 const BASE = process.env.CELLARION_URL || 'http://127.0.0.1:5000';
 // Guard: this script logs in with documented DEV credentials and creates a

@@ -76,9 +76,9 @@ registerTool({
     // be held or suspect); unprofiled is the intake queue: when automatic
     // AI enrichment is OFF (somm-owned data), a new wine arrives with NO
     // profile at all and this list is the only place the somm can see it.
-    // `description: null` keeps curator rows that predate the generatedAt
-    // stamp out of the unprofiled state — a wine with a written description
-    // is not awaiting a profile.
+    // `description: null` keeps curator rows without a generatedAt stamp out
+    // of the unprofiled state — a wine with a written description is not
+    // awaiting a profile.
     const wantState = (s) => args.state === undefined || args.state === s;
     const or = [];
     if (wantState('held')) {
@@ -357,9 +357,9 @@ registerTool({
   },
 });
 
-// Read-only trend access (gap report 5b): record_profile_audit returns the
-// history only as a side effect of WRITING a row — reading the trend must
-// not require polluting the series with a dummy sample.
+// Read-only trend access: record_profile_audit returns the history only as a
+// side effect of WRITING a row — reading the trend must not require
+// polluting the series with a dummy sample.
 registerTool({
   name: 'list_profile_audits',
   title: 'Sommelier: spot-check history and running error rate',

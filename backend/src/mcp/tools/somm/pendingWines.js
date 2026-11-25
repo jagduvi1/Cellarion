@@ -137,28 +137,26 @@ registerTool({
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
 
     // WHAT MAY BE SERVED, and why — three separate questions, deliberately not
-    // one (prod 2026-08-13: this tool refused a promoted wine with "That wine
-    // has no label scan" while its scan existed, and refused another whose
-    // APPROVED PUBLIC photo the wine page renders to anonymous visitors).
+    // one: a single gate would refuse a promoted wine whose scan exists, or a
+    // wine whose APPROVED PUBLIC photo the wine page renders to anonymous
+    // visitors.
     //
     //   scan frames  — curation evidence. Readable while they EXIST and are
     //                  inside their window: pending → readable, promoted →
     //                  readable until retainUntil passes (services/
     //                  labelScanAccess, one definition shared with the REST
     //                  sibling and the retention sweep). QUEUE MEMBERSHIP IS
-    //                  NOT THE GATE. The somm who reported it put it exactly
-    //                  right: "scans that failed badly stay readable; scans
-    //                  that failed subtly do not — the gate is inverted
-    //                  against need."
+    //                  NOT THE GATE: it would keep the scans that failed badly
+    //                  readable and hide those that failed subtly — inverted
+    //                  against need.
     //   public gallery — the wine's approved+public photos, for ANY wine. The
     //                  web page already serves these to anybody with the URL,
     //                  so serving them here is ZERO new exposure, and refusing
     //                  them while claiming privacy is simply false.
-    //   private photos — the owners' own bottle photos. STILL pending-only:
-    // shipping somebody's private
-    //                  gallery to an external model is justified by a curator
-    //                  reading a label they were asked to identify, and by
-    //                  nothing else. Unchanged.
+    //   private photos — the owners' own bottle photos. Pending-only: shipping
+    //                  somebody's private gallery to an external model is
+    //                  justified by a curator reading a label they were asked
+    //                  to identify, and by nothing else.
     const BottleImage = require('../../../models/BottleImage');
     const Bottle = require('../../../models/Bottle');
     const wine = await WineDefinition.findById(args.wine_id)
@@ -196,12 +194,10 @@ registerTool({
     // first), so this surface can never show more than the page does. The
     // kind exclusion is belt-and-braces: a label scan is always private, so it
     // cannot match anyway.
-    // BOTH linkage forms (v1.111.0 hotfix — first prod smoke): an approved
-    // public photo may hang off the WINE or off one of its BOTTLES, and the
-    // wine page renders both — the somm's very example (Wynns "The Original",
-    // credited to its owner) is bottle-linked and was still refused. The
-    // distinct() runs for any wine because it only feeds this approved+public
-    // query; the PRIVATE both-ways owner query above stays pending-only.
+    // BOTH linkage forms: an approved public photo may hang off the WINE or
+    // off one of its BOTTLES, and the wine page renders both. The distinct()
+    // runs for any wine because it only feeds this approved+public query; the
+    // PRIVATE both-ways owner query below stays pending-only.
     const galleryBottleIds = (await Bottle.distinct('_id', { wineDefinition: wine._id })) || [];
     const gallery = await BottleImage.find({
       $or: [
@@ -215,10 +211,9 @@ registerTool({
       .sort({ assignedToWine: -1, createdAt: -1 }).limit(MAX_BOTTLE_IMAGES).lean();
 
     if (readableScans.length === 0 && gallery.length === 0 && !stillPending) {
-      // Two states, two truths. The old message asserted an expiry for both, so
-      // a curator asking about a wine that was never added from a photo was
-      // told its window "has closed" — i.e. that evidence had existed and they
-      // were too late.
+      // Two states, two truths: a wine never added from a photo has no window
+      // that closed, and saying it "has closed" would tell the curator that
+      // evidence had existed and they were too late.
       if (!scan && !scanBack) {
         return fail('conflict',
           'That wine has no label scan — it was not added from a photo — and no public gallery photo either, so there '
@@ -234,7 +229,7 @@ registerTool({
     // both-ways match the queue projection uses (some upload paths stamp the
     // wine on the image, the plain add flow only links it to the bottle).
     // `status`/`visibility` ride along so each photo can be captioned for what
-    // it actually is. PENDING ONLY, unchanged: M-1 stands.
+    // it actually is. PENDING ONLY (the private-photos rule above).
     const bottleIds = stillPending ? await Bottle.distinct('_id', { wineDefinition: wine._id }) : [];
     const imgs = stillPending ? await BottleImage.find({
       kind: { $ne: 'label-scan' },
@@ -276,7 +271,7 @@ registerTool({
         // curator would rather see two labels than be refused all of them.
         if (totalBytes + rendered.bytes > IMAGE_TOTAL_CAP_BYTES) break;
         totalBytes += rendered.bytes;
-        // A caption block BEFORE each image, because a queue row can now carry
+        // A caption block BEFORE each image, because a queue row can carry
         // two label frames of one bottle and "the producer is not printed on
         // this one" means opposite things about a front and a back label. The
         // ids in `data.images` alone cannot carry that: nothing ties an id to a

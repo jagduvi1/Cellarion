@@ -1,5 +1,5 @@
 // The label sweetness vocabulary for an AI: the terms a wine's label sweetness
-// may name (models/SweetnessTerm, GitHub discussion #1754), by scale and band.
+// may name (models/SweetnessTerm), by scale and band.
 // Read scope, like list_classifications — the same list the admin taxonomy
 // screen and the pickers use, and the ONLY values any label sweetness field
 // accepts, so a client reads it before writing one.

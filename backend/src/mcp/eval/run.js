@@ -1,4 +1,4 @@
-/* MCP tool-selection eval (plan §9) — measures whether a REAL model, given our
+/* MCP tool-selection eval — measures whether a REAL model, given our
  * live tool list + server instructions, reaches for the right tool on natural
  * user phrasings. This is the feedback loop for tool names/descriptions: when
  * a case fails consistently, fix the description, not the case.

@@ -1,7 +1,7 @@
-// Portfolio-intelligence read tools (plan Phase 3): cellar_health_check,
-// find_gaps, value_report. All three follow the §5.2 cost rule — they return
-// STRUCTURED analysis for the calling model to reason over; no LLM runs here,
-// so every call is $0 to Cellarion.
+// Portfolio-intelligence read tools: cellar_health_check, find_gaps,
+// value_report. All three follow the cost rule — they return STRUCTURED
+// analysis for the calling model to reason over; no LLM runs here, so every
+// call is $0 to Cellarion.
 //
 // The computations live in services/insightsService.js — ONE implementation
 // shared with any future UI page (one-impl rule, like statsService). This file

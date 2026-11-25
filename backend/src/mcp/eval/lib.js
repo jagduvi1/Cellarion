@@ -1,4 +1,4 @@
-// Pure helpers for the MCP tool-selection eval (plan §9). Kept free of SDK /
+// Pure helpers for the MCP tool-selection eval. Kept free of SDK /
 // network / API dependencies so they are unit-testable in jest.
 
 /**

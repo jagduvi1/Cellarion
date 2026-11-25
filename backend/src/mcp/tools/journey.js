@@ -1,4 +1,4 @@
-// case_journey (plan Phase 3): the story of a multi-bottle holding. Cellarion
+// case_journey: the story of a multi-bottle holding. Cellarion
 // has no "case" entity — a case is simply several bottles of the same wine +
 // vintage. The lot computation lives in services/insightsService.js
 // (buildCaseJourneys — one impl for MCP and any future UI page); this adapter

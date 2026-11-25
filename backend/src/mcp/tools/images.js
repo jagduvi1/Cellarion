@@ -1,6 +1,6 @@
-// attach_bottle_image (plan §3.18) — the parity gap a real user hit: adding a
-// bottle over MCP but having no way to put its label photo on. Two input
-// modes for a caller with no file upload:
+// attach_bottle_image — parity with the web upload: a bottle added over MCP
+// needs a way to get its label photo on. Two input modes for a caller with
+// no file upload:
 //   - image_url: an https product/label image (e.g. the Systembolaget page's
 //     image). Downloaded server-side through the SSRF guard.
 //   - image_base64: raw bytes the caller already holds (a photo the user
@@ -98,9 +98,8 @@ registerTool({
     let bottleId = args.bottle_id;
     if (!bottleId) {
       // wine_id: the effect is per wine, so any of the user's bottles will do —
-      // the newest active one in a cellar the user can still edit (a bottle
-      // left in a cellar they were removed from must not be picked and then
-      // refused — audit 2026-09-07).
+      // the newest active one in a cellar the user can still edit (a bottle left
+      // in a cellar they were removed from must not be picked and then refused).
       const Cellar = require('../../models/Cellar');
       const editable = await Cellar.find({
         deletedAt: null,
@@ -155,7 +154,7 @@ registerTool({
     // The background is removed from every bottle photo and kept only for a
     // label-only one. The flag is the model's word for it, so a picture
     // shaped like a whole bottle (tall and narrow, as retailer product shots
-    // are) is cut out anyway: the #1455 rule holds even when a model sets
+    // are) is cut out anyway: the rule holds even when a model sets
     // label_only on the wrong photo. keep_background is ignored, and said so.
     const notes = [];
     let keepBackground = args.label_only === true;

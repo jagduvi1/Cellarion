@@ -1,9 +1,9 @@
-// "What should I drink" tools (plan Phase 3): what_should_i_open_tonight and
+// "What should I drink" tools: what_should_i_open_tonight and
 // pair_with_dish. Both are candidate-shortlist generators — they select
 // ready-to-drink bottles with the structured facts a sommelier would weigh
 // (maturity + urgency, taste profile, rating, price, rack position, open-
 // bottle state) and let the CALLING model make the actual choice. No LLM runs
-// here (§5.2): the server curates data, the caller reasons.
+// here: the server curates data, the caller reasons.
 //
 // Selection/enrichment/scoring live in services/drinkingService.js — ONE
 // implementation shared with any future UI feature (one-impl rule). This file

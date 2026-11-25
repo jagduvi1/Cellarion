@@ -1,7 +1,7 @@
-// Self-description tools (§3.16 of the MCP plan). Because Cellarion is
-// open-source, the MCP is radically transparent: any connected AI can learn what
-// it is, which version it's talking to, and where the source lives — so it can
-// use the tools well and even help improve the app. Source is pointed at (the
+// Self-description tools. Because Cellarion is open-source, the MCP is
+// radically transparent: any connected AI can learn what it is, which version
+// it's talking to, and where the source lives — so it can use the tools well
+// and even help improve the app. Source is pointed at (the
 // public GitHub repo), never served from the running container filesystem.
 const pkg = require('../../../package.json');
 const { registerTool } = require('../registry');
@@ -30,7 +30,7 @@ registerTool({
       repository: 'https://github.com/jagduvi1/Cellarion',
       homepage: 'https://cellarion.app',
       // The code is AGPL; the shared registry's curated content is not — it
-      // is provided under its own terms (registry lockdown 2026-09-06, L6).
+      // is provided under its own terms.
       data_terms: 'https://cellarion.app/terms',
     };
     // Hosted cellarion.app only (config/hostedInstance.js): the hosted service

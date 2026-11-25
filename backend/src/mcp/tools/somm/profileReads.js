@@ -79,12 +79,12 @@ registerTool({
   },
 });
 
-// The curated core (rethink decision 3, 2026-08-18): a wine ≥N owners is the
-// registry's high-traffic tier and MUST reach a curator-verified profile —
-// everything outside the core may live as a labelled AI estimate
-// indefinitely. This is the somm's impact-ranked worklist: owner count IS the
-// priority order. (Maturity-queue wines are the core's other half and already
-// have their own standing surface — list_maturity_queue.)
+// The curated core: a wine ≥N owners is the registry's high-traffic tier and
+// MUST reach a curator-verified profile — everything outside the core may
+// live as a labelled AI estimate indefinitely. This is the somm's
+// impact-ranked worklist: owner count IS the priority order. (Maturity-queue
+// wines are the core's other half and have their own standing surface —
+// list_maturity_queue.)
 registerTool({
   name: 'list_unverified_core_wines',
   title: 'Sommelier: high-ownership wines still lacking a curator-verified profile',
@@ -159,10 +159,10 @@ registerTool({
   },
 });
 
-// Pending-proposal visibility (gap report item 3): propose_wine_correction
-// enforces one pending proposal per (wine, kind) and 409s on a repeat — but
-// nothing LISTED what was pending, so across sessions the only way to
-// discover an existing proposal was to collide with it.
+// Pending-proposal visibility: propose_wine_correction enforces one pending
+// proposal per (wine, kind) and 409s on a repeat — without this listing, the
+// only way to discover an existing proposal across sessions would be to
+// collide with it.
 registerTool({
   name: 'list_pending_corrections',
   title: 'Sommelier: correction proposals already filed',
@@ -221,10 +221,10 @@ registerTool({
   },
 });
 
-// The durable spot-check tally (gap report item 5): sample_published_profiles
-// asks for a corrections-per-sample rate tracked across weeks — the number
-// that decides whether heavier anti-hallucination work is worth building —
-// and it previously lived only in chat.
+// The durable spot-check tally: sample_published_profiles asks for a
+// corrections-per-sample rate tracked across weeks — the number that decides
+// whether heavier anti-hallucination work is worth building — so it needs a
+// record that outlives the chat.
 registerTool({
   name: 'record_profile_audit',
   title: 'Sommelier: record a spot-check result (corrections per sample)',

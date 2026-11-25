@@ -1,16 +1,14 @@
-// capture_tasting_note (plan Phase 3) — the natural companion of drinking:
+// capture_tasting_note — the natural companion of drinking:
 // ONE call writes a PRIVATE tasting-journal entry and optionally the bottle
 // rating(s) in the same step. Two input forms, one journal entry either way:
 //   bottle_id + note           — the classic single-bottle note
 //   bottles: [{bottle_id, …}]  — several wines poured at ONE occasion (a
 //                                dinner with six bottles is one entry with six
 //                                pairings, never six copies of the same note)
-// title / people / mood describe the occasion itself — the journal model
-// always supported them; only this surface was narrower (support ticket).
-// people is free-text NAMES ONLY: never linked to Cellarion accounts, and
-// visibility is always private, so the mention-notification machinery in
-// journalOps can never fire from a machine caller (the reason people-tagging
-// was originally excluded here).
+// title / people / mood describe the occasion itself, the same fields the
+// journal model holds. people is free-text NAMES ONLY, never linked to
+// Cellarion accounts, and visibility is always private, so the mention
+// notifications in journalOps can never fire from a machine caller.
 //
 // One ledger row covers the entry AND every rating it set, so undo_last / the
 // activity timeline revert the whole occasion together. Self-budgeted like
@@ -87,7 +85,7 @@ registerTool({
   scope: 'write',
   // Charges the write budget ITSELF — one slot per bottle, after validation —
   // so the generic per-call charge in server.js must skip it (same contract
-  // as bulk_add, MCP-audit M7: no double-count, no charge on replay/refusal).
+  // as bulk_add: no double-count, no charge on replay/refusal).
   selfBudgeted: true,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -178,8 +176,8 @@ registerTool({
     }
 
     // Whole occasion charged upfront, after validation: the single form costs
-    // the same one slot the generic charge used to take; the occasion form
-    // costs one per bottle. Replays and invalid input never reach this.
+    // one slot, like the generic charge; the occasion form costs one per
+    // bottle. Replays and invalid input never reach this.
     if (!takeMutationSlot(String(ctx.user.id), items.length, ipKeyFor(ctx))) {
       return fail('rate_limited', `Not enough write budget left for ${items.length} bottle(s) this window — wait a few minutes, or log fewer bottles per call.`);
     }
@@ -211,9 +209,9 @@ registerTool({
     //    consumed-rating save, document deleted mid-flight) compensate exactly
     //    like returned ones — an escaping throw would strand the entry and the
     //    earlier ratings with no ledger row for undo, and the released
-    //    idempotency claim would let a same-key retry double-write (audit
-    //    2026-07-24 M1). Thrown = concurrency-shaped → `conflict`; returned =
-    //    validation-shaped → `invalid_input`, as before.
+    //    idempotency claim would let a same-key retry double-write. Thrown =
+    //    concurrency-shaped → `conflict`; returned = validation-shaped →
+    //    `invalid_input`.
     const applied = [];
     for (const r of resolved) {
       if (!r.change) continue;

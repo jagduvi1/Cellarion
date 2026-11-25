@@ -75,8 +75,8 @@ const wineLite = (wd, { termLoaded = false, styleLoaded = false } = {}) => (wd ?
 /**
  * The tasting profile as a curator needs to judge it: the values, plus WHO
  * wrote them and how sure the generator was. `confidence` is the model's own
- * self-rating and is not a correctness score — a 0.6 profile inverted the
- * facts about a Vintage Port — so it is labelled, not thresholded.
+ * self-rating and is not a correctness score — a middling score can sit on a
+ * profile that inverts the facts — so it is labelled, not thresholded.
  *
  * A HELD profile carries the doubt but no prose, which would make it look
  * exactly like a wine that was never enriched — the curator could not tell
