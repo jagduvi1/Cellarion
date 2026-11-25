@@ -25,8 +25,12 @@
  * slug read names the same way, so they never repeat a term the rule reads in
  * a name.
  *
- * The Registry Bridge copy calls assignSweetnessStyle (services/registryBridge).
- * No other write path calls either rule yet.
+ * assignSweetnessStyle is called by the Registry Bridge copy
+ * (services/registryBridge), by an approved correction proposal
+ * (services/wineProposalDecisionOps), by the admin wine edit
+ * (routes/admin/wines) and, without writing, by a proposal being filed
+ * (services/proposalFields probeSweetnessStyle). No write path calls
+ * assignSweetness yet.
  */
 const mongoose = require('mongoose');
 const constants = require('../config/constants');
@@ -877,7 +881,10 @@ function heldStyle(terms, s) {
  * the term the wine is KNOWN by when its label prints none, named by the
  * producer or the trade, with the page that names it. Sets `sweetnessStyle`,
  * or the `sweetnessReview` marker, on `target`. Callers: the Registry Bridge
- * copy (services/registryBridge); no REST or MCP caller yet.
+ * copy (services/registryBridge); an approved correction proposal, filed over
+ * REST (POST /api/wine-proposals) or MCP (suggest_wine_correction,
+ * propose_wine_correction), in services/wineProposalDecisionOps; the admin
+ * wine edit (PUT /api/admin/wines/:id).
  *
  * Input: `term` as printed, a term row id or an ObjectId (anything else is an
  * unknown word) — null or '' clears the style (the caller decides who may

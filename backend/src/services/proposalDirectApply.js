@@ -48,14 +48,27 @@
  * to agree with the obvious. One exception keeps the gate — a row several
  * members hold. A beer is rarely in four cellars; a real wine with an odd
  * name often is, and hiding it from all of them is an admin's call.
+ *
+ * THE SWEETNESS STYLE applies on filing as well, by the same line, and it is
+ * the one field a MEMBER's own filing applies on a server that reviews
+ * (memberAppliesOnFiling). It is the term a wine is known by when its label
+ * prints none: never part of the dedup key, the slug or the display name,
+ * never written without the page that names it, and cleared with one edit.
+ * What decides is the write rule itself (services/sweetnessWrite
+ * assignSweetnessStyle), asked without writing: only a style the rule would
+ * WRITE AS FILED on a wine that has none applies. A style the label's own
+ * term contradicts, a second opinion on a recorded style, a term with a legal
+ * definition named by the trade — the rule holds or refuses those, and they
+ * go to a person.
  */
 const Appellation = require('../models/Appellation');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { normalizeAppellationKey } = require('../utils/normalize');
+const { STYLE_FIELD, probeSweetnessStyle } = require('./proposalFields');
 
 // Blank-fillable, reversible, and not part of the dedup key.
-const DIRECT_FIELDS = ['appellation', 'region', 'classification'];
+const DIRECT_FIELDS = ['appellation', 'region', 'classification', STYLE_FIELD];
 
 // A non-wine flag applies on filing while at most this many members hold a
 // bottle of the row (any status — a drunk bottle is still in their history).
@@ -82,6 +95,8 @@ const MAX_NAME_TOKENS = 12;
 
 /** True when the wine currently carries no value for this identity field. */
 function fieldIsEmpty(wine, field) {
+  // A style is an object, set or not: the wine must be loaded with it.
+  if (field === STYLE_FIELD) return wine.sweetnessStyle == null;
   const v = field === 'region' ? wine.region : wine[field];
   if (v === undefined || v === null) return true;
   // region is a ref; a populated doc or an ObjectId both count as SET.
@@ -266,11 +281,57 @@ async function classifyProposal(wine, kind, proposedFields) {
     }
   }
 
+  if (proposedFields[STYLE_FIELD]) {
+    const style = await styleWritesAsFiled(wine, proposedFields);
+    if (!style.direct) return style;
+  }
+
   return { direct: true, reason: 'Blank identity fields, reversible, consistent with the name.' };
+}
+
+/**
+ * Would the write rule write this proposed sweetness style exactly as filed?
+ * Asked without writing (services/proposalFields probeSweetnessStyle); `wine`
+ * must be loaded with sweetnessStyle. Anything the rule holds, refuses or
+ * leaves to a person is not direct.
+ */
+async function styleWritesAsFiled(wine, proposedFields) {
+  const probe = await probeSweetnessStyle(wine, proposedFields);
+  if (probe.ok && probe.verdict === 'applied') {
+    return { direct: true, reason: 'A sourced sweetness style on a wine that has none: reversible, and no part of its identity.' };
+  }
+  return {
+    direct: false,
+    reason: probe.message
+      || 'The wine already carries a sweetness term this style has to be weighed against — an admin reads that.',
+  };
+}
+
+/**
+ * May a MEMBER's field correction apply on filing, on a server that reviews
+ * contributions? One case: the pending suggestion holds a sweetness style and
+ * nothing else, the wine has no style recorded, and the write rule would
+ * write it as filed. Every other member correction waits for a curator.
+ * `proposedFields` is the WHOLE pending row (an amendment included), `wine`
+ * loaded with sweetnessStyle. Returns { direct, reason } like classifyProposal.
+ * Caller: createFieldCorrection (services/wineProposalOps).
+ */
+async function memberAppliesOnFiling(wine, proposedFields) {
+  const fields = Object.entries(proposedFields || {})
+    .filter(([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length))
+    .map(([k]) => k);
+  if (fields.length !== 1 || fields[0] !== STYLE_FIELD) {
+    return { direct: false, reason: 'Only a sweetness style on its own applies on filing.' };
+  }
+  if (!fieldIsEmpty(wine, STYLE_FIELD)) {
+    return { direct: false, reason: 'The wine already has a sweetness style — replacing it is reviewed.' };
+  }
+  return styleWritesAsFiled(wine, proposedFields);
 }
 
 module.exports = {
   classifyProposal,
+  memberAppliesOnFiling,
   appellationImpliedByName,
   proposedAppellationCountryConflict,
   appellationsAgree,

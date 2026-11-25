@@ -8,7 +8,9 @@
  * only (merge / non-wine stay sommelier tools,
  * mcp/tools/somm/corrections.js), filed into the SAME WineCorrectionProposal
  * queue the admin reviews with diff + bulk tooling. A suggestion waits for that
- * review, unless contributions are not reviewed (services/trustedContributions).
+ * review, with two exceptions decided in createFieldCorrection: a server that
+ * does not review contributions (services/trustedContributions), and a
+ * sweetness style that fills a blank.
  *
  * Gating: demo exclusion is the transport's job (requireNonDemo /
  * MCP's no-token rule); HERE lives the shared part — discussion ban, the
@@ -46,14 +48,15 @@ const { isValidId } = require('../utils/validation');
 const { WINE_COLOURS, isStyleType } = require('../utils/wineColour');
 
 const { TIER_DAILY, checkContributionGate } = require('./contributionGate');
-const { appliesDirectly, applyCorrectionIfTrusted } = require('./trustedContributions');
+const { appliesDirectly, applyCorrectionIfTrusted, applyAsFiler } = require('./trustedContributions');
+const { WITH_SWEETNESS_STYLE, SWEETNESS_STYLE_POPULATE } = require('../config/constants');
 
 // The fields a correction may change, their limits and how a proposed value
 // is read are shared with the sommelier's tool (services/proposalFields), so
 // the two doors cannot accept different things for the same approval.
 const {
-  TEXT_FIELDS: FIELDS, EXTRA_FIELDS, WINE_TYPES, FIELD_MAX, GRAPE_NAME_MAX, REASON_MIN, REASON_MAX, URL_MAX,
-  readProposedFields, settleClassificationByCountry,
+  TEXT_FIELDS: FIELDS, EXTRA_FIELDS, STYLE_FIELD, WINE_TYPES, FIELD_MAX, GRAPE_NAME_MAX, REASON_MIN, REASON_MAX, URL_MAX,
+  readProposedFields, settleClassificationByCountry, settleSweetnessStyle,
 } = require('./proposalFields');
 // Not a field but a MODIFIER of `grapes`: the names
 // in the grape list the caller asserts are genuinely missing from the taxonomy.
@@ -74,17 +77,41 @@ const AMENDMENTS_MAX = 10;
 const fail = (code, message) => ({ ok: false, code, message });
 
 /**
- * Create a field_correction proposal from a regular user.
- * fields = { producer?, name?, appellation?, region?, country?, classification? }
- */
-/**
- * File a member's field correction — and, on a server that does not review
- * contributions, apply it at once (services/trustedContributions). The
+ * File a member's field correction: fields = the identity fields
+ * (services/proposalFields TEXT_FIELDS and EXTRA_FIELDS) and/or
+ * sweetnessStyle { term, source, url }. On a server that does not review
+ * contributions it applies at once (services/trustedContributions), and so
+ * does a sweetness style that fills a blank (applyStyleOnFiling below). The
  * answer then carries `applied: true` and the corrected wine.
+ * Callers: POST /api/wine-proposals and the MCP tool suggest_wine_correction.
  */
 async function createFieldCorrection(userId, input, opts = {}) {
   const result = await fileFieldCorrection(userId, input, opts);
-  return applyCorrectionIfTrusted(result, userId, opts);
+  const settled = await applyCorrectionIfTrusted(result, userId, opts);
+  if (!settled.ok || settled.applied) return settled;
+  return applyStyleOnFiling(settled, userId, opts);
+}
+
+/**
+ * The one member correction that applies on filing where contributions are
+ * reviewed: a sweetness style, on its own, on a wine that has none
+ * (services/proposalDirectApply memberAppliesOnFiling). The filed row stays,
+ * decided by the member, with the reason and the link, so a curator can read
+ * it afterwards. A relay from another server (via 'bridge') always waits. The
+ * answer then carries `applied: true` and `appliedBecause: 'sweetness_style'`.
+ */
+async function applyStyleOnFiling(result, userId, { via, req } = {}) {
+  if (!result.proposal || via === 'bridge') return result;
+  const pending = plain(result.proposal.proposedFields);
+  if (!pending[STYLE_FIELD]) return result;
+  // Lazy: the classifier loads the registry models only a style needs.
+  const { memberAppliesOnFiling } = require('./proposalDirectApply');
+  const verdict = await memberAppliesOnFiling(result.wine, pending);
+  if (!verdict.direct) return result;
+  // Judged on the style alone: a field amended into the row before the apply
+  // claims it keeps the whole row waiting (approveProposal onlyFields).
+  const applied = await applyAsFiler(result, userId, req, { onlyFields: [STYLE_FIELD] });
+  return applied.applied ? { ...applied, appliedBecause: 'sweetness_style' } : applied;
 }
 
 async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl }, { via, req } = {}) {
@@ -110,8 +137,8 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
 
   const src = fields || {};
   for (const f of Object.keys(src)) {
-    if (!FIELDS.includes(f) && !EXTRA_FIELDS.includes(f) && !FIELD_MODIFIERS.includes(f)) {
-      return fail('invalid', `Unknown field "${f}" — correctable fields: ${[...FIELDS, ...EXTRA_FIELDS].join(', ')}.`);
+    if (!FIELDS.includes(f) && !EXTRA_FIELDS.includes(f) && f !== STYLE_FIELD && !FIELD_MODIFIERS.includes(f)) {
+      return fail('invalid', `Unknown field "${f}" — correctable fields: ${[...FIELDS, ...EXTRA_FIELDS, STYLE_FIELD].join(', ')}.`);
     }
   }
   if (src.newGrapes !== undefined && src.newGrapes !== null && (src.grapes === undefined || src.grapes === null)) {
@@ -121,7 +148,7 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
   // newGrapeNames are the varieties the caller declared missing from the
   // taxonomy (audit only), classificationTier the cleaned classification as
   // sent, settled by the wine's country once the wine is loaded.
-  const read = await readProposedFields(src, { grapesMax: GRAPES_MAX, declaredNew: src.newGrapes });
+  const read = await readProposedFields(src, { grapesMax: GRAPES_MAX, declaredNew: src.newGrapes, styleUrl: cleanUrl });
   if (!read.ok) return fieldFailure(read);
   const { proposedFields, classificationTier, newGrapeNames } = read;
 
@@ -146,13 +173,20 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
     // noDrafts: a draft is edited directly by its creator; the correction
     // queue is for shared records.
     noDrafts: true,
-    populate: ['country', 'region', 'grapes'],
+    // The sweetness style too: a proposed style is held against the one the
+    // wine carries, and the snapshot records it.
+    select: WITH_SWEETNESS_STYLE,
+    populate: ['country', 'region', 'grapes', SWEETNESS_STYLE_POPULATE],
   });
   if (!wine) return fail('not_found', 'Wine not found');
 
   // A word two tier systems share is settled by the wine's country, the
   // country approval resolves in.
   await settleClassificationByCountry(proposedFields, classificationTier, wine);
+  // A sweetness style is held against the wine now, so the member learns at
+  // once what the write rule would refuse at approval.
+  const style = await settleSweetnessStyle(proposedFields, wine);
+  if (!style.ok) return fieldFailure(style);
 
   // A colour only means something on a style type — judged against the type
   // this suggestion leaves the wine with: its own type field, else the type in
@@ -292,6 +326,16 @@ function fieldFailure(refusal) {
         'leave out percentages and anything that is not the variety itself.');
     case 'taxonomy_changed':
       return fail('conflict', 'The grape taxonomy changed while filing — please try again.');
+    case 'style_shape':
+      return fail('invalid', 'sweetnessStyle needs the term the wine is known by, who names it and the page that does: { term, source, url }.');
+    case 'style_source':
+      return fail('invalid', 'The source of a sweetness style is "producer" (the producer\'s own wording) or "trade" (a merchant, a critic, a wine database).');
+    case 'style_url_required':
+      return fail('invalid', 'A sweetness style needs the link to the page that names it.');
+    case 'style_url':
+      return fail('invalid', 'The link for a sweetness style must be an http:// or https:// address with a host and no user name or password.');
+    case 'style_refused':
+      return fail('invalid', refusal.message);
     default:
       return fail('invalid', 'Suggest at least one changed field.');
   }

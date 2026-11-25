@@ -263,6 +263,41 @@ describe('GET / (list)', () => {
       expect(Grape.find).not.toHaveBeenCalled();
     });
   });
+
+  // A sweetness style is three values in one field: the diff row reads
+  // "term (source)" on both sides, and the page that names the proposed term
+  // rides along for the reviewer to open.
+  describe('a proposed sweetness style', () => {
+    const URL = 'https://merchant.example/kabinett';
+    const rowWith = (wineStyle) => ({
+      _id: P1, kind: 'field_correction', status: 'pending',
+      proposer: { _id: ADMIN_ID, username: 'rudi' },
+      wineDefinition: { _id: W1, name: 'Riesling Kabinett', producer: 'Weingut X', sweetnessStyle: wineStyle },
+      proposedFields: { sweetnessStyle: { term: 'feinherb', source: 'trade', url: URL } },
+      currentSnapshot: { producer: 'Weingut X', name: 'Riesling Kabinett', sweetnessStyle: null },
+      reason: 'The merchant calls this cuvée feinherb.',
+      createdAt: '2026-09-18T00:00:00.000Z',
+    });
+
+    test('reads as one diff row with its link, against a wine that has none', async () => {
+      WineCorrectionProposal.aggregate.mockResolvedValue([rowWith(null)]);
+      WineCorrectionProposal.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      const row = (await (await get('?status=pending')).json()).proposals[0];
+      expect(row.diff).toEqual({ sweetnessStyle: { current: null, proposed: 'feinherb (trade)', url: URL } });
+      // The wine's sweetness style is asked for: the path is select: false.
+      const winePopulate = WineCorrectionProposal.populate.mock.calls[0][1].find((p) => p.path === 'wineDefinition');
+      expect(winePopulate.select.split(' ')).toContain('sweetnessStyle');
+      expect(winePopulate.populate).toContainEqual({ path: 'sweetnessStyle.term', select: 'name' });
+    });
+
+    test('shows the style the wine carries now on the current side', async () => {
+      WineCorrectionProposal.aggregate.mockResolvedValue([rowWith({ term: { name: 'fruchtsüß' }, source: 'producer', url: 'https://estate.example/' })]);
+      WineCorrectionProposal.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      const row = (await (await get('?status=pending')).json()).proposals[0];
+      expect(row.diff.sweetnessStyle).toEqual({ current: 'fruchtsüß (producer)', proposed: 'feinherb (trade)', url: URL });
+      expect(row.wineDefinition.sweetnessStyle).toBe('fruchtsüß (producer)');
+    });
+  });
 });
 
 // Like every other submitter-facing queue, a decided correction tells its

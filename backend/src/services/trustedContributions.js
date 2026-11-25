@@ -57,12 +57,29 @@ async function approvePhotoIfTrusted(imageId, req) {
  */
 async function applyCorrectionIfTrusted(result, userId, { via, req } = {}) {
   if (!result?.ok || !result.proposal || !appliesDirectly(via)) return result;
+  return applyAsFiler(result, userId, req);
+}
+
+/**
+ * Apply a just-filed field correction as the member who filed it, through
+ * approveProposal. The caller has decided that it may: a server that does not
+ * review (applyCorrectionIfTrusted above), or the one correction a member's
+ * filing applies on a server that does (services/wineProposalOps: a sweetness
+ * style that fills a blank). `onlyFields` names the fields the caller judged:
+ * approveProposal then applies the row only while it holds no other. Returns
+ * the result with `applied: true`, the decided proposal and the corrected
+ * wine — or unchanged when approveProposal leaves it pending or fails; never
+ * throws.
+ */
+async function applyAsFiler(result, userId, req, { onlyFields = null } = {}) {
   try {
     // Lazy: the decision service loads the search client and most of the
     // registry write path, which only an applying correction needs.
     const { approveProposal } = require('./wineProposalDecisionOps');
     const asReq = req && req.user ? req : { user: { id: String(userId), roles: ['user'] } };
-    const outcome = await approveProposal(result.proposal._id, asReq);
+    const outcome = onlyFields
+      ? await approveProposal(result.proposal._id, asReq, { onlyFields })
+      : await approveProposal(result.proposal._id, asReq);
     if (outcome.status !== 200) return result;
     const WineCorrectionProposal = require('../models/WineCorrectionProposal');
     const WineDefinition = require('../models/WineDefinition');
@@ -77,4 +94,4 @@ async function applyCorrectionIfTrusted(result, userId, { via, req } = {}) {
   }
 }
 
-module.exports = { appliesDirectly, approvePhotoIfTrusted, applyCorrectionIfTrusted };
+module.exports = { appliesDirectly, approvePhotoIfTrusted, applyCorrectionIfTrusted, applyAsFiler };

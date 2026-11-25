@@ -1936,8 +1936,8 @@ describe('propose_wine_correction', () => {
       // Both are proposable, so both must ride in the snapshot —
       // the admin drift check compares against it field by field.
       type: null, grapes: null,
-      // Proposable too (colour of a sparkling/dessert/fortified wine).
-      colour: null,
+      // Proposable too: the colour of a sparkling/dessert/fortified wine, and the sweetness style.
+      colour: null, sweetnessStyle: null,
     });
 
     const row = McpActionLog.create.mock.calls[0][0];

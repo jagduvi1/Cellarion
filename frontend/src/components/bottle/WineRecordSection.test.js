@@ -71,10 +71,11 @@ test('shows the full record with blanks rendered as "not recorded", never hidden
   renderSection();
   expect(screen.getByText('Cloudy Bay')).toBeInTheDocument();
   expect(screen.getByText('Marlborough')).toBeInTheDocument();
-  // appellation + classification are blank → two visible gaps
-  expect(await screen.findAllByText('not recorded')).toHaveLength(2);
+  // appellation, classification and sweetness are blank → three visible gaps
+  expect(await screen.findAllByText('not recorded')).toHaveLength(3);
   expect(screen.getByText('Appellation')).toBeInTheDocument();
   expect(screen.getByText('Classification')).toBeInTheDocument();
+  expect(screen.getByText('Sweetness')).toBeInTheDocument();
 });
 
 test('per-row actions hide until the single section toggle is pressed, and hide again on Done', async () => {

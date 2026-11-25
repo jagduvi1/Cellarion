@@ -90,6 +90,22 @@ The sweetness or dosage term **the label states**, named as the registry's term 
 | Riesling Spätlese trocken, Mosel | Riesling Spätlese | Spätlese | trocken |
 | Riesling Spätlese, Mosel | Riesling Spätlese | Spätlese | *(empty)* |
 
+## sweetnessStyle
+
+The term a wine is **known by when its label prints none**, named by the producer or the trade: a Kabinett that merchants list as "feinherb", an Auslese the estate itself calls "fruchtsüß". It is stored as the term (from the same list as `labelSweetness`), who names it (`producer` or `trade`) and the page that does.
+
+One question decides the field: *does the label print the word?* If it does, the word is `labelSweetness`. If it does not, it is `sweetnessStyle`, and only with a source.
+
+- **Never part of the wine's identity.** It is not in the dedup key, the slug or the display name, and two records never split or merge over it.
+- **Never without the page that names it.** The page must use the term for this wine; another vintage of the same wine is fine. A taste impression is not a source, and the term is never worked out from the Prädikat or the alcohol.
+- **A term with a legal definition (trocken, halbtrocken, Brut …) only from the producer.** A merchant's "trocken" is not a statement by the wine. Customary terms (feinherb, fruchtsüß, edelsüß …) may come from either.
+- **The label wins.** A style on the same band as the label's term is dropped as redundant; one on another band is refused, and a person looks at it.
+- **Producer beats trade.** A different term from an equal or weaker source than the recorded one does not replace it by itself.
+
+Anyone can suggest a style from the "Sweetness" row of the wine record, or over MCP (`suggest_wine_correction`, `propose_wine_correction`). On a wine that has no style, a suggestion that carries nothing else applies at once; the filing is kept with its reason and link, decided by the member who filed it, so a curator can read it afterwards. Everything else waits for review: a different style on a wine that has one, or a style filed together with other fields. An admin sets or clears a style with `PUT /api/admin/wines/:id` (`sweetnessStyle: { term, source, url }` or `null`).
+
+All of it runs through one write rule, `assignSweetnessStyle` in `services/sweetnessWrite.js`. Filing asks that rule first, without writing (`probeSweetnessStyle` in `services/proposalFields.js`), so what approval would refuse is said when the suggestion is made.
+
 ---
 
 ## How a classification is written

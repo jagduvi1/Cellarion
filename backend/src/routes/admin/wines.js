@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { generateWineKey, normalizeString, normalizeAppellation } = require('../../utils/normalize');
 const { assignClassification } = require('../../services/classificationOps');
+const { assignSweetnessStyle } = require('../../services/sweetnessWrite');
+const { WITH_SWEETNESS_STYLE, SWEETNESS_STYLE_POPULATE } = require('../../config/constants');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { validateImageRef } = require('../../services/accountOps');
 const { WINE_COLOURS, stateColour, colourTypeConflict } = require('../../utils/wineColour');
@@ -648,8 +650,18 @@ router.put('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, producer, country, region, appellation, classification, classifications, grapes, type, colour, image } = req.body;
+    // The sweetness style is edited only when the body names it: null clears
+    // it, { term, source, url } sets it. The wine is then loaded with it (the
+    // path is select: false), as its write rule requires.
+    const styleSent = Object.prototype.hasOwnProperty.call(req.body, 'sweetnessStyle');
+    const styleBody = req.body.sweetnessStyle;
+    if (styleSent && styleBody !== null && (typeof styleBody !== 'object' || Array.isArray(styleBody))) {
+      return res.status(400).json({ error: 'sweetnessStyle must be null or { term, source, url }' });
+    }
 
-    const wine = await WineDefinition.findById(req.params.id);
+    const wine = styleSent
+      ? await WineDefinition.findById(req.params.id).select(WITH_SWEETNESS_STYLE)
+      : await WineDefinition.findById(req.params.id);
     // A private draft is not registry content, not even to an admin.
     if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine not found' });
@@ -753,6 +765,23 @@ router.put('/:id', async (req, res) => {
     // re-inferred from the name by the model hook.
     if (colour !== undefined) stateColour(wine, colour);
 
+    // The sweetness style through its write rule, strict
+    // (services/sweetnessWrite), after the name, type and classification this
+    // save sets: the rule reads all three. An admin is the person the rule
+    // leaves a second opinion to, so a different term replaces the recorded
+    // one whatever its source.
+    if (styleSent) {
+      const want = styleBody === null
+        ? { term: null }
+        : { term: styleBody.term, source: styleBody.source, url: styleBody.url, strict: true };
+      let style = await assignSweetnessStyle(wine, want);
+      if (style.ok && style.verdict === 'needs_review') {
+        wine.sweetnessStyle = null;
+        style = await assignSweetnessStyle(wine, want);
+      }
+      if (!style.ok) return res.status(400).json({ error: style.message });
+    }
+
     // Image handling. When the admin clears the default image, look for an
     // approved+public gallery image to promote in its place — otherwise the
     // wine ends up with no image even though candidates exist.
@@ -802,7 +831,7 @@ router.put('/:id', async (req, res) => {
     // Compared before populate (the snapshot folds ids either way, but the
     // unpopulated doc is the apples-to-apples read).
     const profileInputsChanged = profileInputsSnapshot(wine) !== beforeProfileInputs;
-    await wine.populate(['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }]);
+    await wine.populate(['country', 'region', 'grapes', { path: 'classifications', select: 'name kind' }, ...(styleSent ? [SWEETNESS_STYLE_POPULATE] : [])]);
 
     // Sync to the registry index (fire-and-forget). Cellar search
     // (services/bottleSearch) reads the wine live from MongoDB.

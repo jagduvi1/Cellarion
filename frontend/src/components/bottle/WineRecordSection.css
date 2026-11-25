@@ -336,3 +336,16 @@
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }
+
+/* The sweetness style: the term stays the value; who names it reads beside it,
+   lighter, so it is never taken for a word the label prints. */
+.wr-style-source {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.wr-style-source a {
+  color: inherit;
+  text-decoration: underline;
+}

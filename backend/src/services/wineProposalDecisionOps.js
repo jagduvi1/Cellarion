@@ -37,6 +37,12 @@ const { WINE_COLOURS, isStyleType } = require('../utils/wineColour');
 const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { otherProducerSpellings, planProducerRename, displaySpelling } = require('./producerSpelling');
 const { termNameForWine } = require('./sweetnessOps');
+const { assignSweetnessStyle } = require('./sweetnessWrite');
+const { WITH_SWEETNESS_STYLE } = require('../config/constants');
+const { TEXT_FIELDS, EXTRA_FIELDS, STYLE_FIELD } = require('./proposalFields');
+
+// Every field a field correction may hold (services/proposalFields).
+const PROPOSABLE_FIELDS = [...TEXT_FIELDS, ...EXTRA_FIELDS, STYLE_FIELD];
 const { performWineMerge } = require('./wineMergeOps');
 const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName } = require('../utils/normalize');
 const { assignClassification } = require('./classificationOps');
@@ -134,8 +140,14 @@ async function decideOutcome(proposalId) {
  * route and the bulk loop run EXACTLY the same machinery — the
  * performWineMerge extraction pattern, one layer up. Unexpected errors are
  * thrown (after the claim revert) for the caller to map to its own 500.
+ *
+ * `onlyFields` is for a filing that applies itself: the fields it was judged
+ * on (services/proposalDirectApply). The claim then takes the row only while
+ * it holds no other field, so a field its filer amends in between the
+ * judgement and the claim never applies unread: 409 `proposal_changed`, and
+ * the row waits for a person.
  */
-async function approveProposal(proposalId, req, { deferFollowThrough = false, producerSpelling = null } = {}) {
+async function approveProposal(proposalId, req, { deferFollowThrough = false, producerSpelling = null, onlyFields = null } = {}) {
   if (!producerSpelling) {
     const split = await splitBeforeClaim(proposalId);
     if (split) return { status: 409, body: splitBody(split.proposed, split.spellings) };
@@ -145,12 +157,22 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
   // decisions wins (the aiBudgetRequests check-then-act fix): a null result
   // means already-decided (409) or never-existed (404).
   const now = new Date();
+  const claim = { _id: proposalId, status: 'pending' };
+  if (onlyFields) {
+    // null matches a field the row does not hold.
+    for (const f of PROPOSABLE_FIELDS) if (!onlyFields.includes(f)) claim[`proposedFields.${f}`] = null;
+  }
   const proposal = await WineCorrectionProposal.findOneAndUpdate(
-    { _id: proposalId, status: 'pending' },
+    claim,
     { $set: { status: 'approved', decidedBy: req.user.id, decidedAt: now } },
     { new: true }
   );
-  if (!proposal) return decideOutcome(proposalId);
+  if (!proposal) {
+    if (onlyFields && await WineCorrectionProposal.exists({ _id: proposalId, status: 'pending' })) {
+      return { status: 409, body: { error: 'The suggestion changed while it was being applied — it waits for review', code: 'proposal_changed' } };
+    }
+    return decideOutcome(proposalId);
+  }
 
   // Any apply failure below reverts the claim so there is no half-approved
   // state. Best-effort by necessity: the moment our claim left 'pending',
@@ -178,7 +200,13 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
   let correctedWine = null;
   try {
     if (proposal.kind === 'field_correction') {
-      const wine = await WineDefinition.findById(proposal.wineDefinition);
+      const pf = proposal.proposedFields || {};
+      // A proposed sweetness style needs the wine loaded with the one it
+      // carries (select: false on the model): its write rule refuses a wine
+      // loaded without it.
+      const wine = pf.sweetnessStyle
+        ? await WineDefinition.findById(proposal.wineDefinition).select(WITH_SWEETNESS_STYLE)
+        : await WineDefinition.findById(proposal.wineDefinition);
       if (!wine) {
         await revertClaim();
         return { status: 404, body: { error: 'The proposed wine no longer exists' } };
@@ -189,7 +217,6 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
       const beforeProfileInputs = profileInputsSnapshot(wine);
       const producerBefore = wine.producer;
       const countryBefore = wine.country;
-      const pf = proposal.proposedFields || {};
       const applied = [];
 
       // Same identity-field semantics as the admin wine PUT: trimmed
@@ -285,6 +312,41 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         applied.push(resolved.substitutions.length
           ? `grapes (${resolved.substitutions.map((s) => `${s.from} → ${s.to}`).join(', ')})`
           : 'grapes');
+      }
+
+      // The sweetness style goes through its write rule, strict
+      // (services/sweetnessWrite assignSweetnessStyle), after the name, type
+      // and classification of this same proposal: the rule reads all three.
+      // A refusal says what stands against the style — the label's own term,
+      // a tier that is sweet by law, a term the table lacks.
+      if (pf.sweetnessStyle) {
+        const want = { term: pf.sweetnessStyle.term, source: pf.sweetnessStyle.source, url: pf.sweetnessStyle.url, strict: true };
+        let style = await assignSweetnessStyle(wine, want);
+        // A different term from an equal or weaker source than the recorded
+        // one is the rule's "a person decides", and an admin approving it is
+        // that person. A filing that applies itself (a member's, a
+        // curator's) is not: it never replaces a recorded style.
+        const reviewer = Array.isArray(req.user.roles) && req.user.roles.includes('admin');
+        if (style.ok && style.verdict === 'needs_review' && reviewer) {
+          wine.sweetnessStyle = null;
+          style = await assignSweetnessStyle(wine, want);
+        }
+        if (!style.ok) {
+          await revertClaim();
+          return { status: 400, body: { error: style.message } };
+        }
+        if (style.verdict === 'needs_review' || style.verdict === 'dropped') {
+          await revertClaim();
+          return { status: 409, body: {
+            error: style.verdict === 'dropped'
+              ? 'The sweetness terms are not loaded on this server — nothing was applied'
+              : 'The wine already has a sweetness style from an equal or stronger source — a curator decides which one stands',
+            code: 'sweetness_style_needs_review',
+          } };
+        }
+        applied.push(style.verdict === 'applied' ? 'sweetness style'
+          : style.verdict === 'redundant' ? 'sweetness style (not kept: the label already states this sweetness)'
+            : 'sweetness style (already recorded)');
       }
 
       // Producer SPELLING. The mint-time resolver
