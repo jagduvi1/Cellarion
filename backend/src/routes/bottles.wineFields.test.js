@@ -42,6 +42,7 @@ jest.mock('../services/sweetnessCategory', () => ({
   ...jest.requireActual('../services/sweetnessCategory'),
   readSweetnessCategories: jest.fn(async () => new Map()),
   attachSweetnessCategories: jest.fn(async (wines) => wines),
+  attachSweetnessCategoriesIfReadable: jest.fn(async (wines) => wines),
 }));
 jest.mock('../models/Rack', () => ({ findOne: jest.fn(), exists: jest.fn(), updateMany: jest.fn() }));
 jest.mock('../models/CellarLayout', () => ({ findOne: jest.fn() }));

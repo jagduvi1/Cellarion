@@ -226,7 +226,8 @@ function windowOf(b, profileMap) {
  *  cellars   lean cellars (user, members, name)
  *  racks     lean racks (cellar, name, geometry, slots)
  *  bottles   lean, populated (INVENTORY_WINE_POPULATE) and carrying their
- *            image URLs (attachBottleImageUrls)
+ *            image URLs (attachBottleImageUrls); their wines carry the
+ *            sweetness category buildInventory attached, or read null
  *  profiles  Map wine id → aiProfile (the descriptors read)
  *  personal  Map bottle id → personal entries (personalData.listForBottles)
  *  profileMap  the reviewed drink-window profiles (maturityUtils.buildProfileMap)

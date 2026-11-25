@@ -4257,6 +4257,25 @@
       "a6": "Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON (or a ZIP with your images), plus CSV import for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR."
     }
   },
+  "sweetness": {
+    "band": {
+      "dry": "Dry",
+      "off-dry": "Off-dry",
+      "medium-sweet": "Medium sweet",
+      "sweet": "Sweet",
+      "brut-nature": "Brut nature",
+      "extra-brut": "Extra brut",
+      "brut": "Brut",
+      "extra-dry": "Extra dry",
+      "sec": "Sec",
+      "demi-sec": "Demi-sec",
+      "doux": "Doux"
+    },
+    "scale": {
+      "still": "Still wine",
+      "sparkling": "Sparkling wine"
+    }
+  },
   "maturity": {
     "peak": "Peak",
     "early": "Early",

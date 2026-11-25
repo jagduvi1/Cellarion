@@ -36,12 +36,12 @@ const WINE_TYPE = { type: ['string', 'null'], enum: ['red', 'white', 'rosé', 's
 const SWEETNESS_CATEGORY = {
   type: ['string', 'null'],
   enum: ['dry', 'off-dry', 'medium-sweet', 'sweet', null],
-  description: 'The sweetness the wine reads as, on one scale for still and sparkling wines. Null when the record states none (a Kabinett or Spätlese without a term is not guessed), and for a fortified wine or a drink that is not wine, which have no scale. Read from the record for every answer, never stored: the label\'s term (`labelSweetness`), else a sweetness word in the wine\'s name, else `sweetnessStyle`, else a tier that settles it (Beerenauslese, Trockenbeerenauslese and Eiswein are sweet; a Grosses Gewächs is dry), else the type `dessert`. The sparkling terms fold onto the four: brut nature, extra brut and brut are dry; extra dry and sec off-dry; demi-sec medium-sweet; doux sweet. Values may be added, never renamed or removed.',
+  description: 'The sweetness the wine reads as, on one scale for still and sparkling wines. Null when the record states none (a Kabinett or Spätlese without a term is not guessed), and for a fortified wine or a drink that is not wine, which have no scale. Read from the record for every answer, never stored: the label\'s term (`labelSweetness`), else a sweetness word that ends the wine\'s name (anywhere in the name of a sparkling wine), else `sweetnessStyle`, else a tier that settles it (one that is sweet by law, such as Beerenauslese, Trockenbeerenauslese or Eiswein, is sweet; a Grosses Gewächs is dry), else the type `dessert`. The sparkling terms fold onto the four: brut nature, extra brut and brut are dry; extra dry and sec off-dry; demi-sec medium-sweet; doux sweet. Values may be added, never renamed or removed.',
 };
 const SWEETNESS_CATEGORY_BASIS = {
   type: ['string', 'null'],
   enum: ['label', 'name', 'style', 'tier', 'type', null],
-  description: 'What `sweetnessCategory` rests on: `label` (the label\'s term), `name` (a sweetness word in the wine\'s name), `style` (`sweetnessStyle`), `tier` (a classification tier that settles it) or `type` (the type `dessert`). Null when `sweetnessCategory` is null. Values may be added, never renamed or removed.',
+  description: 'What `sweetnessCategory` rests on: `label` (the label\'s term), `name` (a sweetness word in the wine\'s name), `style` (`sweetnessStyle`), `tier` (a tier the name or the classification states) or `type` (the type `dessert`). Null when `sweetnessCategory` is null. Values may be added, never renamed or removed.',
 };
 const MATURITY = {
   type: ['string', 'null'],
@@ -896,7 +896,7 @@ const paths = {
         { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Words that must all appear (accents ignored) in the wine name, producer, grapes, country, region, appellation, type, notes or location.' },
         { name: 'type', in: 'query', schema: { type: 'string' }, description: 'Wine type, e.g. `red`. Comma-separated for several.' },
         { name: 'vintage', in: 'query', schema: { type: 'string' }, description: 'One or more vintages, comma-separated.' },
-        { name: 'sweetnessCategory', in: 'query', schema: { type: 'string', examples: ['dry', 'off-dry,medium-sweet'] }, description: 'One or more of `dry`, `off-dry`, `medium-sweet`, `sweet`, comma-separated: the bottles whose wine reads as one of them (the wine\'s `sweetnessCategory`). `not-stated` finds the wines that could state one and do not. A fortified wine, a drink that is not wine and a bottle without a wine are found by none of them.' },
+        { name: 'sweetnessCategory', in: 'query', schema: { type: 'string', examples: ['dry', 'off-dry,medium-sweet'] }, description: 'One or more of `dry`, `off-dry`, `medium-sweet`, `sweet`, comma-separated: the bottles whose wine reads as one of them (the wine\'s `sweetnessCategory`). `not-stated` finds the wines that could state one and do not. A fortified wine, a drink that is not wine and a bottle without a wine are found by none of them, and a value that names none of the five finds nothing.' },
         { name: 'sort', in: 'query', schema: { type: 'string', enum: ['createdAt', '-createdAt', 'vintage', '-vintage', 'price', '-price', 'rating', '-rating', 'name', '-name', 'maturity', '-maturity'], default: '-createdAt' }, description: 'A leading `-` sorts descending.' },
       ],
       responses: {
@@ -934,7 +934,7 @@ const paths = {
         content: json(ref('ConsumeRequest'), { reason: 'drank', rating: 4, consumedRatingScale: '5', note: 'With friends', ifActive: true }),
       },
       responses: {
-        200: ok('The bottle, now out of the cellar.', ref('ConsumeResponse'), { bottle: { ...exampleBottle, status: 'drank', consumedAt: '2026-10-22T19:30:00.000Z', consumedReason: 'drank' } }),
+        200: ok('The bottle, now out of the cellar.', ref('ConsumeResponse'), { bottle: { ...withoutImageUrls(exampleBottle), wineDefinition: ID.wine, status: 'drank', consumedAt: '2026-10-22T19:30:00.000Z', consumedReason: 'drank' } }),
         ...errors(400, 401, 403, 404, 409, 429),
       },
     },

@@ -203,11 +203,16 @@ describe('BottleFilterModal — sweetness', () => {
     expect(screen.queryByRole('button', { name: /Sweetness/ })).not.toBeInTheDocument();
   });
 
-  test('choosing a value adds it, choosing it again removes it; a chosen value opens the section', () => {
-    const first = renderModal({}, { facets: { sweetnessCategory: HELD }, baseFacets: { sweetnessCategory: HELD } });
-    fireEvent.click(section());
+  test('a cellar where no wine reads as a category has no section: "Not stated" alone would list every wine', () => {
+    const only = { 'not-stated': 12 };
+    renderModal({}, { facets: { sweetnessCategory: only }, baseFacets: { sweetnessCategory: only } });
+    expect(screen.queryByRole('button', { name: /Sweetness/ })).not.toBeInTheDocument();
+  });
+
+  test('choosing a value adds it to the ones already chosen', () => {
+    const { onApply } = renderModal({ sweetnessCategory: ['dry'] }, { facets: { sweetnessCategory: HELD }, baseFacets: { sweetnessCategory: HELD } });
     fireEvent.click(pill('sweet'));
-    expect(first.onApply).toHaveBeenCalledWith(expect.objectContaining({ sweetnessCategory: ['sweet'] }));
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ sweetnessCategory: ['dry', 'sweet'] }));
   });
 
   test('a chosen value shows from the start, counts under the other filters, and comes off again', () => {

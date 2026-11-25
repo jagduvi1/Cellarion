@@ -57,6 +57,7 @@ jest.mock('../services/sweetnessCategory', () => ({
   ...jest.requireActual('../services/sweetnessCategory'),
   readSweetnessCategories: jest.fn(async () => new Map()),
   attachSweetnessCategories: jest.fn(async (wines) => wines),
+  attachSweetnessCategoriesIfReadable: jest.fn(async (wines) => wines),
 }));
 
 const http = require('http');

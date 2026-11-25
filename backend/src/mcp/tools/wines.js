@@ -179,8 +179,14 @@ registerTool({
       ? undefined
       : await require('../../services/wineProposalOps').pendingForWine(w._id, ctx.user.id);
     // The category the record reads as (null when it states none), from the
-    // reader's own load of the wine (services/sweetnessCategory).
-    const sweetness = (await readSweetnessCategories([w._id])).get(String(w._id)) ?? null;
+    // reader's own load of the wine (services/sweetnessCategory). A failing
+    // lookup leaves the two keys out; the wine is still answered.
+    let sweetness;
+    try {
+      sweetness = (await readSweetnessCategories([w._id])).get(String(w._id)) ?? null;
+    } catch (err) {
+      console.warn('[mcp] sweetness category lookup failed for wine %s: %s', w._id, err.message);
+    }
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
       ...wineSummary(w, { termLoaded: true, styleLoaded: 'shaped', sweetness }),
       classification: w.classification || null,

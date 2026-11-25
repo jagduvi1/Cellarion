@@ -15,6 +15,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const bottleSearch = require('./bottleSearch');
 const { coerceStringQuery } = require('../utils/validation');
+const { sweetnessQueryValue } = require('./sweetnessCategory');
 const { parsePagination } = require('../utils/pagination');
 const { filterByRating } = require('../utils/ratingUtils');
 const {
@@ -46,7 +47,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const grapes = coerceStringQuery(req.query.grapes);
   const vintage = coerceStringQuery(req.query.vintage);
   const appellation = coerceStringQuery(req.query.appellation);
-  const sweetnessCategory = coerceStringQuery(req.query.sweetnessCategory);
+  const sweetnessCategory = sweetnessQueryValue(req.query.sweetnessCategory);
   const minRating = coerceStringQuery(req.query.minRating);
   const maxRating = coerceStringQuery(req.query.maxRating);
   const ratingBandParam = coerceStringQuery(req.query.ratingBand);

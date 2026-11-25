@@ -39,6 +39,7 @@ import './BottleDetail.css';
 import { backLabel as backLabelText } from '../utils/backLabel';
 import { isSafeInternalPath } from '../utils/postLoginRedirect';
 import { backPlaceLabel, cellarListFrom, RETURNING } from '../utils/useBackHere';
+import { keepSweetnessReading } from '../utils/sweetnessCategory';
 
 // Lazy-load heavy components only needed on user interaction
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
@@ -239,8 +240,14 @@ function BottleDetail() {
     }
   };
 
+  // The page's own bottle replaced by a write's answer: the wine keeps the
+  // sweetness reading the page read with it (utils/sweetnessCategory).
+  const takeBottle = (updated) => setBottle((prev) => (updated && typeof updated === 'object'
+    ? { ...updated, wineDefinition: keepSweetnessReading(prev?.wineDefinition, updated.wineDefinition) }
+    : updated));
+
   const handleBottleUpdated = (updated, lotOutcome = null) => {
-    setBottle(updated);
+    takeBottle(updated);
     setEditing(false);
     setLotMsg(lotOutcome);
   };
@@ -705,7 +712,7 @@ function BottleDetail() {
 
       {/* ── Consumption details (history bottles only) ── */}
       {isConsumed && (
-        <ConsumedDetails bottle={bottle} canEdit={canEditConsumed} onUpdate={setBottle} onReviewSaved={() => setReviewsVersion((v) => v + 1)} />
+        <ConsumedDetails bottle={bottle} canEdit={canEditConsumed} onUpdate={takeBottle} onReviewSaved={() => setReviewsVersion((v) => v + 1)} />
       )}
 
       {/* Undo an accidental removal — only within the 2-day restore window */}

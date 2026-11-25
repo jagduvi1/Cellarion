@@ -49,14 +49,14 @@ jest.mock('../models/PersonalDataEntry', () => ({ find: jest.fn() }));
 jest.mock('../services/bottleImageUrls', () => ({ attachBottleImageUrls: jest.fn() }));
 // The sweetness category is read from real rows in
 // routes/sweetnessCategory.surfaces.mongo.test.js. Here its reader is stood in
-// for: a wine with a label term reads as that term's band, any other as none.
+// for with one fixed reading for every wine, so what the route sends shows
+// that it hands the reading on as it got it.
 jest.mock('../services/sweetnessCategory', () => ({
   attachSweetnessCategories: jest.fn(async (wines) => {
     for (const w of wines) {
       if (!w || typeof w !== 'object') continue;
-      const band = w.labelSweetness && w.labelSweetness.band;
-      w.sweetnessCategory = band || null;
-      w.sweetnessCategoryBasis = band ? 'label' : null;
+      w.sweetnessCategory = 'off-dry';
+      w.sweetnessCategoryBasis = 'style';
     }
     return wines;
   }),
@@ -385,7 +385,7 @@ describe('a read token gets the inventory', () => {
     expect(body.wines[W1]).toEqual({
       name: 'Barolo', displayName: 'Barolo secco', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
       appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'secco', band: 'dry', scale: 'still', regulated: true }, sweetnessStyle: null,
-      sweetnessCategory: 'dry', sweetnessCategoryBasis: 'label', grapes: ['Nebbiolo'],
+      sweetnessCategory: 'off-dry', sweetnessCategoryBasis: 'style', grapes: ['Nebbiolo'],
       image: '/api/uploads/thumbs/processed/w1img.webp.webp',
       profile: { body: 'full', acidity: 'high', sweetness: 'dry', tannin: 'high', flavors: ['tar', 'rose'], foodPairings: ['truffle'] },
     });

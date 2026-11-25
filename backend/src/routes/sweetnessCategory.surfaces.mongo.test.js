@@ -15,7 +15,10 @@
  *    never loaded the mark;
  *  - a fortified wine and a drink that is not wine are found by no sweetness
  *    filter and counted under none, "not-stated" included;
- *  - the counts under a filter are the list under that filter.
+ *  - the counts under a filter are the list under that filter;
+ *  - the bottle list reads the member's own wines for the filter, however
+ *    many registry wines another filter names;
+ *  - a dry word in the name never outvotes a tier that is sweet by law.
  *
  * Every request stays on the test stack: FRONTEND_URL is a dead local
  * address and fetch follows no redirect.
@@ -58,6 +61,10 @@ const EXPECTED = {
   typeSweet: ['sweet', 'type'],
   marked: null,
   kabinett: null,
+  // "Trocken" before the tier is the tier's own word, and a still-wine word
+  // in the middle of a name is no statement.
+  tba: ['sweet', 'tier'],
+  dolceVita: null,
   port: false,
   cider: false,
 };
@@ -109,6 +116,8 @@ describeWithMongo('the sweetness category on every surface (real MongoDB)', () =
     // The curator's mark: "Brut" is part of this name, not a statement.
     await wine('marked', { name: 'Brut Premier', type: 'sparkling', sweetnessInName: true });
     await wine('kabinett', { name: 'Riesling Kabinett' });
+    await wine('tba', { name: 'Riesling Trocken Beerenauslese' });
+    await wine('dolceVita', { name: 'La Dolce Vita Rosso', type: 'red' });
     await wine('port', { name: 'Tawny Reserve', type: 'fortified' });
     await wine('cider', { name: 'Apfel Cidre' });
     await WineDefinition.collection.updateOne({ _id: wines.cider._id }, { $set: { nonWine: true, type: null } });
@@ -208,7 +217,7 @@ describeWithMongo('the sweetness category on every surface (real MongoDB)', () =
 
     test('the counts: bottles per category, the unstated ones, and no entry for a wine without a scale', async () => {
       const body = await get(`/api/cellars/${home._id}`);
-      expect(body.baseFacets.sweetnessCategory).toEqual({ dry: 4, 'off-dry': 1, 'medium-sweet': 1, sweet: 2, 'not-stated': 2 });
+      expect(body.baseFacets.sweetnessCategory).toEqual({ dry: 4, 'off-dry': 1, 'medium-sweet': 1, sweet: 3, 'not-stated': 3 });
       expect(body.facets.sweetnessCategory).toEqual(body.baseFacets.sweetnessCategory);
     });
 
@@ -216,9 +225,9 @@ describeWithMongo('the sweetness category on every surface (real MongoDB)', () =
       ['dry', ['brut', 'ggDry', 'labelDry', 'labelDry']],
       ['off-dry', ['nameOffDry']],
       ['medium-sweet', ['styleMedium']],
-      ['sweet', ['tierSweet', 'typeSweet']],
-      ['not-stated', ['kabinett', 'marked']],
-      ['sweet,off-dry', ['nameOffDry', 'tierSweet', 'typeSweet']],
+      ['sweet', ['tba', 'tierSweet', 'typeSweet']],
+      ['not-stated', ['dolceVita', 'kabinett', 'marked']],
+      ['sweet,off-dry', ['nameOffDry', 'tba', 'tierSweet', 'typeSweet']],
     ])('?sweetnessCategory=%s lists exactly those bottles', async (value, want) => {
       const body = await get(`/api/cellars/${home._id}?sweetnessCategory=${value}`);
       expect(listed(body)).toEqual(want);
@@ -236,6 +245,22 @@ describeWithMongo('the sweetness category on every surface (real MongoDB)', () =
       expect(body.bottles.total).toBe(0);
     });
 
+    test('the same key repeated is read as a list, on the page, the history and the bottle list', async () => {
+      const page = await get(`/api/cellars/${home._id}?sweetnessCategory=off-dry&sweetnessCategory=medium-sweet`);
+      expect(listed(page)).toEqual(['nameOffDry', 'styleMedium']);
+      const history = await get(`/api/cellars/${home._id}/history?sweetnessCategory=sweet&sweetnessCategory=off-dry`);
+      expect(history.bottles.map((b) => String(b._id))).toEqual([String(bottles.drunk._id)]);
+      const list = await get('/api/bottles?sweetnessCategory=off-dry&sweetnessCategory=medium-sweet&limit=200');
+      expect(list.bottles.total).toBe(2);
+    });
+
+    test('the vintage page\'s wine carries the reading too', async () => {
+      const page = await get(`/api/cellars/${home._id}/vintages/${wines.ggDry._id}/2021`);
+      expect(pair(page.wine)).toEqual(['dry', 'tier']);
+      const none = await get(`/api/cellars/${home._id}/vintages/${wines.kabinett._id}/2021`);
+      expect(none.wine).toMatchObject({ sweetnessCategory: null, sweetnessCategoryBasis: null });
+    });
+
     test('with another filter, the counts of the sweetness section stay those of the other filter alone', async () => {
       const body = await get(`/api/cellars/${home._id}?type=sparkling&sweetnessCategory=dry`);
       expect(listed(body)).toEqual(['brut']);
@@ -249,8 +274,8 @@ describeWithMongo('the sweetness category on every surface (real MongoDB)', () =
       expect(history.bottles.map((b) => String(b._id))).toEqual([String(bottles.drunk._id)]);
       expect((await get(`/api/cellars/${home._id}/history?sweetnessCategory=sweet`)).bottles).toEqual([]);
       const multi = await get(`/api/cellars/multi/bottles?cellars=${home._id},${annex._id}&sweetnessCategory=sweet`);
-      expect(multi.bottles.items.map((b) => keyOf(b.wineDefinition?._id)).sort()).toEqual(['tierSweet', 'tierSweet', 'typeSweet']);
-      expect(multi.facets.sweetnessCategory.sweet).toBe(3);
+      expect(multi.bottles.items.map((b) => keyOf(b.wineDefinition?._id)).sort()).toEqual(['tba', 'tierSweet', 'tierSweet', 'typeSweet']);
+      expect(multi.facets.sweetnessCategory.sweet).toBe(4);
     });
   });
 
@@ -271,6 +296,27 @@ describeWithMongo('the sweetness category on every surface (real MongoDB)', () =
       expect(page.bottles.total).toBe(4);
       expect(listed(await get('/api/bottles?sweetnessCategory=dry&type=sparkling'))).toEqual(['brut']);
       expect((await get('/api/bottles?sweetnessCategory=sweet&type=sparkling')).bottles.total).toBe(0);
+    });
+
+    test('with another wine filter, only the member\'s own wines are read — not every registry wine that filter names', async () => {
+      // A registry far larger than the cellar: none of these is in it.
+      const others = Array.from({ length: 60 }, (_, i) => ({
+        name: `Registry Riesling ${i} trocken`, producer: 'Weingut Anderswo', type: 'white', country: wines.labelDry.country,
+        normalizedKey: `registry-riesling-${i}|weingut anderswo|`, createdBy: ada._id, createdAt: new Date(), updatedAt: new Date(),
+      }));
+      await WineDefinition.collection.insertMany(others);
+      const find = jest.spyOn(WineDefinition, 'find');
+      try {
+        const body = await get('/api/bottles?type=white&sweetnessCategory=dry&limit=200');
+        expect([...new Set(listed(body))]).toEqual(['ggDry', 'labelDry']);
+        const owned = (await Bottle.distinct('wineDefinition', { user: ada._id })).filter(Boolean).length;
+        const asked = find.mock.calls.map(([q]) => q && q._id && Array.isArray(q._id.$in) ? q._id.$in.length : 0);
+        expect(Math.max(...asked)).toBeLessThanOrEqual(owned);
+        expect(Math.max(...asked)).toBeGreaterThan(0);
+      } finally {
+        find.mockRestore();
+        await WineDefinition.collection.deleteMany({ producer: 'Weingut Anderswo' });
+      }
     });
 
     test('a value that is no category finds nothing; a bottle without a wine is found by none', async () => {
@@ -333,16 +379,22 @@ describeWithMongo('the sweetness category on every surface (real MongoDB)', () =
       expect(dry.page.total).toBe(4);
       expect(dry.data.every((row) => row.wine.sweetness_category === 'dry')).toBe(true);
       const unstated = await tool('search_bottles', { sweetness: 'not-stated' });
-      expect(unstated.data.map((row) => row.wine.name).sort()).toEqual(['Brut Premier', 'Riesling Kabinett']);
+      expect(unstated.data.map((row) => row.wine.name).sort()).toEqual(['Brut Premier', 'La Dolce Vita Rosso', 'Riesling Kabinett']);
       expect(unstated.data.every((row) => row.wine.sweetness_category === null)).toBe(true);
       const sweet = await tool('search_bottles', { sweetness: 'sweet', query: 'riesling' });
-      expect(sweet.data.map((row) => row.wine.name)).toEqual(['Riesling Beerenauslese', 'Riesling Beerenauslese']);
+      expect(sweet.data.map((row) => row.wine.name).sort()).toEqual(['Riesling Beerenauslese', 'Riesling Beerenauslese', 'Riesling Trocken Beerenauslese']);
     });
 
-    test('with reserved, the filter is dropped and the answer says so', async () => {
-      const res = await tool('search_bottles', { sweetness: 'sweet', reserved: 'exclude' });
-      expect(res.warnings).toContain('sweetness filter cannot be combined with reserved — ignored in this response.');
-      expect(res.page.total).toBeGreaterThan(3);
+    test('it takes several values, and narrows the list with the reserved filter too', async () => {
+      const both = await tool('search_bottles', { sweetness: ['off-dry', 'medium-sweet'] });
+      expect(both.data.map((row) => row.wine.sweetness_category).sort()).toEqual(['medium-sweet', 'off-dry']);
+      // The reserved filter takes the list path: sweetness narrows it there as well.
+      const unreserved = await tool('search_bottles', { sweetness: 'sweet', reserved: 'exclude' });
+      expect(unreserved.page.total).toBe(4);
+      expect(unreserved.data.every((row) => row.wine.sweetness_category === 'sweet')).toBe(true);
+      expect(unreserved.warnings).toBeUndefined();
+      const reserved = await tool('search_bottles', { sweetness: 'sweet', reserved: 'only' });
+      expect(reserved.page.total).toBe(0);
     });
 
     test('get_wine and get_bottle carry the category and what it rests on', async () => {

@@ -125,20 +125,23 @@ The first of these that the record states decides it:
 | Basis | What is read | Example |
 |---|---|---|
 | `label` | The term in `labelSweetness` | trocken → dry; Demi-Sec → medium-sweet |
-| `name` | A sweetness word the name still carries, read the way the style rule reads a name | "Riesling Kabinett trocken" → dry; "Cuvée Réserve Brut" → dry |
+| `name` | A sweetness word the name still carries, read exactly as the label sweetness write rule reads a name: one term, the last word of a still wine's name, anywhere in a sparkling wine's | "Riesling Kabinett trocken" → dry; "Cuvée Réserve Brut" → dry |
 | `style` | The term in `sweetnessStyle` | known as feinherb → off-dry |
-| `tier` | A tier that settles it: one that is sweet by law, or a Grosses Gewächs | Beerenauslese, Trockenbeerenauslese, Eiswein → sweet; GG → dry |
+| `tier` | A tier the name or the classification states that settles it: one that is sweet by law, or a Grosses Gewächs | Beerenauslese, Trockenbeerenauslese, Eiswein, Ausbruch … → sweet; GG → dry |
 | `type` | The wine type "dessert" | → sweet |
 
 The sparkling terms fold onto the four: brut nature, extra brut and brut are dry; extra dry and sec are off-dry; demi-sec is medium-sweet; doux is sweet.
 
 - **Nothing else is guessed.** A Kabinett, Spätlese or Auslese without a term reads as none: those tiers are made in every style. So does any other wine whose record states nothing.
-- **A word the reader doubts is no statement.** A place word ("Dry Creek"), a word glued to another, or a name marked by a curator as carrying the word on purpose is not read. A name that states two categories states none.
+- **A word the reader doubts is no statement.** That is the write rule's own list: a still-wine word that does not end the name ("Dolce Vita", "Riesling trocken Alte Reben"), the English "dry" and "sweet" on their own ("Dry Creek", "Dry Riesling"), a place word (a "Seco" on a wine from Arroyo Seco), a word glued to another, a name that states two terms, and a name a curator marked as carrying the word on purpose. Precision comes first: a wine wrongly filed under Sweet is worse than one filed under "not stated", where it can be found and given its term.
+- **The same word that will move.** Because the reading is the write rule's, the word the category rests on is the word that moves into `labelSweetness` when names are cleaned: the basis then changes from `name` to `label`, the category does not.
+- **A tier that is sweet by law outvotes a dry word in the name.** "Riesling Trocken Beerenauslese" is a Trockenbeerenauslese, not a dry wine; the write rules refuse that pair, and the category follows the tier.
+- **A wine with no type has no scale yet.** Its label term and its style are read; a word in its name is not.
 - **No scale, no category.** A fortified wine and a drink that is not wine have no category, and no sweetness filter finds them. The filter value `not-stated` finds the wines that *could* state one and do not, which is where a missing term shows.
 
-The category is on the wine in the bottle list and the bottle read (`GET /api/bottles`, `GET /api/bottles/:id`), the wine read, the inventory and the offline copy. `GET /api/bottles`, the cellar page, the history and the view across cellars filter on it with `sweetnessCategory` (several values comma-separated); the cellar filter counts it like every other section. Over MCP it is `sweetness_category` on `get_wine`, `get_bottle` and each `search_bottles` row, and the `sweetness` filter of `search_bottles`. In the analytics it is a column (`wine.sweetnessCategory`), not yet something to group by.
+The category is on the wine in the bottle list and the bottle read (`GET /api/bottles`, `GET /api/bottles/:id`), the wine read, the vintage page, the inventory and the offline copy. `GET /api/bottles`, the cellar page, the history and the view across cellars filter on it with `sweetnessCategory` (several values comma-separated, or the key repeated; a value that names none of them finds nothing); the cellar filter counts it like every other section. Over MCP it is `sweetness_category` on `get_wine`, `get_bottle` and each `search_bottles` row, and the `sweetness` filter of `search_bottles` (one value or several). In the analytics it is a column (`wine.sweetnessCategory`), not yet something to group by.
 
-One reader answers all of them: `services/sweetnessCategory.js`. It loads what it needs of the wine itself, so a surface that leaves a field out of its own read still gets the same answer as the filter.
+One reader answers all of them: `services/sweetnessCategory.js`. It loads what it needs of the wine itself, so a surface that leaves a field out of its own read still gets the same answer as the filter. When that read fails, a page a member is looking at goes out without the two keys (never with null, which means "states none"); the inventory and the offline copy, which are kept, fail instead.
 
 ---
 

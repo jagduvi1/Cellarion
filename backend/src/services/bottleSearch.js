@@ -42,7 +42,7 @@ const { grapeSearchNames } = require('../utils/grapeDisplay');
 const { publishedValuesForBottles } = require('./registryDataOps');
 const { listForBottles } = require('./personalData');
 const { loadTerms } = require('./sweetnessOps');
-const { parseSweetnessFilter, sweetnessFilterValue } = require('./sweetnessCategory');
+const { CATEGORY_WINE_SELECT, parseSweetnessFilter, sweetnessFilterValue } = require('./sweetnessCategory');
 
 // Searchable fields, most important first — the order is the field ranking.
 // `facts` sits below the wine's own fields and above the notes: a curated
@@ -564,21 +564,35 @@ function facetMetaOf(wines) {
   return { countries, regions, grapes };
 }
 
+// The sweetness facet value of each wine, kept for as long as the term table
+// copy it was read with (a minute: services/sweetnessOps) — so as stale, at
+// most, as the search documents are. Reading a name costs more than a wine's
+// other facets together, and a plain cellar page counts every wine of the
+// cellar on every page of its scroll.
+let sweetnessFacets = new WeakMap(); // term table → Map(wine id + updatedAt → value)
+function sweetnessFacetOf(wine, terms) {
+  let kept = sweetnessFacets.get(terms);
+  if (!kept) { kept = new Map(); sweetnessFacets.set(terms, kept); }
+  const key = `${wine._id}:${wine.updatedAt ? new Date(wine.updatedAt).getTime() : ''}`;
+  if (!kept.has(key)) kept.set(key, sweetnessFilterValue(wine, terms));
+  return kept.get(key);
+}
+
 async function loadWines(ids) {
   const unique = [...new Set(ids.filter(Boolean).map(String))];
   if (unique.length === 0) return new Map();
   const wines = await WineDefinition.find({ _id: { $in: unique } })
     // pendingIdentity: such a wine's registry values are not searched (attachFacts).
-    // classification and the three sweetness fields feed the sweetness
-    // category; the terms stay ids, which the term table names.
-    .select('name producer appellation type nonWine pendingIdentity country region grapes classification labelSweetness sweetnessStyle sweetnessInName')
+    // CATEGORY_WINE_SELECT is what the sweetness category reads (the terms
+    // stay ids, which the term table names); updatedAt keys its kept value.
+    .select(`${CATEGORY_WINE_SELECT} pendingIdentity grapes updatedAt`)
     .populate('country', 'name')
     .populate('region', 'name')
     // regionalNames feed grapeSearchNames (regional display names match too).
     .populate('grapes', 'name regionalNames')
     .lean();
   const terms = await loadTerms();
-  for (const w of wines) w.sweetnessFacet = sweetnessFilterValue(w, terms);
+  for (const w of wines) w.sweetnessFacet = sweetnessFacetOf(w, terms);
   return new Map(wines.map((w) => [String(w._id), w]));
 }
 
@@ -944,6 +958,8 @@ module.exports = {
     MAX_QUERY_CHARS, MAX_WORD_CHARS, MAX_TYPO_WORD_CHARS,
     docBytes, factsText, FACT_TYPES, MAX_FACTS_CHARS,
     forgetAllDocs: () => { docsCache.clear(); bytesKept = 0; },
+    sweetnessFacetOf,
+    forgetSweetnessFacets: () => { sweetnessFacets = new WeakMap(); },
     setDocsMaxBytes: (n = DEFAULT_DOCS_MAX_BYTES) => { DOCS_MAX_BYTES = n; },
     keptScopes: () => docsCache.size,
     keptBytes: () => bytesKept,

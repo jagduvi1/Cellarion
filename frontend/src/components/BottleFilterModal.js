@@ -5,7 +5,7 @@ import { SCALE_META, toNormalized, fromNormalized } from '../utils/ratingUtils';
 import {
   MATURITY_FILTER_OPTIONS, NEEDS_ATTENTION, MATURITY_I18N_KEY, MATURITY_STATS_KEY, toMaturityArray,
 } from '../utils/filterLabels';
-import { SWEETNESS_FILTER_VALUES, sweetnessFilterLabel } from '../utils/sweetnessCategory';
+import { SWEETNESS_CATEGORIES, SWEETNESS_FILTER_VALUES, sweetnessFilterLabel } from '../utils/sweetnessCategory';
 import './BottleFilterModal.css';
 
 const COLLAPSED_LIMIT = 8;
@@ -231,11 +231,13 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
         {/* Sweetness — the category each wine reads as (dry … sweet, one
             scale for still and sparkling), in scale order, then the wines that
             state none. Only the values this cellar holds; closed until one is
-            chosen, like the longer sections below. */}
+            chosen, like the longer sections below. A cellar where no wine
+            reads as a category has no section: "Not stated" alone would
+            list every wine. */}
         {(() => {
           const held = SWEETNESS_FILTER_VALUES.filter(v => allFacets?.sweetnessCategory?.[v] > 0);
           const chosen = filters.sweetnessCategory || [];
-          if (held.length === 0 && chosen.length === 0) return null;
+          if (!held.some(v => SWEETNESS_CATEGORIES.includes(v)) && chosen.length === 0) return null;
           const counts = countsFor('sweetnessCategory');
           return (
             <FilterSection label={t('cellarDetail.sweetnessLabel', 'Sweetness')} icon="🍯" defaultExpanded={chosen.length > 0}>

@@ -22,6 +22,7 @@ jest.mock('../services/sweetnessCategory', () => ({
   ...jest.requireActual('../services/sweetnessCategory'),
   readSweetnessCategories: jest.fn(async () => new Map()),
   attachSweetnessCategories: jest.fn(async (wines) => wines),
+  attachSweetnessCategoriesIfReadable: jest.fn(async (wines) => wines),
 }));
 jest.mock('../models/Discussion', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: () => false, search: jest.fn(), indexWine: jest.fn() }));

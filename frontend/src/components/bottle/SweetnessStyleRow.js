@@ -142,9 +142,9 @@ function SweetnessStyleRow({ wine, canSuggest, suggestMode, blocked, pending, ap
     else groups.push({ band: x.band, scale: x.scale, terms: [x] });
   }
   const bandLabel = (g) => {
-    const band = t(`admin.taxonomy.band.${g.band}`, g.band);
+    const band = t(`sweetness.band.${g.band}`, g.band);
     // With the type unknown both scales are offered, and say which they are.
-    return scale ? band : t('wineRecord.styleBandOnScale', '{{band}} · {{scale}}', { band, scale: t(`admin.taxonomy.scale.${g.scale}`, g.scale) });
+    return scale ? band : t('wineRecord.styleBandOnScale', '{{band}} · {{scale}}', { band, scale: t(`sweetness.scale.${g.scale}`, g.scale) });
   };
 
   // Arrow keys move within the two choices; the group is one tab stop.

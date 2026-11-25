@@ -1,6 +1,6 @@
 import {
   SWEETNESS_CATEGORIES, SWEETNESS_NOT_STATED, SWEETNESS_FILTER_VALUES,
-  sweetnessFilterLabel, sweetnessChipLabel, sweetnessFilterValueOf,
+  sweetnessFilterLabel, sweetnessChipLabel, sweetnessFilterValueOf, keepSweetnessReading,
 } from './sweetnessCategory';
 
 // The sweetness category on the screens. The server works it out; here are
@@ -38,5 +38,29 @@ describe('what the offline filter matches a wine on', () => {
 
   test('nothing for a wine from a copy saved before the category was sent', () => {
     expect(sweetnessFilterValueOf({ type: 'white', name: 'Riesling trocken' })).toBe('');
+  });
+});
+
+describe('the answer to a write keeps the reading the page already holds', () => {
+  const read = { _id: 'w1', name: 'Brut', sweetnessCategory: 'dry', sweetnessCategoryBasis: 'name' };
+
+  test('the same wine, answered without the keys, keeps both', () => {
+    expect(keepSweetnessReading(read, { _id: 'w1', name: 'Brut' })).toEqual(read);
+    expect(keepSweetnessReading({ ...read, sweetnessCategory: null, sweetnessCategoryBasis: null }, { _id: 'w1' }))
+      .toEqual({ _id: 'w1', sweetnessCategory: null, sweetnessCategoryBasis: null });
+  });
+
+  test('an answer that carries the keys is taken as it is', () => {
+    const next = { _id: 'w1', sweetnessCategory: 'sweet', sweetnessCategoryBasis: 'style' };
+    expect(keepSweetnessReading(read, next)).toBe(next);
+  });
+
+  test('another wine, a wine sent as an id, and a page that held no reading carry nothing over', () => {
+    const other = { _id: 'w2', name: 'Riesling' };
+    expect(keepSweetnessReading(read, other)).toBe(other);
+    expect(keepSweetnessReading(read, 'w1')).toBe('w1');
+    expect(keepSweetnessReading(read, null)).toBeNull();
+    expect(keepSweetnessReading({ _id: 'w1' }, { _id: 'w1' })).toEqual({ _id: 'w1' });
+    expect(keepSweetnessReading(undefined, { _id: 'w1' })).toEqual({ _id: 'w1' });
   });
 });

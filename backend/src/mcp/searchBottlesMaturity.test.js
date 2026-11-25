@@ -19,6 +19,13 @@ const chain = (result) => {
 jest.mock('../models/Cellar', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
+// The sweetness category has its own load of the wine, checked on real rows in
+// routes/sweetnessCategory.surfaces.mongo.test.js. No database here, so it is
+// stood in for: nothing read.
+jest.mock('../services/sweetnessCategory', () => ({
+  ...jest.requireActual('../services/sweetnessCategory'),
+  readSweetnessCategories: jest.fn(async () => new Map()),
+}));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false) }));
 jest.mock('../services/photoState', () => ({
   photosForBottle: jest.fn(), photoPresence: jest.fn(async () => new Map()),

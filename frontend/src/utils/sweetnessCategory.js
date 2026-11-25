@@ -13,8 +13,12 @@ export const SWEETNESS_CATEGORIES = ['dry', 'off-dry', 'medium-sweet', 'sweet'];
 export const SWEETNESS_NOT_STATED = 'not-stated';
 export const SWEETNESS_FILTER_VALUES = [...SWEETNESS_CATEGORIES, SWEETNESS_NOT_STATED];
 
-/** The category's name. The four are the still-wine bands, so they share their words. */
-export const sweetnessCategoryLabel = (t, category) => t(`admin.taxonomy.band.${category}`, category);
+/**
+ * The category's name. The four are the still-wine bands, so they share their
+ * words (`sweetness.band.*`, the member-facing names; the admin screens keep
+ * their own under `admin.*`, which no translator of the app is asked for).
+ */
+export const sweetnessCategoryLabel = (t, category) => t(`sweetness.band.${category}`, category);
 
 /** A filter value's name inside the Sweetness section of the filter. */
 export const sweetnessFilterLabel = (t, value) => (value === SWEETNESS_NOT_STATED
@@ -36,4 +40,22 @@ export function sweetnessFilterValueOf(wine) {
   if (!wine || typeof wine !== 'object' || !('sweetnessCategory' in wine)) return '';
   if (wine.nonWine === true || wine.type === 'fortified') return '';
   return wine.sweetnessCategory || SWEETNESS_NOT_STATED;
+}
+
+/**
+ * The wine of a bottle a write just answered with, carrying the reading the
+ * page already holds. A write to a bottle answers with its wine but without
+ * the category (only the reads work it out), and it changes nothing on the
+ * wine — so while the answer is about the same wine, its reading stays.
+ * Another wine (the bottle was moved to one) carries nothing over.
+ */
+export function keepSweetnessReading(prevWine, nextWine) {
+  if (!nextWine || typeof nextWine !== 'object' || 'sweetnessCategory' in nextWine) return nextWine;
+  if (!prevWine || typeof prevWine !== 'object' || !('sweetnessCategory' in prevWine)) return nextWine;
+  if (!nextWine._id || String(prevWine._id) !== String(nextWine._id)) return nextWine;
+  return {
+    ...nextWine,
+    sweetnessCategory: prevWine.sweetnessCategory,
+    sweetnessCategoryBasis: prevWine.sweetnessCategoryBasis ?? null,
+  };
 }
