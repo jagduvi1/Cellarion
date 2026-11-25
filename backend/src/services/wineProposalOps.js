@@ -9,7 +9,7 @@
  * into the SAME WineCorrectionProposal queue the admin already reviews with
  * diff + bulk tooling. Suggestions never auto-apply; approval stays human.
  *
- * Gating (issue #985): demo exclusion is the transport's job (requireNonDemo /
+ * Gating: demo exclusion is the transport's job (requireNonDemo /
  * MCP's no-token rule); HERE lives the shared part — discussion ban, the
  * per-contribution-tier daily budget, and the one-pending-per-wine conflict.
  *
@@ -24,8 +24,8 @@
  * readers (get_wine) so the block is discoverable before a correction is
  * composed.
  *
- * An amendment is ONE atomic update pinned to { pending, this proposer }
- * (audit 2026-09-12 H-1): per-field $set paths, so two amendments of
+ * An amendment is ONE atomic update pinned to { pending, this proposer }:
+ * per-field $set paths, so two amendments of
  * different fields in the same second both land, and never a write onto a
  * row an admin decided in between — that case falls through to a fresh
  * filing, budget applied. The original reason and evidenceUrl are never
@@ -144,7 +144,7 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
     userId,
     roles: req?.user?.roles || [],
     // noDrafts: a draft is edited directly by its creator; the correction
-    // queue is for shared records (draft design 2026-09-12).
+    // queue is for shared records.
     noDrafts: true,
     populate: ['country', 'region', 'grapes'],
   });
@@ -227,8 +227,7 @@ async function fileFieldCorrection(userId, { wineId, fields, reason, evidenceUrl
       // One pending field_correction per wine (partial unique index): a row
       // appeared between the lookup and this insert. Whose it is decides the
       // outcome — the caller's own (a parallel filing of theirs) is amended,
-      // never reported as "in the queue" while its fields were dropped
-      // (audit 2026-09-12 M-1).
+      // never reported as "in the queue" while its fields were dropped.
       if (err?.code === 11000) {
         existing = await findPendingForWine(wineId);
         amending = isOwn(existing, userId);

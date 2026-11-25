@@ -293,7 +293,7 @@ registerTool({
       admin_response: t.adminResponse || null,
       responded_at: t.respondedAt || null,
       replies: (t.replies || []).map((r) => ({ author: r.author, message: r.message, created_at: r.createdAt })),
-      // Mirror BOTH bounds reply_to_ticket enforces (MCP-audit M6): not closed
+      // Mirror BOTH bounds reply_to_ticket enforces: not closed
       // AND under the reply cap (which counts admin replies too), so the model
       // isn't told it can reply and then refused.
       can_reply: t.status !== 'closed' && (t.replies || []).length < TICKET_REPLY_CAP,

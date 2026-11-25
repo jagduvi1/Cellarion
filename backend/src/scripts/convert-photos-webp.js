@@ -1,5 +1,5 @@
 /**
- * One-time conversion of the kept photos to WebP (scaling audit 2026-09-25).
+ * One-time conversion of the kept photos to WebP.
  *
  * New photos are stored as WebP of at most 2048 px (services/photoFormat).
  * Every photo processed before that is a full-resolution lossless PNG — or,

@@ -1,6 +1,6 @@
 /**
  * Which curator corrections may apply themselves, and which still need an
- * admin (2026-08-21).
+ * admin.
  *
  * WHY. Every identity correction used to wait for an admin click. Measured over
  * one full curation day: 16 proposals filed, ONE needed the gate. The other
@@ -47,7 +47,7 @@
  * the generic designation "Vino Rosso", whose whole legal meaning is the
  * ABSENCE of a geographic indication) route to review.
  *
- * NON-WINE (2026-10-13) applies on filing too, by the same reversibility line.
+ * NON-WINE applies on filing too, by the same reversibility line.
  * The quarantine is a flag: the row leaves registry search and the maturity
  * queue, every owner's bottles keep working, and an admin restores it in one
  * click (Admin → Wines → Proposals → Decided), which re-seeds the queue rows
@@ -70,7 +70,7 @@ const DIRECT_FIELDS = ['appellation', 'region', 'classification'];
 // bottle of the row (any status — a drunk bottle is still in their history).
 // A member = the owner or a member of a cellar with a bottle of it: a
 // bottle's `user` is the cellar OWNER, so counting that made ten members of
-// one shared cellar count as one (audit 2026-10-14).
+// one shared cellar count as one.
 const NON_WINE_DIRECT_MAX_OWNERS = 3;
 
 async function countHoldingMembers(wineId) {
@@ -109,7 +109,7 @@ function idOf(v) {
  * "Chianti Classico" beats "Chianti" and the check compares like with like.
  * Returns the Appellation doc, or null when the name claims no place.
  *
- * COUNTRY-SCOPED (2026-08-21). Without this, a name-derived appellation from
+ * COUNTRY-SCOPED. Without this, a name-derived appellation from
  * the wrong country reads as a place claim. Found live while dry-running a
  * backfill: Nockie's "Palette Pinot Noir" is a NEW ZEALAND wine and "Palette
  * Rose" a SOUTH AFRICAN one, and Palette is an AOC in Provence. Same producer,

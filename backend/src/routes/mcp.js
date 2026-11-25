@@ -13,7 +13,7 @@ const { findLiveLink, redeemExportLink } = require('../services/exportLinks');
 const { issuer } = require('../services/mcpOAuth');
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
-// The canonical personal-session scope set — single source (MCP-audit L1), used
+// The canonical personal-session scope set — single source, used
 // for both the reversible-action set and the browser-revert ctx below.
 const { MCP_PERSONAL_SCOPES } = require('../config/constants');
 
@@ -36,7 +36,7 @@ function requirePublicMcpEnabled(req, res, next) {
   next();
 }
 
-// ── Dedicated protocol-endpoint limiters (MCP-audit M8) ─────────────────────
+// ── Dedicated protocol-endpoint limiters ─────────────────────
 // Hosted AI connectors (claude.ai, ChatGPT) egress from a SMALL shared IP
 // pool, so the global per-IP apiLimiter made every hosted user share one
 // 15-minute bucket — one chatty agent could starve everyone else's connector.
@@ -185,7 +185,7 @@ router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, req
       // see audit LOW-1.
       session.callState.calls = 0;
       // Attribution follows the actual caller; the request body does NOT
-      // stay pinned in the session (audit 2026-09 M01-1).
+      // stay pinned in the session.
       session.ctx.req = require('../mcp/requestSnapshot').snapshotRequest(req);
       // Housekeeping (cap eviction, TTL sweep) must not close the transport
       // while this request is being served — see sessions.beginRequest.

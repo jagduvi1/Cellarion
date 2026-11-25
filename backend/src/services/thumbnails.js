@@ -17,7 +17,7 @@
  * until 2026-09 full-resolution PNGs, median ~300 KB, some over 10 MB), while
  * cards and list rows show them 36–350 CSS px tall. A 400×640 WebP is ~13 KB
  * on average — a fraction of the full photo for every card grid, and small
- * enough to keep a whole cellar's photos on a phone for offline use (#1355).
+ * enough to keep a whole cellar's photos on a phone for offline use.
  * A new photo's thumbnail is rendered when it is processed (warmThumbFor), so
  * only older photos pay the first-request render. Until 2026-09-27 only
  * `processed` had thumbnails, so every keep-background photo shipped full

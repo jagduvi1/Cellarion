@@ -40,7 +40,7 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     }
     // The frontend only offers the suggestion inputs for wrong_info, but a
     // client is not a trust boundary — and stale state CAN leak a suggestion
-    // onto another reason (audit 2026-07-29 R7-#5). Enforce the pairing here.
+    // onto another reason. Enforce the pairing here.
     if (hasField && reason !== 'wrong_info') {
       return res.status(400).json({ error: 'A suggested correction is only valid with the "wrong info" reason' });
     }

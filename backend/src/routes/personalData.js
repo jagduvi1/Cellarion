@@ -1,5 +1,5 @@
 /**
- * Personal typed key/value data on wines and bottles (issue #986).
+ * Personal typed key/value data on wines and bottles.
  * Thin HTTP wrappers over services/personalData.js — the logic layer shared
  * with the MCP tools (mcp/tools/personalData.js). Keep semantics there.
  */

@@ -31,7 +31,7 @@ const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun
  * regression is caught by a unit test rather than only in production.
  *
  * An objection to all Cellarion email (emailOptOutAt, the one-click
- * unsubscribe) wins over the per-category opt-in (audit 2026-09-27 M7).
+ * unsubscribe) wins over the per-category opt-in.
  *
  * @param {object} user  Lean user doc with preferences.notifications + emailVerified + emailOptOutAt
  * @param {boolean} emailVerificationEnabled  Whether the email channel is configured

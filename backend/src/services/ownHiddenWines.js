@@ -1,5 +1,5 @@
 /**
- * A member's OWN quarantined drinks (2026-10-13).
+ * A member's OWN quarantined drinks.
  *
  * The non-wine quarantine hides a row from registry search for everyone: the
  * shared registry is for wine. But a member who keeps cider, beer or soda in
@@ -41,7 +41,7 @@ function termFilter(term) {
  * with them. "Holds a bottle" is a cellar-membership question, not
  * `Bottle.user` — every bottle's user is the cellar OWNER (bottleOps), so
  * keying on it left the editor who added the cider unable to find it while
- * the owner, who never touched it, could (audit 2026-10-14). Same resolution
+ * the owner, who never touched it, could. Same resolution
  * as wineVisibility.isDraftVisibleViaSharedCellar.
  */
 function memberCellarIds(userId) {

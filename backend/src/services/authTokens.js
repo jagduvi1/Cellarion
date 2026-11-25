@@ -8,7 +8,7 @@ const { markActive } = require('./lastActive');
 // SSO flow (routes/oauth.js) so both mint IDENTICAL sessions — same JWT claims,
 // same rotating + path-scoped refresh cookie, same absolute-lifetime cap.
 //
-// Sessions are PER DEVICE (2026-09-04). The account used to hold ONE refresh
+// Sessions are PER DEVICE. The account used to hold ONE refresh
 // token hash, so signing in on the phone silently signed the laptop out: its
 // cookie no longer matched anything, the next /refresh got a 401, and the
 // client treated that as "session dead". On the hosted instance 247 of 313
@@ -31,7 +31,7 @@ const generateAccessToken = (user) => {
 const generateRefreshToken = () => crypto.randomBytes(64).toString('hex');
 const hashRefreshToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 
-// Secure flag for the refresh cookie (L-22): dedicated COOKIE_SECURE override
+// Secure flag for the refresh cookie: dedicated COOKIE_SECURE override
 // ('true'/'false'), falling back to the old NODE_ENV inference when unset.
 // Self-hosters serving plain HTTP must set COOKIE_SECURE=false once the image
 // ships with NODE_ENV=production, or the browser will drop the cookie.
@@ -40,7 +40,7 @@ const COOKIE_SECURE = process.env.COOKIE_SECURE
   : process.env.NODE_ENV === 'production';
 
 // Cookie options for the httpOnly refresh token. path-scoped to /api/auth
-// (L-23) so the 30-day credential only rides on auth endpoints instead of
+// so the 30-day credential only rides on auth endpoints instead of
 // every backend request (uploads, JSON APIs, SSE) where it could land in
 // logs/proxies. sameSite:'lax' is what lets the cookie survive the top-level
 // OAuth redirect back from the identity provider.
@@ -56,7 +56,7 @@ const refreshCookieOptions = { ...refreshCookieBase, maxAge: 7 * 24 * 60 * 60 * 
 
 // Clear the refresh cookie. clearCookie only removes a cookie whose path
 // matches, so we clear BOTH the scoped path and the legacy path '/' — sessions
-// issued before the /api/auth scoping (L-23) still carry a path=/ cookie until
+// issued before the /api/auth scoping still carry a path=/ cookie until
 // their next rotation, and clearing only the scoped variant would silently
 // leave the old credential behind. The legacy clear can be dropped once all
 // pre-scoping sessions have aged out (30-day absolute lifetime).

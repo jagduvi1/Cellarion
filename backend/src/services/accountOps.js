@@ -98,7 +98,7 @@ async function buildPreferencesUpdate(userId, body = {}) {
     // Turning any email back on withdraws the blanket objection the one-click
     // unsubscribe recorded (User.emailOptOutAt): from here on the per-category
     // switches decide. Turning one off never sets it — that is a per-category
-    // choice, the unsubscribe link is the objection (audit 2026-09-27 M7).
+    // choice, the unsubscribe link is the objection.
     if (Object.entries(update).some(([k, v]) => k.endsWith('.email') && v === true)) {
       update.emailOptOutAt = null;
     }
@@ -366,7 +366,7 @@ function validateSourceUrl(url) {
     return 'URLs pointing to private/internal addresses are not allowed';
   }
   // For IP-literal hosts, reuse the structural private/reserved classifier the
-  // image-fetch SSRF guard uses (security audit L-1). WHATWG `new URL` already
+  // image-fetch SSRF guard uses. WHATWG `new URL` already
   // canonicalizes decimal/hex/octal IPv4 to dotted-quad; isPrivateAddress adds
   // the IPv6 / ULA / link-local / v4-mapped forms the old lexical denylist
   // missed. DNS names are intentionally left as-is: this value is stored and
@@ -387,7 +387,7 @@ function validateSourceUrl(url) {
  *     FRONTEND_URL origin — what the request form sends after background
  *     removal).
  * Anything else — a protocol-relative `//host/x`, `javascript:`, a bare word
- * — is refused. Until audit 2026-09 (F06-1) such a value flowed verbatim into
+ * — is refused. Until audit 2026-09 such a value flowed verbatim into
  * WineDefinition.image on approval, where every viewer's AuthImage would have
  * fetched it with the bearer token attached.
  * Returns an error string, or null when the value is acceptable (empty is fine).
@@ -434,7 +434,7 @@ function validateImageRef(image, { allowInline = true } = {}) {
 }
 
 /**
- * The links of a request (#1460): sourceUrl and sourceUrls merged in that
+ * The links of a request: sourceUrl and sourceUrls merged in that
  * order, trimmed, without repeats, at most MAX_SOURCE_URLS, each a public
  * http(s) URL. The first is required — it is what sourceUrl holds for every
  * reader and older install that knows one link. Returns { links } or { error }.

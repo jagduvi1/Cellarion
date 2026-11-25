@@ -38,7 +38,7 @@ function describe(op, t) {
 const show = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
 
 /**
- * The changes made offline that the server refused (#1355), one by one, with
+ * The changes made offline that the server refused, one by one, with
  * the user's choices. Nothing refused is ever dropped without passing here.
  */
 export default function OfflineAttentionModal({ userId, onClose }) {

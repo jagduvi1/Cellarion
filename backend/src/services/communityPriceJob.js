@@ -103,7 +103,7 @@ async function runCommunityPriceAggregation() {
 
     const curve = buildReleaseCurve(vintages);
     // Publish only non-suspect vintages with a k-anonymity floor of
-    // FIRM_MIN_OWNERS distinct owners (security audit L-18): a 1–2 owner
+    // FIRM_MIN_OWNERS distinct owners: a 1–2 owner
     // "indicative" aggregate is effectively an individual user's exact
     // purchase price, and CommunityWinePrice feeds a public endpoint.
     // Sub-floor vintages drop out of validVintages, so the stale-cleanup

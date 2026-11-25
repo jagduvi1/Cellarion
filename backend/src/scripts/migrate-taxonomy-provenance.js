@@ -1,5 +1,5 @@
 /**
- * Carry `pendingReview` across to the two fields that replaced it (2026-08-31).
+ * Carry `pendingReview` across to the two fields that replaced it.
  *
  * The old boolean conflated two facts: that a user write minted the document,
  * and that nobody had reviewed it. Every row still carrying `pendingReview:

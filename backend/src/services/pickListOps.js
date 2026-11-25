@@ -48,7 +48,7 @@ function parseBottleIds(raw, { allowEmpty = false } = {}) {
   for (const id of raw) {
     if (!isValidId(id)) return { error: 'bottleIds must be valid bottle ids' };
     // Lower case: ids are compared as strings below, and an upper-case hex id
-    // is valid (release audit 2026-10-13: one read as not_found).
+    // is valid (one read as not_found).
     const lc = id.toLowerCase();
     if (!seen.has(lc)) { seen.add(lc); ids.push(lc); }
   }
@@ -93,7 +93,7 @@ const summary = (list) => ({
 });
 
 async function listPickLists(userId) {
-  // The summary needs two counts, not 50 × 500 item subdocuments (audit 2026-10-14).
+  // The summary needs two counts, not 50 × 500 item subdocuments.
   const lists = await PickList.find({ user: userId }).select('name createdAt updatedAt items.pickedAt').sort({ updatedAt: -1 }).lean();
   return { lists: lists.map(summary) };
 }
@@ -181,8 +181,7 @@ async function removeFromPickList(userId, id, bottleIds, req) {
   ).lean();
   if (!list) return err(404, 'Pick list not found');
   // What the $pull took: the rows of these ids that were on the list when we
-  // read it — not before − after, which an add landing in between undercounts
-  // (audit 2026-10-14).
+  // read it — not before − after, which an add landing in between undercounts.
   const wanted = new Set(parsed.ids);
   const removed = (before.items || []).filter((it) => wanted.has(String(it.bottle))).length;
   if (removed > 0) logAudit(req, 'picklist.remove', { type: 'picklist', id: list._id }, { name: list.name, bottles: removed });
@@ -293,7 +292,7 @@ async function getPickListView(userId, id) {
     if (!b) return { bottleId: it.bottle, addedAt: it.addedAt, pickedAt: it.pickedAt, state: 'unavailable' };
     const cellar = visibleCellars.get(String(b.cellar));
     // A bottle still waiting on its wine request shows the name asked for, as
-    // the cellar list does (release audit 2026-10-13: it read "Unknown wine").
+    // the cellar list does (it read "Unknown wine").
     const req = b.pendingWineRequest;
     const w = b.wineDefinition || (req ? { name: req.wineName, producer: req.producer } : {});
     return {
@@ -314,7 +313,7 @@ async function getPickListView(userId, id) {
   const rank = (it) => {
     if (it.state === 'unavailable') return [2, '', '', 0, 0];
     // The cellar's id after its name: two cellars named alike ("Home", "home")
-    // stay apart (release audit 2026-10-13).
+    // stay apart.
     return [it.state === 'in_cellar' ? 0 : 1, it.cellar.name.toLowerCase(), String(it.cellar.id), it.rack ? (it.rack.order ?? Infinity) : Infinity, it.rack ? it.rack.position : Infinity];
   };
   items.sort((a, b) => {

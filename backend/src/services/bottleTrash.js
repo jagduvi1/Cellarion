@@ -66,8 +66,7 @@ async function trashBottle(bottle, req, { batchId, deletedAt = new Date(), audit
   const { snapshot } = await snapshotBottleForDelete(bottle);
   // The snapshot keeps an import request only when THIS bottle is the last
   // one waiting on it. Every trashed bottle keeps its own copy instead, so
-  // whichever of a batch is restored first can bring the request back
-  // (release audit 2026-10-12).
+  // whichever of a batch is restored first can bring the request back.
   if (bottle.pendingWineRequest && !snapshot.wineRequest) {
     snapshot.wineRequest = await WineRequest.findById(bottle.pendingWineRequest).lean() || null;
   }

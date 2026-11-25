@@ -13,7 +13,7 @@ import { matchKeyByName, normaliseKeyName } from '../../utils/registryKeyName';
 import { useContributionReviewed } from '../../utils/contributionReview';
 
 /**
- * Personal typed key/value data on this bottle and its wine (issue #986).
+ * Personal typed key/value data on this bottle and its wine.
  * "Personal" = not published to the shared registry — entries ARE visible to
  * everyone who can see the bottle, attributed to their author. This is a
  * CONTENT card, not a bottle action, so it lives once in the page body.
@@ -72,7 +72,7 @@ function ScopeChoice({ name, year, value, onChange, t }) {
 // `scope="vintage"`: the card on the vintage page, which reaches the data
 // through one bottle of the vintage. There "this bottle" means nothing, so
 // new data goes on this vintage or on every vintage of the wine, and one
-// bottle's own entries stay on that bottle's page (beta feedback 2026-10-10).
+// bottle's own entries stay on that bottle's page.
 // `vintageScopable`: whether that bottle has a vintage to scope to — the
 // server scopes "this vintage" through it, and an NV group of imported
 // bottles may have only empty ones; then "every vintage" is the one choice.
@@ -92,7 +92,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
   // extended first, then the entry saved).
   const [addingOption, setAddingOption] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(null);
-  // Promotion path (#985): "suggest this to the registry" on an own entry.
+  // Promotion path: "suggest this to the registry" on an own entry.
   const [promote, setPromote] = useState(null); // entry
   const [promoteReason, setPromoteReason] = useState('');
   const [promoteBusy, setPromoteBusy] = useState(false);

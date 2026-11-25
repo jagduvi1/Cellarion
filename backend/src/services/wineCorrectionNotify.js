@@ -5,7 +5,7 @@
  *   - routes/admin/wines.js           the wine is merged away or deleted and
  *                                     its pending corrections close with it
  *
- * The second group is why this is a service (pre-deploy audit 2026-09-18): the
+ * The second group is why this is a service: the
  * bottle page promises "we'll notify you when a curator has decided", and a
  * correction that makes a wine collide with its twin ends in exactly that
  * merge — auto-rejected by a bare updateMany, with nobody told, and invisible
@@ -15,7 +15,7 @@
  * it files — web, connector or bridge). A sommelier's own proposals are filed
  * without one and decided in batches of a hundred; a notification per row
  * would bury that account's inbox under its own work. Rows filed by users
- * before `via` existed (2026-09-08) carry none either and stay silent. And
+ * before `via` existed carry none either and stay silent. And
  * never for a decision on one's own proposal.
  *
  * Fire-and-forget, like every notify call: a notification failure must never

@@ -129,7 +129,7 @@
 }
 
 /* On the vintage page: the drunk bottles of this vintage, and the other
-   vintages as rows that open their own pages (beta feedback 2026-10-10). */
+   vintages as rows that open their own pages. */
 .lot-history__head + .lot-history__events,
 .lot-history__head + .lot-history__vintage-rows {
   margin-top: 0.75rem;

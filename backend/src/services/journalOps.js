@@ -75,7 +75,7 @@ function sanitizeEntry(body) {
 
 /**
  * Ownership/existence validation for the references sanitizeEntry accepted by
- * shape alone (audit L-5). Mirrors sanitizeEntry's style: invalid references
+ * shape alone. Mirrors sanitizeEntry's style: invalid references
  * are silently dropped (nulled), never a hard 400 — exactly like a malformed
  * ObjectId already is.
  *

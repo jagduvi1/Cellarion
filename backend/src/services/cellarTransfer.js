@@ -95,7 +95,7 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
 
   const newOwner = await User.findById(newOwnerId).select('_id username email isDemo').lean();
   if (!newOwner) throw fail(404, 'New owner account not found');
-  // Audit 2026-09 D03-1: a demo account is hard-deleted within hours, taking
+  // A demo account is hard-deleted within hours, taking
   // everything just transferred into it. Refuse rather than let a mistaken
   // click (or a phished session) make a cellar vanish.
   if (newOwner.isDemo) throw fail(400, 'A demo account cannot own a cellar');
@@ -138,7 +138,7 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
   // ── 2b. The cellar's "Recently deleted" (services/bottleTrash), same
   //        reasoning: those bottles come back as the new owner's, the new
   //        owner's export carries them, and the outgoing owner's erasure
-  //        must not reach into this cellar's trash (release audit 2026-10-12).
+  //        must not reach into this cellar's trash.
   const movedTrashIds = await DeletedBottle.find({ cellar: cellar._id, user: currentOwner }).distinct('_id');
   if (movedTrashIds.length) {
     await DeletedBottle.updateMany(

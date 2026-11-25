@@ -84,7 +84,7 @@ async function flagSuspectProducer(extracted, { match = null } = {}) {
   if (typeof extracted.producer !== 'string' || !extracted.producer.trim()) return extracted;
   try {
     const { detectScanSuspectProducer } = require('../services/crossFieldScan');
-    // Field caps BEFORE the check (release-audit HIGH-2): scanLabelFull hands
+    // Field caps BEFORE the check: scanLabelFull hands
     // back the model's raw JSON, so a crafted label can return a producer far
     // past any schema cap — and the containment heuristic's cost grows with
     // token count. 200 chars is the registry field cap; nothing real is longer.
@@ -95,7 +95,7 @@ async function flagSuspectProducer(extracted, { match = null } = {}) {
     });
     if (!hit) return extracted;
     // Flag ONLY when the registry matched nothing — for hard and soft hits
-    // alike (release-audit M-3). With a match present, confirming attaches to
+    // alike. With a match present, confirming attaches to
     // the EXISTING wine and mints nothing, so the flag would cost the one-tap
     // card (and the manual form's country requirement) for zero registry
     // benefit; a real place-named estate — Château Margaux — keeps its card
@@ -195,7 +195,7 @@ function sendAiBudgetExhausted(res, debit) {
  * contract, and two copies of it drifting apart would mean the same bottle
  * matched on the front scan and minted a duplicate on the back scan.
  *
- * ADVISORY, NOT THE COMMIT (issue #1134). What comes back is a SUGGESTION the
+ * ADVISORY, NOT THE COMMIT. What comes back is a SUGGESTION the
  * client shows by name and may offer as a "did you mean?" candidate — it is
  * not what gets saved. The bottle/wishlist commit resolves the SCANNED
  * identity through findOrCreateWine, whose own ladder links at ≥0.95 and asks
@@ -259,7 +259,7 @@ async function matchScannedIdentity({ name, producer, appellation }, viewer) {
   }
 
   // Drop candidates whose name states a DIFFERENT Prädikat or sweetness than
-  // the scanned one (issue #1134). A producer's range from one vineyard shares
+  // the scanned one. A producer's range from one vineyard shares
   // the producer and appellation axes — 0.55 of the composite — so every
   // sibling scores 0.83–0.90 against every other and the top one here is
   // decided by string distance between "Feinherb" and "Trocken". Filtered
@@ -513,7 +513,7 @@ router.get('/', requireAuth, async (req, res) => {
 // and erased with all the others.
 // asyncHandler (mirrors chat.js): if tryDebitAi rejects on a Mongo error — it
 // runs BEFORE the try below — Express 4 would otherwise leave the request
-// hanging on an unhandled rejection instead of responding 500 (audit HIGH).
+// hanging on an unhandled rejection instead of responding 500.
 router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const { image } = req.body;
 
@@ -547,7 +547,7 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
   // debit ONLY on a failure that produced no billable completion (no API key,
   // unsupported image, transport error). A completed-but-unhelpful call
   // (422 "Could not read label") STAYS debited — mirrors identify-text/ai-info
-  // and closes the budget + kill-switch bypass via unreadable labels (audit HIGH).
+  // and closes the budget + kill-switch bypass via unreadable labels.
   let extracted;
   let labelImage;
   try {
@@ -677,7 +677,7 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
   // oversized payload is a cost attack, not a user error to be tolerated.
   // Same caps as the registry-write path, imported not re-declared.
   //
-  // ALLOWLIST, not a loop over whatever arrived (release-audit HIGH-1): the
+  // ALLOWLIST, not a loop over whatever arrived: the
   // client sends back the `extracted` object /scan-label handed it, VERBATIM —
   // including `partial: true`, the very flag that makes the rescue worth
   // offering. A validator that 400'd on any non-string key therefore rejected
@@ -760,7 +760,7 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
   try {
     // The ALLOWLISTED front object, so junk keys a hostile client stuffed into
     // frontExtracted can never ride mergeBackScan's spread back out to the
-    // client (audit INFO-1).
+    // client.
     // The client echoes the front response's producer_suspect flag; it never
     // enters the allowlisted `front` object (schema fields only), but it tells
     // the merge that a usable back producer should WIN that field rather than
@@ -818,7 +818,7 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
 // the commit itself — POST /api/bottles / POST /api/wishlist with `newWine`
 // (services/wineCommit) — exactly the shape of the two prior fixes:
 // identify-text went read-only in v1.97 (52% orphan rate for 'ai' rows) and
-// import /validate went registry-read-only in v1.100.0 (#899).
+// import /validate went registry-read-only in v1.100.0.
 //
 // Body:  { name, producer, country, region?, appellation?, type?, grapes? }
 //        (confirmCreate / source / labelImage are accepted and IGNORED — a
@@ -933,7 +933,7 @@ router.post('/find-or-create', requireAuth, requireNonDemo, asyncHandler(async (
 // Stays a POST though it is semantically a read — app.js's writeLimiter skips
 // GET/HEAD/OPTIONS, and this path must keep its rate limit.
 //
-// asyncHandler: tryDebitAi runs before the try; a Mongo error there must 500, not hang (audit HIGH).
+// asyncHandler: tryDebitAi runs before the try; a Mongo error there must 500, not hang.
 router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
@@ -1000,7 +1000,7 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (r
 // POST /api/wines/ai-info — query AI for wine info without creating anything in DB.
 // Returns raw AI-identified data (country/region/grapes as name strings, not IDs).
 // Used by the AdminRequests page to pre-fill the Create New Wine form.
-// asyncHandler: tryDebitAi runs before the try; a Mongo error there must 500, not hang (audit HIGH).
+// asyncHandler: tryDebitAi runs before the try; a Mongo error there must 500, not hang.
 router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
@@ -1089,7 +1089,7 @@ router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res
   try {
     const { idOrSlug } = req.params;
     // Unauthenticated share/preview surface — quarantined non-wines are hidden
-    // here for the same reason as on the OG page (code audit 2026-07-27, M5).
+    // here for the same reason as on the OG page.
     // The authenticated /:id route below deliberately still resolves them, so
     // an owner's own bottle page keeps working: hiding, not breaking.
     // pendingIdentity joins the exclusion: this route is unauthenticated, so

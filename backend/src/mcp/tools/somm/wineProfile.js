@@ -95,7 +95,7 @@ registerTool({
     }
 
     const wine = await WineDefinition.findById(args.wine_id);
-    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    // A user's private draft is nobody's curation work.
     if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
 
     // Refused rather than accepted-and-dropped: the model hook keeps a colour

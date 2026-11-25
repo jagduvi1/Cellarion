@@ -1,4 +1,4 @@
-/* Personal wine data card (#986) — modal form + key chips.
+/* Personal wine data card — modal form + key chips.
    Field chrome (border, focus ring, sizing) comes from the shared .form-group
    rules in styles/common.css; this file only adds what those lack: a modern
    custom-chevron select and the saved-key chips. */

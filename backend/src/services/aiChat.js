@@ -107,7 +107,7 @@ async function filterToUserCellar(hits, maxResults, { cellarIds } = {}) {
   // Fetch active bottles in the user's live cellars for those wine definitions.
   // Scoped by CELLAR, not by bottle owner: in a shared cellar the owner added
   // the bottles, so `user: userId` would hide every one of them from editors
-  // and viewers (issue #1421). The cellar list is therefore the ONLY scope and is
+  // and viewers. The cellar list is therefore the ONLY scope and is
   // mandatory — a missing or EMPTY list must match nothing, never every
   // bottle in the database (and never deleted cellars).
   const bottleFilter = {
@@ -214,7 +214,7 @@ function formatWineList(matches, { profileMap, countMap, priceMap } = {}) {
 // bottles" counts below must be scoped the same way as everything else, or a
 // wine shown once would report the total including deleted cellars. Like the
 // wine list, it counts every bottle in those cellars whoever added it, so a
-// shared-cellar member sees the same counts as the owner (issue #1421).
+// shared-cellar member sees the same counts as the owner.
 async function fetchEnrichmentData(matches, scopedCellarIds = []) {
   if (!matches.length) return { profileMap: new Map(), countMap: new Map(), priceMap: new Map() };
 
@@ -395,7 +395,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
 
     // Restrict the vector search to wines the user actually owns. Without this,
     // top-K is pulled from the global catalogue and small cellars get filtered
-    // out entirely (see issue #386).
+    // out entirely.
     // Resolved ONCE and threaded through everything below, so the count, the
     // vector pre-filter and the wine list cannot disagree with each other —
     // which is the same invariant the HONEST SCOPING note further down cares
@@ -403,7 +403,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     // are shown.
     const scopedCellarIds = await liveCellarIds(userId, cellarIds);
     // No `user` here: the cellars ARE the scope, including ones shared with
-    // the user, whose bottles were added by the owner (issue #1421).
+    // the user, whose bottles were added by the owner.
     const bottleScope = { status: 'active', cellar: { $in: scopedCellarIds } };
     const userWineDefIds = await Bottle.distinct('wineDefinition', bottleScope);
 

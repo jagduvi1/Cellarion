@@ -1,5 +1,5 @@
 /**
- * migrate-closed-proposals.js — one-off (2026-09-28): proposals that a merge
+ * migrate-closed-proposals.js — one-off: proposals that a merge
  * or a delete closed automatically were stored as status 'rejected' with
  * decidedBy null and a reason starting "Closed automatically: …". They are
  * lifecycle closures, not a reviewer's judgement, and they read as

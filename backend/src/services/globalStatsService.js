@@ -703,7 +703,7 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     // the wineDefinition index and the vintage picked in $filter, this is
     // 3.3 s → 1.0 s on prod data (19,851 bottles, 9,896 pairs, the same
     // profile on every pair). The per-bottle let/$expr sub-pipeline was the
-    // slowest query in the Mongo profiler (2026-10-14), and it grew with
+    // slowest query in the Mongo profiler, and it grew with
     // every bottle; this grows with distinct wine + vintage pairs instead.
     { $group: { _id: { wd: '$wineDefinition', v: '$vintage' }, n: { $sum: 1 } } },
     { $lookup: {

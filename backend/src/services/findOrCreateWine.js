@@ -121,8 +121,7 @@ async function appellationInRegionColumn(rawName, countryId) {
   if (!key) return null;
   // Same ambiguity doctrine as regionForAppellation: TWO docs answering one
   // key (a synonym collision) means the taxonomy holds a duplicate — never
-  // pick one arbitrarily; fall through to the ordinary region path instead
-  // (audit 2026-09-14 L5).
+  // pick one arbitrarily; fall through to the ordinary region path instead.
   const hits = await Appellation.find({
     country: countryId,
     $or: [{ normalizedName: key }, { normalizedSynonyms: key }],
@@ -153,7 +152,7 @@ async function findOrCreateRegion(rawName, countryId, userId) {
   if (appellation) {
     return appellation.region ? Region.findOne({ _id: appellation.region }) : null;
   }
-  // Mint gates (registry audit 2026-07-26 RC-8). A comma means the caller
+  // Mint gates. A comma means the caller
   // packed a hierarchy into one string ("Bordeaux, Haut-Médoc", "Niagara
   // Peninsula, Ontario") — never a region name; and a region that IS a
   // recognized country name belongs in the country field, not here (a region
@@ -524,7 +523,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   };
 
   // Different-style guard, the same shape as the country one and for the same
-  // reason (issue #1134): a scanned Mosel range — "… Riesling Spätlese Alte
+  // reason: a scanned Mosel range — "… Riesling Spätlese Alte
   // Reben", "… Riesling Auslese", "… Riesling Spätlese Trocken" — shares one
   // producer and one vineyard, so 0.55 of the composite is settled before the
   // name is read and every sibling scores 0.83–0.90 against every other. Where
@@ -574,8 +573,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       (excludeId != null && String(candidate._id) === String(excludeId)) ||
       (candidate.pendingIdentity === true && String(candidate.createdBy) !== String(userId))
     );
-  // The same isolation as a QUERY clause, for the capped stages below
-  // (audit 2026-09-12): a `.limit(2)` that ran BEFORE the post-filter could
+  // The same isolation as a QUERY clause, for the capped stages below:
+  // a `.limit(2)` that ran BEFORE the post-filter could
   // be filled by two strangers' drafts of the same canonical identity — a
   // draft keeps a producer, so it shares the published wine's canonicalKey —
   // and the real published row was then never fetched, sending the add on to
@@ -708,7 +707,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   }
 
   // MongoDB text-search fallback. A quarantined non-wine is out of the index
-  // and must not come back through here either (audit 2026-10-14): the
+  // and must not come back through here either: the
   // exact-key stage above is the one place its owner's add still reaches it.
   if (candidates.length === 0) {
     try {
@@ -790,8 +789,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   let producerNorm = normalizeString(trimmedProducer);
   // KNOWN LIMIT — a NON-LATIN producer ("Мукузани", "獺祭", "ქართული ღვინო")
   // reaches this gate with producerNorm === '' and is therefore filed pending,
-  // even though isIdentitySentinel now correctly says it is real information
-  // (security audit H-4). That is deliberate for now, not an oversight: the
+  // even though isIdentitySentinel now correctly says it is real information.
+  // That is deliberate for now, not an oversight: the
   // registry's normalizedKey is `normalizeString(producer):…`, so STORING such
   // a producer would key it as `:<name>:<appellation>` — indistinguishable from
   // every other non-Latin producer of a same-named wine, and the E11000
@@ -824,8 +823,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       // Appellation keys fold hyphens to spaces (normalizeAppellationKey) —
       // querying with plain normalizeString would MISS every hyphenated
       // appellation doc ("Châteauneuf-du-Pape") and silently reopen the
-      // place-as-producer hole for exactly the places the seed script promotes
-      // (audit 2026-07-29 A3). Both keys queried: legacy docs may still carry
+      // place-as-producer hole for exactly the places the seed script promotes.
+      // Both keys queried: legacy docs may still carry
       // the old fold until the backfill script has run.
       Appellation.exists({ normalizedName: { $in: [producerNorm, normalizeAppellationKey(trimmedProducer)] } }),
     ]);

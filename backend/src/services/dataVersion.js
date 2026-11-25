@@ -8,7 +8,7 @@
  * changed through the app, so it can answer from memory. A change landing while
  * it computes moves the version on, so a stale answer never outlives the change.
  *
- * Why (scaling audit 2026-09-25): Home Assistant polls the stats overview and
+ * Why: Home Assistant polls the stats overview and
  * the maturity list every few minutes, and every poll recomputed the user's
  * whole collection — the #1 database load.
  *
@@ -18,7 +18,7 @@
  * here; every cache also caps its age. A curator's or admin's write that
  * changes what a user's statistics say (a wine request resolved or rejected, a
  * pending wine's identity completed, a drink window reviewed) bumps that
- * wine's owners explicitly, through bumpWineOwners (audit 2026-09-27 M6).
+ * wine's owners explicitly, through bumpWineOwners.
  */
 
 // One global clock: every bump takes the next tick. A user never bumped reads

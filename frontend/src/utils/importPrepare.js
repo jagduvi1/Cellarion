@@ -6,7 +6,7 @@
  * items flow into the validate results, which is what both the session
  * draft and the confirm payload are built from.
  *
- * Extracted from ImportBottles (audit 2026-07-24 M3) so the mode transform
+ * Extracted from ImportBottles so the mode transform
  * sits behind a unit test like its siblings importMappers/importPayload —
  * a field dropped here silently disappears between review and creation.
  */
@@ -25,7 +25,7 @@ export function prepareImportItems(parsedItems, { vivinoScanHistory, vivinoImpor
       // the collection and was drunk at the scan moment. Without dateAdded
       // the backend stamps addedToCellarAt = import day, producing "Added
       // Jul 2026 → Drank May 2019" journeys and negative holding-time
-      // stats (audit 2026-07-24 H1). Vivino histories have no purchase
+      // stats. Vivino histories have no purchase
       // date, so scanDate is the only truthful anchor.
       ...(scanDate ? { consumedAt: scanDate, dateAdded: scanDate } : {}),
       // The user's Vivino rating doubles as the drinking rating (it was

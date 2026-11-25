@@ -5,7 +5,7 @@ const WineDefinition = require('../models/WineDefinition');
  * Aggregation pipeline that produces one row per DISTINCT AUTHOR, carrying
  * that author's latest public review rating: `{ _id: <authorId>, rating }`.
  *
- * Forgery resistance (SECURITY_AUDIT_2026-07-08 M-3): the Review model
+ * Forgery resistance: the Review model
  * deliberately allows multiple reviews per author per wine (re-tastings are a
  * product feature), so the aggregate must not weight authors by how many
  * reviews they posted. Sorting by createdAt desc before grouping by author

@@ -3,7 +3,7 @@
  * the REST somm routes (routes/somm/pendingWines.js) and the MCP somm tools
  * (mcp/tools/somm.js), so the two surfaces cannot drift on projection,
  * anonymisation, taxonomy resolution or conflict semantics. Same shape as
- * services/ownerInquiryOps (#930) and services/wineProfileOps.
+ * services/ownerInquiryOps and services/wineProfileOps.
  *
  * What is in the queue: WineDefinitions minted at bottle-commit from an
  * incomplete identity — no producer, a sentinel producer, or a geography typed
@@ -57,7 +57,7 @@ const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'classification', 're
 /**
  * Not a field — an explicit, audited OVERRIDE of the cross-field refusal below.
  *
- * Why it has to exist (audit L-10b): the gate refuses a producer that matches a
+ * Why it has to exist: the gate refuses a producer that matches a
  * Region or Appellation document, and users can MINT those. A junk Region
  * called "Ferreirinha" or an appellation promoted from a misread label makes
  * that real producer's name permanently unwritable — and the only escape the
@@ -375,7 +375,7 @@ async function applyPendingFix(wine, clean, userId) {
     const cls = await assignClassification(wine, { classification: clean.classification, strict: true });
     if (!cls.ok) return { ok: false, code: 'invalid_input', message: cls.message };
   }
-  // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
+  // Refused, not accepted-and-dropped by the model hook.
   const colourErr = colourTypeConflict(clean.type || wine.type, clean.colour);
   if (colourErr) return { ok: false, code: 'invalid_input', message: colourErr };
   if (clean.type) wine.type = clean.type;
@@ -434,7 +434,7 @@ async function applyPendingFix(wine, clean, userId) {
   const willPromote = !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name) &&
     !isImplausibleIdentity(wine.producer, wine.name);
   //
-  // OVERRIDABLE, explicitly and audibly (audit L-10b). The rules read the LIVE
+  // OVERRIDABLE, explicitly and audibly. The rules read the LIVE
   // taxonomy, and users can mint Regions and Appellations — so a junk Region
   // doc bearing a real producer's name makes that producer permanently
   // unwritable, and the only remaining escape (identityUnavailable) records
@@ -500,7 +500,7 @@ async function applyPendingFix(wine, clean, userId) {
   // true at this point (the pre-validate hook flips it during save below), so
   // this must PREDICT the hook with the hook's own predicate rather than read
   // the flag. Using generateWineKey unconditionally dropped the creator id out
-  // of a STILL-PENDING row's key (security audit M-2), breaking the documented
+  // of a STILL-PENDING row's key, breaking the documented
   // namespace invariant: two curator-renamed pending rows by different users
   // could then land on the same ordinary key and E11000 into a "merge them
   // instead" 409 that is simply false.
@@ -579,7 +579,7 @@ async function runPromotionFollowThrough(wine) {
   // The stamp itself now lives on the TRANSITION — a post('save') hook on
   // WineDefinition — because "every promoting caller runs this follow-through"
   // was simply false: the admin PUT and /strip-producer promote by setting a
-  // producer and saving, and called nothing (audit M-4). Kept here as well,
+  // producer and saving, and called nothing. Kept here as well,
   // deliberately: the update matches `retainUntil: null` and so cannot extend a
   // live deadline, and this call is what the curation path's own test asserts.
   await stampPromotedScanRetention(wine);
@@ -594,7 +594,7 @@ async function runPromotionFollowThrough(wine) {
   // budgetUserId: this is curation work, not a user action, so it is not
   // debited to whoever happened to add the bottle.
   //
-  // Deliberately NOT passed trigger:'add' (2026-08-21): the enrichmentOnAdd
+  // Deliberately NOT passed trigger:'add': the enrichmentOnAdd
   // policy exists to stop paying for profiles on records nobody has looked
   // at, and this is the opposite — a curator has just supplied the identity
   // by hand. Same family as reenrichAfterRecordEdit: chosen, not incidental.

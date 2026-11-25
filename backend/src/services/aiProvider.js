@@ -1,5 +1,5 @@
 /**
- * AI provider layer — chat/LLM calls (issue #698).
+ * AI provider layer — chat/LLM calls.
  *
  * Cellarion's AI features all call an LLM through the small client surface
  * used by aiChat.js and labelScan.js: `client.messages.create(params)` and

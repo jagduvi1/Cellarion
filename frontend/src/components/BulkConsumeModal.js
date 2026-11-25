@@ -7,7 +7,7 @@ import Modal from './Modal';
 import BulkOutcome from './BulkOutcome';
 
 // LOCAL calendar date, YYYY-MM-DD — toISOString() would give the UTC day, which
-// is yesterday for anyone west of Greenwich in the evening (audit 2026-09-14).
+// is yesterday for anyone west of Greenwich in the evening.
 const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

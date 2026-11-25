@@ -67,7 +67,7 @@ async function createNotification(userId, type, title, message, link = null, cat
 // Categories that stay in the app (the bell): no push preference covers
 // them, and the permissive fallback below must not reach for one. Early
 // access notices (a feature entered beta, a thank-you) are not something a
-// member opted into push for (release audit 2026-10-10).
+// member opted into push for.
 const IN_APP_ONLY = new Set(['earlyAccess']);
 
 // Push-preference gate: category-specific when the caller named one,

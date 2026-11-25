@@ -68,7 +68,7 @@ function capFor(kind, keyDoc, now = Date.now()) {
  * number of concurrent requests, never silently underspent.
  *
  * Keyed on the account, not the key: keys are freely re-mintable, so a per-key
- * counter was an allowance multiplier (audit 2026-09-08).
+ * counter was an allowance multiplier.
  */
 async function takeQuota(keyDoc, kind) {
   if (!KINDS.includes(kind)) throw new Error(`Unknown bridge quota kind: ${kind}`);
@@ -136,7 +136,7 @@ async function usageFor(keyDoc, now = Date.now()) {
 /**
  * Open the ×5 window for 24 hours. Once per 30 days per ACCOUNT: the point is a
  * cellar import, not a standing raise, and a per-KEY cooldown was simply a
- * mint-a-new-key away (audit 2026-09-08). The window is written to every active
+ * mint-a-new-key away. The window is written to every active
  * key of the owner, so the sync `capFor(kind, keyDoc)` above stays correct
  * whichever key makes the request. Returns { ok, until } or
  * { ok: false, nextAvailableAt }.

@@ -94,7 +94,7 @@ async function drainBatches(batch) {
  * (unreachable, but kept); now it is deleted 7 days after the identity it
  * documented was completed.
  *
- * Same TOCTOU-safe shape as the sweep below (audit L-1): the selection
+ * Same TOCTOU-safe shape as the sweep below: the selection
  * predicate is REPEATED in the delete, so a row whose deadline was cleared
  * between the two (a wine returned to the queue) is silently skipped rather
  * than dropped out from under a live pointer. The wine's `scanImage` pointer is
@@ -214,7 +214,7 @@ async function unattachedScanBatch() {
       console.warn('[scanImageRetention] unlink failed (continuing):', err.message);
     }
   }
-  // The selection predicate is REPEATED in the delete (audit L-1). Between the
+  // The selection predicate is REPEATED in the delete. Between the
   // find above and this delete, a second bottle of the same unidentified wine
   // can attach one of these scans (services/wineCommit.attachScanImage stamps
   // it on the wine) — deleting by id alone would then drop the row a live
@@ -231,7 +231,7 @@ async function unattachedScanBatch() {
 }
 
 /**
- * The THIRD clock: an ordinary bottle PHOTO attached to nothing (2026-08-16).
+ * The THIRD clock: an ordinary bottle PHOTO attached to nothing.
  *
  * The add-bottle flow uploads the photo before the bottle exists — POST
  * /api/images/upload deliberately requires neither a bottle nor a wine, and

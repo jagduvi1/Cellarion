@@ -1,6 +1,6 @@
 /**
  * Which photos belong to the shared registry, and so outlive the bottle they
- * were taken of and the account that uploaded them (policy, 2026-09-27).
+ * were taken of and the account that uploaded them.
  *
  * A photo an admin approved as PUBLIC is registry content: every owner of the
  * wine sees it, it may be the wine's picture, and other people's cellars and

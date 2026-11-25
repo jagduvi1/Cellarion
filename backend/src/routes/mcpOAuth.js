@@ -10,8 +10,8 @@ const { rateLimitKey } = require('../utils/clientIp');
 const { logAudit } = require('../services/audit');
 const rateLimitsConfig = require('../config/rateLimits');
 
-// Dedicated strict limiter for unauthenticated Dynamic Client Registration
-// (security audit M-6): /register persists an OAuthClient row per call and
+// Dedicated strict limiter for unauthenticated Dynamic Client Registration:
+// /register persists an OAuthClient row per call and
 // otherwise rode only the 200/15min global write limiter — an IP-rotating
 // attacker could accumulate ~19k inert client rows/day, so it still needs a
 // per-IP bound of its own.
@@ -115,7 +115,7 @@ const MAX_OAUTH_CONNECTIONS_PER_USER = 20; // Claude + ChatGPT + Desktop + … �
 // still fires and the connection dies as it would have under strict
 // rotation. What the window gives up: a thief who replays a spent token
 // within a minute of the owner's rotation holds a live pair until the
-// owner's next refresh trips detection (release audit 2026-10-09, M2).
+// owner's next refresh trips detection.
 // Usage check 2026-10-09: one connector replayed its revoked token every ten
 // minutes for a day and a half, because it never re-authorizes on
 // invalid_grant. An empty value means "unset" (compose forwards knobs as
@@ -201,7 +201,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       responseTypes: ['code'],
       softwareId: typeof body.software_id === 'string' ? body.software_id.slice(0, 200) : null,
       softwareVersion: typeof body.software_version === 'string' ? body.software_version.slice(0, 50) : null,
-      // Auto-reap if it never completes a token exchange (M-6). Cleared on
+      // Auto-reap if it never completes a token exchange. Cleared on
       // first use below, so a real connector persists.
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
@@ -433,7 +433,7 @@ router.post('/token', oauthLimiter, async (req, res) => {
 
     if (grantType === 'authorization_code') {
       const { code, code_verifier, redirect_uri, resource } = req.body;
-      // typeof, not truthiness (L-2). The urlencoded parser below only ever
+      // typeof, not truthiness. The urlencoded parser below only ever
       // yields strings, but app.js mounts express.json() on the /api/mcp
       // PREFIX — which matches /api/mcp/oauth/* — so a caller sending
       // Content-Type: application/json can put an object here. hashCode()
@@ -566,7 +566,7 @@ router.post('/revoke', oauthLimiter, async (req, res) => {
     const { client, viaHeader } = await authenticateClient(req);
     if (!client) return invalidClient(res, viaHeader);
     const { token } = req.body;
-    // typeof for the same JSON-content-type reason as /token (L-2). RFC 7009
+    // typeof for the same JSON-content-type reason as /token. RFC 7009
     // §2.2 says an unknown/invalid token is still a 200, so a malformed one
     // simply falls through to the success response — never a 500.
     if (typeof token === 'string' && token) {

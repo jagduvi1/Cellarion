@@ -347,7 +347,7 @@
   color: var(--color-text-secondary, #888);
 }
 
-/* Front and back label side by side (#1460) */
+/* Front and back label side by side */
 .request-photos {
   display: flex;
   gap: 1rem;

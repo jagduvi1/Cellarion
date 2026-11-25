@@ -1,5 +1,5 @@
 /**
- * Owner-question emails (2026-10-20). A curator's question to the owners of a
+ * Owner-question emails. A curator's question to the owners of a
  * wine (ownerInquiryOps.createOwnerInquiry) used to reach the bell and push
  * only, and none of 64 open questions had an answer. Every recipient now also
  * gets the question by email, unless:

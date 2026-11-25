@@ -1,4 +1,4 @@
-// Humanizes the engine's raw measure labels (audit UX-6): the wire format is
+// Humanizes the engine's raw measure labels: the wire format is
 // 'agg(field.key)' — correct for machines, jarring on a chart axis. One
 // helper shared by the table and the dashboard so the wording cannot fork.
 const AGG_LABELS = {

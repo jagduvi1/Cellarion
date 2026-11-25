@@ -1,7 +1,7 @@
 /**
  * clear-method-appellations.js
  *
- * A production method is not an appellation (GitHub discussion #1696):
+ * A production method is not an appellation:
  * "Méthode Traditionnelle", "Metodo Classico", "Méthode Cap Classique" say how
  * a sparkling wine was made, not where it is from. Our own scan, import and
  * text-search prompts nevertheless told the model to put them in the

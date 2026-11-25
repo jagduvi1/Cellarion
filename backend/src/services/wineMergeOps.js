@@ -143,7 +143,7 @@ async function performWineMerge(sourceId, targetId, req) {
   // Close the source's PENDING correction proposals — a pending row whose
   // subject wine is gone would dangle forever: the review list renders a null
   // wine, approve 404s and reverts its claim back to pending, and the
-  // AdminWines badge stays inflated (audit 2026-08-10 MED). Auto-reject with
+  // AdminWines badge stays inflated. Auto-reject with
   // the reason rather than re-point: the merge usually RESOLVES the complaint,
   // and silently re-targeting what an admin later approves would be spookier
   // than asking the somm to re-file against the keeper. decidedBy stays null —

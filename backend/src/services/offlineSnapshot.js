@@ -1,5 +1,5 @@
 /**
- * Offline snapshot (#1355): everything the app needs to show a user's cellars,
+ * Offline snapshot: everything the app needs to show a user's cellars,
  * racks and bottles with no network — one compact document the client keeps
  * on the device and answers its own reads from while offline.
  *

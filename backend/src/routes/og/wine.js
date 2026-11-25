@@ -24,7 +24,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     // Quarantined non-wines are 404 to crawlers, matching the taxonomy listing
     // routes below and the sitemap. #844 hid them from every discovery surface
     // but left this detail page serving their title/OG/JSON-LD in full to
-    // anything that had the URL (code audit 2026-07-27, M5).
+    // anything that had the URL.
     const hidden = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
     // slugFilter resolves SUPERSEDED slugs too, so a crawler's index entry from
     // before a name correction still resolves — and is 301'd to the new slug
@@ -112,7 +112,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     const grapeNames = (wine.grapes || []).map(g => g.name).filter(Boolean);
     const hasRating = wine.communityRating?.reviewCount > 0;
-    // Rich-snippet floor (SECURITY_AUDIT_2026-07-08 M-3): reviewCount is the
+    // Rich-snippet floor: reviewCount is the
     // distinct-author count, and a single-author "aggregate" is not an
     // aggregate — require at least 2 distinct authors before emitting
     // schema.org AggregateRating into search-engine structured data.

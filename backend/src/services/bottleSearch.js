@@ -55,7 +55,7 @@ const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified
 const SORT_FIELDS = { name: 'wineName', createdAt: 'createdAt', vintage: 'vintage', price: 'price', rating: 'rating' };
 
 const MAX_QUERY_WORDS = 10;      // Meilisearch read at most ten query words too
-// Bounds on the matching work one request can ask for (audit 2026-09-27 H1):
+// Bounds on the matching work one request can ask for:
 // the edit distance is quadratic in word length, and a search runs on the one
 // Node process every user shares. Without these, ten 5,000-character query
 // words against notes carrying 5,000-character words cost seconds of CPU.
@@ -787,8 +787,7 @@ function emptyResult() {
  * Search the bottles of the given cellars.
  *
  * The scope (`cellarId` or `cellarIds`) must already be access-checked by the
- * caller. No usable scope matches nothing — never every tenant's bottles
- * (security audit 2026-09-02, D10-5).
+ * caller. No usable scope matches nothing — never every tenant's bottles.
  *
  * @param {string} query free text; '' lists every bottle that passes the filters
  * @param {object} opts

@@ -18,7 +18,7 @@ const { resolveBottleAccess } = require('./toolUtil');
 // action needs the write grant (a consume-only token must never gain
 // delete-a-bottle power through undo).
 // Release a claim made before a mutation that then failed, so the ledger row
-// stays un-reversed and the undo can be retried (grand-audit M1: claiming
+// stays un-reversed and the undo can be retried (claiming
 // reversed:true and then hitting a VersionError on save() left the row marked
 // undone while nothing was actually restored — the retry then found nothing).
 // The idempotencyKey was nulled at claim time and stays null; that only means
@@ -415,7 +415,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     return ok(envelope.summary, envelope.data);
   }
 
-  // Personal typed key/value data (#986) — entries are always the caller's
+  // Personal typed key/value data — entries are always the caller's
   // own (only the author ever writes them), so every op is author-scoped and
   // needs no cellar-role re-check.
   if (row.action === 'personal_data') {
@@ -498,7 +498,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       // prev carries ONLY the fields that action changed (a rename-only row
       // has no unit, and vice versa), so undoing a rename never touches a unit
       // set elsewhere. A unit restore obeys the same rule as the forward path:
-      // never on a key that holds entries (audit 2026-09-14 M2).
+      // never on a key that holds entries.
       const prev = row.prev || {};
       const restoresUnit = Object.prototype.hasOwnProperty.call(prev, 'unit') && (prev.unit || null) !== (key.unit || null);
       if (restoresUnit) {
@@ -899,7 +899,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     return ok(envelope.summary, envelope.data);
   }
 
-  // Open-bottle tracking: open / pour / close (issue #835). Changed-since
+  // Open-bottle tracking: open / pour / close. Changed-since
   // guards compare against what THIS action recorded, so an undo never
   // clobbers open-state the user changed by hand in between.
   if (['open', 'pour', 'close'].includes(row.action)) {
@@ -1072,7 +1072,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     reverseEntry = { action: 'update', prev: result.prev };
   } else if (row.action === 'consume') {
     // consumedAt rides along so that undoing THIS undo re-consumes on the day
-    // the user actually recorded, not on the day of the undo (audit 2026-09-14).
+    // the user actually recorded, not on the day of the undo.
     const prevSnapshot = { reason: bottle.consumedReason || bottle.status, note: bottle.consumedNote, rating: bottle.consumedRating, ratingScale: bottle.consumedRatingScale, consumedAt: bottle.consumedAt || undefined };
     const result = await restoreBottle(bottle, ctx.req);
     if (result.error) return fail('conflict', `Cannot undo that consume: ${result.error.message}`);

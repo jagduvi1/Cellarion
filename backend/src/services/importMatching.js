@@ -44,7 +44,7 @@ function scoreCandidate(candidate, item) {
     appellation: item.appellation,
     // The region hint lets an appellation-first name ("Douro Old Vines
     // Reserva") shed its prefix when the file names the region, not the
-    // appellation (registry backlog 2026-09-06).
+    // appellation.
     region: item.region
   });
 }
@@ -129,7 +129,7 @@ async function splitKnownProducerPrefix(displayName) {
     // behind ("Kim", "Louis", "19"), and those junk rows are still in the
     // registry until their purge. A single wine under a one-word producer is
     // not corroboration; two or more is (Hugel, Penfolds, Ridge all qualify).
-    // Anything longer than one word is trusted as before (audit 2026-09-14 M1).
+    // Anything longer than one word is trusted as before.
     if (n === 1) {
       const siblings = await WineDefinition.countDocuments(filter, { limit: 2 });
       if (siblings < 2) continue;
@@ -150,7 +150,7 @@ async function splitKnownProducerPrefix(displayName) {
  * resolver does. It matters here more than anywhere: a CellarTracker row with
  * no producer scores 1.0 against a PENDING row, whose stored producer is ''
  * — so without the gate an import would offer, and then attach bottles to,
- * ANOTHER USER's hidden half-identified wine (security audit). Strategy 3 was
+ * ANOTHER USER's hidden half-identified wine. Strategy 3 was
  * the worst of the three: `normalizedKey: /:<name>:/` is unanchored, and the
  * pending namespace `pending~<uid>:<name>:` contains that substring by
  * construction. The creator still matches their OWN pending rows, which is
@@ -242,7 +242,7 @@ async function findWineMatches(item, viewer = {}) {
         { normalizedKey: { $regex: `^${escapeRegex(normalizedProducer)}:` } },
         { normalizedKey: { $regex: `:${escapeRegex(normalizedName)}:` } },
         // The same two lookups on the appellation-stripped name and the
-        // bracket-free producer (registry backlog 2026-09-06).
+        // bracket-free producer.
         ...(bareProducer ? [{ normalizedKey: { $regex: `^${escapeRegex(normalizeString(bareProducer))}:` } }] : []),
         ...(bareName ? [{ normalizedKey: { $regex: `:${escapeRegex(bareName)}:` } }] : []),
       ]

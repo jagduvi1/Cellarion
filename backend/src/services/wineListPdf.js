@@ -120,7 +120,7 @@ function groupingLevels(grouping = {}) {
 // goes to "Other", which sorts last.
 function groupKeyOf(wine, level, parentKey) {
   // Mirrors frontend/src/utils/wineListSections.js: Other = a drink that is
-  // not wine; a wine of unknown colour is its own group (release audit 2026-10-28).
+  // not wine; a wine of unknown colour is its own group.
   if (level === 'type') return wine.nonWine ? 'other' : (wine.type || 'unknown');
   if (level === 'country') return wine.country || 'Other';
   const key = level === 'region'

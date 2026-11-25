@@ -25,8 +25,7 @@ const today = () => {
 // bottle" (open it and pour one glass instead of taking it out). Without it
 // — the bottle page, "Drink one" — that choice is not shown. The racks and
 // the room used to carry copies of this dialog for the sake of that one
-// button, and those copies never learned the reservation warning
-// (usability plan 2026-10-14, D2).
+// button, and those copies never learned the reservation warning.
 export function ConsumeModal({ wineName, defaultRatingScale, reservationText, onConfirm, onCancel, onJustAGlass }) {
   const { t } = useTranslation();
   const [reason,       setReason]      = useState('drank');

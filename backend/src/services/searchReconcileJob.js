@@ -48,7 +48,7 @@ const MAX_DELETES_PER_INDEX = 5000;
 // The collection each reconcilable index mirrors. The index LIST itself lives
 // in services/search (RECONCILABLE_INDEXES) so adding an index is one edit
 // there plus a model mapping here — and a missing mapping fails loudly below
-// rather than silently skipping (release-audit INFO-1: two independent lists).
+// rather than silently skipping (two independent lists).
 const INDEX_MODELS = {
   wines: '../models/WineDefinition',
 };

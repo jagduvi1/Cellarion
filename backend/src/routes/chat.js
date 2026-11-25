@@ -111,10 +111,10 @@ async function validateAndCheckLimit(req, res) {
     }
   }
 
-  // 6000, was 5000: the honest-scoping preamble (#946) added ~330 chars to the
+  // 6000, was 5000: the honest-scoping preamble added ~330 chars to the
   // FRONT of wineSection, and a cap that stayed put would silently truncate
-  // roughly one wine entry off the TAIL on every reuse round-trip
-  // (release-audit L-1). The bound exists to stop a hostile client inflating
+  // roughly one wine entry off the TAIL on every reuse round-trip.
+  // The bound exists to stop a hostile client inflating
   // the prompt, not to shave legitimate context.
   const previousWines = typeof rawPreviousWines === 'string'
     ? rawPreviousWines.slice(0, 6000)

@@ -6,7 +6,7 @@ import { API_URL } from '../api/apiConstants';
  * GET /api/site/review; backend config/contributionReview). The texts that
  * promise "a curator reviews it" say so only where one does: on a server
  * whose admin turned review off, a photo, a fix or a value goes live as it
- * is made (discussion #1778).
+ * is made.
  *
  * Fetched once per page load and shared by every component. Until the answer
  * arrives — or without one — it reads as reviewed, the setting every server

@@ -37,7 +37,7 @@ const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]
 // and vintage pages share block names, so a page opened right after a fold on
 // the other — before that save has come back into the signed-in user — must
 // start from this tab's list: otherwise it shows the fold undone, and its next
-// change saves the old list over the new one (audit 2026-10-14). Once the
+// change saves the old list over the new one. Once the
 // user carries something else (the save landed, or another device changed
 // it), the user's list wins again.
 let session = null; // { userId, list, base }
@@ -69,7 +69,7 @@ export function useCollapsedBlocks() {
   const latest = useRef(collapsed);
   // Saves go one at a time, each sending the list as it is when it starts:
   // two quick changes can never land on the server (or come back into the
-  // signed-in user) in the wrong order (release audit 2026-10-13). A save
+  // signed-in user) in the wrong order. A save
   // whose list an earlier one already sent is skipped.
   const saving = useRef(Promise.resolve());
   const sent = useRef(collapsed);

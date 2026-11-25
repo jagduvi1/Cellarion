@@ -929,7 +929,7 @@ router.get('/:id', async (req, res) => {
     const baseFacets = facetSource.baseFacetDistribution;
     // The rack / group filter is not something the search counts, so cascading
     // counts cannot reflect it; send no counts rather than whole-cellar numbers
-    // beside a scoped list (audit 2026-09-07).
+    // beside a scoped list.
     const facets = onlyIds ? null : facetSource.facetDistribution;
     const facetMeta = facetSource.facetMeta;
 
@@ -1072,12 +1072,12 @@ router.delete('/:id', async (req, res) => {
     // Cascade soft-delete to the LIVE racks only ({ deletedAt: null }). Racks
     // the user already soft-deleted individually keep their own (earlier)
     // deletedAt — restamping "now" would reset their 30-day purge clock, and a
-    // later restore would flip them back as zombie racks the user had removed
-    // (grand-audit M13). Restore below re-activates only racks stamped with
+    // later restore would flip them back as zombie racks the user had removed.
+    // Restore below re-activates only racks stamped with
     // this exact timestamp, so the two sets never mix.
     // Also free NFC tags: the rfidTag unique index has no deletedAt filter, so
     // a soft-deleted rack would keep its tag claimed (blocking re-link on
-    // another rack) until the retention purge (grand-audit L14).
+    // another rack) until the retention purge.
     await Rack.updateMany({ cellar: cellar._id, deletedAt: null }, { $set: { deletedAt: now }, $unset: { rfidTag: '' } });
 
     // Wine lists and the 3D room layout are intentionally NOT removed here:
@@ -1141,7 +1141,7 @@ router.get('/:id/audit', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    // Return a MINIMISED projection (security audit M-2): the raw AuditLog docs
+    // Return a MINIMISED projection: the raw AuditLog docs
     // carry actor.ipAddress, userAgent, and the actor's email — a cellar owner
     // must not harvest collaborators' (incl. former collaborators', and any
     // admin/somm actor's) IP + email. The app's own token layer already blocks

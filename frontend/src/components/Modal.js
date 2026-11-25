@@ -86,7 +86,7 @@ function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus 
     // of a roving-tabindex group (the Wine record's type/colour chips). Counting
     // them put the opening focus on an unchecked chip, where Space proposed the
     // wrong type, and let Shift+Tab from the group's real tab stop walk out of
-    // the dialog (audit 2026-09-19).
+    // the dialog.
     const focusable = () =>
       Array.from(
         box.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')

@@ -93,7 +93,7 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
       type: wine.type || '',
       // The Other category (a drink that is not wine) travels as its own
       // field: a bare type of '' would re-import as an untyped WINE and mint
-      // a cider into the shared registry (release audit 2026-10-28).
+      // a cider into the shared registry.
       category: wine.nonWine === true ? 'other' : 'wine',
       // The colour of a sparkling/dessert/fortified wine, when recorded — so a
       // sparkling rosé survives an export → import round-trip as one.
@@ -329,7 +329,7 @@ async function buildCellarDataExport(userId, scope) {
       ? BottleImage.find({ uploadedBy: userId, bottle: { $in: bottleIds } })
           .select('bottle originalUrl processedUrl credit createdAt').limit(EXPORT_MAX).lean()
       : [],
-    // Label scans (audit L-2). They hang off a WINE, never a bottle, so the
+    // Label scans. They hang off a WINE, never a bottle, so the
     // bottle-scoped query above could never reach them — yet
     // services/userDataRegistry states the bytes ship in this ZIP, and they
     // are unambiguously the user's own photos. Only the user's own, and only

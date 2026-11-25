@@ -28,8 +28,8 @@ const router = express.Router();
 // keys, the wine's creator or another user's label-scan evidence) with only the
 // NAMES of its country, region and grapes. Until 2026-09 every rack response
 // populated whole documents: a large cellar came to about 5 MB, most of it
-// taxonomy descriptions, and every shared wine's scan evidence rode along
-// (scaling audit 2026-09-25). Lean: thousands of bottles as plain objects,
+// taxonomy descriptions, and every shared wine's scan evidence rode along.
+// Lean: thousands of bottles as plain objects,
 // while the rack itself stays a document, so schema defaults (zones,
 // disabledPositions, …) still fill racks saved before those fields existed.
 const SLOT_BOTTLES = {
@@ -53,12 +53,12 @@ const MAX_MODULES = 50;
 // A modular rack's slots in total. Within the per-module bounds alone, 50
 // modules of a 20×20 cube with 10×10 cells is two million slots — which the
 // racks page, the print map and the room then draw, one by one, for every
-// member of the cellar (audit 2026-10-14). The largest real cabinets are a
+// member of the cellar. The largest real cabinets are a
 // few thousand.
 const MAX_RACK_SLOTS = 10000;
 // Mirrors the Rack schema's rows/cols bounds (models/Rack.js). Checked at the
 // request boundary because geometry runs on the values BEFORE save() would
-// reject them (security audit 2026-09-02 D14-1).
+// reject them.
 const MAX_RACK_DIM = 20;
 const isRackDim = (v) => Number.isInteger(v) && v >= 1 && v <= MAX_RACK_DIM;
 
@@ -154,7 +154,7 @@ router.get('/nfc/:id', requireAuth, async (req, res) => {
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
     // Only members of the rack's cellar may resolve the tag — anyone else gets
     // the same 404 as a nonexistent rack, so this endpoint is not an existence
-    // oracle for rack IDs or a rack→cellar linkage leak (audit L-4 / I-9).
+    // oracle for rack IDs or a rack→cellar linkage leak.
     const cellar = await Cellar.findById(rack.cellar).select('user members deletedAt');
     if (!cellar || cellar.deletedAt || !getCellarRole(cellar, req.user.id)) {
       return res.status(404).json({ error: 'Rack not found' });
@@ -328,7 +328,7 @@ router.put('/:id', async (req, res) => {
     // cols narrower than a stored per-shelf width (audit 2026-09-16 — a
     // cols-only PUT used to slip past and leave a cabinet no later edit
     // could save). Only when the SHAPE is in the request — a rename, group,
-    // zone or NFC edit must never trip over a stored list (audit 2026-09-15).
+    // zone or NFC edit must never trip over a stored list.
     if (type !== undefined || rows !== undefined || cols !== undefined || typeConfig !== undefined) {
       const effType = type !== undefined ? type : rack.type;
       const effRows = rows !== undefined ? rows : rack.rows;
@@ -352,7 +352,7 @@ router.put('/:id', async (req, res) => {
     // already numbered. So on a cabinet holding any of those, the widths with
     // the stored two deep and lie must equal the new ones. Only those two
     // come from the stored shape, so the other shape edits keep their own
-    // rules (release audit 2026-10-14: ticking Two deep moved a bottle).
+    // rules (ticking Two deep moved a bottle).
     const numbered = (rack.slots || []).length > 0 || (rack.disabledPositions || []).length > 0
       || (rack.zones || []).some((z) => (z.positions || []).length > 0);
     if (typeConfig && !rack.isModular && (type !== undefined ? type : rack.type) === 'cabinet' && numbered) {
@@ -381,7 +381,7 @@ router.put('/:id', async (req, res) => {
     if (name !== undefined) rack.name = name;
     // '' or null clears the group (ungrouped); absent leaves it alone.
     if (group !== undefined) {
-      // A non-string group is a client bug, not a request to un-group (audit 2026-09-07).
+      // A non-string group is a client bug, not a request to un-group.
       if (group !== null && typeof group !== 'string') return res.status(400).json({ error: 'group must be a string' });
       rack.group = normalizeRackGroup(group);
     }
@@ -493,7 +493,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Offline-queue preconditions (#1355): a write queued offline carries what the
+// Offline-queue preconditions: a write queued offline carries what the
 // user saw when they made it — the occupant of each slot it touches (a bottle
 // id, or null for an empty slot). If the rack has changed since (a partner
 // placed a bottle there meanwhile), the write is refused with 409 instead of
@@ -596,7 +596,7 @@ router.post('/:id/move-bottles', async (req, res) => {
     const source = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     // The target is looked up IN the source's cellar: a rack elsewhere reads
     // exactly like one that does not exist, so the answer cannot be used to
-    // probe for other people's rack ids (release audit 2026-10-12).
+    // probe for other people's rack ids.
     const target = source ? await Rack.findOne({ _id: toRackId, cellar: source.cellar, deletedAt: null }) : null;
     if (!source || !target) return res.status(404).json({ error: 'Rack not found' });
 

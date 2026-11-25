@@ -1,5 +1,5 @@
 /**
- * Label sweetness — the term table and its readers (GitHub discussion #1754).
+ * Label sweetness — the term table and its readers.
  *
  * This file: the curated term rows (models/SweetnessTerm), an in-memory copy
  * the pickers, the MCP tool, the style guard and the identity keys read, the

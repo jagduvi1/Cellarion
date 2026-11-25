@@ -2,7 +2,7 @@
  * Signup binding — lets the email-verification link sign a new member in,
  * but only in the browser that registered the account.
  *
- * Verification itself issues no session by default (security audit M-1): a
+ * Verification itself issues no session by default: a
  * session-issuing verify step is a login-CSRF hole, because an attacker can
  * register an account, take its verification link and get a victim's browser
  * to open it — the victim is then silently signed in to the attacker's account

@@ -74,7 +74,7 @@ const bridgeProtocol = (req) => {
 const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'servingTempMin', 'servingTempMax', 'needsAir', 'source', 'generatedAt', 'verifiedAt'];
 
 // Strict: mongoose.isValidObjectId() also accepts any 12-character string, so
-// a nested value could reach $in and raise a CastError 500 (audit 2026-09-08).
+// a nested value could reach $in and raise a CastError 500.
 const isValidId = (id) => /^[a-f0-9]{24}$/i.test(String(id));
 
 // Pre-auth per-address limiter: bounds key guessing and probing. A
@@ -114,7 +114,7 @@ const keyLimiter = rateLimit({
 
 // Kill switch: `bridge.enabled = 0` closes the whole protocol with a clear
 // 503, the lever routes/mcp.js has had since it shipped and this surface
-// lacked (audit 2026-09-08). Read from the in-memory config, so it takes
+// lacked. Read from the in-memory config, so it takes
 // effect on the next request without a restart.
 function bridgeOpen(req, res, next) {
   if ((rateLimitsConfig.get().bridge || {}).enabled === 0) {
@@ -246,7 +246,7 @@ router.get('/me', async (req, res) => {
 // GET /v1/search?q=  — identities only, capped like the web UI's add-bottle search.
 // Validation runs BEFORE the quota is spent: a malformed call used to cost a
 // unit, and with one change check a day that meant a single typo silenced the
-// weekly refresh until UTC midnight (audit 2026-09-08).
+// weekly refresh until UTC midnight.
 function validSearch(req, res, next) {
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   if (q.length < QUERY_MIN || q.length > QUERY_MAX) {
@@ -294,7 +294,7 @@ router.get('/search', validSearch, quota('searches'), async (req, res) => {
     }
     // A search is a read of the registry too — ten identities a call, hundreds
     // of calls a day. Counting only single fetches left the copy detector
-    // blind to this path (audit 2026-09-08). Detection counts on the owner.
+    // blind to this path. Detection counts on the owner.
     if (wines.length) {
       recordRead({ key: `user:${req.user.id}`, kind: 'user' }, wines.map((w) => w._id)).catch(() => {});
     }
@@ -342,7 +342,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
         // Published registry values only; who contributed them stays on the
         // hosted page.
         // A field whose figures exist only per vintage has a null wine-wide
-        // value; dropping it took its overrides with it (audit 2026-09-08).
+        // value; dropping it took its overrides with it.
         values: values && values.ok
           ? values.fields.filter((f) => f.value !== null && f.value !== undefined || f.wineValue !== null && f.wineValue !== undefined || (f.overrides || []).length > 0)
             .map((f) => ({ key: f.key, value: f.value, wineValue: f.wineValue ?? null, overrides: f.overrides || [] }))
@@ -414,7 +414,7 @@ router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, r
     const checkedAt = new Date();
     // The same visibility the single-wine fetch applies: a hidden row must
     // report as removed, not as changed, or the change check is an existence
-    // oracle for wines /wines/:id would 404 (audit 2026-09-08).
+    // oracle for wines /wines/:id would 404.
     const found = await WineDefinition.find({ _id: { $in: ids }, ...VISIBLE, canary: { $ne: true } })
       .select('_id updatedAt nonWine').lean();
     const present = new Map(found.map((w) => [String(w._id), w]));

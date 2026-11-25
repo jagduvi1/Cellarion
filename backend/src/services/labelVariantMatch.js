@@ -134,7 +134,7 @@ function isLabelVariant(a, b, grapeTokens) {
       && !subset(ra.varieties, rb.varieties) && !subset(rb.varieties, ra.varieties)) {
     return { match: false, reason: 'each name states a different variety — a range, not a duplicate' };
   }
-  // The same guard on the OTHER axis a range varies along (issue #1134): a
+  // The same guard on the OTHER axis a range varies along: a
   // Mosel estate bottles one vineyard as Kabinett, Spätlese and Auslese, and
   // each Prädikat again as trocken / feinherb. Today the reduction already
   // separates them — style words are not in FURNITURE, so they survive into

@@ -1001,8 +1001,8 @@ function ImportBottles() {
   const getImportableCount = () => results.filter(isImportableRow).length;
 
   // A typed vintage on a flagged row must be a real year before confirm, or
-  // the one row the user took care of is the one the server rejects
-  // (audit 2026-09-07). Empty stays NV.
+  // the one row the user took care of is the one the server rejects.
+  // Empty stays NV.
   const isBadTypedVintage = (v) => {
     if (!v || v === 'NV') return false;
     const n = parseInt(v, 10);

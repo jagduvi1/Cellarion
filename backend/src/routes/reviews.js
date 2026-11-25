@@ -349,7 +349,7 @@ router.put('/:id', async (req, res) => {
 
     await review.save();
 
-    // Keep Cellar-Cred symmetric across visibility flips (L-19): the +3
+    // Keep Cellar-Cred symmetric across visibility flips: the +3
     // "public review" award tracks whether the review IS public, so flipping
     // public→private reverses it and private→public re-awards it. A flip loop
     // therefore nets zero, and deleting after going private can't dodge the
@@ -391,7 +391,7 @@ router.delete('/:id', async (req, res) => {
     const wineId = review.wineDefinition;
     const authorId = review.author;
 
-    // Reverse the Cellar-Cred this review awarded (L-19) — count the votes
+    // Reverse the Cellar-Cred this review awarded — count the votes
     // BEFORE they are deleted. The +3 public-review award is only reversed if
     // the review is currently public (a private review either never earned it
     // or already had it reversed on the public→private flip); like-cred was
@@ -447,7 +447,7 @@ router.post('/:id/like', requireNonDemo, async (req, res) => {
       const del = await ReviewVote.deleteOne({ _id: existing._id });
       if (del.deletedCount > 0) {
         await Review.updateOne({ _id: review._id, likesCount: { $gt: 0 } }, { $inc: { likesCount: -1 } });
-        // Symmetric cred (L-19): the like awarded +1 to the author, so the
+        // Symmetric cred: the like awarded +1 to the author, so the
         // unlike takes it back — a like/unlike toggle loop nets zero. Guarded
         // by deletedCount so a concurrent double-unlike can't double-reverse.
         decrementCred(review.author.toString(), 'review_like_received').catch(() => {});

@@ -1,5 +1,5 @@
 /**
- * The ONE contributor gate for community suggestions (#985): discussion-ban
+ * The ONE contributor gate for community suggestions: discussion-ban
  * check + the per-tier daily budget, counted across ALL suggestion
  * collections — wine corrections, registry key proposals and registry value
  * suggestions share a single pool, so "your daily limit" means one number

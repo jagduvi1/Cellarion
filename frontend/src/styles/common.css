@@ -440,7 +440,7 @@
   margin-top: 1.25rem;
 }
 
-/* Shared by dialogs that open on several pages (release audit 2026-10-13: the
+/* Shared by dialogs that open on several pages (the
    pick list opened them before CellarDetail.css / BottleDetail.css loaded). */
 /* The bulk modals' forms (purchase details, consume, reserve, add to list). */
 .bulk-form .form-group { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }

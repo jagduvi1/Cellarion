@@ -274,7 +274,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   /* Themed surface/text — without these the UA-default white box + black text
-     stayed light-on-dark in dark mode (grand-audit M19). */
+     stayed light-on-dark in dark mode. */
   background: var(--color-input-bg, var(--color-surface));
   color: var(--color-text);
   font-size: 0.9rem;

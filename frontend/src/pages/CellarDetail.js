@@ -111,7 +111,7 @@ function CellarDetail() {
   // (cards, for paging) can be 1 where the filter's button means 2 bottles.
   const [bottleCount, setBottleCount] = useState(0);
   // Bottles per maturity stage, for the filter's maturity buttons — asked for
-  // each time the filter opens (#1291), kept with the cellar they are for:
+  // each time the filter opens, kept with the cellar they are for:
   // { id, counts }.
   const [maturity, setMaturity] = useState(null);
   // { count, nextExpected } — bottles bought for this cellar, not arrived yet.
@@ -268,7 +268,7 @@ function CellarDetail() {
     if (multiScope) setFilters(prev => (prev.reserved ? { ...prev, reserved: '' } : prev));
   }, [multiScope]);
 
-  // And for "stored in" — racks belong to one cellar (audit 2026-09-07).
+  // And for "stored in" — racks belong to one cellar.
   useEffect(() => {
     if (multiScope) setFilters(prev => (prev.storage ? { ...prev, storage: '' } : prev));
   }, [multiScope]);
@@ -525,7 +525,7 @@ function CellarDetail() {
         const storageList = (racksData.racks || []).map(r => ({ id: String(r._id), name: r.name, group: r.group || null }));
         setStorageRacks(storageList);
         // A remembered "stored in" whose rack was deleted or group renamed
-        // would show an opaque chip over an empty list (audit 2026-09-07).
+        // would show an opaque chip over an empty list.
         setFilters(prev => {
           const m = /^(group|rack):(.+)$/.exec(String(prev.storage || ''));
           if (!m) return prev;

@@ -29,7 +29,7 @@ const keyOf = (e) =>
 /**
  * Suggested glass price from the list's glass pricing rule.
  * MUST stay identical to the backend's canonical copy in
- * backend/src/utils/glassPrice.js (MCP-audit M4) — separate npm packages, one
+ * backend/src/utils/glassPrice.js — separate npm packages, one
  * rule. If you change the formula, change it in BOTH places.
  */
 const suggestGlassPrice = (listPrice, layout = {}) => {

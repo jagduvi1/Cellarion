@@ -34,7 +34,7 @@ const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
 const MAX_ITEMS = 24; // two cases — keeps one batch well inside the write budget
 const PREVIEW_FRESH_MS = 15 * 60 * 1000;
 // Unconsumed previews kept per user; older ones are deleted when a new one is
-// made (audit 2026-09-02 D08-1). Five is plenty for an agent that previews a
+// made. Five is plenty for an agent that previews a
 // couple of batches before applying them.
 const MAX_OUTSTANDING_PREVIEWS = 5;
 // Preview is not free: it runs up to MAX_ITEMS registry resolutions and parks
@@ -72,7 +72,7 @@ function validateItemFields(item) {
   const r = resolveRating(item.rating, item.rating_scale);
   if (r.error) return r.error;
   // Checked here, in the preview: addBottle refuses an unsupported code, and at
-  // apply a new wine is created BEFORE the bottle (release audit 2026-10-13).
+  // apply a new wine is created BEFORE the bottle.
   const c = parseCurrency(item.currency);
   if (!c.ok) return c.error;
   // The same three checks add_bottle makes before it mints a wine.
@@ -143,7 +143,7 @@ registerTool({
   scope: 'write',
   // Charges the write budget ITSELF — one slot per item on apply, nothing on
   // preview — so the generic per-call charge in server.js must skip it or a
-  // 12-bottle case would cost 14 (MCP-audit M7).
+  // 12-bottle case would cost 14.
   selfBudgeted: true,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -162,7 +162,7 @@ registerTool({
       if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
 
       // Charged BEFORE the registry resolutions below — they are the work a
-      // looping client would otherwise get for free (D08-1).
+      // looping client would otherwise get for free.
       if (!takeMutationSlot(String(ctx.user.id), previewCost(args.items.length), ipKeyFor(ctx))) {
         return fail('rate_limited', 'Too many previews in a short time — wait a few minutes before previewing again, or apply the last one.');
       }

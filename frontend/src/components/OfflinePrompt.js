@@ -7,7 +7,7 @@ import { refreshSnapshot } from '../utils/offlineSnapshot';
 
 /**
  * The installed app asks once, after sign-in, whether to keep the cellar on
- * the phone for offline use (#1355). Nothing is stored on the device before a
+ * the phone for offline use. Nothing is stored on the device before a
  * yes; the answer is kept and never asked again (Settings → Offline mode
  * changes it). A browser tab never asks — there it is only switched on in
  * Settings.

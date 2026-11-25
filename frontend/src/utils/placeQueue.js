@@ -1,4 +1,4 @@
-// Post-add placing queue (issue #1055): the bottles just added arrive at the
+// Post-add placing queue: the bottles just added arrive at the
 // rack view as a queue of ids; each tap on a free slot places the next one,
 // and "auto-place remaining" fills first-free slots for whoever does not
 // care about exact positions. Pure helpers — the page owns the state and the
@@ -52,7 +52,7 @@ export function readPlaceQueue(state) {
  * The queue minus every bottle some loaded rack already holds. Router state
  * survives Back/reload, and placing an already-placed bottle again would MOVE
  * it (the slot endpoint has move semantics) — so a re-entered queue must not
- * contain them (audit 2026-09-14).
+ * contain them.
  */
 export function withoutPlaced(ids, racks) {
   const placed = new Set();

@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 //
 // In the Android app (and any browser) the Back button is history.back().
 // No pop-up added a history entry, so Back with one open left the page —
-// and a half-filled form with it (live walkthrough 2026-10-15). Each pop-up
+// and a half-filled form with it. Each pop-up
 // that can be closed now adds one entry for the SAME page while it is open:
 // Back lands on the page itself, and the newest pop-up closes.
 //
@@ -250,7 +250,7 @@ export function useBackToClose(onClose, enabled = true) {
  * guard): the router's own state (usr/key/idx) so later pages keep counting
  * from the right index, without a pop-up's mark, plus `extra`. A bare
  * `{ … }` made React Router count from NaN after a replace, which switched
- * Back-to-close off everywhere after (release audit 2026-10-16).
+ * Back-to-close off everywhere after.
  */
 export function pageEntryState(extra = {}) {
   const { [MARK]: _mark, ...routerState } = historyState();
@@ -261,7 +261,7 @@ export function pageEntryState(extra = {}) {
  * Run `fn` once the current history entry is no longer a pop-up's own (one
  * that just closed is taken off a tick later): a navigation from a closing
  * pop-up's handler would otherwise replace or step from that entry, not the
- * page's (release audit 2026-10-16). Runs at once when there is none; gives
+ * page's. Runs at once when there is none; gives
  * up waiting after `timeoutMs`.
  */
 export function afterPopupEntryGone(fn, timeoutMs = 1500) {

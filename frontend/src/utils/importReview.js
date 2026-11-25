@@ -8,7 +8,7 @@
  * ordered) the server did not mark as conflicting, or null.
  *
  * styleConflict: the row and the candidate NAME a different Prädikat or
- * sweetness, so they are two wines from one producer's range (issue #1134).
+ * sweetness, so they are two wines from one producer's range.
  * colourConflict: the row and the candidate state different colours — the
  * other bottle of a red/white pair sharing one name. Either way the user can
  * still pick it by hand; it is only never chosen FOR them. Every preselection
@@ -54,7 +54,7 @@ function followingSiblings(results, selections, sourceIndex, identityChoice) {
     const cur = sel[r.index];
     if (cur == null) return true;
     // A skip is a decision only an undo on that row reverses: a sibling
-    // skipped on purpose never follows a wine choice (audit 2026-10-14).
+    // skipped on purpose never follows a wine choice.
     return identityChoice && before != null && before !== 'skip' && cur === before;
   });
 }

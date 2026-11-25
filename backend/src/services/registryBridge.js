@@ -64,7 +64,7 @@ function refreshEnvMode() {
 /**
  * The install's own bridge state: the change-check watermark and the last run.
  * Persisted so a restart — which is the last step of connecting — does not
- * erase the only record of what the refresh did (audit 2026-09-08).
+ * erase the only record of what the refresh did.
  */
 async function bridgeState() {
   try {
@@ -126,7 +126,7 @@ async function setRefreshMode(mode, userId) {
 // an adoption or a refresh. A seeded placeholder (no dates, no note) is not an
 // edit, so the registry still fills it.
 //
-// The comparison is symmetric on purpose (audit 2026-09-08). The first version
+// The comparison is symmetric on purpose. The first version
 // asked "was this row touched AFTER the last sync", and the wine's sync stamp
 // advanced on every refresh including runs that skipped the row — so an edit
 // survived exactly one refresh and the next one silently reverted it. Matching
@@ -433,7 +433,7 @@ async function adoptWine(registryId, userId) {
   if (wine && wine.registryId && String(wine.registryId) !== String(w.id)) return { ok: false, code: 'conflict' };
   // Captured before the assignment below: rows a previous adoption wrote carry
   // the OLD stamp, and comparing them against the new one would read them as
-  // local edits and freeze them (audit 2026-09-08).
+  // local edits and freeze them.
   const prevSync = wine?.registrySyncedAt || null;
   const profile = profileFrom(w.profile);
   if (wine) {
@@ -463,8 +463,8 @@ async function adoptWine(registryId, userId) {
     await assignClassification(wine, classificationInput(w));
     // The registry's colour is authoritative when it sends one — null included.
     // Without the mark, the model hook inferred rosé for a new "… Rosé" copy the
-    // registry holds as uncoloured, and the next refresh cleared it again
-    // (audit 2026-09-19). An older registry sends no key: the hook infers.
+    // registry holds as uncoloured, and the next refresh cleared it again.
+    // An older registry sends no key: the hook infers.
     if (Object.prototype.hasOwnProperty.call(w, 'colour')) stateColour(wine, wine.colour);
     await applyRegistryStyle(wine, w, { mayClear: true });
     try {
@@ -624,7 +624,7 @@ async function applyRegistryUpdate(local, w) {
   // rows below. Using the run's start time meant `updatedAt` (stamped by the
   // pre-save hook at the real save moment) ran ahead of registrySyncedAt on
   // every wine past the first few seconds of a run, so the next run read the
-  // copy as locally edited and froze its identity forever (audit 2026-09-08).
+  // copy as locally edited and froze its identity forever.
   const stamp = new Date();
   wine.registrySyncedAt = stamp;
   try {
@@ -659,7 +659,7 @@ async function applyRegistryUpdate(local, w) {
  * per-wine sync date. Deriving it per wine meant the watermark never advanced
  * — every wine the registry had touched since the oldest adoption came back
  * changed, every week, until the daily fetch quota ran out, and the wines past
- * that point were never updated at all (audit 2026-09-08).
+ * that point were never updated at all.
  */
 async function refreshHeld({ now = new Date() } = {}) {
   if (!isEnabled()) return recordRefresh({ at: now, skipped: 'disabled' });
@@ -799,7 +799,7 @@ async function forwardRequest({ wineName, sourceUrl, sourceUrls, image, backImag
   // itself (syncForwardedRequests), so cellarion.app need not notify the key
   // owner as well. Only forwardAndTrackRequest may say so.
   if (follow) payload.follow = true;
-  // The extra links (#1460) only when there are any: a registry from before
+  // The extra links only when there are any: a registry from before
   // them ignores the field, and the first link rides as sourceUrl regardless.
   const links = Array.isArray(sourceUrls) ? sourceUrls.filter((u) => typeof u === 'string' && u) : [];
   if (links.length > 1) payload.sourceUrls = links;

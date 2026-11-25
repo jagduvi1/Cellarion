@@ -69,7 +69,7 @@ function sanitizeCredit(credit, userRoles) {
  *   approved + public, reviewed by the uploader, BEFORE background removal is
  *   kicked off. The worker keeps an already-approved row approved; a row
  *   approved after the hand-off raced it and usually ended 'processed' —
- *   invisible in every gallery (release audit 2026-10-09, H1).
+ *   invisible in every gallery.
  * @param {'web'|'mcp'} [opts.via='web']   the surface, named in the audit row
  * @param {object}  req                    for downstream audit attribution
  * @returns {{ image }} | {{ error: { status, message } }}

@@ -7,7 +7,7 @@ import { PASSWORD_POLICY } from '../utils/accountRules';
 import './Login.css';
 
 function ResetPassword() {
-  // Labels tied to their inputs, so screen readers announce them (pre-release audit 2026-10-14).
+  // Labels tied to their inputs, so screen readers announce them.
   const passwordId = useId();
   const confirmId = useId();
   const { t } = useTranslation();
@@ -21,7 +21,7 @@ function ResetPassword() {
 
   // Read the one-time token ONCE, then take it out of the address bar so it
   // does not linger in browser history, in the Referer of any outbound link,
-  // or in an analytics pageview (audit 2026-09 F03-6). State survives the URL
+  // or in an analytics pageview. State survives the URL
   // change; the form posts the captured value.
   const [token] = useState(() => searchParams.get('token'));
   useEffect(() => {

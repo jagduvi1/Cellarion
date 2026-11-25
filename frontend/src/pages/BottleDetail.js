@@ -124,7 +124,7 @@ function BottleDetail() {
   // wrong DATA is corrected there, with the right value, not reported in prose.
   const [suggestFixSignal, setSuggestFixSignal] = useState(0);
   // Cards that fold to their title row and stay folded, as on the vintage
-  // page (2026-10-14). The SAME block names as there: the same card folded on
+  // page. The SAME block names as there: the same card folded on
   // one page is folded on the other — "the stuff I don't want to see" is not
   // per page. Remembered on the account (preferences.collapsedBlocks).
   const { isCollapsed, toggle: toggleBlock, expand: expandBlocks } = useCollapsedBlocks();
@@ -176,8 +176,8 @@ function BottleDetail() {
         setUserRole(data.userRole);
         setCellarColor(data.cellarColor || null);
         setCurrentRelease(data.currentRelease || null);
-        // The bottle's rack placement now arrives ON the bottle response
-        // (2026-08-22). The old fetchRackInfo downloaded every rack with all
+        // The bottle's rack placement now arrives ON the bottle response.
+        // The old fetchRackInfo downloaded every rack with all
         // slots plus the full 3D layout — the two heaviest requests on this
         // page — to find one bottle id in the browser; the server answers the
         // same question with one indexed query. That per-open cost is what
@@ -966,7 +966,7 @@ function BottleDetail() {
             // demo, not a private draft — same gate as WineRecordSection) AND
             // while the record is on screen: the edit form replaces it, and the
             // tasting-profile report button stays clickable there, so the
-            // hand-off would have been a dead click (pre-deploy audit 2026-09-18).
+            // hand-off would have been a dead click.
             onSuggestFix={!editing && !user?.isDemo && bottle.wineDefinition.draft !== true
               // The form opens in the wine record: unfold it if it is folded.
               ? () => { setReportWineOpen(false); setReportDefaultReason(null); expandBlocks('vintage.record'); setSuggestFixSignal(n => n + 1); }

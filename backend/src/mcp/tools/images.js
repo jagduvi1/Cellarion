@@ -67,8 +67,8 @@ registerTool({
     // expects a bottle and cuts a flat label's edges away, so its background
     // is kept — the app's "Keep the background" for the same photo. Named for
     // what the photo IS, not for what to do with it: a broad keep_background
-    // gets set on whole-bottle photos, which then keep their backgrounds
-    // (#1455). A bottle-shaped
+    // gets set on whole-bottle photos, which then keep their backgrounds.
+    // A bottle-shaped
     // picture is cut out even with the flag (see BOTTLE_SHAPED).
     label_only: z.boolean().optional().describe('true ONLY for a photo of the label alone, cropped or rectified so the label fills the frame (no bottle, table or shelf in it): it keeps its background, with no background removal (which expects a bottle and would cut the label\'s edges away). Never set it for a retailer product image or any photo with the bottle in it. A tall, narrow, bottle-shaped picture is cut out anyway, with a warning.'),
     // Kept in the schema so a caller that still sends it is not refused
@@ -176,7 +176,7 @@ registerTool({
     }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient
-      // infra fault → `unavailable` (MCP-audit M3: not the agent's cadence).
+      // infra fault → `unavailable` (not the agent's cadence).
       return fail(result.error.status >= 500 ? 'unavailable' : 'invalid_input', result.error.message);
     }
     const image = result.image;

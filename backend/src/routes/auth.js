@@ -33,7 +33,7 @@ const router = express.Router();
 
 // Dummy hash compared on login when the identifier matches no account, so the
 // response time is indistinguishable from a real wrong-password compare and
-// cannot be used for account enumeration (L-1). It MUST be generated at
+// cannot be used for account enumeration. It MUST be generated at
 // User.BCRYPT_COST (12) — a cheaper hash compares ~4x faster and reopens the
 // timing oracle. Regenerate if the cost ever changes:
 //   node -e "console.log(require('bcrypt').hashSync(require('crypto').randomBytes(32).toString('hex'), 12))"
@@ -42,8 +42,8 @@ if (bcrypt.getRounds(DUMMY_HASH) !== User.BCRYPT_COST) {
   throw new Error(`DUMMY_HASH cost ${bcrypt.getRounds(DUMMY_HASH)} != BCRYPT_COST ${User.BCRYPT_COST} — regenerate DUMMY_HASH in routes/auth.js`);
 }
 
-// Enumeration-timing parity for /forgot-password + /resend-verification
-// (security audit L-8). The "account found" branch pays a token-generation +
+// Enumeration-timing parity for /forgot-password + /resend-verification.
+// The "account found" branch pays a token-generation +
 // user.save() write that the early-return branch skips, making a real account
 // measurably slower — a timing oracle the equalized login flow already closed.
 // A no-op write against a fresh random _id matches nothing (writes no data) but
@@ -310,7 +310,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     if (!user) {
-      // Audit 2026-09 D04-4: the typed identifier is attacker-chosen text and
+      // The typed identifier is attacker-chosen text and
       // often a real e-mail from a breach list; every admin can read the audit
       // log. Keep what forensics needs — shape + a short hash to correlate
       // repeats — never the raw string.
@@ -405,7 +405,7 @@ router.post('/verify-email', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const { token } = req.body || {};
 
-  // typeof, not truthiness (security audit 2026-07-25 L-2): a JSON body value
+  // typeof, not truthiness: a JSON body value
   // like {"token":{"$ne":null}} is truthy, and crypto's update() then throws a
   // TypeError that the catch below turns into a 500 with a full stack trace.
   // Nothing is exploitable — it throws BEFORE the Mongo query, so no operator
@@ -518,7 +518,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
 
 // Rate limiters for refresh — 30 per 15 min for one refresh token.
 //
-// Keyed on the token, not the address (scaling audit 2026-09-25): many people
+// Keyed on the token, not the address: many people
 // can share one address — a mobile carrier's NAT, an office — and a per-IP
 // bucket made their refreshes compete, with a 429 for whoever came last.
 // Every successful refresh rotates the token, so this bounds a client retrying
@@ -557,7 +557,7 @@ const refreshIpLimiter = rateLimit({
 // visitor, and every crawler that executes the app, sends one per page view.
 // Answered before the limiters so it is counted nowhere — counted, a crawler
 // rendering public wine pages tripped the 30-per-address bucket within a
-// minute and was answered 429 for the rest of its crawl (2026-10-27).
+// minute and was answered 429 for the rest of its crawl.
 const noCookieIsNotAnAttempt = (req, res, next) => {
   if (!req.cookies?.refreshToken) return res.status(401).json({ error: 'No refresh token' });
   next();
@@ -618,7 +618,7 @@ router.post('/refresh', noCookieIsNotAnAttempt, refreshIpLimiter, refreshLimiter
     const accessToken = await issueTokens(user, res, { session });
 
     // persistent: whether this device's session is a "remember me" one. The
-    // cookie is httpOnly, so the app cannot see it — offline mode (#1355) only
+    // cookie is httpOnly, so the app cannot see it — offline mode only
     // allows an offline start for a session that survives closing the browser.
     res.json({ token: accessToken, persistent: session.persistent !== false });
   } catch (error) {
@@ -708,7 +708,7 @@ router.post('/change-password', requireAuth, requireNonDemo, authLimiter, async 
 router.post('/logout', async (req, res) => {
   try {
     // Who is signing out: the bearer token when there is a valid one, else the
-    // httpOnly refresh cookie itself. An offline session (#1355) has no access
+    // httpOnly refresh cookie itself. An offline session has no access
     // token; when this route required one, logging out there wiped the device
     // but left the server session and cookie alive — the next online start
     // signed the same account straight back in. The cookie is SameSite=Lax,
@@ -749,7 +749,7 @@ router.post('/logout', async (req, res) => {
     // keeps the cookie out of that request — but the browser would still honour
     // a deletion header in the response, signing the user out at their next
     // refresh (and, read as a rejection, wiping their offline copy). With no
-    // cookie there is nothing to clear (audit 2026-09-27 M5).
+    // cookie there is nothing to clear.
     if (hash) clearRefreshCookie(res);
     // Signing out of a shared browser leaves no signup binding behind either.
     if (req.cookies?.signupBinding) clearSignupBinding(res);
@@ -836,7 +836,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 router.post('/reset-password', authLimiter, async (req, res) => {
   const { token, password } = req.body;
 
-  // typeof on the token for the same reason as /verify-email (L-2). `password`
+  // typeof on the token for the same reason as /verify-email. `password`
   // needs no guard here — Mongoose casts/validates it and answers 400.
   if (typeof token !== 'string' || !token || !password) {
     return res.status(400).json({ error: 'Token and new password are required' });

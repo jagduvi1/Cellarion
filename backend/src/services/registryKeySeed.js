@@ -2,7 +2,7 @@
  * The standard wine-record fields every install has: ABV and Closure, defined
  * exactly as cellarion.app accepted them (name, type, unit, options, translated
  * names). Without them a fresh server's wine record had no ABV row at all until
- * its admin proposed the field and accepted it (discussion #1778).
+ * its admin proposed the field and accepted it.
  *
  * Seeded BY NAME: each standard field the registry lacks is created, whether
  * the registry is empty (a fresh install) or already has fields of its own (an

@@ -30,7 +30,7 @@ const ageOf = () => {
 };
 
 /**
- * Keeps the device's offline copy of the user's cellars fresh (#1355):
+ * Keeps the device's offline copy of the user's cellars fresh:
  * on start when it is more than a couple of minutes old, every 15 minutes
  * while the app is visible, when the app comes back to the foreground after
  * that long, and a few seconds after the user changes something. Online and

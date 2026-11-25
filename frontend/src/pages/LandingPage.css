@@ -19,7 +19,7 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border-light);
-  /* Keep clear of the iOS status bar in the installed PWA (issue #1145).
+  /* Keep clear of the iOS status bar in the installed PWA.
      index.html sets viewport-fit=cover and a black-translucent status bar,
      so a sticky top:0 element draws UNDERNEATH the clock and battery — the
      Sign in button ended up in the strip iOS owns and could not be tapped.

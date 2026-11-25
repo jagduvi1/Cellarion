@@ -1,5 +1,5 @@
 /**
- * Offline reads (#1355): answer the app's own GET requests from the snapshot
+ * Offline reads: answer the app's own GET requests from the snapshot
  * kept on the device (GET /api/offline/snapshot), in the SAME response shapes
  * the server uses, so pages need no offline code of their own.
  *

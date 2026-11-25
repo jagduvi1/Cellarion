@@ -5,12 +5,12 @@ if (!process.env.JWT_SECRET) {
 }
 const SECRET = process.env.JWT_SECRET;
 
-// Tokens older than this are rejected (L-3). A link captured from a forwarded
+// Tokens older than this are rejected. A link captured from a forwarded
 // or archived email must not replay forever; 90 days comfortably outlives any
 // legitimate inbox latency.
 const TOKEN_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
-// Length of the truncated HMAC emitted before the full-digest upgrade (L-2).
+// Length of the truncated HMAC emitted before the full-digest upgrade.
 const LEGACY_MAC_LENGTH = 16;
 
 /**
@@ -35,7 +35,7 @@ function verifyUnsubscribeToken(token) {
     if (parts.length !== 3) return null;
     const [userId, timestamp, mac] = parts;
 
-    // Expiry (L-3): the signed timestamp must parse and be within the window.
+    // Expiry: the signed timestamp must parse and be within the window.
     const issuedAt = Number(timestamp);
     if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > TOKEN_MAX_AGE_MS) return null;
 
@@ -44,7 +44,7 @@ function verifyUnsubscribeToken(token) {
       .update(`${userId}:${timestamp}`)
       .digest('hex');
 
-    // Backward compatibility (L-2): links in already-sent emails carry the old
+    // Backward compatibility: links in already-sent emails carry the old
     // 16-hex truncated MAC and must keep working until they age out. Accept the
     // legacy 16-char digest prefix ONLY when the provided MAC is exactly 16 hex
     // chars; everything else must match the full 64-hex digest. The 90-day

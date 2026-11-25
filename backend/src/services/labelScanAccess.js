@@ -72,7 +72,7 @@ const isWithinPromotedGrace = (image, now = Date.now()) => {
 const mayCurationReadScan = (wine, image, now = Date.now()) => {
   if (!wine) return false;
   // A private draft is pending by invariant but is in nobody's queue: its
-  // creator has not asked anyone to read the label (draft design 2026-09-12).
+  // creator has not asked anyone to read the label.
   if (wine.draft === true) return false;
   if (wine.pendingIdentity === true) return true;
   return isWithinPromotedGrace(image, now);
@@ -83,7 +83,7 @@ const mayCurationReadScan = (wine, image, now = Date.now()) => {
  *
  * ONE implementation, called from the WineDefinition post('save') hook — i.e.
  * from the transition itself, so no write path can promote a row and forget
- * (audit M-4) — and, since 2026-08-13, from services/wineCommit for a wine that
+ * — and, since 2026-08-13, from services/wineCommit for a wine that
  * was BORN promoted. That row makes no pending→promoted transition, so the hook
  * never fires for it; its correction window has to start at the mint instead.
  * Same window, same sweep, same idempotence.
@@ -132,7 +132,7 @@ const stampPromotedScanRetention = async (wine) => {
  * scan. Owners' galleries are private; curation is the one purpose-bound
  * exception, so every such read must leave an audit row — on BOTH surfaces
  * (REST GET /api/images/:id and MCP get_pending_wine_images), through this
- * one helper so they can never diverge (audit 2026-09 M03-4). The row names
+ * one helper so they can never diverge. The row names
  * the wine and the image ids, never the bytes.
  */
 const logCurationImageRead = (req, { wineId, imageIds, privateCount, scanCount, via }) => {

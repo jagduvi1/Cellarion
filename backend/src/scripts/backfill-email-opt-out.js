@@ -1,5 +1,5 @@
 /**
- * One-time backfill (2026-09-27): record the objection of everyone who clicked
+ * One-time backfill: record the objection of everyone who clicked
  * "unsubscribe from all Cellarion email" before User.emailOptOutAt existed.
  *
  * The one-click unsubscribe used to turn off only the notification flags the
@@ -17,7 +17,7 @@
  * push of every category present, including push, which defaults to on — a
  * state nobody reaches without meaning it.
  *
- * What: emailOptOutAt = the click's time (audit) or now (--all-off), and
+ * What: emailOptOutAt = the click's time or now (--all-off), and
  * supportReply.email = false so the settings page shows it off. Never touches
  * an account that already has emailOptOutAt, one that turned a category's
  * email back on after its click (the objection was withdrawn — see

@@ -125,7 +125,7 @@ registerTool({
     else filter.status = status;
     // Cast REQUIRED: queryInquiryPage runs an aggregate, and Mongoose does not
     // cast $match values in pipelines — a hex STRING matches nothing while the
-    // sibling countDocuments (which does cast) still counts (audit M-1).
+    // sibling countDocuments (which does cast) still counts.
     if (args.wine_id) filter.wineDefinition = new mongoose.Types.ObjectId(args.wine_id);
 
     const { rows, total, pendingCount, answeredCount } = await queryInquiryPage(filter, { limit, offset });

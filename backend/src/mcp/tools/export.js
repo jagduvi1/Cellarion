@@ -52,7 +52,7 @@ registerTool({
   // NOT read-only for the client: every call MINTS a bearer download link.
   // Clients treat readOnlyHint as "no confirmation needed", which is exactly
   // what a prompt-injected agent needs to mint the link silently and pass it
-  // to an attacker through any outbound tool argument (audit 2026-09 M02-1).
+  // to an attacker through any outbound tool argument.
   // One write-budget slot per call is the right price for that.
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -106,7 +106,7 @@ registerTool({
     'Limited to once per day. For just the wine collection, prefer export_cellar.',
   scope: 'write',
   // NOT read-only for the client — see export_cellar: the full-PII export
-  // link must go through the client's confirmation step (audit 2026-09 M02-1).
+  // link must go through the client's confirmation step.
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {},
   handler: async (args, ctx) => {

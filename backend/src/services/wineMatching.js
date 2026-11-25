@@ -13,7 +13,7 @@ const WEIGHTS = { name: 0.45, producer: 0.45, appellation: 0.10 };
 
 // Label-abbreviation expansions applied to BOTH sides of the NAME comparison
 // only — never to stored strings or keys. German labels print "GG" where the
-// registry spells out "Großes Gewächs"; the prod-photo scan bench (2026-07-29)
+// registry spells out "Großes Gewächs"; the prod-photo scan bench
 // measured "Philippsbrunnen GG Riesling" vs "Riesling Philippsbrunnen Großes
 // Gewächs" under the 0.75 match floor purely on this token, on every GG wine
 // tested. Comparison-layer only, so no key or display string ever changes.

@@ -20,7 +20,7 @@ function getClient(feature) {
 }
 
 /**
- * Prompt caching (2026-09-25).
+ * Prompt caching.
  *
  * A label scan and an import lookup each resend ~1,500–2,000 tokens of fixed
  * instructions on every call — about two thirds of what a scan costs. Anthropic
@@ -91,7 +91,7 @@ const SCAN_LABEL_REQUEST = 'Identify the wine in this photo, following your inst
 // single-message layout put the rules AFTER the row, and instructions read last
 // are followed most closely; with the rules moved up into the system block, this
 // line keeps the one rule that protects the shared registry at the end.
-// Measured on 50 curated registry wines (2026-09-25), confidently WRONG
+// Measured on 50 curated registry wines, confidently WRONG
 // type/region/grape answers: single message 10, system block 7, system block +
 // this line 5 — at 65% lower cost per call once cached.
 const IMPORT_ROW_REMINDER = 'Return the JSON object exactly as your instructions specify. Give region, appellation, type and grapes only where you actually know them for THIS wine — otherwise null (and [] for grapes).';
@@ -119,7 +119,7 @@ const IMPORT_ROW_REMINDER = 'Return the JSON object exactly as your instructions
  * fill(): apply [token, value] pairs in order through put().
  *
  * History: the 2026-08-03 audit fixed suggestProfile and scanLabelBack this
- * way; the 2026-09-02 audit (D10-9) found identifyWineFromText,
+ * way; the 2026-09-02 audit found identifyWineFromText,
  * identifyWineFromQuery, suggestDrinkWindow and suggestPrice still on raw
  * .replace(token, string). Every builder now goes through fill() — and
  * callClaudeJson refuses an assembled prompt over MAX_PROMPT_CHARS as the
@@ -503,7 +503,7 @@ function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) 
  * On 429 the call is retried once after waiting out the retry-after header.
  */
 async function callClaudeJson({ client, model, maxTokens, prompt, system, validate, tools }) {
-  // Backstop (audit 2026-09-02 D10-9): every builder inserts fields literally,
+  // Backstop: every builder inserts fields literally,
   // but a superadmin-customised template or a future builder that bypasses
   // fill() must still not turn one call into a 100k-token request. Refused
   // before any request is made, so the reason is refundable. The system block
@@ -606,7 +606,7 @@ function validateWineIdentity(parsed) {
 // What the producer slot says when the import row has none. A CellarTracker
 // export without a Producer column carries "Kim Crawford Pinot Gris" as the
 // whole wine name; the client used to guess the first word and the registry
-// paid for it (2026-09-12). Inline in the slot rather than a template rule
+// paid for it. Inline in the slot rather than a template rule
 // for the same reason as the hints below: importLookupPrompt is
 // admin-editable, so the instruction must travel inside a placeholder the
 // stored prompt is guaranteed to have.
@@ -636,7 +636,7 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   // would make .replace() a silent no-op and the hint would vanish with no
   // error. For the same reason each hint carries its OWN instruction inline
   // instead of relying on a rule in the template.
-  // Bounded before they touch the prompt (audit 2026-08-21 M-1). These come
+  // Bounded before they touch the prompt. These come
   // straight from a client CSV column with no earlier length validation — the
   // wine-field caps apply at COMMIT, and this call runs at /validate. Unbounded,
   // a pathological column inflates every identify call's token count (billed to
@@ -695,7 +695,7 @@ async function identifyWineFromQuery(query) {
   try { client = getClient('text_lookup'); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const { DEFAULT_TEXT_SEARCH_PROMPT } = require('../config/aiConfig');
-  // Free text typed by the user, inserted literally (audit 2026-09-02 D10-9).
+  // Free text typed by the user, inserted literally.
   const prompt = fill(DEFAULT_TEXT_SEARCH_PROMPT, [['{{query}}', field(query, QUERY_FIELD_MAX)]]);
 
   return callClaudeJson({
@@ -728,8 +728,8 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
   const isNv = vintage === 'NV';
   const template = isNv ? aiConfig.get().maturitySuggestPromptNv : aiConfig.get().maturitySuggestPrompt;
 
-  // Registry text a user can author — sanitised and inserted literally
-  // (audit 2026-09-02 D10-9). Grapes are capped per NAME, not on the join.
+  // Registry text a user can author — sanitised and inserted literally.
+  // Grapes are capped per NAME, not on the join.
   const prompt = fill(template, [
     ['{{name}}', field(name)],
     ['{{producer}}', field(producer)],
@@ -883,7 +883,7 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   const translation = languageDirective(language);
   prompt += translation;
 
-  // Web-search rescue (pilot 2026-08-19): the retry path for would-hold rows.
+  // Web-search rescue: the retry path for would-hold rows.
   // The instruction keeps the output contract intact — searched or not, the
   // answer is the bare JSON object.
   if (allowSearch) {

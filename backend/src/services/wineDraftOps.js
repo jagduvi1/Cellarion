@@ -201,7 +201,7 @@ async function updateDraft(wine, clean, userId) {
       ? await resolveCanonicalAppellation(normalizeAppellation(clean.appellation))
       : null;
   }
-  // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
+  // Refused, not accepted-and-dropped by the model hook.
   const colourErr = colourTypeConflict(clean.type || wine.type, clean.colour);
   if (colourErr) return fail('invalid_input', colourErr);
   if (clean.type) wine.type = clean.type;
@@ -212,7 +212,7 @@ async function updateDraft(wine, clean, userId) {
   let countryDoc = null;
   if (clean.countryName !== undefined) {
     // Country is required on every registry row — it cannot be cleared, and
-    // saying so beats a silent no-op the form springs back from (audit 2026-09-12).
+    // saying so beats a silent no-op the form springs back from.
     if (!clean.countryName) return fail('invalid_input', 'Country cannot be cleared — every wine needs one.');
     countryDoc = await Country.findOne({ normalizedName: normalizeString(resolveCountryName(clean.countryName)) });
     if (!countryDoc) {
@@ -254,8 +254,7 @@ async function updateDraft(wine, clean, userId) {
     // stripped, producer prefix folded out — services/findOrCreateWine does
     // exactly this before keying a mint), so a retry add of the same wine
     // resolves to this draft instead of minting a second one, and the key the
-    // publish step regenerates matches what the registry would compute
-    // (audit 2026-09-12).
+    // publish step regenerates matches what the registry would compute.
     wine.name = canonicalizeWineName(stripTrailingVintage(wine.name), wine.producer || '') || wine.name;
     wine.normalizedKey = draftWineKey(wine.name, wine.producer, wine.createdBy, wine.appellation);
   }
@@ -358,7 +357,7 @@ async function publishDraft(wine, { userId = null, req = null, confirmCreate = f
   const identity = await checkPublishIdentity(wine);
   let producerMissing = identity.ok ? identity.producerMissing === true : false;
   // The producer string an unattended publish had to drop survives in the
-  // audit entry, as it does for a refused mint (audit 2026-09-12).
+  // audit entry, as it does for a refused mint.
   let rejectedProducer = null;
   if (!identity.ok) {
     if (!auto) return fail('invalid_identity', identity.message);
@@ -476,8 +475,8 @@ async function removeDraftRow(wine, req, action, detail = {}, { requireEmpty = f
   await deleteDraftImages(wine._id);
   try { require('./search').removeWine(wine._id); } catch { /* never indexed; best-effort */ }
   // The "no bottles" decision is repeated right before the delete: a bottle
-  // added during the cleanup above must not be left pointing at nothing
-  // (audit 2026-09-12). The predicate on draft:true guards a publish in the
+  // added during the cleanup above must not be left pointing at nothing.
+  // The predicate on draft:true guards a publish in the
   // same window the same way.
   if (requireEmpty && (await Bottle.exists({ wineDefinition: wine._id }) || await DeletedBottle.exists({ wineDefinition: wine._id }))) {
     return { ok: false, code: 'conflict', message: 'A bottle was added to this draft while it was being removed — it stays.' };
@@ -524,7 +523,7 @@ async function attachDraftBottles(wine, targetWineId, { userId, roles = [], req 
   // on the target they would be unreadable-but-retained forever.
   await deleteDraftImages(wine._id, { kind: 'label-scan' });
   // Then EVERY reference follows the bottles — the admin merge's own
-  // re-pointer (audit 2026-09-12): bottles, their photos, price-tracking
+  // re-pointer: bottles, their photos, price-tracking
   // requests and skips, wishlist items, reviews, reports, discussions, journal
   // pairings, recommendations, restock alerts, wine-list entries. A draft's
   // bottle can acquire any of these exactly like an ordinary one, and a
@@ -550,7 +549,7 @@ async function deleteDraft(wine, req = null, { action = 'wine.draft_delete' } = 
     return fail('conflict', 'This draft holds bottles — publish it, or attach the bottles to an existing wine, instead of deleting it.');
   }
   // Bottles in a "Recently deleted" (services/bottleTrash) still need their
-  // wine — and its photos — to come back (release audit 2026-10-12).
+  // wine — and its photos — to come back.
   if (await DeletedBottle.exists({ wineDefinition: wine._id })) {
     return fail('conflict', 'Bottles of this draft are in Recently deleted. Restore them, or wait until they are deleted for good, before deleting the draft.');
   }

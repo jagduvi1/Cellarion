@@ -50,7 +50,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // (pending or approved) → the vintage's official photo → the wine's
   // registry image → the owner's photo of another vintage. Same order as the
   // bottle page hero. A photo you took of YOUR bottle beats a generic registry
-  // image and must not disappear when an admin approves it (#1227); a photo
+  // image and must not disappear when an admin approves it; a photo
   // of ANOTHER vintage only stands in when the wine has no
   // image at all, so a 2016 bottle never wears the 2015 label while the wine
   // has a picture, and a card with any photo is never blank.

@@ -21,7 +21,7 @@
 }
 
 /* Outside the Layout, nothing else keeps the page clear of a phone's status
-   bar in a home-screen install (release audit 2026-10-13). */
+   bar in a home-screen install. */
 .pick-list-page {
   padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
 }
@@ -184,7 +184,7 @@
 }
 
 /* A 44 px target around the box: it is ticked standing in a cellar, phone in
-   one hand (release audit 2026-10-13). */
+   one hand. */
 .pick-list-tick {
   display: flex;
   align-items: center;
@@ -258,7 +258,7 @@
   }
 
   /* Ink on paper whatever the theme: dark mode's light text tokens printed
-     the title and rack names near-invisible (release audit 2026-10-13). */
+     the title and rack names near-invisible. */
   .pick-list-page {
     --color-text: #000;
     --color-text-secondary: #333;

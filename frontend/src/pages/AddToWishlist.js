@@ -256,7 +256,7 @@ function AddToWishlist() {
         if (!typed && fromMerged[key]) next[key] = fromMerged[key];
       }
       // A SUSPECT front producer may be REPLACED by the back label's — only
-      // while the box still holds the exact prefilled string (audit M-1).
+      // while the box still holds the exact prefilled string.
       if (suspectValue
           && next.producer === suspectValue
           && fromMerged.producer
@@ -297,7 +297,7 @@ function AddToWishlist() {
   useEffect(() => {
     const restock = location.state?.fromRestock;
     const rawWineParam = new URLSearchParams(location.search).get('wine');
-    // Only a well-formed id may be interpolated into the API path (audit 2026-09 F01-2).
+    // Only a well-formed id may be interpolated into the API path.
     const wineParam = /^[a-f0-9]{24}$/i.test(rawWineParam || '') ? rawWineParam : null;
     const wineId = restock?.wineId || wineParam;
     if (!wineId) return;
@@ -326,7 +326,7 @@ function AddToWishlist() {
   // ignored it, and it must not bloat the wishlist commit). ──
   //
   // Resolve on WHAT THE LABEL SAID — never on the matched row. Same silent
-  // substitution AddBottle carried (issue #1134), and worse here: this page
+  // substitution AddBottle carried, and worse here: this page
   // never rendered the matched wine at all, so there was nothing on screen
   // that could have shown the swap.
   const handleConfirmScan = useCallback(async () => {

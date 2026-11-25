@@ -15,7 +15,7 @@ router.use(requireAuth);
 // Server-side cache for the overview. Computing it loads the user's entire
 // bottle set. Home Assistant polls it every few minutes and is nudged after
 // every change, so the old 2-minute window almost never matched and every poll
-// recomputed everything — the #1 database load (scaling audit 2026-09-25).
+// recomputed everything — the #1 database load.
 // Now an entry stays valid while the user's data version (services/dataVersion,
 // moved by every audited bottle./cellar. change) is the one it was computed
 // at. The max age bounds what the version cannot see: registry edits, curated

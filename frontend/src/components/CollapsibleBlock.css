@@ -73,7 +73,7 @@
 }
 
 /* Folded: the title row stays, the rest is hidden — never a dialog the card
-   renders inside itself (release audit 2026-10-13: "+ Add" on a folded card
+   renders inside itself ("+ Add" on a folded card
    opened an invisible dialog). */
 .cblock--collapsed > .card > :not(:first-child):not(.modal-overlay),
 .cblock--nested.cblock--collapsed > .card > :first-child > :not(:first-child):not(.modal-overlay) {

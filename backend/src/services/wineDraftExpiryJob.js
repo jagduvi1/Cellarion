@@ -47,7 +47,7 @@ async function runWineDraftExpirySweep(now = new Date()) {
   // ── Warn: empty drafts lapsing within the next 24 h, not yet warned ──
   const soon = new Date(now.getTime() + ops.DRAFT_WARN_HOURS * 60 * 60 * 1000);
   // Drafts holding bottles are never deleted, so they are never warned — and
-  // they must not occupy the window either (audit 2026-09-12): a few hundred
+  // they must not occupy the window either: a few hundred
   // bottle-holding drafts in the 24 h band would otherwise fill SWEEP_LIMIT
   // every hour and starve the empty ones the warning exists for.
   const inWindow = await WineDefinition.find({

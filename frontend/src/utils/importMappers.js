@@ -281,7 +281,7 @@ function mapCellarionRow(row) {
     appellation: str('appellation'),
     type: mapWineType(str('type')),
     // The export writes category 'other' for a drink that is not wine: it
-    // re-imports as Other, never as an untyped wine (release audit 2026-10-28).
+    // re-imports as Other, never as an untyped wine.
     nonWineHint: str('category').toLowerCase() === 'other' || undefined,
     price: num('price'),
     currency: str('currency') || undefined,
@@ -541,7 +541,7 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   // A filled-in column that reads like a price, and not one bottle got a
   // price from it: its name was not one we know, or its values did not read
   // as numbers. Said out loud instead of importing every bottle without its
-  // price in silence (forum feedback 2026-10-12).
+  // price in silence.
   if (items.length > 0 && !items.some((it) => it.price != null)) {
     // "0" is how CellarTracker writes "no price entered" — not a price left unread.
     const filled = (v) => { const s = v == null ? '' : String(v).trim(); return s !== '' && parseLocaleNumber(s) !== 0; };

@@ -123,7 +123,7 @@ async function collectVintageEvidence(ids) {
  */
 async function sameProducerAppellationGroups({ limit = 50, offset = 0 } = {}) {
   // Quarantined non-wines are excluded, same contract as every other
-  // duplicate pool (code audit 2026-07-27, H3).
+  // duplicate pool.
   const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
     .select('name producer appellation')
     .lean();
@@ -375,8 +375,7 @@ async function nameSubsetPairs({ limit = 50, offset = 0 } = {}) {
 
   // The health job asks only for the count (limit: 0) — total is known here,
   // and everything below (the Bottle aggregate, entry building, the sort) is
-  // presentation. Computing it weekly just to slice(0, 0) was pure waste
-  // (audit 2026-08-16).
+  // presentation. Computing it weekly just to slice(0, 0) was pure waste.
   if (limit === 0) {
     return { pairs: [], total: active.length, scannedCount: wines.length, skippedBuckets };
   }

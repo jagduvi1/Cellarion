@@ -153,7 +153,7 @@ export default function AnalyticsTable({ cellarId }) {
     return [...grouped.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
   }, [catalogue]);
 
-  // Follow in-place navigation between cellars (audit F6): the component
+  // Follow in-place navigation between cellars: the component
   // stays mounted when only the route param changes, so the scope must track
   // the prop or the table keeps showing the previous cellar's bottles under
   // the new cellar's header.
@@ -304,7 +304,7 @@ export default function AnalyticsTable({ cellarId }) {
       const res = await saveView(apiFetch, {
         name: name.trim(),
         viz: grouping.on ? chartType : 'table',
-        query: widgetQuery(), // page position never belongs in a saved view (audit F4)
+        query: widgetQuery(), // page position never belongs in a saved view
       });
       const body = await res.json();
       if (!res.ok) setError(body.error || t('analytics.saveFailed', 'Could not save'));
@@ -335,7 +335,7 @@ export default function AnalyticsTable({ cellarId }) {
   };
 
   const removeOwnView = async (view) => {
-    // Audit F6: one misclick used to destroy a view irrecoverably.
+    // One misclick used to destroy a view irrecoverably.
     if (!window.confirm(t('analytics.deleteViewConfirm', 'Delete the view "{{name}}"?', { name: view.name }))) return;
     const res = await deleteView(apiFetch, view.id).catch(() => null);
     if (res && res.ok) setViews((v) => ({ ...v, own: v.own.filter((x) => x.id !== view.id) }));
@@ -352,11 +352,11 @@ export default function AnalyticsTable({ cellarId }) {
   const pinToDashboard = async () => {
     const title = pinTitle.trim().slice(0, 80);
     if (!title) return;
-    // Viz stays honest (UX-1): a grouped view looked at as a table pins as a
+    // Viz stays honest: a grouped view looked at as a table pins as a
     // table widget; nothing is coerced to bars.
     const widget = { title, viz: grouping.on ? chartType : 'table', size: 'half', query: widgetQuery() };
     try {
-      // Fresh dashboard list FIRST (audit F3): pinning onto a mount-time
+      // Fresh dashboard list FIRST: pinning onto a mount-time
       // snapshot replaced the whole widgets array and silently deleted
       // anything another tab had added since.
       const dashRes = await listDashboards(apiFetch);
@@ -367,7 +367,7 @@ export default function AnalyticsTable({ cellarId }) {
         const target = fresh.find((d) => d.id === pinDash);
         res = await updateDashboard(apiFetch, pinDash, { widgets: [...(target.widgets || []), widget] });
       } else {
-        // New board with a USER-EDITABLE name (audit F1: the hardcoded
+        // New board with a USER-EDITABLE name (the hardcoded
         // 'My cellar' 409'd forever once such a board existed — now a
         // collision is an error the user can fix by typing another name).
         const name = pinBoardName.trim().slice(0, 60) || t('analytics.defaultBoardName', 'My cellar');

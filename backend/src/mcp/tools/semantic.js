@@ -152,7 +152,7 @@ registerTool({
 
     // Vectors outlive a quarantine (the flag does not change the embedding
     // text), so the document load is where a non-wine row stays out of
-    // semantic search, as it does out of keyword search (audit 2026-10-14).
+    // semantic search, as it does out of keyword search.
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, nonWine: { $ne: true } })
       .select('name producer slug country region appellation classification labelSweetness sweetnessStyle grapes type colour communityRating')
       .populate(['country', 'region', 'grapes', { path: 'labelSweetness', select: 'name band scale regulated -_id' }, { path: 'sweetnessStyle.term', select: 'name band scale regulated' }])

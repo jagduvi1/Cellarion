@@ -25,7 +25,7 @@ const { logAudit } = require('../services/audit');
 const rateLimit = require('express-rate-limit');
 const { rateLimitKey } = require('../utils/clientIp');
 
-// Audit 2026-09 D05-4: the full account export spans ~40 collections at up to
+// The full account export spans ~40 collections at up to
 // 50k rows each and had no per-user throttle. Three an hour is more than any
 // person needs and stops a looping script; keyed on the account so a shared
 // address is not punished. Kept separate from the MCP export-link claim
@@ -340,7 +340,7 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
         profileVisibility: user.profileVisibility,
         ratingScale: user.preferences?.ratingScale || '5',
         createdAt: user.createdAt,
-        // Supporter-tier badge (2026-08-27): the paid plan is worn publicly as
+        // Supporter-tier badge: the paid plan is worn publicly as
         // a thank-you chip. Tier name only — never amounts or billing state.
         plan: user.plan || 'free',
         contribution: {
@@ -374,7 +374,7 @@ router.get('/me/export', requireAuth, accountExportLimiter, async (req, res) => 
     // source of truth shared with the deletion job — see
     // services/userDataRegistry.js).
     const exportData = await buildUserExport(userId, user);
-    // Audit 2026-09 S1-1: the cellar exports and the MCP twin already leave a
+    // The cellar exports and the MCP twin already leave a
     // row; the one export that carries ALL of a person's data did not.
     logAudit(req, 'user.account_export', { type: 'user', id: userId }, {
       via: 'web', collections: Object.keys(exportData || {}).length, truncated: !!exportData?._truncated,

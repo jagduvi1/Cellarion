@@ -19,7 +19,7 @@ import './AnalyticsDashboard.css';
 const AnalyticsTable = lazy(() => import('../components/AnalyticsTable'));
 
 /**
- * The analytics dashboards (#987) — cube.dev-style "pages you just look at",
+ * The analytics dashboards — cube.dev-style "pages you just look at",
  * SEVERAL of them since the saved-views slice: a dropdown switches between
  * named boards, each a grid of widgets running in parallel through the same
  * bounded engine as the table. A user with no saved board sees the DEFAULT
@@ -233,7 +233,7 @@ export default function AnalyticsDashboard() {
   useEffect(() => { reload(); }, [reload]);
 
   // With saved boards present, one of them is ALWAYS the active board — the
-  // client-side default only exists for zero-board users (audit F2).
+  // client-side default only exists for zero-board users.
   const active = boards?.length ? (boards.find((d) => d.id === activeId) || boards[0]) : null;
   const widgets = active ? active.widgets : DEFAULT_WIDGETS;
 

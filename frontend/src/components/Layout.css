@@ -456,8 +456,8 @@
        ADDED to the height — with height: var(--bottom-nav-height) alone the
        ~34px home-indicator inset of an installed iOS PWA was carved OUT of the
        64px, squeezing the items into ~29px: icons overflowed through the
-       border-top (the "stray line") and labels sat on the home indicator
-       (issue #861). In a Safari tab the inset is 0 and nothing changes. The
+       border-top (the "stray line") and labels sat on the home indicator.
+       In a Safari tab the inset is 0 and nothing changes. The
        content box stays exactly --bottom-nav-height, and the total matches
        every calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))
        offset elsewhere. */

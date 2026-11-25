@@ -19,7 +19,7 @@ const router = express.Router();
 const GOOGLE_ENABLED = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 // The same opt-in shape for a generic OIDC provider, so a self-hoster can point
-// Cellarion at their own identity provider instead of Google (#1203). Nothing
+// Cellarion at their own identity provider instead of Google. Nothing
 // here is Google-specific and nothing changes for a deployment that leaves
 // these unset — there is no mode flag and no either/or: both can be on.
 //
@@ -429,7 +429,7 @@ router.get('/google/callback', (req, res, next) => {
     }
     try {
       await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
-      // A sign-in ends the signup binding, as /login does (release audit 2026-10-28).
+      // A sign-in ends the signup binding, as /login does.
       if (req.cookies?.signupBinding) clearSignupBinding(res);
       logAudit(req, 'auth.oauth.success', { type: 'user', id: user._id }, { provider: 'google' });
       resolvePendingShares(user).catch(() => {});
@@ -468,7 +468,7 @@ router.get('/oidc/callback', (req, res, next) => {
     }
     try {
       await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
-      // A sign-in ends the signup binding, as /login does (release audit 2026-10-28).
+      // A sign-in ends the signup binding, as /login does.
       if (req.cookies?.signupBinding) clearSignupBinding(res);
       logAudit(req, 'auth.oauth.success', { type: 'user', id: user._id }, { provider: 'oidc' });
       resolvePendingShares(user).catch(() => {});

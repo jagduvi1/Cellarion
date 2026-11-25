@@ -27,7 +27,7 @@ const PRODUCER_MAX_LINES = 2;
 const VINTAGE_SIZE = 9;
 
 // Text is measured by the width of its letters, not their number (release
-// audit 2026-10-13: a name in capitals, or in Chinese, Japanese or Korean,
+// A name in capitals, or in Chinese, Japanese or Korean,
 // ran off the label). Rough serif widths in ems: a CJK character is a full
 // em, a capital about 0.72, anything else an average lower-case letter.
 const CJK = /[ᄀ-ᇿ⺀-鿿가-힯豈-﫿＀-￯]/;

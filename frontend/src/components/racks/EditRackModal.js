@@ -39,12 +39,12 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const alternate = isCabinet && altList.every(Boolean);
   // Two-deep decides which rows of an alternating bay are the narrow ones, so
   // on such a cabinet it stays as created; the route refuses the flip on a
-  // loaded rack (audit 2026-09-16).
+  // loaded rack.
   const anyAlternate = altList.some(Boolean);
   const storedSide = isCabinet ? cabinetShelfSideways(rack.rows, rack.typeConfig) : [];
   const [sideways, setSideways] = useState(storedSide);
   // Same for a stacked shelf with a bottle across the front: two deep decides
-  // whether the levels above hold one fewer (release audit 2026-10-14). Read
+  // whether the levels above hold one fewer. Read
   // from the dialog's own lie list, so switching a shelf back to front to
   // back frees Two deep at once (audit 2026-10-14; the route still refuses
   // the flip on a loaded rack).
@@ -55,8 +55,7 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
   const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
   const [headToTail, setHeadToTail] = useState(rack.typeConfig?.headToTail === true);
-  // Not where Two deep is locked on: it could never be ticked there
-  // (release audit 2026-10-12).
+  // Not where Two deep is locked on: it could never be ticked there.
   const showHeadToTail = !(twoDeepLocked && twoDeep);
   const setSide = (i, value) => setSideways((prev) => prev.map((v, k) => (k === i ? value : v)));
   const [saving, setSaving] = useState(false);

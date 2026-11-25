@@ -171,7 +171,7 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
   let appliedNote = '';
   // Set only by the field_correction branch when the caller defers — the
   // bulk loop fires ONE follow-through per wine after every decision has
-  // applied (audit 2026-08-16: per-proposal firing raced same-wine batches
+  // applied (per-proposal firing raced same-wine batches
   // and cost N forced AI calls for one wine).
   let followThrough = null;
   // The corrected wine, for the submitter's notification once all is recorded.
@@ -287,7 +287,7 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
           : 'grapes');
       }
 
-      // Producer SPELLING (2026-09-28). The mint-time resolver
+      // Producer SPELLING. The mint-time resolver
       // (services/producerSpelling) never sees a producer changed on an
       // existing wine, and approving one that way split 9 producers in a
       // single week ("Château Lagrézette" beside "Chateau Lagrezette"). A
@@ -478,7 +478,7 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
       await settleNonWineProposals(wine._id, true);
       searchService.indexWine(wine._id);
       // Its vectors go too, or semantic search and the similar-wines graph
-      // would keep showing the row (audit 2026-10-14).
+      // would keep showing the row.
       await WineEmbedding.deleteMany({ wineDefinition: wine._id });
       // Completes the quarantine for the somm queue: PENDING maturity rows
       // go (they are auto-seeded stubs); REVIEWED windows are curated data

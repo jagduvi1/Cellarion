@@ -49,7 +49,7 @@ const rateLimited = (message) => ({
 // module, so a case of 12 costs 12 — see mcp/mutationBudget.js.
 const { takeMutationSlot, ipKeyFor, WRITE_WINDOW_MS } = require('./mutationBudget');
 // Cross-request tool-call budget per caller (user id / anon IP) — caps read
-// amplification the per-request cap and per-IP HTTP limiter can't (M-4).
+// amplification the per-request cap and per-IP HTTP limiter can't.
 const { withinCallBudget } = require('./callBudget');
 
 const callBudgetExceeded = () =>
@@ -124,7 +124,7 @@ function budgetedHandler(tool, ctx, state) {
       recordUsage(ctx, 'tool', tool.name, true, 'rate_limited');
       return rateLimited(`Too many tool calls in one request (max ${maxCalls}). Send fewer calls per batch and paginate instead.`);
     }
-    // Cross-request caller budget — bounds read amplification (M-4).
+    // Cross-request caller budget — bounds read amplification.
     if (!withinCallBudget(ctx)) {
       recordUsage(ctx, 'tool', tool.name, true, 'rate_limited');
       return callBudgetExceeded();
@@ -142,7 +142,7 @@ function budgetedHandler(tool, ctx, state) {
       }
       // Self-budgeted tools (bulk_add, auto_arrange) charge the write budget
       // themselves — per ITEM on apply, nothing on preview — so the generic
-      // one-slot-per-call charge here would double-count (MCP-audit M7).
+      // one-slot-per-call charge here would double-count.
       if (!tool.selfBudgeted && !takeMutationSlot(String(ctx.user.id), 1, ipKeyFor(ctx))) {
         recordUsage(ctx, 'tool', tool.name, true, 'rate_limited');
         return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
@@ -368,8 +368,8 @@ async function initStatefulSession(req, res, ctx) {
     // POSTs on one session may interleave req refs — same-user cosmetic only.
     // Keep an ATTRIBUTION SNAPSHOT, never the Express request: the request
     // carries the parsed JSON body (up to 2 MB under /api/mcp) and a session
-    // lives 30 min idle / 2 h, so 200 pinned bodies would exhaust the heap
-    // (audit 2026-09 M01-1). Everything logAudit, the ledger and the budgets
+    // lives 30 min idle / 2 h, so 200 pinned bodies would exhaust the heap.
+    // Everything logAudit, the ledger and the budgets
     // read from ctx.req is in the snapshot.
     session.ctx = { user: ctx.user, scopes: ctx.scopes, req: snapshotRequest(ctx.req) };
     const server = await buildServer(session.ctx, { session, callState: session.callState });

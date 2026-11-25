@@ -53,7 +53,7 @@ export default function AddToPickListModal({ bottleIds: fixedIds = [], choices, 
         setTarget(arr.length ? String(arr[0].id) : NEW_LIST);
       })
       // Say so: silently offering "new list" invites a duplicate of one that
-      // exists (release audit 2026-10-13).
+      // exists.
       .catch(() => {
         if (!active) return;
         setLists([]);
@@ -79,7 +79,7 @@ export default function AddToPickListModal({ bottleIds: fixedIds = [], choices, 
       setResult({ id: data.list.id, name: data.list.name, added: data.added ?? 0, skipped: (data.skipped || []).length });
     } catch (err) {
       // A dropped connection throws a TypeError with the browser's own text
-      // ("Failed to fetch"), not a message for the user (audit 2026-10-14).
+      // ("Failed to fetch"), not a message for the user.
       setError(err instanceof TypeError ? t('common.networkError', 'Network error') : err.message);
       setSubmitting(false);
     }
@@ -123,7 +123,7 @@ export default function AddToPickListModal({ bottleIds: fixedIds = [], choices, 
               {choices.map((b) => {
                 const id = String(b._id);
                 // What tells two bottles apart when their slot does not:
-                // size, purchase and price (pre-release audit 2026-10-14).
+                // size, purchase and price.
                 const bought = [
                   b.bottleSize && b.bottleSize !== DEFAULT_SIZE ? bottleSizeLabel(b.bottleSize, t) : null,
                   b.purchaseDate ? new Date(b.purchaseDate).toLocaleDateString(i18n?.language, { year: 'numeric', month: 'short' }) : null,
