@@ -411,8 +411,8 @@ function cellarsByCount(bottles) {
  * `pinVintage`: a vintage that must survive `limit`. The bottle page asks
  * for every vintage of the wine capped at 20, and the bottle it is showing
  * must be among them — or a 21-vintage vertical's oldest bottle would read
- * "no bottles of this vintage" about the one in the owner's hand (audit
- * 2026-09-16). The pinned lot takes the last place when it would be cut.
+ * "no bottles of this vintage" about the one in the owner's hand. The
+ * pinned lot takes the last place when it would be cut.
  *
  * `withCellars`: each lot also names the cellars to open it in
  * (`cellar_ids`): the cellars with bottles of it left, or — all drunk — the

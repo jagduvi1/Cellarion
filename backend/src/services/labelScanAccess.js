@@ -83,28 +83,28 @@ const mayCurationReadScan = (wine, image, now = Date.now()) => {
  *
  * ONE implementation, called from the WineDefinition post('save') hook — i.e.
  * from the transition itself, so no write path can promote a row and forget
- * — and, since 2026-08-13, from services/wineCommit for a wine that
- * was BORN promoted. That row makes no pending→promoted transition, so the hook
- * never fires for it; its correction window has to start at the mint instead.
- * Same window, same sweep, same idempotence.
+ * — and from services/wineCommit for a wine that was BORN promoted. That row
+ * makes no pending→promoted transition, so the hook never fires for it; its
+ * correction window has to start at the mint instead. Same window, same
+ * sweep, same idempotence.
  *
- * The hook exists because the admin PUT and /strip-producer both set a producer and
- * save(), the hook clears pendingIdentity, and neither route called the
- * follow-through: the scan became unreadable (the wine is no longer pending)
- * AND unsweepable (retainUntil null is excluded by the expiry sweep), leaving
- * the file on disk forever with no way to read it. That is precisely the "worst
- * of both worlds" this grace window exists to end.
+ * The hook, not each route, because write paths such as the admin PUT and
+ * /strip-producer set a producer and save(), the pre-validate hook clears
+ * pendingIdentity, and they call no follow-through: an unstamped scan is then
+ * unreadable (the wine is no longer pending) AND unsweepable (retainUntil
+ * null is excluded by the expiry sweep), left on disk forever with no way to
+ * read it. That is precisely the "worst of both worlds" this window ends.
  *
  * IDEMPOTENT by construction: the update matches only `retainUntil: null`, so a
- * second call — services/pendingWineOps.runPromotionFollowThrough still makes
+ * second call — services/pendingWineOps.runPromotionFollowThrough makes
  * one, deliberately, for the curation path — can never extend a live deadline.
- * Best-effort: a missed stamp leaves the scan on its old (indefinite) footing
+ * Best-effort: a missed stamp leaves the scan with no deadline (indefinite)
  * and never deletes anything early.
  *
  * BOTH FRAMES: a wine added through the back-label rescue carries a front scan
  * AND a back scan, and they are one piece of evidence about one identity. A
- * stamp that reached only the front would leave the back frame on the old
- * indefinite footing — unreadable (curation access is gated on
+ * stamp that reached only the front would leave the back frame with no
+ * deadline — unreadable (curation access is gated on
  * pending-or-within-grace) and unsweepable (the expiry job excludes
  * retainUntil: null) — which is precisely the state this window exists to end.
  * One updateMany over both ids, not two calls, so they can never diverge.

@@ -1,8 +1,7 @@
 /**
- * Owner-question emails. A curator's question to the owners of a
- * wine (ownerInquiryOps.createOwnerInquiry) used to reach the bell and push
- * only, and none of 64 open questions had an answer. Every recipient now also
- * gets the question by email, unless:
+ * Owner-question emails. A curator's question to the owners of a wine
+ * (ownerInquiryOps.createOwnerInquiry) is rarely answered from the bell and
+ * push alone, so every recipient also gets the question by email, unless:
  *   - mail is not configured, or the address is missing or not verified;
  *   - they unsubscribed from all Cellarion email (emailOptOutAt) or turned
  *     this category off (preferences.notifications.ownerInquiry.email);
@@ -114,10 +113,10 @@ async function emailOnce({ inquiry, wineLabel, questionPath, now = new Date() })
 /**
  * One-time, idempotent: an account that unsubscribed from all email before
  * this category existed has no ownerInquiry flag stored, so the schema default
- * (on) showed it ticked in Settings, and saving any notification setting then
- * sent `email: true` and withdrew the unsubscribe (buildPreferencesUpdate).
- * Store the flag off for those accounts, as the unsubscribe itself now does —
- * the same repair scripts/backfill-email-opt-out.js made for support answers.
+ * (on) would show it ticked in Settings, and saving any notification setting
+ * would send `email: true` and withdraw the unsubscribe (buildPreferencesUpdate).
+ * Store the flag off for those accounts, as the unsubscribe itself does — the
+ * same repair scripts/backfill-email-opt-out.js makes for support answers.
  * Run at boot (server.js); later boots find nothing to do.
  *
  * @returns {Promise<number>} accounts updated

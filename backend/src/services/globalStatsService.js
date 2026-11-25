@@ -56,31 +56,25 @@ const SIGNIN_ACTIONS = ['auth.login.success', 'auth.oauth.success'];
 // therefore NOT presence.
 //
 // token.used is written once a day per API token by whatever is holding it
-// (hourly until 2026-09-26; see middleware/apiTokenAuth).
-// Production tokens are named "Home Assistant", "Homeassistant" and "Climate
-// device: Kallaren": integrations that poll around the clock and would mark
-// their owner present every single day, for ever. Measured on 2026-09-09 they
-// inflated the 7-or-more-days tier from 44 users to 63 — a 43% overstatement,
-// concentrated exactly where the most engaged people are supposed to be.
+// (see middleware/apiTokenAuth). Integrations such as a home-automation hub or
+// a climate device poll around the clock and would mark their owner present
+// every single day, for ever, inflating exactly the top tiers where the most
+// engaged people are supposed to be.
 // oauth.token_refreshed is a background token rotation and never a person.
 //
 // The token's origin ('personal' PAT vs 'oauth' connected AI) is NOT used to
-// tell machines from people, because it does not: production has personal
-// tokens named "claude" and OAuth tokens that could equally be automated.
-// The rule that survives contact with the data is simpler and explains itself
-// in one sentence — presence counts things a person DID, plus signing in.
+// tell machines from people, because it does not: a personal token can serve
+// an AI client and an OAuth token can equally be automated. The rule is
+// simpler and explains itself in one sentence — presence counts things a
+// person DID, plus signing in.
 //
-// What this costs MCP users: nothing, measured rather than assumed. Dropping
-// these two actions removed NOBODY from the page — all 255 people seen stayed
-// seen — because anyone using MCP for something real writes an audited action
-// of their own (15 of the 16 accounts with MCP writes in the window remained
-// present; the 16th is an excluded admin). Only the hourly heartbeat goes: 7
-// users leave the 2-or-more tier and 19 leave the 7-or-more one, which is the
-// machine inflation being removed, not people being hidden.
+// What this costs MCP users: nothing real. Anyone using MCP for something
+// real writes an audited action of their own; only the machine heartbeat
+// goes, which is inflation being removed, not people being hidden.
 //
-// A read-only MCP session does now leave no trace here. That is consistent
-// rather than unfair: reading leaves no trace for anybody, since browsing the
-// site is not audited either. Presence is a floor for every kind of user.
+// A read-only MCP session leaves no trace here. That is consistent rather
+// than unfair: reading leaves no trace for anybody, since browsing the site
+// is not audited either. Presence is a floor for every kind of user.
 const MACHINE_ACTIONS = ['token.used', 'oauth.token_refreshed'];
 
 // Days a user was PRESENT, whether or not they touched a bottle.
@@ -157,8 +151,8 @@ const buildPresenceWindowPipeline = ({ since, excludedIds = [], windows }) => [
  *
  * Two rules, each fixing a way a number could vanish:
  *   • every CONFIGURED tier appears, at 0 if nobody is on it — $group only
- *     emits values that exist, so `benefactor` was absent from the table
- *     entirely and "nobody chose it" read as "it doesn't exist"
+ *     emits values that exist, so an empty tier would be absent from the
+ *     table and "nobody chose it" would read as "it doesn't exist"
  *   • a plan value NOT in the config is kept and flagged, never dropped — a
  *     retired or hand-set tier is still real users
  *
@@ -611,35 +605,27 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const matureReturned = mature.reduce((s, c) => s + c.returned, 0);
   const matureChanged = mature.reduce((s, c) => s + (c.changed || 0), 0);
 
-  // History worth keeping: a LOGIN-ONLY ladder lived here until 2026-08-21 and
-  // was removed for good reasons. It counted sign-in events, and a rotating
-  // 30-day refresh cookie means an active user may not sign in for weeks — so
-  // it structurally undercounted, disagreed with the bottle ladder by design,
-  // and invited exactly the comparison the docs had to warn against.
+  // There is deliberately no LOGIN-ONLY ladder. A rotating 30-day refresh
+  // cookie means an active user may not sign in for weeks, so counting
+  // sign-in events structurally undercounts returning users and disagrees
+  // with the bottle ladder by design. The presence ladder above counts any
+  // recorded action, sign-ins included, so a long session hides nobody. It is
+  // one indexed aggregation behind the 5-minute cache, not a full scan.
   //
-  // The presence ladder above is NOT that metric returning. Measured against
-  // production on 2026-09-09, sign-in events alone found 105 returning users
-  // where presence found 130: a quarter of them were missed by counting logins.
-  // Presence counts any recorded action, sign-ins included, so a long session
-  // no longer hides anyone. It is one indexed aggregation (~240 ms over 57k
-  // rows) behind the 5-minute cache, not the full scan the old one was.
-  //
-  // Two facts that cost real time to learn, kept here because nothing in the
-  // schema hints at either: single sign-on writes its OWN audit action, so
-  // matching only 'auth.login.success' silently drops every SSO-only account;
-  // and a sign-in row is written before the request is authenticated, so its
-  // actor.userId is NULL and the account is in resource.id instead. Both are
-  // handled in buildPresencePipeline. See docs/admin-global-stats-architecture.md.
+  // Two facts kept here because nothing in the schema hints at either: single
+  // sign-on writes its OWN audit action, so matching only 'auth.login.success'
+  // silently drops every SSO-only account; and a sign-in row is written before
+  // the request is authenticated, so its actor.userId is NULL and the account
+  // is in resource.id instead. Both are handled in presenceStages, which every
+  // presence pipeline shares. See docs/admin-global-stats-architecture.md.
 
   // ── Plans / subscriptions ───────────────────────────────────────────────
   // Every CONFIGURED tier appears, including the ones nobody has chosen.
   //
   // Grouping alone only emits tiers that have at least one user, so a tier with
-  // zero supporters vanished from the table entirely — and "nobody picked
-  // benefactor" then looked identical to "benefactor does not exist". That is
-  // precisely the question worth asking after a repricing, and the page could
-  // not answer it (found 2026-08-21, benefactor absent since the tiers shipped
-  // in v1.140).
+  // zero supporters would vanish from the table entirely — and "nobody picked
+  // this tier" would look identical to "this tier does not exist". That is
+  // precisely the question worth asking after a repricing.
   //
   // Ordered by the config ladder rather than by count, because the ladder IS
   // the price order and reading it that way is the point. Any plan value found
@@ -699,12 +685,10 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     { $match: { ...bottleMatch, status: 'active', vintage: { $nin: ['NV', null, ''] } } },
     // One join per (wine, vintage), not per bottle: bottles of the same wine
     // and vintage share a profile, so they are counted together (n) and the
-    // final $group sums n. With a plain localField/foreignField join through
-    // the wineDefinition index and the vintage picked in $filter, this is
-    // 3.3 s → 1.0 s on prod data (19,851 bottles, 9,896 pairs, the same
-    // profile on every pair). The per-bottle let/$expr sub-pipeline was the
-    // slowest query in the Mongo profiler, and it grew with
-    // every bottle; this grows with distinct wine + vintage pairs instead.
+    // final $group sums n. A plain localField/foreignField join through the
+    // wineDefinition index, with the vintage picked in $filter, grows with
+    // distinct wine + vintage pairs; a per-bottle let/$expr sub-pipeline grows
+    // with every bottle and is the slower query by far.
     { $group: { _id: { wd: '$wineDefinition', v: '$vintage' }, n: { $sum: 1 } } },
     { $lookup: {
       from: 'winevintageprofiles',

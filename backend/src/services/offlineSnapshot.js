@@ -10,9 +10,9 @@
  * return (member ids, the owner's username).
  *
  * Each wine is sent ONCE in `wines`; bottles and rack slots reference it by id
- * and the client joins them back (six bottles of a wine used to mean six copies
- * of its registry record). Bottles carry exactly what the cellar list gives
- * them: the list-weight wine populate, their resolved card image, and their
+ * and the client joins them back (six bottles of a wine must not mean six
+ * copies of its registry record). Bottles carry exactly what the cellar list
+ * gives them: the list-weight wine populate, their resolved card image and
  * maturity status, plus the two years the maturity sort orders a stage by.
  */
 const crypto = require('crypto');
@@ -44,7 +44,7 @@ const TAG_MAX_AGE_MS = 30 * 60 * 1000;
  *
  * `salt` gives another document built from the same data its own tag space
  * (GET /api/inventory passes 'inventory:1'): a tag from one can then never
- * be answered 304 by the other. Without it the tag is exactly as before.
+ * be answered 304 by the other. Without it the tag is the snapshot's own.
  */
 async function snapshotTag(userId, now = Date.now(), { salt = null } = {}) {
   const shared = await Cellar.find({ 'members.user': userId, deletedAt: null }).select('user').lean();
@@ -64,9 +64,9 @@ async function snapshotTag(userId, now = Date.now(), { salt = null } = {}) {
 // The bottle cards' wine populate (config/constants WINE_POPULATE_CARDS): each
 // country, region and grape cut to what the offline screens show — the cellar
 // list, cellar page, racks and bottle page read their name (and the filters
-// their id). The full rows carried long descriptions, copied onto every wine:
-// for the largest cellar 637 kB, 41% of the whole copy (scaling audit
-// 2026-09-25, item 11). The cellar page online uses the same populate.
+// their id). The full rows carry long descriptions, which would be copied onto
+// every wine and make up a large share of a big cellar's copy. The cellar page
+// online uses the same populate.
 const SNAPSHOT_WINE_POPULATE = WINE_POPULATE_CARDS;
 
 // A handful of registry records store their image inline (a data: URI of up

@@ -26,9 +26,9 @@ function getClient(feature) {
  * instructions on every call — about two thirds of what a scan costs. Anthropic
  * caches a stable request PREFIX: marked for the cache, a repeat within the
  * cache lifetime pays 10% for that part (the first write pays 125% for a
- * 5-minute lifetime, 200% for an hour). Measured on prod 2026-09-25: 68% of
- * label scans follow another scan within 5 minutes and 85% within an hour, and
- * import rows arrive 25 per request, five at a time.
+ * 5-minute lifetime, 200% for an hour). Most label scans follow another scan
+ * within the hour, many within 5 minutes, and import rows arrive 25 per
+ * request, five at a time, so the cached prefix is usually still warm.
  *
  * ONE layout on the Anthropic provider: the fixed instructions ride as the
  * system block, the per-call part (the photo, or the import row closed by
@@ -37,7 +37,7 @@ function getClient(feature) {
  * marker — a pure cost switch that can never change what the model reads. A
  * block under the model's cache minimum (1,024 tokens on Sonnet 5, 4,096 on
  * Haiku 4.5) is simply not cached; the marker costs nothing then. An
- * OpenAI-compatible provider keeps the original single-message layout.
+ * OpenAI-compatible provider keeps the single-message layout.
  */
 function instructionsAsSystem() {
   return aiProvider.providerName() === 'anthropic';
@@ -71,10 +71,10 @@ function splitTemplateForCache(template) {
   return tail ? { head: text.slice(0, cut), tail } : null;
 }
 
-// Anthropic caches a prefix only from 1,024 tokens on (2,048 on Haiku). The
-// import rules tail is ~1,200–1,400 tokens — near the line: a trimmed template
-// silently loses caching, visible only as "Cached 0 %" in the cost panel
-// (release audit 2026-09-27, L). Say so in the log, once per template.
+// Anthropic caches a prefix only at or above the model's minimum length (see
+// Prompt caching above). The import rules tail is ~1,200–1,400 tokens — near the
+// line: a trimmed template silently loses caching, visible only as "Cached
+// 0 %" in the cost panel. Say so in the log, once per template.
 const CACHE_MIN_TAIL_CHARS = 4800; // ≈ 1,200 tokens at ~4 characters per token
 let shortTailWarnedFor = null;
 function warnIfTailTooShortToCache(tail, what) {
@@ -88,12 +88,11 @@ function warnIfTailTooShortToCache(tail, what) {
 const SCAN_LABEL_REQUEST = 'Identify the wine in this photo, following your instructions exactly.';
 
 // Closes the import row's message in the system-block layout. The
-// single-message layout put the rules AFTER the row, and instructions read last
-// are followed most closely; with the rules moved up into the system block, this
-// line keeps the one rule that protects the shared registry at the end.
-// Measured on 50 curated registry wines, confidently WRONG
-// type/region/grape answers: single message 10, system block 7, system block +
-// this line 5 — at 65% lower cost per call once cached.
+// single-message layout puts the rules AFTER the row, and instructions read
+// last are followed most closely; with the rules up in the system block, this
+// line keeps the one rule that protects the shared registry at the end. On
+// curated registry wines it gives fewer confidently WRONG type/region/grape
+// answers than either layout alone, at a fraction of the cost once cached.
 const IMPORT_ROW_REMINDER = 'Return the JSON object exactly as your instructions specify. Give region, appellation, type and grapes only where you actually know them for THIS wine — otherwise null (and [] for grapes).';
 
 /**
@@ -118,11 +117,8 @@ const IMPORT_ROW_REMINDER = 'Return the JSON object exactly as your instructions
  *
  * fill(): apply [token, value] pairs in order through put().
  *
- * History: the 2026-08-03 audit fixed suggestProfile and scanLabelBack this
- * way; the 2026-09-02 audit found identifyWineFromText,
- * identifyWineFromQuery, suggestDrinkWindow and suggestPrice still on raw
- * .replace(token, string). Every builder now goes through fill() — and
- * callClaudeJson refuses an assembled prompt over MAX_PROMPT_CHARS as the
+ * Every builder goes through fill() or put(), never .replace(token, string) —
+ * and callClaudeJson refuses an assembled prompt over MAX_PROMPT_CHARS as the
  * backstop for a customised template or a future builder that bypasses it.
  */
 const PROMPT_FIELD_MAX = 200;
@@ -196,8 +192,8 @@ async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = f
 
   // The instructions as the system block on Anthropic (see systemBlock).
   // One-hour cache lifetime: scans come in bursts, but a user can pause
-  // between bottles — on prod 85% of scans land within the hour after the
-  // previous one, 68% within five minutes.
+  // between bottles, and an hour catches clearly more of the scans that
+  // follow another one than five minutes does.
   const system = instructionsAsSystem() && labelScanPrompt ? systemBlock(labelScanPrompt, '1h') : null;
 
   const response = await client.messages.create({
@@ -226,8 +222,8 @@ async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = f
 
   // Strip any accidental markdown fences, then extract only the first
   // balanced {...} — local vision models (openai mode) often wrap the JSON
-  // in prose, which used to fail the scan AND burn a non-refundable budget
-  // unit even when the label was read correctly.
+  // in prose, and parsing the raw text would fail the scan AND burn a
+  // non-refundable budget unit even when the label was read correctly.
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
   let data;
@@ -252,15 +248,14 @@ async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = f
 
   // A NON-EMPTY STRING in at least one of the two identity fields is the bar
   // for "partial". `typeof`, not truthiness alone: a model returning
-  // `"name": 42` would otherwise pass here and blow up downstream in .trim()
-  // (the identify-text hang, audit HIGH).
+  // `"name": 42` would otherwise pass here and blow up downstream in .trim().
   const usable = (v) => typeof v === 'string' && v.trim() !== '';
   const hasName = usable(data.name);
   const hasProducer = usable(data.producer);
 
   if (!hasName && !hasProducer) {
     // NEITHER field readable — nothing to prefill and nothing to merge a back
-    // label into. Still a 422 with the historical message, allowPartial or not.
+    // label into. A 422 with the stable message clients read, allowPartial or not.
     const err = new Error('Could not identify wine from label');
     err.status = 422;
     // Debug raw logged server-side only
@@ -364,7 +359,7 @@ async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontIma
   const raw = textFromResponse(response);
 
   // Same fence-strip + first-balanced-object extraction as scanLabelFull: local
-  // vision models wrap their JSON in prose, and failing there used to burn a
+  // vision models wrap their JSON in prose, and failing there would burn a
   // non-refundable budget unit on a scan that had actually been read.
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
@@ -414,15 +409,15 @@ const mergeValue = (v) => (typeof v === 'string' && v.trim() ? v.trim() : '');
  * label naming the dominant variety are both true, and case is the only
  * difference that has to be collapsed.
  *
- * SUSPECT-PRODUCER EXCEPTION (release-audit M-1, v1.111.0): front-wins is the
- * right default because the front label is the wine's own identity statement —
- * but when the front's producer was FLAGGED as not-a-producer (a place plus
- * filler, an appellation in the box), front-wins made the rescue inert: the
- * user was told to photograph the back label "to fill the gaps", the back
- * label's real producer line lost the merge to the flagged string, and the one
- * remedy the flag offered could never apply it. With `suspectProducer`, a
- * usable back producer WINS that one field, and the displaced front string is
- * recorded in `conflicts` so nothing is silently thrown away.
+ * SUSPECT-PRODUCER EXCEPTION: front-wins is the right default because the
+ * front label is the wine's own identity statement — but when the front's
+ * producer was FLAGGED as not-a-producer (a place plus filler, an appellation
+ * in the box), front-wins would make the rescue inert: the user is told to
+ * photograph the back label "to fill the gaps", the back label's real producer
+ * line would lose the merge to the flagged string, and the one remedy the flag
+ * offers could never apply. With `suspectProducer`, a usable back producer
+ * WINS that one field, and the displaced front string is recorded in
+ * `conflicts` so nothing is silently thrown away.
  *
  * @returns {{merged: object, conflicts: Array<{field,front,back}>, filled: string[]}}
  *   `filled` names the fields the BACK label supplied — the client fills only
@@ -503,8 +498,8 @@ function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) 
  * On 429 the call is retried once after waiting out the retry-after header.
  */
 async function callClaudeJson({ client, model, maxTokens, prompt, system, validate, tools }) {
-  // Backstop: every builder inserts fields literally,
-  // but a superadmin-customised template or a future builder that bypasses
+  // Backstop: every builder inserts fields literally, but a
+  // superadmin-customised template or a future builder that bypasses
   // fill() must still not turn one call into a 100k-token request. Refused
   // before any request is made, so the reason is refundable. The system block
   // counts too — it is the same template, only split.
@@ -556,8 +551,8 @@ async function callClaudeJson({ client, model, maxTokens, prompt, system, valida
 
     // The Claude call COMPLETED and is billed. Every failure from here on is
     // NON-refundable — a completed-but-unparseable/invalid response must stay
-    // debited, exactly like ai_unknown (audit EXTRA-A: a post-completion parse
-    // failure used to return an `exception:` reason and get wrongly refunded).
+    // debited, exactly like ai_unknown, so a post-completion parse failure
+    // never returns an `exception:` reason (that one is refunded).
     raw = textFromResponse(response);
     try {
       // Strip code fences, then extract only the first balanced {...} so any
@@ -583,36 +578,36 @@ function validateWineIdentity(parsed) {
   return null;
 }
 
+// What the producer slot says when the import row has none. A CellarTracker
+// export without a Producer column carries "Kim Crawford Pinot Gris" as the
+// whole wine name, and guessing its first word mints a wrong producer into
+// the registry. Inline in the slot rather than a template rule for the same
+// reason as the hints below: importLookupPrompt is admin-editable, so the
+// instruction must travel inside a placeholder the stored prompt is
+// guaranteed to have.
+const PRODUCER_EMBEDDED_IN_NAME =
+  'not stated in the file — the wine name above is the full display name and almost certainly BEGINS with the producer; split the producer out and return the wine\'s own name without it';
+
 /**
  * Identify a wine from text data (name, producer, etc.) using Claude.
- * Used by the bottle import flow when no match is found in the library.
+ * Used by the bottle import flow (routes/import.js) when no match is found in
+ * the library.
  *
- * Non-fatal: returns null if the API key is missing, Claude can't identify
- * the wine, or any error occurs — callers should fall back to 'no_match'.
+ * Non-fatal: data is null when the API key is missing, the model can't
+ * identify the wine, or the call fails — callers fall back to 'no_match'.
  *
  * @param {Object} opts
  * @param {string} opts.name     Wine name from the import row
  * @param {string} opts.producer Producer / winery name
  * @param {string} [opts.vintage]
  * @param {string} [opts.country] Optional country hint from the import data
- * @returns {Promise<Object|null>} Extracted wine data or null
- */
-/**
- * Returns { data, debugRaw, debugReason } so callers always get full visibility.
+ * @param {string} [opts.appellation] Appellation stated in the import file (a hint)
+ * @param {string} [opts.region] Region stated in the import file (a hint)
+ * @returns {Promise<Object>} { data, debugRaw, debugReason } — full visibility:
  *   data        – parsed wine object, or null if not identified
  *   debugRaw    – raw string from the model (or error message)
  *   debugReason – short explanation when data is null
  */
-// What the producer slot says when the import row has none. A CellarTracker
-// export without a Producer column carries "Kim Crawford Pinot Gris" as the
-// whole wine name; the client used to guess the first word and the registry
-// paid for it. Inline in the slot rather than a template rule
-// for the same reason as the hints below: importLookupPrompt is
-// admin-editable, so the instruction must travel inside a placeholder the
-// stored prompt is guaranteed to have.
-const PRODUCER_EMBEDDED_IN_NAME =
-  'not stated in the file — the wine name above is the full display name and almost certainly BEGINS with the producer; split the producer out and return the wine\'s own name without it';
-
 async function identifyWineFromText({ name, producer, vintage, country, appellation, region }) {
   // A name alone is enough to ask: the model splits an embedded producer out
   // (see PRODUCER_EMBEDDED_IN_NAME). A producer alone is not a wine.
@@ -626,22 +621,22 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   // The user's own file already states the geography on most exports
   // (CellarTracker has Appellation and a Country/Region/SubRegion/Appellation
   // Locale path), and asking the model to identify a wine WITHOUT telling it
-  // what the label says was making it infer what it had been handed. Passed as
+  // what the label says makes it infer what it has been handed. Passed as
   // hints, not answers: the caller decides precedence, and file geography wins
   // there — this only stops the model guessing blind.
   //
   // ⚠️ These ride in the {{country}} slot rather than new placeholders on
   // purpose. importLookupPrompt is admin-editable and prod may hold a
   // customised copy; a {{appellation}} placeholder that a stored prompt lacks
-  // would make .replace() a silent no-op and the hint would vanish with no
-  // error. For the same reason each hint carries its OWN instruction inline
+  // would make the substitution a silent no-op and the hint would vanish with
+  // no error. For the same reason each hint carries its OWN instruction inline
   // instead of relying on a rule in the template.
-  // Bounded before they touch the prompt. These come
-  // straight from a client CSV column with no earlier length validation — the
-  // wine-field caps apply at COMMIT, and this call runs at /validate. Unbounded,
-  // a pathological column inflates every identify call's token count (billed to
-  // the user's own AI budget) and widens the prompt-injection surface for no
-  // benefit: no real appellation approaches 200 characters.
+  // Bounded before they touch the prompt. These come straight from a client
+  // CSV column with no earlier length validation — the wine-field caps apply
+  // at COMMIT, and this call runs at /validate. Unbounded, a pathological
+  // column inflates every identify call's token count (billed to the user's
+  // own AI budget) and widens the prompt-injection surface for no benefit:
+  // no real appellation approaches 200 characters.
   const hint = (v) => field(v);
   const hints = [
     country ? `Country hint: ${hint(country)}` : '',
@@ -651,9 +646,9 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   const countryHint = hints.length ? `${hints.join('\n')}\n` : '';
 
   // name/producer come straight from the user's file: sanitised and inserted
-  // literally (audit 2026-09-02 D10-9 — a `$'` producer used to re-insert the
-  // template per occurrence). The hint strings are built above from field()
-  // output; their newlines are ours.
+  // literally (see put(): a `$'` producer must not re-insert the template).
+  // The hint strings are built above from field() output; their newlines are
+  // ours.
   const pairs = [
     ['{{name}}', field(name)],
     ['{{producer}}', field(producer) || PRODUCER_EMBEDDED_IN_NAME],
@@ -796,7 +791,7 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
  * `language` (a code from utils/profileLanguage, passed by enrichmentJob while
  * SuperAdmin → AI sets one) also asks for data.localized: the description,
  * flavors and foodPairings translated. Without one — off, English or an
- * unknown code — the request is the one it always was.
+ * unknown code — no translation is asked for.
  */
 async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext, allowSearch, retryDirective, language }) {
   if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
@@ -809,13 +804,13 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   // place user input reaches a prompt whose answer is written back to the SHARED
   // registry. Collapse whitespace (a newline is what lets injected text pose as
   // a new instruction), drop control characters, and bound the length. The mint
-  // chokepoint now normalises region and grape names too, but this has to hold
-  // for rows that predate that and for any caller that bypasses it. field()
+  // chokepoint normalises region and grape names too, but this has to hold
+  // for older rows it never saw and for any caller that bypasses it. field()
   // and put() are the shared helpers at the top of this file.
 
-  // Per NAME, not on the joined string: capping the join truncated the tail of a
-  // large blend and could cut a varietal mid-word before it reached a prompt
-  // whose answer is written back to the shared registry.
+  // Per NAME, not on the joined string: capping the join would truncate the
+  // tail of a large blend and could cut a varietal mid-word before it reached
+  // a prompt whose answer is written back to the shared registry.
   const grapeList = (Array.isArray(grapes) ? grapes : [grapes])
     .map((g) => field(g))
     .filter(Boolean)
@@ -837,10 +832,10 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     prompt = put(prompt, token, value);
   }
 
-  // Curator-supplied ground truth on a held-profile release (somm request
-  // 2026-08-18): the dominant hold reason is "the model couldn't place the
-  // producer", and that is usually resolvable by a curator in one web search
-  // — these are the one or two facts that previously had nowhere to go.
+  // Curator-supplied ground truth on a held-profile release: the dominant
+  // hold reason is "the model couldn't place the producer", and that is
+  // usually resolvable by a curator in one web search — these are the one or
+  // two facts that would otherwise have nowhere to go.
   // Role-gated input (somm/admin only), but sanitised exactly like the
   // registry fields above, and appended AFTER template substitution so it
   // can never hit a {{token}}. Longer cap: facts lists need room.

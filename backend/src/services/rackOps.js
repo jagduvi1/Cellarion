@@ -1,5 +1,5 @@
 // Shared cellar/rack/placement mutations — ONE implementation for the REST
-// routes and the MCP tools (plan §7). Placement's "one bottle per slot" and
+// routes and the MCP tools. Placement's "one bottle per slot" and
 // "one slot per bottle" invariants are PROCEDURAL (no unique index on
 // slots.position), so the exact filter-then-push sequence lives here once and
 // both surfaces call it — a hand-rolled copy could create duplicate-position
@@ -41,14 +41,6 @@ async function createCellar({ name, description }, req) {
   return { cellar };
 }
 
-/**
- * Create a GRID-family rack in an access-checked cellar — the ONE
- * implementation behind the grid branch of REST POST /api/racks and the MCP
- * create_rack tool (the route delegates here; H1 of the 2026-07-17 MCP
- * audit). Modular racks stay a REST-only route path (their validation has no
- * MCP twin to drift against). typeConfig (double-height rows etc.) is
- * accepted and validated; MCP simply doesn't pass it in v1.
- */
 /** The rack group as stored: trimmed, capped, empty → null (ungrouped). */
 function normalizeRackGroup(group) {
   if (group === undefined) return undefined;
@@ -56,6 +48,14 @@ function normalizeRackGroup(group) {
   return s || null;
 }
 
+/**
+ * Create a GRID-family rack in an access-checked cellar — the ONE
+ * implementation behind the grid branch of REST POST /api/racks and the MCP
+ * create_rack tool (the route delegates here). Modular racks stay a REST-only
+ * route path (their validation has no MCP twin to drift against). typeConfig
+ * (double-height rows, cabinet shelves) is accepted and validated; MCP passes
+ * it for a cabinet only.
+ */
 async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols = 8, typeConfig, group }, req) {
   if (!name || !String(name).trim()) return { error: { status: 400, message: 'Rack name is required' } };
   if (type && !RACK_TYPES.includes(type)) {
@@ -63,8 +63,8 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
   }
   // The schema's min/max fires only at save(), after validateCabinetConfig
   // has compared the shelf list against parseInt(rows) — so a rows of 5.5
-  // used to save as a cabinet with 5.5 shelves. MCP
-  // already enforces this through zod; REST did not.
+  // would save as a cabinet with 5.5 shelves. MCP enforces this through zod
+  // too; this check is what holds it for REST.
   if ((rows != null && !isRackDim(rows)) || (cols != null && !isRackDim(cols))) {
     return { error: { status: 400, message: `rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` } };
   }
@@ -165,10 +165,9 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   try {
     await rack.save();
   } catch (err) {
-    // Unique slots.bottle index (prior-audit M4): a concurrent placement of
-    // this bottle into ANOTHER rack won the race — different documents, so
-    // only the index (not __v) can see it. The bottle is placed; nothing to
-    // put back.
+    // Unique slots.bottle index: a concurrent placement of this bottle into
+    // ANOTHER rack won the race — different documents, so only the index
+    // (not __v) can see it. The bottle is placed; nothing to put back.
     if (err.code === 11000) {
       return { error: { status: 409, message: 'This bottle was just placed in another rack — refresh and retry.', code: 'conflict' } };
     }
@@ -428,8 +427,8 @@ async function applyArrangement(rack, target, req, meta = {}) {
     if (err.name === 'VersionError') {
       return { error: { status: 409, code: 'conflict', message: 'The rack was modified at the same moment — nothing was applied.' } };
     }
-    // Unique slots.bottle index (prior-audit M4): one of these bottles was
-    // concurrently placed into another rack — nothing was applied.
+    // Unique slots.bottle index: one of these bottles was concurrently
+    // placed into another rack — nothing was applied.
     if (err.code === 11000) {
       return { error: { status: 409, code: 'conflict', message: 'A bottle in this plan was just placed in another rack — nothing was applied.' } };
     }
@@ -442,10 +441,10 @@ async function applyArrangement(rack, target, req, meta = {}) {
 const slotBottleId = (s) => String(s.bottle && s.bottle._id ? s.bottle._id : s.bottle);
 
 /**
- * Move the bottles of one rack into another rack of the same cellar (forum
- * feedback 2026-10-12: a rack rebuilt as a wine cabinet meant moving every
- * bottle across by hand, one at a time). Both racks are loaded and
- * access-checked by the caller.
+ * Move the bottles of one rack into another rack of the same cellar, so a
+ * rack rebuilt as, say, a wine cabinet does not mean moving every bottle
+ * across by hand, one at a time. Both racks are loaded and access-checked by
+ * the caller.
  *
  * Bottles keep their order: sorted by position in the source, they fill the
  * target's free positions (in range, not disabled, not taken) from the lowest

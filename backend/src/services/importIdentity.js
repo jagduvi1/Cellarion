@@ -19,22 +19,20 @@ const { WINE_TYPES } = require('./wineProfileOps');
 
 // Below this identification confidence the AI is going on inference, not
 // knowledge ("0.5 = reasonably sure" in the prompt's own scale) — exactly the
-// band that writes a producer's home region onto wines from elsewhere and splits
-// one producer across region granularities. Geography the
-// AI proposed under this floor is dropped before it can mint; the curation
-// backfill queue fills it from evidence instead.
+// band that writes a producer's home region onto wines from elsewhere and
+// splits one producer across region granularities. Geography the AI proposed
+// under this floor is dropped before it can mint; the curation backfill queue
+// fills it from evidence instead.
 //
-// ⚠️ THIS FLOOR APPLIES TO AI-DERIVED GEOGRAPHY ONLY. It used to be justified
-// by "import files carry no region/appellation columns, so this only ever
-// strips AI inference — never user data", and that stopped being true:
-// importMappers maps CellarTracker's Appellation, its
+// ⚠️ THIS FLOOR APPLIES TO AI-DERIVED GEOGRAPHY ONLY. Import files DO carry
+// geography: the frontend mappers (utils/importMappers.js,
+// importCellarTracker.js) read CellarTracker's Appellation, its
 // Country/Region/SubRegion/Appellation Locale path, SubRegion and a generic
-// appellation column, and findExactRegistryWine/scoreCandidate below have been
-// matching on item.appellation all along. So the floor WAS deleting what the
-// user typed. Measured 2026-08-21: one 231-wine import produced 86 null/null
-// registry rows, and over half of a curation day went on putting back
-// appellations the file had supplied. File geography now wins outright and is
-// never subject to this floor — see buildProposedWine.
+// appellation column, and findExactRegistryWine/scoreCandidate
+// (importMatching) match on item.appellation. Flooring those would delete
+// what the user typed and leave curators putting back appellations the file
+// had supplied. File geography wins outright and is never subject to this
+// floor — see buildProposedWine.
 const AI_GEOGRAPHY_MIN_CONFIDENCE = 0.6;
 
 /**
@@ -48,14 +46,14 @@ const AI_GEOGRAPHY_MIN_CONFIDENCE = 0.6;
  *
  * Kept as a named function (rather than inline in the /validate loop) so the
  * precedence is unit-testable — it is the rule that decides what enters the
- * shared registry, and it was previously an expression buried 500 lines in.
+ * shared registry.
  */
 function buildProposedWine(aiData, item) {
   const clean = (v) => {
     const s = typeof v === 'string' ? v.trim() : '';
     return s || null;
   };
-  // Below the floor the model is inferring, not knowing (part B below).
+  // Below the floor the model is inferring, not knowing (AI_GEOGRAPHY_MIN_CONFIDENCE).
   const lowGeoConfidence =
     !(typeof aiData.confidence === 'number' && aiData.confidence >= AI_GEOGRAPHY_MIN_CONFIDENCE);
   const fromAi = (v) => (lowGeoConfidence ? null : clean(v));
@@ -75,24 +73,24 @@ function buildProposedWine(aiData, item) {
     // A file with no producer column gets its producer from the model, and
     // the model — told a name-equals-producer estate wine is fine — sometimes
     // mirrors an unknown cuvée name back as the producer (name and producer
-    // both "Les Caractères"). That is a
-    // missing producer, not a producer: leave it empty so the row mints as a
-    // pending identity for a curator, unless the name itself is an estate.
+    // both "Les Caractères"). That is a missing producer, not a producer:
+    // leave it empty so the row mints as a pending identity for a curator,
+    // unless the name itself is an estate.
     producer: producerMirroredFromName(aiData, item) ? null : aiData.producer,
     // Country keeps the AI's value first: it is fed the file's country as a
     // hint and normalizes local-language names ("Deutschland" → "Germany"),
-    // which the raw column does not. The file is the fallback, which is new —
-    // a countryless identification used to cost the user the row entirely.
+    // which the raw column does not. The file is the fallback, so a
+    // countryless identification does not cost the user the row.
     country: clean(aiData.country) || clean(item && item.country),
     region: clean(item && item.region) || fromAi(aiData.region),
     // A file's appellation column sometimes holds the ripeness Prädikat rather
     // than a place — "Auslese" for a Mosel Riesling, say. Taken literally the
-    // wine ends up with
-    // NO appellation, which is the thin-identity condition that makes
-    // auto-enrichment decline it for good: the owner's data-entry habit
-    // silently costs them their tasting notes. So a purely-Prädikat value is not
-    // treated as geography, and the model's place name fills the field instead.
-    // pradikatOnlyValue refuses anything that might also name a place.
+    // wine ends up with NO appellation, which is the thin-identity condition
+    // that makes auto-enrichment decline it for good: the owner's data-entry
+    // habit silently costs them their tasting notes. So a purely-Prädikat
+    // value is not treated as geography, and the model's place name fills the
+    // field instead. pradikatOnlyValue refuses anything that might also name a
+    // place.
     appellation: filePradikat
       ? fromAi(aiData.appellation)
       : (clean(item && item.appellation) || fromAi(aiData.appellation)),
@@ -254,7 +252,7 @@ function producerMirroredFromName(aiData, item) {
  *   - grapes, region, appellation: NEVER gate the bypass. Grapes are
  *     inferable from the name and enrichable later; region derives from the
  *     appellation (regionForAppellation — the appellation's region
- *     deliberately outranks the file's); appellation was never required.
+ *     deliberately outranks the file's); appellation is not required at all.
  *
  * Returns an aiIdentified-shaped object (confidence null) so Pass 2 and the
  * result builder treat the row exactly like an AI-identified one — same

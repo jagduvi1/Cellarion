@@ -6,11 +6,10 @@
  * working for the people who hold it — bottles, racks, notes, personal data —
  * but leaves the registry's search, its vectors and the sommelier's maturity
  * queue: the non-wine quarantine (WineDefinition.nonWine), which the app
- * shows as the category "Other" (the type is none). The flag used to be set
- * by curators only, hours after a member had added a cider as "sparkling";
- * now the member says so up front (add form, import, MCP: category "other")
- * or moves a drink to Other from the bottle page, which is what this module
- * does.
+ * shows as the category "Other" (the type is none). A member need not wait
+ * for a curator to set the flag: they say so up front (add form, import, MCP:
+ * category "other") or move a drink to Other from the bottle page, which is
+ * what this module does.
  *
  * ONE quarantine procedure: a member's move is the same non_wine proposal the
  * sommelier files, decided by the same rule (services/proposalDirectApply:
@@ -72,11 +71,10 @@ async function markNotWineByMember({ wineId, userId, req = null, via = 'member' 
     return { ok: false, code: 'forbidden', message: 'Only a member who holds a bottle of it in a cellar they can edit can move a drink to Other.' };
   }
 
-  // The gate every member contribution to the shared registry pays (release
-  // audit 2026-10-28): a banned account may not move a row, and a move from
-  // the bottle page or MCP counts against the day's suggestion budget — a
-  // drink added as Other up front only says what the member bought, so it
-  // pays the ban check alone.
+  // The gate every member contribution to the shared registry pays: a banned
+  // account may not move a row, and a move from the bottle page or MCP counts
+  // against the day's suggestion budget — a drink added as Other up front
+  // only says what the member bought, so it pays the ban check alone.
   const gate = await checkContributionGate(userId, { budget: via !== 'add' });
   if (!gate.ok) return gate;
 

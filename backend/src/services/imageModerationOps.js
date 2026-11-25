@@ -36,10 +36,10 @@ const viaDetail = (via) => (via ? { via } : {});
 // A photo uploaded on a bottle carries no wine of its own — the bottle does.
 // Publishing it (approved + public) makes it a photo OF THE WINE: every owner
 // of that wine sees it in their gallery and can pick it as their bottle's
-// picture, and it can become the wine's registry image. Until 2026-09-27 the
-// approve and visibility routes left the wine reference empty, so a published
-// bottle photo was visible on that one bottle only, never reached the wine,
-// and approving from the queue needed a second "assign to wine" click.
+// picture, and it can become the wine's registry image. So approving or
+// publishing fills in the wine reference: without it a published bottle photo
+// would be visible on that one bottle only, never reach the wine, and
+// approving from the queue would need a second "assign to wine" click.
 // Resolves the wine through the bottle when the row has none; a photo that
 // already carries a wine (a wine-level upload) keeps it. Returns the wine id.
 async function linkWineViaBottle(image) {

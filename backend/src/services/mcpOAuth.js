@@ -1,7 +1,7 @@
-// OAuth 2.1 authorization-server helpers for the MCP connector flow (plan §2.4
-// Phase B). Pure-ish logic — PKCE, scope handling, metadata documents, and
-// token minting — kept out of the route so it is unit-testable and the route
-// stays a thin HTTP shell.
+// OAuth 2.1 authorization-server helpers for the MCP connector flow. Pure-ish
+// logic — PKCE, scope handling, metadata documents, and token minting — kept
+// out of the route so it is unit-testable and the route stays a thin HTTP
+// shell.
 //
 // Standards: OAuth 2.1 + RFC 8414 (AS metadata) + RFC 9728 (protected-resource
 // metadata) + RFC 7591 (DCR) + RFC 7636 (PKCE) + RFC 8707 (resource indicator).
@@ -209,15 +209,15 @@ function tokenResponse(rawAccess, rawRefresh, scopes) {
  * connections minted through the consent flow (`oauthClientId` set), NOT the
  * user's own personal API tokens (HA integration, climate devices), which
  * carry a null `oauthClientId` and keep their deliberate PAT semantics
- * (survive password change — decided on the HA-tokens PR).
+ * (they survive a password change).
  *
- * Called when a user changes or resets their password (security report
- * 2026-08-27, second analysis): a phished OAuth connection is a third-party
- * grant, and the natural "secure my account" reflex must end it — the same
- * trust boundary already applied to login sessions and SSE streams two lines
- * away in the auth handlers. Soft revoke (`revokedAt`) so the connection
- * still shows as revoked in the Settings list; the MCP auth middleware
- * filters `revokedAt: null`, so access dies on the next request.
+ * Called when a user changes or resets their password (routes/auth.js): a
+ * phished OAuth connection is a third-party grant, and the natural "secure my
+ * account" reflex must end it — the same trust boundary already applied to
+ * login sessions and SSE streams right beside it in the auth handlers. Soft
+ * revoke (`revokedAt`) so the connection still shows as revoked in the
+ * Settings list; the MCP auth middleware filters `revokedAt: null`, so access
+ * dies on the next request.
  *
  * Returns the number of connections revoked (0 when the user had none).
  */

@@ -2,13 +2,11 @@
  * Which curator corrections may apply themselves, and which still need an
  * admin.
  *
- * WHY. Every identity correction used to wait for an admin click. Measured over
- * one full curation day: 16 proposals filed, ONE needed the gate. The other
- * fifteen were lookups ("Barolo by Cà di Bruno is in Piedmont") that spent the
- * scarcest resource in the loop — the admin's attention — and, worse,
- * serialised the curator behind it. They finished a block and idled waiting for
- * a review round trip while 231 new wines arrived from a single import the same
- * morning. The gate was not wrong; it was priced wrong.
+ * WHY. Most identity corrections are lookups ("Barolo by Cà di Bruno is in
+ * Piedmont"). Sending each past an admin spends the scarcest resource in the
+ * loop — the admin's attention — and, worse, serialises the curator behind a
+ * review round trip while new wines keep arriving. The gate is not wrong; it
+ * is priced wrong for filling a blank.
  *
  * THE LINE IS REVERSIBILITY, NOT TRUST. A proposal applies itself only when it
  * FILLS A BLANK on a field that can be edited back:
@@ -18,8 +16,8 @@
  * Everything else keeps the admin gate, for reasons that are specific rather
  * than cautious:
  *   - producer / name  drive normalizedKey and the public URL, and are the
- *                      class with measured failures (5 curator assertions
- *                      overturned by web verification, 2026-08-10)
+ *                      class where a curator's assertion is most often
+ *                      overturned by web verification
  *   - merge            performWineMerge ends in source.deleteOne() — the
  *                      absorbed record is destroyed, not tombstoned, so an
  *                      unmerge means rebuilding it by hand
@@ -27,36 +25,29 @@
  *   - OVERWRITES       replacing a value someone already curated is a
  *                      different act from filling a blank
  *
- * THE NAME CHECK is the part that earns the loosened gate. The single proposal
- * the human gate caught that day was a wine named "Rosso Veronese" receiving
- * appellation "Veneto IGT" — a different denomination from the one its own name
- * states. That is mechanisable, and it generalises: if a wine's NAME contains a
- * curated appellation, a proposal naming a DIFFERENT one is a claim about the
- * label contradicting the record, which is exactly the judgement an admin
- * should keep.
+ * THE NAME CHECK is the part that earns the loosened gate. A wine named
+ * "Rosso Veronese" receiving appellation "Veneto IGT" gets a different
+ * denomination from the one its own name states. That is mechanisable, and it
+ * generalises: if a wine's NAME contains a curated appellation, a proposal
+ * naming a DIFFERENT one is a claim about the label contradicting the record,
+ * which is exactly the judgement an admin should keep.
  *
- * Crucially the check ROUTES, it does not REFUSE. Same day, the same rule fires
- * on "Prosecco" by Two Pairs → King Valley — and there the curator was RIGHT: a
- * King Valley Glera is a real category and stamping the Italian DOC on it would
- * have been the error. A rule that blocked the mismatch would have blocked the
- * most valuable correction of the day. So a mismatch means "an admin reads
- * this", never "this is wrong".
+ * Crucially the check ROUTES, it does not REFUSE. The same rule fires on
+ * "Prosecco" by Two Pairs → King Valley — and there the curator is RIGHT: a
+ * King Valley Glera is a real category and stamping the Italian DOC on it
+ * would be the error. A rule that blocked the mismatch would block exactly
+ * such a correction. So a mismatch means "an admin reads this", never "this
+ * is wrong".
  *
- * Replayed over that day's 16: eleven apply themselves, and all three needing
- * judgement (Prosecco, Rosso Veronese, and the Monatio class — a name carrying
- * the generic designation "Vino Rosso", whose whole legal meaning is the
- * ABSENCE of a geographic indication) route to review.
- *
- * NON-WINE applies on filing too, by the same reversibility line.
- * The quarantine is a flag: the row leaves registry search and the maturity
+ * NON-WINE applies on filing too, by the same reversibility line. The
+ * quarantine is a flag: the row leaves registry search and the maturity
  * queue, every owner's bottles keep working, and an admin restores it in one
  * click (Admin → Wines → Proposals → Decided), which re-seeds the queue rows
- * the quarantine removed. What the gate cost was not: beers and ciders sat in
- * public search for hours after the curator had already named them, waiting
- * on an admin to agree with the obvious. One exception keeps the
- * gate — a row several members hold. A beer is rarely in four cellars; a real
- * wine with an odd name often is, and hiding it from all of them is an admin's
- * call.
+ * the quarantine removed. Behind the gate, beers and ciders would sit in
+ * public search for hours after the curator named them, waiting on an admin
+ * to agree with the obvious. One exception keeps the gate — a row several
+ * members hold. A beer is rarely in four cellars; a real wine with an odd
+ * name often is, and hiding it from all of them is an admin's call.
  */
 const Appellation = require('../models/Appellation');
 const Bottle = require('../models/Bottle');
@@ -69,8 +60,8 @@ const DIRECT_FIELDS = ['appellation', 'region', 'classification'];
 // A non-wine flag applies on filing while at most this many members hold a
 // bottle of the row (any status — a drunk bottle is still in their history).
 // A member = the owner or a member of a cellar with a bottle of it: a
-// bottle's `user` is the cellar OWNER, so counting that made ten members of
-// one shared cellar count as one.
+// bottle's `user` is the cellar OWNER, so counting that would make ten
+// members of one shared cellar count as one.
 const NON_WINE_DIRECT_MAX_OWNERS = 3;
 
 async function countHoldingMembers(wineId) {
@@ -109,21 +100,19 @@ function idOf(v) {
  * "Chianti Classico" beats "Chianti" and the check compares like with like.
  * Returns the Appellation doc, or null when the name claims no place.
  *
- * COUNTRY-SCOPED. Without this, a name-derived appellation from
- * the wrong country reads as a place claim. Found live while dry-running a
- * backfill: Nockie's "Palette Pinot Noir" is a NEW ZEALAND wine and "Palette
- * Rose" a SOUTH AFRICAN one, and Palette is an AOC in Provence. Same producer,
- * two hemispheres, one French name — "Palette" there is a range name, not a
- * place, and the backfill would have written Provence onto both.
+ * COUNTRY-SCOPED. Without this, a name-derived appellation from the wrong
+ * country reads as a place claim: Nockie's "Palette Pinot Noir" is a NEW
+ * ZEALAND wine and "Palette Rose" a SOUTH AFRICAN one, and Palette is an AOC
+ * in Provence. Same producer, two hemispheres, one French name — "Palette"
+ * there is a range name, not a place, and a backfill would write Provence
+ * onto both.
  *
- * The cost of missing it was not hypothetical in the other direction either:
- * a curator correcting that Pinot Noir to Marlborough would have been routed
- * for review because the name "disagreed", making them wait on a correction
- * that should apply instantly.
+ * It costs in the other direction too: a curator correcting that Pinot Noir
+ * to Marlborough would be routed for review because the name "disagreed",
+ * waiting on a correction that should apply instantly.
  *
  * A wine with no country cannot be checked, so the match stands — that is the
- * conservative reading (route rather than auto-apply), matching the old
- * behaviour exactly.
+ * conservative reading (route rather than auto-apply).
  */
 async function appellationImpliedByName(name, countryId) {
   const tokens = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, MAX_NAME_TOKENS);

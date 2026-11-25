@@ -126,7 +126,7 @@ async function discardOriginal(image) {
 }
 
 // Background removals in progress — graceful shutdown (services/shutdown)
-// lets them finish, so a deploy no longer strands a photo in 'processing'
+// lets them finish, so a deploy does not strand a photo in 'processing'
 // until the hourly cleanup resets it for a manual retry.
 const inFlight = new Set();
 
@@ -220,12 +220,12 @@ async function runProcessImage(imageId) {
     // 'uploaded' image races it. Re-read the flag and the status (this job's
     // doc snapshot predates the approval) BEFORE writing the settled status, so
     // an approval that landed mid-run is kept rather than overwritten with
-    // 'processed' (release audit 2026-09-27, L); then upgrade the WINE's
-    // display image from the original to the clean processed version —
-    // previously an early approval pinned originalUrl on the wine forever.
+    // 'processed'; then upgrade the WINE's display image from the original to
+    // the clean processed version, so an early approval never leaves the wine
+    // pointing at the original.
     const official = await BottleImage.findById(imageId).select('assignedToWine wineDefinition status');
 
-    // Update document. The processed (cropped) image is now the version we keep
+    // Update document. The processed (cropped) image is the version we keep
     // and export, so the dedup hash is computed from it (overriding the
     // original-bytes hash stamped at upload) — keeping it consistent with what a
     // cellar export carries and re-imports.
@@ -243,14 +243,14 @@ async function runProcessImage(imageId) {
       require('./search').indexWine(official.wineDefinition);
     }
 
-    // The processed file is now the only copy we keep — the raw frame goes.
+    // The processed file is the only copy we keep — the raw frame goes.
     // AFTER the wine-image upgrade above, so WineDefinition.image never points
     // at a file that has just been deleted, even for a moment.
     await discardOriginal(image);
 
     // Render the card thumbnail now, so the first cellar view after an upload
     // reads a file instead of queueing a render. Best-effort: a miss here is
-    // rendered on first request as before.
+    // rendered on first request instead.
     await warmThumbFor(image.processedUrl);
 
     // A server that does not review photos publishes it now it is ready.
@@ -273,8 +273,7 @@ async function runProcessImage(imageId) {
   }
 }
 
-// reprocessAllImages (admin "re-run rembg over every image") used to live here.
-// It went with the retained originals: a processed image no longer has a
+// There is no "re-run rembg over every image": a processed image has no
 // source frame to re-run, by design (see discardOriginal). An image whose rembg
 // run FAILED keeps its original and is re-run via POST /api/images/:id/retry.
 
@@ -306,8 +305,8 @@ async function cleanupOrphanedImages() {
     if (!fs.existsSync(ORIGINALS_DIR)) return;
 
     // originalUrl is null for every processed image (discardOriginal) and for
-    // rejected ones — path.basename(null) used to throw here, which silently
-    // disabled the orphan sweep forever once any image had been moderated.
+    // rejected ones, so the query skips nulls: path.basename(null) throws, and
+    // would silently disable the orphan sweep once any image was moderated.
     // A file whose unlink failed in discardOriginal lands here too: nothing
     // references it any more, so it is an orphan.
     const files = await fs.promises.readdir(ORIGINALS_DIR);
