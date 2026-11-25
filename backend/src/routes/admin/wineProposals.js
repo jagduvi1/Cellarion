@@ -42,7 +42,7 @@ const { otherProducerSpellings, displaySpelling } = require('../../services/prod
 const { normalizeString, resolveGrapeName } = require('../../utils/normalize');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
-const { grapeLabel, identitySnapshot } = require('../../utils/proposalSnapshot');
+const { grapeLabel, styleLabel, identitySnapshot } = require('../../utils/proposalSnapshot');
 // What approving or rejecting one proposal does lives in the service. This
 // file parses the requests, lists the queue with its live diff, and runs the
 // bulk loops over the same two functions.
@@ -100,12 +100,14 @@ router.get('/', async (req, res) => {
       { path: 'proposer', select: 'username' },
       {
         path: 'wineDefinition',
-        select: 'name producer appellation classification type colour nonWine country region grapes',
+        select: 'name producer appellation classification type colour nonWine country region grapes sweetnessStyle',
         populate: [
           { path: 'country', select: 'name' },
           { path: 'region', select: 'name' },
           // For the grapes diff row's CURRENT side.
           { path: 'grapes', select: 'name' },
+          // And the sweetness style row's.
+          { path: 'sweetnessStyle.term', select: 'name' },
         ],
       },
       { path: 'mergeTargetId', select: 'name producer appellation type' },
@@ -169,6 +171,15 @@ router.get('/', async (req, res) => {
           // Only worth saying while it can still be acted on.
           const unknown = p.status === 'pending' ? p.proposedFields.grapes.filter(isUnknownGrape) : [];
           if (unknown.length) diff.grapes.unknown = unknown;
+        }
+        // The sweetness style reads "term (source)" on both sides; the page
+        // that names the proposed term rides along as a link to open.
+        if (p.proposedFields.sweetnessStyle && p.proposedFields.sweetnessStyle.term) {
+          diff.sweetnessStyle = {
+            current: live ? live.sweetnessStyle : null,
+            proposed: styleLabel(p.proposedFields.sweetnessStyle),
+            url: p.proposedFields.sweetnessStyle.url || null,
+          };
         }
         if (diff.producer && otherSpellingsById.has(String(p._id))) {
           diff.producer.otherSpellings = otherSpellingsById.get(String(p._id));

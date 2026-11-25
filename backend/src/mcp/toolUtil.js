@@ -227,6 +227,18 @@ function pageParams(args, defLimit, maxLimit) {
   return { limit, offset };
 }
 
+// A correction proposal's fields as the tools' arguments spell them. The
+// proposal stores the sweetness style as sweetnessStyle { term, source, url };
+// the tools take and answer sweetness_style { term, source, source_url }, so
+// what one tool reports can be sent to another as it stands.
+const proposalFieldName = (f) => (f === 'sweetnessStyle' ? 'sweetness_style' : f);
+function proposalFieldsOut(pf) {
+  const plain = pf && typeof pf.toObject === 'function' ? pf.toObject() : pf;
+  if (!plain || !plain.sweetnessStyle) return plain || null;
+  const { sweetnessStyle: s, ...rest } = plain;
+  return { ...rest, sweetness_style: { term: s.term, source: s.source, source_url: s.url } };
+}
+
 // What belongs in the three registry fields every add/correct tool takes —
 // one text, so no tool schema drifts from the rule.
 const FIELD_DESCRIPTIONS = {
@@ -234,6 +246,7 @@ const FIELD_DESCRIPTIONS = {
   appellation: 'The appellation as its register names it, WITHOUT the regulatory mark: "Barolo" not "Barolo DOCG", "Pauillac" not "Pauillac AOC". Premier/Grand Cru stays only where it is part of the legal name ("Chablis Premier Cru", "Saint-Émilion Grand Cru"). Never a quality tier, and never a production method ("Méthode Traditionnelle", "Metodo Classico", "Méthode Cap Classique"): the appellation is the origin, null when the label names none.',
   classification: 'A quality tier granted ON TOP of the appellation, named as the registry\'s classification list has it (list_classifications): Riserva, Gran Reserva, Grand Cru Classé, Cru Bourgeois, Premier Cru in Champagne, a German Prädikat (Kabinett, Spätlese), VDP Grosse Lage … Several tiers comma-separated ("Spätlese, VDP Grosse Lage"). NEVER the regulatory mark (DOCG, DOC, AOC, IGT, AVA) — that follows from the appellation and is dropped on write; a word the list lacks is refused with the known tiers.',
   labelSweetness: 'The sweetness the LABEL states, as printed — trocken, halbtrocken, feinherb, Brut Nature, Extra Brut, Brut, Extra Dry, amabile, meio seco … — named as list_sweetness_terms has it (a listed spelling is accepted). ONE term. The server knows the scale from the wine\'s type: "trocken" on a Sekt is the sec band, on a still wine the dry band. The printed word only: never derived from a Kabinett/Spätlese tier, never the tasting profile\'s dry/off-dry/sweet estimate, and no term when the label states none. Fortified wines carry none.',
+  sweetnessStyle: 'The sweetness term the wine is KNOWN by when its LABEL prints none (feinherb, fruchtsüß, edelsüß …), as { term, source, source_url }: `term` as list_sweetness_terms has it; `source` "producer" (the producer\'s own wording) or "trade" (a merchant, a critic, a wine database); `source_url` the page that names this term for this wine (evidence_url is used when it is left out; one of the two is required). A term with a legal definition (regulated: true: trocken, halbtrocken, Brut …) only from the producer. Never a taste impression, never worked out from a Kabinett/Spätlese tier or the alcohol, and never a word the label itself prints. Descriptive: no part of the wine\'s identity.',
 };
 
 module.exports = {
@@ -243,6 +256,8 @@ module.exports = {
   sweetnessStyleFields,
   wineDisplayName,
   FIELD_DESCRIPTIONS,
+  proposalFieldName,
+  proposalFieldsOut,
   ok,
   fail,
   objectId,

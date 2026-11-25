@@ -52,6 +52,20 @@ const proposedFieldsSchema = new mongoose.Schema({
   // a name. A proposed list REPLACES the wine's list; `default: undefined`
   // keeps "not proposed" distinct from "proposed empty".
   grapes:         { type: [{ type: String, trim: true, maxlength: 60 }], default: undefined },
+  // The sweetness style: the term the wine is KNOWN by when its label prints
+  // none (services/proposalFields STYLE_FIELD). The term travels as its NAME,
+  // like a grape, and resolves on the wine's scale at approval; `source` is
+  // who names it and `url` the page that does, already in the form the wine
+  // stores (utils/sweetnessStyle). One object, so an amendment replaces all
+  // three together; `default: undefined` keeps "not proposed" off the row.
+  sweetnessStyle: {
+    type: new mongoose.Schema({
+      term:   { type: String, trim: true, maxlength: 60, required: true },
+      source: { type: String, enum: ['producer', 'trade'], required: true },
+      url:    { type: String, trim: true, maxlength: 500, required: true },
+    }, { _id: false }),
+    default: undefined,
+  },
 }, { _id: false });
 
 const wineCorrectionProposalSchema = new mongoose.Schema({

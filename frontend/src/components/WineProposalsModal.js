@@ -32,6 +32,9 @@ const FIELD_KEYS = {
   // The colour of a sparkling/dessert/fortified wine.
   colour: 'admin.wines.proposals.fields.colour',
   grapes: 'admin.wines.proposals.fields.grapes',
+  // The term a wine is known by when its label prints none: "term (source)"
+  // on both sides, with the page that names the proposed term as a link.
+  sweetnessStyle: 'admin.wines.proposals.fields.sweetnessStyle',
 };
 
 const wineLabel = (w) => (w ? [w.producer, w.name].filter(Boolean).join(' — ') : null);
@@ -534,6 +537,13 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                   <span style={{ textDecoration: 'line-through', ...mutedStyle }}>{d.current || '—'}</span>
                   <span aria-hidden="true">→</span>
                   <strong>{d.proposed}</strong>
+                  {/* A sweetness style names its page: the reviewer opens it
+                      to see that it uses the term for this wine. */}
+                  {d.url && (
+                    <a href={d.url} target="_blank" rel="noopener noreferrer nofollow" style={{ fontSize: '0.78rem' }}>
+                      {t('admin.wines.proposals.styleSource', 'the page that names it')}
+                    </a>
+                  )}
                   {/* Drift: the wine changed since the somm looked at it — the
                       snapshot is what they judged, so flag the difference. */}
                   {p.currentSnapshot && p.currentSnapshot[field] !== d.current && (

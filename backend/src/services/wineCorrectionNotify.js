@@ -28,6 +28,7 @@ const { createNotification } = require('./notifications');
 const FIELD_WORDS = {
   producer: 'producer', name: 'wine name', appellation: 'appellation', region: 'region',
   country: 'country', classification: 'classification', type: 'type', grapes: 'grapes',
+  sweetnessStyle: 'sweetness style',
 };
 
 const plain = (v) => (v && typeof v.toObject === 'function' ? v.toObject() : (v || {}));

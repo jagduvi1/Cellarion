@@ -162,3 +162,81 @@ describe('idempotency', () => {
     expect(tool().description).toMatch(/read back/);
   });
 });
+
+describe('the sweetness style', () => {
+  const STYLE = { term: 'feinherb', source: 'trade', source_url: 'https://merchant.example/kabinett' };
+  const wine = { _id: WINE, producer: 'Weingut Beispiel', name: 'Riesling Kabinett' };
+
+  test('the schema takes a term, who names it and an optional link — nothing else as a source', () => {
+    const { sweetness_style: style } = tool().inputSchema.fields.shape;
+    expect(style.safeParse(STYLE).success).toBe(true);
+    expect(style.safeParse({ term: 'feinherb', source: 'producer' }).success).toBe(true);
+    expect(style.safeParse({ term: 'feinherb', source: 'critic', source_url: STYLE.source_url }).success).toBe(false);
+    expect(style.safeParse({ source: 'trade', source_url: STYLE.source_url }).success).toBe(false);
+    expect(style.safeParse({ term: 'x'.repeat(61), source: 'trade' }).success).toBe(false);
+  });
+
+  test('it reaches the service as sweetnessStyle { term, source, url }, with evidence_url beside it for the fallback', async () => {
+    ops.createFieldCorrection.mockResolvedValue({
+      ok: true, amended: false, wine,
+      proposal: { _id: 'p1', proposedFields: { sweetnessStyle: { term: 'feinherb', source: 'trade', url: STYLE.source_url } } },
+    });
+    await tool().handler({ wine_id: WINE, fields: { sweetness_style: STYLE }, reason: 'The merchant calls it feinherb.', evidence_url: 'https://other.example/a' }, CTX);
+    expect(ops.createFieldCorrection).toHaveBeenCalledWith(ME, {
+      wineId: WINE,
+      fields: { sweetnessStyle: { term: 'feinherb', source: 'trade', url: STYLE.source_url } },
+      reason: 'The merchant calls it feinherb.',
+      evidenceUrl: 'https://other.example/a',
+    }, { via: 'mcp', req: CTX.req });
+  });
+
+  test('without source_url the style goes on with no link of its own, for the service to take evidence_url', async () => {
+    ops.createFieldCorrection.mockResolvedValue({
+      ok: true, amended: false, wine,
+      proposal: { _id: 'p1', proposedFields: { sweetnessStyle: { term: 'feinherb', source: 'trade', url: 'https://other.example/a' } } },
+    });
+    await tool().handler({ wine_id: WINE, fields: { sweetness_style: { term: 'feinherb', source: 'trade' } }, reason: 'The merchant calls it feinherb.', evidence_url: 'https://other.example/a' }, CTX);
+    const sent = ops.createFieldCorrection.mock.calls[0][1];
+    expect(sent.fields).toEqual({ sweetnessStyle: { term: 'feinherb', source: 'trade', url: undefined } });
+    expect(sent.evidenceUrl).toBe('https://other.example/a');
+  });
+
+  test('a style merged into the caller\'s own waiting suggestion is named as the tool takes it', async () => {
+    ops.createFieldCorrection.mockResolvedValue({
+      ok: true, amended: true, amendedFields: ['sweetnessStyle'], wine,
+      proposal: { _id: 'p1', amendments: [{}], proposedFields: { grapes: ['Riesling'], sweetnessStyle: { term: 'feinherb', source: 'trade', url: STYLE.source_url } } },
+    });
+    const body = parse(await tool().handler({ wine_id: WINE, fields: { sweetness_style: STYLE }, reason: 'The merchant calls it feinherb.' }, CTX));
+    expect(body.summary).toMatch(/was amended with sweetness_style — it now covers grapes, sweetness_style/);
+    expect(JSON.stringify(body)).not.toMatch(/sweetnessStyle/);
+  });
+
+  test('a style that waits for review is reported under the tool\'s own field name', async () => {
+    ops.createFieldCorrection.mockResolvedValue({
+      ok: true, amended: false, wine,
+      proposal: { _id: 'p1', proposedFields: { appellation: 'Mosel', sweetnessStyle: { term: 'feinherb', source: 'trade', url: STYLE.source_url } } },
+    });
+    const body = parse(await tool().handler({ wine_id: WINE, fields: { appellation: 'Mosel', sweetness_style: STYLE }, reason: 'The merchant calls it feinherb.' }, CTX));
+    expect(body.data).toMatchObject({ status: 'pending', fields: ['appellation', 'sweetness_style'] });
+  });
+
+  test('a style that applied on filing says so, and not that the server skips review', async () => {
+    ops.createFieldCorrection.mockResolvedValue({
+      ok: true, amended: false, applied: true, appliedBecause: 'sweetness_style', wine,
+      proposal: { _id: 'p1', proposedFields: { sweetnessStyle: { term: 'feinherb', source: 'trade', url: STYLE.source_url } } },
+    });
+    const body = parse(await tool().handler({ wine_id: WINE, fields: { sweetness_style: STYLE }, reason: 'The merchant calls it feinherb.' }, CTX));
+    expect(body.summary).toBe('Applied to Weingut Beispiel — Riesling Kabinett: sweetness_style feinherb (named by the trade)');
+    expect(body.data).toMatchObject({ status: 'approved', fields: ['sweetness_style'] });
+    expect(body.data.note).toMatch(/needs no review/);
+    expect(body.data.note).not.toMatch(/turned review of contributions off/);
+  });
+
+  test('the description says when a style applies at once and when it is reviewed', () => {
+    expect(tool().description).toMatch(/sweetness_style/);
+    expect(tool().description).toMatch(/APPLIES AT ONCE/);
+    expect(tool().description).toMatch(/reviewed like the rest/);
+    expect(tool().description).toMatch(/a term with a legal definition/);
+    expect(tool().description).toMatch(/is merged into it/);
+  });
+});

@@ -29,6 +29,22 @@ const TEXT_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'cl
  * variety list, and every name must exist in the taxonomy.
  */
 const EXTRA_FIELDS = ['type', 'colour', 'grapes'];
+/**
+ * The sweetness style: the term a wine is KNOWN by when its label prints
+ * none, as { term, source, url } — the word, who names it ('producer' |
+ * 'trade') and the page that does. One field with three parts, so an
+ * amendment never leaves a term beside another filing's link. Never part of
+ * the wine's identity (models/WineDefinition sweetnessStyle).
+ */
+const STYLE_FIELD = 'sweetnessStyle';
+const STYLE_TERM_MAX = 60;
+/**
+ * Every field a field correction may hold: the paths of the proposal's
+ * proposedFields (models/WineCorrectionProposal; a test keeps the two equal).
+ * A filing that applies itself is claimed only while it holds none but the
+ * ones it was judged on (services/wineProposalDecisionOps onlyFields).
+ */
+const PROPOSABLE_FIELDS = [...TEXT_FIELDS, ...EXTRA_FIELDS, STYLE_FIELD];
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const FIELD_MAX = 200;
 const GRAPE_NAME_MAX = 60;
@@ -116,19 +132,24 @@ async function resolveProposedGrapes(names, declaredNew, { grapesMax }) {
  *   grapesMax    how many varieties this door allows in a list
  *   declaredNew  the varieties the caller says the taxonomy lacks (the member
  *                path's `newGrapes`); leave undefined where a door has none
+ *   styleUrl     the filing's evidence link: the page a proposed sweetness
+ *                style names when it carries no link of its own
  *
  * Returns { ok: true, proposedFields, classificationTier, newGrapeNames }.
  * proposedFields holds the canonical value of each field that was sent;
  * classificationTier is the cleaned classification as sent, for
- * settleClassificationByCountry once the wine is loaded. A refusal is one of:
+ * settleClassificationByCountry once the wine is loaded. A sweetness style is
+ * read for its shape only: settleSweetnessStyle holds it against the wine. A
+ * refusal is one of:
  *   'field_too_long' { field }        'regulatory_mark' { value }
  *   'unknown_tier' { message }        'bad_type'   'bad_colour'
  *   'grapes_list'   'grape_name'      'no_fields'
+ *   'style_shape'   'style_source'    'style_url_required'   'style_url'
  *   and what resolveProposedGrapes refuses.
  * Callers: fileFieldCorrection (services/wineProposalOps) and
  * propose_wine_correction (mcp/tools/somm/corrections.js).
  */
-async function readProposedFields(src, { grapesMax, declaredNew } = {}) {
+async function readProposedFields(src, { grapesMax, declaredNew, styleUrl } = {}) {
   const proposedFields = {};
   let classificationTier = null;
   let newGrapeNames = [];
@@ -176,8 +197,111 @@ async function readProposedFields(src, { grapesMax, declaredNew } = {}) {
     proposedFields.grapes = resolved.names;
     newGrapeNames = resolved.newNames;
   }
+  if (src[STYLE_FIELD] !== undefined && src[STYLE_FIELD] !== null) {
+    const style = readProposedStyle(src[STYLE_FIELD], styleUrl);
+    if (!style.ok) return style;
+    proposedFields[STYLE_FIELD] = style.value;
+  }
   if (Object.keys(proposedFields).length === 0) return refused('no_fields');
   return { ok: true, proposedFields, classificationTier, newGrapeNames };
+}
+
+/**
+ * The shape of a proposed sweetness style, before the wine is known: a term,
+ * a source, and a link the write rule would store (utils/sweetnessStyle
+ * normalizeStyleUrl; the normalised link is what is filed). `fallbackUrl` is
+ * the filing's own evidence link, used when the style carries none. Whether
+ * the term exists for THIS wine is settleSweetnessStyle's question.
+ */
+function readProposedStyle(raw, fallbackUrl) {
+  const { SWEETNESS_STYLE_SOURCES, normalizeStyleUrl } = require('../utils/sweetnessStyle');
+  if (typeof raw !== 'object' || Array.isArray(raw)) return refused('style_shape');
+  // The word as printed: a string, and never a term row's id, which the rule
+  // would resolve but a reviewer could not read.
+  if (typeof raw.term !== 'string') return refused('style_shape');
+  const term = plainText(raw.term);
+  if (!term || term.length > STYLE_TERM_MAX || /^[0-9a-f]{24}$/i.test(term)) return refused('style_shape');
+  const source = typeof raw.source === 'string' ? raw.source.trim().toLowerCase() : '';
+  if (!SWEETNESS_STYLE_SOURCES.includes(source)) return refused('style_source');
+  const given = typeof raw.url === 'string' && raw.url.trim() ? raw.url : fallbackUrl;
+  if (typeof given !== 'string' || !given.trim()) return refused('style_url_required');
+  const link = normalizeStyleUrl(given);
+  if (!link.ok) return refused('style_url');
+  return { ok: true, value: { term, source, url: link.href } };
+}
+
+/**
+ * What the write rule (services/sweetnessWrite assignSweetnessStyle) would do
+ * with a proposed style on this wine, without writing: the rule runs strict
+ * on a plain copy that already carries the name, type and classification the
+ * same proposal sets — and, for an amendment, the ones its waiting row
+ * (`pendingFields`) already holds, since approval applies the whole row.
+ * `wine` must be loaded with its sweetness style ('+sweetnessStyle'): a copy
+ * without it would read as "no style recorded".
+ * Returns the rule's own answer — { ok: true, verdict, reason } with verdict
+ * applied | needs_review | redundant | unchanged | dropped, or
+ * { ok: false, reason, message } — plus `scale` (the scale the wine's type
+ * gives; null for a wine with no type, which the rule cannot hold against
+ * its name) and `term` ({ name, regulated } of the row the word resolves to,
+ * or null).
+ * Callers: settleSweetnessStyle below and services/proposalDirectApply.
+ */
+async function probeSweetnessStyle(wine, proposedFields, pendingFields = null) {
+  const { assignSweetnessStyle } = require('./sweetnessWrite');
+  const { loadTerms, resolveLoaded, scaleForType } = require('./sweetnessOps');
+  const style = proposedFields[STYLE_FIELD];
+  const isDoc = typeof wine.toObject === 'function';
+  if (isDoc && typeof wine.isSelected === 'function' && !wine.isSelected(STYLE_FIELD)) {
+    throw new Error('probeSweetnessStyle: the wine was loaded without sweetnessStyle');
+  }
+  const copy = isDoc ? wine.toObject({ depopulate: true }) : { ...wine };
+  const sets = { ...(pendingFields || {}), ...proposedFields };
+  if (sets.name) copy.name = sets.name;
+  if (sets.type) copy.type = sets.type;
+  if (sets.classification) {
+    // The proposed tiers replace the wine's rows at approval: the copy
+    // carries the proposed string alone, which the rule reads for a tier
+    // that is sweet by law.
+    copy.classification = sets.classification;
+    copy.classifications = [];
+  }
+  const scale = scaleForType(copy.type, { nonWine: copy.nonWine === true });
+  const answer = await assignSweetnessStyle(copy, { term: style.term, source: style.source, url: style.url, strict: true });
+  const countryId = (wine.country && wine.country._id) || wine.country || null;
+  const row = answer.ok ? resolveLoaded(await loadTerms(), style.term, { scale, countryId }) : null;
+  return { ...answer, scale, term: row ? { name: row.name, regulated: row.regulated !== false } : null };
+}
+
+/**
+ * Hold a proposed sweetness style against the wine it is filed on, at filing:
+ * the term must exist on the wine's scale (and takes the table's spelling), a
+ * term with a legal definition needs the producer as its source, and a style
+ * that adds nothing is not filed — the label's own term already states it or
+ * contradicts it, or the same style is recorded already. A different term
+ * from an equal or weaker source than the recorded one IS filed: a person
+ * decides that. `pendingFields` are the fields of the caller's own waiting
+ * row when this filing amends it. Rewrites proposedFields.sweetnessStyle.term
+ * in place.
+ * Returns { ok: true } or the refusal 'style_refused' { reason, message }.
+ * Callers: the two that call readProposedFields.
+ */
+async function settleSweetnessStyle(proposedFields, wine, pendingFields = null) {
+  const style = proposedFields[STYLE_FIELD];
+  if (!style) return { ok: true };
+  const probe = await probeSweetnessStyle(wine, proposedFields, pendingFields);
+  if (!probe.ok) return refused('style_refused', { reason: probe.reason, message: probe.message });
+  if (probe.verdict === 'redundant') {
+    return refused('style_refused', { reason: 'redundant', message: 'The label of this wine already states this sweetness, so there is no style to add.' });
+  }
+  if (probe.verdict === 'unchanged') {
+    return refused('style_refused', { reason: 'unchanged', message: 'This sweetness style is already recorded for the wine.' });
+  }
+  if (probe.verdict !== 'applied' && probe.verdict !== 'needs_review') {
+    return refused('style_refused', { reason: probe.reason || probe.verdict, message: 'Sweetness terms are not available on this server yet.' });
+  }
+  // The table's own spelling, so the review shows what would be written.
+  if (probe.term) style.term = probe.term.name;
+  return { ok: true };
 }
 
 /**
@@ -197,6 +321,9 @@ async function settleClassificationByCountry(proposedFields, classificationTier,
 module.exports = {
   TEXT_FIELDS,
   EXTRA_FIELDS,
+  STYLE_FIELD,
+  STYLE_TERM_MAX,
+  PROPOSABLE_FIELDS,
   WINE_TYPES,
   FIELD_MAX,
   GRAPE_NAME_MAX,
@@ -205,4 +332,6 @@ module.exports = {
   URL_MAX,
   readProposedFields,
   settleClassificationByCountry,
+  probeSweetnessStyle,
+  settleSweetnessStyle,
 };

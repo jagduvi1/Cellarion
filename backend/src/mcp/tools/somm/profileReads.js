@@ -9,7 +9,7 @@ const WineDefinition = require('../../../models/WineDefinition');
 const Bottle = require('../../../models/Bottle');
 const WineCorrectionProposal = require('../../../models/WineCorrectionProposal');
 const { registerTool } = require('../../registry');
-const { ok, fail, SOMM_ROLES, requireSomm } = require('../../toolUtil');
+const { ok, fail, SOMM_ROLES, requireSomm, proposalFieldName, proposalFieldsOut } = require('../../toolUtil');
 const { logAudit } = require('../../../services/audit');
 const { isValidId } = require('../../../utils/validation');
 const { stripHtml } = require('../../../utils/sanitize');
@@ -208,13 +208,13 @@ registerTool({
       wine: label(p.wineDefinition),
       kind: p.kind,
       status: p.status,
-      proposed_fields: p.proposedFields || null,
+      proposed_fields: proposalFieldsOut(p.proposedFields),
       merge_target: p.mergeTargetId ? { wine_id: p.mergeTargetId._id, wine: label(p.mergeTargetId) } : null,
       evidence_url: p.evidenceUrl || null,
       reason: p.reason,
       created_at: p.createdAt,
       ...(p.amendments && p.amendments.length
-        ? { amendments: p.amendments.map((a) => ({ at: a.at, fields: a.fields || [], reason: a.reason, evidence_url: a.evidenceUrl || null })) }
+        ? { amendments: p.amendments.map((a) => ({ at: a.at, fields: (a.fields || []).map(proposalFieldName), reason: a.reason, evidence_url: a.evidenceUrl || null })) }
         : {}),
       ...(p.status !== 'pending' ? { decided_at: p.decidedAt, reject_reason: p.rejectReason || null, applied_note: p.appliedNote || null } : {}),
     })));

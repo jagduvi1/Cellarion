@@ -217,6 +217,7 @@ describe('creation', () => {
         type: null,
         colour: null,
         grapes: null,
+        sweetnessStyle: null,
       },
     }));
     expect(logAudit).toHaveBeenCalledWith(null, 'wine_proposal.user_create',

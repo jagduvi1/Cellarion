@@ -5,6 +5,7 @@ import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import GrapeTokenInput, { foldGrapeName } from '../GrapeTokenInput';
 import GrapePicker from '../GrapePicker';
 import ContributePrompt from './ContributePrompt';
+import SweetnessStyleRow, { hasSweetnessRow } from './SweetnessStyleRow';
 import { createWineProposal, getMyWineProposals } from '../../api/wineProposals';
 import { getWinePublicData, suggestWineValue, proposeRegistryKey } from '../../api/registryData';
 import { useContributionReviewed } from '../../utils/contributionReview';
@@ -341,6 +342,38 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     return next && next !== (values[f] || '') ? { [f]: next } : null;
   };
 
+  // What a filed suggestion changes on this page, for the form below and for
+  // the sweetness row's own form (SweetnessStyleRow).
+  const recordFiled = (body, fields, field) => {
+    setSentField(field);
+    if (body.applied) {
+      // Applied already — a server that does not review, or a sweetness style
+      // on a wine that had none: nothing is pending. Re-read the wine so the
+      // record shows the change.
+      setSentApplied(true);
+      if (onWineChanged) onWineChanged();
+      return;
+    }
+    setSentApplied(false);
+    // `newGrapes` qualifies the list; it is not a field of the record.
+    const sent = { ...fields };
+    delete sent.newGrapes;
+    // The server answers with the whole pending suggestion — canonical
+    // grape names, and every field of it when this filing amended one.
+    const stored = body.proposal?.proposedFields;
+    // `stored` is authoritative when present: after an amendment it holds
+    // every field; after a FRESH filing (my earlier suggestion was decided
+    // while this page was open) it holds only the new ones — merging the
+    // stale local fields back in would show a decided suggestion as
+    // pending. The local merge is only the fallback for a bare answer.
+    setMine((prev) => {
+      const before = prev.find((p) => p.status === 'pending')?.proposedFields || {};
+      const merged = stored || { ...(body.amended === false ? {} : before), ...sent };
+      return [{ status: 'pending', proposedFields: merged }, ...prev.filter((p) => p.status !== 'pending')];
+    });
+    setSlot((s) => s || { mine: true, fields: Object.keys(sent) });
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     const fields = draftFields();
@@ -355,33 +388,8 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
         ...(evidenceUrl.trim() ? { evidenceUrl: evidenceUrl.trim() } : {}),
       });
       const body = await res.json().catch(() => ({}));
-      if (res.ok && body.applied) {
-        // A server that does not review applied it already: nothing is
-        // pending — re-read the wine so the record shows the change.
-        setSentApplied(true);
-        setSentField(modal.field);
-        setModal(null);
-        if (onWineChanged) onWineChanged();
-      } else if (res.ok) {
-        setSentApplied(false);
-        // `newGrapes` qualifies the list; it is not a field of the record.
-        const sent = { ...fields };
-        delete sent.newGrapes;
-        // The server answers with the whole pending suggestion — canonical
-        // grape names, and every field of it when this filing amended one.
-        const stored = body.proposal?.proposedFields;
-        setSentField(modal.field);
-        // `stored` is authoritative when present: after an amendment it holds
-        // every field; after a FRESH filing (my earlier suggestion was decided
-        // while this page was open) it holds only the new ones — merging the
-        // stale local fields back in kept showing a decided suggestion as
-        // pending. The local merge is only the fallback for a bare answer.
-        setMine((prev) => {
-          const before = prev.find((p) => p.status === 'pending')?.proposedFields || {};
-          const merged = stored || { ...(body.amended === false ? {} : before), ...sent };
-          return [{ status: 'pending', proposedFields: merged }, ...prev.filter((p) => p.status !== 'pending')];
-        });
-        setSlot((s) => s || { mine: true, fields: Object.keys(sent) });
+      if (res.ok) {
+        recordFiled(body, fields, modal.field);
         setModal(null);
       } else {
         setError(body.error || t('common.networkError', 'Network error. Please try again.'));
@@ -599,6 +607,20 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
             )}
           </div>
         ))}
+        {/* The label's sweetness term, or the term the wine is known by: a
+            row with a form of its own, since a style is a term, a source and
+            the page that names it. */}
+        {hasSweetnessRow(wine) && (
+          <SweetnessStyleRow
+            wine={wine}
+            canSuggest={canSuggest}
+            suggestMode={suggestMode}
+            blocked={blockedByOther}
+            pending={pendingValues.sweetnessStyle || null}
+            apiFetch={apiFetch}
+            onFiled={(body, fields) => recordFiled(body, fields, 'sweetnessStyle')}
+          />
+        )}
       </div>
       {/* ── Public data fields: the accepted vocabulary with published
           values; blanks invite value suggestions ── */}
