@@ -32,7 +32,7 @@ function deleteApiCaches() {
   );
 }
 
-// ── Offline app shell (#1355) ──────────────────────────────────────────────
+// ── Offline app shell ──────────────────────────────────────────────────────
 // BUILD is stamped in by the build (vite-plugins/swPrecache.js): this build's
 // version and every file of it — /index.html plus all hashed JS/CSS/woff2.
 // It stays null on the dev server, where nothing is precached.
@@ -151,7 +151,7 @@ async function offlineShell() {
   return undefined;
 }
 
-// ── Offline photos (#1355) ─────────────────────────────────────────────────
+// ── Offline photos ─────────────────────────────────────────────────────────
 // The page (utils/offlineSnapshot.syncPhotos) keeps the card-size thumbnails
 // of the user's bottles in this cache. Here they are served from it, and when
 // a full-size photo can't be fetched offline its thumbnail stands in — so the
@@ -275,8 +275,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  // The link is server-built, but it is data: only ever open this origin
-  // (audit 2026-09 F03-5).
+  // The link is server-built, but it is data: only ever open this origin.
   const raw = event.notification.data?.link;
   let link = null;
   try {

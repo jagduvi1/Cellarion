@@ -237,7 +237,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       {loading && <p>{t('common.loading')}</p>}
       {/* "every wine has a usable identity" is only true of an UNFILTERED
           empty queue. With a source filter on, or with dispositioned rows
-          hidden, it asserts the exact opposite of the truth (audit M-3). */}
+          hidden, it asserts the exact opposite of the truth. */}
       {wines !== null && !loading && wines.length === 0 && !error && (
         <p>{(viaFilter || unavailableTotal > 0)
           ? t('admin.wines.pendingIdentity.emptyFiltered', { n: unavailableTotal })
@@ -311,7 +311,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                         <>
                           {/* Deliberately NOT a link: /wines/:id renders from
                               the public route, which excludes pending rows — so
-                              every link here would 404 (audit H-1). The row's
+                              every link here would 404. The row's
                               own edit form + photos are the working surface. */}
                           <strong>{w.name}</strong>
                           <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #666)' }}>
