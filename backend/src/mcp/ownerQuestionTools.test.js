@@ -1,6 +1,6 @@
 /**
  * list_curator_questions / answer_curator_question — the OWNER side of owner
- * inquiries over MCP (2026-09-24).
+ * inquiries over MCP.
  *
  * Pins: both tools are plain user tools (no somm gate; list read-scoped,
  * answer write-scoped and budgeted like every write); the list runs the SAME

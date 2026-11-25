@@ -7,7 +7,7 @@
  * one per page view, and none of them can guess a token: there is nothing to
  * guess. Counted against the write limiter and the refresh limiters, a
  * crawler rendering public wine pages was answered 429 for most of its crawl
- * and left an audit row per hit (2026-10-27). Now the probe answers 401 and
+ * and left an audit row per hit. Now the probe answers 401 and
  * is counted nowhere, while a refresh that carries a cookie is limited as
  * before.
  */

@@ -1,5 +1,5 @@
 /**
- * The wine record and its label sweetness term (GitHub discussion #1754): the
+ * The wine record and its label sweetness term: the
  * hooks that make the term part of the identity without moving anything for a
  * wine that has none — exercised through validate(), the path every save takes.
  *

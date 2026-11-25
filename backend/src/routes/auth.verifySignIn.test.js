@@ -4,8 +4,8 @@
  *
  * WHY THIS TEST EXISTS: a session-issuing verify step is a login-CSRF hole —
  * an attacker registers, takes their own verification link and gets a victim's
- * browser to open it, silently signing the victim in to the attacker's account
- * (security audit M-1). The binding cookie set at registration is what makes
+ * browser to open it, silently signing the victim in to the attacker's account.
+ * The binding cookie set at registration is what makes
  * the convenience safe, so every way of NOT having the right binding must still
  * verify without a session.
  */

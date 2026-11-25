@@ -1,5 +1,5 @@
 /**
- * structuralUndo — the unplace-undo status guard (grand-audit M2).
+ * structuralUndo — the unplace-undo status guard.
  *
  * Pins that undoing an unplace refuses when the bottle has been CONSUMED (or
  * left the cellar, or the rack shrank) since — and, critically, that it does
@@ -73,7 +73,7 @@ test('an active in-cellar bottle IS re-slotted (claims, then places)', async () 
   expect(placeBottleInRack).toHaveBeenCalledWith(expect.any(Object), 3, BOTTLE, expect.any(Object));
 });
 
-// MCP-audit H3: the pre-claim checks pass, the row is claimed, THEN the
+// The pre-claim checks pass, the row is claimed, THEN the
 // placement fails (e.g. the bottle was concurrently placed into another rack →
 // the new unique slots.bottle index returns E11000 → placeBottleInRack maps it
 // to {error}). Without unclaim the row would stay reversed:true and the action

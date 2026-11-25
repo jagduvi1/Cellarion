@@ -109,7 +109,7 @@ test('quarantines a row: sets the flag, saves, self-heals the index, audits', as
   );
   // A quarantine seeds nothing — the queue rows are what it takes away.
   expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
-  // Its vectors go too (audit 2026-10-14): semantic search and the
+  // Its vectors go too: semantic search and the
   // similar-wines graph must not keep a row keyword search dropped.
   expect(require('../../models/WineEmbedding').deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID });
   expect(require('../../services/embeddingJob').reembedActiveVintages).not.toHaveBeenCalled();
@@ -253,7 +253,7 @@ test('the name-check scan pool excludes quarantined rows at the query level', as
 // #844 promised, in its commit message AND in the /:id/non-wine route comment,
 // that flagged rows leave "the admin duplicate-scan pools" — but only the
 // name-check pool above actually got the filter. A quarantined whisky stayed a
-// merge candidate in all three of these (code audit 2026-07-27, H3). Asserted
+// merge candidate in all three of these. Asserted
 // per pool so a future pool added without the filter fails here, not in prod.
 describe('every duplicate/collision pool excludes quarantined rows', () => {
   const chainReturning = (rows) => {

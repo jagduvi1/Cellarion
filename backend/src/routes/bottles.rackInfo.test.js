@@ -94,7 +94,7 @@ beforeEach(() => {
   Cellar.findById.mockResolvedValue({
     _id: CELLAR, user: USER, deletedAt: null, members: [], userColors: [],
   });
-  // Own photos: find().sort().limit().lean(); the vintage official: find().select().lean() (2026-10-09).
+  // Own photos: find().sort().limit().lean(); the vintage official: find().select().lean().
   BottleImage.find.mockImplementation(() => { const q = { sort: () => q, limit: () => q, select: () => q, lean: async () => [] }; return q; });
   BottleImage.findOne.mockReturnValue(sortLean(null));
   BottleImage.findById.mockReturnValue({ lean: async () => null });

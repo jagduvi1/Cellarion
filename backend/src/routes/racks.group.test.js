@@ -1,5 +1,5 @@
 /**
- * Rack group on the REST routes (discussion #1228):
+ * Rack group on the REST routes:
  * POST passes the group to the shared grid creator, PUT stores it normalised
  * and clears it on '', and the update audit row names the cellar.
  */

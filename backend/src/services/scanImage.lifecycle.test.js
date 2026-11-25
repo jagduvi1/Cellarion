@@ -106,7 +106,7 @@ describe('attachScanImage — the commit stamps the label onto the wine', () => 
 
     await attachScanImage(w, { scanImageId: IMG }, req);
 
-    // retainUntil rides the claim itself (release-audit LOW-1): a stamp that
+    // retainUntil rides the claim itself: a stamp that
     // ran afterwards could fail and leave an attached frame with no clock —
     // skipped by BOTH sweeps, kept forever.
     expect(BottleImage.findOneAndUpdate).toHaveBeenCalledWith(
@@ -171,7 +171,7 @@ describe('runScanImageRetentionSweep', () => {
 
     // Files first: the doc is the only reference to the file on disk.
     expect(unlinkImageFiles).toHaveBeenCalledWith(stale[0]);
-    // The delete REPEATS the selection predicate (audit L-1): between the find
+    // The delete REPEATS the selection predicate: between the find
     // and the delete a second bottle of the same unidentified wine can attach
     // one of these scans, and deleting by id alone would drop a row a live
     // WineDefinition.scanImage points at.
@@ -200,7 +200,7 @@ describe('runScanImageRetentionSweep', () => {
 });
 
 /**
- * The THIRD clock (2026-08-16): an ordinary bottle PHOTO attached to nothing.
+ * The THIRD clock: an ordinary bottle PHOTO attached to nothing.
  *
  * The add-bottle flow uploads before the bottle exists and links afterwards;
  * an abandoned add leaves a photo with no bottle and no wine, which nothing

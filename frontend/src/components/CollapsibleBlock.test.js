@@ -63,7 +63,7 @@ describe('CollapsibleBlock', () => {
     expect(onToggle).toHaveBeenCalledTimes(2);
   });
 
-  // Audit 2026-10-14: the bottle page's "This wine in your cellar" has an
+  // The bottle page's "This wine in your cellar" has an
   // "Open the vintage page →" link in its title row. Following it opens
   // nothing in the card, so it must not unfold the card for the account.
   it('folded: a link to another page leaves the fold alone; an in-page "#" link unfolds', () => {

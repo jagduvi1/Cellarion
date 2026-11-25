@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { setOfflineModePreference } from '../utils/offlineMode';
 
-// Offline start (#1355): a refresh that gets NO answer is not a dead session.
+// Offline start: a refresh that gets NO answer is not a dead session.
 // `t` answers the inline English, as a failed sign-in words its message with it.
 vi.mock('../i18n', () => ({
   default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },

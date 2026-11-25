@@ -335,7 +335,7 @@ describe('attachMaturity', () => {
       expect.objectContaining({ vintage: '2018', status: 'reviewed', profileId: 'p9' }));
   });
 
-  // Security audit 2026-09-02 (D09-4): any registered user could write a
+  // Any registered user could write a
   // sommelier-status drink window into the shared registry from a plain JSON
   // file, and every other user of that wine+vintage saw it as curated.
   test("an ordinary importer's window becomes a PENDING suggestion, never a reviewed profile", async () => {

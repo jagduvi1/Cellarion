@@ -1,5 +1,5 @@
 /**
- * The pre-validate hook's CLASSIFICATION rule (GitHub discussion #1696): the
+ * The pre-validate hook's CLASSIFICATION rule: the
  * appellation's regulatory mark (DOCG, DOC, AOC, …) is not a quality tier, so
  * it never stores as one — on any save-based write, whatever surface typed
  * it. No DB needed: doc.validate() runs the middleware.

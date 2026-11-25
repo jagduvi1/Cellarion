@@ -1,8 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
-// After a save the cellar page says what was added and offers the next one
-// (newcomer walkthrough 2026-10-15).
+// After a save the cellar page says what was added and offers the next one.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key, a) => (a && typeof a === 'object' ? `${key}:${JSON.stringify(a)}` : (typeof a === 'string' ? a : key)) }),
 }));
@@ -35,7 +34,7 @@ test('without a wine name there is no quoted stand-in', () => {
   expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.addedUnnamed:{"count":3}');
 });
 
-// Release audit 2026-10-16: the next bottle is added the same way, and the
+// The next bottle is added the same way, and the
 // add page comes back to where the notice was.
 test('"Add another bottle" carries the way back and the mode of the bottle just added', () => {
   function Where() {

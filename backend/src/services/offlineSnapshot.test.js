@@ -1,5 +1,5 @@
 /**
- * Offline snapshot (#1355) — the document a device keeps to show its user's
+ * Offline snapshot — the document a device keeps to show its user's
  * cellars, racks and bottles with no network.
  */
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));

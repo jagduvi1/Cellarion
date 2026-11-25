@@ -189,7 +189,7 @@ describe('official image + credit', () => {
   });
 });
 
-// ─── Taxonomy review queues over MCP (strategy 2026-07-29 R2/R3) ─────────────
+// ─── Taxonomy review queues over MCP ─────────────
 
 jest.mock('../services/taxonomyReview', () => ({
   listPendingRegions: jest.fn(),

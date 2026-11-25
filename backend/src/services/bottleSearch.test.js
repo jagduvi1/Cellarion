@@ -456,7 +456,7 @@ describe('text helpers', () => {
   });
 });
 
-// ── Bounds on the work one request can ask for (audit 2026-09-27 H1) ────────
+// ── Bounds on the work one request can ask for ────────
 // The edit distance is quadratic in word length, and a search runs on the one
 // Node process every user shares. Before these bounds, one 4,999-character
 // query word against 50 bottles each carrying a distinct 4,999-character word

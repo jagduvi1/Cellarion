@@ -1,5 +1,5 @@
 /**
- * personalData service (#986) — the shared engine both the REST routes and
+ * personalData service — the shared engine both the REST routes and
  * the MCP tools call.
  *
  * Pins: wine-level visibility scoped to CURRENT cellar members (departed

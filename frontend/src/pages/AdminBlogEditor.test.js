@@ -1,5 +1,5 @@
 /**
- * The admin blog editor could not open ANY existing post (found 2026-09-15).
+ * The admin blog editor could not open ANY existing post.
  *
  * loadPost was a useCallback listing `editor` as a dependency, and TipTap's
  * useEditor hands back a fresh reference on re-render — so every state update

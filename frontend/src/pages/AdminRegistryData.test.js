@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-// The review queue with per-vintage slots (2026-09-04): each suggested value
+// The review queue with per-vintage slots: each suggested value
 // says which slot it lands in, a vintage row shows what the wine says
 // wine-wide today (or that it says nothing yet), and the reviewer can widen a
 // vintage suggestion into the wine-wide default in one click.
@@ -143,7 +143,7 @@ describe('changing and removing a field', () => {
   });
 });
 
-// The vocabulary editor (2026-09-09): every accepted key gets a display name
+// The vocabulary editor: every accepted key gets a display name
 // per language, and the English name is never one of the boxes — it IS the
 // key. The body sent is the WHOLE map, so an emptied box is a removal.
 describe('display-name translations', () => {

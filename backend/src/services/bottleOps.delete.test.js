@@ -135,7 +135,7 @@ describe('restoreDeletedBottle', () => {
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.restore_deleted', expect.objectContaining({ id: 'b1' }), { via: 'undo', placed: true });
   });
 
-  // Release audit 2026-10-13: the raw insert bypassed the schema's alias setter.
+  // The raw insert bypassed the schema's alias setter.
   test('a currency alias in the snapshot is restored as its code', async () => {
     worldIntact();
     Rack.findOne.mockResolvedValue(null);

@@ -4,7 +4,7 @@
  *
  * WHY THIS TEST EXISTS:
  * findWineMatches annotates every registry candidate with styleConflict, the
- * verdict the import's preselection and its >= EXACT gates read (issue #1134).
+ * verdict the import's preselection and its >= EXACT gates read.
  * The guard reads a candidate's RECORDED term before its name, which it can
  * only do when the candidate load populates the term: with a bare id and a
  * cold term table it reads "no term", and once the word has left the names a

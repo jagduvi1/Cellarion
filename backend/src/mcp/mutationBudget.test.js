@@ -1,5 +1,5 @@
 /**
- * mutationBudget — real-execution coverage (grand-audit M24).
+ * mutationBudget — real-execution coverage.
  *
  * Every consumer suite pins takeMutationSlot to () => true, so the actual
  * budget logic (all-or-nothing batch charging, the 15-min window rollover, the
@@ -53,7 +53,7 @@ test('reads the LIVE write.max on each call (admin can tune it down)', () => {
   expect(takeMutationSlot(u, 2)).toBe(true);
 });
 
-// Security audit L-18: a per-IP write budget bounds the amplification of many
+// A per-IP write budget bounds the amplification of many
 // distinct accounts sharing one NAT. Per-user cap 5, per-IP cap 5 × IP_WRITE_MULTIPLIER.
 test('a shared IP is capped across distinct users at max × IP_WRITE_MULTIPLIER', () => {
   const ip = `ip-${now}`;

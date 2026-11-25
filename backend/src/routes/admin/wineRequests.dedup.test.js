@@ -185,7 +185,7 @@ test('a duplicate-key race resolves the request by LINKING the existing wine', a
   expect(requestDoc.save).toHaveBeenCalled();
 });
 
-// Provenance (2026-09-08): `createdBy` on the new wine is the ADMIN who
+// Provenance: `createdBy` on the new wine is the ADMIN who
 // approved it, which is the wrong answer to "a rights holder says this record
 // is theirs — who gave it to us?". The contribution block answers that, and it
 // is the only place the bridge origin survives once the audit rows expire.

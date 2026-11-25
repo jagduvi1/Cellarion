@@ -53,7 +53,7 @@ test('a feature switched off is left out entirely', async () => {
 });
 
 // GET /api/site/review — whether this server reviews contributions, so the
-// app promises "a curator reviews it" only where one does (discussion #1778).
+// app promises "a curator reviews it" only where one does.
 describe('GET /api/site/review', () => {
   const contributionReview = require('../config/contributionReview');
   afterEach(() => contributionReview.set({ enabled: true }));

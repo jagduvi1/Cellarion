@@ -1,5 +1,5 @@
 /**
- * McpActionLog index + constants guards (MCP-audit H2).
+ * McpActionLog index + constants guards.
  *
  * The whole claim-first idempotency guarantee (prior-audit M2) rests on the
  * unique {user, idempotencyKey} index: it's what makes "exactly one twin wins

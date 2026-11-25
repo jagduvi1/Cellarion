@@ -113,7 +113,7 @@ describe('add_bottle', () => {
     )).error.code).toBe('invalid_input');
   });
 
-  // Release audit 2026-10-13: the new wine was created before addBottle refused the currency.
+  // The new wine was created before addBottle refused the currency.
   test('an unsupported currency → invalid_input before any wine work', async () => {
     const res = await tool('add_bottle').handler(
       { cellar_id: oid('c'), new_wine: { name: 'x', producer: 'y', country: 'z', type: 'red' }, currency: 'PLN' }, CTX);
@@ -174,7 +174,7 @@ describe('add_bottle', () => {
   test('existing wine_id: no findOrCreateWine call, no wine.create audit', async () => {
     ownCellar();
     // findOne, not findById: the wine_id branch goes through
-    // services/wineVisibility, so a stranger's pending row is not_found (M-4).
+    // services/wineVisibility, so a stranger's pending row is not_found.
     WineDefinition.findOne.mockReturnValue(chain({ _id: oid('f'), name: 'Known', producer: 'P', grapes: [] }));
     bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: 'NV', cellar: oid('c') } });
     const body = parse(await tool('add_bottle').handler({ cellar_id: oid('c'), wine_id: oid('f') }, CTX));

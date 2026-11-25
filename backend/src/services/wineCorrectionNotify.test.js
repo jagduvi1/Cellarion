@@ -2,7 +2,7 @@
  * wineCorrectionNotify — telling a submitter what became of their correction,
  * from every place one gets decided.
  *
- * Pre-deploy audit 2026-09-18: the bottle page promises "we'll notify you when
+ * The bottle page promises "we'll notify you when
  * a curator has decided", but a merge or a delete closed the wine's pending
  * corrections with a bare updateMany and told nobody — and a merge is exactly
  * where a correction that makes a wine collide with its twin ends up.
@@ -89,7 +89,7 @@ describe('notifyProposer', () => {
 describe('closePendingForWine', () => {
   const REASON = 'Closed automatically: the wine was merged into "Pira — Barolo". Re-file against that wine if the issue still applies.';
 
-  // Status 'closed', not 'rejected' (2026-09-28): nobody judged these — the wine
+  // Status 'closed', not 'rejected': nobody judged these — the wine
   // went away. Stored as rejections they read as disagreements with the
   // sommelier (25 of 27 "rejections" in three weeks were merges into records
   // that already carried the proposed producer).

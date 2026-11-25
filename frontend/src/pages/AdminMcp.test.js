@@ -1,7 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminMcp from './AdminMcp';
 
-// The bug this suite exists for (grand-audit H1): the page stored the raw
+// The bug this suite exists for: the page stored the raw
 // Response as `data`, so `byDay(data.daily)` iterated undefined and crashed the
 // whole app on every load. These tests drive the real parse path.
 

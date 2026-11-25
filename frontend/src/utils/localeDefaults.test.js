@@ -47,7 +47,7 @@ describe('guessCurrency', () => {
   });
 });
 
-// Release audit 2026-10-16: en-GB is the English many devices outside Europe
+// en-GB is the English many devices outside Europe
 // are set to; other languages' regions still count.
 test('an English region tag outside Europe says nothing about money', () => {
   expect(guessCurrency({ timeZone: 'Asia/Kolkata', languages: ['en-GB'] })).toBeNull();

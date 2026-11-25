@@ -14,7 +14,7 @@ beforeEach(() => {
 });
 
 // A curator's or admin's write to shared wine data changes what the owners'
-// statistics and bottle lists say (audit 2026-09-27 M6). Tested on the shared
+// statistics and bottle lists say. Tested on the shared
 // module instance: the lazy Bottle require inside must see the mock above.
 describe('bumpWineOwners', () => {
   const shared = require('./dataVersion');

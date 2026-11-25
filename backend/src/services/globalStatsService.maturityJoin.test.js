@@ -51,7 +51,7 @@ describe('stats maturity join (Mongo profiler 2026-10-14)', () => {
     expect(lookup.let).toBeUndefined();
   });
 
-  // Release audit 2026-10-14: a substring check here stayed green with $or in
+  // A substring check here stayed green with $or in
   // place of $and, $ne in place of $eq, and the $project dropping `profiles`
   // before the pick (each measured on Mongo 7: noProfile 12017 → 348, or
   // everything noProfile). The whole condition and the stage order are pinned.

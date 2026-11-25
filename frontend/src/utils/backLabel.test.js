@@ -1,7 +1,7 @@
 import { backLabel } from './backLabel';
 
 // The back links draw a chevron; a label that also starts with an arrow read
-// "‹ ← Back to …" (live walkthrough 2026-10-15).
+// "‹ ← Back to …".
 test('drops one leading arrow, whatever the language', () => {
   expect(backLabel('← Back to Cellars')).toBe('Back to Cellars');
   expect(backLabel('←Tillbaka till källaren')).toBe('Tillbaka till källaren');

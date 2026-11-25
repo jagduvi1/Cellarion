@@ -312,7 +312,7 @@ describe('updateBottleFields (real execution)', () => {
     expect((await updateBottleFields(liveBottle(), { currency: 7 }, REQ)).error.status).toBe(400);
   });
 
-  // Release audit 2026-10-13: undoing a change away from an old import's code was refused.
+  // Undoing a change away from an old import's code was refused.
   test('currency: an undo (restoringPrev) puts back a previous code that is not supported', async () => {
     const b = liveBottle({ currency: 'SEK' });
     const res = await updateBottleFields(b, { currency: 'ILS' }, REQ, { restoringPrev: true });

@@ -59,7 +59,7 @@ describe('DraftWineBanner', () => {
     expect(publishWineDraft).toHaveBeenCalledWith(authState.apiFetch, 'w1', { confirmCreate: false });
     expect(await screen.findByText('Published to the shared registry.')).toBeInTheDocument();
     // The notice is handed up with the change: the page keeps it after the
-    // refetch unmounts this banner (audit 2026-09-12).
+    // refetch unmounts this banner.
     expect(onChanged).toHaveBeenCalledWith('Published to the shared registry.');
   });
 

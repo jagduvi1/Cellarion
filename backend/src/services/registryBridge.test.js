@@ -112,7 +112,7 @@ describe('adoptWine — registry keys this install only knows as a proposal', ()
     warn.mockRestore();
   });
 
-  // Release audit 2026-10-23: proposals allow a 1000-character rationale, and
+  // Proposals allow a 1000-character rationale, and
   // appending the registry note past that failed validation on save — after the
   // wine was already saved, so the adoption answered 500 and its values never
   // landed.
@@ -293,7 +293,7 @@ describe('refreshHeld', () => {
     const r = await bridge.refreshHeld({ now: new Date('2026-09-08') });
     // `since` is the install's own watermark from site config, not the oldest
     // per-wine sync date: derived per wine it never advanced, so the same
-    // wines came back every week until the quota ran out (audit 2026-09-08).
+    // wines came back every week until the quota ran out.
     expect(client.changes).toHaveBeenCalledWith([RID, 'b'.repeat(24)], new Date(0));
     expect(local.name).toBe('Salmos Priorat'); // untouched locally → identity follows the registry
     expect(local.aiProfile).toMatchObject({ description: 'A dense Priorat.' });
@@ -535,7 +535,7 @@ describe('audit 2026-09-08 — refresh keeps its promises', () => {
       image: null, aiProfile: { source: 'ai' },
       // Faithful to models/WineDefinition.js: the pre-save hook stamps
       // updatedAt with the REAL instant of the save, while the run passes a
-      // logical `now`. That gap is what froze copies (audit 2026-09-08), so
+      // logical `now`. That gap is what froze copies, so
       // the mock has to reproduce it rather than echo the run's clock.
       save: jest.fn(async function save() { this.updatedAt = new Date(); }),
       ...over,

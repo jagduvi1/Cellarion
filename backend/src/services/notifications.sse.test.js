@@ -55,7 +55,7 @@ describe('createNotifications SSE nudges', () => {
   test('total failure (no insertedDocs on the error) emits nothing and does not throw', async () => {
     Notification.insertMany.mockRejectedValue(new Error('connection lost'));
     // The rows created are the answer: none here, so a caller counting what
-    // reached the bell counts zero (release audit 2026-10-10).
+    // reached the bell counts zero.
     await expect(createNotifications([
       { userId: 'u1', type: 'drink_window', title: 't', message: 'm' },
     ])).resolves.toEqual([]);
@@ -88,7 +88,7 @@ describe('createNotifications and the notifications version', () => {
   });
 });
 
-// Early access notices stay in the app (release audit 2026-10-10): the
+// Early access notices stay in the app: the
 // permissive "any push toggle on" fallback for an unknown category must not
 // web-push a notice no member opted into push for.
 describe('pushAllowedFor', () => {

@@ -49,7 +49,7 @@ describe('classifyMaturity', () => {
 
   test('NV vintage with a reviewed absolute-year profile classifies (matches the frontend)', () => {
     // Non-relative NV profile: numbers are absolute years, no anchor needed.
-    // An NV bottle must not classify as null (audit H6).
+    // An NV bottle must not classify as null.
     const bottle = makeBottle('NV');
     const map = makeMap('NV', { status: 'reviewed', earlyFrom: 2020 });
     expect(classifyMaturity(bottle, map)).toBe('early');

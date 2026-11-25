@@ -1,6 +1,6 @@
 /**
  * Classification through the pending-wine fix (fix_pending_wine over MCP) —
- * added with #1701 (audit 2026-10-26): the admin form gained the field, and
+ * the admin form has the field, and
  * MCP parity means the sommelier completing a pending wine can set or clear
  * the tier too. The mint's rule applies: a regulatory mark stores as none.
  */

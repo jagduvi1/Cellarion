@@ -1,5 +1,5 @@
 /**
- * A rack's slots in total (audit 2026-10-14): within the per-module bounds
+ * A rack's slots in total: within the per-module bounds
  * alone, a modular rack could legally hold two million slots, which every
  * member's racks page, print map and room then drew one by one. Create and
  * update refuse a rack past MAX_RACK_SLOTS; ordinary shapes are untouched.

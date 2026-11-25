@@ -416,7 +416,7 @@ describe('page breaks between sibling groups (post-ship audit 2026-09-12)', () =
   });
 });
 
-// Release audit 2026-10-28: the PDF groups like the on-screen menu
+// The PDF groups like the on-screen menu
 // (frontend/src/utils/wineListSections.js) — a drink that is not wine heads
 // "Other", a wine of unknown colour "Unknown", both after the wine types.
 describe('buildSections — the Other category and untyped wines', () => {

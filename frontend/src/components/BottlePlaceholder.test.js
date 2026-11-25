@@ -48,7 +48,7 @@ describe('BottlePlaceholder', () => {
     expect(wrapWords('', 3)).toEqual([]);
   });
 
-  // Release audit 2026-10-13: names were measured in letters, so capitals and
+  // Names were measured in letters, so capitals and
   // Chinese, Japanese or Korean names ran off the label.
   it('measures capitals and CJK characters wider than lower-case letters', () => {
     expect(textEm('ABCD')).toBeGreaterThan(textEm('abcd'));

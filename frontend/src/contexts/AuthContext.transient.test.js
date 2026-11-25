@@ -2,8 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth, refreshOutcome, START_RETRY_DELAYS_MS } from './AuthContext';
 
 // A refresh the server couldn't serve — a deploy restarting it (502/503), a
-// hiccup, a rate limit (429) — is not a dead session. Only 401 ends it
-// (scaling audit 2026-09-25).
+// hiccup, a rate limit (429) — is not a dead session. Only 401 ends it.
 // `t` answers the inline English, as a failed sign-in words its message with it.
 vi.mock('../i18n', () => ({
   default: { changeLanguage: vi.fn(), t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue ?? key) },
@@ -163,7 +162,7 @@ describe('starting the app during a deploy', () => {
     expect(localStorage.getItem('cellarion-offline-user')).not.toBeNull();
   });
 
-  // Audit 2026-09-27 M4: after a successful refresh, a profile request that
+  // After a successful refresh, a profile request that
   // still failed after the retries cleared the session — even when the start
   // had already opened the device copy — and bounced the user to the login page.
   it('with offline mode: a profile request that keeps failing after the refresh opens the device copy, not the login page', async () => {

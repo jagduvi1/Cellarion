@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// SuperAdmin → AI → Vector Search (2026-09): Qdrant is gone; the wine vectors
+// SuperAdmin → AI → Vector Search: Qdrant is gone; the wine vectors
 // are stored on the WineEmbedding rows and compared in memory. The panel
 // shows what is stored and whether the registry-wide copy is loaded.
 

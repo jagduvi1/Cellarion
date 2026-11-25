@@ -230,7 +230,7 @@ describe('audit 2026-09-08 — key churn', () => {
     expect((await res.json()).code).toBe('key_churn');
     expect(BridgeKey.create).not.toHaveBeenCalled();
     // The active-key cap alone was no cap: revoking frees the slot at once, so
-    // mint-revoke-mint was unbounded (audit 2026-09-08).
+    // mint-revoke-mint was unbounded.
     const churnFilter = BridgeKey.countDocuments.mock.calls[1][0];
     expect(churnFilter.createdAt.$gte).toBeInstanceOf(Date);
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'bridge.key.create_failed', expect.anything(), expect.objectContaining({ reason: 'churn' }));

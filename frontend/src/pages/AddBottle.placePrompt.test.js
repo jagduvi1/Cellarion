@@ -117,11 +117,10 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
     }
   });
 
-  // The cellar page then says what was added, with "Add another bottle"
-  // (newcomer walkthrough 2026-10-15).
+  // The cellar page then says what was added, with "Add another bottle".
   // Not opened from the list here (no `cameFrom`): the add page is replaced,
   // so Back never lands on an emptied form — from the place dialog too, once
-  // its own Back entry is gone (release audit 2026-10-16).
+  // its own Back entry is gone.
   const NOTICE = { addedNotice: { name: 'Kaefferkopf 2019', count: 2, history: false, onOrder: false } };
   const ADDED = { replace: true, state: NOTICE };
 
@@ -170,7 +169,7 @@ test('the notice names the wine the bottles were saved under', async () => {
   }));
 });
 
-// Release audit 2026-10-16: opened from the cellar list, a save goes BACK to
+// Opened from the cellar list, a save goes BACK to
 // it (a second copy of the list made the first Back dead), and the notice
 // waits for it in sessionStorage — router state cannot ride a pop.
 describe('back to the list it came from', () => {

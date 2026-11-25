@@ -1,5 +1,5 @@
 /**
- * A production method is not an appellation (GitHub discussion #1696). Only a
+ * A production method is not an appellation. Only a
  * value that is NOTHING BUT a method counts — the same words end real
  * appellation names — and it keys as no appellation in every identity key, so
  * a lookup lands on the row the model hook stores without one.

@@ -46,7 +46,7 @@ describe('collapsedBlocks', () => {
     expect(auth.updatePreferences.mock.calls.length).toBe(calls);
   });
 
-  // Release audit 2026-10-13: two quick changes could be saved out of order.
+  // Two quick changes could be saved out of order.
   it('saves one at a time, each sending the latest list, never the same list twice', async () => {
     auth.user = { preferences: {} };
     const answer = [];
@@ -83,7 +83,7 @@ describe('collapsedBlocks', () => {
     expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.wine', 'vintage.history'] });
   });
 
-  // Audit 2026-10-14: the bottle and vintage pages share block names. A page
+  // The bottle and vintage pages share block names. A page
   // opened before the other page's save came back started from the old list,
   // showed the fold undone, and its next change saved over the new list.
   describe('a page opened before the last save came back', () => {

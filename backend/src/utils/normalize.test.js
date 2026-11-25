@@ -125,7 +125,7 @@ describe('tokenize', () => {
 
 // ─── generateWineKey ─────────────────────────────────────────────────────────
 
-// ─── normalizeClassification (GitHub discussion #1696) ───────────────────────
+// ─── normalizeClassification ───────────────────────
 
 describe('normalizeClassification', () => {
   test('a quality tier is kept as typed, whitespace folded', () => {

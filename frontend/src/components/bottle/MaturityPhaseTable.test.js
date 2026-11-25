@@ -2,7 +2,7 @@ import { render } from '@testing-library/react';
 import MaturityPhaseTable from './MaturityPhaseTable';
 
 // Without an initialised i18n the stock t returns a template verbatim; the
-// years cell is built from translated strings (audit 2026-10-14), so this
+// years cell is built from translated strings, so this
 // gives it the English strings, interpolated and pluralised like i18next.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -48,7 +48,7 @@ describe('MaturityPhaseTable', () => {
     ]);
   });
 
-  // Release audit 2026-10-13: the marked row now comes from the maturity status.
+  // The marked row now comes from the maturity status.
   describe('a reviewed profile: the row marked as now is the phase its status names', () => {
     const marked = (profile) => rows(render(<MaturityPhaseTable profile={{ status: 'reviewed', ...profile }} />).container)
       .filter((r) => r.active).map((r) => r.cls);

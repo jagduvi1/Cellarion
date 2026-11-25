@@ -5,7 +5,7 @@
  * "snapshot follows the spelling" step never sees a current snapshot, and the
  * next enrichment sweep regenerates every renamed profile as stale — an AI
  * spend per wine and a fresh generatedAt that drops curated ones back into
- * the low-confidence queue (release audit 2026-09-29).
+ * the low-confidence queue.
  */
 const fs = require('fs');
 const path = require('path');

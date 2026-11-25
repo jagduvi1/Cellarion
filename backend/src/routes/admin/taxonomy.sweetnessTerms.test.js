@@ -1,5 +1,5 @@
 /**
- * The label sweetness term routes (GitHub discussion #1754): list with wine
+ * The label sweetness term routes: list with wine
  * counts and the review flag, create with a scale and a band of that scale,
  * the word and scale of a term that wines carry are frozen (their identity
  * keys are built from it), delete refused while a wine references the row,

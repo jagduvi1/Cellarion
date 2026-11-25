@@ -1,5 +1,5 @@
 /**
- * aiConfig provider resolution (issue #698).
+ * aiConfig provider resolution.
  *
  * get() must return the models that ACTUALLY serve requests: the stored
  * Claude/Voyage names by default, the env-configured models when

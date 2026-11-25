@@ -228,7 +228,7 @@ describe('the auto-promote hook consults it', () => {
   });
 
   /**
-   * Audit M-4: the TRANSITION now records itself, so the post-save hook can
+   * The TRANSITION now records itself, so the post-save hook can
    * start the label scan's retention clock on EVERY promoting write path — the
    * admin PUT and /strip-producer promote by setting a producer and saving, and
    * used to stamp nothing, leaving the scan unreadable AND unsweepable.

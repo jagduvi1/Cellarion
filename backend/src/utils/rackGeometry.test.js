@@ -96,7 +96,7 @@ describe('rackGeometry', () => {
     it('2 rows, 1 col → 1 + 1 = 2 (odd row min is 1)', () => {
       expect(totalSlots('hex', 2, 1)).toBe(2);
     });
-    // Security audit D14-1: a `rows`-iteration loop run on unvalidated input
+    // A `rows`-iteration loop run on unvalidated input
     // by the rack update route would let one request with rows "1e308" stall
     // the backend. The hex count is closed form; these pin it to the
     // equivalent loop across the whole legal range.

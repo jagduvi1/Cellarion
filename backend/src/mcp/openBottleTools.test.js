@@ -1,5 +1,5 @@
 /**
- * MCP open-bottle tools (issue #835) — open_bottle / pour_glass / close_bottle.
+ * MCP open-bottle tools — open_bottle / pour_glass / close_bottle.
  *
  * Pins: consume-scope gating, idempotency-by-state (repeat open reports the
  * existing state, NO second ledger row), implicit open on pour_glass, the

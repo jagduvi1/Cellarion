@@ -6,7 +6,7 @@
  * When the server refuses a custom field, the add stops at a notice — and the
  * link used to run only from the notice's Close button. Leaving the page any
  * other way stranded the photos: no bottle, no wine, a row in the admin queue
- * that nobody could act on until the 30-day sweep (audit 2026-09-27 M1).
+ * that nobody could act on until the 30-day sweep.
  *
  * Locked here: the link is made before the notice is shown, and once only.
  *

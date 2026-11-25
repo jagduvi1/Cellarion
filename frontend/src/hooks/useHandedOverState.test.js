@@ -30,7 +30,7 @@ test('nothing handed over: nothing shown, nothing touched', () => {
   expect(window.history.state).toEqual({ usr: null, key: 'k2', idx: 0 });
 });
 
-// Release audit 2026-10-16: the add page goes BACK to the list it came from,
+// The add page goes BACK to the list it came from,
 // and router state cannot ride a pop — the notice waits in sessionStorage.
 describe('handed over for a page reached by Back', () => {
   const store = () => {

@@ -1,7 +1,7 @@
 /**
  * GET /api/bottles — answering API-token polling from memory.
  *
- * Scaling audit 2026-09-25: Home Assistant asks `?maturity=…&limit=…` every
+ * Home Assistant asks `?maturity=…&limit=…` every
  * few minutes and after every change nudge, and the maturity path loads and
  * classifies the whole collection per request. Pinned here: a token request
  * with an unchanged data version is answered from memory; a change (the data

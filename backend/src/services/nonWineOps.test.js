@@ -153,7 +153,7 @@ describe('applyOtherCategoryAfterAdd', () => {
   });
 });
 
-// Release audit 2026-10-28: the move pays the contribution gate like every
+// The move pays the contribution gate like every
 // other member write to the registry, and the other holders are told.
 describe('markNotWineByMember — gate and co-holders', () => {
   test('a banned member is refused before anything is filed; a move from the bottle page spends the daily budget', async () => {

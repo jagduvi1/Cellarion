@@ -263,7 +263,7 @@ describe('dataForWine', () => {
   });
 });
 
-// Display names (2026-09-09). The vocabulary refused "Alkoholgehalt" as a
+// Display names. The vocabulary refused "Alkoholgehalt" as a
 // duplicate of ABV, correctly — and the German reader who proposed it could
 // not have known, because the only key on his page was named in English. A
 // key now carries the reader's name in `displayName`; `name` is unchanged
@@ -431,7 +431,7 @@ describe('admin decisions', () => {
     expect(awardValue).toHaveBeenCalledTimes(1);
   });
 
-  // ── Contributor feedback (2026-08-30) ────────────────────────────────────
+  // ── Contributor feedback ────────────────────────────────────
   // The rejectReason field was written, capped and stored — and had no
   // reader: no notification type existed, and the user-facing keys endpoint
   // returns only the accepted vocabulary, so a curator's explanation reached
@@ -513,7 +513,7 @@ describe('admin decisions', () => {
   });
 });
 
-// A server whose admin turned review of contributions off (discussion #1778):
+// A server whose admin turned review of contributions off:
 // a value is published and a field accepted as made, through the same
 // decide code an admin runs, decided by the contributor, nobody notified,
 // no daily limit. A relay from another server (via 'bridge') always waits.

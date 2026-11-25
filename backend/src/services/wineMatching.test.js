@@ -90,7 +90,7 @@ describe('scoreWineMatch', () => {
   });
 });
 
-// ─── producer variants — comparison-key axis (dup analysis 2026-07-22) ──────
+// ─── producer variants — comparison-key axis ──────
 
 describe('scoreWineMatch — producer variants', () => {
   test('corporate-suffix variant of the same producer scores as an exact producer match', () => {

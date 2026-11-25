@@ -1,5 +1,5 @@
 /**
- * Producer spelling canonicalization at mint (strategy 2026-07-29, R1).
+ * Producer spelling canonicalization at mint.
  *
  * Pins the invariants: majority spelling wins, ties go to the registry's
  * oldest spelling, a brand-new producer keeps the typed spelling, quarantined
@@ -68,7 +68,7 @@ describe('resolveCanonicalProducerSpelling', () => {
   });
 });
 
-// Stage 2 (2026-08-14): decoration variants — the split class stage 1 is
+// Stage 2: decoration variants — the split class stage 1 is
 // blind to, found as 130 live clusters by the producer-display consolidation.
 // Every guard here is a real prod case that must NOT auto-fold.
 describe('resolveCanonicalProducerSpelling — decoration stage', () => {

@@ -1,5 +1,5 @@
 /**
- * The Registry Bridge and the label sweetness term (GitHub discussion #1754).
+ * The Registry Bridge and the label sweetness term.
  *
  * WHY THIS TEST EXISTS:
  * Self-hosted installs update on their own schedule. A peer on protocol v1 —

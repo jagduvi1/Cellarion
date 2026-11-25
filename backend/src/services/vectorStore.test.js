@@ -1,5 +1,5 @@
 /**
- * Vector search without a vector database (2026-09): the vectors live on the
+ * Vector search without a vector database: the vectors live on the
  * WineEmbedding rows as int8 and are compared in memory.
  *
  * WHY THIS TEST EXISTS:

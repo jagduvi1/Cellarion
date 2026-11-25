@@ -1,7 +1,7 @@
 /**
  * Tests for the signed unsubscribe token (utils/unsubscribe.js).
  *
- * Covers the 2026-07 hardening (SECURITY_AUDIT_2026-07-08 L-2 + L-3):
+ * Covers the 2026-07 hardening:
  * - full 64-hex HMAC emitted (was truncated to 16 hex / 64 bits)
  * - 90-day expiry enforced on the signed timestamp (was never checked)
  * - strict 3-part token shape

@@ -4,7 +4,7 @@
  *
  * The mapper's own suite hands it fixtures, so it cannot see this: `colour`
  * was emitted by the mapper and never selected by the query, and no export
- * ever carried one (audit 2026-09-19). Source-level on purpose — the query
+ * ever carried one. Source-level on purpose — the query
  * needs a live database, the rule does not.
  */
 const fs = require('fs');

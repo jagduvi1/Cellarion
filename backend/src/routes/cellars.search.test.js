@@ -349,7 +349,7 @@ describe('GET /api/cellars/multi/bottles — only the page is loaded', () => {
   });
 });
 
-// ── Sort by quantity (forum request 2026-10-15) ─────────────────────────────
+// ── Sort by quantity ─────────────────────────────
 // The grouped list's cards by how many identical bottles each holds; the
 // search's ranking can't do that, so every hit is loaded and the cards are
 // counted.
@@ -428,7 +428,7 @@ describe('GET /api/cellars/:id?group=1&sort=-quantity — counted in the databas
     expect(loads.map((l) => l.ids).flat().sort()).toEqual([B2, B3].sort());
   });
 
-  // Release audit 2026-10-16: one wine and vintage in two sizes, as many of
+  // One wine and vintage in two sizes, as many of
   // each — the order no longer depends on the order MongoDB groups in, so a
   // page boundary never shows one card twice and the other not at all.
   test('cards that differ only in size keep one order whatever order the groups come in', async () => {

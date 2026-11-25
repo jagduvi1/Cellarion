@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import SupportModal from './SupportModal';
 
-// Support's answer is emailed as well, unless the user turned that off
-// (2026-09-26). The form says so where the user gives us the reason to email
+// Support's answer is emailed as well, unless the user turned that off.
+// The form says so where the user gives us the reason to email
 // them, and links to the setting.
 
 vi.mock('react-i18next', () => ({

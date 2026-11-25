@@ -1,7 +1,7 @@
 /**
  * `needsReview` — which user-minted taxonomy rows actually want a decision.
  *
- * WHY (2026-08-31): `pendingReview` is set on EVERY region and grape a user
+ * WHY: `pendingReview` is set on EVERY region and grape a user
  * write mints and cleared only by an admin clicking approve, so the queue grows
  * automatically and drains by hand. Measured on production: of 164 regions
  * minted in one month, 161 were in genuine use and exactly one was junk. At a

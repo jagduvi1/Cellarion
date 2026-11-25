@@ -1,5 +1,5 @@
 /**
- * The resolver and the label sweetness term (GitHub discussion #1754).
+ * The resolver and the label sweetness term.
  *
  * WHY THIS TEST EXISTS:
  * After the migration the plain "Riesling Spätlese" and the registry's

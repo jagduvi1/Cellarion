@@ -1,5 +1,5 @@
 /**
- * Audit 2026-09 M01-1: a stateful MCP session must never retain the Express
+ * A stateful MCP session must never retain the Express
  * request (and with it the parsed body). The snapshot has to satisfy every
  * consumer of ctx.req — attribution, ledger token id, rate-limit key — and
  * carry nothing else.

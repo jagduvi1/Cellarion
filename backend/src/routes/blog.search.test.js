@@ -1,5 +1,5 @@
 /**
- * Blog free-text search (user request 2026-08-21).
+ * Blog free-text search.
  *
  * A Mongo regex over 27 posts, not a Meilisearch index — the interesting part
  * is therefore not relevance but the two ways a user-supplied needle can hurt

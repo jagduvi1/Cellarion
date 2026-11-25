@@ -112,7 +112,7 @@ it('step 2 asks for the barcode; one scanned there is kept for the bottle, no lo
   await act(async () => { fireEvent.click(screen.getByText('addBottle.searchBtn')); });
   await act(async () => { fireEvent.click(screen.getByText('Barolo').closest('.wine-row')); });
   expect(screen.getByText('addBottle.barcodeHelp')).toBeInTheDocument();
-  // Below the fields: the vintage comes first (newcomer walkthrough 2026-10-15).
+  // Below the fields: the vintage comes first.
   const vintageField = screen.getByPlaceholderText('addBottle.vintagePlaceholder');
   expect(vintageField.compareDocumentPosition(screen.getByText('addBottle.barcodeHelp')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 

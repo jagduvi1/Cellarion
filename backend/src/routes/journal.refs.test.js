@@ -1,5 +1,5 @@
 /**
- * Reference-validation tests for /api/journal (security audit L-5).
+ * Reference-validation tests for /api/journal.
  *
  * WHY THIS TEST EXISTS:
  * If sanitizeEntry accepted any well-formed ObjectId for

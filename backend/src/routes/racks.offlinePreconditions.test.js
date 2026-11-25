@@ -1,5 +1,5 @@
 /**
- * Offline-queue preconditions on the rack slot routes (#1355). A placement,
+ * Offline-queue preconditions on the rack slot routes. A placement,
  * move or clear queued offline says which bottle the user saw in each slot it
  * touches; if the rack changed meanwhile (a partner placed a bottle there),
  * the route answers 409 instead of silently displacing that bottle. Absent →

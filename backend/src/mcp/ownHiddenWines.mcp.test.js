@@ -1,6 +1,6 @@
 /**
- * search_registry / get_wine and a member's own quarantined drinks
- * (2026-10-13): listed first for the member who has them, flagged, readable
+ * search_registry / get_wine and a member's own quarantined drinks:
+ * listed first for the member who has them, flagged, readable
  * by id for them — and for nobody else, never on the anonymous surface.
  */
 jest.mock('../models/WineDefinition', () => ({ findOne: jest.fn(), find: jest.fn(), findById: jest.fn() }));

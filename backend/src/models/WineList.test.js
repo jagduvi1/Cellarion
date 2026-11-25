@@ -1,5 +1,5 @@
 /**
- * WineList total-entry cap (security audit H1).
+ * WineList total-entry cap.
  *
  * The public, unauthenticated PDF endpoint renders every entry synchronously
  * and buffers the whole document in the backend heap, so an uncapped list is a

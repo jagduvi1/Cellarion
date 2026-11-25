@@ -277,7 +277,7 @@ describe('POST /api/wines/identify-text — model output is normalized before th
 });
 
 describe('POST /api/wines/identify-text — regional grape display parity', () => {
-  // Audit 2026-08-11 INFO: the AI-identify card renders next to the search
+  // The AI-identify card renders next to the search
   // list, which already shows the regional label ("Tinta Roriz" on a Douro
   // row) — the identify response must be decorated the same way.
   const DOURO_WINE = {

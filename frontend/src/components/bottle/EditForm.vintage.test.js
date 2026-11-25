@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // The vintage field keeps its stored codes but accepts the words the UI shows
-// for them (#1690): a Norwegian user typing "Uten årgang" saves 'NV'.
+// for them: a Norwegian user typing "Uten årgang" saves 'NV'.
 
 vi.mock('react-i18next', () => {
   const words = { 'common.nonVintage': 'Uten årgang', 'common.unknownVintage': 'Ukjent årgang' };

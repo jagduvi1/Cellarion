@@ -90,7 +90,7 @@ describe('shape gate', () => {
   test('INVERTED: completing "Increíble" with producer "Increíble" is ACCEPTED and promotes', async () => {
     // Was refused. Refusing it also refused a curator writing "Petrus" as the
     // producer of "Petrus" — the single-wine estate, 67 of 91 sampled real
-    // pairs (audit H-1/H-2). The suspicion is now producer-echoes-name.v1 in
+    // pairs. The suspicion is now producer-echoes-name.v1 in
     // the cross-field REVIEW queue, where a curator with the label photo (still
     // readable for 7 days after promotion) can clear it or correct it.
     const wine = pendingWine();
@@ -198,7 +198,7 @@ describe('cross-field gate', () => {
 });
 
 /**
- * The OVERRIDE (audit L-10b). Users can mint Regions and Appellations, so a
+ * The OVERRIDE. Users can mint Regions and Appellations, so a
  * junk taxonomy row bearing a real producer's name made that producer
  * permanently unwritable — and the only escape left was identityUnavailable,
  * i.e. recording a FALSEHOOD about a label that plainly prints the name.

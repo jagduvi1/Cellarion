@@ -34,7 +34,7 @@ jest.mock('./crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(asyn
 jest.mock('./search', () => ({ removeWine: jest.fn() }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn(async () => {}) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn(async () => {}) }));
-// The admin merge's reference re-pointer — attach delegates to it (audit 2026-09-12).
+// The admin merge's reference re-pointer — attach delegates to it.
 jest.mock('./wineMergeOps', () => ({ reassignWineRefs: jest.fn(async () => 2) }));
 
 const WineDefinition = require('../models/WineDefinition');
@@ -287,7 +287,7 @@ describe('publishDraft', () => {
     expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: 'cave de kaysersberg:kaefferkopf:alsace', _id: { $ne: WINE } });
     expect(runPromotionFollowThrough).not.toHaveBeenCalled();
     // The expiry job and the erasure path reuse this object for the attach
-    // that follows — every pre-save mutation is undone (audit 2026-09-12).
+    // that follows — every pre-save mutation is undone.
     expect(w).toMatchObject({ draft: true, normalizedKey: 'draft~x', draftExpiresAt: new Date('2026-09-19T00:00:00Z') });
   });
 
@@ -327,7 +327,7 @@ describe('attachDraftBottles', () => {
     expect(findVisibleWine).toHaveBeenCalledWith(TARGET, expect.objectContaining({ userId: ME, noDrafts: true }));
     // Scans first (never moved onto the target), then the full re-point —
     // price tracking, personal data, restock alerts, journal pairings and the
-    // rest follow the bottles exactly as in an admin merge (audit 2026-09-12).
+    // rest follow the bottles exactly as in an admin merge.
     expect(BottleImage.find).toHaveBeenCalledWith({ wineDefinition: WINE, kind: 'label-scan' });
     expect(BottleImage.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['scan1'] } });
     expect(reassignWineRefs).toHaveBeenCalledWith(WINE, TARGET);

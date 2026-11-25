@@ -1,7 +1,7 @@
 /**
  * What the rack routes send about the bottles in their slots.
  *
- * Scaling audit 2026-09-25: GET /api/racks populated whole bottle, wine and
+ * GET /api/racks populated whole bottle, wine and
  * taxonomy documents. A large cellar came to about 5 MB (mostly taxonomy
  * descriptions), and every shared wine's label-scan evidence, AI profile and
  * creator reached any viewer of the cellar. Pinned here: every rack response

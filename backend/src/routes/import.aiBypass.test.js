@@ -263,7 +263,7 @@ describe('complete-row AI bypass', () => {
   });
 });
 
-// ── Vivino-shaped exports (2026-08-30) ─────────────────────────────────────
+// ── Vivino-shaped exports ─────────────────────────────────────
 // Measured on a real 186-row import: every grape string was a composition
 // ("Sangiovese Blend", "Red Blend"), none matched the taxonomy, so the type
 // gate never resolved and the bypass fired zero times — 60 wines fell through
@@ -321,7 +321,7 @@ describe('blend-style grape strings', () => {
   });
 });
 
-// ── Duplicate rows of one wine (2026-08-30) ────────────────────────────────
+// ── Duplicate rows of one wine ────────────────────────────────
 describe('the bypass identity reaches every row of a multi-bottle line', () => {
   it('duplicate rows inherit the representative identity — and spend no AI', async () => {
     // One cascade attempt is made per unique (name, producer); the result is

@@ -127,7 +127,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   Bottle.__instances.length = 0;
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, name: 'Main', user: USER_ID, members: [], deletedAt: null });
-  // findOne: the by-id path resolves through services/wineVisibility (M-4).
+  // findOne: the by-id path resolves through services/wineVisibility.
   WineDefinition.findOne.mockResolvedValue({ _id: WINE_ID, name: 'Test Wine' });
   // Existing bottle for PUT — carries a stored window half for the
   // partial-update inversion checks.

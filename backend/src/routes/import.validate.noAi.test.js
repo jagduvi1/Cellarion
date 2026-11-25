@@ -1,6 +1,6 @@
 /**
  * POST /api/bottles/import/validate — no-AI installs share the registry-first
- * cascade (audit 2026-08-03 H3).
+ * cascade.
  *
  * WHY THIS TEST EXISTS: `uniquePrs` (the dedup-by-wine-key list driving the
  * Pass 1a registry cascade) used to be built only when aiProvider

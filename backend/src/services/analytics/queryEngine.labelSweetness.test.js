@@ -1,5 +1,5 @@
 /**
- * The analytics engine and the label sweetness term (GitHub discussion #1754):
+ * The analytics engine and the label sweetness term:
  * rows mode loads and populates the term so the taxonomy extractor can name
  * it, and grouped mode resolves the bucket ids to term names. Same mocks as
  * queryEngine.test.

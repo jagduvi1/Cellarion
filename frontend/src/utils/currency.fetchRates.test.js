@@ -1,6 +1,6 @@
 import { fetchRates } from './currency';
 
-// Audit 2026-09 F03-4: rates come from our own backend, never from the
+// Rates come from our own backend, never from the
 // upstream provider directly, and the result is cached per session.
 test('fetchRates asks the backend endpoint and caches the answer', async () => {
   const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ base: 'USD', rates: { USD: 1, EUR: 0.92 } }) });

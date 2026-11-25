@@ -111,7 +111,7 @@ describe('buildPreferencesUpdate', () => {
     expect(Object.keys(update).some((k) => k.includes('evil') || k.includes('hacked'))).toBe(false);
   });
 
-  // Audit 2026-09-27 M7: the one-click unsubscribe records an objection to all
+  // The one-click unsubscribe records an objection to all
   // email (User.emailOptOutAt). Turning any email back on in Settings withdraws
   // it — the per-category switches decide from then on. Turning one off, or
   // touching push only, never records one: the link is the objection.
@@ -268,7 +268,7 @@ describe('validateSourceUrl', () => {
     expect(validateSourceUrl('not a url')).toMatch(/valid URL/);
   });
 
-  // Security audit L-1: the structural classifier closes forms the old lexical
+  // The structural classifier closes forms the old lexical
   // regex missed. WHATWG `new URL` canonicalizes decimal/hex/octal IPv4, and
   // isPrivateAddress catches IPv6 loopback/ULA/link-local + v4-mapped.
   test('rejects private targets in canonicalized-IPv4 and IPv6 forms', () => {
@@ -445,7 +445,7 @@ describe('createWineRequest — links and the back label (#1460)', () => {
 });
 
 // The repeat check is quadratic in the list and the route takes megabytes of
-// JSON: the length is refused BEFORE the loop (release audit 2026-10-09, H2).
+// JSON: the length is refused BEFORE the loop.
 describe('createWineRequest — an oversized link list is refused at once', () => {
   test('a list of 200,000 one-character strings is refused in well under a second', async () => {
     const sourceUrls = Array.from({ length: 200000 }, (_, i) => String(i));

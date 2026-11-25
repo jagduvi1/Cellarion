@@ -11,7 +11,7 @@ jest.mock('../models/Discussion', () => ({}));
 
 const { Meilisearch } = require('meilisearch');
 
-// The admin reindex 500'd on prod (2026-08-11): meilisearch-js >=0.38 moved
+// The admin reindex 500'd on prod: meilisearch-js >=0.38 moved
 // task waiting to client.tasks.waitForTasks and renamed the options.
 describe('waitForTasks Meili API pin', () => {
   test('uses client.tasks.waitForTasks (0.38+ API), never client.waitForTasks', () => {

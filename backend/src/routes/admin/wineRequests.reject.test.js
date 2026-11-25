@@ -75,7 +75,7 @@ beforeEach(() => {
   Bottle.distinct.mockResolvedValue([]);
 });
 
-// Audit 2026-09-27 M6: the detached bottles' owners see different statistics
+// The detached bottles' owners see different statistics
 // and bottle lists — their data version must move, as it does on resolve, or
 // the read caches keep the old answer for up to 30 minutes.
 test('reject moves the data version of every owner of a detached bottle', async () => {

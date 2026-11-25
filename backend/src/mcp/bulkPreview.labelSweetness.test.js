@@ -1,5 +1,5 @@
 /**
- * bulk_add's preview and the label sweetness term (GitHub discussion #1754).
+ * bulk_add's preview and the label sweetness term.
  *
  * WHY THIS TEST EXISTS:
  * A plan item built from a wine_id is summarised with `termLoaded: true`, so

@@ -1,5 +1,5 @@
 /**
- * services/shutdown — what a deploy's SIGTERM does (scaling audit 2026-09-25).
+ * services/shutdown — what a deploy's SIGTERM does.
  * Node as PID 1 used to ignore it, so Docker waited its 10 s and killed the
  * process mid-work. Pinned here: the order of the steps, that a request being
  * served finishes (with Connection: close) while new connections are refused,

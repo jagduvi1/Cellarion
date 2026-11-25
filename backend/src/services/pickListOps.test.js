@@ -1,5 +1,5 @@
 /**
- * Pick lists (forum request 2026-10-13) — the shared service behind REST
+ * Pick lists — the shared service behind REST
  * /api/pick-lists and the MCP pick-list tools. Pinned: only bottles the user
  * can see and that are still in the cellar go on a list; the caps; the
  * duplicate-proof atomic add; another user's list reads as not found; and the

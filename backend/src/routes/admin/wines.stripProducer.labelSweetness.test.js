@@ -1,6 +1,5 @@
 /**
- * POST /api/admin/wines/:id/strip-producer and the label sweetness term
- * (GitHub discussion #1754).
+ * POST /api/admin/wines/:id/strip-producer and the label sweetness term.
  *
  * WHY THIS TEST EXISTS:
  * Before renaming, the route refuses (409) when the same producer already has

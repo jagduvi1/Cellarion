@@ -212,7 +212,7 @@ test('Drink, Edit vintage and Add act on this vintage\'s bottles; the page reloa
   page = { ...page, bottles: page.bottles.slice(1), total: 2 };
   fireEvent.click(await screen.findByText('drink-stub:3'));
   expect(await screen.findByText('cellarVintageBeta.kindLine:{"count":2,"cellar":"Home"}')).toBeInTheDocument();
-  // Said with Undo now, not only "Logged" (live walkthrough 2026-10-15).
+  // Said with Undo now, not only "Logged".
   expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.takenOut');
   expect(screen.getByText('common.undo')).toBeInTheDocument();
 
@@ -727,7 +727,7 @@ describe('the vintage\'s own drink window', () => {
   });
 });
 
-// Release audit 2026-10-16: NV follows the bottle page's rule — a window
+// NV follows the bottle page's rule — a window
 // only in relative mode and with a year to measure from.
 describe('NV maturity', () => {
   const nvPage = (bottles) => ({ ...page, vintage: 'NV', bottles, total: bottles.length });

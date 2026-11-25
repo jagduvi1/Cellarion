@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import HeroImage from './HeroImage';
 
-// Release audit 2026-10-13: a bottle still waiting on its wine request drew
+// A bottle still waiting on its wine request drew
 // a blank label.
 describe('HeroImage drawn bottle', () => {
   it('a bottle waiting on its wine request shows the requested name and producer', () => {

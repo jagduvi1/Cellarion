@@ -57,7 +57,7 @@ describe('WineDrafts page', () => {
     fireEvent.click(screen.getByLabelText('Select Kaefferkopf'));
     fireEvent.click(screen.getByLabelText('Select Empty One'));
     // After the batch the published row is gone from the list — its outcome
-    // is kept in the "Just now" box (audit 2026-09-12).
+    // is kept in the "Just now" box.
     api.listMyWineDrafts.mockResolvedValue(res({ drafts: [DRAFTS[1]] }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Publish selected \(2\)/ })); });
     expect(api.publishWineDrafts).toHaveBeenCalledWith(authState.apiFetch, ['d1', 'd2']);

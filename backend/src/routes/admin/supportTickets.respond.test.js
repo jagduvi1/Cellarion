@@ -97,7 +97,7 @@ test('not emailed when the user turned support-reply emails off', async () => {
   expect(Notification.create).toHaveBeenCalled(); // the bell still gets it
 });
 
-// Audit 2026-09-27 M7: someone who clicked "unsubscribe from all" before this
+// Someone who clicked "unsubscribe from all" before this
 // category existed has no supportReply flag stored — the objection itself
 // (emailOptOutAt) must stop the mail. The bell still carries the answer.
 test('not emailed to someone who unsubscribed from all Cellarion email, even with no support-reply flag stored', async () => {

@@ -1,6 +1,6 @@
 const { statedStyle, conflictingStyleTerms, SWEETNESS_WORDS } = require('./styleTerms');
 
-// The vineyard the reporter's bottles come from (issue #1134). Kept as one
+// The vineyard the reporter's bottles come from. Kept as one
 // constant so a test reads as the tail of the name, which is the only part
 // that differs and the whole reason the scorer could not separate them.
 const V = 'Brauneberger Juffer-Sonnenuhr Riesling ';

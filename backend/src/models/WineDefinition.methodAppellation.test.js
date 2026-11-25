@@ -1,5 +1,5 @@
 /**
- * The pre-validate hook's PRODUCTION METHOD rule (GitHub discussion #1696): a
+ * The pre-validate hook's PRODUCTION METHOD rule: a
  * value that is nothing but a method ("Méthode Traditionnelle") is no
  * appellation, so it never stores as one — on any save-based write — and the
  * canonical key derived in the same hook carries no appellation. No DB

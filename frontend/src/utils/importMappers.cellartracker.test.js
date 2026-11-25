@@ -297,7 +297,7 @@ describe('CT List table (bundle, 20 wines)', () => {
   // Cellarion bucket for Spirits" — a reasonable call at the time, because the
   // parsed type was dropped at the payload boundary and reached nothing.
   //
-  // Forwarding type (2026-08-22) changed the calculus: WineDefinition is
+  // Forwarding type changed the calculus: WineDefinition is
   // SHARED, so one user's whisky filed as a fortified wine becomes everyone's
   // fortified wine — the same shape as writing a Provence AOC onto a New
   // Zealand Pinot. The bottle still imports; it just arrives without a claimed

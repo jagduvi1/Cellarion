@@ -5,7 +5,7 @@ import CellarDetail from './CellarDetail';
 // The filter's numbers. Its button counts bottles, not cards: two identical
 // bottles share one card, and a filter matching both must read "Show 2
 // bottles". Its maturity buttons show a count too, fetched from the cellar's
-// maturity-counts route — the statistics never carried them (#1291).
+// maturity-counts route — the statistics never carried them.
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k, o) => (o && o.count !== undefined ? `${k}:${o.count}` : k), i18n: { language: 'en' } }),

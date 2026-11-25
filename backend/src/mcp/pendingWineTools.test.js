@@ -199,7 +199,7 @@ describe('list_pending_wines', () => {
  *   { status: 'approved', visibility: 'public', … } — the PUBLIC gallery, the
  *     same filter GET /api/images/wine/:id serves the web. Any wine.
  *   { $or: [{ wineDefinition }, { bottle }] }       — the owners' own photos.
- *     PENDING wines only (security audit M-1).
+ *     PENDING wines only.
  */
 const primeImageQueries = ({ gallery = [], owners = [] } = {}) => {
   BottleImage.find.mockImplementation((q) =>
@@ -245,7 +245,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
       expect(Buffer.from(img.data, 'base64').toString()).toBe('downscaled-jpeg-bytes');
     }
     // The scanned LABEL is the primary evidence and comes first. `private`
-    // rides along (audit M-1): these are the owner's own photos, released to
+    // rides along: these are the owner's own photos, released to
     // curation for one purpose, and the payload says so.
     expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan', side: 'front', private: true });
   });
@@ -354,7 +354,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
   });
 
   /**
-   * M-1 (security audit) — this tool ships other people's PRIVATE bottle photos
+   * This tool ships other people's PRIVATE bottle photos
    * as base64 to an EXTERNAL model. The only thing that justifies it is a
    * curator reading a label they have been asked to identify, so the wine must
    * still be pending. Without the gate any somm token could pull the private

@@ -264,7 +264,7 @@ describe('findOrCreateWine — producer-prefix canonicalization (step 0)', () =>
   test('a name identical to the producer is left alone (nothing would remain)', async () => {
     // Step 0 is the subject here: the strip must not eat the whole name.
     //
-    // INVERTED (audit H-1): this briefly asserted pendingIdentity: true, because
+    // INVERTED: this briefly asserted pendingIdentity: true, because
     // the shape gate refused producer === name. That refusal is gone — it is the
     // single-wine estate, and "Paul Avril"/"Paul Avril" is exactly the shape
     // Petrus and Château Margaux have. The row mints PUBLIC, name intact.
@@ -639,8 +639,7 @@ describe('findOrCreateWine — fuzzy threshold routing', () => {
 
     const result = await findOrCreateWine(INPUT, USER_ID);
 
-    // A quarantined non-wine is out of the index and out of this fallback too
-    // (audit 2026-10-14).
+    // A quarantined non-wine is out of the index and out of this fallback too.
     expect(WineDefinition.find).toHaveBeenCalledWith({
       $text: { $search: 'Clos des Papes Paul Avril' },
       nonWine: { $ne: true },
@@ -1282,7 +1281,7 @@ describe('taxonomy find-or-create dedup', () => {
  */
 describe('findOrCreateWine — region canon: appellation granularity wins', () => {
   // The canon lookup is Region.find(...).limit(2) — TWO hits mean a taxonomy
-  // duplicate and the canon must refuse to pick (audit 2026-08-16). This
+  // duplicate and the canon must refuse to pick. This
   // dispatcher serves that shape for canon queries and keeps the chainable
   // taxonomy default for everything else (cross-field reference loads).
   const primeRegionCanon = (map) => {
@@ -1476,7 +1475,7 @@ describe('findOrCreateWine — label variants are caught even on confirmCreate',
 });
 
 describe('findOrCreateWine — a ripeness Prädikat is not an appellation', () => {
-  // The import paths route a bare Prädikat out of the appellation (PR #1173);
+  // The import paths route a bare Prädikat out of the appellation;
   // the add-bottle form must too, or a record arrives with appellation
   // "Kabinett". Every mint applies the rule.
   test('a bare Prädikat leaves the appellation and lands in classification', async () => {

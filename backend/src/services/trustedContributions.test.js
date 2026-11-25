@@ -3,7 +3,7 @@
  * contributions does with a member's photo or field correction.
  *
  * WHY THIS TEST EXISTS:
- * A household on its own install (discussion #1778) waited on itself: every
+ * A household on its own install waited on itself: every
  * photo sat in Admin → Image Review (and a pending photo is the uploader's
  * only, so the other member did not see it), every fix and value in a queue.
  * With review switched off each contribution must be applied through the

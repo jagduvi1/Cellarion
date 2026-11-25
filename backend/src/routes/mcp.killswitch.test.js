@@ -61,7 +61,7 @@ const post = (path, auth) => fetch(`${baseUrl}${path}`, {
 // Exact-shape on purpose: a new knob in this group must be a deliberate edit
 // here, not something that slips in unnoticed. Every LIMIT must also be a real
 // number — an undefined max makes express-rate-limit treat its endpoint as
-// unlimited, which is how the OAuth AS ended up unbounded (audit M-1).
+// unlimited, which is how the OAuth AS ended up unbounded.
 test('defaults leave every MCP surface open', async () => {
   expect(rateLimitsConfig.defaults.mcp).toEqual({
     enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200, oauthMax: 2000,
