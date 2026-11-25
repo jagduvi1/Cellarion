@@ -2291,7 +2291,7 @@ function ImportBottles() {
                             {isExpanded ? t('importBottles.review.hide') : t('importBottles.review.options', { count: r.matches.length })}
                           </button>
                         )}
-                        {/* A producer-less row can be looked up too: the model splits the producer out of the display name (2026-09-14). */}
+                        {/* A producer-less row can be looked up too: the model splits the producer out of the display name. */}
                         {r.status === 'fuzzy' && r.item.wineName && !isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs"
@@ -2576,8 +2576,7 @@ function ImportBottles() {
       )}
       {/* One plain line, no dialog and no extra step: the bottles ARE imported,
           so this is information, not an action. Rows whose wine could not be
-          fully identified used to be dropped silently; now they land and a
-          curator finishes the wine. */}
+          fully identified land anyway, and a curator finishes the wine. */}
       {importResult?.pendingIdentityCount > 0 && (
         <p className="done-note">
           {/* `n`, not `count`: passing i18next's magic `count` would demand a

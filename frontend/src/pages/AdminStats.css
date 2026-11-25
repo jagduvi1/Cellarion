@@ -353,10 +353,10 @@
   color: var(--color-text-muted);
 }
 
-/* ── Signup-cohort table (mobile fix, 2026-08-21) ─────────────────────────
-   On a phone the long row labels forced the numeric cells to wrap, splitting
-   "7 · 44%" across lines — which reads as broken data, not layout. Numbers
-   never wrap; the label column is the one allowed to give way. */
+/* ── Signup-cohort table ──────────────────────────────────────────────────
+   On a phone the long row labels would force the numeric cells to wrap,
+   splitting "7 · 44%" across lines — which reads as broken data, not layout.
+   Numbers never wrap; the label column is the one allowed to give way. */
 .admin-stats-cohorts .admin-stats-count,
 .admin-stats-cohorts .admin-stats-pct {
   white-space: nowrap;
@@ -368,13 +368,12 @@
   overflow-wrap: anywhere;
 }
 /* Four columns on a phone. The nowrap rule above matches header cells too, so
-   "Changed a cellar" took the width it wanted and the label column collapsed
-   to one character per line (measured at 360px: 29px wide, 174px tall).
-   Headers may wrap; the label column keeps room for "7–14 days ago" on two
-   lines; cells give up a little side padding so all four columns fit a 360px
-   screen (measured: label 102px wide, table 2px inside its panel); and on a
-   screen narrower still, the table scrolls sideways inside its wrapper rather
-   than crushing a column. */
+   without this a header like "Changed a cellar" takes the width it wants and
+   the label column collapses to one character per line. Headers may wrap; the
+   label column keeps room for "7–14 days ago" on two lines; cells give up a
+   little side padding so all four columns fit a 360px screen; and on a screen
+   narrower still, the table scrolls sideways inside its wrapper rather than
+   crushing a column. */
 .admin-stats-cohorts th.admin-stats-count,
 .admin-stats-cohorts th.admin-stats-pct {
   white-space: normal;

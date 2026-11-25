@@ -65,8 +65,7 @@ export default function WineDetail() {
     const fetchWine = async () => {
       try {
         // Signed in: send the session along so the same endpoint returns the
-        // full profile; anonymous visitors get the prose-only tier (registry
-        // lockdown 2026-09-06).
+        // full profile; anonymous visitors get the prose-only tier.
         const url = `${API_URL}/api/wines/${encodeURIComponent(idOrSlug)}/public`;
         const res = user ? await apiFetch(url) : await fetch(url);
         if (ignore) return;
@@ -270,8 +269,8 @@ export default function WineDetail() {
         <div className="wd-card bd-ai-profile">
           <div className="bd-ai-profile__header">
             <h2>{t('wineDetail.tastingProfile', 'Tasting profile')}</h2>
-            {/* Provenance is load-bearing here too (#985): the public page
-                must never present AI-generated text as established fact. */}
+            {/* Provenance is load-bearing here too: the public page must
+                never present AI-generated text as established fact. */}
             {wine.aiProfile.source === 'curator' ? (
               <span className="bd-ai-tag bd-ai-tag--curator" title={t('wineDetail.provenanceCuratorTitle', 'A sommelier has verified this profile')}>
                 {t('wineDetail.provenanceCurator', 'Curator-verified')}
@@ -373,8 +372,8 @@ export default function WineDetail() {
           <Link to="/cellars" className="btn btn-secondary">
             {t('wineDetail.backToCellars')}
           </Link>
-          {/* R7: the report link used to exist only on the bottle page — but
-              wrong shared data is most visible to NON-owners, right here. */}
+          {/* The report link is here as well as on the bottle page: wrong
+              shared data is most visible to NON-owners, right here. */}
           <button type="button" className="btn btn-secondary" onClick={() => setShowReport(true)}>
             {t('wineDetail.reportIssue')}
           </button>

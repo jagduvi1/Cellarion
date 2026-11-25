@@ -295,7 +295,7 @@
   }
 }
 
-/* ── Phase 2 UX: skeleton, error, pagination, row link, toasts ────────────── */
+/* ── Skeleton, error, pagination, row link, toasts ────────────────────────── */
 .wines-error {
   display: flex;
   align-items: center;

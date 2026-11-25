@@ -472,15 +472,14 @@ button.btn-landing-ghost:disabled {
   }
 
   .landing-nav {
-    /* LONGHAND, deliberately. The `padding: 0 4%` shorthand that used to be
-       here reset padding-top to 0 and undid the safe-area inset from the base
-       rule — while `height: calc(60px + env(safe-area-inset-top))` survived,
-       because nothing else touched it. The bar therefore kept its full height
-       but lost the padding, so `align-items: center` centred the Sign In
-       button across the inset as well and its upper half sat back under the
-       strip iOS owns: visible, but only tappable along the bottom edge.
-       Reported by a real device after the first fix looked right in code
-       (issue #1145, deltabeat). Never use the padding shorthand here. */
+    /* LONGHAND, deliberately. A `padding: 0 4%` shorthand here would reset
+       padding-top to 0 and undo the safe-area inset from the base rule, while
+       `height: calc(60px + env(safe-area-inset-top))` survives because nothing
+       else touches it. The bar would keep its full height but lose the
+       padding, so `align-items: center` would centre the Sign In button across
+       the inset as well and its upper half would sit under the strip iOS
+       owns: visible, but only tappable along the bottom edge. Never use the
+       padding shorthand here. */
     padding-left: 4%;
     padding-right: 4%;
   }

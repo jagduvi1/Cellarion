@@ -847,7 +847,7 @@ function Settings() {
         </form>
       </div>
 
-      {/* ── Offline mode (#1355) ── */}
+      {/* ── Offline mode ── */}
       <OfflineSettings />
 
       </SettingsGroup>

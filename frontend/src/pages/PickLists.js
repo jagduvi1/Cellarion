@@ -7,10 +7,10 @@ import BetaBadge from '../components/BetaBadge';
 import './PickList.css';
 
 /**
- * Pick lists (early access, flag pickLists; forum request 2026-10-13): the
- * member's named lists of bottles to fetch — "Saturday dinner", "Drink next".
- * Bottles are added from the cellar's Select mode or a bottle's ⋮ menu; each
- * list shows where every bottle sits.
+ * Pick lists (early access, flag pickLists): the member's named lists of
+ * bottles to fetch — "Saturday dinner", "Drink next". Bottles are added from
+ * the cellar's Select mode, a vintage page or a bottle's ⋮ menu; each list
+ * shows where every bottle sits.
  */
 export default function PickLists() {
   const { t } = useTranslation();

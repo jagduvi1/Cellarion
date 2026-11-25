@@ -162,11 +162,11 @@ function AddBottle() {
   const [customFieldNotice, setCustomFieldNotice] = useState(null);
   const [uploadedImages, setUploadedImages] = useState([]);
   // How many public photos the registry holds, KEYED BY WINE ID. A single
-  // counter was wrong twice over: a passive reset effect runs a render late, so
-  // the first commit after a wine switch painted the previous wine's answer
-  // ("we already have a photo" for a wine that has none), and an out-of-order
-  // response could overwrite the current wine's count with a stale one. Keying
-  // makes both unrepresentable. Absent key = not fetched yet.
+  // counter would be wrong twice over: a passive reset effect runs a render
+  // late, so the first commit after a wine switch would paint the previous
+  // wine's answer ("we already have a photo" for a wine that has none), and an
+  // out-of-order response could overwrite the current wine's count with a
+  // stale one. Keying makes both unrepresentable. Absent key = not fetched yet.
   const [wineImageCounts, setWineImageCounts] = useState({});
   // Open when the mode was carried over, so its ticked box is in sight.
   const [showDetails, setShowDetails] = useState(startMode === 'onOrder' || startMode === 'history');
@@ -178,8 +178,7 @@ function AddBottle() {
 
   // Adding several bottles at once is precisely when missing these fields hurts:
   // the alternative is opening every bottle afterwards and typing the same note
-  // again. A support ticket arrived describing exactly that, from someone who
-  // never found the panel — so for a multi-bottle add we open it for them.
+  // again, and the panel is easy to miss — so for a multi-bottle add we open it.
   useEffect(() => {
     if (numBottles > 1 && !detailsTouchedRef.current) setShowDetails(true);
   }, [numBottles]);
@@ -195,7 +194,7 @@ function AddBottle() {
   const wineFieldsSentRef = useRef(false);
   // Post-add placing offer: { ids, count } once the save landed
   // in a cellar that has racks. Skippable, never blocking — "Not now" goes to
-  // the cellar page exactly as before.
+  // the cellar page, as an add into a cellar without racks does.
   const [placePrompt, setPlacePrompt] = useState(null);
   const imagesLinkedRef = useRef(false);
 
@@ -219,13 +218,13 @@ function AddBottle() {
   // ── Back-label rescue ──
   // Offered ONLY when the front pass came back incomplete (`extracted.partial`)
   // or unreadable (a 422, which still hands back a scanImageId). Optional and
-  // dismissible: skipping it must behave exactly as it did before this existed,
-  // and the form stays fully editable throughout.
+  // dismissible: skipping it must leave the add exactly as if it was never
+  // offered, and the form stays fully editable throughout.
   const [backOffer, setBackOffer] = useState(false);
   const [backScanImageId, setBackScanImageId] = useState(null);
   // The cross-field rule id when the scanned producer looks like a place or
-  // label text (v1.111.0); the ref holds the exact prefilled string so the
-  // back-label rescue can replace it if — and only if — the user left it alone.
+  // label text; the ref holds the exact prefilled string so the back-label
+  // rescue can replace it if — and only if — the user left it alone.
   const [producerSuspect, setProducerSuspect] = useState(null);
   const suspectProducerValueRef = useRef(null);
   // What the two labels disagreed about. Shown as a non-blocking note and
@@ -251,14 +250,14 @@ function AddBottle() {
     // commit can stamp it on the wine. If the extraction was wrong, that photo
     // is what lets a curator fix the registry entry later.
     setScanImageId(data.scanImageId || null);
-    // A HALF-READ label (one of name/producer empty) is a 200 now, not an
-    // error: the back label is offered as an optional way to fill the rest.
+    // A HALF-READ label (one of name/producer empty) is a 200, not an error:
+    // the back label is offered as an optional way to fill the rest.
     const partial = data.extracted?.partial === true;
     setBackOffer(partial);
     setBackScanImageId(null);
     setScanConflicts([]);
-    // A SUSPECT producer (the box holds a place or label text, not a winery —
-    // v1.111.0) is why this scan is partial even though every field is filled.
+    // A SUSPECT producer (the box holds a place or label text, not a winery)
+    // is why this scan is partial even though every field is filled.
     // The flag drives a visible note, and the ref remembers the exact string
     // so a back-scan producer may REPLACE it — but only while the user hasn't
     // edited the box (their typing always outranks both labels).
@@ -528,7 +527,7 @@ function AddBottle() {
   }, [clearAi]);
 
   // Resolve confirmed wine data against the registry (READ-ONLY — nothing is
-  // created in step 1 any more), handling the three response shapes: matched
+  // created in step 1), handling the three response shapes: matched
   // wine, soft-zone candidates, or no match (→ the data rides to the commit).
   const resolveSelectedWine = useCallback(async (wineData, carriedVintage, opts = {}) => {
     setError(null);
@@ -584,29 +583,27 @@ function AddBottle() {
   }, [apiFetch, t, applyResolvedWine, applyPendingNewWine, search]);
 
   // Confirm scan result — resolve the wine and go to bottle details. The
-  // label image is NOT part of the wine payload (the old find-or-create route
-  // ignored it, and it must not bloat the bottle commit): bottle photos go
+  // label image is NOT part of the wine payload (the resolve route ignores
+  // it, and it must not bloat the bottle commit): bottle photos go
   // through the separate /api/images upload + link-to-bottle flow.
   //
-  // Resolve on WHAT THE LABEL SAID — never on the matched row.
-  // This used to substitute `match.wine`'s name/producer/appellation wholesale
-  // whenever the scan matcher returned anything at all, which it does from
-  // 0.75. The card above still showed `extracted.name`, so a wine filed under
-  // its neighbour looked completely correct: a Mosel estate's Spätlese Alte
-  // Reben, Auslese and Spätlese Feinherb all committed to the Feinherb row and
-  // nothing on screen said so. Handing the scanned identity to the resolver
-  // puts the decision back on the one ladder that has a visible answer for
-  // every band — link at >=0.95, ASK between 0.85 and 0.95, and the scan's own
-  // match offered below that (see resolveSelectedWine).
+  // Resolve on WHAT THE LABEL SAID — never on the matched row. The scan
+  // matcher returns a match from 0.75 while the card above shows
+  // `extracted.name`, so taking `match.wine`'s name/producer/appellation
+  // would file a wine under its neighbour with nothing on screen saying so
+  // (an estate's Spätlese, Auslese and Spätlese Feinherb all on the Feinherb
+  // row). Handing the scanned identity to the resolver puts the decision on
+  // the one ladder that has a visible answer for every band — link at
+  // >=0.95, ASK between 0.85 and 0.95, and the scan's own match offered
+  // below that (see resolveSelectedWine).
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
-    // country/type GAP-FILL from the matched row — never identity. The old
-    // matched branch substituted the whole identity, but it also quietly
-    // healed labels that state no country (registry rows always have one;
-    // the resolve endpoint hard-requires it) and typeless extractions
-    // (findOrCreateWine defaults an empty type to 'red'). Keep exactly that
-    // healing: the match fills only what the label did NOT state, and
-    // name/producer/appellation stay the label's own words.
+    // country/type GAP-FILL from the matched row — never identity. It heals
+    // labels that state no country (registry rows always have one; the
+    // resolve endpoint hard-requires it) and typeless extractions
+    // (findOrCreateWine defaults an empty type to 'red'): the match fills
+    // only what the label did NOT state, and name/producer/appellation stay
+    // the label's own words.
     await resolveSelectedWine(
       {
         name: extracted.name,
@@ -640,7 +637,7 @@ function AddBottle() {
   }, [scanResult]);
 
   // Confirm from the manual edit form.
-  // Producer is deliberately NOT required: an unreadable label used to be a
+  // Producer is deliberately NOT required: an unreadable label must not be a
   // dead end here, and the whole point of the pending-identity flow is that the
   // bottle saves anyway. A producerless payload simply can't score a registry
   // match (producer is 45% of the dedup composite), so the resolve returns
@@ -677,12 +674,11 @@ function AddBottle() {
 
   // Explicit search (Enter key or button). Registry search ONLY — no AI.
   //
-  // This used to fire identifyWineByText in parallel on every search, which
-  // both spent AI budget per keystroke-batch and (before identify-text became
-  // read-only) minted a registry wine for every guess, whether or not the user
-  // took it. AI is now something the user asks for via the "Can't find your
-  // wine?" row below, which also means the fast library results paint
-  // immediately instead of waiting behind a slower AI call.
+  // An AI call per search would spend AI budget on every keystroke-batch,
+  // whether or not the user takes its guess. AI is something the user asks
+  // for via the "Can't find your wine?" row below, which also means the fast
+  // library results paint immediately instead of waiting behind a slower AI
+  // call.
   const handleSearch = useCallback(() => {
     if (!search.trim()) { setWines([]); return; }
     const query = search.trim();
@@ -862,9 +858,8 @@ function AddBottle() {
   );
 
   // The registry wine this scan matched, when it matched one. The scan card
-  // used to read `match` only inside handleConfirmScan, so a matched scan and
-  // an unmatched one looked identical and our existing photo was never shown —
-  // the user re-photographed a wine we already had a picture of. Showing it
+  // shows its photo, so a matched scan does not look like an unmatched one
+  // and nobody re-photographs a wine we already have a picture of. Showing it
   // next to their own shot also makes a WRONG match obvious while they are
   // still holding the bottle, which is the cheapest correction signal we get.
   const scanMatchedWine = scanResult?.match?.wine || null;
@@ -927,11 +922,10 @@ function AddBottle() {
   const foundByBarcode = !!barcodeWineId && selectedWine?._id === barcodeWineId;
 
   // What the page that lists the new bottles says — "“X 2019” added" with
-  // "Add another bottle" (components/BottleAddedNotice). A newcomer adding a
-  // few wines in a row had to find the add button again after every save
-  // (newcomer walkthrough 2026-10-15). The name is the wine the server filed
-  // the bottles under (a "did you mean?" pick at commit can differ from what
-  // was typed).
+  // "Add another bottle" (components/BottleAddedNotice), so someone adding a
+  // few wines in a row need not find the add button again after every save.
+  // The name is the wine the server filed the bottles under (a "did you
+  // mean?" pick at commit can differ from what was typed).
   const addedNotice = () => {
     const created = createdBottlesRef.current.filter(Boolean);
     const first = created[0] || {};
@@ -945,9 +939,9 @@ function AddBottle() {
   // Where the bottles now are, said there. Opened from that very list (its
   // add buttons pass `cameFrom`), the page goes BACK to it — the list keeps
   // its place and Back from it leaves it, where a second copy of the list
-  // made the first Back dead — and the notice is
-  // handed over through sessionStorage. Otherwise the add page is replaced,
-  // so Back never lands on an emptied form.
+  // would make the first Back dead — and the notice is handed over through
+  // sessionStorage. Otherwise the add page is replaced, so Back never lands
+  // on an emptied form.
   // From a closing pop-up ("Place them now?", "did you mean?", the custom-
   // field notice) it first waits until that pop-up's own Back entry is gone;
   // still on it after the wait, going back would only close that entry, so
@@ -969,7 +963,7 @@ function AddBottle() {
   const goToCellarAdded = () => leaveTo(`/cellars/${cellarId}`);
   const leavePlacePrompt = () => { setPlacePrompt(null); goToCellarAdded(); };
   // Leaving without saving (Cancel, the back link): back to the list it came
-  // from too — a pushed copy of it made the first Back land on the emptied
+  // from too — a pushed copy of it would make the first Back land on the emptied
   // form. Bottles already saved (a save that stopped part-way) are said there.
   const leaveUnsaved = (e) => {
     if (createdBottlesRef.current.some(Boolean)) {
@@ -991,14 +985,13 @@ function AddBottle() {
   // can hold it back for one dialog and then resume exactly the same flow.
   const finishAdd = async () => {
     linkUploadedImages();
-    // Offer to place the new bottles now when the cellar has racks (issue
-    // #1055). One read; any failure to answer simply skips the offer.
+    // Offer to place the new bottles now when the cellar has racks. One read;
+    // any failure to answer simply skips the offer.
     const newIds = createdBottlesRef.current.map(b => b?._id).filter(Boolean);
     let hasRacks = false;
     // Bottles added straight into the drinking history are consumed — a
-    // consumed bottle has no place in a rack (audit 2026-09-14 M). Nor does
-    // one on order: it is placed once it arrives, and its list is where the
-    // user goes next.
+    // consumed bottle has no place in a rack. Nor does one on order: it is
+    // placed once it arrives, and its list is where the user goes next.
     if (onOrder && !addToHistory) {
       leaveTo(`/cellars/${cellarId}/on-order`);
       return;
@@ -1040,8 +1033,7 @@ function AddBottle() {
       : msg;
     // Custom fields the server refused on bottles that DID land. Declared
     // outside the try so the network-failure path below can report them too:
-    // a later create that throws used to lose them with the attempt (release
-    // audit 2026-09-27, L).
+    // a later create that throws must not lose them with the attempt.
     const fieldWarnings = [];
 
     try {
@@ -1185,8 +1177,8 @@ function AddBottle() {
       if (fieldWarnings.length > 0) {
         // The photos belong to bottles that now exist: link them before the
         // dialog, not on its Close button — leaving the page any other way
-        // stranded them without a bottle (the orphan rows in the admin queue;
-        // audit 2026-09-27 M1). Idempotent, so finishAdd's call is a no-op.
+        // would strand them without a bottle (orphan rows in the admin
+        // queue). Idempotent, so finishAdd's call is a no-op.
         linkUploadedImages();
         setCustomFieldNotice(fieldWarnings);
         return;
@@ -1296,8 +1288,8 @@ function AddBottle() {
             </p>
           )}
 
-          {/* WHY this scan is partial when every box is filled (audit M-2):
-              the producer looks like label text, not a winery. Says which box
+          {/* WHY this scan is partial when every box is filled: the
+              producer looks like label text, not a winery. Says which box
               to check; never blocks anything. */}
           {producerSuspect && (
             <p className="scan-back-conflicts">
@@ -1387,9 +1379,9 @@ function AddBottle() {
                 </p>
               )}
 
-              {/* A finished search with nothing in it used to render nothing at
-                  all — say so, so the AI row and "Enter it yourself" below read
-                  as the next step rather than as noise. */}
+              {/* A finished search with nothing in it says so, so the AI row
+                  and "Enter it yourself" below read as the next step rather
+                  than as noise. */}
               {searchDone && wines.length === 0 && registryWines.length === 0
                 && !aiSearching && !aiIdentified && !aiMatch && (
                 <p className="wine-search-no-results" role="status">
@@ -1438,9 +1430,9 @@ function AddBottle() {
                       </div>
                     </div>
                     <div className="ai-result-actions">
-                      {/* Busy state is load-bearing: this is now an async
-                          registry write, and a double-tap could otherwise
-                          create two rows. */}
+                      {/* Busy state is load-bearing: this is an async
+                          registry lookup, and a double-tap would otherwise
+                          send it twice. */}
                       <button
                         type="button"
                         className={`btn ${aiCandidates.length > 0 ? 'btn-secondary' : 'btn-success'}`}
@@ -1471,9 +1463,9 @@ function AddBottle() {
                 </div>
               )}
 
-              {/* ── Search results list. Never hidden by the AI card any more:
-                   hiding it is how the AI's guess used to beat the correct
-                   registry row. Rows already shown above are filtered out. ── */}
+              {/* ── Search results list. Never hidden by the AI card: hiding
+                   it would let the AI's guess beat the correct registry
+                   row. Rows already shown above are filtered out. ── */}
               {!aiSearching && wines.length > 0 && (
                 <div className="wines-list">
                   {wines
@@ -1796,8 +1788,8 @@ function AddBottle() {
                 {/* ── Custom fields ──
                     ABV and anything else the label carries, typed while the
                     bottle is still in hand. The same personal typed data the
-                    bottle page writes (#986) — this is a second entry point to
-                    it, not a second store. Nothing is written until the bottle
+                    bottle page writes — this is a second entry point to it,
+                    not a second store. Nothing is written until the bottle
                     POST carries it, so an abandoned form leaves no rows. */}
                 <div className="form-group">
                   <label>{t('addBottle.customFields', 'Custom fields')}</label>

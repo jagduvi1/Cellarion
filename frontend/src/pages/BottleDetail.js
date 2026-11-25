@@ -176,12 +176,11 @@ function BottleDetail() {
         setUserRole(data.userRole);
         setCellarColor(data.cellarColor || null);
         setCurrentRelease(data.currentRelease || null);
-        // The bottle's rack placement now arrives ON the bottle response.
-        // The old fetchRackInfo downloaded every rack with all
-        // slots plus the full 3D layout — the two heaviest requests on this
-        // page — to find one bottle id in the browser; the server answers the
-        // same question with one indexed query. That per-open cost is what
-        // let an ordinary editing session hit the API rate limit.
+        // The bottle's rack placement arrives ON the bottle response: the
+        // server finds it with one indexed query, where finding it in the
+        // browser would download every rack with all slots plus the full 3D
+        // layout — the two heaviest requests on this page — on every open,
+        // enough for an ordinary editing session to hit the API rate limit.
         setRackInfo(data.rackInfo || null);
         setCellarHasRacks(!!data.cellarHasRacks);
         setLotSiblingIds(Array.isArray(data.lotSiblingIds) ? data.lotSiblingIds : []);
@@ -250,9 +249,8 @@ function BottleDetail() {
   const noticeName = () => bottleNoticeName(bottle);
 
   // "Added by mistake?" / "Cancel order": the bottle goes to the cellar's
-  // Recently deleted (POST /:id/undo now trashes it), not away for good — it
-  // used to be the one delete in the app with no way back, while selecting the
-  // same bottle and deleting it could be undone for TRASH_DAYS. The list it
+  // Recently deleted (POST /:id/undo trashes it), not away for good — the
+  // same TRASH_DAYS way back as a delete from the cellar list. The list it
   // returns to offers Undo at once.
   const handleMistakeConfirm = async () => {
     if (mistakeBusy) return;
@@ -373,8 +371,8 @@ function BottleDetail() {
   // past it the button is hidden and the endpoint refuses.
   const canRestore = canEditConsumed && withinRestoreWindow(bottle);
   // "Add again": new bottles of this wine and vintage, copied from this one —
-  // the drunk bottle's page had no way to buy it again (Add more bottles is
-  // for bottles still in the cellar). Same gate as Add more bottles.
+  // the drunk bottle's way to buy it again (Add more bottles is for bottles
+  // still in the cellar). Same gate as Add more bottles.
   const canAddAgain = canEditConsumed && !!wine && !user?.isDemo;
 
   // Shared overflow-menu contents — same list used by the desktop header ⋮ and
@@ -382,11 +380,11 @@ function BottleDetail() {
   // drift between the page's two action surfaces.
   const overflowItems = (
     <>
-      {/* "Add more bottles" — the support answer to "I added Qty 1, how do I
-          make it 6?" without re-searching in Add Bottle (promised 2026-08-10).
-          Needs a real registry wine to clone (pending-request bottles have
-          none) and a non-demo account (POST /api/bottles is requireNonDemo,
-          same gate that hides the Add Bottle form in the demo). */}
+      {/* "Add more bottles" — more of this wine and vintage (one bottle
+          becomes six) without re-searching in Add Bottle. Needs a real
+          registry wine to clone (pending-request bottles have none) and a
+          non-demo account (POST /api/bottles is requireNonDemo, same gate
+          that hides the Add Bottle form in the demo). */}
       {canEdit && wine && !user?.isDemo && !onOrderNow && (
         <button className="bd-overflow-item" role="menuitem" onClick={() => { setAddMoreOpen(true); setBdMoreOpen(false); }}>
           <span aria-hidden="true">➕</span> {t('bottleDetail.addMore.action', 'Add more bottles')}
@@ -399,9 +397,9 @@ function BottleDetail() {
           <span aria-hidden="true">📍</span> {t('pickLists.addAction', 'Add to pick list')}
         </button>
       )}
-      {/* The retail barcode, for a bottle already in the cellar — until now
-          only Add Bottle could read one. Demo accounts cannot (each code is
-          a vote in the shared barcode lookup; the server refuses too). */}
+      {/* The retail barcode, for a bottle already in the cellar, not only at
+          the add. Demo accounts cannot (each code is a vote in the shared
+          barcode lookup; the server refuses too). */}
       {canEdit && !user?.isDemo && (
         <button className="bd-overflow-item" role="menuitem" onClick={() => { setBarcodeOpen(true); setBdMoreOpen(false); }}>
           <span aria-hidden="true">📷</span> {bottle?.barcode ? t('barcodeScan.titleChange', 'Change barcode') : t('barcodeScan.title', 'Add barcode')}
@@ -684,9 +682,9 @@ function BottleDetail() {
               {/* A pending-identity wine has no producer yet. Say so plainly
                   rather than rendering a bare "· France": the owner otherwise
                   has no way to know their wine is awaiting curation, and won't
-                  understand why it can't be found in search (audit L-3 + the
-                  product finding). No action is required of them — promotion
-                  is automatic — so this is a statement, not a prompt. */}
+                  understand why it can't be found in search. No action is
+                  required of them — promotion is automatic — so this is a
+                  statement, not a prompt. */}
               {displayProducer || <em className="bd-producer-pending">{t('bottleDetail.producerPending')}</em>}
               {wine?.country?.name && <span className="bd-country">{displayProducer ? ' · ' : ' — '}{wine.country.name}</span>}
             </p>
@@ -769,7 +767,7 @@ function BottleDetail() {
         />
       )}
 
-      {/* ── Personal typed key/value data (#986) — content card, renders once.
+      {/* ── Personal typed key/value data — content card, renders once.
           Demo visitors are excluded: writes are requireNonDemo and their
           ephemeral accounts would orphan shared-visible rows. ── */}
       {!user?.isDemo && (

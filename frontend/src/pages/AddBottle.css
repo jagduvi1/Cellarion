@@ -995,8 +995,8 @@
   gap: 0.15rem;
 }
 
-/* The name wraps onto a second line rather than "Château Ma…" on a phone
-   (newcomer walkthrough 2026-10-15); a very long one ends in … after two. */
+/* The name wraps onto a second line rather than "Château Ma…" on a phone;
+   a very long one ends in … after two. */
 .selected-wine-bar-name {
   color: var(--color-text);
   font-size: 0.95rem;

@@ -72,8 +72,8 @@ function CellarRacks() {
   const [viewMode, setViewModeState] = useState(() => {
     try {
       const stored = window.localStorage.getItem('cellarion.rackViewMode');
-      // 'iso' was a short-lived option (deprecated in v1.53.1) — fall back to
-      // the closest equivalent so returning users don't see a missing view.
+      // A stored 'iso' names a view that no longer exists — fall back to the
+      // closest equivalent so returning users don't see a missing view.
       if (stored === 'iso') return 'shelf';
       return stored || 'compact';
     } catch {
@@ -161,10 +161,10 @@ function CellarRacks() {
     return () => document.removeEventListener('keydown', onKey);
   }, [movingOn]);
 
-  // --- post-add placing mode — HOOKS live up here, before the
-  // page's early `if (error) return` (audit 2026-09-14 H: hooks declared after
-  // a conditional return crash the page on a load error). The handlers that
-  // use them sit further down, next to the render.
+  // --- post-add placing mode — HOOKS live up here, before the page's early
+  // `if (error) return`: hooks declared after a conditional return crash the
+  // page on a load error. The handlers that use them sit further down, next
+  // to the render.
   const location = useLocation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
   const backHere = useBackHere('racks');
@@ -175,9 +175,9 @@ function CellarRacks() {
   const [placeFromBottle] = useState(() => !!(location.state && location.state.placeFrom === 'bottle'));
   const [placeNotice, setPlaceNotice] = useState(null);
   const [placeBusy, setPlaceBusy] = useState(false);
-  // Back/reload after the queue drained used to re-enter the mode with the
-  // original ids and MOVE already-placed bottles: drop anything the loaded
-  // racks already hold (audit 2026-09-14 M).
+  // Back/reload after the queue drained re-enters the mode with the original
+  // ids, which would MOVE already-placed bottles: drop anything the loaded
+  // racks already hold.
   useEffect(() => {
     if (!placeQueue.length || !racks.length) return;
     const trimmed = withoutPlaced(placeQueue, racks);
@@ -1016,7 +1016,7 @@ function CellarRacks() {
       {/* Room View / Cellar Book live in the shared view switcher on every page */}
       <CellarNav cellarId={id} active="racks" />
 
-      {/* Post-add placing mode (issue #1055): progress + auto-place + leave */}
+      {/* Post-add placing mode: progress + auto-place + leave */}
       {placingActive && !loading && racks.length > 0 && (
         <div className={`alert ${placeNotice?.kind === 'error' ? 'alert-warning' : 'alert-info'} place-queue-bar`} role="status">
           <span>

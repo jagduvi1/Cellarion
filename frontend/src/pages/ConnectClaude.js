@@ -17,12 +17,12 @@ const EXAMPLE_KEYS = ['ex1', 'ex2', 'ex3', 'ex4', 'ex5', 'ex6'];
  * details) links back for anyone new to it. Crawlers get the server-rendered
  * twin in backend/src/routes/og/site.js — keep the two in step.
  *
- * Facts about Claude's plans and menus were checked against Anthropic's help
- * centre on 2026-10-11 ("Get started with custom connectors using remote
- * MCP"): the Free plan may add ONE custom connector; the path is Customize →
- * Connectors → + Add → Add custom connector; a connector added on the web or
- * desktop is available in the iOS and Android apps afterwards. Re-check them
- * when Anthropic changes its plans.
+ * Facts about Claude's plans and menus come from Anthropic's help centre
+ * ("Get started with custom connectors using remote MCP"): the Free plan may
+ * add ONE custom connector; the path is Customize → Connectors → + Add → Add
+ * custom connector; a connector added on the web or desktop is available in
+ * the iOS and Android apps afterwards. Re-check them when Anthropic changes
+ * its plans.
  */
 function ConnectClaude() {
   const { t } = useTranslation();
