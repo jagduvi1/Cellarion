@@ -3,8 +3,7 @@
  * selection. Extracted from ImportBottles so the payload boundary is unit-
  * testable: every field the parsers emit and the backend consumes must be
  * forwarded here — a field missing from this mapping silently disappears
- * between the review screen and the created bottle (that is exactly how the
- * CellarTracker rack auto-map's row/col placements got lost).
+ * between the review screen and the created bottle.
  */
 export function buildImportItem(r, selection) {
   return {
@@ -28,25 +27,21 @@ export function buildImportItem(r, selection) {
     // CellarTracker imports carry grape varieties and a personal drink
     // window; the backend importer consumes these when present.
     grapes: r.item.grapes,
-    // …and geography. The parsers have read these all along (CT Appellation,
-    // the Country/Region/SubRegion/Appellation Locale path, SubRegion, and a
-    // generic appellation column) and they were never forwarded — so a wine
-    // minted from an import lost the appellation the user's own file stated,
-    // and a curator put it back by hand later. Exactly the disappearance this
-    // file's docblock warns about, on a different field.
+    // …and geography (CT Appellation, the Country/Region/SubRegion/Appellation
+    // Locale path, SubRegion, and a generic appellation column): without it a
+    // wine minted from an import loses the appellation the user's own file
+    // states, and a curator has to put it back by hand.
     country: r.item.country,
     region: r.item.region,
     appellation: r.item.appellation,
     classification: r.item.classification,
-    // `type` was the same disappearance as the geography above, one field over:
-    // every parser computed a wine colour and nothing ever forwarded it, so a
-    // stored type came only from the AI. Forwarded now — and the mappers were
-    // changed to return null rather than guessing 'red', because a value that
-    // goes nowhere can be wrong for free while a stored one cannot.
+    // The wine colour every parser computes. The mappers return null rather
+    // than guessing 'red' (importFields mapWineType): a forwarded value is
+    // stored, and a stored guess becomes a fact.
     type: r.item.type,
     // CellarTracker tracks spirits beside wine (Category "Distilled", Type
     // "Spirits"). Passed through so the row can be flagged rather than
-    // silently filed as a fortified wine, which is what used to happen.
+    // silently filed as a fortified wine.
     nonWineHint: r.item.nonWineHint,
     drinkFrom: r.item.drinkFrom ?? undefined,
     drinkTo: r.item.drinkTo ?? undefined,

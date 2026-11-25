@@ -5,10 +5,10 @@ import { API_URL } from '../api/apiConstants';
 import { useTranslation } from 'react-i18next';
 import { formatVintage } from '../utils/vintage';
 
-// The owner's own photo carries its review state as a small pill (discussion
-// #1227: "I don't know if some uploads have been rejected or are still
-// waiting"). Other people's photos only reach a gallery once published, so
-// the pill is for `mine` rows only; rejected rows never reach the carousel.
+// The owner's own photo carries its review state as a small pill, so a photo
+// still waiting is never taken for a rejected one. Other people's photos only
+// reach a gallery once published, so the pill is for `mine` rows only;
+// rejected rows never reach the carousel.
 const PHOTO_STATE = { uploaded: 'queued', processing: 'processing', processed: 'review', approved: 'published' };
 const STATE_FALLBACK = { queued: 'Queued', processing: 'Processing…', review: 'Awaiting review', published: 'Published' };
 
@@ -73,9 +73,8 @@ function ImageCarousel({ images, size = 'medium', vintage, defaultImageId, onSet
             picture in the shared registry, taking it down changes other
             people's pages, so it becomes a report an admin decides. */}
         {(onDelete || onReport) && (() => {
-          // The gallery now says `mine` itself (uploader
-          // ids no longer travel); the uploadedBy comparison stays for any
-          // older payload shape.
+          // The gallery says `mine` itself (uploader ids do not travel); the
+          // uploadedBy comparison stays for an older payload shape.
           const mine = currentImage.mine === true || (currentUserId && currentImage.uploadedBy != null && String(currentImage.uploadedBy) === String(currentUserId));
           const canDelete = mine && !currentImage.assignedToWine;
           // Without the default star it takes the corner, not the star's

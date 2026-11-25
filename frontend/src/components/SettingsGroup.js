@@ -13,7 +13,7 @@ import scrollBelowNavbar from '../utils/scrollBelowNavbar';
  *   #notifications, #mcp, #api-tokens — opens that group and scrolls to it.
  *   The hash is read from the router's location, so a link followed inside
  *   the app (React Router's navigation fires no `hashchange`) opens the group
- *   like a fresh page load does (release audit 2026-09-27, L).
+ *   like a fresh page load does.
  */
 const STORE_KEY = 'cellarion-settings-open';
 

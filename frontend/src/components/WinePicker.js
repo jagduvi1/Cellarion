@@ -113,8 +113,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
       const res = await identifyWineByText(apiFetch, query.trim());
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // Previously an `if (res.ok)` with no else: a 429 or 403 flipped the
-        // button back with no feedback at all.
+        // A 429 or 403 must not just flip the button back with no feedback.
         setAiError(t('journal.aiFailed', 'Wine lookup is unavailable right now.'));
         return;
       }

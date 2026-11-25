@@ -18,7 +18,7 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vin
   const [failedSrc, setFailedSrc] = useState(null);
   const photoSrc = defaultImage || pendingImage || vintageImage || wine?.image || otherVintageImage;
 
-  // Show carousel using bottleId — the API now returns both bottle-specific
+  // Show carousel using bottleId — the API returns both bottle-specific
   // and approved wine-level images, so the user can pick any as their default
   if (bottle?._id && !galleryEmpty) {
     return (

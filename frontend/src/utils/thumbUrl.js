@@ -3,9 +3,9 @@
  *
  * `…/api/uploads/processed/<uuid>.png` → `…/api/uploads/thumbs/processed/<uuid>.png.webp`
  * and the same for `originals/` (photos kept with their background — a
- * keep-background upload, an imported never-cropped photo; until 2026-09-27
- * those shipped full size to every card). A ~400×640 WebP the backend renders
- * on first request — services/thumbnails.js.
+ * keep-background upload, an imported never-cropped photo; without a thumbnail
+ * they would ship full size to every card). A ~400×640 WebP the backend
+ * renders on first request — services/thumbnails.js.
  * Anything else — an external link, a data:/blob: URL — has no thumbnail and
  * is returned as is. Callers fall back to the full URL when the thumbnail
  * fails to load (an older backend, a busy renderer).

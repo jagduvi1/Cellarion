@@ -36,12 +36,11 @@ const PLAN_CONFIG = {
  */
 function Chip({ cls, size, icons, label, explain }) {
   const [open, setOpen] = useState(false);
-  // Viewport clamp for the popover (bug seen live on v1.179.0): the chip
-  // often sits at the END of the author row, so a left-anchored popover runs
-  // off the right edge of a phone. Measure once per open (shift starts at 0,
-  // so the measurement is of the unshifted box) and slide it just enough to
-  // stay on screen with an 8px margin. jsdom reports zero-size rects — the
-  // width guard keeps tests inert.
+  // Viewport clamp for the popover: the chip often sits at the END of the
+  // author row, so a left-anchored popover runs off the right edge of a
+  // phone. Measure once per open (shift starts at 0, so the measurement is of
+  // the unshifted box) and slide it just enough to stay on screen with an 8px
+  // margin. jsdom reports zero-size rects — the width guard keeps tests inert.
   const popRef = useRef(null);
   const [shift, setShift] = useState(0);
   useLayoutEffect(() => {

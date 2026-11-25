@@ -403,10 +403,10 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
         }
         return;
       }
-      // Server-side resolution (audit fix): suggest by key NAME — the backend
-      // matches against its own nameKey rule. 404 = no such accepted key →
-      // propose the key itself; a type mismatch surfaces the type-validation
-      // message instead of a dead-end "already in the vocabulary" conflict.
+      // Server-side resolution: suggest by key NAME — the backend matches
+      // against its own nameKey rule. 404 = no such accepted key → propose the
+      // key itself; a type mismatch surfaces the type-validation message
+      // instead of a dead-end "already in the vocabulary" conflict.
       // A vintage-scoped personal entry promotes into that vintage's slot;
       // a wine-level one into the wine-wide default. The entry already knows.
       const res = await suggestWineValue(apiFetch, wineId, {

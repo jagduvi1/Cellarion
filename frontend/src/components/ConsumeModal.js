@@ -23,9 +23,8 @@ const today = () => {
 // from a slot, where the bottle page's own "Open bottle…" button is not at
 // hand. They pass this, and the dialog first offers "Just a glass — keep the
 // bottle" (open it and pour one glass instead of taking it out). Without it
-// — the bottle page, "Drink one" — that choice is not shown. The racks and
-// the room used to carry copies of this dialog for the sake of that one
-// button, and those copies never learned the reservation warning.
+// — the bottle page, "Drink one" — that choice is not shown. One dialog for
+// every caller, so none of them misses the reservation warning.
 export function ConsumeModal({ wineName, defaultRatingScale, reservationText, onConfirm, onCancel, onJustAGlass }) {
   const { t } = useTranslation();
   const [reason,       setReason]      = useState('drank');

@@ -2,8 +2,8 @@
 //
 // When the server refuses to renew a session that was in use (the access token
 // expired and the refresh was rejected), the app signs out and the protected
-// page sends the person to /login. That page used to look exactly like a fresh
-// visit, so it read as "the app threw me out". The flag lives in sessionStorage
+// page sends the person to /login. Unexplained, that page looks like a fresh
+// visit and reads as "the app threw me out". The flag lives in sessionStorage
 // (this tab only); the login page shows it until the next sign-in clears it
 // (AuthContext.applySession). A sign-out you chose clears sessionStorage.
 

@@ -13,9 +13,8 @@ const MAX_MORE = MAX_COPIES;
 
 /**
  * Add more bottles of a wine directly from a bottle you already registered —
- * the answer to the support question "I added a bottle with Qty 1, how do I
- * make it 6?" without re-searching the wine in Add Bottle (support reply
- * promised 2026-08-10).
+ * a bottle added with Qty 1 becomes 6 without re-searching the wine in Add
+ * Bottle.
  *
  * Creating N bottles is N sequential POSTs, exactly like the Add Bottle page's
  * own multi-bottle loop, including its partial-failure contract: on a
@@ -33,9 +32,10 @@ const MAX_MORE = MAX_COPIES;
  *
  * Props: bottle (the populated bottle being viewed — must have a
  * wineDefinition), onClose(), onAdded(count, vintage) — fired only when the
- * whole batch succeeded, with the stored vintage the new bottles carry. copyDetailsDefault: whether "Copy this bottle's details"
- * starts ticked — off for "Add again" of a bottle already drunk, a new
- * purchase whose date, price, shop, notes and occasion are not the old one's.
+ * whole batch succeeded, with the stored vintage the new bottles carry.
+ * copyDetailsDefault: whether "Copy this bottle's details" starts ticked — off
+ * for "Add again" of a bottle already drunk, a new purchase whose date, price,
+ * shop, notes and occasion are not the old one's.
  */
 function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = true }) {
   const { t } = useTranslation();

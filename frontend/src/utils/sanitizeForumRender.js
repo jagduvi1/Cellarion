@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify';
 // same allowlist (see backend/src/utils/sanitizeHtml.js). We re-sanitize on
 // render to handle two failure modes:
 //   1. A bug in the backend sanitizer ever ships dangerous markup to clients.
-//   2. Bodies that pre-date the migration (defensive against historical data).
+//   2. Stored bodies that never passed through the save-time sanitizer.
 //
 // Tags + attributes MUST stay in lockstep with the backend allowlist; mismatch
 // means content silently disappears at render time.

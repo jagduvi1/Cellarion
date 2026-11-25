@@ -5,10 +5,9 @@ import './BottlePlaceholder.css';
 /**
  * A drawn bottle for a wine nobody has photographed yet: glass in the wine's
  * colour and a paper label with the producer, the wine's name and the
- * vintage (beta feedback 2026-10-12: a flat colour block "always looks a bit
- * weird"). Drawn, never fetched — a picture looked up on the web would be
- * someone else's photo of perhaps another wine, and would tell the image
- * host which wines the member keeps.
+ * vintage, rather than a flat colour block. Drawn, never fetched — a picture
+ * looked up on the web would be someone else's photo of perhaps another wine,
+ * and would tell the image host which wines the member keeps.
  *
  * `compact`: no text, for a thumbnail too small to read it.
  *

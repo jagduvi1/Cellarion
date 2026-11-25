@@ -63,8 +63,8 @@ export const scanLabelBack = (apiFetch, payload) =>
 /**
  * Resolve confirmed wine data against the shared registry. READ-ONLY — this
  * NEVER creates (the endpoint keeps its /find-or-create path for
- * compatibility, but it went resolve-only when step-1 minting left 31
- * zero-bottle orphan rows on prod). A wine is only ever minted when the user
+ * compatibility; minting at this step would leave a zero-bottle orphan row
+ * whenever the user turns back). A wine is only ever minted when the user
  * COMMITS: POST /api/bottles or POST /api/wishlist with a `newWine` payload
  * (this same wineData object, `source: 'ai'` riding along when the data came
  * from an accepted AI suggestion so provenance stays measurable).

@@ -6,8 +6,7 @@ import { adminGetCanonicalCollisions, adminDismissDuplicateCluster } from '../ap
 /**
  * Admin review list for wines sharing one canonical identity key — the
  * strongest duplicate signal the registry computes (producer-spelling,
- * producer-in-name and appellation-tier variance all collapsed), detected
- * since the 2026-07-22 dup analysis but never surfaced in any UI until now.
+ * producer-in-name and appellation-tier variance all collapsed).
  *
  * Deliberately a REVIEW list, not an auto-merge: distinct wineries can
  * legitimately share a key (Domaine Chandon, Napa vs Bodegas Chandon,

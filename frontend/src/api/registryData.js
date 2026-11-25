@@ -1,6 +1,6 @@
 import { JSON_HEADERS } from './apiConstants';
 
-// Public key vocabulary + values (#985 Slice B).
+// Public key vocabulary + values.
 // Mirrors backend routes/registryData.js + routes/admin/registryData.js.
 
 // `lang` is what the UI is showing; the server answers with each key's

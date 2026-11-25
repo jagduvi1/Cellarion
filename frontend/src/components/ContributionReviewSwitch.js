@@ -8,8 +8,8 @@ import { setContributionReviewed } from '../utils/contributionReview';
  * The admin's switch for reviewing contributions (backend
  * config/contributionReview), shown above the queues it empties: Image
  * Review and Data Fields. On by default. Off suits a private server whose
- * members all trust each other (a household on its own install, discussion
- * #1778): photos, fixes, values and new fields then go live as they are made.
+ * members all trust each other (a household on its own install): photos,
+ * fixes, values and new fields then go live as they are made.
  * Turning it off decides nothing already waiting — the queues say so.
  *
  * Where a super admin is configured (cellarion.app) only they may change it;

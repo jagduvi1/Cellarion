@@ -53,8 +53,8 @@ export default function TastingProfileCard({ wine, onReport }) {
     <div className="bd-ai-profile card">
       <div className="bd-ai-profile__header">
         <h2>{t('bottleDetail.tastingProfile', 'Tasting profile')}</h2>
-        {/* Provenance is load-bearing (#985): never present AI-generated
-            profile text as established fact. */}
+        {/* Provenance is load-bearing: never present AI-generated profile
+            text as established fact. */}
         {ap.source === 'curator' ? (
           <span className="bd-ai-tag bd-ai-tag--curator" title={t('bottleDetail.provenanceCuratorTitle', 'A sommelier has verified this profile')}>
             {t('bottleDetail.provenanceCurator', 'Curator-verified')}

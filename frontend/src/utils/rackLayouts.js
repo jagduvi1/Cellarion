@@ -575,9 +575,9 @@ export function cabinetBays(rows, cols, typeConfig) {
  * bottle a nested full-width level pokes out, plus the half bottle a two-deep
  * back row pokes out in the view that draws the back row offset (the 2D map;
  * the shelf view and the 3D room stack the back row straight behind the front
- * and pass `backOffset: false`, or every cabinet gained a blank strip at the
- * right — audit 2026-09-16). An alternating bay never pokes out: its offset
- * rows are the narrow ones.
+ * and pass `backOffset: false`, or every cabinet would gain a blank strip at
+ * the right). An alternating bay never pokes out: its offset rows are the
+ * narrow ones.
  */
 export function cabinetBayUnits(bay, { twoDeep, stagger, backOffset = true }) {
   if (bay.alternate) return bay.cols;

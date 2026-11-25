@@ -4,9 +4,9 @@ import './BottleUndoNotice.css';
 
 /**
  * The line the cellar page shows after the add page saved bottles — with the
- * next one a tap away ("Add another bottle"). A newcomer adding a few wines
- * in a row had to find the add button again after every save (newcomer
- * walkthrough 2026-10-15). Same look as BottleUndoNotice.
+ * next one a tap away ("Add another bottle"), so adding a few wines in a row
+ * never means finding the add button again after every save. Same look as
+ * BottleUndoNotice.
  *
  * `notice` = { name, count, history, onOrder } — handed over in the navigation's
  * router state by AddBottle (hooks/useHandedOverState), to the cellar page or

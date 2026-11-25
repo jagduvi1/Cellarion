@@ -9,7 +9,7 @@
  * (components/OfflineSettings). The choice is stored per browser, as one
  * account's: when another account signs in on the device the choice is
  * dropped, and that account is asked (or switches it on) itself — nothing of
- * theirs is stored before that (audit 2026-09-27 M3; adoptOfflineChoice).
+ * theirs is stored before that (adoptOfflineChoice).
  *
  * What it switches on (this module is the only switch):
  *  - the service worker keeps the whole app for offline use (public/service-worker.js)
@@ -90,9 +90,9 @@ export function offlineChoiceOwner() {
  * Called when an account signs in (AuthContext.applySession). The stored
  * choice — on or off — is one account's: another account's sign-in drops it,
  * so the prompt asks them (or Settings lets them switch it on) and nothing of
- * theirs is stored before that. A choice stored before owners were recorded
- * (up to v1.242.0) is taken to be the signing-in account's, once. Returns
- * whether the choice still stands.
+ * theirs is stored before that. A choice stored with no owner recorded is
+ * taken to be the signing-in account's, once. Returns whether the choice
+ * still stands.
  */
 export function adoptOfflineChoice(userId) {
   const id = userId ? String(userId) : '';

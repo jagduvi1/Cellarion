@@ -18,7 +18,7 @@ import { getWineImageUrl } from './wineImageUrl';
 
 export const SNAPSHOT_SCHEMA = 1;
 export const PHOTO_CACHE = 'cellarion-photos';      // also named in public/service-worker.js
-const PHOTO_BUDGET_BYTES = 25 * 1024 * 1024;         // prod 2026-09: the largest cellar needs ~7 MB
+const PHOTO_BUDGET_BYTES = 25 * 1024 * 1024;         // headroom over what a large cellar's thumbnails need
 
 // { userId, base, idx, generatedAt } — base: the snapshot as the server sent
 // it; idx: base with the user's still-pending offline writes applied on top,
@@ -107,9 +107,9 @@ export async function offlineAnswer(url, userId) {
  * the banner and the refresh timing see a fresh copy).
  */
 // The server allows 30 refreshes per 10 minutes (routes/offline). A burst of
-// changes can use them up; the copy then went silently stale until the 15-min
-// timer (release audit 2026-09-27, L). One retry is scheduled for when the
-// server says the window reopens — a later 429 replaces it, never stacks.
+// changes can use them up, and the copy must not then go silently stale until
+// the 15-min timer. One retry is scheduled for when the server says the
+// window reopens — a later 429 replaces it, never stacks.
 const RETRY_DEFAULT_MS = 60 * 1000;
 const RETRY_MAX_MS = 10 * 60 * 1000;
 let retryTimer = null;

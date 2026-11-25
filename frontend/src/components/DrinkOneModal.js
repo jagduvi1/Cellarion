@@ -18,11 +18,10 @@ import { bottleSizeLabel, DEFAULT_SIZE } from '../config/bottleSizes';
  *
  * `rackMap` (cellar list) or `bottle.rackInfo` (vintage page) names the slot.
  * With a single bottle the picker is skipped — and so it is when every row
- * would read the same (same place, purchase and reservation): three rows of
- * "Not in a rack · Oct 2026" are a choice with nothing to choose (live
- * walkthrough 2026-10-15). onDone(bottle, reason) fires
- * after the server confirmed, so the caller can refresh and offer the
- * journal prompt as the bottle page does.
+ * would read the same (same place, purchase and reservation): three identical
+ * rows are a choice with nothing to choose. onDone(bottle, reason) fires after
+ * the server confirmed, so the caller can refresh and offer the journal
+ * prompt as the bottle page does.
  */
 export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onDone, placesKnown = true }) {
   const { t, i18n } = useTranslation();
@@ -43,8 +42,8 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
   // until then (or if that load failed) every bottle reads "Not in a rack" —
   // skipping then could free the wrong slot. An opened bottle is never the
   // same as a sealed one.
-  // The size too: the vintage page offers every size of the wine and year
-  // (release audit 2026-10-16 — a magnum went for a 75 cl).
+  // The size too: the vintage page offers every size of the wine and year,
+  // and a magnum must never go for a 75 cl.
   const sizeOf = (b) => b.bottleSize || DEFAULT_SIZE;
   const sizeLabel = (b) => (sizeOf(b) === DEFAULT_SIZE ? '' : bottleSizeLabel(sizeOf(b), t));
   const rowText = (b) => [slotLabel(b), sizeOf(b), purchaseLabel(b), isReserved(b) ? reservationSummary(b, t) : '', b.openedAt ? 'open' : ''].join('|');

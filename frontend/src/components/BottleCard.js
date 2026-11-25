@@ -331,7 +331,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 
       <div className="bottle-info">
         {/* The name truncates, the ×n pill never does — a long name on a
-            narrow row used to take the count with it. */}
+            narrow row must not take the count with it. */}
         <div className="bottle-name">
           <span className="bottle-name-text">{displayName}</span>
           {isGroup && <span className="bottle-count-pill">×{groupCount}</span>}

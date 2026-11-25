@@ -51,8 +51,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * What a refresh answer says about the session. Only the server saying no
  * (401, or another 4xx that no retry can change) ends it. A 429 or a 5xx says
  * the server can't answer right now — a deploy restarting it (502/503 for a
- * few seconds), a hiccup, a rate limit — and used to sign people out exactly
- * like a rejection.
+ * few seconds), a hiccup, a rate limit — and must not sign people out like a
+ * rejection.
  * @returns {'ok' | 'rejected' | 'unavailable'}
  */
 export function refreshOutcome(status) {
@@ -142,7 +142,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const clearToken = () => {
-    // Clean up any legacy stored tokens from previous versions
+    // Tokens live in memory only: remove any still left in web storage
     removeStored('token');
     removeStored('token', 'session');
     removeStored('sessionOnly', 'session');
@@ -162,7 +162,7 @@ export const AuthProvider = ({ children }) => {
     // A logout made with no network is finished at the next start
     // (restoreSession) — but a sign-in in between makes it moot: the old
     // cookie is gone, and the next start would post that logout with THIS
-    // account's cookie, ending the new session (release audit 2026-09-27, L).
+    // account's cookie, ending the new session.
     markPendingLogout(false);
     // A session again: the login page's "Your session ended" has done its job.
     clearSessionExpired();
@@ -210,9 +210,9 @@ export const AuthProvider = ({ children }) => {
   // tabs) race the rotation and the loser is spuriously logged out. The Web
   // Locks API serializes across tabs of the same origin: the waiter re-runs
   // with the cookie its predecessor just rotated in, which is valid.
-  // (Sessions are per DEVICE server-side since 2026-09-04, so signing in on
-  // another device no longer invalidates this browser's cookie; the race
-  // above is the only remaining way two refreshes can collide.)
+  // (Sessions are per DEVICE server-side, so signing in on another device
+  // does not invalidate this browser's cookie; the race above is the only
+  // way two refreshes can collide.)
   // How the last refresh ended: 'ok', 'rejected' (the server said no — the
   // session is dead), 'network' (no answer at all — the device is offline) or
   // 'unavailable' (the server answered but couldn't serve: a deploy, a 5xx,
@@ -220,9 +220,9 @@ export const AuthProvider = ({ children }) => {
   // see onRefreshFailed below.
   const refreshOutcomeRef = useRef('ok');
 
-  // A reload in the middle of a refresh used to sign the user out: the server
-  // had already rotated the cookie, the page that asked was gone before the
-  // response (and its new cookie) arrived, and the reloaded page presented
+  // A reload in the middle of a refresh must not sign the user out: the server
+  // has already rotated the cookie, the page that asked is gone before the
+  // response (and its new cookie) arrives, and the reloaded page presents
   // the rotated-away token — which the server answers with 401 and a cleared
   // cookie. Likely with offline mode: the app refreshes the moment the
   // signal returns, which is exactly when people pull to refresh. Two guards:
@@ -328,11 +328,11 @@ export const AuthProvider = ({ children }) => {
   );
 
   // ------------------------------------------------------------------
-  // On mount: restore session from localStorage
+  // On mount: restore the session (refresh cookie, or the offline profile)
   // ------------------------------------------------------------------
 
   useEffect(() => {
-    // Migrate: clear any legacy stored tokens from previous versions
+    // Tokens live in memory only: remove any still left in web storage
     removeStored('token');
     removeStored('token', 'session');
     removeStored('sessionOnly', 'session');

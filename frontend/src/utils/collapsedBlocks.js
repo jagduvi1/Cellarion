@@ -3,12 +3,11 @@ import { useAuth } from '../contexts/AuthContext';
 
 /**
  * The blocks of the wine and vintage page a member can fold away: its three
- * sections and the cards with a title of their own (beta feedback
- * 2026-10-12: "let the user minimise the stuff they don't want to see").
- * The bottle page folds the same cards under the same names (2026-10-14:
- * tasting, record, personal, history, reviews), so a card folded on one page
- * is folded on the other. Mirrors backend config/constants
- * COLLAPSIBLE_BLOCKS — the server refuses a name it doesn't know.
+ * sections and the cards with a title of their own. The bottle page folds
+ * the same cards under the same names (tasting, record, personal, history,
+ * reviews), so a card folded on one page is folded on the other. Mirrors
+ * backend config/constants COLLAPSIBLE_BLOCKS — the server refuses a name it
+ * doesn't know.
  *
  * The folded set is remembered on the account (preferences.collapsedBlocks),
  * so a fold made on the phone is still there on the computer.
@@ -37,9 +36,9 @@ const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]
 // and vintage pages share block names, so a page opened right after a fold on
 // the other — before that save has come back into the signed-in user — must
 // start from this tab's list: otherwise it shows the fold undone, and its next
-// change saves the old list over the new one. Once the
-// user carries something else (the save landed, or another device changed
-// it), the user's list wins again.
+// change saves the old list over the new one. Once the user carries something
+// else (the save landed, or another device changed it), the user's list wins
+// again.
 let session = null; // { userId, list, base }
 
 /** The list a page starts from: the account's, or this tab's newer one. */

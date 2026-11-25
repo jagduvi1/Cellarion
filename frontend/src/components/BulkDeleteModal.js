@@ -17,8 +17,8 @@ export const TYPE_TO_CONFIRM_FROM = 10;
 const SUMMARY_LINES = 5;
 
 /**
- * Bulk delete (forum feedback 2026-10-12: an import came in without its
- * prices and had to be deleted so it could be done again).
+ * Bulk delete — for instance an import that came in incomplete and is to be
+ * done again.
  *
  * The confirm screen says exactly what goes — the wines and how many of each,
  * how many sit in a rack — and that nothing is gone for good yet: the bottles

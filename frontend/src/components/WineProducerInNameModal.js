@@ -12,15 +12,15 @@ import {
 const PAGE_SIZE = 50;
 
 /**
- * Admin registry name-check tool (historically "producer in name" — the
- * endpoint kept its path). Surfaces wines whose name looks wrong per the rules
- * in backend utils/nameChecks.js: producer repeated in the name, name
- * identical to producer, a stranded connective ("La Viña de"). Sibling of
+ * Admin registry name-check tool (its endpoint's path says "producer in
+ * name"). Surfaces wines whose name looks wrong per the rules in backend
+ * utils/nameChecks.js: producer repeated in the name, name identical to
+ * producer, a stranded connective ("La Viña de"). Sibling of
  * WineDuplicatesModal.
  *
  * Row actions: Strip (rename to the proposal), "Looks fine" (record a
  * per-rule clearance so the row stops reappearing — with a one-level undo),
- * Delete. A rule picker reaches the non-default cohorts (the ~139 estate
+ * Delete. A rule picker reaches the non-default cohorts (the estate
  * name=producer rows), and an audit checkbox ignores clearances entirely so a
  * new/refined rule can be validated before its suppression is trusted.
  *

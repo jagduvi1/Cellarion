@@ -205,8 +205,8 @@ export const adminMergeTaxonomy = (apiFetch, tab, fromId, toId) =>
     body: JSON.stringify({ fromId, toId }),
   });
 
-// The registry name-check scan (historical path name — it now runs every
-// default rule in backend utils/nameChecks.js, not just producer-in-name).
+// The registry name-check scan: despite its path name it runs every default
+// rule in backend utils/nameChecks.js, not just producer-in-name.
 export const adminGetProducerInNameWines = (apiFetch, params) =>
   apiFetch(`/api/admin/wines/producer-in-name?${params}`);
 

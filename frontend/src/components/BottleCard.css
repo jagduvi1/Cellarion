@@ -1,6 +1,6 @@
-/* Styles for BottleCard (used by /cellars/:id and /bottles). Originally
-   lived in CellarDetail.css; co-located here so any page rendering a
-   BottleCard gets the styling without importing the whole cellar page CSS. */
+/* Styles for BottleCard (used by /cellars/:id and /bottles). Co-located here
+   so any page rendering a BottleCard gets the styling without importing the
+   whole cellar page CSS. */
 
 /* ── Image wrap + credit tooltip ── */
 .bottle-img-wrap,

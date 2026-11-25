@@ -7,11 +7,10 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 const DISMISS_KEY = 'announcementDismissed';
 const CACHE_TTL = 60 * 1000;
 // How often an OPEN tab re-asks. The banner's whole job is to reach people
-// before something happens (a maintenance window, an incident), and fetching
-// only on mount meant it reached nobody who already had the app open —
-// found 2026-08-17, when a live banner was invisible to exactly the person
-// who had been sitting on the page. Comfortably longer than CACHE_TTL, so
-// each poll actually re-asks rather than reading its own cache.
+// before something happens (a maintenance window, an incident), and a fetch
+// on mount alone would reach nobody who already has the app open.
+// Comfortably longer than CACHE_TTL, so each poll actually re-asks rather
+// than reading its own cache.
 const POLL_MS = 5 * 60 * 1000;
 
 // Module-level cache: Layout remounts on every route change, but the banner
@@ -34,9 +33,8 @@ async function fetchAnnouncement() {
   } catch {
     // A transient network blip must not TAKE DOWN a banner that is already
     // showing: keep whatever we last knew. Only the first-ever failure
-    // resolves to "no banner" (see above). This matters more with polling
-    // than it did with a single fetch — one dropped request in five minutes
-    // would otherwise blink the notice off the page.
+    // resolves to "no banner" (see above). With polling, one dropped request
+    // in five minutes would otherwise blink the notice off the page.
     if (cached === null) cached = { enabled: false };
   }
   return cached;

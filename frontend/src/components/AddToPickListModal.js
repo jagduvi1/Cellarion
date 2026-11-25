@@ -17,10 +17,10 @@ const NEW_LIST = '__new__';
  * no longer in the cellar, come back as skipped. The done screen links to the
  * list, where each bottle shows its cellar, rack and slot.
  *
- * `choices` instead of `bottleIds` (the vintage page — beta feedback
- * 2026-10-14): the bottles of one wine and year to choose from, each named by
- * its rack slot like "Drink a bottle" does. The first is ticked; with a single
- * bottle there is nothing to choose.
+ * `choices` instead of `bottleIds` (the vintage page): the bottles of one
+ * wine and year to choose from, each named by its rack slot like "Drink a
+ * bottle" does. The first is ticked; with a single bottle there is nothing to
+ * choose.
  */
 export default function AddToPickListModal({ bottleIds: fixedIds = [], choices, onClose, onDone }) {
   const { t, i18n } = useTranslation();

@@ -13,9 +13,8 @@ import { thumbUrl } from '../utils/thumbUrl';
  * - External http(s), inline data:image and blob: URLs pass through unchanged.
  * - Anything else renders nothing. A registry wine.image is user-influenced
  *   data: a protocol-relative `//host/x`, a backslash variant or a leading
- *   space used to fall through to the authenticated branch and make every
- *   viewer's browser send its bearer token to that host (audit 2026-09
- *   S7-1 / F06-1 / F01-1).
+ *   space must never reach the authenticated branch, or every viewer's
+ *   browser would send its bearer token to that host.
  */
 const API_PATH = /^\/api\/(?!\/)[^\\]*$/;
 // Spaces inside an http(s) URL are tolerated (the browser encodes them, and
