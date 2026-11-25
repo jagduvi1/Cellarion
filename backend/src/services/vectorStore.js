@@ -1,32 +1,29 @@
 /**
  * Wine vectors, kept in MongoDB and compared in memory.
  *
- * Until 2026-09 the vectors lived in a Qdrant container. At Cellarion's size
- * a vector database bought nothing a plain scan doesn't: a few thousand
- * vectors per cellar, ~14k for the whole registry, a few registry-wide
- * searches a day. Comparing every vector takes ~16 ms per 11k on one core.
- * A vector index only pays off at hundreds of thousands of vectors, or many
- * searches a second. So each WineEmbedding row (one per wine × vintage ×
- * model × index version) now carries its own vector, and searches happen
- * here.
+ * At Cellarion's size a vector database buys nothing a plain scan doesn't: a
+ * cellar holds a few thousand vectors, registry-wide searches are few,
+ * and comparing every vector takes milliseconds on one core. A vector index
+ * only pays off at hundreds of thousands of vectors, or many searches a
+ * second. So each WineEmbedding row (one per wine × vintage × model × index
+ * version) carries its own vector, and searches happen here.
  *
  * Storage: int8, at the provider's full dimension (2048 for Voyage), each
  * value divided by the vector's largest |value| and scaled to ±127. A 2048
  * vector is 2 KB. Cosine ignores scale, so the row also keeps the int8
- * vector's length (`norm`) to finish the cosine at search time. On
- * production's 14,106 vectors this agreed with Qdrant's own search on 99.6%
- * of "similar wines" and 97% of free-text top-10 results. Cutting to 1024
- * dimensions agreed on only 72% of free-text results, so the full dimension
- * stays.
+ * vector's length (`norm`) to finish the cosine at search time. At the full
+ * dimension this agrees with a float search on nearly every "similar wines"
+ * and free-text top-10 answer; cut to 1024 dimensions it loses too many
+ * free-text results, so the full dimension stays.
  *
  * Every search scans ONE in-memory copy of all rows — registry-wide (MCP
  * "find similar" / "semantic search", restock suggestions) or scoped to some
  * wines (`wineIds`: cellar chat, restock, MCP "mine"), which only scores the
  * rows of those wines. One shared copy, not a read per search: a bulk "mark
- * as drunk" of 60 wines once read a big cellar's vectors 60 times at once
- * and ran the process out of memory (review 2026-09-27).
+ * as drunk" would otherwise read a big cellar's vectors once per bottle, all
+ * at once, and run the process out of memory.
  *
- * The copy (~28 MB for today's 14k rows) is built on first use by streaming
+ * The copy (about 2 KB a row) is built on first use by streaming
  * the rows, one build at a time. It is checked against the rows at most
  * every FRESH_MS — their count and newest embeddedAt, read from an index, so
  * any process's writes count — and rebuilt when they changed, so a busy
@@ -214,8 +211,8 @@ async function search(queryValues, {
   // built, straight from MongoDB — usually none (an indexed range on
   // embeddedAt). A wine added a moment ago must count at once for its
   // owner's chat and restock check, not after the copy's next check: missing
-  // it sent a false "time to restock?" (review 2026-09-27). A re-embedded row
-  // replaces its stale score.
+  // it would send a false "time to restock?". A re-embedded row replaces its
+  // stale score.
   if (only) {
     const recent = await WineEmbedding.find({
       model, indexVersion, dim, embeddedAt: { $gt: new Date(table.newest) }, wineDefinition: { $in: wineIds },

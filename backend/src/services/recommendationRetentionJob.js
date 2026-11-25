@@ -3,8 +3,8 @@
  *
  * `Recommendation.recipientEmail` holds a NON-USER third party's address (the
  * subject has no account, never consented, and has no Art. 17/21 mechanism of
- * their own), so it must not be retained indefinitely (security audit L-15,
- * GDPR data minimisation / storage limitation). After the recommendation email
+ * their own), so it must not be retained indefinitely (GDPR data
+ * minimisation / storage limitation). After the recommendation email
  * is dispatched the address serves exactly one purpose: showing the sender who
  * their "sent" recommendation went to. So instead of deleting the user-visible
  * recommendation document, this job blanks just the email once the document is
@@ -14,7 +14,7 @@
  * The per-user daily send cap in routes/recommendations.js only counts
  * documents from the last 24 h with a non-null recipientEmail, so a 90-day
  * scrub never affects it. Sender-account erasure scrubs the field immediately
- * regardless of age (userDataRegistry.js).
+ * regardless of age (services/userData/community.js).
  */
 const Recommendation = require('../models/Recommendation');
 

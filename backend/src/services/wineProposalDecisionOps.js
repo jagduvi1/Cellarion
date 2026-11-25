@@ -67,7 +67,7 @@ async function countryAfter(pf, wine) {
 // Absent = no answer yet; anything else malformed is a 400. A rename names
 // the spelling(s) to fold: the bucket over-folds (Domaine de Bellevue and
 // Château Bellevue share one), so "all of them" could re-attribute another
-// estate's wines (review 2026-09-28).
+// estate's wines.
 function parseSpellingChoice(body) {
   const kind = body?.producerSpelling;
   if (kind === undefined || kind === null) return { choice: null };
@@ -101,9 +101,9 @@ const splitBody = (proposed, spellings) => ({
   spellings,
 });
 
-// A read-only first look at a pending producer change, BEFORE the claim (review
-// 2026-09-28). A split with no pick is the routine first answer for these rows
-// — every bulk batch gives one — so it must not cost a claim and a revert: the
+// A read-only first look at a pending producer change, BEFORE the claim. A
+// split with no pick is the routine first answer for these rows — every bulk
+// batch gives one — so it must not cost a claim and a revert: the
 // revert can collide with a proposal re-filed in that window and strand this
 // one approved-but-unapplied. The check after the claim stays authoritative.
 async function splitBeforeClaim(proposalId) {
@@ -212,9 +212,9 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
       if (pf.appellation) {
         // Tier-strip AND curated-registry resolve. Approving a proposal is a
         // registry WRITE, so it owes the same canonicalization as the mint
-        // chokepoint: without the resolver a somm's "Yecla DO" landed
-        // verbatim on the wine (prod, 2026-08-12) because the trailing "DO"
-        // is deliberately outside normalizeAppellation's token set.
+        // chokepoint: without the resolver a somm's "Yecla DO" would land
+        // verbatim on the wine, because the trailing "DO" is deliberately
+        // outside normalizeAppellation's token set.
         wine.appellation = await resolveCanonicalAppellation(normalizeAppellation(pf.appellation.trim()));
         applied.push('appellation');
       }
@@ -267,9 +267,9 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
       }
 
       // Grapes resolve against LIVE taxonomy at approval, not at filing: a
-      // variety can be renamed or merged into its canonical entry in between
-      // (17 were merged on 2026-08-19 alone), and the curator's names should
-      // still land on the right rows afterwards. Match-only, exactly like
+      // variety can be renamed or merged into its canonical entry in between,
+      // and the curator's names should still land on the right rows
+      // afterwards. Match-only, exactly like
       // country above — approving a proposal must never MINT taxonomy.
       if (Array.isArray(pf.grapes) && pf.grapes.length) {
         const resolved = await resolveGrapeIdsStrict(pf.grapes);
@@ -401,13 +401,12 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
 
       // The PUT's follow-through: registry index, the embedding text — and
       // the IndexNow ping (an approved identity fix changes the public wine
-      // page exactly like a PUT rename; parity per audit 2026-08-10).
+      // page exactly like a PUT rename).
       submitUrls(`/wines/${wine._id}`);
       searchService.indexWine(wine._id);
-      // And the PUT's re-enrich (parity gap found live 2026-08-16: approving
-      // "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached
-      // until a manual force re-enrich). Real-change only, curator-safe —
-      // see reenrichAfterRecordEdit.
+      // And the PUT's re-enrich: without it an approved identity change keeps
+      // the old identity's profile until a manual force re-enrich. Real-change
+      // only, curator-safe — see reenrichAfterRecordEdit.
       const profileInputsChanged = profileInputsSnapshot(wine) !== beforeProfileInputs;
       if (deferFollowThrough) {
         followThrough = { wineId: String(wine._id), wine, changed: profileInputsChanged };

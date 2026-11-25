@@ -373,8 +373,8 @@ function buildReceiptResult(parsed, { now = new Date() } = {}) {
     if (price == null && lineTotal != null && lineTotal > 0) price = lineTotal / quantity;
     if (price != null && (price < 0 || price > MAX_UNIT_PRICE)) price = null;
     // …less a discount printed for this line. The model only REPORTS discount
-    // amounts; the arithmetic is done here, where it is exact (a live test on
-    // 2026-10-04 had the model's own spread of a Mix Six saving off by 1.6%).
+    // amounts; the arithmetic is done here, where it is exact (the model's own
+    // spread of a multi-bottle saving across its lines is not).
     const lineDiscount = toNumber(w.lineDiscount);
     if (price != null && lineDiscount != null && lineDiscount > 0 && lineDiscount < price * quantity) {
       price = (price * quantity - lineDiscount) / quantity;

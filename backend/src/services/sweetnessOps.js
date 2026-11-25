@@ -237,12 +237,12 @@ function termSpellings(row) {
 
 /**
  * The MCP fields for a wine, emitted HONESTLY or not at all (the grapes rule
- * in mcp/tools/somm.js), decided by the caller's PROJECTION, not by what the
- * stored row happens to hold:
+ * in mcp/tools/somm/shared.js), decided by the caller's PROJECTION, not by
+ * what the stored row happens to hold:
  *
  *   loaded: true  — the caller selected (and populated) the field. A row that
  *                   predates the field has no key at all (a lean read applies
- *                   no defaults; thousands of rows are like that), and it means
+ *                   no defaults; many rows are like that), and it means
  *                   the same as null: the wine states no term. So:
  *                   { label_sweetness: row | null, display_name }.
  *   loaded: false — the caller did not load the field: neither key, so a

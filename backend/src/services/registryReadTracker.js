@@ -1,6 +1,6 @@
 /**
- * Distinct-wines-per-reader-per-day counter (registry lockdown 2026-09-06,
- * layer L4). See models/RegistryReadDay.js for what it measures and why.
+ * Distinct-wines-per-reader-per-day counter. See models/RegistryReadDay.js
+ * for what it measures and why.
  *
  * Two operations:
  *   recordRead(reader, wineId)  — count one read; returns the reader's

@@ -2,13 +2,13 @@
  * Weekly registry-health check.
  *
  * Every detection net the registry has — name checks, canonical collisions,
- * the low-confidence queue, producer spelling splits, invariant drift — was
- * manual before this: a human had to remember to press a button or run a
- * container command, and the 2026-07 audits repeatedly found month-old
- * regressions nobody had looked for. This job runs the cheap read-only counts
- * on a schedule and notifies every admin when a metric REGRESSES against the
- * previous run (alert-on-increase + re-baseline — the same pattern as the
- * prod registry watchdog, so a standing backlog alerts once, not weekly).
+ * the low-confidence queue, producer spelling splits, invariant drift — is
+ * otherwise manual: a human has to remember to press a button or run a
+ * container command, and a regression nobody looks for sits for weeks. This
+ * job runs the cheap read-only counts on a schedule and notifies every admin
+ * when a metric REGRESSES against the previous run (alert-on-increase +
+ * re-baseline — the same pattern as the prod registry watchdog, so a standing
+ * backlog alerts once, not weekly).
  *
  * Deliberately counts, not findings: the queues themselves are the workbench
  * (AdminWines), this is only the doorbell. Every metric here mirrors an
@@ -47,13 +47,12 @@ const METRIC_LABELS = {
   nameCheckFlags: 'name-check flags',
   canonicalCollisionSets: 'canonical-key collision sets',
   lowConfidenceQueue: 'low-confidence profiles',
-  // Replaced producerSpellingSplits: the old metric grouped by
-  // normalizeString, which does NOT fold estate titles — so all 130
-  // "Philipp Kuhn" / "Weingut Philipp Kuhn" display splits counted ZERO and
-  // the watchdog never rang. The new key groups by producerSegment + country
-  // (decoration-aware, cross-country fenced). A NEW key on purpose, per the
-  // crossFieldMetricKey rule above: the count restarts against a fresh
-  // baseline instead of diffing the new definition against the old one.
+  // Groups by producerSegment + country (decoration-aware, cross-country
+  // fenced). normalizeString does NOT fold estate titles: grouped by it,
+  // "Philipp Kuhn" / "Weingut Philipp Kuhn" would never count as a split and
+  // the watchdog would never ring. A changed definition gets a NEW key (the
+  // fresh-baseline rule, as for crossFieldMetricKey above): its count restarts
+  // against a fresh baseline instead of diffing two definitions.
   producerDisplaySplits: 'producer display splits (same estate, several spellings)',
   // The TYPO complement of the display-split metric: producer keys within a
   // small edit distance inside one (country, appellation) bucket — "Philip
@@ -66,32 +65,26 @@ const METRIC_LABELS = {
   // Short-vs-full name fragments within ONE producer ("Vat 8" beside "Vat 8
   // Shiraz Cabernet" — an import can mint such pairs that no other detector
   // fires on; the same-producer+appellation group buries them inside the
-  // estate's whole range). Counts the admin
-  // name-subsets fragmentation queue via the same function, so the number and
-  // the queue agree.
+  // estate's whole range). Counts the admin name-subsets fragmentation queue
+  // via the same function, so the number and the queue agree.
   nameSubsetPairs: 'short-vs-full name fragment pairs (one producer)',
   // Rows that are not wrong, just BLANK — no region at all. Every other net
-  // keys off a value, so these trip nothing and sit invisible (180 on prod
-  // the day the queue shipped, 112 owned by real users). Counts the admin
-  // completeness queue via the same function, so number and queue agree.
+  // keys off a value, so these trip nothing and sit invisible. Counts the
+  // admin completeness queue via the same function, so number and queue agree.
   incompleteGeography: 'published rows with no region',
-  // The v1.116.0 review-queue class: producerSuspect rows surface in the
-  // admin queue regardless of confidence threshold, and held profiles live
-  // here. A NEW key rather than a redefinition of lowConfidenceQueue — same
-  // fresh-baseline rule as producerDisplaySplits above, so the watchdog
-  // diffs this class against its own baseline instead of ringing once for a
-  // definition change.
+  // producerSuspect rows, which the admin queue shows regardless of the
+  // confidence threshold. Their own key rather than part of lowConfidenceQueue
+  // (the fresh-baseline rule above), so the watchdog diffs this class against
+  // its own baseline.
   producerSuspectProfiles: 'producer-suspect profiles awaiting review',
-  // The publication gate's output: generated
-  // but HELD rows awaiting a release decision in the admin queue. Its own
-  // key, per the fresh-baseline rule above; lowConfidenceQueue now counts
-  // PUBLISHED rows only — holds leaving it can only shrink that number,
-  // which never alerts.
+  // The publication gate's output: generated but HELD rows awaiting a release
+  // decision in the admin queue. Its own key, per the fresh-baseline rule
+  // above; lowConfidenceQueue counts PUBLISHED rows only and leaves holds out.
   heldProfiles: 'held profiles awaiting release (publication gate)',
-  // The curated core (rethink decision 3, 2026-08-18): wines ≥3 distinct
-  // owners must reach curator-verified profiles; this counts the ones that
-  // haven't. Mirrors the somm's list_unverified_core_wines worklist, same
-  // numbers-agree contract as every metric here.
+  // The curated core: wines with ≥3 distinct owners must reach curator-verified
+  // profiles; this counts the ones that haven't. Mirrors the somm's
+  // list_unverified_core_wines worklist, same numbers-agree contract as every
+  // metric here.
   coreUnverifiedProfiles: 'core wines (≥3 owners) without a curator-verified profile',
   missingInvariants: 'rows missing canonicalKey/slug',
   pendingWineReports: 'open wine reports',
@@ -108,7 +101,7 @@ for (const id of DEFAULT_CROSS_FIELD_CHECK_IDS) {
 
 async function computeMetrics() {
   // One lean pass serves both the name checks and the spelling-split count —
-  // ~4k rows of three short fields, the same order of work as one admin scan.
+  // three short fields per row, the same order of work as one admin scan.
   const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
     .select(`${NAME_CHECK_SELECT} country canonicalKey slug`)
     .lean();
@@ -121,10 +114,10 @@ async function computeMetrics() {
     if (!w.canonicalKey || !w.slug) missingInvariants += 1;
     // Display-split buckets: producer COMPARISON key + country. The key folds
     // titles/legal suffixes ("Philipp Kuhn" ≡ "Weingut Philipp Kuhn" ≡
-    // "… GmbH"), which is the class the old normalizeString grouping was
-    // blind to; the country fence keeps "Taylors" (AU) vs "Taylor's" (PT) —
-    // different estates — from counting as a split. Sentinels excluded: ten
-    // flavours of "Unknown" are a data gap, not a spelling split.
+    // "… GmbH"), the class a normalizeString grouping is blind to; the country
+    // fence keeps "Taylors" (AU) vs "Taylor's" (PT) — different estates — from
+    // counting as a split. Sentinels excluded: ten flavours of "Unknown" are a
+    // data gap, not a spelling split.
     if (w.producer && !isIdentitySentinel(w.producer)) {
       const seg = producerSegment(w.producer);
       if (seg) {
@@ -153,15 +146,12 @@ async function computeMetrics() {
     WineDefinition.countDocuments({
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       // Mirrors the admin queue in routes/admin/wines.js: a null confidence is
-      // an unvouched-for row, not a confident one, and excluding it meant the
-      // watchdog could never count the rows most worth counting. The queue's
-      // producerSuspect branch is deliberately NOT here — that class counts
-      // under its own key (producerSuspectProfiles) so this metric keeps its
-      // baseline. Held rows are excluded the same way since the publication
-      // gate: they count under heldProfiles, and this metric
-      // becomes what its label says — low-confidence profiles users can SEE.
-      // Post-gate it should trend toward zero; excluding holds only shrinks
-      // it, which never alerts.
+      // an unvouched-for row, not a confident one: excluding it would leave
+      // the rows most worth counting uncounted. The queue's producerSuspect
+      // branch is deliberately NOT here — that class counts under its own key
+      // (producerSuspectProfiles) so this metric keeps its baseline. Held rows
+      // are excluded the same way: they count under heldProfiles, so this
+      // metric is what its label says — low-confidence profiles users can SEE.
       'aiProfile.heldAt': null,
       $or: [
         { 'aiProfile.confidence': null },

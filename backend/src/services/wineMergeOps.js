@@ -61,8 +61,8 @@ async function performWineMerge(sourceId, targetId, req) {
     WineDefinition.findById(sourceId),
     WineDefinition.findById(targetId),
   ]);
-  // Neither side of a merge may be a user's private draft (draft design
-  // 2026-09-12): a draft is published or attached by its creator, never merged.
+  // Neither side of a merge may be a user's private draft: a draft is
+  // published or attached by its creator, never merged.
   if (source && source.draft === true) source = null;
   if (target && target.draft === true) target = null;
   if (!source) return { error: { status: 404, message: 'Source wine not found' } };
@@ -143,16 +143,16 @@ async function performWineMerge(sourceId, targetId, req) {
   // Close the source's PENDING correction proposals — a pending row whose
   // subject wine is gone would dangle forever: the review list renders a null
   // wine, approve 404s and reverts its claim back to pending, and the
-  // AdminWines badge stays inflated. Auto-reject with
-  // the reason rather than re-point: the merge usually RESOLVES the complaint,
-  // and silently re-targeting what an admin later approves would be spookier
-  // than asking the somm to re-file against the keeper. decidedBy stays null —
+  // AdminWines badge stays inflated. Closed (status 'closed') with the reason
+  // rather than re-pointed: the merge usually RESOLVES the complaint, and
+  // silently re-targeting what an admin later approves would be spookier than
+  // asking the somm to re-file against the keeper. decidedBy stays null —
   // this is lifecycle closure, not a reviewer's judgement.
   const keeperLabel = [target.producer, target.name].filter(Boolean).join(' — ');
-  // The shared closer also TELLS a user who filed one (pre-deploy audit
-  // 2026-09-18): this is where a correction that made the wine collide with its
-  // twin ends up, and the bottle now points at the keeper, so nothing on the
-  // web would ever show them the outcome. The notification links to the keeper.
+  // The shared closer also TELLS a user who filed one: this is where a
+  // correction that made the wine collide with its twin ends up, and the bottle
+  // now points at the keeper, so nothing on the web would ever show them the
+  // outcome. The notification links to the keeper.
   await closePendingForWine(
     sourceId,
     `Closed automatically: the wine was merged into "${keeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
@@ -202,11 +202,10 @@ const PRODUCER_VERDICT_FIELDS = ['producerSuspect', 'producerUnknown', 'producer
 const plainProfile = (p) => (p && typeof p.toObject === 'function' ? p.toObject() : { ...(p || {}) });
 
 // Which tasting profile the keeper ends up with. A curated profile always
-// wins over an unreviewed one: before 2026-09-28 the keeper's own profile
-// was kept whenever it had one, so merging "Château Mouton-Rothschild" (a
-// curator-reviewed profile) into "Château Mouton Rothschild" (an old AI one)
-// threw the reviewed profile away with the deleted record. Among equals, the
-// keeper keeps its own; among donors, the highest model confidence wins.
+// wins over an unreviewed one: keeping the keeper's own whenever it has one
+// would throw a curator-reviewed donor profile away with the deleted record.
+// Among equals, the keeper keeps its own; among donors, the highest model
+// confidence wins.
 async function inheritAiProfile(keeper, sources) {
   if (isCuratedProfile(keeper)) return;
   const withProfile = sources.filter(w => w.aiProfile?.description);

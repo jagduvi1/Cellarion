@@ -97,8 +97,8 @@ async function savePending(wineRequest) {
 // notifies the local user. The key owner's account here never filed anything
 // in this app, so a second bell on cellarion.app is noise, and it reads as the
 // two accounts being linked by something other than the key.
-// The bell here stays when the install will never hear: one older than
-// v1.252.0, a request forwarded before it upgraded (no installFollowsAt), or a
+// The bell here stays when the install will never hear: a request without
+// installFollowsAt (an older install, or one forwarded before it upgraded), or a
 // resolve to a wine the bridge does not serve (pending identity / not a wine —
 // the sync cannot copy it, so it never finishes there). Bridge corrections and
 // values have no sync at all, so their notifications always stay.
@@ -159,8 +159,8 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
 
     // Now that these bottles have a real wineDefinition, put each wine+vintage
     // into the sommelier maturity queue — mirroring the hand-add and matched-
-    // import paths. Without this, wines that entered via an import "request"
-    // never surfaced for a somm to set a drink window.
+    // import paths. Without this, wines that enter via an import "request"
+    // would never surface for a somm to set a drink window.
     for (const vintage of pendingVintages) {
       await ensurePendingVintageProfile(linkedWine._id, vintage);
     }
@@ -221,7 +221,7 @@ async function completeRequestReject(wineRequest, { resolvedBy = null, adminNote
     );
     bottlesDetached = result.modifiedCount || 0;
     // Their owners' statistics and bottle lists change with it — the same
-    // bump resolve makes (services/dataVersion; audit 2026-09-27 M6).
+    // bump resolve makes (services/dataVersion).
     pendingOwners.forEach(bumpDataVersion);
   }
 

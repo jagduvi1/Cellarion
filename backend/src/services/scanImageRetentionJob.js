@@ -1,7 +1,7 @@
 /**
  * Label-scan retention sweep — runs daily via the scheduler.
  *
- * POST /api/wines/scan-label now KEEPS the frame it scanned (services/imageOps
+ * POST /api/wines/scan-label KEEPS the frame it scanned (services/imageOps
  * .persistLabelScan) so a curator working the pending-identity queue can read
  * the label the extraction got wrong. Most scans go on to become a bottle,
  * where services/wineCommit binds the image to the minted wine — but a user who
@@ -32,18 +32,18 @@
  *                          is then deleted — files, document, and the wine's
  *                          scanImage pointer. See services/labelScanAccess.
  *                          Two populations, one clock: a row that LEFT the
- *                          queue (stamped by the promotion hook) and, since
- *                          2026-08-13, a scan-originated row that was never in
- *                          it — minted looking complete and stamped at birth by
+ *                          queue (stamped by the promotion hook) and a
+ *                          scan-originated row that was never in it — minted
+ *                          looking complete and stamped at birth by
  *                          services/wineCommit. The quiet failures are the ones
  *                          whose label a curator most needs; the window is what
  *                          bounds the retention, not queue membership.
  *   30 days, ORPHAN PHOTO — an ordinary bottle photo (kind:'bottle') attached
  *                          to nothing, from an add abandoned between the
- *                          upload and the link (runUnattachedBottleImageSweep,
- *                          2026-08-16). Until it existed, nothing swept these
- *                          and they sat in the admin moderation queue reading
- *                          as images belonging to nothing.
+ *                          upload and the link (runUnattachedBottleImageSweep).
+ *                          Unswept, these would sit in the admin moderation
+ *                          queue for good, reading as images belonging to
+ *                          nothing.
  * A scan on a wine that is STILL pending is on none of the clocks: it is
  * attached, and it has no retainUntil until the row promotes.
  */
@@ -55,12 +55,12 @@ const SCAN_IMAGE_RETENTION_DAYS = 30;
 // One batch is bounded, so a single find + unlink + delete never holds the
 // event loop for long.
 const SWEEP_LIMIT = 500;
-// …and a daily run keeps taking batches until a clock is clear (scaling audit
-// 2026-09-25). One batch a day was a ceiling on retention itself: once more
-// than 500 rows lapse in a day — scan volume at roughly 10× today — the
-// backlog only grows and the 30-day / 7-day promises quietly become weeks.
-// The run yields between batches, and stops after MAX_BATCHES_PER_RUN so a
-// huge backlog drains over a few days instead of holding the process.
+// …and a daily run keeps taking batches until a clock is clear. One batch a
+// day would be a ceiling on retention itself: once more than SWEEP_LIMIT rows
+// lapse in a day, the backlog only grows and the 30-day / 7-day promises
+// quietly become weeks. The run yields between batches, and stops after
+// MAX_BATCHES_PER_RUN so a huge backlog drains over a few days instead of
+// holding the process.
 const MAX_BATCHES_PER_RUN = 40;
 
 /**
@@ -81,8 +81,8 @@ async function drainBatches(batch) {
 }
 
 /**
- * The SECOND clock, added with the promotion grace window: a label scan whose
- * wine has LEFT the pending queue and whose 7 days are up.
+ * The SECOND clock, the promotion grace window: a label scan whose wine has
+ * LEFT the pending queue and whose 7 days are up.
  *
  * Distinct from the sweep below in every respect and therefore its own pass:
  * that one deletes scans attached to NOTHING after 30 days; this one deletes
@@ -90,12 +90,11 @@ async function drainBatches(batch) {
  * still pending carries no retainUntil at all and can never be picked up here —
  * the queue is its purpose, and the queue has no deadline.
  *
- * GDPR: this REDUCES retention. Before, an attached scan was kept for good
- * (unreachable, but kept); now it is deleted 7 days after the identity it
- * documented was completed.
+ * GDPR: an attached scan is not kept for good (unreachable, but kept): it is
+ * deleted 7 days after the identity it documented was completed.
  *
- * Same TOCTOU-safe shape as the sweep below: the selection
- * predicate is REPEATED in the delete, so a row whose deadline was cleared
+ * Same TOCTOU-safe shape as the sweep below: the selection predicate is
+ * REPEATED in the delete, so a row whose deadline was cleared
  * between the two (a wine returned to the queue) is silently skipped rather
  * than dropped out from under a live pointer. The wine's `scanImage` pointer is
  * nulled AFTER the delete, and only for rows that actually went — never
@@ -119,7 +118,7 @@ async function promotedScanExpiryBatch() {
     // `$type: 'date'` rather than `$ne: null` — identical semantics here (the
     // field is a Date or null), but it matches the index's
     // partialFilterExpression exactly, so the planner can prove the partial
-    // index covers this query (models/BottleImage, audit L-10).
+    // index covers this query (models/BottleImage).
     retainUntil: { $type: 'date', $lt: now },
   })
     .select('originalUrl processedUrl')
@@ -140,7 +139,7 @@ async function promotedScanExpiryBatch() {
     // `$type: 'date'` rather than `$ne: null` — identical semantics here (the
     // field is a Date or null), but it matches the index's
     // partialFilterExpression exactly, so the planner can prove the partial
-    // index covers this query (models/BottleImage, audit L-10).
+    // index covers this query (models/BottleImage).
     retainUntil: { $type: 'date', $lt: now },
   });
   const deleted = res.deletedCount || 0;
@@ -214,8 +213,8 @@ async function unattachedScanBatch() {
       console.warn('[scanImageRetention] unlink failed (continuing):', err.message);
     }
   }
-  // The selection predicate is REPEATED in the delete. Between the
-  // find above and this delete, a second bottle of the same unidentified wine
+  // The selection predicate is REPEATED in the delete. Between the find
+  // above and this delete, a second bottle of the same unidentified wine
   // can attach one of these scans (services/wineCommit.attachScanImage stamps
   // it on the wine) — deleting by id alone would then drop the row a live
   // WineDefinition.scanImage points at. Re-asserting the filter makes the
@@ -237,7 +236,7 @@ async function unattachedScanBatch() {
  * /api/images/upload deliberately requires neither a bottle nor a wine, and
  * POST /api/images/link-to-bottle binds it once the commit succeeds. A user
  * who abandons the add between those two steps leaves a photo behind with no
- * bottle and no wine, and until now NOTHING swept it: the two clocks above
+ * bottle and no wine, and nothing else sweeps it: the two clocks above
  * only ever consider kind:'label-scan'. Such a row also enters the admin
  * moderation queue, where it reads as an image belonging to nothing.
  *
@@ -293,10 +292,10 @@ async function unattachedBottleImageBatch() {
       console.warn('[scanImageRetention] unlink failed (continuing):', err.message);
     }
   }
-  // Predicate REPEATED in the delete, same reason as the sweep above (audit
-  // L-1): a user can link one of these to a bottle between the find and the
-  // delete — /link-to-bottle is a plain updateMany — and deleting by id alone
-  // would drop a row a live bottle now points at.
+  // Predicate REPEATED in the delete, same reason as the sweep above: a user
+  // can link one of these to a bottle between the find and the delete —
+  // /link-to-bottle is a plain updateMany — and deleting by id alone would
+  // drop a row a live bottle now points at.
   const res = await BottleImage.deleteMany({
     _id: { $in: stale.map((i) => i._id) },
     ...selector,

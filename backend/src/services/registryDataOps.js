@@ -1,5 +1,5 @@
 /**
- * Public key vocabulary + values (#985 Slice B) — ONE implementation shared
+ * Public key vocabulary + values — ONE implementation shared
  * by the REST routes (routes/registryData.js, routes/admin/registryData.js)
  * and the MCP tools (mcp/tools/registryData.js).
  *
@@ -45,7 +45,7 @@ const fail = (code, message) => ({ ok: false, code, message });
 
 /**
  * The slot a value applies to: null = the wine-wide default, 'YYYY' = that
- * vintage only (2026-09-04, per-vintage overrides). Blank, 'all', NV and
+ * vintage only (a per-vintage override). Blank, 'all', NV and
  * Unknown all collapse to the default — an override records drift BETWEEN
  * years, and a bottle without a year has nothing to drift from. Anything
  * else must be a plausible year (same rule as Bottle.vintage).
@@ -331,9 +331,9 @@ async function dataForWine(wineId, userId = null, { roles, vintage, locale } = {
   // WHO contributed a published value stays on the row (`suggestedBy` — the
   // admin queues, the audit trail and the contributor's own export read it) and
   // goes no further: this function feeds every user-facing surface (the bottle
-  // page, the connector), and none of them names the contributor (the
-  // record is the registry's, not a byline; same rule as a
-  // correction's proposer, #930). So it is not even loaded here.
+  // page, the connector), and none of them names the contributor (the record
+  // is the registry's, not a byline; same rule as a correction's proposer).
+  // So it is not even loaded here.
   const [publishedRows, pendingRows] = await Promise.all([
     RegistryDataValue.find({ wineDefinition: { $eq: wid }, status: 'published' })
       .select('key value vintage').lean(),
@@ -442,8 +442,8 @@ async function publishedValuesForBottles(bottles, { types } = {}) {
 /* ── Admin operations ────────────────────────────────────────────────── */
 
 // Review pages and the MCP review tool work oldest-first in bounded pages —
-// an unbounded triple-populate find over a growing queue is how admin pages
-// die (audit finding).
+// an unbounded triple-populate find over a growing queue would take the admin
+// page down with it.
 const REVIEW_QUEUE_LIMIT = 200;
 
 async function listReviewQueues() {
@@ -576,10 +576,10 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req, asWi
   // when the reviewer widened it. Publishing supersedes ONLY the value in
   // that same slot — a new default never touches the per-vintage overrides
   // and an override never touches the default. The old row is DEMOTED to
-  // rejected (not deleted — audit finding: a crash between two writes must
-  // never destroy the only durable copy of a published value; a demoted row
-  // can be re-published by hand), then this row takes the published slot
-  // the partial unique index keeps singular. The demoted row keeps its
+  // rejected, not deleted: a crash between two writes must never destroy the
+  // only durable copy of a published value (a demoted row can be re-published
+  // by hand). Then this row takes the published slot the partial unique index
+  // keeps singular. The demoted row keeps its
   // suggester's Cellar Cred (services/suggestionCred reads SUPERSEDED_REASON).
   const widened = !!asWineDefault && !!row.vintage;
   const targetVintage = asWineDefault ? null : (row.vintage || null);
@@ -670,8 +670,8 @@ function castForKey(def, raw) {
 }
 
 /**
- * Change a key's type, unit or allowed values (admin) — a field created the
- * wrong way (ABV as text, discussion #1778) had no way back. Accepted and
+ * Change a key's type, unit or allowed values (admin), so a field created the
+ * wrong way (ABV as text) has a way back. Accepted and
  * still-proposed keys alike; the name stays (it is the identifier), and so
  * does the id, so analytics fields and saved views keep pointing at it.
  *

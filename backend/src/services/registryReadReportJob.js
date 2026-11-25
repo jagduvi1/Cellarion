@@ -1,5 +1,5 @@
 /**
- * Daily registry readers report (registry lockdown 2026-09-06, layer L4).
+ * Daily registry readers report: the watch on who copies the registry.
  *
  * Yesterday's RegistryReadDay rows, ranked by DISTINCT wines read. A copy of
  * the registry is a reader with thousands of distinct wines in a day; a
