@@ -9,7 +9,7 @@ process.env.JWT_SECRET = 'test-secret';
 jest.mock('../models/User', () => ({ exists: jest.fn() }));
 const User = require('../models/User');
 
-const { requireAuth, optionalAuth, requireRole, requireNonDemo, requireSommOrAdmin } = require('./auth');
+const { requireAuth, optionalAuth, requireRole, requireNonDemo, requireSommOrAdmin, isSommOrAdmin } = require('./auth');
 
 // ─── Helpers ────────────────────────────────────────��────────────────────────
 
@@ -327,6 +327,28 @@ describe('requireSommOrAdmin', () => {
     requireSommOrAdmin(req, res, next);
 
     expect(next).toHaveBeenCalled();
+  });
+});
+
+// The check behind requireSommOrAdmin, also used where a route answers a
+// curator with more than a member (routes/somm/maturity.js, prices.js).
+describe('isSommOrAdmin', () => {
+  test.each([
+    [['somm'], true],
+    [['admin'], true],
+    [['user', 'somm'], true],
+    [['user'], false],
+    [['moderator'], false],
+    [[], false],
+  ])('roles %j → %s', (roles, expected) => {
+    expect(isSommOrAdmin({ roles })).toBe(expected);
+  });
+
+  test('no user, or a user without roles, is not a curator and does not throw', () => {
+    expect(isSommOrAdmin(undefined)).toBe(false);
+    expect(isSommOrAdmin(null)).toBe(false);
+    expect(isSommOrAdmin({})).toBe(false);
+    expect(isSommOrAdmin({ roles: 'admin' })).toBe(false);
   });
 });
 

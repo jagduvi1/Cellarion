@@ -143,6 +143,15 @@ const requireNonDemo = (req, res, next) => {
 };
 
 /**
+ * True for a sommelier or an admin: the people who curate the registry. The one
+ * definition behind requireSommOrAdmin and behind the lookups that tell a
+ * curator more than a member (who set a drink window or a price —
+ * routes/somm/maturity.js, routes/somm/prices.js).
+ */
+const isSommOrAdmin = (user) =>
+  Boolean(user && Array.isArray(user.roles) && (user.roles.includes('somm') || user.roles.includes('admin')));
+
+/**
  * Middleware that allows both somm and admin roles.
  * Used to protect sommelier queue routes.
  */
@@ -150,7 +159,7 @@ const requireSommOrAdmin = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  if (!req.user.roles.includes('somm') && !req.user.roles.includes('admin')) {
+  if (!isSommOrAdmin(req.user)) {
     return res.status(403).json({ error: 'Access denied. Sommelier or admin role required.' });
   }
   next();
@@ -189,6 +198,7 @@ module.exports = {
   requireRole,
   requireNonDemo,
   requireSommOrAdmin,
+  isSommOrAdmin,
   requireModeratorOrAdmin,
   isModerator,
 };
