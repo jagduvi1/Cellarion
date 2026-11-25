@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
+const { requireAuth, requireSommOrAdmin, isSommOrAdmin } = require('../../middleware/auth');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const { isValidId } = require('../../utils/validation');
 const { parsePagination } = require('../../utils/pagination');
@@ -115,7 +115,7 @@ router.get('/lookup', async (req, res) => {
       return res.status(400).json({ error: 'Invalid wine ID' });
     }
 
-    const curator = req.user.roles.includes('somm') || req.user.roles.includes('admin');
+    const curator = isSommOrAdmin(req.user);
     const query = WineVintageProfile.findOne({
       wineDefinition: String(wine),
       vintage: String(vintage)

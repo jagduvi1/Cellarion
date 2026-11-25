@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
+const { requireAuth, requireSommOrAdmin, isSommOrAdmin } = require('../../middleware/auth');
 const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const Bottle = require('../../models/Bottle');
@@ -104,7 +104,9 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
 /**
  * GET /api/somm/prices/lookup?wine=:wineId&vintage=:vintage
  * Returns the full price history for a wine+vintage (newest first).
- * Any authenticated user — used by BottleDetail for premium users.
+ * Any authenticated user — used by BottleDetail and CellarVintage. Who recorded
+ * an entry (setBy) goes to sommeliers and admins only: the registry never
+ * shows members who contributed its data (as GET /api/somm/maturity/lookup).
  */
 router.get('/lookup', async (req, res) => {
   try {
@@ -116,10 +118,10 @@ router.get('/lookup', async (req, res) => {
       return res.status(400).json({ error: 'Invalid wine ID' });
     }
 
-    const history = await WineVintagePrice.find({ wineDefinition: String(wine), vintage: String(vintage) })
-      .populate('setBy', 'username')
-      .sort({ setAt: -1 })
-      .lean();
+    const query = WineVintagePrice.find({ wineDefinition: String(wine), vintage: String(vintage) }).sort({ setAt: -1 });
+    // A member sees the prices, their source and the curator's note, never who
+    // recorded them: the field is left out of the query altogether.
+    const history = await (isSommOrAdmin(req.user) ? query.populate('setBy', 'username') : query.select('-setBy')).lean();
 
     // Batch-fetch rate snapshots for all entry dates and attach as exchangeRates.
     const dates = [...new Set(history.map(e => e.setAt.toISOString().slice(0, 10)))];
