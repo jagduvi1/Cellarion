@@ -240,13 +240,13 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
         <DraftWineBanner wine={wine} wineDraft={wineDraft} onChanged={onDraftChanged} />
       )}
 
-      {/* The full public record with visible blanks + per-field suggestions
-          (#985). Demo visitors see the record but not the suggest actions
-          (writes are requireNonDemo). It folds to its title row like the
-          vintage page's (2026-10-14): a flat inner "card" lets the shared
-          folding rules find its title row inside this card. */}
+      {/* The full public record with visible blanks + per-field suggestions.
+          Demo visitors see the record but not the suggest actions (writes are
+          requireNonDemo). It folds to its title row like the vintage page's: a
+          flat inner "card" lets the shared folding rules find its title row
+          inside this card. */}
       {/* No registry wine (a bottle waiting on its request): the record shows
-          nothing, so there is nothing to fold (audit 2026-10-14). */}
+          nothing, so there is nothing to fold. */}
       {recordFold && wine ? (
         <CollapsibleBlock nested {...recordFold}>
           <div className="card bd-record-fold">{record}</div>
@@ -327,7 +327,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
 
       {/* The serving temperature does not depend on the vintage: when the
           maturity section below is hidden (no vintage, or Unknown), the line
-          gets a section of its own (release audit 2026-10-28). */}
+          gets a section of its own. */}
       {(!bottle.vintage || bottle.vintage === 'Unknown') && servingLine && (
         <div className="bd-section">
           <span className="bd-section-label">{t('serving.label', 'Serving')}</span>

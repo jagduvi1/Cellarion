@@ -51,7 +51,7 @@ function loadPhoto(file) {
  * @param {Object}   callbacks — optional callbacks for scan results
  * @param {Function} callbacks.onScanSuccess — called with scan data when label is read successfully
  * @param {Function} callbacks.onScanError   — called with (message, responseBody) on failure.
- *   The body matters: a 422 now carries `scanImageId`, so a page that falls
+ *   The body matters: a 422 carries `scanImageId`, so a page that falls
  *   back to manual entry can still supply the photo to the pending wine.
  * @param {Function} callbacks.onBackScanSuccess — called with the back-scan
  *   response ({ merged, conflicts, filled, match, backScanImageId })
@@ -241,8 +241,8 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
         } else {
           closeViewfinder();
           // The BODY rides along, not just the message: a 422 carries a
-          // scanImageId, and dropping it is how an unreadable label used to
-          // lose its photo (the pending wine then had no evidence at all).
+          // scanImageId; dropped, an unreadable label loses its photo and the
+          // pending wine has no evidence at all.
           if (onErrorRef.current) onErrorRef.current(messageForResponse(res, data, i18n.t('camera.labelUnreadable'), i18n.t), data);
         }
       } catch {

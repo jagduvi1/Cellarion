@@ -28,12 +28,12 @@ export function CollapseToggle({ collapsed, onToggle, label, controls }) {
 }
 
 /**
- * A card that folds down to its title row (the wine and vintage page, beta
- * feedback 2026-10-12). Wraps an existing card component untouched: the
- * button sits in the card's top-right corner and, folded, everything but the
- * card's first row (its title) is hidden — hidden, not unmounted, so the card
- * keeps what it loaded. `nested`: the card's title row is one level down
- * (the wine record's section inside its card).
+ * A card that folds down to its title row (the wine and vintage page). Wraps
+ * an existing card component untouched: the button sits in the card's
+ * top-right corner and, folded, everything but the card's first row (its
+ * title) is hidden — hidden, not unmounted, so the card keeps what it loaded.
+ * `nested`: the card's title row is one level down (the wine record's section
+ * inside its card).
  *
  * Many cards render nothing when they have nothing to say; the button only
  * appears once there is a card to fold.

@@ -52,9 +52,8 @@ export function bottleAnchorYear(bottle) {
  * in drinkStatus and on the server — gives a shared year to the EARLIER
  * phase. So a later phase is shown from the year after the one before it
  * ends, and a phase left with no year of its own is not listed: the table
- * marks the same single phase the status names (beta feedback 2026-10-12:
- * two phases were marked as now in the same year). Display only — the profile
- * keeps its own numbers.
+ * marks the same single phase the status names, never two phases as now in
+ * one year. Display only — the profile keeps its own numbers.
  *
  * @param {object} profile
  * @param {{ early: string, peak: string, late: string }} labels - Translated phase labels

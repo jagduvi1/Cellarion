@@ -7,7 +7,7 @@ import { backLabel as backLabelText } from '../utils/backLabel';
  * Standard header block that sits ABOVE <CellarNav> on every cellar subpage.
  * A fixed shape (back-link row → title + always-reserved subtitle line, with an
  * optional right-side action slot) means the nav strip always anchors at the
- * same vertical position, so it no longer "jumps" as the user moves between
+ * same vertical position, so it never "jumps" as the user moves between
  * Bottles / Racks / Room / History / Cellar Book.
  *
  *   backTo, backLabel   — the shared back-link

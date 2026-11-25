@@ -34,7 +34,7 @@ import { formatVintage } from '../../utils/vintage';
 
 // The server's rule for an enum key's options (utils/personalDataTypes:
 // 2–20 options, each at most 40 characters), mirrored so the row says what is
-// wrong while it is typed rather than after the add (release audit 2026-09-27, L).
+// wrong while it is typed rather than after the add.
 export const ENUM_OPTIONS_MIN = 2;
 export const ENUM_OPTIONS_MAX = 20;
 export const ENUM_OPTION_MAX_CHARS = 40;

@@ -7,7 +7,7 @@
 }
 
 /* Each chip is a real button (the tap-to-reveal needs one), restyled to look
-   exactly like the old inline chip. */
+   like a plain inline chip. */
 .cred-badge {
   position: relative; /* anchors the tap popover */
   display: inline-flex;

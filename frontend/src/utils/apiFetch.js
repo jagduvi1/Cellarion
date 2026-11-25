@@ -10,8 +10,8 @@ import { API_URL } from '../api/apiConstants';
  * The bearer token and the refresh cookie are only ever meant for OUR API. A
  * caller-supplied URL that resolves anywhere else — a protocol-relative
  * `//host/x`, a backslash trick, an absolute third-party URL — is fetched
- * with neither, and never triggers the refresh/logout dance (audit 2026-09
- * F03-3 / S7-1: a registry image value used to reach this wrapper verbatim).
+ * with neither, and never triggers the refresh/logout dance: a caller may
+ * pass a stored value, such as a registry image address, on verbatim.
  *
  * Usage (via AuthContext):
  *   const { apiFetch } = useAuth();

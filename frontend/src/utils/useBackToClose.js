@@ -261,8 +261,7 @@ export function pageEntryState(extra = {}) {
  * Run `fn` once the current history entry is no longer a pop-up's own (one
  * that just closed is taken off a tick later): a navigation from a closing
  * pop-up's handler would otherwise replace or step from that entry, not the
- * page's. Runs at once when there is none; gives
- * up waiting after `timeoutMs`.
+ * page's. Runs at once when there is none; gives up waiting after `timeoutMs`.
  */
 export function afterPopupEntryGone(fn, timeoutMs = 1500) {
   const start = Date.now();

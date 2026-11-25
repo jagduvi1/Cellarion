@@ -231,7 +231,7 @@ function SelfHostedBridgeSection() {
       {/* Once the plaintext key is on screen the dialog must not be dismissable
           by a stray Escape or a click on the backdrop: closing clears it, it is
           shown exactly once, and the cap is two keys per account. "Done" is the
-          only way out (audit 2026-09-08). */}
+          only way out. */}
       {showCreate && (
         <Modal
           title={t('settings.bridge.createTitle', 'Create bridge key')}

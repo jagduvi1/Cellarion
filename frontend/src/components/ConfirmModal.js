@@ -33,8 +33,8 @@ function ConfirmModal({ title, message, warning, confirmLabel, confirmClass, con
     return () => { mounted.current = false; };
   }, []);
 
-  // A confirm whose action throws used to leave the button disabled for good
-  // and say nothing. Now the dialog stays open, says why, and can be tried
+  // A confirm whose action throws must not leave the button disabled for good
+  // and say nothing: the dialog stays open, says why, and can be tried
   // again. (Callers that close the dialog themselves are unaffected.)
   const handleConfirm = async () => {
     setSubmitting(true);

@@ -4,9 +4,8 @@ import { fmtCurrency } from './chartHelpers';
 
 /**
  * Cellar breakdown. Each cellar's name links to the cellar itself when the
- * payload carries an id — the "from the cellars" half of the forum request
- * (turbulent3964 2026-08-29). Only the name is a link, not the whole row: the
- * bar and meta line are a measurement, and making a 100%-wide bar clickable
+ * payload carries an id. Only the name is a link, not the whole row: the bar
+ * and meta line are a measurement, and making a 100%-wide bar clickable
  * reads as a mis-target.
  */
 function CellarBreakdownViz({ cellars, currency }) {

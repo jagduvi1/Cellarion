@@ -33,7 +33,7 @@ export const updateDashboard = (apiFetch, id, patch) =>
 export const deleteDashboard = (apiFetch, id) =>
   apiFetch(`/api/analytics/dashboards/${id}`, { method: 'DELETE' });
 
-// Saved views + preset stars (#987 saved-views slice).
+// Saved views + preset stars.
 export const listViews = (apiFetch) => apiFetch('/api/analytics/views');
 
 export const saveView = (apiFetch, view) =>

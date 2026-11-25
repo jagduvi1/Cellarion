@@ -24,8 +24,8 @@ import { isOfflineModeEnabled } from './offlineMode';
 const OTHER_ACCOUNT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 // Any op, anyone's, after three months: a change queued by an account that
 // ended (signed out elsewhere, deleted) with nobody signing in here since would
-// otherwise sit in the device's storage indefinitely (release audit
-// 2026-09-27, L). The user's own op has shown in the banner for 90 days by then.
+// otherwise sit in the device's storage indefinitely. The user's own op has
+// shown in the banner for 90 days by then.
 const ABANDONED_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const SENT_KEEP_MS = 60 * 60 * 1000;
 export const QUEUE_CHANGED_EVENT = 'cellarion-offline-queue';

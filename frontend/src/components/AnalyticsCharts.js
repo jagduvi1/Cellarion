@@ -6,13 +6,13 @@ import {
 import { SERIES_COLORS } from '../utils/chartColors';
 
 /**
- * Charts over the analytics grouped result (#987 R-C, first slice).
+ * Charts over the analytics grouped result.
  *
  * Pure presentation: the grouped response IS the chart data — every number
  * here came through the engine's caps and normalizations, so nothing is
  * computed client-side beyond pivoting the bucket list into recharts' shape.
  * Colors come from the app-wide SERIES_COLORS palette (one definition for
- * every chart in the app — the palette-unification decision, D1/R-C).
+ * every chart in the app).
  *
  * Shapes: 1 dimension → bar | donut | line; 2 dimensions → stacked bar
  * (dim1 on the axis, dim2 as the stack segments, capped for legibility).

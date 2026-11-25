@@ -3,9 +3,7 @@ import { formatVolume, mlFromCode } from '../config/bottleSizes';
 
 /**
  * Extra details a cellar-list card can show, picked by the user under
- * "Show on cards" (forum feedback 2026-10-12: "choose some of the additional
- * bottle details to display in the main list, for example ratings").
- * Kept per device, like the list's density and notes toggles.
+ * "Show on cards". Kept per device, like the list's density and notes toggles.
  */
 export const CARD_FIELDS = ['rating', 'price', 'size', 'region', 'purchased'];
 export const CARD_FIELDS_STORAGE_KEY = 'cellarion_bottle_fields';

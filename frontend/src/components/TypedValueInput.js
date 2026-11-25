@@ -20,7 +20,7 @@ export function formatTypedValue(keyDef, value, t) {
 }
 
 /**
- * One value input driven by a typed key (#985/#986 shared type system):
+ * One value input driven by a typed key (registry and personal keys alike):
  * text / integer / decimal (unit suffix) / boolean (yes-no select) /
  * date / enum (select of the key's options). Controlled: (value, onChange).
  * The backend re-validates against the key's stored type — this only shapes

@@ -18,11 +18,11 @@ import {
 import './AnalyticsTable.css';
 
 /**
- * The self-service analytics table (#987 Phase 1) — a third view mode on the
- * cellar page. Columns come from the field catalogue (including the user's
- * own typed personal keys and the public registry vocabulary), filters and
- * sorting run server-side through /api/analytics/query, and the CSV export
- * is exactly the current query.
+ * The self-service analytics table — a third view mode on the cellar page.
+ * Columns come from the field catalogue (including the user's own typed
+ * personal keys and the public registry vocabulary), filters and sorting run
+ * server-side through /api/analytics/query, and the CSV export is exactly the
+ * current query.
  *
  * The scope pill is a design requirement, not decoration: whether consumed
  * bottles count changes nearly every number, so the active scope must be
@@ -124,15 +124,15 @@ export default function AnalyticsTable({ cellarId }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  // Grouped mode (R-B): when on, the table pivots — 1-2 dimensions, count
-  // always as the first measure, up to two more picked from measure-capable
-  // fields. Off = the flat rows table.
+  // Grouped mode: when on, the table pivots — 1-2 dimensions, count always
+  // as the first measure, up to two more picked from measure-capable fields.
+  // Off = the flat rows table.
   const [grouping, setGrouping] = useState({ on: false, dim1: 'wine.type', dim2: '', measures: [] });
-  // R-C: how the grouped result renders — the table stays the default.
+  // How the grouped result renders — the table stays the default.
   const [chartType, setChartType] = useState('table'); // 'table' | 'bar' | 'donut' | 'line'
   const [chartMeasure, setChartMeasure] = useState(0);
-  // Saved views + preset stars (saved-views slice): the Views menu leads with
-  // the user's starred set; own views are applied exactly like presets.
+  // Saved views + preset stars: the Views menu leads with the user's starred
+  // set; own views are applied exactly like presets.
   const [views, setViews] = useState({ own: [], starredPresets: [] });
   const [viewsOpen, setViewsOpen] = useState(false);
   const [dashboards, setDashboards] = useState([]);
@@ -335,15 +335,14 @@ export default function AnalyticsTable({ cellarId }) {
   };
 
   const removeOwnView = async (view) => {
-    // One misclick used to destroy a view irrecoverably.
+    // A deleted view cannot be recovered, so one misclick must not do it.
     if (!window.confirm(t('analytics.deleteViewConfirm', 'Delete the view "{{name}}"?', { name: view.name }))) return;
     const res = await deleteView(apiFetch, view.id).catch(() => null);
     if (res && res.ok) setViews((v) => ({ ...v, own: v.own.filter((x) => x.id !== view.id) }));
   };
 
-  // The stored widget query must not carry the table's PAGE position (audit
-  // F4: a pinned list opened at offset 150 showed a mid-list slice or a
-  // false empty state on the dashboard).
+  // The stored widget query must not carry the table's PAGE position: a
+  // pinned list would open on the dashboard mid-list, or falsely empty.
   const widgetQuery = () => {
     const { limit, offset, ...rest } = query;
     return rest;

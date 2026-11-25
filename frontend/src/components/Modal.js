@@ -19,10 +19,10 @@ import './Modal.css';
  * modal): on open it moves focus into the dialog and keeps Tab inside it.
  */
 // Open dialogs. Escape closes only the newest: a dialog opened from inside
-// another (the beta feedback form inside the rack "Move bottles" dialog) must
-// not take its parent — and the parent's typed input — with it. "Newest" is
-// the order of FIRST RENDER, which runs parent before child; effects run
-// child before parent, so they cannot tell a nested pair apart.
+// another (a form opened from a button inside a dialog) must not take its
+// parent — and the parent's typed input — with it. "Newest" is the order of
+// FIRST RENDER, which runs parent before child; effects run child before
+// parent, so they cannot tell a nested pair apart.
 const openModals = new Set();
 let modalSeq = 0;
 

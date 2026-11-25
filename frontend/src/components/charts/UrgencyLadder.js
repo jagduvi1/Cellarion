@@ -9,13 +9,12 @@ import { formatVintage } from '../../utils/vintage';
  *
  * Each row links to its bottle when the payload carries BOTH ids, which is
  * where the owner finds the two things they actually need next: which rack and
- * slot it is in, and what the label looks like (forum request, turbulent3964
- * 2026-08-29 — "especially the Drink These Now wines!").
+ * slot it is in, and what the label looks like.
  *
  * Both ids are required because a bottle's page is
  * /cellars/:cellarId/bottles/:bottleId — there is no /bottles/:id route, so an
- * id-only link would 404. Rows missing either render as plain text, which is
- * also what a client sees against a server older than this payload change.
+ * id-only link would 404. Rows missing either (an older server sends neither)
+ * render as plain text.
  */
 function UrgencyLadder({ bottles, currency }) {
   const { t } = useTranslation();

@@ -14,8 +14,7 @@ const PAGE_SIZE = 50;
  * The COMPLETENESS queue: registry rows that are not wrong, just BLANK — no
  * region at all. Every other admin queue keys off a value (a name embedding
  * its producer, a producer that is really a place, two rows colliding on a
- * key), so a region-less row trips none of them and stays invisible; 180 sat
- * on prod the day this shipped, 112 of them owned by real users.
+ * key), so a region-less row trips none of them and would stay invisible.
  *
  * Rows are ranked most-owned first, and within that an appellation LEAD (one
  * edit away) before a blank row (research needed). Editing the wine is the

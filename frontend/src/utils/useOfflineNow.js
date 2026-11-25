@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { isOfflineModeEnabled, OFFLINE_MODE_EVENT } from './offlineMode';
 
 /**
- * Pages that work offline, from the device's copy (#1355, utils/offlineData):
+ * Pages that work offline, from the device's copy (utils/offlineData):
  * the cellar list, a cellar, its racks, a bottle — and Settings, where offline
  * mode itself is switched. Everything else needs the network.
  */

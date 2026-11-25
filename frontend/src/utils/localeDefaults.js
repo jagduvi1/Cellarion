@@ -123,8 +123,8 @@ export function guessCurrency({ timeZone = deviceTimeZone(), languages = deviceL
   const zoneIsEuropeanOrUnknown = !timeZone || timeZone.startsWith('Europe/') || timeZone.startsWith('Etc/') || timeZone === 'UTC';
   for (const tag of tags) {
     // Outside Europe en-GB says little about money: it is the English many
-    // devices in India, Nigeria or the Gulf are set to (release audit
-    // 2026-10-16). Other tags still count — en-US in Puerto Rico is USD.
+    // devices in India, Nigeria or the Gulf are set to. Other tags still
+    // count — en-US in Puerto Rico is USD.
     if (!zoneIsEuropeanOrUnknown && /^en-GB$/i.test(tag)) continue;
     const fromTag = currencyOf(explicitRegion(tag));
     if (fromTag) return fromTag;

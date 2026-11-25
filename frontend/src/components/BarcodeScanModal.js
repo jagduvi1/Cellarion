@@ -12,9 +12,8 @@ import './BarcodeScanModal.css';
 
 /**
  * "Add barcode" for a bottle already in the cellar (the bottle page's ⋮).
- * Until now a barcode could only be read while adding a bottle. The camera
- * reads it with the same reader Add Bottle uses (useBarcodeWatch: the
- * browser's BarcodeDetector, else the ZXing fallback, the same code in two
+ * The camera reads it with the same reader Add Bottle uses (useBarcodeWatch:
+ * the browser's BarcodeDetector, else the ZXing fallback, the same code in two
  * frames); the numbers can also be typed. A code read by the camera is saved
  * at once; a typed one when the user presses Save. A bottle that has a
  * barcode can have it removed here.

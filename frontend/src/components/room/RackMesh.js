@@ -820,8 +820,8 @@ export default function RackMesh({
     e.stopPropagation();
     onClick?.(e.shiftKey);
 
-    // Set drag plane to the rack's current y-elevation (fixes Bug 4:
-    // stacked racks no longer project to y=0)
+    // Set drag plane to the rack's current y-elevation, so a stacked rack
+    // does not project to y=0
     const rackY = position[1];
     floorPlane.current.set(new THREE.Vector3(0, 1, 0), -rackY);
 
@@ -956,7 +956,7 @@ export default function RackMesh({
           modular racks have irregular internal layouts (driven by the scaled
           2D layout), so the simple per-row planks/scallops don't apply — and
           a cabinet brings its own beech shelves (and would get grid cradles
-          that no longer line up under its narrowed, staggered cells). */}
+          that do not line up under its narrowed, staggered cells). */}
       {rackType !== 'x-rack' && rackType !== 'shelf' && rackType !== 'cube' && !isCabinet && !rack.isModular && (
         <>
           {/* Shelves between rows (thin planks). headroomAbove shifts a

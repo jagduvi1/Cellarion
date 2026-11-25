@@ -87,8 +87,8 @@ export default function AiConnectSection() {
       <h2 className="settings-section-title">
         {t('settings.aiConnect.title', 'Connect your AI')}
       </h2>
-      {/* Out of beta (2026-10). The safety net stays worth saying up front:
-          read-only tokens, every change reversible, instant revoke. */}
+      {/* The safety net is worth saying up front: read-only tokens, every
+          change reversible, instant revoke. */}
       <div className="alert alert-info">
         {t('settings.aiConnect.safetyNotice',
           'If you are unsure, start with a read-only token. Anything an AI changes can be undone under "{{section}}", and revoking the token cuts it off instantly.',

@@ -17,11 +17,11 @@ import './WineRecordSection.css';
 import { formatVintage } from '../../utils/vintage';
 
 /**
- * The full public record of a wine, blanks included (#985 Slice A).
- * A visible gap is what invites a contribution — blank fields render as
- * "not recorded", and every field carries a "suggest a fix" action that files
- * into the admin-reviewed WineCorrectionProposal queue. Nothing a user does
- * here writes to the registry; approval stays a human act.
+ * The full public record of a wine, blanks included. A visible gap is what
+ * invites a contribution — blank fields render as "not recorded", and every
+ * field carries a "suggest a fix" action that files into the admin-reviewed
+ * WineCorrectionProposal queue (applied at once only on a server whose admin
+ * turned contribution review off).
  *
  * Type and grapes are part of the record too, so a wrong or incomplete grape
  * list has the same route to a fix as every other field — not a separate
@@ -103,7 +103,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   // section-level toggle so the record reads clean.
   const [suggestMode, setSuggestMode] = useState(false);
   const sectionRef = useRef(null);
-  // Public key vocabulary + values (#985 Slice B)
+  // Public key vocabulary + values
   const [publicFields, setPublicFields] = useState([]);
   const [valueModal, setValueModal] = useState(null); // { field } from publicFields
   const [valueInput, setValueInput] = useState('');
@@ -495,7 +495,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   const typeChoices = WINE_TYPES.filter((v) => v !== values.type || isStyleType(v));
   // The colour choice is KEPT while a still type is selected (the row is
   // hidden and draftFields ignores it): arrow keys select as they move, and a
-  // pass through "Rosé" on the way back to "Sparkling" used to wipe it.
+  // pass through "Rosé" on the way back to "Sparkling" must not wipe it.
   const chooseType = (v) => setProposedType(v);
   // Tapping the chosen colour again takes the choice back — to the recorded
   // colour, or to none.
@@ -541,7 +541,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
           </button>
         )}
       </div>
-      {/* The one-line framing stays for everyone (audit: read-only viewers
+      {/* The one-line framing stays for everyone (read-only viewers would
           otherwise lose the only explanation of what this shared data is);
           the suggest mode swaps it for the instruction, set apart so the
           change of mode is seen. */}
@@ -600,8 +600,8 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
           </div>
         ))}
       </div>
-      {/* ── Public data fields (#985 Slice B): the accepted vocabulary with
-          published values; blanks invite value suggestions ── */}
+      {/* ── Public data fields: the accepted vocabulary with published
+          values; blanks invite value suggestions ── */}
       {(publicFields.length > 0 || (canSuggest && suggestMode)) && (
         <>
           <span className="bd-section-label" style={{ marginTop: '0.8rem' }}>
@@ -635,7 +635,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                   </span>
                   {/* ANY pending suggestion (yours or someone's) holds the
                       key's single review slot — show status, never a button
-                      that can only 409 (audit: second-suggester dead-end). */}
+                      that can only 409. */}
                   {canSuggest && (field.mySuggestion || field.hasPendingSuggestion) ? (
                     <span className="wr-pending" title={field.mySuggestion
                       ? t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')

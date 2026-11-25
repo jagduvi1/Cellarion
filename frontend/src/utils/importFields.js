@@ -103,9 +103,8 @@ export function normHeader(header) {
  * Build a header-tolerant accessor over a parsed CSV row: get(keys) returns
  * the first non-empty value among the given header names, trimmed — or ''
  * when none match. Each name is tried as written, lowercased, and then in its
- * normHeader form against the row's headers in theirs (forum feedback
- * 2026-10-12: a price column that was not spelled exactly "Price" was
- * dropped without a word).
+ * normHeader form against the row's headers in theirs: a price column not
+ * spelled exactly "Price" must still be read, not dropped without a word.
  */
 export function makeGetter(row) {
   let normalized = null; // header form → value, built on first use

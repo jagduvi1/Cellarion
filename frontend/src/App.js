@@ -96,11 +96,9 @@ const WineLists            = lazy(() => import('./pages/WineLists'));
 const WineListEditor       = lazy(() => import('./pages/WineListEditor'));
 const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
 
-// The page of one wine and vintage (the early-access layout, out for
-// everyone since 2026-10-13 — the classic page and its flag are gone).
-// Keyed by the address: one vintage page links to another (its "Other
-// vintages"), and the next one must start fresh — no notice, open window or
-// folded list carried over from the last.
+// The page of one wine and vintage. Keyed by the address: one vintage page
+// links to another (its "Other vintages"), and the next one must start fresh
+// — no notice, open window or folded list carried over from the last.
 function VintagePage() {
   const { id, wineId, vintage } = useParams();
   return <CellarVintage key={`${id}/${wineId}/${vintage}`} />;

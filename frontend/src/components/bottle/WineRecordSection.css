@@ -1,6 +1,6 @@
-/* Wine record (#985 Slice A) — the full public record with visible blanks
-   and per-field suggest actions. Same key-value ledger language as the
-   personal-data card. */
+/* Wine record — the full public record with visible blanks and per-field
+   suggest actions. Same key-value ledger language as the personal-data
+   card. */
 
 /* Clears the app header when another surface scrolls the record into view. */
 .wr-section {
@@ -68,9 +68,9 @@
   margin-top: 0.15rem;
 }
 
-/* One line per field on every width — key, value, action. The record used to
-   stack key over value on a phone, which made eight fields fill the screen;
-   the short "Fix" / "Add" actions are what let it stay a ledger there too. */
+/* One line per field on every width — key, value, action. Key stacked over
+   value on a phone would make eight fields fill the screen; the short
+   "Fix" / "Add" actions are what let it stay a ledger there too. */
 .wr-row {
   display: grid;
   grid-template-columns: minmax(110px, 34%) 1fr auto;

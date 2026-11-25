@@ -11,10 +11,8 @@ import { lazy as reactLazy } from 'react';
  * import is thrown, not caught — it propagates past Suspense to the root
  * ErrorBoundary and takes the WHOLE app down, not just that route.
  *
- * Reported twice on 2026-08-21: once as "the dashboard is blank" by a user,
- * where it went undiagnosed for hours because the symptom is silent, and once
- * with the console 404 that finally named it. Seven deploys shipped that day,
- * so every open tab had seven chances to hit it.
+ * The symptom is silent — a blank page, with only a 404 in the console to
+ * name it — and every deploy gives every open tab another chance to hit it.
  *
  * THE FIX is to reload once. index.html is served no-store, so a reload fetches
  * the new module graph and the route renders. There is nothing to lose by

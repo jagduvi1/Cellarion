@@ -12,9 +12,8 @@ import { EMPTY_DISPLAY_NAMES } from '../utils/taxonomyName';
  * `Cache-Control: public, max-age=3600` besides.
  *
  * Deliberately never throws and never blocks: a failed fetch leaves the map
- * empty, and an empty map means every name renders canonically — which is what
- * the app did before this existed. Localisation is worth having, not worth a
- * blank page.
+ * empty, and an empty map means every name renders canonically. Localisation
+ * is worth having, not worth a blank page.
  */
 
 // Module scope, not component state: every component that mounts wants the
@@ -31,11 +30,10 @@ function loadDisplayNames(lang) {
     .then((body) => {
       if (!body || !body.byId || !body.byName) return EMPTY_DISPLAY_NAMES;
       const map = { byId: body.byId, byName: body.byName };
-      // ONLY a valid answer is cached. Caching the empty fallback on a non-OK
-      // response looked harmless and wasn't: a 503 during a deploy would have
-      // condemned the tab to English for its whole lifetime — the exact thing
-      // the catch below already refuses to do for a network failure (found by
-      // the pre-merge audit; the two failure paths now agree).
+      // ONLY a valid answer is cached: the empty fallback cached on a non-OK
+      // response (a 503 during a deploy) would condemn the tab to English for
+      // its whole lifetime — the same thing the catch below refuses to do for
+      // a network failure.
       cache.set(lang, map);
       return map;
     })

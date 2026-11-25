@@ -9,8 +9,8 @@ function VintageBarChart({ data, onBarClick }) {
   if (!data || data.length === 0) return <p className="stats-empty">{t('statistics.noVintageData')}</p>;
 
   // The two stored codes are bars of their own, after the years, labelled
-  // through the display helper ('Unknown' used to
-  // sit among the years as a raw word, sliced to "wn" past twenty bars).
+  // through the display helper: among the years, 'Unknown' would show as a
+  // raw word, sliced to "wn" past twenty bars.
   const CODES = ['NV', 'Unknown'];
   const numeric  = data.filter(d => !CODES.includes(String(d.year)));
   const nvItem   = data.find(d => d.year === 'NV');

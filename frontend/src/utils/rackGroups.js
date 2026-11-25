@@ -1,9 +1,8 @@
 /**
- * Racks sectioned by their optional group label (discussion #1228: a
- * basement is usually several racks, not one). Groups
- * keep first-seen order — the order the racks were created in — and the
- * ungrouped racks come last under a null key, so a cellar with no groups at
- * all renders as one section, no heading.
+ * Racks sectioned by their optional group label (a basement is usually
+ * several racks, not one). Groups keep first-seen order — the order the racks
+ * were created in — and the ungrouped racks come last under a null key, so a
+ * cellar with no groups at all renders as one section, no heading.
  */
 export function groupRacks(racks) {
   const sections = [];

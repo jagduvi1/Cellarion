@@ -32,8 +32,8 @@ export function getMaturityStatus(profile, anchorYear, year = CURRENT_YEAR) {
   if (peakUntil  && year <= peakUntil)               return { status: 'peak' };
   if (lateFrom   && year <  lateFrom)                return { status: 'peak', hint: 'lateFrom', year: lateFrom };
   if (lateUntil  && year <= lateUntil)               return { status: 'late' };
-  // A late phase with no end stays late once it has begun (release audit
-  // 2026-10-13: it fell through to "Optimal maturity").
+  // A late phase with no end stays late once it has begun, rather than
+  // falling through to the peak check below.
   if (lateFrom   && !lateUntil && year >= lateFrom)  return { status: 'late' };
   if ((lateUntil && year >  lateUntil) ||
       (peakUntil && year >  peakUntil && !lateFrom)) return { status: 'declining' };
@@ -70,11 +70,10 @@ export function getPersonalWindowStatus(bottle, currentYear = CURRENT_YEAR) {
   if (from === null && to === null && peakFrom === null && peakUntil === null) return null;
 
   // With the optional peak set, the personal window carries the same five
-  // stages the sommelier profile has always had ("drinkable ≠ peak"):
+  // stages as the sommelier profile ("drinkable ≠ peak"):
   // not-ready | early (drinkFrom..peakFrom) | peak | late (peakUntil..drinkTo)
-  // | declining. Without it, the whole span stays 'peak' — the historical
-  // behaviour. MUST stay in step with backend classifyPersonalWindow
-  // (utils/maturityUtils).
+  // | declining. Without it, the whole span stays 'peak'. MUST stay in step
+  // with backend classifyPersonalWindow (utils/maturityUtils).
   let status = 'peak';
   if (from !== null && currentYear < from) status = 'not-ready';
   else if (to !== null && currentYear > to) status = 'declining';

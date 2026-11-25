@@ -1,6 +1,6 @@
 import { JSON_HEADERS } from './apiConstants';
 
-// User-facing registry correction suggestions (#985 Slice A).
+// User-facing registry correction suggestions.
 // Mirrors backend routes/wineProposals.js.
 
 export const createWineProposal = (apiFetch, data) =>

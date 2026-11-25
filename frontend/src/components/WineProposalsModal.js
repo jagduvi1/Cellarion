@@ -145,10 +145,10 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
     const gone = new Set(ids);
     decidedDelta.current += gone.size;
     setItems(prev => (prev || []).filter(x => !gone.has(x._id)));
-    // Decided rows leave the SELECTION too: a row approved
-    // via its own button kept its id in selectedIds, inflating the count and
-    // making the next bulk call send an already-decided id whose 409 landed
-    // as an error on a row no longer rendered. (After a bulk call,
+    // Decided rows leave the SELECTION too: a row approved via its own button
+    // would keep its id in selectedIds, inflating the count and making the
+    // next bulk call send an already-decided id whose 409 lands as an error
+    // on a row no longer rendered. (After a bulk call,
     // applyBulkResults re-sets the selection to the failed ids — functional
     // updates apply in order, so that write wins, as intended.)
     setSelectedIds(prev => {

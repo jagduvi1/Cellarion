@@ -2,7 +2,7 @@
 // points a user picks instead of composing dimensions and measures from
 // scratch. Client-side constants — applying one just sets the table's state,
 // so presets need no storage, no schema and no extra requests. User-SAVED
-// views are a later slice (R-E); these are the system ones.
+// views are stored on the server (api/analytics.js); these are the system ones.
 //
 // `build()` returns the state patch; date-dependent presets compute their
 // values at click time. labelKey resolves through i18n with `label` as the
