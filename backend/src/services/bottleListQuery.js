@@ -16,11 +16,13 @@ const { parsePagination } = require('../utils/pagination');
 // What a card displays must be what search matches: the search haystack
 // below holds each grape's regional display name beside its canonical one.
 const { resolveGrapeDisplayName } = require('../utils/grapeDisplay');
+const { parseSweetnessFilter, wineIdsMatching } = require('./sweetnessCategory');
 
 const { isValidObjectId } = mongoose;
 
 // The answer when no bottle can match and none was read: the user owns no
-// cellar, or a filter names a country, region, grape or wine that does not exist.
+// cellar, a filter names a country, region, grape or wine that does not exist,
+// or no wine in scope reads as a sweetness category asked for.
 const nothingCanMatch = (limit, skip) => ({ bottles: [], total: 0, limit, skip, maturityMap: null, nothingCanMatch: true });
 
 /**
@@ -39,6 +41,9 @@ const nothingCanMatch = (limit, skip) => ({ bottles: [], total: 0, limit, skip, 
  *   vintage      — vintage year string, comma-separated
  *   producer     — exact producer string (case-insensitive)
  *   bottleSize   — exact bottle-size string (e.g. "750ml")
+ *   sweetnessCategory — 'dry','off-dry','medium-sweet','sweet', or 'not-stated' for the
+ *                  wines that could state one and do not — one, or several
+ *                  comma-separated (OR-combined); services/sweetnessCategory
  *   minRating    — minimum normalised rating (0-100)
  *   maxRating    — maximum normalised rating (0-100); with minRating it is a range
  *   maturity     — 'declining','late','peak','early','not-ready','none' — one, or
@@ -77,6 +82,8 @@ async function queryUserBottles(userId, params) {
   const vintage          = q(params.vintage);
   const producer         = q(params.producer);
   const bottleSize       = q(params.bottleSize);
+  // null when absent; a Set of categories otherwise (multi-select, OR).
+  const sweetnessFilter  = parseSweetnessFilter(q(params.sweetnessCategory));
   const minRating        = q(params.minRating);
   const maxRating        = q(params.maxRating);
   const ratingBandParam  = q(params.ratingBand); // one of RATING_BANDS (a statistics band link)
@@ -217,6 +224,20 @@ async function queryUserBottles(userId, params) {
     filter.wineDefinition = includeNoWine ? { $in: [...wdIds, null] } : { $in: wdIds };
   } else if (includeNoWine) {
     filter.wineDefinition = null;
+  }
+
+  // The sweetness category is read from the record and never stored, so it
+  // narrows by wine like the filters above: among the wines those left — or,
+  // with none of them set, the wines of the bottles in scope — keep the ones
+  // that read as a category asked for. A bottle without a wine has none.
+  if (sweetnessFilter) {
+    const narrowed = filter.wineDefinition && Array.isArray(filter.wineDefinition.$in);
+    const candidates = narrowed
+      ? filter.wineDefinition.$in
+      : (filter.wineDefinition === null ? [] : await Bottle.distinct('wineDefinition', filter));
+    const wineIds = await wineIdsMatching(candidates.filter(Boolean), sweetnessFilter);
+    if (wineIds.length === 0) return nothingCanMatch(limit, skip);
+    filter.wineDefinition = { $in: wineIds };
   }
 
   // A list that holds history bottles sorts "by rating" on the rating each

@@ -16,6 +16,7 @@ import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import SearchInput from '../components/SearchInput';
 import { ratingRangeLabel, ratingBandName, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
+import { sweetnessChipLabel } from '../utils/sweetnessCategory';
 import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import BottleUndoNotice from '../components/BottleUndoNotice';
@@ -61,7 +62,8 @@ const readSavedScope = (cellarId) => validScope(readStored(SCOPE_STORAGE_PREFIX 
 const FILTERS_STORAGE_PREFIX = 'cellarFilters:';
 const buildDefaultFilters = (sort = DEFAULT_CELLAR_SORT) => ({
   search: '', type: [], country: [], region: [], appellation: [],
-  grapes: [], vintage: [], minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
+  grapes: [], vintage: [], sweetnessCategory: [],
+  minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
   // Only set by Statistics chart deep links (no control in the filter modal);
   // shown as removable chips.
   producer: '', bottleSize: '', purchaseYear: '', ratingBand: '',
@@ -71,7 +73,7 @@ const buildDefaultFilters = (sort = DEFAULT_CELLAR_SORT) => ({
 // `scope=owned` widens the view to every cellar the user owns — how the
 // Statistics page's chart segments land here.
 const URL_FILTER_KEYS = ['search', 'type', 'country', 'region', 'appellation',
-  'grapes', 'vintage', 'minRating', 'maxRating', 'maturity', 'unplaced', 'reserved', 'storage',
+  'grapes', 'vintage', 'sweetnessCategory', 'minRating', 'maxRating', 'maturity', 'unplaced', 'reserved', 'storage',
   'producer', 'bottleSize', 'purchaseYear', 'ratingBand', 'sort'];
 const readSavedFilters = (cellarId) => {
   try {
@@ -160,6 +162,7 @@ function CellarDetail() {
       appellation: searchParams.get('appellation')?.split(',').filter(Boolean) || [],
       grapes: searchParams.get('grapes')?.split(',').filter(Boolean) || [],
       vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
+      sweetnessCategory: searchParams.get('sweetnessCategory')?.split(',').filter(Boolean) || [],
       minRating: searchParams.get('minRating') || '',
       maxRating: searchParams.get('maxRating') || '',
       // One bucket or several, comma-separated (OR) — e.g. ?maturity=late,declining
@@ -312,6 +315,7 @@ function CellarDetail() {
     debouncedSearch,
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
     filters.appellation.join(','), filters.grapes.join(','), filters.vintage.join(','),
+    (filters.sweetnessCategory || []).join(','),
     filters.minRating, filters.maxRating, toMaturityArray(filters.maturity).join(','),
     filters.unplaced, filters.reserved, filters.storage,
     filters.producer, filters.bottleSize, filters.purchaseYear, filters.ratingBand, filters.sort
@@ -825,6 +829,7 @@ function CellarDetail() {
             (filters.appellation || []).forEach(v => activeChips.push({ key: 'appellation', value: v, label: v }));
             (filters.grapes || []).forEach(v => activeChips.push({ key: 'grapes', value: v, label: grapeNames[v] || v }));
             (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
+            (filters.sweetnessCategory || []).forEach(v => activeChips.push({ key: 'sweetnessCategory', value: v, label: sweetnessChipLabel(t, v) }));
             // One chip for the rating range (either bound or both), in the user's scale.
             const ratingLabel = ratingRangeLabel(t, filters.minRating, filters.maxRating, ratingScale);
             if (ratingLabel) activeChips.push({ key: 'rating', value: '', label: ratingLabel });
@@ -855,7 +860,7 @@ function CellarDetail() {
 
             const clearAll = () => setFilters(prev => ({
               ...prev,
-              type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
+              type: [], country: [], region: [], appellation: [], grapes: [], vintage: [], sweetnessCategory: [],
               minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
               producer: '', bottleSize: '', purchaseYear: '', ratingBand: ''
             }));
@@ -976,7 +981,7 @@ function CellarDetail() {
             // cellar yet" here reads as "my bottles are gone".
             <LoadError message={error} {...retryProps} />
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.ratingBand || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.ratingBand || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.sweetnessCategory?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
                 {filters.search && !multiScope && (

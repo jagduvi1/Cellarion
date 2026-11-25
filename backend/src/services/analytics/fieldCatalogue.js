@@ -81,6 +81,11 @@ const STATIC_FIELDS = [
   // it needs a $lookup of the row's `band`, which the engine's taxonomy path
   // does not do — a later slice, honestly flagged out.
   dim({ key: 'wine.labelSweetness', label: 'Label sweetness', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.labelSweetness', taxonomyModel: 'SweetnessTerm', taxonomyCollection: 'sweetnessterms' }),
+  // The sweetness the wine READS as on one scale for still and sparkling
+  // wines, worked out per row from the record and never stored
+  // (services/sweetnessCategory) — so a column only: grouping or filtering on
+  // it would need the reading inside the pipeline.
+  dim({ key: 'wine.sweetnessCategory', label: 'Sweetness category', domain: 'wine', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['dry', 'off-dry', 'medium-sweet', 'sweet'] }),
 
   // Inventory
   dim({ key: 'bottle.vintage', label: 'Vintage', domain: 'inventory', type: 'text', source: 'bottle', path: 'vintage' }),

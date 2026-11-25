@@ -34,6 +34,13 @@ jest.mock('../models/WineCorrectionProposal', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
 }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
+// The sweetness category is read from real rows in
+// routes/sweetnessCategory.surfaces.mongo.test.js; here its reader answers
+// "nothing read", so the mocked wine model is not asked for it.
+jest.mock('../services/sweetnessCategory', () => ({
+  ...jest.requireActual('../services/sweetnessCategory'),
+  readSweetnessCategories: jest.fn(async () => new Map()),
+}));
 // get_bottle reads the vintage's window for its serving line (utils/servingUtils);
 // no profiles here, so the line carries the style's temperature only.
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(() => ({ lean: () => Promise.resolve([]) })) }));

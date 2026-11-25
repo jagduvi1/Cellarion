@@ -22,6 +22,7 @@ import './CellarDetail.css';
 import './CellarHistory.css';
 import '../components/BottleUndoNotice.css';
 import { formatVintage } from '../utils/vintage';
+import { sweetnessChipLabel } from '../utils/sweetnessCategory';
 
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 
@@ -51,7 +52,7 @@ const cursorOf = (bottle) => `${bottle.consumedAt || ''}|${bottle._id}`;
 const HISTORY_VIEW_PREFIX = 'cellarion.historyView.';
 const DEFAULT_HISTORY_FILTERS = {
   search: '',
-  type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
+  type: [], country: [], region: [], appellation: [], grapes: [], vintage: [], sweetnessCategory: [],
   minRating: '', maxRating: '', maturity: []
 };
 const readSavedHistoryView = (cellarId) => {
@@ -157,7 +158,8 @@ function CellarHistory() {
   const filterKey = [
     debouncedSearch,
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
-    (filters.appellation || []).join(','), filters.grapes.join(','), filters.vintage.join(',')
+    (filters.appellation || []).join(','), filters.grapes.join(','), filters.vintage.join(','),
+    (filters.sweetnessCategory || []).join(',')
   ].join('|');
 
   // `id` is included so navigating to another cellar whose scope key matches the
@@ -322,6 +324,7 @@ function CellarHistory() {
   (filters.appellation || []).forEach(v => activeChips.push({ key: 'appellation', value: v, label: v }));
   (filters.grapes || []).forEach(v => activeChips.push({ key: 'grapes', value: v, label: grapeNames[v] || v }));
   (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
+  (filters.sweetnessCategory || []).forEach(v => activeChips.push({ key: 'sweetnessCategory', value: v, label: sweetnessChipLabel(t, v) }));
 
   // Something narrows the list — a filter chip or the search box (which has
   // no chip, so without it a search that found nothing would show the
@@ -337,7 +340,7 @@ function CellarHistory() {
   };
 
   const clearAll = () => setFilters(prev => ({
-    ...prev, type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
+    ...prev, type: [], country: [], region: [], appellation: [], grapes: [], vintage: [], sweetnessCategory: [],
     minRating: '', maxRating: '', maturity: []
   }));
 

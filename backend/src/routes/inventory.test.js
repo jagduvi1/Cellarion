@@ -47,6 +47,20 @@ jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/PersonalDataEntry', () => ({ find: jest.fn() }));
 // routes/cellars is heavy and only lends its image resolver (as in offline.test).
 jest.mock('../services/bottleImageUrls', () => ({ attachBottleImageUrls: jest.fn() }));
+// The sweetness category is read from real rows in
+// routes/sweetnessCategory.surfaces.mongo.test.js. Here its reader is stood in
+// for: a wine with a label term reads as that term's band, any other as none.
+jest.mock('../services/sweetnessCategory', () => ({
+  attachSweetnessCategories: jest.fn(async (wines) => {
+    for (const w of wines) {
+      if (!w || typeof w !== 'object') continue;
+      const band = w.labelSweetness && w.labelSweetness.band;
+      w.sweetnessCategory = band || null;
+      w.sweetnessCategoryBasis = band ? 'label' : null;
+    }
+    return wines;
+  }),
+}));
 
 const express = require('express');
 const http = require('http');
@@ -370,7 +384,8 @@ describe('a read token gets the inventory', () => {
     });
     expect(body.wines[W1]).toEqual({
       name: 'Barolo', displayName: 'Barolo secco', producer: 'Mascarello', type: 'red', category: 'wine', colour: null, country: 'Italy', region: 'Piedmont',
-      appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'secco', band: 'dry', scale: 'still', regulated: true }, sweetnessStyle: null, grapes: ['Nebbiolo'],
+      appellation: 'Barolo', classification: 'DOCG', labelSweetness: { name: 'secco', band: 'dry', scale: 'still', regulated: true }, sweetnessStyle: null,
+      sweetnessCategory: 'dry', sweetnessCategoryBasis: 'label', grapes: ['Nebbiolo'],
       image: '/api/uploads/thumbs/processed/w1img.webp.webp',
       profile: { body: 'full', acidity: 'high', sweetness: 'dry', tannin: 'high', flavors: ['tar', 'rose'], foodPairings: ['truffle'] },
     });

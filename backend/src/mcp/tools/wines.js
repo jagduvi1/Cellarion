@@ -16,6 +16,7 @@ const { withoutLocalized } = require('../../utils/profileLanguage');
 const { gateMcpRead, CAP_MESSAGE } = require('../../services/registryReadTracker');
 const { absoluteImageUrl, isInlineImage } = require('../../services/photoState');
 const { findOwnHiddenWineIds, isOwnHiddenWine } = require('../../services/ownHiddenWines');
+const { readSweetnessCategories } = require('../../services/sweetnessCategory');
 
 // A caller's own quarantined drink (services/ownHiddenWines): not in the
 // shared registry, so it says so wherever it is returned.
@@ -177,8 +178,11 @@ registerTool({
     const pendingCorrection = anonymous || w.draft === true
       ? undefined
       : await require('../../services/wineProposalOps').pendingForWine(w._id, ctx.user.id);
+    // The category the record reads as (null when it states none), from the
+    // reader's own load of the wine (services/sweetnessCategory).
+    const sweetness = (await readSweetnessCategories([w._id])).get(String(w._id)) ?? null;
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
-      ...wineSummary(w, { termLoaded: true, styleLoaded: 'shaped' }),
+      ...wineSummary(w, { termLoaded: true, styleLoaded: 'shaped', sweetness }),
       classification: w.classification || null,
       classifications: classificationsOut(w),
       lwin7: w.lwin?.lwin7 || null,

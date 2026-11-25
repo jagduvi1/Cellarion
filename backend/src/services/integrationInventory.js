@@ -39,6 +39,7 @@ const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constan
 const { snapshotTag } = require('./offlineSnapshot');
 const { listForBottles } = require('./personalData');
 const { labelSweetnessOut, sweetnessStyleOut, wineDisplayName } = require('./sweetnessOps');
+const { attachSweetnessCategories } = require('./sweetnessCategory');
 
 const INVENTORY_SCHEMA = 1;
 // Salts the offline snapshot's validator: an inventory tag can never equal a
@@ -162,6 +163,11 @@ function wineOf(wine, profile) {
     // or the trade. Descriptive: never part of the name or the identity. No
     // key when its term cannot be read (a term row that is gone).
     ...(style === undefined ? {} : { sweetnessStyle: style }),
+    // dry | off-dry | medium-sweet | sweet, or null when the record states
+    // none, and what that rests on (services/sweetnessCategory); buildInventory
+    // attaches both to the loaded wine.
+    sweetnessCategory: text(wine.sweetnessCategory),
+    sweetnessCategoryBasis: text(wine.sweetnessCategoryBasis),
     producer: text(w.producer),
     type: text(w.type),
     // 'other' = a drink that is not wine (cider, beer, spirits), outside the
@@ -364,6 +370,7 @@ async function buildInventory(userId, { attachBottleImageUrls, include = [] }) {
     buildProfileMap(bottles),
     listForBottles(bottles, cellars),
     attachBottleImageUrls(bottles, userId),
+    attachSweetnessCategories(bottles.map((b) => b.wineDefinition)),
   ]);
 
   return assembleInventory({ userId, cellars, racks, bottles: withImages, profiles, personal, profileMap, consumedSummary });

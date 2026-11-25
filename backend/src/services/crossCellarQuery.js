@@ -46,6 +46,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const grapes = coerceStringQuery(req.query.grapes);
   const vintage = coerceStringQuery(req.query.vintage);
   const appellation = coerceStringQuery(req.query.appellation);
+  const sweetnessCategory = coerceStringQuery(req.query.sweetnessCategory);
   const minRating = coerceStringQuery(req.query.minRating);
   const maxRating = coerceStringQuery(req.query.maxRating);
   const ratingBandParam = coerceStringQuery(req.query.ratingBand);
@@ -59,7 +60,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const grapeIds = grapes
     ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
     : [];
-  const hasSearchFilters = !!(search || type || country || region || grapes || vintage || appellation);
+  const hasSearchFilters = !!(search || type || country || region || grapes || vintage || appellation || sweetnessCategory);
   // ?producer / ?bottleSize / ?purchaseYear (chart deep links) — post-filters.
   const extraFilters = parseExtraBottleFilters(req.query);
   const needsMaturity = statusFilter !== 'consumed' && !!(maturityFilter || sortField === 'maturity');
@@ -98,6 +99,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
       appellation,
       grapeIds,
       vintage,
+      sweetnessCategory,
       statusFilter,
       sort,
       limit: 10000,

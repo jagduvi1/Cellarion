@@ -579,7 +579,13 @@ function nameHits(terms, name, { scale, keep, countryId, places = [] }) {
   }));
 }
 
-/** The terms the name states as words of its own (the English words aside), each with its doubt. */
+/**
+ * The terms the name states as words of its own (the English words aside),
+ * each with its doubt. Synchronous, on a loaded table. Read here by the style
+ * rule and, outside this module, by the sweetness category
+ * (services/sweetnessCategory): one reading of a name for both, so a word
+ * that makes a style redundant is the word the category rests on.
+ */
 function nameTerms(terms, name, opts) {
   return nameHits(terms, name, opts).filter((h) => !NAME_AMBIGUOUS_WORDS.has(h.key));
 }
@@ -1015,7 +1021,7 @@ async function assignSweetnessStyle(target, { term, source, url, type, countryId
 }
 
 module.exports = {
-  extractFromName, extractLoaded, assignSweetness, assignSweetnessStyle, STYLE_SOURCE_RANK,
+  extractFromName, extractLoaded, nameTerms, assignSweetness, assignSweetnessStyle, STYLE_SOURCE_RANK,
   // Tests: the cut on names longer than the reader accepts, for its time bound.
   __testing: { cutSpan },
 };

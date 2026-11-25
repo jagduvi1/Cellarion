@@ -4,17 +4,23 @@ import Modal from '../Modal';
 import { createWineProposal } from '../../api/wineProposals';
 import { getSweetnessTerms } from '../../api/taxonomy';
 import { messageForResponse } from '../../utils/friendlyError';
+import { SWEETNESS_CATEGORIES, sweetnessCategoryLabel } from '../../utils/sweetnessCategory';
 
 /**
  * The "Sweetness" row of the wine record (WineRecordSection), and the form
  * that suggests the term a wine is KNOWN by when its label prints none.
  *
- * Two different facts can stand in this row, and they must not look alike:
+ * Three different facts can stand in this row, and they must not look alike:
  *   - the term the LABEL states (wine.labelSweetness) — part of the wine's
  *     identity, shown as it is;
  *   - the sweetness STYLE (wine.sweetnessStyle) — a term the producer or the
- *     trade names, shown as "known as …" with the page that says so.
- * Only the style can be suggested here. It is filed like every other fix
+ *     trade names, shown as "known as …" with the page that says so;
+ *   - with neither, the CATEGORY the record reads as all the same
+ *     (wine.sweetnessCategory, worked out by the server: a sweetness word in
+ *     the name, a tier that settles it, the type "dessert"), shown with what
+ *     it rests on. A wine that reads as none says "not recorded".
+ * Only the style can be suggested here, and not on a wine whose name carries
+ * the word: the name states it already. It is filed like every other fix
  * (POST /api/wine-proposals, fields.sweetnessStyle = { term, source, url }).
  * The server applies a customary term at once on a typed wine that has no
  * style and answers `applied`; otherwise a curator decides.
@@ -101,6 +107,13 @@ function SweetnessStyleRow({ wine, canSuggest, suggestMode, blocked, pending, ap
 
   const labelTerm = wine.labelSweetness && typeof wine.labelSweetness === 'object' ? wine.labelSweetness.name : null;
   const style = wine.sweetnessStyle && typeof wine.sweetnessStyle === 'object' && wine.sweetnessStyle.name ? wine.sweetnessStyle : null;
+  // What the record reads as when neither term is there to show, and why.
+  const category = SWEETNESS_CATEGORIES.includes(wine.sweetnessCategory) ? wine.sweetnessCategory : null;
+  const basis = category ? wine.sweetnessCategoryBasis : null;
+  const basisText = basis === 'name' ? t('wineRecord.categoryFromName', 'from the name')
+    : basis === 'tier' ? t('wineRecord.categoryFromTier', 'by its tier')
+      : basis === 'type' ? t('wineRecord.categoryFromType', 'dessert wine')
+        : null;
 
   const openForm = () => {
     setTerm('');
@@ -181,9 +194,10 @@ function SweetnessStyleRow({ wine, canSuggest, suggestMode, blocked, pending, ap
   };
 
   const fieldName = t('wineRecord.field_sweetness', 'Sweetness');
-  // The label's own term is not suggested here, and a style beside it would
-  // say nothing new: no action on such a wine.
-  const canAct = canSuggest && suggestMode && !blocked && !pending && !labelTerm;
+  // The label's own term is not suggested here, and a style beside it — or
+  // beside a name that carries the word — would say nothing new: no action on
+  // such a wine.
+  const canAct = canSuggest && suggestMode && !blocked && !pending && !labelTerm && basis !== 'name';
 
   return (
     <div className="wr-row">
@@ -200,6 +214,11 @@ function SweetnessStyleRow({ wine, canSuggest, suggestMode, blocked, pending, ap
               <a href={style.sourceUrl} target="_blank" rel="noopener noreferrer nofollow">{sourceLabel(style.source)}</a>
             ) : sourceLabel(style.source)}
           </span>
+        </span>
+      ) : category ? (
+        <span className="wr-value">
+          {sweetnessCategoryLabel(t, category)}
+          {basisText && <>{' '}<span className="wr-style-source">{'· '}{basisText}</span></>}
         </span>
       ) : (
         <span className="wr-value wr-value--blank">{t('wineRecord.notRecorded', 'not recorded')}</span>

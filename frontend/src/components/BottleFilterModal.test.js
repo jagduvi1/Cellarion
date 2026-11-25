@@ -181,3 +181,55 @@ test('without counts (null) the pills show no numbers and none is dimmed', () =>
   expect(italy).toHaveTextContent(/^Italy$/);
   expect(italy).not.toHaveClass('filter-pill--dimmed');
 });
+
+// The Sweetness section: the category each wine reads as, on one scale for
+// still and sparkling wines. The server counts it like every other field.
+describe('BottleFilterModal — sweetness', () => {
+  const section = () => screen.getByRole('button', { name: /Sweetness/ });
+  const pill = (label) => screen.getByRole('button', { name: new RegExp(`^${label}`) });
+  const HELD = { dry: 40, sweet: 6, 'not-stated': 12, 'off-dry': 3 };
+
+  test('the section lists the values the cellar holds, in scale order, the unstated ones last', () => {
+    renderModal({}, { facets: { sweetnessCategory: HELD }, baseFacets: { sweetnessCategory: HELD } });
+    // Closed until a value is chosen, like the other longer sections.
+    expect(screen.queryByRole('button', { name: /^dry/ })).not.toBeInTheDocument();
+    fireEvent.click(section());
+    const labels = Array.from(section().closest('.bfm-section').querySelectorAll('.filter-pill')).map((b) => b.textContent);
+    expect(labels).toEqual(['dry40', 'off-dry3', 'sweet6', 'Not stated12']);
+  });
+
+  test('a cellar that sends no sweetness counts has no section', () => {
+    renderModal({}, { facets: { type: { red: 3 } }, baseFacets: { type: { red: 3 } } });
+    expect(screen.queryByRole('button', { name: /Sweetness/ })).not.toBeInTheDocument();
+  });
+
+  test('choosing a value adds it, choosing it again removes it; a chosen value opens the section', () => {
+    const first = renderModal({}, { facets: { sweetnessCategory: HELD }, baseFacets: { sweetnessCategory: HELD } });
+    fireEvent.click(section());
+    fireEvent.click(pill('sweet'));
+    expect(first.onApply).toHaveBeenCalledWith(expect.objectContaining({ sweetnessCategory: ['sweet'] }));
+  });
+
+  test('a chosen value shows from the start, counts under the other filters, and comes off again', () => {
+    const { onApply } = renderModal({ sweetnessCategory: ['dry'], type: ['white'] }, {
+      facets: { sweetnessCategory: { dry: 9, 'not-stated': 2 } }, baseFacets: { sweetnessCategory: HELD },
+    });
+    expect(pill('dry')).toHaveClass('filter-pill--selected');
+    expect(pill('dry')).toHaveTextContent('dry9');
+    // Held by the cellar, none under the other filter: dimmed, no number.
+    expect(pill('sweet')).toHaveClass('filter-pill--dimmed');
+    fireEvent.click(pill('dry'));
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ sweetnessCategory: [] }));
+  });
+
+  test('a value chosen on another page stays listed where this scope holds none of it, so it can be taken off', () => {
+    renderModal({ sweetnessCategory: ['sweet'] }, { facets: { sweetnessCategory: {} }, baseFacets: { sweetnessCategory: { dry: 4 } } });
+    expect(pill('sweet')).toHaveClass('filter-pill--selected');
+  });
+
+  test('"Clear all" clears it, and it counts as an active filter', () => {
+    const { onApply } = renderModal({ sweetnessCategory: ['dry', 'sweet'] }, { baseFacets: { sweetnessCategory: HELD }, facets: { sweetnessCategory: HELD } });
+    fireEvent.click(screen.getByRole('button', { name: 'cellarDetail.clearAllFilters' }));
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ sweetnessCategory: [] }));
+  });
+});

@@ -116,6 +116,30 @@ A style that applies at once still counts against the member's daily suggestion 
 
 All of it runs through one write rule, `assignSweetnessStyle` in `services/sweetnessWrite.js`. Filing asks that rule first, without writing (`probeSweetnessStyle` in `services/proposalFields.js`), so what approval would refuse is said when the suggestion is made.
 
+## sweetnessCategory
+
+Not a field anyone fills in: the **reading** of the fields above on one scale, so a cellar can be filtered by sweetness without knowing every country's words. It is `dry`, `off-dry`, `medium-sweet` or `sweet` for still and sparkling wines alike, and it comes with `sweetnessCategoryBasis`, which says what it rests on. It is worked out each time a wine is read and never stored, so it cannot drift from the record.
+
+The first of these that the record states decides it:
+
+| Basis | What is read | Example |
+|---|---|---|
+| `label` | The term in `labelSweetness` | trocken → dry; Demi-Sec → medium-sweet |
+| `name` | A sweetness word the name still carries, read the way the style rule reads a name | "Riesling Kabinett trocken" → dry; "Cuvée Réserve Brut" → dry |
+| `style` | The term in `sweetnessStyle` | known as feinherb → off-dry |
+| `tier` | A tier that settles it: one that is sweet by law, or a Grosses Gewächs | Beerenauslese, Trockenbeerenauslese, Eiswein → sweet; GG → dry |
+| `type` | The wine type "dessert" | → sweet |
+
+The sparkling terms fold onto the four: brut nature, extra brut and brut are dry; extra dry and sec are off-dry; demi-sec is medium-sweet; doux is sweet.
+
+- **Nothing else is guessed.** A Kabinett, Spätlese or Auslese without a term reads as none: those tiers are made in every style. So does any other wine whose record states nothing.
+- **A word the reader doubts is no statement.** A place word ("Dry Creek"), a word glued to another, or a name marked by a curator as carrying the word on purpose is not read. A name that states two categories states none.
+- **No scale, no category.** A fortified wine and a drink that is not wine have no category, and no sweetness filter finds them. The filter value `not-stated` finds the wines that *could* state one and do not, which is where a missing term shows.
+
+The category is on the wine in the bottle list and the bottle read (`GET /api/bottles`, `GET /api/bottles/:id`), the wine read, the inventory and the offline copy. `GET /api/bottles`, the cellar page, the history and the view across cellars filter on it with `sweetnessCategory` (several values comma-separated); the cellar filter counts it like every other section. Over MCP it is `sweetness_category` on `get_wine`, `get_bottle` and each `search_bottles` row, and the `sweetness` filter of `search_bottles`. In the analytics it is a column (`wine.sweetnessCategory`), not yet something to group by.
+
+One reader answers all of them: `services/sweetnessCategory.js`. It loads what it needs of the wine itself, so a surface that leaves a field out of its own read still gets the same answer as the filter.
+
 ---
 
 ## How a classification is written
@@ -208,6 +232,7 @@ Notes on the examples:
 | `backend/src/models/SweetnessTerm.js` | A sweetness term: word, scale, band, country, synonyms |
 | `backend/src/data/sweetness-terms.json` | The seed list of sweetness terms |
 | `backend/src/services/sweetnessOps.js` | The term list in memory, word to term, the display name and the read shapes |
+| `backend/src/services/sweetnessCategory.js` | The sweetness category: the reading of a wine on one scale, its basis, and the filter values |
 | `backend/src/scripts/clear-method-appellations.js` | Backfill that clears appellations that are only a production method |
 | `backend/src/utils/styleTerms.js` | Prädikat and sweetness vocabulary, the Prädikat split, the style-term duplicate guard |
 | `backend/src/services/findOrCreateWine.js` | The mint and lookup pipeline, including the estate-name pollution guard |

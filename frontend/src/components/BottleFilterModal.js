@@ -5,6 +5,7 @@ import { SCALE_META, toNormalized, fromNormalized } from '../utils/ratingUtils';
 import {
   MATURITY_FILTER_OPTIONS, NEEDS_ATTENTION, MATURITY_I18N_KEY, MATURITY_STATS_KEY, toMaturityArray,
 } from '../utils/filterLabels';
+import { SWEETNESS_FILTER_VALUES, sweetnessFilterLabel } from '../utils/sweetnessCategory';
 import './BottleFilterModal.css';
 
 const COLLAPSED_LIMIT = 8;
@@ -179,7 +180,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
   const clearAll = () => {
     onApply({
       ...filters,
-      type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
+      type: [], country: [], region: [], appellation: [], grapes: [], vintage: [], sweetnessCategory: [],
       minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: ''
     });
   };
@@ -187,7 +188,8 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
   const maturitySelected = toMaturityArray(filters.maturity);
   const activeCount = (filters.type?.length || 0) + (filters.country?.length || 0) +
     (filters.region?.length || 0) + (filters.appellation?.length || 0) + (filters.grapes?.length || 0) +
-    (filters.vintage?.length || 0) + (filters.minRating || filters.maxRating ? 1 : 0) + (maturitySelected.length ? 1 : 0) +
+    (filters.vintage?.length || 0) + (filters.sweetnessCategory?.length || 0) +
+    (filters.minRating || filters.maxRating ? 1 : 0) + (maturitySelected.length ? 1 : 0) +
     (filters.unplaced ? 1 : 0) + (filters.reserved ? 1 : 0) + (filters.storage ? 1 : 0);
 
   // A pill's count: how many bottles choosing it gives, with the other
@@ -222,6 +224,35 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
                     />
                   );
                 })}
+            </FilterSection>
+          );
+        })()}
+
+        {/* Sweetness — the category each wine reads as (dry … sweet, one
+            scale for still and sparkling), in scale order, then the wines that
+            state none. Only the values this cellar holds; closed until one is
+            chosen, like the longer sections below. */}
+        {(() => {
+          const held = SWEETNESS_FILTER_VALUES.filter(v => allFacets?.sweetnessCategory?.[v] > 0);
+          const chosen = filters.sweetnessCategory || [];
+          if (held.length === 0 && chosen.length === 0) return null;
+          const counts = countsFor('sweetnessCategory');
+          return (
+            <FilterSection label={t('cellarDetail.sweetnessLabel', 'Sweetness')} icon="🍯" defaultExpanded={chosen.length > 0}>
+              {SWEETNESS_FILTER_VALUES.filter(v => held.includes(v) || chosen.includes(v)).map(value => {
+                const count = counts ? counts[value] || 0 : null;
+                const selected = chosen.includes(value);
+                return (
+                  <FilterPill
+                    key={value}
+                    label={sweetnessFilterLabel(t, value)}
+                    count={count || null}
+                    selected={selected}
+                    dimmed={!selected && count === 0}
+                    onClick={() => toggle('sweetnessCategory', value)}
+                  />
+                );
+              })}
             </FilterSection>
           );
         })()}

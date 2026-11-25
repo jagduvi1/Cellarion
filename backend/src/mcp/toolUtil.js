@@ -101,7 +101,19 @@ function accessibleCellars(userId) {
 const { classificationsOut } = require('../services/classificationOps');
 const { labelSweetnessOut, labelSweetnessFields, sweetnessStyleFields, wineDisplayName } = require('../services/sweetnessOps');
 
-function wineSummary(wd, { termLoaded = false, styleLoaded = false } = {}) {
+/**
+ * A wine's sweetness reading (services/sweetnessCategory readSweetnessCategories:
+ * { category, basis } or null) as two keys. sweetness_category is dry |
+ * off-dry | medium-sweet | sweet on one scale for still and sparkling wines,
+ * null when the record states none; sweetness_category_basis says what it
+ * rests on (label | name | style | tier | type).
+ */
+const sweetnessCategoryOut = (read) => ({
+  sweetness_category: read ? read.category : null,
+  sweetness_category_basis: read ? read.basis : null,
+});
+
+function wineSummary(wd, { termLoaded = false, styleLoaded = false, sweetness } = {}) {
   if (!wd) return null;
   return {
     wine_id: wd._id,
@@ -123,6 +135,10 @@ function wineSummary(wd, { termLoaded = false, styleLoaded = false } = {}) {
     // so a read that did not ask carries no key, and neither does a style this
     // read cannot vouch for.
     ...sweetnessStyleFields(wd, { loaded: styleLoaded }),
+    // sweetness_category and its basis only when the caller looked the reading
+    // up and passed it (`sweetness`: the reading, or null for a wine that
+    // states none): a summary built without it carries neither key.
+    ...(sweetness === undefined ? {} : sweetnessCategoryOut(sweetness)),
     producer: wd.producer || null,
     type: wd.type || null,
     // 'other' = a drink that is not wine (cider, beer, spirits), kept in the
