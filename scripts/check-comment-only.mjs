@@ -7,9 +7,10 @@
 // Every path that differs between the working tree and the point where it
 // left <base-ref> (the merge base; default origin/main) must be provable:
 //
-//   .js .jsx .mjs .cjs   base and head are minified with esbuild and compared.
-//                        Minification drops comments and whitespace, so
-//                        identical output means identical code. A pragma
+//   .js .jsx .mjs .cjs   base and head are minified with esbuild (names kept)
+//                        and compared. Minification drops comments and
+//                        whitespace, so identical output means identical code,
+//                        down to the name of a local variable. A pragma
 //                        comment (eslint-disable, @vite-ignore, @__PURE__,
 //                        @jest-environment, …) is behaviour, so the pragmas
 //                        must be the same too.
@@ -80,7 +81,11 @@ function loadEsbuild() {
 export function minified(text, file, { testTitles = false } = {}) {
   const loader = extname(file) === '.jsx' || file.startsWith('frontend/') ? 'jsx' : 'js';
   const input = testTitles && /\.test\.(js|jsx|mjs|cjs)$/.test(file) ? blankTestTitles(text) : text;
-  return loadEsbuild().transformSync(input, { minify: true, loader, legalComments: 'none', logLevel: 'silent' }).code;
+  // Names are kept. esbuild picks short names by how often each character
+  // occurs in the source, and it counts a comment that sits between the
+  // attributes of a JSX tag: rewording one would rename identifiers in code
+  // that did not change. With the names kept, a renamed variable is also seen.
+  return loadEsbuild().transformSync(input, { minifyWhitespace: true, minifySyntax: true, loader, legalComments: 'none', logLevel: 'silent' }).code;
 }
 
 /**
