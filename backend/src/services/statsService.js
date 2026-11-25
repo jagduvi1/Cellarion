@@ -211,7 +211,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
         id:            b._id?.toString(),
         // cellarId travels WITH the bottle id because a bottle's page is
         // /cellars/:cellarId/bottles/:bottleId — the id alone cannot address
-        // it. The HA card never noticed: it calls the API, not a URL.
+        // it. The HA card does not need it: it calls the API, not a URL.
         cellarId:      b.cellar?.toString(),
         name:          wd?.name      || 'Unknown',
         producer:      wd?.producer  || '',
@@ -225,10 +225,9 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     const cid = b.cellar.toString();
     if (!cellarMap[cid]) {
       const cel = cellars.find(x => x._id.toString() === cid);
-      // id lets the Statistics cellar breakdown link straight to the cellar
-      // (forum request, turbulent3964 2026-08-29). Falls back to the map key,
-      // which IS the cellar id — so the link works even when the cellar doc
-      // wasn't in the fetched list.
+      // id lets the Statistics cellar breakdown link straight to the cellar.
+      // Falls back to the map key, which IS the cellar id — so the link works
+      // even when the cellar doc wasn't in the fetched list.
       cellarMap[cid] = { id: cid, name: cel?.name || 'Cellar', count: 0, value: 0, wines: new Set(), maturity: emptyMaturity() };
     }
     cellarMap[cid].count++;
@@ -243,9 +242,8 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       const v = toTarget(b.price, b.currency || 'USD');
       // id + cellarId: same reason as the urgency ladder's — together they
       // address the bottle's page (/cellars/:cellarId/bottles/:id), where the
-      // owner sees its rack slot and label photo (forum request,
-      // turbulent3964 2026-08-29). Optional-chained so a missing id omits the
-      // field rather than crashing; the UI then renders plain text.
+      // owner sees its rack slot and label photo. Optional-chained so a missing
+      // id omits the field rather than crashing; the UI then renders plain text.
       if (v != null) topValueArr.push({ id: b._id?.toString(), cellarId: b.cellar?.toString(), name: wd.name || 'Unknown', producer: wd.producer || '', vintage: b.vintage || 'NV', type: statType(wd), price: Math.round(v * 100) / 100 });
     }
   }

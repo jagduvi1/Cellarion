@@ -1,13 +1,14 @@
 /**
- * User-facing wine-correction proposals (#985 Slice A) — ONE implementation
- * shared by the REST route (routes/wineProposals.js) and the MCP tool
+ * User-facing wine-correction proposals — ONE implementation shared by the
+ * REST route (routes/wineProposals.js) and the MCP tool
  * suggest_wine_correction (mcp/tools/corrections.js), the ownerInquiryOps /
  * personalData pattern.
  *
  * This is the regular-user half of the proposal system: field corrections
- * only (merge / non-wine stay sommelier tools — mcp/tools/somm.js), filed
- * into the SAME WineCorrectionProposal queue the admin already reviews with
- * diff + bulk tooling. Suggestions never auto-apply; approval stays human.
+ * only (merge / non-wine stay sommelier tools,
+ * mcp/tools/somm/corrections.js), filed into the SAME WineCorrectionProposal
+ * queue the admin reviews with diff + bulk tooling. A suggestion waits for that
+ * review, unless contributions are not reviewed (services/trustedContributions).
  *
  * Gating: demo exclusion is the transport's job (requireNonDemo /
  * MCP's no-token rule); HERE lives the shared part — discussion ban, the
@@ -16,22 +17,21 @@
  * The one-pending rule is per WINE, not per user (partial unique index on
  * WineCorrectionProposal). A user who notices a second gap right after filing
  * must not be told "already awaiting review" by their own suggestion. So when
- * the pending row is the caller's OWN, a new filing
- * AMENDS it instead of colliding; only somebody else's pending row is a
- * conflict. An amendment enters nothing new into the queue, so it bypasses
- * the daily budget (not the ban) — capped at AMENDMENTS_MAX per proposal so
- * the bypass cannot be farmed. `pendingForWine` exposes the same state to
- * readers (get_wine) so the block is discoverable before a correction is
- * composed.
+ * the pending row is the caller's OWN, a new filing AMENDS it instead of
+ * colliding; only somebody else's pending row is a conflict. An amendment
+ * enters nothing new into the queue, so it bypasses the daily budget (not the
+ * ban) — capped at AMENDMENTS_MAX per proposal so the bypass cannot be farmed.
+ * `pendingForWine` exposes the same state to readers (get_wine) so the block
+ * is discoverable before a correction is composed.
  *
  * An amendment is ONE atomic update pinned to { pending, this proposer }:
- * per-field $set paths, so two amendments of
- * different fields in the same second both land, and never a write onto a
- * row an admin decided in between — that case falls through to a fresh
- * filing, budget applied. The original reason and evidenceUrl are never
- * touched; each amendment is $pushed with its own reason/evidence, and the
- * snapshot is refreshed only for the fields being added, so drift the admin
- * should still see on the original fields survives.
+ * per-field $set paths, so two amendments of different fields in the same
+ * second both land, and never a write onto a row an admin decided in between
+ * — that case falls through to a fresh filing, budget applied. The original
+ * reason and evidenceUrl are never touched; each amendment is $pushed with
+ * its own reason/evidence, and the snapshot is refreshed only for the fields
+ * being added, so drift the admin should still see on the original fields
+ * survives.
  *
  * Results are transport-neutral: { ok: true, ... } or { ok: false, code,
  * message } — codes: invalid | banned | limit | not_found | conflict.
@@ -352,8 +352,8 @@ function findPendingForWine(wineId) {
 /**
  * Read-side view of the one-pending-per-wine state, for get_wine and the
  * like: which fields a pending suggestion covers and whether it is the
- * CALLER's (then also when it was filed) — never whose it is otherwise (the
- * #930 anonymisation rule: proposer identity stays with admins). Proposed
+ * CALLER's (then also when it was filed) — never whose it is otherwise
+ * (proposer identity stays with admins). Proposed
  * VALUES are not exposed either: the queue is not a second, unreviewed
  * registry.
  *

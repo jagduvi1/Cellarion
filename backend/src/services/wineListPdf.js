@@ -446,7 +446,7 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
     const level = section.level || 0;
     // Ancestors only while deciding the break: a break placed between two
     // sibling groups repeats the parents ("RED WINES (continued) › Italy
-    // (continued)") before the new sibling — post-ship audit 2026-09-12.
+    // (continued)") before the new sibling.
     stack.length = level;
 
     if (level === 0 && i > 0 && newPageEachSection) {

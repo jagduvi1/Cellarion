@@ -54,9 +54,9 @@ function refreshEnvMode() {
   if (!raw) return null;
   if (['off', 'false', '0', 'no', 'never', 'none'].includes(raw)) return 'off';
   if (raw === 'weekly' || raw === 'on' || raw === 'true' || raw === '1') return 'weekly';
-  // Anything else is a typo, and treating it as "weekly" ALSO locked the admin
-  // toggle with env_override — refresh on, no way to turn it off (audit
-  // 2026-09-08). Warn and fall through to the Settings switch instead.
+  // Anything else is a typo. Treating it as "weekly" would also lock the admin
+  // toggle with env_override (refresh on, no way to turn it off), so warn and
+  // fall through to the Settings switch instead.
   console.warn(`[bridge] REGISTRY_BRIDGE_REFRESH="${raw}" is not "weekly" or "off" — ignoring it; the Settings switch decides.`);
   return null;
 }
@@ -126,11 +126,11 @@ async function setRefreshMode(mode, userId) {
 // an adoption or a refresh. A seeded placeholder (no dates, no note) is not an
 // edit, so the registry still fills it.
 //
-// The comparison is symmetric on purpose. The first version
-// asked "was this row touched AFTER the last sync", and the wine's sync stamp
-// advanced on every refresh including runs that skipped the row — so an edit
-// survived exactly one refresh and the next one silently reverted it. Matching
-// stamps cannot drift: only the bridge writes them together.
+// The comparison is symmetric on purpose. "Was this row touched AFTER the last
+// sync" is not enough for these rows: the wine's sync stamp advances on every
+// refresh, including runs that skip the row, so an edit would survive one
+// refresh and the next would silently revert it. Matching stamps cannot drift:
+// only the bridge writes them together.
 const EDIT_SLACK_MS = 5000;
 const WINDOW_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
 

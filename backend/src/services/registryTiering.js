@@ -1,6 +1,6 @@
 /**
- * What an ANONYMOUS caller gets of a wine's tasting profile (registry lockdown
- * 2026-09-06, layer L3: "findable, not harvestable").
+ * What an ANONYMOUS caller gets of a wine's tasting profile: the registry is
+ * "findable, not harvestable".
  *
  * The public wine page and the no-signup registry MCP exist so that a wine is
  * readable and citable — one wine at a time, in prose. The structured profile

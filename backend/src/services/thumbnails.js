@@ -10,18 +10,17 @@
  * every later one is a plain file read. The source is never rewritten
  * (random-UUID filenames), so a thumbnail that exists is immutable and carries
  * the same long cache as the source; a miss is no-store, like every other
- * uploads miss (see middleware/uploadsStatic.js — a cached 404 once stuck at
- * Cloudflare for a year).
+ * uploads miss (see middleware/uploadsStatic.js — a CDN would keep a cached
+ * 404 long after the file exists).
  *
- * Why: the processed photos are up to 2048 px tall (services/photoFormat —
- * until 2026-09 full-resolution PNGs, median ~300 KB, some over 10 MB), while
- * cards and list rows show them 36–350 CSS px tall. A 400×640 WebP is ~13 KB
- * on average — a fraction of the full photo for every card grid, and small
- * enough to keep a whole cellar's photos on a phone for offline use.
- * A new photo's thumbnail is rendered when it is processed (warmThumbFor), so
- * only older photos pay the first-request render. Until 2026-09-27 only
- * `processed` had thumbnails, so every keep-background photo shipped full
- * size to every card (release audit, L).
+ * Why: the processed photos are up to 2048 px tall (services/photoFormat; an
+ * older one may still be a full-resolution PNG), while cards and list rows
+ * show them 36–350 CSS px tall. A 400×640 WebP is a fraction of the full photo
+ * for every card grid, and small enough to keep a whole cellar's photos on a
+ * phone for offline use. `originals` has thumbnails too, or every
+ * keep-background photo would ship full size to every card. A new photo's
+ * thumbnail is rendered when it is processed (warmThumbFor), so only older
+ * photos pay the first-request render.
  *
  * A photo converted to WebP (scripts/convert-photos-webp.js) keeps its old
  * thumbnail address working: `x.png.webp` is answered with the thumbnail of

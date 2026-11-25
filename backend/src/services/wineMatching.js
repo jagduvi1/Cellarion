@@ -41,12 +41,12 @@ function nameSimilarity(a, b) {
 
 /**
  * Producer-axis similarity, compared on producer KEYS ("Kumeu River Wines
- * Limited" → "kumeu river") instead of raw strings. Corporate suffixes and
- * house prefixes used to drag the SAME winery to ~0.5 similarity, which put a
- * producer-variant duplicate at ~0.77 composite — under the soft zone, so it
- * was silently created (registry duplicate analysis 2026-07-22). On equal keys
- * the axis now scores 1. Falls back to the raw comparison whenever either side
- * has no key left (an all-stopword producer like "Domaine").
+ * Limited" → "kumeu river") instead of raw strings. On raw strings, corporate
+ * suffixes and house prefixes drag the SAME winery to ~0.5 similarity, which
+ * puts a producer-variant duplicate under the soft zone, so it would be
+ * silently created. On equal keys the axis scores 1. Falls back to the raw
+ * comparison whenever either side has no key left (an all-stopword producer
+ * like "Domaine").
  */
 function producerSimilarity(a, b) {
   const keyA = normalizeProducerKey(a || '');
@@ -130,10 +130,10 @@ function stripProducerPrefix(name, producer) {
 // producer prefix is stripped the row still LEADS with the appellation
 // ("Rioja Prado Enea Gran Reserva") while the registry stores the designation
 // alone ("Prado Enea Gran Reserva"). Producers arrive with a parenthetical
-// the registry does not carry ("Ca' Marcanda (Gaja)"). A re-import of one
-// such file re-created its entire request queue (44 rows, 2026-09-06) —
-// every wine already existed. Both are comparison-layer variants: stored
-// strings and keys never change.
+// the registry does not carry ("Ca' Marcanda (Gaja)"). Unmatched, a re-import
+// of such a file re-creates a request for every wine although each already
+// exists. Both are comparison-layer variants: stored strings and keys never
+// change.
 
 // Legal-tier suffixes that ride on an appellation hint ("Chianti Classico
 // DOCG", "Rioja DOCa") but never on the wine name's leading words.

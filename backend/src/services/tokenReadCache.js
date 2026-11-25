@@ -11,12 +11,12 @@
  *
  * Only for API-token requests (req.apiToken), the way the stats overview and
  * the token bottle list are cached: the Home Assistant integration polls
- * /api/cellars and /api/notifications every few minutes per install, and the
- * integration is on about one active user in four (usage check 2026-10-09),
- * so the polls scale with the users. Browser reads stay uncached.
+ * /api/cellars and /api/notifications every few minutes per install, and a
+ * good share of active users run it, so the polls scale with the users.
+ * Browser reads stay uncached.
  *
- * In memory, one Node process — Phase C of the scaling plan moves it to
- * MongoDB with the data version itself.
+ * In memory, one Node process: a second process needs it in MongoDB, together
+ * with the data version itself.
  */
 function createTokenReadCache({ maxEntries = 5000, maxAgeMs = 30 * 60 * 1000 } = {}) {
   const entries = new Map(); // `${userId}|${key}` -> { at, version, body }

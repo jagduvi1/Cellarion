@@ -1,18 +1,13 @@
 /**
  * Search-index reconciliation — runs nightly via the scheduler.
  *
- * PROD 2026-08-13: 567 of the 9,918 documents in the (since retired) `bottles`
- * index named bottles that no longer existed in Mongo. Over MCP that read as
- * "0 of 14"; across the ~9 callers in routes/cellars.js it produced phantom
- * counts and short pages. Cellar search now runs on MongoDB itself
- * (services/bottleSearch), so that index is gone — the lesson stands for the
- * indexes that remain.
- *
- * The cause was NOT a missing unindex call — every delete path already removes
- * its document. The debris was OPERATIONAL: a restore from backup rewound Mongo
- * while Meilisearch kept its own volume, and raw maintenance scripts deleted
- * rows without going through the models. Both will happen again, and neither is
- * something an application code path can be taught to prevent.
+ * An index can hold documents whose Mongo row is gone, and every reader of it
+ * then sees phantom hits, wrong counts and short pages. The cause is NOT a
+ * missing unindex call — every delete path removes its document. The debris is
+ * OPERATIONAL: a restore from backup rewinds Mongo while Meilisearch keeps its
+ * own volume, and raw maintenance scripts delete rows without going through
+ * the models. Both will happen, and neither is something an application code
+ * path can be taught to prevent.
  *
  * So this job treats index membership as something to be RECONCILED rather than
  * assumed: it empties an index of everything whose Mongo row is gone, including
@@ -28,9 +23,9 @@
  * document is a registry row strangers can find and open to a 404.
  *
  * The Meilisearch client lives in services/search — this module never requires
- * `meilisearch` itself (ESM-only; a second require is the #702 jest failure mode
- * again) and instead uses the paging/delete surface that module exports, which
- * every suite already knows how to mock.
+ * `meilisearch` itself (ESM-only, which jest cannot parse) and instead uses the
+ * paging/delete surface that module exports, which every suite already knows
+ * how to mock.
  */
 const searchService = require('./search');
 
@@ -65,10 +60,10 @@ const OBJECT_ID_RX = /^[a-f0-9]{24}$/i;
 /**
  * Walk one index, deleting documents whose Mongo row is gone.
  *
- * PAGING IS SAFE ACROSS THE DELETES: deleteDocuments only ENQUEUES a
- * Meilisearch task, so documents do not disappear underneath the offset while
- * this loop is running. (If they did, the worst case is a skipped page, which
- * the next night's run picks up — never a wrong deletion.)
+ * PAGING ACROSS THE DELETES: deleteDocuments only ENQUEUES a Meilisearch task,
+ * but Meili processes it within the next round trip, so the offset advances by
+ * the page less what it removed (end of the loop). A mistimed page is re-read
+ * or skipped, which the next night's run picks up — never a wrong deletion.
  *
  * @returns {Promise<{checked: number, removed: number, skipped: number}>}
  */
@@ -114,10 +109,9 @@ async function reconcileIndex({ label, modelPath }) {
       break;
     }
     // Meili processes the enqueued deletes within the next round trip, so the
-    // remaining documents shift back by however many this page removed —
-    // advancing by the full page would skip that many LIVE docs (release-audit
-    // LOW-2). Never a wrong deletion, but an under-clean that converged over
-    // nights instead of one.
+    // remaining documents shift back by however many this page removed:
+    // advancing by the full page would skip that many LIVE docs. Never a wrong
+    // deletion, but a sweep that needs several nights instead of one.
     offset += PAGE_SIZE - removedThisPage;
   }
 
@@ -125,7 +119,7 @@ async function reconcileIndex({ label, modelPath }) {
 }
 
 /**
- * The nightly entry point. One index failing must not stop the other — they are
+ * The nightly entry point. One index failing must not stop the rest — they are
  * independent questions about independent collections.
  *
  * @returns {Promise<{checked: number, removed: number, skipped: number}>}

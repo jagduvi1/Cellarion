@@ -12,17 +12,17 @@
  *   • pending + anyone else  → NOT visible, reported as the same not-found a
  *                              missing id gets, so its existence never leaks
  *
- * It lives here rather than being re-typed at each call site because the
- * security audit found NINE routes that validated "wine exists" with a bare
- * findById/exists: reviews, wishlist, recommendations, wine reports, wine
- * requests, bottles, and the MCP write/bulk/wine-list tools. A rule spelled out
- * nine times is a rule nine places can forget.
+ * It lives here rather than being re-typed at each call site: every route that
+ * validates "wine exists" needs it (reviews, wishlist, recommendations, wine
+ * reports, wine requests, bottles, and the MCP write/bulk/wine-list tools),
+ * and a bare findById/exists at any of them shows a pending row to anyone.
+ * A rule spelled out at each site is a rule each site can forget.
  *
  * Expressed as a QUERY FILTER, not a post-filter: `pendingIdentity` and
  * `createdBy` are never in a caller's projection (SAFE_SELECT-style inclusive
- * selects omit both), and a post-filter reading an absent field is exactly the
- * dead gate this audit found in mcp/tools/wines.js — `undefined === true` is
- * false, so the check never fires. Mongo decides instead.
+ * selects omit both), and a post-filter reading an absent field is a dead
+ * gate — `undefined === true` is false, so the check never fires. Mongo
+ * decides instead.
  */
 
 const WineDefinition = require('../models/WineDefinition');
@@ -36,9 +36,9 @@ const CURATION_ROLES = Object.freeze(['somm', 'admin']);
 const isCurator = (roles) => Array.isArray(roles) && roles.some((r) => CURATION_ROLES.includes(r));
 
 /**
- * The one clause that keeps PRIVATE DRAFTS out of a query.
- * A draft is `pendingIdentity: true` as well (model invariant),
- * so every pending exclusion already hides it; this constant is for the
+ * The one clause that keeps PRIVATE DRAFTS out of a query. A draft is
+ * `pendingIdentity: true` as well (model invariant), so every pending
+ * exclusion already hides it; this constant is for the
  * surfaces that deliberately INCLUDE pending rows — the curation queue, the
  * curator scan reads, the admin wine loads — and must still not see a draft.
  * Spread it, never re-type it.

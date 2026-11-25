@@ -1,6 +1,6 @@
 /**
  * A server that does not review contributions (config/contributionReview
- * switched off — a household on its own install, discussion #1778) applies
+ * switched off — a household on its own install) applies
  * each one as it is made, through the very code an admin's approval runs, so
  * the result is the same as an approval: the photo published (and the wine's
  * picture when it has none), the value published, the field accepted, the

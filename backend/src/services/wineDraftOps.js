@@ -389,8 +389,7 @@ async function publishDraft(wine, { userId = null, req = null, confirmCreate = f
 
   // Everything below mutates the document before the save; a failed save
   // must hand the caller back the draft it passed in (the expiry job and the
-  // erasure path reuse the object for the attach that follows a duplicate —
-  // audit 2026-09-12).
+  // erasure path reuse the object for the attach that follows a duplicate).
   const before = {
     producer: wine.producer, normalizedKey: wine.normalizedKey, draft: wine.draft,
     draftExpiresAt: wine.draftExpiresAt, draftExpiryWarnedAt: wine.draftExpiryWarnedAt,

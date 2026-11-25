@@ -189,7 +189,7 @@ async function sameProducerAppellationGroups({ limit = 50, offset = 0 } = {}) {
   // Within disjoint, groups where ≥2 members actually CARRY vintage evidence
   // outrank vacuously-disjoint ones (no bottles, no profiles — common for
   // seeded/import rows, which would otherwise flood page 1 with groups whose
-  // "no shared vintage" badge rests on no data at all; audit 2026-08-10).
+  // "no shared vintage" badge rests on no data at all).
   const tier = (g) => {
     if (!g.disjoint) return 0;
     return g.wines.filter((w) => w.vintages.length > 0).length >= 2 ? 2 : 1;
@@ -375,7 +375,7 @@ async function nameSubsetPairs({ limit = 50, offset = 0 } = {}) {
 
   // The health job asks only for the count (limit: 0) — total is known here,
   // and everything below (the Bottle aggregate, entry building, the sort) is
-  // presentation. Computing it weekly just to slice(0, 0) was pure waste.
+  // presentation, and computing it only to slice(0, 0) would be pure waste.
   if (limit === 0) {
     return { pairs: [], total: active.length, scannedCount: wines.length, skippedBuckets };
   }

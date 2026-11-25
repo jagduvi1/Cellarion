@@ -183,9 +183,9 @@ async function resolveRestockAlerts(userId, wineDefinitionId, bottleId) {
 
 // Checks run one at a time, in order. Each one compares vectors, and a bulk
 // "mark as drunk" (the REST bulk route, or an agent consuming bottle after
-// bottle) must not start dozens at once — 60 in parallel once ran the
-// process out of memory (review 2026-09-27). A best-effort notification, so
-// a runaway queue sheds new checks instead of growing without bound.
+// bottle) must not start dozens at once: enough of them in parallel run the
+// process out of memory. A best-effort notification, so a runaway queue
+// sheds new checks instead of growing without bound.
 const MAX_QUEUED = 500;
 let queue = Promise.resolve();
 let queued = 0;

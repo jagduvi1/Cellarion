@@ -1,5 +1,5 @@
-// meilisearch-js v0.50+ renamed the client export `MeiliSearch` → `Meilisearch`.
-// Alias it back to MeiliSearch locally so the rest of this file is unchanged.
+// meilisearch-js v0.50+ exports the client as `Meilisearch`; this file calls it
+// MeiliSearch.
 const { Meilisearch: MeiliSearch } = require('meilisearch');
 const WineDefinition = require('../models/WineDefinition');
 const Discussion = require('../models/Discussion');
@@ -8,9 +8,9 @@ const { grapeSearchNames } = require('../utils/grapeDisplay');
 
 const INDEX_NAME = 'wines';
 const DISCUSSIONS_INDEX_NAME = 'discussions';
-// Indexes this code no longer uses. `bottles` held a copy of every bottle —
-// private notes included — until cellar search moved to MongoDB
-// (services/bottleSearch, 2026-09). Deleted at boot when still present.
+// Indexes this code does not use, deleted at boot when still present. An older
+// install's `bottles` holds a copy of every bottle, private notes included;
+// cellar search runs on MongoDB (services/bottleSearch).
 const RETIRED_INDEXES = ['bottles'];
 
 let client = null;
@@ -56,7 +56,7 @@ async function initialize({ sync = true } = {}) {
       // `replyContent` carries plain-text bodies of all non-deleted replies
       // joined together — lets users find threads where the OP didn't say it
       // but a reply did ("anyone tried this with foie gras?" buried in
-      // reply 7 is now reachable). The single-index approach (vs separate
+      // reply 7 is reachable). The single-index approach (vs separate
       // discussion_replies index) keeps the search query simple — Meilisearch
       // returns one hit per thread regardless of which field matched.
       searchableAttributes: ['title', 'body', 'replyContent', 'authorName', 'wineName'],
@@ -156,7 +156,7 @@ async function syncIfNeeded(idx, syncFn, label, attempt = 0) {
   } catch (err) {
     // Fail CLOSED on the stats check: a transient error must not trigger a
     // full catalog re-upload — at scale that is the most expensive operation
-    // in the system, and it used to fire exactly when Meilisearch was
+    // in the system, and it would fire exactly when Meilisearch is
     // struggling. But an EMPTY index whose stats keep erroring would stay
     // empty forever, so retry the check a few times (covers Meili still
     // warming up at boot) before giving up loudly.
@@ -175,7 +175,7 @@ async function syncIfNeeded(idx, syncFn, label, attempt = 0) {
 // Canonical grape names, plus any regionally correct display name that
 // applies to THIS wine — see utils/grapeDisplay.grapeSearchNames, which cellar
 // search (services/bottleSearch) shares. Wines with no applicable mapping
-// index exactly what they indexed before.
+// index the canonical names only.
 function wineGrapeSearchNames(wine) {
   return grapeSearchNames(wine).join(', ');
 }
@@ -208,8 +208,7 @@ async function syncViaCursor(query, buildDoc, idx, label) {
   let total = 0;
   // addDocuments only ENQUEUES a Meili task (202); collect the task uids so a
   // caller that needs done-means-done (the admin force-reindex) can wait on
-  // them. Boot-time and fire-and-forget callers just ignore the return value —
-  // their behavior is unchanged (audit 2026-07-29, reindex "awaited" claim).
+  // them. Boot-time and fire-and-forget callers just ignore the return value.
   const taskUids = [];
   const cursor = query.cursor();
   for await (const doc of cursor) {
@@ -238,15 +237,15 @@ async function fullSync({ throwOnError = false } = {}) {
 
   try {
     return await syncViaCursor(
-      // Quarantined non-wine rows (spirits/cider/sake kept for their owners —
-      // registry audit 2026-07-26, policy: keep, hide) never enter the index.
+      // Quarantined non-wine rows (spirits/cider/sake kept for their owners:
+      // keep, but hide) never enter the index.
       // Neither do pendingIdentity rows: a half-identified wine must not be
       // findable by strangers in registry search. Cellar search
       // (services/bottleSearch) is unaffected — an owner keeps finding their
       // own bottle.
-      // Canary rows (registry lockdown L4) are not searchable either: a
-      // customer must never be able to find, let alone add, a wine that
-      // does not exist. They stay reachable by id/slug on purpose.
+      // Canary rows are not searchable either: a customer must never be able
+      // to find, let alone add, a wine that does not exist. They stay
+      // reachable by id/slug on purpose.
       WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true } })
         .populate('country', 'name')
         .populate('region', 'name')
@@ -512,8 +511,7 @@ async function searchDiscussions(query, { category, language, limit = 20, offset
   // has no parameter binding.
   if (language && /^[a-z]{2,3}(-[a-z]{2,4})?$/.test(String(language))) {
     // English also matches documents indexed before the field existed, whose
-    // `language` is NOT SET rather than 'en' — the same legacy-row problem
-    // that emptied the English forum on the MongoDB path. A
+    // `language` is NOT SET rather than 'en' (such a thread is English). A
     // reindex fills them in, but search must not depend on one having run.
     filters.push(language === 'en'
       ? '(language = "en" OR language NOT EXISTS)'
@@ -541,9 +539,10 @@ function getIsAvailable() {
 // The nightly sweep (services/searchReconcileJob) needs to walk what is IN an
 // index and delete what Mongo no longer has. Both primitives live here rather
 // than in the job, for the same reason every other Meilisearch call does: this
-// module owns the client, and the `meilisearch` package is ESM-only — a second
-// require of it elsewhere is the #702 jest failure mode all over again. The job
-// requires THIS module, which every suite already knows how to mock.
+// module owns the client, and the `meilisearch` package is ESM-only — jest
+// cannot parse it, so a second require of it elsewhere breaks every suite that
+// loads that file. The job requires THIS module, which every suite already
+// knows how to mock.
 const RECONCILABLE_INDEXES = ['wines'];
 
 const indexByLabel = (label) => {
@@ -553,8 +552,8 @@ const indexByLabel = (label) => {
 
 /**
  * One page of document ids from an index, oldest-first by Meilisearch's
- * internal order (stable within a run — deleteDocuments only ENQUEUES a task,
- * so nothing shifts under the paging while a sweep is walking).
+ * internal order. Deletes made between pages shift what follows; the sweep
+ * (services/searchReconcileJob) advances its offset to allow for them.
  *
  * `fields: ['id']` keeps the payload to ids: a full document page would be
  * megabytes for no purpose.
@@ -591,9 +590,8 @@ async function deleteIndexDocuments(label, ids) {
  */
 async function waitForTasks(taskUids, { timeOutMs = 120000 } = {}) {
   if (!isAvailable || !Array.isArray(taskUids) || taskUids.length === 0) return [];
-  // meilisearch-js ≥0.38 moved task waiting to client.tasks and renamed the
-  // options (timeout/interval, ms) — client.waitForTasks does not exist on
-  // 0.58 and 500'd the admin reindex (prod 2026-08-11).
+  // meilisearch-js ≥0.38 waits on client.tasks, with the options timeout and
+  // interval (ms); client.waitForTasks does not exist there and would throw.
   return await client.tasks.waitForTasks(taskUids, { timeout: timeOutMs, interval: 250 });
 }
 

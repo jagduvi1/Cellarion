@@ -3,14 +3,12 @@
  *
  * Every other net in the registry keys off a value — a name that embeds its
  * producer, a producer that is really an appellation, two rows that collide on
- * a key. A row with an empty field trips none of them: it is silently, quietly
- * incomplete, and nothing has ever listed it. Measured on prod 2026-08-16:
- * 180 published rows carry no region at all, 123 carry neither region nor
- * appellation, and 112 of those have real bottles pointing at them.
+ * a key. A row with an empty field trips none of them: it is quietly
+ * incomplete, and no other net lists it, even when real bottles point at it.
  *
  * That gap has a specific source. The import path can only fill geography the
- * AI actually knows (and since v1.117.0 a low-confidence guess is dropped
- * rather than minted — correctly, but the row then lands blank), the scan path
+ * AI actually knows (a low-confidence guess is dropped rather than minted —
+ * correctly, but the row then lands blank), the scan path
  * fills what the label prints, and neither has a way to say "a human should
  * finish this". The pending-identity queue is the closest thing, but it keys
  * entirely off the PRODUCER: a row with a good producer and no region is

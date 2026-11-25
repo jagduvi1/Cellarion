@@ -96,9 +96,8 @@ function startScheduler() {
     } catch (err) {
       console.error('[scheduler] Recently-deleted purge failed:', err);
     }
-    // The original text of a soft-deleted forum reply is
-    // kept 30 days for moderation and was then kept forever — the purge
-    // helper existed but nothing called it.
+    // The original text of a soft-deleted forum reply is kept 30 days for
+    // moderation, then cleared (DiscussionReply.purgeExpiredDeletes).
     try {
       await DiscussionReply.purgeExpiredDeletes();
     } catch (err) {
@@ -141,13 +140,11 @@ function startScheduler() {
   });
 
   // Search-index reconciliation: daily at 02:37 (container clock; the whole
-  // schedule assumes it). The old 02:15 slot leaned on "the Sunday 02:00 jobs
-  // are done in 15 minutes", which nothing enforces on a 4 GB box
-  // — 02:37 buys the margin without touching any other
-  // slot, and the off-minute keeps fleet load off the :00/:15/:30 marks.
-  // Deletes index documents whose Mongo row is gone; prod 2026-08-13 had 567
-  // such rows in the bottles index after a restore, producing "0 of 14" over
-  // MCP. Read-mostly and delete-only — see services/searchReconcileJob.
+  // schedule assumes it): late enough that the Sunday 02:00 jobs need not be
+  // done within minutes, which nothing enforces on a small box, and the
+  // off-minute keeps fleet load off the :00/:15/:30 marks. Deletes index
+  // documents whose Mongo row is gone (a restore rewinds the database but not
+  // the index). Read-mostly and delete-only — see services/searchReconcileJob.
   cron.schedule('37 2 * * *', async () => {
     console.log('[scheduler] Running search-index reconciliation…');
     try {
@@ -220,8 +217,7 @@ function startScheduler() {
   // Registry health: weekly on Monday at 05:00 UTC (quiet slot — Sunday has
   // the value/price jobs, 06:00 has drink-window). Read-only counts over the
   // registry's detection nets; notifies admins only when a metric regresses
-  // against the previous run (strategy 2026-07-29 R6 — every net existed but
-  // nothing ran them on a schedule).
+  // against the previous run.
   cron.schedule('0 5 * * 1', async () => {
     console.log('[scheduler] Running registry health check…');
     try {
@@ -249,10 +245,10 @@ function startScheduler() {
     }
   });
 
-  // Registry readers report (registry lockdown 2026-09-06, L4): daily at
-  // 05:15 UTC, after the day's counters have closed. Lists yesterday's top
-  // readers by distinct wines and notifies admins about anyone past the alert
-  // level — the alarm the canaries are the evidence for.
+  // Registry readers report: daily at 05:15 UTC, after the day's counters
+  // have closed. Lists yesterday's top readers by distinct wines and notifies
+  // admins about anyone past the alert level — the alarm the canaries are the
+  // evidence for.
   cron.schedule('15 5 * * *', async () => {
     console.log('[scheduler] Running registry readers report…');
     try {
