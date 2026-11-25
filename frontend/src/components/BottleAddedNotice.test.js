@@ -1,8 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
-// After a save the cellar page says what was added and offers the next one
-// (newcomer walkthrough 2026-10-15).
+// After a save the cellar page says what was added and offers the next one.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key, a) => (a && typeof a === 'object' ? `${key}:${JSON.stringify(a)}` : (typeof a === 'string' ? a : key)) }),
 }));

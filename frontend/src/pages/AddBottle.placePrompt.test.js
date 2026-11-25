@@ -117,8 +117,7 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
     }
   });
 
-  // The cellar page then says what was added, with "Add another bottle"
-  // (newcomer walkthrough 2026-10-15).
+  // The cellar page then says what was added, with "Add another bottle".
   // Not opened from the list here (no `cameFrom`): the add page is replaced,
   // so Back never lands on an emptied form — from the place dialog too, once
   // its own Back entry is gone.

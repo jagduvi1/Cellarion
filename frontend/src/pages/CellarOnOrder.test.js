@@ -271,8 +271,7 @@ describe('Change quantity', () => {
   });
 });
 
-// An add on order lands here and says so, with the next one a tap away
-// (newcomer walkthrough 2026-10-15).
+// An add on order lands here and says so, with the next one a tap away.
 test('bottles just added on order are announced with "Add another bottle"', async () => {
   render(
     <MemoryRouter initialEntries={[{ pathname: '/cellars/c1/on-order', state: { addedNotice: { name: 'Barolo 2016', count: 3, history: false } } }]}>
