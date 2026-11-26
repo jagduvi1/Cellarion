@@ -11,6 +11,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import ReconsentModal from './components/ReconsentModal';
 import Analytics from './components/Analytics';
 import { loadFeatureFlags } from './utils/featureFlags';
+import { FRONT_PAGE_LANGUAGES, frontPagePath } from './config/frontPages';
 import './styles/common.css';
 
 // Lazy-load all pages so each route gets its own chunk.
@@ -144,6 +145,9 @@ function AppRoutes() {
 
         {/* Protected routes wrapped in Layout */}
         <Route path="/" element={<LandingPage />} />
+        {FRONT_PAGE_LANGUAGES.map((lang) => (
+          <Route key={lang} path={frontPagePath(lang)} element={<LandingPage pageLanguage={lang} />} />
+        ))}
         <Route
           path="/cellars"
           element={

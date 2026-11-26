@@ -1,172 +1,200 @@
-// The crawler-rendered site pages: the landing page, Help, Developers and the
-// two "connect your AI" pages. None reads the database. Mounted by routes/og.js.
+// The crawler-rendered site pages: the front page (in English and in each
+// front-page language), Help, Developers and the two "connect your AI" pages.
+// None reads the database. Mounted by routes/og.js.
 
 const express = require('express');
 const helpContent = require('../../data/helpContent');
-const { CRAWLER_LANGUAGES } = require('../../config/languages');
-const { SITE_URL, esc, serializeJsonLd, hreflangLinks, ogLimiter } = require('./shared');
+const { CRAWLER_LANGUAGES, FRONT_PAGE_LANGUAGES } = require('../../config/languages');
+const { SITE_URL, esc, serializeJsonLd, ogLimiter } = require('./shared');
 
 const router = express.Router();
 
-// ── Landing-page copy ────────────────────────────────────────────────────────
-// Mirrors the marketing copy in frontend/src/locales/en/translation.json under
-// the `landing.*` keys. The backend Docker image does NOT bundle the frontend
-// locale files, so the crawler-facing copy is duplicated here. The bare "/" is
-// the page AI engines and search bots judge first — without this they'd get the
-// empty SPA shell (no schema, no FAQ, no prose). Keep this in sync with the SPA:
-// if you change the landing copy or FAQ in translation.json, update it here too.
-const LANDING = {
-  metaTitle: 'Free Wine Cellar App, No Bottle Limit | Cellarion',
-  metaDescription: 'A free wine cellar app with every feature included: no bottle limit, no subscription. Track bottles, 3D racks, drink-window alerts and cellar value.',
-  heroHeadline: 'Your wine cellar, beautifully organised.',
-  heroSubline: 'The modern way to track your wine collection. Log every bottle, visualise your racks, get drink-window alerts at the perfect moment, and share cellars with friends — all in one private, ad-free app.',
-  aboutTitle: 'What is Cellarion?',
-  aboutText: 'Cellarion is a wine cellar management app for collectors, restaurants, and weekend enthusiasts. Track every bottle in your collection — vintage, producer, region, price, personal rating, and tasting notes. Organise wines across cellars and racks, get drink-window alerts so you never miss a wine\'s peak, and share cellars with friends. Free to use at cellarion.app.',
-  featuresTitle: 'Everything your cellar needs',
-  features: [
-    ['Bottle Tracking', 'Log every bottle in your collection — vintage, producer, region, price, personal rating, and tasting notes, all in one place.'],
-    ['Cellar & Rack Management', 'Organize bottles across multiple cellars and visualize your physical racks on an interactive grid. Know exactly where each bottle lives.'],
-    ['Drink Window Alerts', 'Get notified when a bottle is approaching its peak or past it. Never open a great wine too early — or too late.'],
-    ['Rich Statistics', 'Explore your cellar with charts and maps — breakdown by country, grape, value, drink status, and more.'],
-    ['Smart Wine Search', 'Fuzzy matching and deduplication so you always find the right wine, even with a typo.'],
-    ['Share Your Cellar', 'Invite friends or colleagues to browse or co-manage a cellar. Granular role-based access keeps you in control.'],
-    ['Label Scanning', 'Snap a photo of the label and we\'ll fill in the details. Background removal keeps bottle images clean and beautiful.'],
-    ['Import & Export', 'Bring your existing collection in via CSV. A structured wine registry shared across users ensures clean, consistent data.'],
-  ],
-  whyTitle: 'Why wine lovers choose Cellarion',
-  why: [
-    ['Free, every feature', 'Every feature is free at cellarion.app: no bottle limit, no paid tier, no credit card, no trial, no upsell pop-ups. We don\'t sell ads either.'],
-    ['No lock-in', 'Your collection is yours. Export everything as JSON — or a ZIP with your images — with one click, any time. If you ever leave, you walk out with all your data.'],
-    ['Private by design', 'No third-party trackers, no data sold to wine merchants. Just a clean app that stays out of your way.'],
-    ['GDPR-compliant', 'Hosted on European infrastructure. Full data export, account deletion, and a one-click email opt-out built in from day one.'],
-  ],
-  // Visible Q&A below MUST match this FAQ verbatim — the rendered page shows
-  // exactly these pairs, so the FAQPage JSON-LD and visible text never diverge.
-  faqs: [
-    ['What is Cellarion?', 'Cellarion is a wine cellar management app that helps you track every bottle in your collection. Log vintage, producer, region, price, personal rating, and tasting notes; organise bottles across cellars and racks; get drink-window alerts when wines approach their peak; and share cellars with friends or co-managers. It\'s free to use at cellarion.app.'],
-    ['How do I track my wine collection with Cellarion?', 'You log each bottle with its vintage, producer, region, price, personal rating, and tasting notes. Bottles live inside named cellars and can be placed on customisable racks for visual organisation. Cellarion automatically calculates drink windows, tracks consumption history, and gives you statistics across your whole collection.'],
-    ['What is a drink window in wine?', 'A drink window is the period during which a wine is at its best — typically a range of years bracketing the wine\'s peak maturity. Cellarion classifies every vintage as Not Ready, Early, Peak, Late, or Declining based on producer notes and vintage data, so you know which bottles to drink soon and which to keep cellaring.'],
-    ['Is Cellarion really free?', 'Yes. Every feature at cellarion.app is free, with no bottle limit: track as many bottles as you like, organise cellars and racks in 3D, get drink-window alerts, see your cellar\'s value and statistics, connect your AI assistant, share with friends and export your data any time. There is no paid tier that unlocks anything and no credit-card prompt, and we don\'t sell ads or your data. Members who want to can support Cellarion; supporting unlocks nothing.'],
-    ['How do I import wines from Vivino or CellarTracker?', 'Cellarion supports CSV import. Export your collection from Vivino, CellarTracker, or any spreadsheet, then upload the CSV in Cellarion\'s import tool. The shared wine registry deduplicates entries automatically so your data stays clean and consistent across the whole catalogue.'],
-    ['Can I export my data and leave any time?', 'Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON (or a ZIP including your uploaded images), plus CSV import for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR.'],
-  ],
-};
+// ── Front page ───────────────────────────────────────────────────────────────
+// The front page as crawlers get it, in English at "/" and in each of
+// FRONT_PAGE_LANGUAGES at its own address (/fr, /de): the same text the app's
+// landing page shows there, so the page a search engine judges is the page a
+// visitor reads. The text is the `landing` keys of the app's locale files,
+// copied into data/landingCopy.json by scripts/sync-landing-copy.mjs, because
+// the backend image does not bundle the frontend locales.
+const LANDING_COPY = require('../../data/landingCopy.json');
 
-// GET /og/home — Server-rendered landing page for crawlers. Nginx routes the
-// bare "/" for crawler user-agents here so AI engines and search bots see the
-// full pitch, FAQ, and JSON-LD (WebSite + Organization + SoftwareApplication +
-// FAQPage) instead of the empty SPA shell. Real users still get the SPA.
-router.get('/home', ogLimiter, (req, res) => {
-  try {
-    const pageUrl = `${SITE_URL}/`;
-    const logo = `${SITE_URL}/cellarion-logo.jpg`;
+// The cards in the order the app's landing page shows them (pages/LandingPage.js):
+// each name is the middle of a landing.feature<Name>Title / …Desc pair, and of
+// a landing.why<Name>Title / …Desc pair.
+const FEATURES = ['Bottle', 'Cellar', 'Drink', 'Stats', 'Search', 'Share', 'Label', 'Import'];
+const REASONS = ['Free', 'Export', 'Privacy', 'Gdpr'];
 
-    const jsonLd = {
-      '@context': 'https://schema.org',
-      '@graph': [
-        {
-          '@type': 'WebSite',
-          '@id': `${SITE_URL}/#website`,
-          url: SITE_URL,
-          name: 'Cellarion',
-          description: LANDING.metaDescription,
-          inLanguage: CRAWLER_LANGUAGES,
-        },
-        {
-          '@type': 'Organization',
-          '@id': `${SITE_URL}/#organization`,
-          name: 'Cellarion',
-          url: SITE_URL,
-          logo,
-          // Off-site profiles that corroborate the entity for search / LLMs.
-          // Add new owned profiles here as they go live (directories, socials).
-          sameAs: [
-            'https://github.com/jagduvi1/Cellarion',
-            'https://play.google.com/store/apps/details?id=app.cellarion.twa',
-          ],
-        },
-        {
-          '@type': 'SoftwareApplication',
-          '@id': `${SITE_URL}/#app`,
-          name: 'Cellarion',
-          description: LANDING.metaDescription,
-          applicationCategory: 'LifestyleApplication',
-          operatingSystem: 'Web, Android',
-          url: SITE_URL,
-          downloadUrl: 'https://play.google.com/store/apps/details?id=app.cellarion.twa',
-          // High-signal entity field for LLMs/Google — reuses the visible feature
-          // names so the structured data never diverges from the page copy.
-          featureList: LANDING.features.map(([title]) => title),
-          offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-        },
-        {
-          '@type': 'FAQPage',
-          '@id': `${SITE_URL}/#faq`,
-          mainEntity: LANDING.faqs.map(([q, a]) => ({
-            '@type': 'Question',
-            name: q,
-            acceptedAnswer: { '@type': 'Answer', text: a },
-          })),
-        },
-      ],
-    };
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=app.cellarion.twa';
+const SOURCE_URL = 'https://github.com/jagduvi1/Cellarion';
 
-    const html = `<!DOCTYPE html>
-<html lang="en">
+const frontPageUrl = (lang) => (lang === 'en' ? `${SITE_URL}/` : `${SITE_URL}/${lang}`);
+
+/** The front page's language versions as [hreflang, address]: English is x-default. */
+const FRONT_PAGE_ALTERNATES = [
+  ['en', frontPageUrl('en')],
+  ...FRONT_PAGE_LANGUAGES.map((lang) => [lang, frontPageUrl(lang)]),
+  ['x-default', frontPageUrl('en')],
+];
+
+/**
+ * The front page's text in `lang`. A key the translation leaves empty reads in
+ * English, as it does in the app (fallbackLng).
+ */
+function landingText(lang) {
+  const read = (copy, key) => key.split('.').reduce((o, k) => (o == null ? undefined : o[k]), copy);
+  const text = (key) => {
+    const own = read(LANDING_COPY[lang], key);
+    return typeof own === 'string' && own.trim() !== '' ? own : read(LANDING_COPY.en, key);
+  };
+  const faqNumbers = Object.keys(LANDING_COPY.en.faq)
+    .map((key) => /^q(\d+)$/.exec(key)?.[1])
+    .filter(Boolean)
+    .sort((a, b) => a - b);
+  return {
+    text,
+    features: FEATURES.map((name) => [text(`feature${name}Title`), text(`feature${name}Desc`)]),
+    reasons: REASONS.map((name) => [text(`why${name}Title`), text(`why${name}Desc`)]),
+    faqs: faqNumbers.map((n) => [text(`faq.q${n}`), text(`faq.a${n}`)]),
+  };
+}
+
+function frontPageHtml(lang) {
+  const { text, features, reasons, faqs } = landingText(lang);
+  const pageUrl = frontPageUrl(lang);
+  const logo = `${SITE_URL}/cellarion-logo.jpg`;
+  const metaTitle = text('metaTitle');
+  const metaDescription = text('metaDescription');
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        url: SITE_URL,
+        name: 'Cellarion',
+        description: metaDescription,
+        inLanguage: CRAWLER_LANGUAGES,
+      },
+      {
+        '@type': 'Organization',
+        '@id': `${SITE_URL}/#organization`,
+        name: 'Cellarion',
+        url: SITE_URL,
+        logo,
+        // Off-site profiles that corroborate the entity for search / LLMs.
+        // Add new owned profiles here as they go live (directories, socials).
+        sameAs: [SOURCE_URL, PLAY_STORE_URL],
+      },
+      {
+        '@type': 'SoftwareApplication',
+        '@id': `${SITE_URL}/#app`,
+        name: 'Cellarion',
+        description: metaDescription,
+        applicationCategory: 'LifestyleApplication',
+        operatingSystem: 'Web, Android',
+        url: SITE_URL,
+        downloadUrl: PLAY_STORE_URL,
+        // High-signal entity field for LLMs/Google — reuses the visible feature
+        // names so the structured data never diverges from the page copy.
+        featureList: features.map(([title]) => title),
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      },
+      {
+        '@type': 'FAQPage',
+        '@id': `${pageUrl}#faq`,
+        inLanguage: lang,
+        // The visible Q&A below prints exactly these pairs, so the FAQPage
+        // JSON-LD and the text a reader sees never diverge.
+        mainEntity: faqs.map(([q, a]) => ({
+          '@type': 'Question',
+          name: q,
+          acceptedAnswer: { '@type': 'Answer', text: a },
+        })),
+      },
+    ],
+  };
+
+  const cards = (list) => list.map(([title, desc]) => `<h3>${esc(title)}</h3><p>${esc(desc)}</p>`).join('\n      ');
+  const alternates = FRONT_PAGE_ALTERNATES
+    .map(([hreflang, href]) => `  <link rel="alternate" hreflang="${hreflang}" href="${esc(href)}" />`)
+    .join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="${lang}">
 <head>
   <meta charset="utf-8" />
-  <title>${esc(LANDING.metaTitle)}</title>
-  <meta name="description" content="${esc(LANDING.metaDescription)}" />
+  <title>${esc(metaTitle)}</title>
+  <meta name="description" content="${esc(metaDescription)}" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="${esc(LANDING.metaTitle)}" />
-  <meta property="og:description" content="${esc(LANDING.metaDescription)}" />
+  <meta property="og:title" content="${esc(metaTitle)}" />
+  <meta property="og:description" content="${esc(metaDescription)}" />
   <meta property="og:image" content="${esc(logo)}" />
   <meta property="og:url" content="${esc(pageUrl)}" />
   <meta property="og:site_name" content="Cellarion" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${esc(LANDING.metaTitle)}" />
-  <meta name="twitter:description" content="${esc(LANDING.metaDescription)}" />
+  <meta name="twitter:title" content="${esc(metaTitle)}" />
+  <meta name="twitter:description" content="${esc(metaDescription)}" />
   <meta name="twitter:image" content="${esc(logo)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
-${hreflangLinks(pageUrl)}
+${alternates}
   <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
   <header>
-    <h1>${esc(LANDING.heroHeadline)}</h1>
-    <p>${esc(LANDING.heroSubline)}</p>
+    <h1>${esc(`${text('heroHeadline')} ${text('heroAccent')}`)}</h1>
+    <p>${esc(text('heroSubline'))}</p>
   </header>
   <main>
     <section>
-      <h2>${esc(LANDING.aboutTitle)}</h2>
-      <p>${esc(LANDING.aboutText)}</p>
+      <h2>${esc(text('aboutTitle'))}</h2>
+      <p>${esc(text('aboutText'))}</p>
     </section>
     <section>
-      <h2>${esc(LANDING.featuresTitle)}</h2>
-      ${LANDING.features.map(([title, desc]) => `<h3>${esc(title)}</h3><p>${esc(desc)}</p>`).join('\n      ')}
+      <h2>${esc(text('featuresTitle'))}</h2>
+      <p>${esc(text('featuresSub'))}</p>
+      ${cards(features)}
     </section>
     <section>
-      <h2>${esc(LANDING.whyTitle)}</h2>
-      ${LANDING.why.map(([title, desc]) => `<h3>${esc(title)}</h3><p>${esc(desc)}</p>`).join('\n      ')}
+      <h2>${esc(text('whyTitle'))}</h2>
+      <p>${esc(text('whySub'))}</p>
+      ${cards(reasons)}
     </section>
     <section>
-      <h2>Frequently asked questions</h2>
-      ${LANDING.faqs.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('\n      ')}
+      <h2>${esc(text('faqTitle'))}</h2>
+      <p>${esc(text('faqSub'))}</p>
+      ${cards(faqs)}
+    </section>
+    <section>
+      <h2>${esc(text('finalTitle'))}</h2>
+      <p>${esc(text('finalSub'))}</p>
+      <p><a href="${esc(`${SITE_URL}/login?mode=register`)}">${esc(text('createAccount'))}</a></p>
     </section>
   </main>
   <footer>
-    <p>Get started free at <a href="${esc(pageUrl)}">Cellarion</a> — track your wine collection, get drink-window alerts, and share cellars with friends. <a href="https://github.com/jagduvi1/Cellarion">Open source on GitHub</a>.</p>
+    <p><a href="${esc(SOURCE_URL)}">${esc(text('footerSourceLink'))}</a></p>
   </footer>
 </body>
 </html>`;
+}
 
-    res.set('Content-Type', 'text/html; charset=utf-8');
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.send(html);
-  } catch (err) {
-    console.error('[og] home page error:', err.message);
-    res.status(500).send('Error generating page');
-  }
+function sendFrontPage(res, lang) {
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(frontPageHtml(lang));
+}
+
+// GET /og/home — the English front page. Nginx routes the bare "/" for crawler
+// user-agents here so AI engines and search bots see the full pitch, FAQ, and
+// JSON-LD (WebSite + Organization + SoftwareApplication + FAQPage) instead of
+// the empty SPA shell. Real users still get the SPA.
+router.get('/home', ogLimiter, (req, res) => sendFrontPage(res, 'en'));
+
+// GET /og/home/:lang — the front page at /fr, /de, routed here for crawlers by
+// the nginx location for FRONT_PAGE_LANGUAGES. English has no second address.
+router.get('/home/:lang', ogLimiter, (req, res) => {
+  if (!FRONT_PAGE_LANGUAGES.includes(req.params.lang)) return res.status(404).send('Not found');
+  return sendFrontPage(res, req.params.lang);
 });
 
 // GET /og/help — Server-rendered help & guide page for crawlers. Built from

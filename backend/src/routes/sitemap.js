@@ -27,6 +27,7 @@ const { countWinesBy } = require('./taxonomy');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const { MIN_WINES } = require('../config/taxonomyPages');
+const { FRONT_PAGE_LANGUAGES } = require('../config/languages');
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 
@@ -85,6 +86,8 @@ async function buildIndex(urlsPerFile) {
 async function buildPages() {
   const staticPages = [
     { loc: '/', priority: '1.0', changefreq: 'weekly' },
+    // The front page at its own address in each front-page language (/fr, /de).
+    ...FRONT_PAGE_LANGUAGES.map((lang) => ({ loc: `/${lang}`, priority: '1.0', changefreq: 'weekly' })),
     { loc: '/blog', priority: '0.8', changefreq: 'daily' },
     { loc: '/community/discussions', priority: '0.8', changefreq: 'daily' },
     { loc: '/help', priority: '0.6', changefreq: 'monthly' },

@@ -184,11 +184,13 @@ describe('wine parts', () => {
 });
 
 describe('the pages part', () => {
-  test('site pages, published posts, taxonomy pages that have enough wines, and the type pages', async () => {
+  test('site pages (the front page in each of its languages too), published posts, taxonomy pages that have enough wines, and the type pages', async () => {
     const r = await get('?part=pages');
     const list = locs(r.body);
     expect(list).toEqual(expect.arrayContaining([
       `${SITE}/`,
+      `${SITE}/fr`,
+      `${SITE}/de`,
       `${SITE}/blog`,
       `${SITE}/community/discussions`,
       `${SITE}/developers`,
