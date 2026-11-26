@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * The front page's language addresses (/fr, /de) are named in three places:
+ * The front page's language addresses (such as /fr) are named in three places:
  * this config (the app's routes and hreflang), the backend's (the crawler
  * pages and the sitemap) and nginx.conf (which sends crawlers there). These
  * tests keep the three equal, keep both language lists to languages the app

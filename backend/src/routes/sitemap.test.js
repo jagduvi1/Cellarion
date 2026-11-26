@@ -191,6 +191,8 @@ describe('the pages part', () => {
       `${SITE}/`,
       `${SITE}/fr`,
       `${SITE}/de`,
+      `${SITE}/nb`,
+      `${SITE}/sv`,
       `${SITE}/blog`,
       `${SITE}/community/discussions`,
       `${SITE}/developers`,

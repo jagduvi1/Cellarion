@@ -15,7 +15,7 @@ const LOGO_LIGHT = '/cellarion-logo-light.png';
 const LOGO_DARK  = '/cellarion-logo-dark.png';
 
 // `pageLanguage`: the language of this address — 'en' at "/", or one of
-// FRONT_PAGE_LANGUAGES at /fr, /de (config/frontPages.js).
+// FRONT_PAGE_LANGUAGES at its own address, such as /fr (config/frontPages.js).
 export default function LandingPage({ pageLanguage = 'en' }) {
   const { t, i18n } = useTranslation();
   const { user, loading, demoLogin } = useAuth();

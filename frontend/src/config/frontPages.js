@@ -1,8 +1,8 @@
 // The front page has an address of its own in these languages, besides English
-// at "/": /fr and /de. Twin of FRONT_PAGE_LANGUAGES in
+// at "/": /fr, /de, /nb and /sv. Twin of FRONT_PAGE_LANGUAGES in
 // backend/src/config/languages.js (the crawler pages and the sitemap) and of
-// the /(fr|de) location in nginx.conf; frontPages.test.js keeps the three equal.
-export const FRONT_PAGE_LANGUAGES = ['fr', 'de'];
+// the front-page location in nginx.conf; frontPages.test.js keeps the three equal.
+export const FRONT_PAGE_LANGUAGES = ['fr', 'de', 'nb', 'sv'];
 
 export const frontPagePath = (lang) => (lang && lang !== 'en' ? `/${lang}` : '/');
 

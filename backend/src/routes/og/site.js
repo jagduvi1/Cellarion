@@ -11,7 +11,7 @@ const router = express.Router();
 
 // ── Front page ───────────────────────────────────────────────────────────────
 // The front page as crawlers get it, in English at "/" and in each of
-// FRONT_PAGE_LANGUAGES at its own address (/fr, /de): the same text the app's
+// FRONT_PAGE_LANGUAGES at its own address (such as /fr): the same text the app's
 // landing page shows there, so the page a search engine judges is the page a
 // visitor reads. The text is the `landing` keys of the app's locale files,
 // copied into data/landingCopy.json by scripts/sync-landing-copy.mjs, because
@@ -190,7 +190,7 @@ function sendFrontPage(res, lang) {
 // the empty SPA shell. Real users still get the SPA.
 router.get('/home', ogLimiter, (req, res) => sendFrontPage(res, 'en'));
 
-// GET /og/home/:lang — the front page at /fr, /de, routed here for crawlers by
+// GET /og/home/:lang — the front page at /fr, /de, /nb, /sv, routed here for crawlers by
 // the nginx location for FRONT_PAGE_LANGUAGES. English has no second address.
 router.get('/home/:lang', ogLimiter, (req, res) => {
   if (!FRONT_PAGE_LANGUAGES.includes(req.params.lang)) return res.status(404).send('Not found');
