@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { SHIPPED_CODES } from 'virtual:locale-coverage';
+import { resolveLocaleCode } from '../i18n';
+import { FRONT_PAGE_ALTERNATES, frontPagePath, frontPageLanguageSwitch } from '../config/frontPages';
 import SEOHead from '../components/SEOHead';
 import DiscussionsFeedWidget from '../components/DiscussionsFeedWidget';
 import SITE_URL from '../config/siteUrl';
@@ -12,9 +14,11 @@ import './LandingPage.css';
 const LOGO_LIGHT = '/cellarion-logo-light.png';
 const LOGO_DARK  = '/cellarion-logo-dark.png';
 
-export default function LandingPage() {
+// `pageLanguage`: the language of this address — 'en' at "/", or one of
+// FRONT_PAGE_LANGUAGES at /fr, /de (config/frontPages.js).
+export default function LandingPage({ pageLanguage = 'en' }) {
   const { t, i18n } = useTranslation();
-  const { user, demoLogin } = useAuth();
+  const { user, loading, demoLogin } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [contactEmail, setContactEmail] = useState(null);
@@ -67,6 +71,18 @@ export default function LandingPage() {
     { q: t('landing.faq.q6'), a: t('landing.faq.a6') },
   ];
 
+  // A visitor who is not signed in reads /fr in French (frontPageLanguageSwitch).
+  // Not remembered: i18n.changeLanguage, not chooseLanguage.
+  useEffect(() => {
+    const target = frontPageLanguageSwitch({
+      pageLanguage,
+      shownLanguage: resolveLocaleCode(i18n.language),
+      signedIn: Boolean(user),
+      restoring: loading,
+    });
+    if (target) i18n.changeLanguage(target);
+  }, [pageLanguage, user, loading, i18n]);
+
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.ok ? r.json() : null)
@@ -113,7 +129,7 @@ export default function LandingPage() {
       },
       {
         '@type': 'FAQPage',
-        '@id': `${SITE_URL}/#faq`,
+        '@id': `${SITE_URL}${frontPagePath(pageLanguage)}#faq`,
         mainEntity: faqs.map(({ q, a }) => ({
           '@type': 'Question',
           name: q,
@@ -128,8 +144,9 @@ export default function LandingPage() {
       <SEOHead
         title={t('landing.metaTitle')}
         description={t('landing.metaDescription')}
-        path="/"
+        path={frontPagePath(pageLanguage)}
         language={lang}
+        hreflang={FRONT_PAGE_ALTERNATES}
         jsonLd={jsonLd}
       />
 
