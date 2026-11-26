@@ -18,7 +18,9 @@ const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
 const { removeFromRacks } = require('./bottleOps');
-const { parseSlotPosition } = require('../utils/validation');
+const { parseSlotPosition, isValidId } = require('../utils/validation');
+const { getCellarRole } = require('../utils/cellarAccess');
+const { ROLE_LEVELS } = require('../middleware/bottleAccess');
 
 const { RACK_TYPES } = Rack;
 
@@ -264,12 +266,38 @@ async function clearRackSlot(rack, position, req) {
 }
 
 /**
- * Move an ACTIVE bottle to a destination cellar the user OWNS. Reassigns the
- * cellar, seeds cellarHistory, saves FIRST (so a concurrency conflict leaves
- * the source rack untouched), then unplaces from the old rack. Dual audit
- * (move.out / move.in). Mirrors POST /api/bottles/:id/move.
- * `destCellar` must already be verified owned by the caller.
- * Returns { error } | { bottle, fromCellar, from: {cellarId, cellarName} }.
+ * The role a cellar move needs on BOTH cellars, the one the bottle leaves and
+ * the one it enters. An editor of a shared cellar moves bottles in and out of
+ * it: the same reach as adding a bottle there or deleting one. A viewer never
+ * moves anything.
+ */
+const MOVE_MIN_ROLE = 'editor';
+
+/**
+ * The destination of a cellar move: an active cellar where the user holds
+ * MOVE_MIN_ROLE. Null when it is missing, deleted or not theirs to move into:
+ * one answer for all three, so the reply reveals nothing about a cellar the
+ * caller cannot see. Callers: POST /api/bottles/:id/move, POST
+ * /api/bottles/bulk-move, MCP move_bottle and its undo_last.
+ */
+async function findMoveDestination(userId, cellarId) {
+  const id = String(cellarId);
+  if (!isValidId(id)) return null;
+  const cellar = await Cellar.findById(id);
+  if (!cellar || cellar.deletedAt) return null;
+  const role = getCellarRole(cellar, userId);
+  return (ROLE_LEVELS[role] || 0) >= ROLE_LEVELS[MOVE_MIN_ROLE] ? cellar : null;
+}
+
+/**
+ * Move an ACTIVE (or on-order) bottle to another cellar. Reassigns the cellar
+ * AND the bottle's owner, seeds cellarHistory, saves FIRST (so a concurrency
+ * conflict leaves the source rack untouched), then unplaces from the old rack.
+ * Dual audit (move.out on the source, move.in on the destination).
+ * The one body behind POST /api/bottles/:id/move, POST /api/bottles/bulk-move,
+ * MCP move_bottle and its undo_last; each caller has already checked
+ * MOVE_MIN_ROLE on both cellars.
+ * Returns { error } | { bottle, from: {cellarId, cellarName} }.
  */
 async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   if (String(destCellar._id) === String(sourceCellar._id)) {
@@ -288,6 +316,13 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
     });
   }
   bottle.cellar = destCellar._id;
+  // A bottle belongs to the owner of the cellar it is in, on every path that
+  // puts one there (add, import, trash restore, cellar transfer). Moved into a
+  // cellar someone else owns, it is theirs: their statistics and export carry
+  // it, and an erasure of the mover's account no longer takes it out of that
+  // cellar. What the mover wrote about it (journal entries, personal fields,
+  // photo credit) stays with the mover.
+  bottle.user = destCellar.user;
   bottle.addedToCellarAt = now;
   bottle.cellarHistory.push({ cellar: destCellar._id, cellarName: destCellar.name, enteredAt: now });
   try {
@@ -567,7 +602,8 @@ async function countUnplaced(ids) {
 
 module.exports = {
   normalizeRackGroup,
-  createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
+  createCellar, createGridRack, placeBottleInRack, clearRackSlot,
+  MOVE_MIN_ROLE, findMoveDestination, moveBottleToCellar,
   ARRANGE_SLOT_POPULATE, usablePositionCount,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement, moveRackBottles,
 };

@@ -2131,7 +2131,12 @@
     "movedManyInfo_one": "{{count}} bottle was moved to {{cellar}}.",
     "movedManyInfo_other": "{{count}} bottles were moved to {{cellar}}.",
     "skippedInfo_one": "{{count}} bottle could not be moved — it is already consumed, or not yours to move.",
-    "skippedInfo_other": "{{count}} bottles could not be moved — they are already consumed, or not yours to move."
+    "skippedInfo_other": "{{count}} bottles could not be moved — they are already consumed, or not yours to move.",
+    "sharedOption": "{{name}} (shared with you)",
+    "becomesOwners_one": "This cellar belongs to someone else. The bottle becomes theirs and stays in their cellar, even if you later leave it.",
+    "becomesOwners_other": "This cellar belongs to someone else. The bottles become theirs and stay in their cellar, even if you later leave it.",
+    "becomesYours_one": "The bottle becomes yours and leaves the shared cellar.",
+    "becomesYours_other": "The bottles become yours and leave the shared cellar."
   },
   "admin": {
     "requests": {

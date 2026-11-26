@@ -1,14 +1,16 @@
 /**
- * POST /api/bottles/bulk-move — many bottles to another owned cellar in ONE
- * request (a delivery logged in a storage cellar moves home in one step,
- * not one bottle at a time).
+ * POST /api/bottles/bulk-move — many bottles to another cellar in ONE request
+ * (a delivery logged in a storage cellar moves home in one step, not one
+ * bottle at a time).
  *
  * Pinned: the request is validated as a whole (ids, cap, a destination you
- * own), then applied PER BOTTLE through the shared rackOps.moveBottleToCellar.
- * A bottle in a cellar you don't own, an unknown id, a consumed bottle or one
- * already in the destination is skipped WITH a reason while the rest still
- * move. Same disclosure rule as the single route: a bottle you may not move
- * reads as not_found.
+ * own or edit), then applied PER BOTTLE through the shared
+ * rackOps.moveBottleToCellar. A bottle in a cellar you neither own nor edit,
+ * an unknown id, a consumed bottle or one already in the destination is
+ * skipped WITH a reason while the rest still move. Same disclosure rule as the
+ * single route: a bottle you may not move reads as not_found. The role rule
+ * itself is the real rackOps one (MOVE_MIN_ROLE + findMoveDestination); only
+ * the move mechanics are mocked.
  */
 const express = require('express');
 const http = require('http');
@@ -28,7 +30,7 @@ jest.mock('../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }))
 jest.mock('../services/priceWarnings', () => ({ gatherPriceWarnings: jest.fn().mockResolvedValue([]) }));
 jest.mock('../services/communityPrice', () => ({ getCurrentRelease: jest.fn().mockResolvedValue(null) }));
 jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn() }));
-jest.mock('../services/rackOps', () => ({ moveBottleToCellar: jest.fn() }));
+jest.mock('../services/rackOps', () => ({ ...jest.requireActual('../services/rackOps'), moveBottleToCellar: jest.fn() }));
 jest.mock('../utils/exchangeRates', () => ({ getSnapshotForDate: jest.fn().mockResolvedValue(null) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn(), findOne: jest.fn() }));
@@ -61,12 +63,16 @@ const OTHER = '64b000000000000000000002';
 const SRC = '64b0000000000000000000c1';
 const FOREIGN = '64b0000000000000000000c2';
 const DEST = '64b0000000000000000000d1';
+const SHARED_EDIT = '64b0000000000000000000e1';
+const SHARED_VIEW = '64b0000000000000000000e2';
 const B = (n) => `64b0000000000000000000b${n}`;
 
 const CELLARS = {
-  [SRC]:     { _id: SRC, user: USER, name: 'Storage', deletedAt: null, members: [] },
-  [FOREIGN]: { _id: FOREIGN, user: OTHER, name: 'Not mine', deletedAt: null, members: [] },
-  [DEST]:    { _id: DEST, user: USER, name: 'Home', deletedAt: null, members: [] },
+  [SRC]:         { _id: SRC, user: USER, name: 'Storage', deletedAt: null, members: [] },
+  [FOREIGN]:     { _id: FOREIGN, user: OTHER, name: 'Not mine', deletedAt: null, members: [] },
+  [DEST]:        { _id: DEST, user: USER, name: 'Home', deletedAt: null, members: [] },
+  [SHARED_EDIT]: { _id: SHARED_EDIT, user: OTHER, name: 'Ours', deletedAt: null, members: [{ user: USER, role: 'editor' }] },
+  [SHARED_VIEW]: { _id: SHARED_VIEW, user: OTHER, name: 'Theirs', deletedAt: null, members: [{ user: USER, role: 'viewer' }] },
 };
 
 function app() {
@@ -98,7 +104,6 @@ function postJson(a, path, body) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  Cellar.findOne.mockResolvedValue(CELLARS[DEST]);
   Cellar.findById.mockImplementation(async (id) => CELLARS[String(id)] || null);
   moveBottleToCellar.mockResolvedValue({ bottle: {} });
   Bottle.find.mockResolvedValue([]);
@@ -134,8 +139,6 @@ describe('POST /api/bottles/bulk-move', () => {
     expect(moveBottleToCellar).toHaveBeenCalledWith(
       expect.objectContaining({ _id: B(1) }), CELLARS[SRC], CELLARS[DEST], expect.anything(),
     );
-    // Destination must be an active cellar the caller OWNS.
-    expect(Cellar.findOne).toHaveBeenCalledWith(expect.objectContaining({ user: USER, deletedAt: null }));
     // One summary audit row on top of the per-bottle rows the helper writes.
     expect(logAudit).toHaveBeenCalledWith(
       expect.anything(), 'bottle.bulk_move', expect.objectContaining({ type: 'cellar' }),
@@ -172,9 +175,40 @@ describe('POST /api/bottles/bulk-move', () => {
     res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(1)], toCellarId: 'nope' });
     expect(res.status).toBe(400);
 
-    Cellar.findOne.mockResolvedValue(null);
-    res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(1)], toCellarId: DEST });
+    res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(1)], toCellarId: '64b0000000000000000000ff' });
     expect(res.status).toBe(404);
+
+    expect(moveBottleToCellar).not.toHaveBeenCalled();
+  });
+
+  test('an editor of a shared cellar moves bottles into it, and out of it into their own', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: SRC, status: 'active' }]);
+    let res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(1)], toCellarId: SHARED_EDIT });
+    expect(res.status).toBe(200);
+    expect(res.body.moved).toBe(1);
+    expect(moveBottleToCellar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ _id: B(1) }), CELLARS[SRC], CELLARS[SHARED_EDIT], expect.anything(),
+    );
+
+    Bottle.find.mockResolvedValue([{ _id: B(2), cellar: SHARED_EDIT, status: 'active' }]);
+    res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(2)], toCellarId: DEST });
+    expect(res.status).toBe(200);
+    expect(res.body.moved).toBe(1);
+    expect(moveBottleToCellar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ _id: B(2) }), CELLARS[SHARED_EDIT], CELLARS[DEST], expect.anything(),
+    );
+  });
+
+  test('a viewer moves nothing: not into the cellar, not out of it', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: SRC, status: 'active' }]);
+    let res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(1)], toCellarId: SHARED_VIEW });
+    expect(res.status).toBe(404);
+
+    Bottle.find.mockResolvedValue([{ _id: B(2), cellar: SHARED_VIEW, status: 'active' }]);
+    res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(2)], toCellarId: DEST });
+    expect(res.status).toBe(200);
+    expect(res.body.moved).toBe(0);
+    expect(res.body.skipped).toEqual([{ id: B(2), reason: 'not_found' }]);
 
     expect(moveBottleToCellar).not.toHaveBeenCalled();
   });

@@ -7,6 +7,7 @@
 
 jest.mock('../models/Cellar', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'cellar-new'; this.save = jest.fn().mockResolvedValue(undefined); });
+  M.findById = jest.fn();
   return M;
 });
 jest.mock('../models/Rack', () => {
@@ -34,7 +35,9 @@ const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
 const { removeFromRacks } = require('./bottleOps');
-const { createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar, applyArrangement } = require('./rackOps');
+const {
+  createCellar, createGridRack, placeBottleInRack, clearRackSlot, findMoveDestination, moveBottleToCellar, applyArrangement,
+} = require('./rackOps');
 
 const REQ = { user: { id: 'u1', roles: ['user'] }, headers: {} };
 const selectable = (doc) => ({ select: jest.fn().mockResolvedValue(doc) });
@@ -340,8 +343,8 @@ describe('moveBottleToCellar', () => {
     _id: 'b1', status: 'active', vintage: '2019', cellarHistory: [], addedToCellarAt: new Date('2026-01-01'),
     createdAt: new Date('2026-01-01'), save: jest.fn().mockResolvedValue(undefined), ...over,
   });
-  const src = { _id: 'c1', name: 'Source' };
-  const dest = { _id: 'c2', name: 'Dest' };
+  const src = { _id: 'c1', name: 'Source', user: 'u1' };
+  const dest = { _id: 'c2', name: 'Dest', user: 'u1' };
 
   test('save-FIRST then unplace; seeds history both ends; dual audit', async () => {
     const b = bottle();
@@ -365,6 +368,48 @@ describe('moveBottleToCellar', () => {
     const b = bottle(); b.save = jest.fn().mockRejectedValue(Object.assign(new Error('v'), { name: 'VersionError' }));
     expect((await moveBottleToCellar(b, src, dest, REQ)).error).toMatchObject({ status: 409, code: 'conflict' });
     expect(removeFromRacks).not.toHaveBeenCalled(); // never unracked on a failed save
+  });
+
+  test('the bottle becomes the destination owner\'s, and goes back with the move back', async () => {
+    const shared = { _id: 'c3', name: 'Ours', user: 'friend' };
+    const b = bottle({ user: 'u1' });
+    await moveBottleToCellar(b, src, shared, REQ);
+    expect(b.user).toBe('friend');
+    expect(b.save).toHaveBeenCalled();
+    await moveBottleToCellar(b, shared, src, REQ);
+    expect(b.user).toBe('u1');
+  });
+});
+
+describe('findMoveDestination', () => {
+  const cellar = (over = {}) => ({ _id: 'aaaaaaaaaaaaaaaaaaaaaaaa', user: 'friend', members: [], deletedAt: null, ...over });
+  const ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+
+  test('the owner and an editor may move into a cellar', async () => {
+    const own = cellar({ user: 'u1' });
+    Cellar.findById.mockResolvedValue(own);
+    expect(await findMoveDestination('u1', ID)).toBe(own);
+    const edited = cellar({ members: [{ user: 'u1', role: 'editor' }] });
+    Cellar.findById.mockResolvedValue(edited);
+    expect(await findMoveDestination('u1', ID)).toBe(edited);
+  });
+
+  test('a viewer, a stranger, a deleted cellar and a missing one all read as null', async () => {
+    Cellar.findById.mockResolvedValue(cellar({ members: [{ user: 'u1', role: 'viewer' }] }));
+    expect(await findMoveDestination('u1', ID)).toBeNull();
+    Cellar.findById.mockResolvedValue(cellar());
+    expect(await findMoveDestination('u1', ID)).toBeNull();
+    Cellar.findById.mockResolvedValue(cellar({ user: 'u1', deletedAt: new Date() }));
+    expect(await findMoveDestination('u1', ID)).toBeNull();
+    Cellar.findById.mockResolvedValue(null);
+    expect(await findMoveDestination('u1', ID)).toBeNull();
+  });
+
+  test('an id that is not an id string is never looked up', async () => {
+    for (const bad of ['attic', { $ne: null }, ['x'], undefined]) {
+      expect(await findMoveDestination('u1', bad)).toBeNull();
+    }
+    expect(Cellar.findById).not.toHaveBeenCalled();
   });
 });
 

@@ -40,7 +40,7 @@ const {
 // wishlist route; findOrCreateWine itself is lazy-required inside the service.
 const { resolveOrMintWine } = require('../services/wineCommit');
 const { applyOtherCategoryAfterAdd } = require('../services/nonWineOps');
-const { moveBottleToCellar } = require('../services/rackOps');
+const { MOVE_MIN_ROLE, findMoveDestination, moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
 const { TRASH_DAYS, trashBottle } = require('../services/bottleTrash');
 const { queryUserBottles } = require('../services/bottleListQuery');
@@ -863,12 +863,13 @@ router.delete('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
   }
 });
 
-// POST /api/bottles/:id/move - Move an active bottle to another cellar you own.
-// v1: own-cellars-only + active (or on-order) bottles only; it lands UNPLACED in the
-// destination (freed from any source rack slot). All bottle data is kept —
-// createdAt (acquisition date) is preserved; addedToCellarAt + cellarHistory are
-// updated. requireBottleAccess('owner') enforces you own the SOURCE cellar.
-router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
+// POST /api/bottles/:id/move - Move an active (or on-order) bottle to another
+// cellar. Owner or editor of BOTH cellars (rackOps.MOVE_MIN_ROLE): the source
+// through requireBottleAccess, the destination through findMoveDestination.
+// It lands UNPLACED in the destination (freed from any source rack slot) and
+// becomes the destination owner's bottle. All bottle data is kept — createdAt
+// (acquisition date) is preserved; addedToCellarAt + cellarHistory are updated.
+router.post('/:id/move', requireBottleAccess(MOVE_MIN_ROLE), async (req, res) => {
   try {
     const { bottle, cellar: sourceCellar } = req;
     const { toCellarId } = req.body;
@@ -883,19 +884,11 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
       return res.status(400).json({ error: 'Only bottles in the cellar or on order can be moved' });
     }
 
-    // Destination must be an active cellar the user OWNS (v1: own cellars only).
-    // Cast the (already isValidObjectId-checked) id to an ObjectId so the query
-    // value can never be a user-supplied operator object (defence-in-depth + keeps
-    // static NoSQL-injection analysis happy).
-    const destCellar = await Cellar.findOne({
-      _id: new mongoose.Types.ObjectId(String(toCellarId)),
-      user: req.user.id,
-      deletedAt: null,
-    });
+    const destCellar = await findMoveDestination(req.user.id, toCellarId);
     if (!destCellar) return res.status(404).json({ error: 'Destination cellar not found' });
 
-    // Move mechanics (history seed, save-first ordering, unplace, dual audit)
-    // are shared with the MCP move tool.
+    // Move mechanics (history seed, new owner, save-first ordering, unplace,
+    // dual audit) are shared with the bulk move and the MCP move tool.
     const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 

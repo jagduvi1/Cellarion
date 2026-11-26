@@ -383,7 +383,7 @@ describeWithMongo('public API contract', () => {
     await expectContract('unplaceBottle', 404, { token: 'write', params: { rackId: ID_ZERO, position: 2 } });
   });
 
-  test('move: to another cellar of your own, out of its rack; refusals', async () => {
+  test('move: to another cellar of your own or one you edit, out of its rack; refusals', async () => {
     const Cellar = require('../models/Cellar');
     const attic = String((await Cellar.create({ name: 'Attic', user: world.users.alice._id }))._id);
     const id = b('b1'); // in the grid, slot 2
@@ -400,11 +400,23 @@ describeWithMongo('public API contract', () => {
     await expectContract('moveBottle', 400, { token: 'write', params: { bottleId: b('drunk') }, body: { toCellarId: attic } });
     await expectContract('moveBottle', 401, { token: 'revoked', params: { bottleId: id }, body: { toCellarId: attic } });
     await expectContract('moveBottle', 403, { token: 'read', params: { bottleId: id }, body: { toCellarId: attic } });
-    // An editor of a shared cellar may not move its bottles out.
-    await expectContract('moveBottle', 403, { token: 'write', params: { bottleId: b('bobs') }, body: { toCellarId: attic } });
     await expectContract('moveBottle', 404, { token: 'write', params: { bottleId: ID_ZERO }, body: { toCellarId: attic } });
-    // A cellar you do not own reads like one that does not exist.
-    await expectContract('moveBottle', 404, { token: 'write', params: { bottleId: id }, body: { toCellarId: String(world.cellars.shared._id) } });
+
+    // An editor of a shared cellar moves its bottles out, and back in.
+    const shared = String(world.cellars.shared._id);
+    const out = await expectContract('moveBottle', 200, { token: 'write', params: { bottleId: b('bobs') }, body: { toCellarId: attic } });
+    expect(out.body.bottle).toMatchObject({ _id: b('bobs'), cellar: attic });
+    const back = await expectContract('moveBottle', 200, { token: 'write', params: { bottleId: b('bobs') }, body: { toCellarId: shared } });
+    expect(back.body.bottle).toMatchObject({ _id: b('bobs'), cellar: shared });
+
+    // A viewer moves nothing: a bottle out of the cellar is refused, and the
+    // cellar as a destination reads like one that does not exist.
+    const Bottle = require('../models/Bottle');
+    const bob = world.users.bob._id;
+    const viewed = await Cellar.create({ name: 'Viewed for moves', user: bob, members: [{ user: world.users.alice._id, role: 'viewer' }] });
+    const viewedBottle = String((await Bottle.create({ user: bob, cellar: viewed._id, wineDefinition: world.wines.white._id, vintage: '2021' }))._id);
+    await expectContract('moveBottle', 403, { token: 'write', params: { bottleId: viewedBottle }, body: { toCellarId: attic } });
+    await expectContract('moveBottle', 404, { token: 'write', params: { bottleId: id }, body: { toCellarId: String(viewed._id) } });
   });
 
   test('climate ingest', async () => {
