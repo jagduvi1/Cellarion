@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Copies the front page's text (the `landing` keys of the app's locale files)
 // into backend/src/data/landingCopy.json, which the crawler-rendered front
-// pages (/, /fr, /de in backend/src/routes/og/site.js) are built from. The
+// pages (/ and /<language> in backend/src/routes/og/site.js) are built from. The
 // backend image is built from backend/ alone, so it cannot read
 // frontend/src/locales itself.
 //

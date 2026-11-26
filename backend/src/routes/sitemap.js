@@ -86,7 +86,7 @@ async function buildIndex(urlsPerFile) {
 async function buildPages() {
   const staticPages = [
     { loc: '/', priority: '1.0', changefreq: 'weekly' },
-    // The front page at its own address in each front-page language (/fr, /de).
+    // The front page at its own address in each front-page language (such as /fr).
     ...FRONT_PAGE_LANGUAGES.map((lang) => ({ loc: `/${lang}`, priority: '1.0', changefreq: 'weekly' })),
     { loc: '/blog', priority: '0.8', changefreq: 'daily' },
     { loc: '/community/discussions', priority: '0.8', changefreq: 'daily' },

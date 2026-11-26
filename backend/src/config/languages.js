@@ -19,12 +19,12 @@ const CRAWLER_LANGUAGES = ['en', 'de', 'fr', 'nb', 'sv'];
 
 /**
  * Languages the front page has an address of its own in, besides English at
- * "/": /fr and /de, each answered in that language to visitors and crawlers
+ * "/" (/fr, /de, /nb, /sv), each answered in that language to visitors and crawlers
  * alike. Read by the crawler page (routes/og/site.js), the sitemap and
  * scripts/sync-landing-copy.mjs. Twin of FRONT_PAGE_LANGUAGES in
- * frontend/src/config/frontPages.js and of the /(fr|de) location in
+ * frontend/src/config/frontPages.js and of the front-page location in
  * frontend/nginx.conf; frontPages.test.js keeps the three equal.
  */
-const FRONT_PAGE_LANGUAGES = ['fr', 'de'];
+const FRONT_PAGE_LANGUAGES = ['fr', 'de', 'nb', 'sv'];
 
 module.exports = { CRAWLER_LANGUAGES, FRONT_PAGE_LANGUAGES };

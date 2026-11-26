@@ -1,7 +1,7 @@
 /**
  * GET /api/og/home and /api/og/home/:lang — the front page crawlers get
  * instead of the SPA shell, in English at "/" and in each front-page language
- * at its own address (/fr, /de).
+ * at its own address (/fr, /de, /nb, /sv).
  *
  * The page is built from data/landingCopy.json (the app's landing text) and
  * reads nothing from the database. Pins what a search engine judges it by: the
@@ -28,8 +28,8 @@ beforeAll(async () => {
 
 afterAll(() => pages.close());
 
-test('the front page has an address of its own in French and German', () => {
-  expect(FRONT_PAGE_LANGUAGES).toEqual(expect.arrayContaining(['fr', 'de']));
+test('the front page has an address of its own in French, German, Norwegian and Swedish', () => {
+  expect(FRONT_PAGE_LANGUAGES).toEqual(expect.arrayContaining(['fr', 'de', 'nb', 'sv']));
 });
 
 describe.each(LANGUAGES)('the front page in %s', (lang) => {
