@@ -178,7 +178,8 @@ async function resolveBulkBottles(req, bottleIds, minRole) {
 //
 // Body:     { bottleIds: string[] (1..BULK_MAX), toCellarId }
 // Response: { moved, movedIds: string[], skipped: [{ id, reason }], toCellar: { _id, name } }
-//   reason ∈ 'not_found', 'same_cellar', 'not_active', 'conflict'
+//   reason ∈ 'not_found', 'same_cellar', 'not_active', 'conflict',
+//   'not_your_cellar' (between two other owners' cellars), 'demo_owner'
 router.post('/bulk-move', async (req, res) => {
   try {
     const { bottleIds, toCellarId } = req.body || {};
@@ -193,21 +194,35 @@ router.post('/bulk-move', async (req, res) => {
 
     const movedIds = [];
     const skipped = [];
+    const sources = new Map(); // source cellar id -> { cellar, requested, moved }
     for (const item of resolved.items) {
       if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
       const { id, bottle, cellar: sourceCellar } = item;
       if (String(sourceCellar._id) === String(destCellar._id)) { skipped.push({ id, reason: 'same_cellar' }); continue; }
+      const key = String(sourceCellar._id);
+      if (!sources.has(key)) sources.set(key, { cellar: sourceCellar, requested: 0, moved: 0 });
+      const tally = sources.get(key);
+      tally.requested += 1;
       if (bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) { skipped.push({ id, reason: 'not_active' }); continue; }
       const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
       if (result.error) { skipped.push({ id, reason: result.error.code || 'error' }); continue; }
+      tally.moved += 1;
       movedIds.push(id);
     }
 
     // One summary row on top of the per-bottle move.out / move.in rows, so the
-    // audit log shows "moved 120 bottles" as one act, not 240 lines to count.
+    // audit log shows "moved 120 bottles" as one act, not 240 lines to count:
+    // on the destination, and on each cellar the bottles left, whose owner
+    // may be someone else (an editor taking bottles out of a shared cellar).
     logAudit(req, 'bottle.bulk_move',
       { type: 'cellar', id: destCellar._id, cellarId: destCellar._id },
       { requested: resolved.ids.length, moved: movedIds.length, skipped: skipped.length });
+    for (const { cellar, requested, moved } of sources.values()) {
+      if (!moved) continue;
+      logAudit(req, 'bottle.bulk_move',
+        { type: 'cellar', id: cellar._id, cellarId: cellar._id },
+        { requested, moved, skipped: requested - moved });
+    }
 
     res.json({
       moved: movedIds.length,

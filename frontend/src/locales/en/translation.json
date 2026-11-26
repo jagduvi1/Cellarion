@@ -1915,7 +1915,8 @@
       "moved": "Moved to {{cellar}}",
       "arrived": "Arrived",
       "onOrder": "On order",
-      "onOrderExpected": "On order, expected {{month}}"
+      "onOrderExpected": "On order, expected {{month}}",
+      "otherAccount": "a cellar of another account"
     },
     "vintageLabel": "Vintage:",
     "paidLabel": "Paid:",
@@ -1975,6 +1976,7 @@
     "sharedAs": "{{user}} as {{role}}",
     "roleChanged": "Role changed: {{from}} → {{to}}",
     "bulkMoveDetail": "{{moved}} of {{requested}} bottles moved",
+    "otherAccountCellar": "a cellar of another account",
     "bulkDoneDetail": "{{done}} of {{requested}} bottles · {{what}}",
     "bulkArriveDetail": "{{done}} of {{requested}} bottles arrived",
     "bulkRestoreDetail": "{{done}} of {{requested}} bottles moved back"

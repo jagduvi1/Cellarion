@@ -27,6 +27,21 @@ describe('BottleJourney', () => {
     expect(screen.getByText('Moved to Cellar B')).toBeInTheDocument();
   });
 
+  test('a cellar of the account the bottle came from shows without its name', () => {
+    const bottle = {
+      status: 'active',
+      cellarHistory: [
+        { enteredAt: '2025-01-02' },                                    // left out on the hand-over
+        { cellar: 'c2', enteredAt: '2025-06-01' },                      // an old entry that lost its name
+        { cellar: 'c3', cellarName: 'Ours', enteredAt: '2026-03-05' },
+      ],
+    };
+    render(<BottleJourney bottle={bottle} />);
+    expect(screen.getByText('Added to history.journey.otherAccount')).toBeInTheDocument();
+    expect(screen.getByText('Moved to —')).toBeInTheDocument();
+    expect(screen.getByText('Moved to Ours')).toBeInTheDocument();
+  });
+
   test('appends a consumed entry for history bottles', () => {
     const bottle = {
       status: 'drank', consumedReason: 'drank', consumedAt: '2026-06-01',

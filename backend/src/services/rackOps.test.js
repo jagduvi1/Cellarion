@@ -8,8 +8,11 @@
 jest.mock('../models/Cellar', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'cellar-new'; this.save = jest.fn().mockResolvedValue(undefined); });
   M.findById = jest.fn();
+  M.find = jest.fn();
   return M;
 });
+// The account a bottle is handed to: its isDemo flag is all a move reads.
+jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/Rack', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'rack-new'; this.save = jest.fn().mockResolvedValue(undefined); });
   M.RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'];
@@ -31,6 +34,7 @@ jest.mock('./bottleOps', () => ({ removeFromRacks: jest.fn().mockResolvedValue(u
 jest.mock('./search', () => ({}));
 
 const Cellar = require('../models/Cellar');
+const User = require('../models/User');
 const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
@@ -370,14 +374,103 @@ describe('moveBottleToCellar', () => {
     expect(removeFromRacks).not.toHaveBeenCalled(); // never unracked on a failed save
   });
 
-  test('the bottle becomes the destination owner\'s, and goes back with the move back', async () => {
+  describe('a move that hands the bottle to another account', () => {
     const shared = { _id: 'c3', name: 'Ours', user: 'friend' };
-    const b = bottle({ user: 'u1' });
-    await moveBottleToCellar(b, src, shared, REQ);
-    expect(b.user).toBe('friend');
-    expect(b.save).toHaveBeenCalled();
-    await moveBottleToCellar(b, shared, src, REQ);
-    expect(b.user).toBe('u1');
+    const lean = (v) => ({ select: () => ({ lean: () => Promise.resolve(v) }) });
+    // ownedByNewOwner: the history cellar ids the new owner owns.
+    const accounts = ({ demo = false, ownedByNewOwner = [] } = {}) => {
+      User.findById.mockReturnValue(lean({ isDemo: demo }));
+      Cellar.find.mockReturnValue(lean(ownedByNewOwner.map((_id) => ({ _id }))));
+    };
+    beforeEach(() => accounts());
+
+    test('the bottle becomes the destination owner\'s, and goes back with the move back', async () => {
+      const b = bottle({ user: 'u1' });
+      await moveBottleToCellar(b, src, shared, REQ);
+      expect(b.user).toBe('friend');
+      expect(b.save).toHaveBeenCalled();
+      accounts({ ownedByNewOwner: ['c1'] });
+      await moveBottleToCellar(b, shared, src, REQ);
+      expect(b.user).toBe('u1');
+    });
+
+    test('the reminders already sent to the previous owner are cleared, so the new owner gets them', async () => {
+      const sent = new Date('2026-10-01');
+      const b = bottle({
+        user: 'u1', drinkWindowNotifiedStatus: 'peak', drinkWindowNotifiedAt: sent,
+        reservationNotifiedAt: sent, openBottleNotifiedAt: sent, arrivalNotifiedAt: sent,
+      });
+      await moveBottleToCellar(b, src, shared, REQ);
+      expect(b).toMatchObject({
+        drinkWindowNotifiedStatus: null, drinkWindowNotifiedAt: null,
+        reservationNotifiedAt: null, openBottleNotifiedAt: null, arrivalNotifiedAt: undefined,
+      });
+    });
+
+    test('the journey keeps the dates of the earlier cellars but not their names', async () => {
+      const b = bottle({
+        user: 'u1',
+        cellarHistory: [
+          { cellar: 'c9', cellarName: 'Andrew Private', enteredAt: new Date('2025-01-01') },
+          { cellar: 'c1', cellarName: 'Source', enteredAt: new Date('2025-06-01') },
+        ],
+      });
+      await moveBottleToCellar(b, src, shared, REQ);
+      expect(b.cellarHistory).toEqual([
+        { cellar: undefined, cellarName: undefined, enteredAt: new Date('2025-01-01') },
+        { cellar: undefined, cellarName: undefined, enteredAt: new Date('2025-06-01') },
+        expect.objectContaining({ cellar: 'c3', cellarName: 'Ours' }),
+      ]);
+      expect(Cellar.find).toHaveBeenCalledWith({ _id: { $in: ['c9', 'c1'] }, user: 'friend' });
+    });
+
+    test('a cellar the new owner owns keeps its name in the journey', async () => {
+      accounts({ ownedByNewOwner: ['c7'] });
+      const b = bottle({ user: 'u1', cellarHistory: [{ cellar: 'c7', cellarName: 'Friend Old', enteredAt: new Date('2025-01-01') }] });
+      await moveBottleToCellar(b, src, shared, REQ);
+      expect(b.cellarHistory[0]).toMatchObject({ cellar: 'c7', cellarName: 'Friend Old' });
+    });
+
+    test('the log row on the other owner\'s cellar leaves out the mover\'s own cellar', async () => {
+      await moveBottleToCellar(bottle({ user: 'u1' }), src, shared, REQ);
+      // On the mover's own cellar: where it went (a cellar the mover can see).
+      expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.move.out', expect.objectContaining({ cellarId: 'c1' }),
+        expect.objectContaining({ toCellarId: 'c3', toCellarName: 'Ours' }));
+      // On the friend's cellar: only that it came from another account.
+      const moveIn = logAudit.mock.calls.find(([, action]) => action === 'bottle.move.in');
+      expect(moveIn[3]).toMatchObject({ fromOtherAccount: true });
+      expect(moveIn[3]).not.toHaveProperty('fromCellarName');
+      expect(moveIn[3]).not.toHaveProperty('fromCellarId');
+    });
+
+    test('between two other people\'s cellars, nothing moves', async () => {
+      const b = bottle({ user: 'friend' });
+      const other = { _id: 'c4', name: 'Theirs', user: 'friend2' };
+      const res = await moveBottleToCellar(b, shared, other, REQ);
+      expect(res.error).toMatchObject({ status: 403, code: 'not_your_cellar' });
+      expect(b.save).not.toHaveBeenCalled();
+      expect(b.user).toBe('friend');
+    });
+
+    test('a demo account never takes a bottle over', async () => {
+      accounts({ demo: true });
+      const b = bottle({ user: 'u1' });
+      const res = await moveBottleToCellar(b, src, shared, REQ);
+      expect(res.error).toMatchObject({ status: 400, code: 'demo_owner' });
+      expect(b.save).not.toHaveBeenCalled();
+    });
+
+    test('between two cellars of the same other owner, an editor moves and the names stay', async () => {
+      const second = { _id: 'c5', name: 'Ours Too', user: 'friend' };
+      const b = bottle({ user: 'friend' });
+      const res = await moveBottleToCellar(b, shared, second, REQ);
+      expect(res.error).toBeUndefined();
+      expect(b.user).toBe('friend');
+      expect(User.findById).not.toHaveBeenCalled();
+      expect(b.cellarHistory.map((h) => h.cellarName)).toEqual(['Ours', 'Ours Too']);
+      expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.move.in', expect.anything(),
+        expect.objectContaining({ fromCellarName: 'Ours' }));
+    });
   });
 });
 

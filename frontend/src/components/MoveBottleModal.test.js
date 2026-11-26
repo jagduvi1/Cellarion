@@ -28,12 +28,15 @@ const { listCellars } = await import('../api/cellars');
 const MoveBottleModal = (await import('./MoveBottleModal')).default;
 
 // The user's own cellars (owner u1), one a friend shares with them as editor
-// and one shared as viewer.
+// and one shared as viewer, a second cellar of that friend's, and one another
+// friend shares as editor.
 const CELLARS = [
   { _id: 'c1', name: 'Storage', user: 'u1', userRole: 'owner' },
   { _id: 'c2', name: 'Home', user: 'u1', userRole: 'owner' },
   { _id: 'c3', name: 'Shared with me', user: 'friend', userRole: 'editor' },
   { _id: 'c4', name: 'Only to look at', user: 'friend', userRole: 'viewer' },
+  { _id: 'c5', name: 'Friend attic', user: 'friend', userRole: 'editor' },
+  { _id: 'c6', name: 'Other friend', user: 'friend2', userRole: 'editor' },
 ];
 const SHARED_OPTION = 'moveBottle.sharedOption:{"name":"Shared with me"}';
 
@@ -92,6 +95,13 @@ describe('MoveBottleModal', () => {
 
     fireEvent.change(select, { target: { value: 'c3' } });
     expect(screen.getByRole('status')).toHaveTextContent('moveBottle.becomesOwners:{"count":2}');
+  });
+
+  test('out of a shared cellar: own cellars and that owner\'s others, never another friend\'s', async () => {
+    render(<MoveBottleModal bottleId="b1" currentCellarId="c3" onClose={() => {}} onMoved={() => {}} />);
+    await screen.findByRole('combobox');
+    const offered = screen.getAllByRole('option').map((o) => o.value).filter(Boolean);
+    expect(offered).toEqual(['c1', 'c2', 'c5']);
   });
 
   test('moving out of a shared cellar into an own one says the bottle becomes yours', async () => {

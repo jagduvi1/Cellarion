@@ -199,6 +199,24 @@ describe('POST /api/bottles/bulk-move', () => {
     );
   });
 
+  test('the cellars the bottles left get a summary row too, with what left each', async () => {
+    Bottle.find.mockResolvedValue([
+      { _id: B(1), cellar: SHARED_EDIT, status: 'active' },
+      { _id: B(2), cellar: SHARED_EDIT, status: 'active' },
+      { _id: B(3), cellar: SHARED_EDIT, status: 'drank' },
+      { _id: B(4), cellar: SRC, status: 'active' },
+    ]);
+    const { status } = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(1), B(2), B(3), B(4)], toCellarId: DEST });
+    expect(status).toBe(200);
+
+    const rows = logAudit.mock.calls.filter(([, action]) => action === 'bottle.bulk_move').map(([, , resource, detail]) => [resource.cellarId, detail]);
+    expect(rows).toEqual([
+      [DEST, { requested: 4, moved: 3, skipped: 1 }],
+      [SHARED_EDIT, { requested: 3, moved: 2, skipped: 1 }],
+      [SRC, { requested: 1, moved: 1, skipped: 0 }],
+    ]);
+  });
+
   test('a viewer moves nothing: not into the cellar, not out of it', async () => {
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: SRC, status: 'active' }]);
     let res = await postJson(app(), '/api/bottles/bulk-move', { bottleIds: [B(1)], toCellarId: SHARED_VIEW });

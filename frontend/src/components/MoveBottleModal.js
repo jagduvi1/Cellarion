@@ -39,12 +39,19 @@ export default function MoveBottleModal({ bottleId, bottleIds, currentCellarId, 
       .then((r) => r.json())
       .then((data) => {
         if (!active) return;
-        // Cellars the user owns or edits, minus the current one and any soft-deleted.
+        // Cellars the user owns or edits, minus the current one and any
+        // soft-deleted. Out of a cellar someone else owns, a bottle goes only
+        // into the user's own cellars or another cellar of that same owner:
+        // the server refuses a move between two other people's cellars.
         const all = data.cellars || [];
+        const current = all.find((c) => String(c._id) === String(currentCellarId)) || null;
+        const reachable = (c) => !current || current.userRole === 'owner'
+          || c.userRole === 'owner' || String(c.user) === String(current.user);
         const movable = all.filter(
-          (c) => MOVE_ROLES.includes(c.userRole) && c.deletedAt == null && String(c._id) !== String(currentCellarId)
+          (c) => MOVE_ROLES.includes(c.userRole) && c.deletedAt == null
+            && String(c._id) !== String(currentCellarId) && reachable(c)
         );
-        setCurrentCellar(all.find((c) => String(c._id) === String(currentCellarId)) || null);
+        setCurrentCellar(current);
         setCellars(movable);
       })
       .catch(() => { if (active) { setCellars([]); setError(t('moveBottle.loadError')); } });

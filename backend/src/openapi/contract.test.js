@@ -402,16 +402,21 @@ describeWithMongo('public API contract', () => {
     await expectContract('moveBottle', 403, { token: 'read', params: { bottleId: id }, body: { toCellarId: attic } });
     await expectContract('moveBottle', 404, { token: 'write', params: { bottleId: ID_ZERO }, body: { toCellarId: attic } });
 
-    // An editor of a shared cellar moves its bottles out, and back in.
+    // An editor of a shared cellar moves its bottles out, and back in. A
+    // bottle belongs to the owner of the cellar it is in (read from the
+    // database: the owner is not part of the documented answer).
+    const Bottle = require('../models/Bottle');
+    const ownerOf = async (id) => String((await Bottle.findById(id).select('user').lean()).user);
     const shared = String(world.cellars.shared._id);
     const out = await expectContract('moveBottle', 200, { token: 'write', params: { bottleId: b('bobs') }, body: { toCellarId: attic } });
     expect(out.body.bottle).toMatchObject({ _id: b('bobs'), cellar: attic });
+    expect(await ownerOf(b('bobs'))).toBe(String(world.users.alice._id));
     const back = await expectContract('moveBottle', 200, { token: 'write', params: { bottleId: b('bobs') }, body: { toCellarId: shared } });
     expect(back.body.bottle).toMatchObject({ _id: b('bobs'), cellar: shared });
+    expect(await ownerOf(b('bobs'))).toBe(String(world.users.bob._id));
 
     // A viewer moves nothing: a bottle out of the cellar is refused, and the
     // cellar as a destination reads like one that does not exist.
-    const Bottle = require('../models/Bottle');
     const bob = world.users.bob._id;
     const viewed = await Cellar.create({ name: 'Viewed for moves', user: bob, members: [{ user: world.users.alice._id, role: 'viewer' }] });
     const viewedBottle = String((await Bottle.create({ user: bob, cellar: viewed._id, wineDefinition: world.wines.white._id, vintage: '2021' }))._id);

@@ -15,6 +15,7 @@ const Rack = require('../models/Rack');
 const MAX_RACK_DIM = 20;
 const isRackDim = (v) => Number.isInteger(v) && v >= 1 && v <= MAX_RACK_DIM;
 const Bottle = require('../models/Bottle');
+const User = require('../models/User');
 const { logAudit } = require('./audit');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
 const { removeFromRacks } = require('./bottleOps');
@@ -290,14 +291,61 @@ async function findMoveDestination(userId, cellarId) {
 }
 
 /**
+ * Why a move that hands a bottle to another account is refused, or null.
+ * The mover must own one of the two cellars: their own bottle into a cellar
+ * they edit, or a bottle of a cellar they edit into their own, never one
+ * friend's bottle into another friend's cellar. And a demo account never takes
+ * a bottle over, since it is erased within hours with everything it owns (the
+ * rule services/cellarTransfer applies to a whole cellar).
+ */
+async function ownerChangeRefusal(sourceCellar, destCellar, moverId) {
+  const mover = String(moverId);
+  if (String(sourceCellar.user) !== mover && String(destCellar.user) !== mover) {
+    return { status: 403, code: 'not_your_cellar', message: 'A bottle can move between two other people\'s cellars only when one of them is yours.' };
+  }
+  const newOwner = await User.findById(destCellar.user).select('isDemo').lean();
+  if (!newOwner) return { status: 404, code: 'not_found', message: 'Destination cellar not found' };
+  if (newOwner.isDemo) {
+    return { status: 400, code: 'demo_owner', message: 'A demo account cannot take over bottles from another account.' };
+  }
+  return null;
+}
+
+// The reminders the previous owner already had for this bottle. Cleared on an
+// owner change, so the new owner is reminded too.
+const OWNER_REMINDER_MARKS = {
+  drinkWindowNotifiedStatus: null, drinkWindowNotifiedAt: null,
+  reservationNotifiedAt: null, openBottleNotifiedAt: null, arrivalNotifiedAt: undefined,
+};
+
+/**
+ * On an owner change, the bottle's journey keeps the dates of its earlier
+ * cellars but only the names of those the new owner owns: another account's
+ * cellar names stay with that account, are not shown to the new owner's
+ * members, and do not outlive that account's erasure.
+ */
+async function keepJourneyToNewOwner(bottle, newOwner) {
+  const ids = bottle.cellarHistory.map((h) => h.cellar).filter(Boolean);
+  const theirs = ids.length
+    ? new Set((await Cellar.find({ _id: { $in: ids }, user: newOwner }).select('_id').lean()).map((c) => String(c._id)))
+    : new Set();
+  for (const h of bottle.cellarHistory) {
+    if (!h.cellar || !theirs.has(String(h.cellar))) {
+      h.cellar = undefined;
+      h.cellarName = undefined;
+    }
+  }
+}
+
+/**
  * Move an ACTIVE (or on-order) bottle to another cellar. Reassigns the cellar
  * AND the bottle's owner, seeds cellarHistory, saves FIRST (so a concurrency
  * conflict leaves the source rack untouched), then unplaces from the old rack.
  * Dual audit (move.out on the source, move.in on the destination).
  * The one body behind POST /api/bottles/:id/move, POST /api/bottles/bulk-move,
  * MCP move_bottle and its undo_last; each caller has already checked
- * MOVE_MIN_ROLE on both cellars.
- * Returns { error } | { bottle, from: {cellarId, cellarName} }.
+ * MOVE_MIN_ROLE on both cellars, and the owner-change rule is checked here.
+ * Returns { error: { status, message, code? } } | { bottle, from: {cellarId, cellarName} }.
  */
 async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   if (String(destCellar._id) === String(sourceCellar._id)) {
@@ -307,6 +355,12 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   // is redirected before it arrives.
   if (bottle.status !== 'active' && bottle.status !== 'ordered') {
     return { error: { status: 400, message: 'Only bottles in the cellar or on order can be moved' } };
+  }
+  const moverId = String(req.user.id);
+  const ownerChanges = String(destCellar.user) !== String(sourceCellar.user);
+  if (ownerChanges) {
+    const refusal = await ownerChangeRefusal(sourceCellar, destCellar, moverId);
+    if (refusal) return { error: refusal };
   }
   const now = new Date();
   if (bottle.cellarHistory.length === 0) {
@@ -323,6 +377,10 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   // cellar. What the mover wrote about it (journal entries, personal fields,
   // photo credit) stays with the mover.
   bottle.user = destCellar.user;
+  if (ownerChanges) {
+    Object.assign(bottle, OWNER_REMINDER_MARKS);
+    await keepJourneyToNewOwner(bottle, destCellar.user);
+  }
   bottle.addedToCellarAt = now;
   bottle.cellarHistory.push({ cellar: destCellar._id, cellarName: destCellar.name, enteredAt: now });
   try {
@@ -343,12 +401,20 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
     wineName = bottle.wineDefinition?.name;
   } catch { /* name is best-effort audit metadata */ }
   const meta = { wineName, vintage: bottle.vintage };
+  // Each row is read by its cellar's owner (the activity log is owner-only).
+  // On an owner change, the row on the cellar the mover does not own leaves
+  // out the mover's own cellar: its name is the mover's, not that owner's.
+  const othersRow = (rowCellar) => ownerChanges && String(rowCellar.user) !== moverId;
   logAudit(req, 'bottle.move.out',
     { type: 'bottle', id: bottle._id, cellarId: sourceCellar._id },
-    { toCellarId: destCellar._id, toCellarName: destCellar.name, ...meta });
+    othersRow(sourceCellar)
+      ? { toOtherAccount: true, ...meta }
+      : { toCellarId: destCellar._id, toCellarName: destCellar.name, ...meta });
   logAudit(req, 'bottle.move.in',
     { type: 'bottle', id: bottle._id, cellarId: destCellar._id },
-    { fromCellarId: sourceCellar._id, fromCellarName: sourceCellar.name, ...meta });
+    othersRow(destCellar)
+      ? { fromOtherAccount: true, ...meta }
+      : { fromCellarId: sourceCellar._id, fromCellarName: sourceCellar.name, ...meta });
 
   return { bottle, from: { cellarId: String(sourceCellar._id), cellarName: sourceCellar.name } };
 }
