@@ -87,9 +87,12 @@ function formatDetail(action, detail, t) {
   }
   if (action === 'bottle.move.out' || action === 'bottle.move.in') {
     const wine = detail.wineName ? `${detail.wineName}${detail.vintage ? ` · ${formatVintage(detail.vintage, t)}` : ''} ` : '';
+    // A move that handed the bottle to or from another account names that
+    // account's cellar only in that account's own log (services/rackOps).
+    const other = t('cellarAudit.otherAccountCellar');
     return action === 'bottle.move.out'
-      ? `${wine}→ ${detail.toCellarName || '—'}`
-      : `${wine}← ${detail.fromCellarName || '—'}`;
+      ? `${wine}→ ${detail.toCellarName || (detail.toOtherAccount ? other : '—')}`
+      : `${wine}← ${detail.fromCellarName || (detail.fromOtherAccount ? other : '—')}`;
   }
   // The one summary row a bulk action writes on top of its per-bottle rows.
   if (action === 'bottle.bulk_move') {

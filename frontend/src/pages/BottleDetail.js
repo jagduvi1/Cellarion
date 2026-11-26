@@ -350,8 +350,9 @@ function BottleDetail() {
   const isConsumed = bottle?.status && bottle.status !== 'active' && !onOrderNow;
   const canEdit = !isConsumed && (userRole === 'owner' || userRole === 'editor');
   const canEditConsumed = isConsumed && (userRole === 'owner' || userRole === 'editor');
-  // v1: move only active (or on-order) bottles, and only between cellars you own.
-  const canMove = !isConsumed && userRole === 'owner';
+  // Active (or on-order) bottles move between cellars the user owns or edits:
+  // the same rights as editing the bottle (the server's rackOps.MOVE_MIN_ROLE).
+  const canMove = canEdit;
   const arrivalMonth = onOrderNow ? formatArrivalMonth(bottle.expectedArrival, i18n.language) : '';
   const arrivalLate = onOrderNow && isArrivalLate(bottle.expectedArrival);
   const backTo = fromChat

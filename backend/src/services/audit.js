@@ -157,8 +157,13 @@ function logAudit(req, action, resource = {}, detail = {}) {
     // requireBottleAccess already loaded onto the request; otherwise resolve
     // the owner from the audited cellarId. Always: the owner's caches must
     // move even when nobody has a push stream open, or the owner's MCP caches
-    // stay stale for their 60 s window.
-    const ownerFromReq = req?.cellar?.user;
+    // stay stale for their 60 s window. The request's cellar speaks only for a
+    // row about that cellar: a move writes its move.in row on the destination,
+    // whose owner may be someone else.
+    const reqCellar = req?.cellar;
+    const rowIsAboutReqCellar = !reqCellar?._id || !resource.cellarId
+      || String(reqCellar._id) === String(resource.cellarId);
+    const ownerFromReq = rowIsAboutReqCellar ? reqCellar?.user : null;
     if (ownerFromReq) {
       if (String(ownerFromReq) !== String(entry.actor.userId)) touch(ownerFromReq);
     } else if (resource.cellarId) {

@@ -30,7 +30,10 @@ jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), build
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+// The move's role rule (MOVE_MIN_ROLE, findMoveDestination) is the real one;
+// the mutations are mocked.
 jest.mock('../services/rackOps', () => ({
+  ...jest.requireActual('../services/rackOps'),
   createCellar: jest.fn(), createGridRack: jest.fn(), placeBottleInRack: jest.fn(),
   clearRackSlot: jest.fn(), moveBottleToCellar: jest.fn(),
 }));
@@ -129,18 +132,39 @@ describe('place_bottle', () => {
 });
 
 describe('move_bottle', () => {
-  test('needs OWNER of source and OWNER of destination', async () => {
-    // Source not owner → not_found
-    Bottle.findById.mockReturnValue(chain({ _id: oid('d'), cellar: oid('c') }));
-    Cellar.findById.mockReturnValue(chain({ _id: oid('c'), user: STRANGER, members: [{ user: ME, role: 'editor' }], deletedAt: null }));
-    expect(parse(await tool('move_bottle').handler({ bottle_id: oid('d'), to_cellar_id: oid('2') }, CTX)).error.code).toBe('not_found');
+  // Cellars by id: 'c' is the source, '2' the destination.
+  const cellarsById = (src, dest) => Cellar.findById.mockImplementation((id) => chain(
+    String(id) === oid('c') ? { _id: oid('c'), name: 'Src', deletedAt: null, ...src }
+      : String(id) === oid('2') ? { _id: oid('2'), name: 'Dest', deletedAt: null, ...dest } : null,
+  ));
+  const own = { user: ME, members: [] };
+  const sharedAs = (role) => ({ user: STRANGER, members: [{ user: ME, role }] });
+  const move = async () => parse(await tool('move_bottle').handler({ bottle_id: oid('d'), to_cellar_id: oid('2') }, CTX));
 
-    // Source owned, dest not owned → not_found
+  beforeEach(() => {
     Bottle.findById.mockReturnValue(chain({ _id: oid('d'), cellar: oid('c') }));
-    Cellar.findById
-      .mockReturnValueOnce(chain({ _id: oid('c'), user: ME, members: [], deletedAt: null, name: 'Src' }))  // source
-      .mockReturnValueOnce(chain({ _id: oid('2'), user: STRANGER, members: [], deletedAt: null }));         // dest
-    expect(parse(await tool('move_bottle').handler({ bottle_id: oid('d'), to_cellar_id: oid('2') }, CTX)).error.code).toBe('not_found');
+    rackOps.moveBottleToCellar.mockResolvedValue({ bottle: {}, from: { cellarId: oid('c'), cellarName: 'Src' } });
+  });
+
+  test('an editor moves a bottle into a shared cellar, and out of one into their own', async () => {
+    cellarsById(own, sharedAs('editor'));
+    expect((await move()).data.to_cellar_id).toBe(oid('2'));
+    expect(rackOps.moveBottleToCellar).toHaveBeenLastCalledWith(
+      expect.anything(), expect.objectContaining({ _id: oid('c') }), expect.objectContaining({ _id: oid('2'), user: STRANGER }), CTX.req,
+    );
+
+    cellarsById(sharedAs('editor'), own);
+    expect((await move()).data.to_cellar_id).toBe(oid('2'));
+    expect(rackOps.moveBottleToCellar).toHaveBeenCalledTimes(2);
+  });
+
+  test('a viewer of either cellar, or a cellar the user has no role in, is not_found', async () => {
+    cellarsById(sharedAs('viewer'), own); // source only viewed
+    expect((await move()).error.code).toBe('not_found');
+    cellarsById(own, sharedAs('viewer')); // destination only viewed
+    expect((await move()).error.code).toBe('not_found');
+    cellarsById(own, { user: STRANGER, members: [] }); // destination a stranger's
+    expect((await move()).error.code).toBe('not_found');
     expect(rackOps.moveBottleToCellar).not.toHaveBeenCalled();
   });
 });
@@ -180,20 +204,44 @@ describe('structural undo', () => {
     expect(rackOps.clearRackSlot).toHaveBeenCalled();
   });
 
-  test('undo move moves the bottle back to origin if still owned + still in dest', async () => {
+  describe('undo move', () => {
     const bottleRef = new mongoose.Types.ObjectId(oid('d'));
-    McpActionLog.findOne.mockReturnValue(chain(structuralRow({ action: 'move', bottle: bottleRef, cellar: oid('2'), detail: { fromCellarId: oid('c'), toCellarId: oid('2') } })));
-    // resolveBottleAccess: bottle in dest cellar c2, owned by ME
-    Bottle.findById
-      .mockReturnValueOnce(chain({ _id: bottleRef, cellar: new mongoose.Types.ObjectId(oid('2')), status: 'active' })) // access resolution
-      .mockReturnValueOnce(chain({ _id: bottleRef, cellar: oid('2'), status: 'active', save: jest.fn() }));            // re-fetch for move
-    Cellar.findById.mockReturnValue(chain({ _id: oid('2'), user: ME, members: [], deletedAt: null, name: 'Dest' }));
-    Cellar.findOne.mockReturnValue(chain({ _id: oid('c'), user: ME, deletedAt: null, name: 'Origin' }));
-    McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'row' });
-    rackOps.moveBottleToCellar.mockResolvedValue({ bottle: {}, from: { cellarId: oid('2'), cellarName: 'Dest' } });
-    const res = await tool('undo_last').handler({}, CTX);
-    expect(parse(res).data.undone).toBe('move_bottle');
-    expect(rackOps.moveBottleToCellar).toHaveBeenCalled();
+    const moveRow = () => structuralRow({ action: 'move', bottle: bottleRef, cellar: oid('2'), detail: { fromCellarId: oid('c'), toCellarId: oid('2') } });
+    // Dest '2' holds the bottle now; 'c' is where it came from.
+    const cellarsById = (origin, dest) => Cellar.findById.mockImplementation((id) => chain(
+      String(id) === oid('2') ? { _id: oid('2'), name: 'Dest', deletedAt: null, ...dest }
+        : String(id) === oid('c') ? { _id: oid('c'), name: 'Origin', deletedAt: null, ...origin } : null,
+    ));
+
+    beforeEach(() => {
+      McpActionLog.findOne.mockReturnValue(chain(moveRow()));
+      Bottle.findById.mockImplementation(() => chain({ _id: bottleRef, cellar: new mongoose.Types.ObjectId(oid('2')), status: 'active', save: jest.fn() }));
+      McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'row' });
+      rackOps.moveBottleToCellar.mockResolvedValue({ bottle: {}, from: { cellarId: oid('2'), cellarName: 'Dest' } });
+    });
+
+    test('moves the bottle back to its origin while the user owns or edits both', async () => {
+      cellarsById({ user: ME, members: [] }, { user: STRANGER, members: [{ user: ME, role: 'editor' }] });
+      const res = await tool('undo_last').handler({}, CTX);
+      expect(parse(res).data.undone).toBe('move_bottle');
+      expect(rackOps.moveBottleToCellar).toHaveBeenCalledWith(
+        expect.anything(), expect.objectContaining({ _id: oid('2') }), expect.objectContaining({ _id: oid('c'), name: 'Origin' }), CTX.req,
+      );
+    });
+
+    test('refuses, and claims nothing, once the user no longer edits the cellar the bottle went into', async () => {
+      cellarsById({ user: ME, members: [] }, { user: STRANGER, members: [{ user: ME, role: 'viewer' }] });
+      expect(parse(await tool('undo_last').handler({}, CTX)).error.code).toBe('conflict');
+      expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(rackOps.moveBottleToCellar).not.toHaveBeenCalled();
+    });
+
+    test('refuses, and claims nothing, once the user no longer edits the origin cellar', async () => {
+      cellarsById({ user: STRANGER, members: [] }, { user: ME, members: [] });
+      expect(parse(await tool('undo_last').handler({}, CTX)).error.code).toBe('conflict');
+      expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(rackOps.moveBottleToCellar).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -26,12 +26,16 @@ export default function BottleJourney({ bottle }) {
     ? bottle.cellarHistory
     : [{ cellarName: bottle.cellar?.name || bottle.cellarName, enteredAt: bottle.addedToCellarAt || bottle.createdAt }];
 
+  // An entry with neither a name nor a cellar is a cellar of the account the
+  // bottle came from: a move that hands a bottle over keeps that account's
+  // cellar names out of the journey (services/rackOps keepJourneyToNewOwner).
+  const placeOf = (h) => h.cellarName || (h.cellar ? '—' : t('history.journey.otherAccount'));
   const items = history.map((h, i) => ({
     key: `c${i}`,
     icon: i === 0 ? '➕' : '📦',
     text: i === 0
-      ? t('history.journey.added', { cellar: h.cellarName || '—' })
-      : t('history.journey.moved', { cellar: h.cellarName || '—' }),
+      ? t('history.journey.added', { cellar: placeOf(h) })
+      : t('history.journey.moved', { cellar: placeOf(h) }),
     date: h.enteredAt,
   }));
 

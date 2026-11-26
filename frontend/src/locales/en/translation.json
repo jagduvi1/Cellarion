@@ -1915,7 +1915,8 @@
       "moved": "Moved to {{cellar}}",
       "arrived": "Arrived",
       "onOrder": "On order",
-      "onOrderExpected": "On order, expected {{month}}"
+      "onOrderExpected": "On order, expected {{month}}",
+      "otherAccount": "a cellar of another account"
     },
     "vintageLabel": "Vintage:",
     "paidLabel": "Paid:",
@@ -1975,6 +1976,7 @@
     "sharedAs": "{{user}} as {{role}}",
     "roleChanged": "Role changed: {{from}} → {{to}}",
     "bulkMoveDetail": "{{moved}} of {{requested}} bottles moved",
+    "otherAccountCellar": "a cellar of another account",
     "bulkDoneDetail": "{{done}} of {{requested}} bottles · {{what}}",
     "bulkArriveDetail": "{{done}} of {{requested}} bottles arrived",
     "bulkRestoreDetail": "{{done}} of {{requested}} bottles moved back"
@@ -2131,7 +2133,12 @@
     "movedManyInfo_one": "{{count}} bottle was moved to {{cellar}}.",
     "movedManyInfo_other": "{{count}} bottles were moved to {{cellar}}.",
     "skippedInfo_one": "{{count}} bottle could not be moved — it is already consumed, or not yours to move.",
-    "skippedInfo_other": "{{count}} bottles could not be moved — they are already consumed, or not yours to move."
+    "skippedInfo_other": "{{count}} bottles could not be moved — they are already consumed, or not yours to move.",
+    "sharedOption": "{{name}} (shared with you)",
+    "becomesOwners_one": "This cellar belongs to someone else. The bottle becomes theirs and stays in their cellar, even if you later leave it.",
+    "becomesOwners_other": "This cellar belongs to someone else. The bottles become theirs and stay in their cellar, even if you later leave it.",
+    "becomesYours_one": "The bottle becomes yours and leaves the shared cellar.",
+    "becomesYours_other": "The bottles become yours and leave the shared cellar."
   },
   "admin": {
     "requests": {

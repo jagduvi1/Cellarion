@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 // The cellar page's bottle list: the row of view buttons, the select-mode
@@ -70,14 +70,16 @@ const memoryStorage = () => {
 };
 
 let api;
+let cellar; // CELLAR, or a test's copy with another role
 beforeEach(() => {
   earlyAccess = false;
+  cellar = CELLAR;
   api = vi.fn(async (url) => {
     // Five bottles in the cellar, four loaded: there is more to load.
     if (url.startsWith('/api/cellars/c1?')) {
-      return ok({ cellar: CELLAR, bottles: { items: ITEMS, total: 5 }, facets: {}, baseFacets: {}, facetMeta: {} });
+      return ok({ cellar, bottles: { items: ITEMS, total: 5 }, facets: {}, baseFacets: {}, facetMeta: {} });
     }
-    if (url === '/api/cellars') return ok({ cellars: [CELLAR] });
+    if (url === '/api/cellars') return ok({ cellars: [cellar] });
     if (url.startsWith('/api/racks')) return ok({ racks: [] });
     if (url.startsWith('/api/climate/')) return ok({ devices: [] });
     return ok({});
@@ -169,5 +171,22 @@ describe('select mode', () => {
     const list = await enterSelectMode();
 
     expect(list.bulkBar()).toMatchSnapshot();
+  });
+
+  test('an editor of a shared cellar selects too, without adding to a wine list', async () => {
+    cellar = { ...CELLAR, userRole: 'editor' };
+    const list = await enterSelectMode();
+
+    const bar = within(list.bulkBar());
+    expect(bar.getByText('bulk.moveAction')).toBeTruthy();
+    expect(bar.getByText('bulk.deleteAction')).toBeTruthy();
+    expect(bar.queryByText('bulk.listAction')).toBeNull(); // a wine list takes only the maker's own bottles
+  });
+
+  test('a viewer gets no select mode', async () => {
+    cellar = { ...CELLAR, userRole: 'viewer' };
+    await renderList();
+
+    expect(screen.queryByRole('button', { name: 'cellarDetail.selectBottles' })).toBeNull();
   });
 });

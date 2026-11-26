@@ -99,7 +99,7 @@ const SCOPE_ALLOWLIST = {
     { method: 'DELETE', pattern: /^\/api\/mcp$/ },
   ],
   write: [
-    // Moving a bottle: to another cellar the caller owns, into a rack slot,
+    // Moving a bottle: to another cellar the caller owns or edits, into a rack slot,
     // out of a rack slot. Exact-anchored, so the bulk move, the in-rack swap
     // (/slots/:position/move), disabling a slot and every other bottle or
     // rack edit stay unreachable. Each has an MCP twin a write token already

@@ -7,21 +7,26 @@ import Modal from './Modal';
 
 /**
  * Move an active bottle — or, with `bottleIds`, MANY at once — to another
- * cellar the user OWNS (v1). The bottles' data and history are kept; they
- * arrive unplaced in the destination. Calls onMoved() on success so the caller
- * can refresh or navigate.
+ * cellar the user owns or edits (the server's rackOps.MOVE_MIN_ROLE). The
+ * bottles' data and history are kept; they arrive unplaced in the destination
+ * and belong to its owner, which the dialog says whenever the move changes
+ * whose bottle it is. Calls onMoved() on success so the caller can refresh or
+ * navigate.
  *
  * Bulk mode (e.g. a whole delivery moved from a storage cellar to home):
  * pass `bottleIds` instead of `bottleId`. One
  * request moves them all; bottles the server could not move (already
  * consumed, or not the user's to move) are reported, not hidden.
  */
+const MOVE_ROLES = ['owner', 'editor'];
+
 export default function MoveBottleModal({ bottleId, bottleIds, currentCellarId, wineLabel, onClose, onMoved }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const bulk = Array.isArray(bottleIds);
   const count = bulk ? bottleIds.length : 1;
   const [cellars, setCellars] = useState(null); // null while loading
+  const [currentCellar, setCurrentCellar] = useState(null);
   const [target, setTarget] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -34,11 +39,20 @@ export default function MoveBottleModal({ bottleId, bottleIds, currentCellarId, 
       .then((r) => r.json())
       .then((data) => {
         if (!active) return;
-        // v1: only cellars the user owns, excluding the current one and any soft-deleted.
-        const owned = (data.cellars || []).filter(
-          (c) => c.userRole === 'owner' && c.deletedAt == null && String(c._id) !== String(currentCellarId)
+        // Cellars the user owns or edits, minus the current one and any
+        // soft-deleted. Out of a cellar someone else owns, a bottle goes only
+        // into the user's own cellars or another cellar of that same owner:
+        // the server refuses a move between two other people's cellars.
+        const all = data.cellars || [];
+        const current = all.find((c) => String(c._id) === String(currentCellarId)) || null;
+        const reachable = (c) => !current || current.userRole === 'owner'
+          || c.userRole === 'owner' || String(c.user) === String(current.user);
+        const movable = all.filter(
+          (c) => MOVE_ROLES.includes(c.userRole) && c.deletedAt == null
+            && String(c._id) !== String(currentCellarId) && reachable(c)
         );
-        setCellars(owned);
+        setCurrentCellar(current);
+        setCellars(movable);
       })
       .catch(() => { if (active) { setCellars([]); setError(t('moveBottle.loadError')); } });
     return () => { active = false; };
@@ -87,6 +101,19 @@ export default function MoveBottleModal({ bottleId, bottleIds, currentCellarId, 
     );
   }
 
+  // A bottle belongs to the owner of its cellar, so a move between cellars of
+  // two different owners hands it over: say so before the user confirms.
+  const dest = (cellars || []).find((c) => String(c._id) === String(target));
+  const ownerChanges = !!dest && (currentCellar
+    ? String(dest.user) !== String(currentCellar.user)
+    : dest.userRole !== 'owner');
+  let ownerNote = null;
+  if (ownerChanges) {
+    ownerNote = dest.userRole === 'owner'
+      ? t('moveBottle.becomesYours', { count })
+      : t('moveBottle.becomesOwners', { count });
+  }
+
   return (
     <Modal title={bulk ? t('moveBottle.titleMany', { count }) : t('moveBottle.title')} onClose={onClose} showClose trapFocus>
       {wineLabel && <p className="move-bottle-wine"><strong>{wineLabel}</strong></p>}
@@ -107,11 +134,14 @@ export default function MoveBottleModal({ bottleId, bottleIds, currentCellarId, 
           >
             <option value="">{t('moveBottle.selectCellar')}</option>
             {cellars.map((c) => (
-              <option key={c._id} value={c._id}>{c.name}</option>
+              <option key={c._id} value={c._id}>
+                {c.userRole === 'owner' ? c.name : t('moveBottle.sharedOption', { name: c.name })}
+              </option>
             ))}
           </select>
         </label>
       )}
+      {ownerNote && <p className="move-bottle-owner-note" role="status">{ownerNote}</p>}
 
       {error && <p className="error-message" role="alert">{error}</p>}
 

@@ -17,7 +17,7 @@ const { parseCurrency, normalizeCurrency, isSupportedCurrency } = require('../co
 const mongoose = require('mongoose');
 const { updateBottleFields, consumeBottle, restoreBottle, markArrived } = require('../services/bottleOps');
 const { parseExpectedArrival } = require('../utils/onOrder');
-const { moveBottleToCellar } = require('../services/rackOps');
+const { MOVE_MIN_ROLE, findMoveDestination, moveBottleToCellar } = require('../services/rackOps');
 const DeletedBottle = require('../models/DeletedBottle');
 const { TRASH_DAYS, trashBottle, restoreTrashed } = require('../services/bottleTrash');
 
@@ -128,9 +128,9 @@ router.post('/trash/restore', async (req, res) => {
 const BULK_MAX = 500;
 
 // Validate a bulk id list and load the bottles with their cellars. Access is
-// judged per SOURCE cellar (resolved once each) against `minRole`: 'owner'
-// for a move (the single move route's rule), 'editor' for edits and consumes
-// (the single PUT / consume rule). Same disclosure as the single routes: a
+// judged per SOURCE cellar (resolved once each) against `minRole`: the
+// single routes' rule for the same act (rackOps.MOVE_MIN_ROLE for a move,
+// 'editor' for edits, consumes and deletes). Same disclosure as the single routes: a
 // bottle you may not touch reads as not_found. Items come back in request
 // order, deduplicated, each either { id, bottle, cellar } or { id, reason }.
 // Returns { error } | { ids, items }.
@@ -169,49 +169,60 @@ async function resolveBulkBottles(req, bottleIds, minRole) {
   return { ids, items };
 }
 
-// POST /api/bottles/bulk-move - Move MANY active bottles to another cellar you
-// own, in ONE request. Same rules and mechanics as the single move above,
-// applied per bottle through the shared services/rackOps.moveBottleToCellar:
-// the SOURCE cellar must be owned (not merely editable), active bottles only,
-// each bottle lands unplaced, dual audit per bottle.
+// POST /api/bottles/bulk-move - Move MANY active bottles to another cellar in
+// ONE request. Same rules and mechanics as the single move, applied per bottle
+// through the shared services/rackOps.moveBottleToCellar: owner or editor of
+// each source cellar and of the destination (MOVE_MIN_ROLE), active or
+// on-order bottles only, each bottle lands unplaced and becomes the
+// destination owner's, dual audit per bottle.
 //
 // Body:     { bottleIds: string[] (1..BULK_MAX), toCellarId }
 // Response: { moved, movedIds: string[], skipped: [{ id, reason }], toCellar: { _id, name } }
-//   reason ∈ 'not_found', 'same_cellar', 'not_active', 'conflict'
+//   reason ∈ 'not_found', 'same_cellar', 'not_active', 'conflict',
+//   'not_your_cellar' (between two other owners' cellars), 'demo_owner'
 router.post('/bulk-move', async (req, res) => {
   try {
     const { bottleIds, toCellarId } = req.body || {};
-    const resolved = await resolveBulkBottles(req, bottleIds, 'owner');
+    const resolved = await resolveBulkBottles(req, bottleIds, MOVE_MIN_ROLE);
     if (resolved.error) return res.status(resolved.error.status).json({ error: resolved.error.message });
     if (!toCellarId || !mongoose.isValidObjectId(String(toCellarId))) {
       return res.status(400).json({ error: 'Invalid destination cellar' });
     }
 
-    // Destination: an active cellar the user OWNS (same as the single move).
-    const destCellar = await Cellar.findOne({
-      _id: new mongoose.Types.ObjectId(String(toCellarId)),
-      user: req.user.id,
-      deletedAt: null,
-    });
+    const destCellar = await findMoveDestination(req.user.id, toCellarId);
     if (!destCellar) return res.status(404).json({ error: 'Destination cellar not found' });
 
     const movedIds = [];
     const skipped = [];
+    const sources = new Map(); // source cellar id -> { cellar, requested, moved }
     for (const item of resolved.items) {
       if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
       const { id, bottle, cellar: sourceCellar } = item;
       if (String(sourceCellar._id) === String(destCellar._id)) { skipped.push({ id, reason: 'same_cellar' }); continue; }
+      const key = String(sourceCellar._id);
+      if (!sources.has(key)) sources.set(key, { cellar: sourceCellar, requested: 0, moved: 0 });
+      const tally = sources.get(key);
+      tally.requested += 1;
       if (bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) { skipped.push({ id, reason: 'not_active' }); continue; }
       const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
       if (result.error) { skipped.push({ id, reason: result.error.code || 'error' }); continue; }
+      tally.moved += 1;
       movedIds.push(id);
     }
 
     // One summary row on top of the per-bottle move.out / move.in rows, so the
-    // audit log shows "moved 120 bottles" as one act, not 240 lines to count.
+    // audit log shows "moved 120 bottles" as one act, not 240 lines to count:
+    // on the destination, and on each cellar the bottles left, whose owner
+    // may be someone else (an editor taking bottles out of a shared cellar).
     logAudit(req, 'bottle.bulk_move',
       { type: 'cellar', id: destCellar._id, cellarId: destCellar._id },
       { requested: resolved.ids.length, moved: movedIds.length, skipped: skipped.length });
+    for (const { cellar, requested, moved } of sources.values()) {
+      if (!moved) continue;
+      logAudit(req, 'bottle.bulk_move',
+        { type: 'cellar', id: cellar._id, cellarId: cellar._id },
+        { requested, moved, skipped: requested - moved });
+    }
 
     res.json({
       moved: movedIds.length,

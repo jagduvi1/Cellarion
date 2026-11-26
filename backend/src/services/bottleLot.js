@@ -8,7 +8,7 @@
  * definition, one query.
  *
  * Owned cellars only: bottles in a cellar shared with the user belong to its
- * owner's decisions (the bulk bar is owner-only for the same reason). Bottle
+ * owner's decisions, so a lot never reaches into one. Bottle
  * size is deliberately NOT part of the key — a magnum ages differently, but
  * the request was wine + vintage, and the checkbox is opt-in per save.
  *

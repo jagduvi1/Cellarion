@@ -11,7 +11,9 @@ const Bottle = require('../models/Bottle');
 const McpActionLog = require('../models/McpActionLog');
 const { logAudit } = require('../services/audit');
 const { getMaxPosition } = require('../utils/rackGeometry');
-const { placeBottleInRack, clearRackSlot, moveBottleToCellar } = require('../services/rackOps');
+const {
+  placeBottleInRack, clearRackSlot, MOVE_MIN_ROLE, findMoveDestination, moveBottleToCellar,
+} = require('../services/rackOps');
 const { resolveBottleAccess, resolveCellarAccess } = require('./toolUtil');
 
 /** Atomic single-use claim on the ledger row. */
@@ -178,10 +180,11 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
   }
 
   if (last.action === 'move') {
-    // Reverse = move the bottle back to its origin cellar (must still be owned
-    // and the bottle still active). Arrives unplaced, same as any move.
+    // Reverse = move the bottle back to its origin cellar, under the rule of
+    // any move: the user still owns or edits both cellars, and the bottle is
+    // still active. Arrives unplaced and goes back to the origin's owner.
     const fromId = last.detail?.fromCellarId;
-    const access = await resolveBottleAccess(ctx.user.id, last.bottle, 'owner');
+    const access = await resolveBottleAccess(ctx.user.id, last.bottle, MOVE_MIN_ROLE);
     if (!access) return fail('conflict', 'That bottle is no longer accessible; nothing was changed.');
     if (String(access.bottle.cellar) !== String(last.detail?.toCellarId)) {
       return fail('conflict', 'That bottle has moved again since; undo it manually. Nothing was changed.');
@@ -191,8 +194,8 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     if (access.bottle.status !== 'active' && access.bottle.status !== 'ordered') {
       return fail('conflict', 'That bottle has been consumed since the move; nothing was changed.');
     }
-    const origin = await Cellar.findOne({ _id: fromId, user: ctx.user.id, deletedAt: null });
-    if (!origin) return fail('conflict', 'The origin cellar is gone or no longer yours; nothing was changed.');
+    const origin = await findMoveDestination(ctx.user.id, fromId);
+    if (!origin) return fail('conflict', 'The origin cellar is gone, or you no longer own or edit it; nothing was changed.');
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
     const bottle = await Bottle.findById(access.bottle._id);
     const result = await moveBottleToCellar(bottle, access.cellar, origin, ctx.req);

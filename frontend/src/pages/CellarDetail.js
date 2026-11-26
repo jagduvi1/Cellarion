@@ -1022,7 +1022,8 @@ function CellarDetail() {
               onLoadMore={loadMore}
               multi={dataIsMulti}
               rackKnown={!dataIsMulti && hasRacks === true}
-              canBulkMove={!dataIsMulti && cellar?.userRole === 'owner'}
+              canBulkMove={!dataIsMulti && canEdit}
+              canAddToList={cellar?.userRole === 'owner'}
               canConsume={!dataIsMulti && canEdit}
               onBulkDone={() => { fetchCellarData(0); fetchStatistics(); fetchRacks(); }}
               onSelectModeChange={setSelecting}

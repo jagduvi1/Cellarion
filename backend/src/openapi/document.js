@@ -678,7 +678,7 @@ const schemas = {
   MoveRequest: {
     type: 'object',
     required: ['toCellarId'],
-    properties: { toCellarId: { ...OBJECT_ID, description: 'The cellar to move the bottle to. You must own it.' } },
+    properties: { toCellarId: { ...OBJECT_ID, description: 'The cellar to move the bottle to. You must own it or be its editor.' } },
   },
   MoveResponse: {
     type: 'object',
@@ -944,7 +944,7 @@ const paths = {
       operationId: 'moveBottle',
       tags: ['Moving bottles'],
       summary: 'Move a bottle to another cellar',
-      description: 'Moves a bottle that is in a cellar, or on order, to another cellar. Needs the `write` scope, and you must own both cellars. Everything recorded on the bottle is kept. It leaves its rack slot and arrives in no rack: place it with `PUT /api/racks/{rackId}/slots/{position}`.',
+      description: 'Moves a bottle that is in a cellar, or on order, to another cellar. Needs the `write` scope, and you must own or be an editor of both cellars. A bottle belongs to the owner of the cellar it is in, so a bottle moved into a cellar someone else owns becomes theirs. Everything recorded on the bottle is kept. It leaves its rack slot and arrives in no rack: place it with `PUT /api/racks/{rackId}/slots/{position}`.',
       security: scope('write'),
       parameters: [{ $ref: '#/components/parameters/BottleId' }],
       requestBody: {

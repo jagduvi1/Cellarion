@@ -37,7 +37,8 @@ const BULK_ACTIONS = [
   // Early access (flag pickLists): the bottles go on a pick list that shows
   // where each one sits. Shown only to members with the feature on.
   { key: 'pick',     icon: '📍', label: 'bulk.pickAction', feature: 'pickLists' },
-  { key: 'list',     icon: '📋', label: 'bulk.listAction' },
+  // A wine list takes bottles only from cellars its maker owns (routes/wineLists).
+  { key: 'list',     icon: '📋', label: 'bulk.listAction', ownerOnly: true },
   { key: 'delete',   icon: '🗑️', label: 'bulk.deleteAction', danger: true },
 ];
 
@@ -46,10 +47,10 @@ const BULK_ACTIONS = [
 // `cellarName` so it links to and is badged with the right cellar. Items are
 // grouped ({ key, count, bottles }) in both views — cross-cellar groups never
 // span two cellars — with a flat-bottle fallback for ungrouped responses.
-// `canBulkMove` (owner of this one cellar) enables select mode and its bulk
-// actions; `onBulkDone` refreshes the parent's list, stats and racks after
+// `canBulkMove` (owner or editor of this one cellar) enables select mode and
+// its bulk actions, `canAddToList` (owner) the ones marked ownerOnly; `onBulkDone` refreshes the parent's list, stats and racks after
 // one; `onSelectModeChange` tells the parent to hide the FAB meanwhile.
-export default function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, placesKnown = false, canBulkMove = false, canConsume = false, onBulkDone, onSelectModeChange, onTakenOut }) {
+export default function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, placesKnown = false, canBulkMove = false, canAddToList = false, canConsume = false, onBulkDone, onSelectModeChange, onTakenOut }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -104,7 +105,7 @@ export default function BottlesList({ bottles, rackMap, cellarId, hasMore, loadi
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
   // ── Multi-select → "Move to cellar" (a whole delivery logged in a storage
-  // cellar goes home in one step, not one bottle at a time). Owner-only and
+  // cellar goes home in one step, not one bottle at a time). Owner or editor,
   // single-cellar — the parent gates canBulkMove. A
   // collapsed group toggles all of its bottles at once, which is exactly the
   // delivery case; expand the group to pick individual bottles.
@@ -131,7 +132,7 @@ export default function BottlesList({ bottles, rackMap, cellarId, hasMore, loadi
     });
   };
   const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
-  // Leaving the owner/single-cellar case (scope widened, cellar changed) ends
+  // Leaving the editable single-cellar case (scope widened, cellar changed) ends
   // select mode rather than leaving checked cards nothing can act on.
   useEffect(() => {
     if (!canBulkMove) { setSelectMode(false); setSelectedIds(new Set()); }
@@ -289,7 +290,7 @@ export default function BottlesList({ bottles, rackMap, cellarId, hasMore, loadi
             </button>
           </div>
           <div className="bulk-bar-actions">
-            {BULK_ACTIONS.filter(a => !a.feature || (a.feature === 'pickLists' && pickListsOn)).map(a => (
+            {BULK_ACTIONS.filter(a => (!a.feature || (a.feature === 'pickLists' && pickListsOn)) && (!a.ownerOnly || canAddToList)).map(a => (
               <button
                 key={a.key}
                 type="button"

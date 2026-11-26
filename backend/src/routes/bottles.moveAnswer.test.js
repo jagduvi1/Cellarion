@@ -1,10 +1,12 @@
 /**
- * POST /api/bottles/:id/move — what it answers by caller, and what it refuses
- * as a destination, without a database. An API token gets the bottle with its
- * wine as an id (the public contract, openapi/document.js MoveResponse); a
- * session gets the wine populated for the bottle page. A destination that is
- * not an id string is a 400, never a crash. openapi/contract.test.js checks
- * the token answer on a real database.
+ * POST /api/bottles/:id/move — what it answers by caller, what it refuses as a
+ * destination, and who may move, without a database. An API token gets the
+ * bottle with its wine as an id (the public contract, openapi/document.js
+ * MoveResponse); a session gets the wine populated for the bottle page. A
+ * destination that is not an id string is a 400, never a crash. The owner or
+ * an editor of both cellars may move; a viewer may not. The role rule is the
+ * real rackOps one; only the move mechanics are mocked.
+ * openapi/contract.test.js checks the token answer on a real database.
  */
 const express = require('express');
 const http = require('http');
@@ -26,7 +28,7 @@ jest.mock('../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }))
 jest.mock('../services/priceWarnings', () => ({ gatherPriceWarnings: jest.fn().mockResolvedValue([]) }));
 jest.mock('../services/communityPrice', () => ({ getCurrentRelease: jest.fn().mockResolvedValue(null) }));
 jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn() }));
-jest.mock('../services/rackOps', () => ({ moveBottleToCellar: jest.fn() }));
+jest.mock('../services/rackOps', () => ({ ...jest.requireActual('../services/rackOps'), moveBottleToCellar: jest.fn() }));
 jest.mock('../utils/exchangeRates', () => ({ getSnapshotForDate: jest.fn().mockResolvedValue(null) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn(), findOne: jest.fn() }));
@@ -54,8 +56,16 @@ const bottlesRouter = require('./bottles');
 jest.setTimeout(20000);
 
 const USER = '64b000000000000000000001';
+const FRIEND = '64b000000000000000000002';
 const SRC = '64b0000000000000000000c1';
 const DEST = '64b0000000000000000000d1';
+const SHARED = '64b0000000000000000000d2';
+
+// The caller's own cellars, and one a friend owns and shares with them; the
+// role on it is set per test.
+const own = (id, name) => ({ _id: id, user: USER, name, deletedAt: null, members: [] });
+const shared = (role) => ({ _id: SHARED, user: FRIEND, name: 'Ours', deletedAt: null, members: [{ user: USER, role }] });
+let cellars;
 const BOTTLE = '64b0000000000000000000b1';
 const WINE = '64b0000000000000000000e1';
 
@@ -92,8 +102,8 @@ beforeEach(() => {
     populate: jest.fn(async function populate() { this.wineDefinition = { _id: WINE, name: 'Château Exemple', producer: 'Château Exemple' }; return this; }),
   };
   Bottle.findById.mockResolvedValue(bottle);
-  Cellar.findById.mockResolvedValue({ _id: SRC, user: USER, name: 'Storage', deletedAt: null, members: [] });
-  Cellar.findOne.mockResolvedValue({ _id: DEST, user: USER, name: 'Home', deletedAt: null, members: [] });
+  cellars = { [SRC]: own(SRC, 'Storage'), [DEST]: own(DEST, 'Home'), [SHARED]: shared('editor') };
+  Cellar.findById.mockImplementation(async (id) => cellars[String(id)] || null);
   moveBottleToCellar.mockResolvedValue({ bottle, from: { cellarId: SRC, cellarName: 'Storage' } });
 });
 
@@ -127,7 +137,49 @@ describe('POST /api/bottles/:id/move — the destination must be an id string', 
     const res = await post({ toCellarId }, { asToken: true });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Invalid destination cellar');
-    expect(Cellar.findOne).not.toHaveBeenCalled();
+    expect(Cellar.findById).toHaveBeenCalledTimes(1); // the source, by the access check
+    expect(moveBottleToCellar).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/bottles/:id/move — who may move', () => {
+  test('an editor of a shared cellar moves a bottle into it', async () => {
+    const res = await post({ toCellarId: SHARED });
+    expect(res.status).toBe(200);
+    expect(moveBottleToCellar).toHaveBeenCalledWith(bottle, cellars[SRC], cellars[SHARED], expect.anything());
+  });
+
+  test('an editor of a shared cellar moves a bottle out of it, into their own', async () => {
+    bottle.cellar = SHARED;
+    const res = await post({ toCellarId: DEST });
+    expect(res.status).toBe(200);
+    expect(moveBottleToCellar).toHaveBeenCalledWith(bottle, cellars[SHARED], cellars[DEST], expect.anything());
+  });
+
+  test('a viewer cannot move a bottle into the cellar', async () => {
+    cellars[SHARED] = shared('viewer');
+    const res = await post({ toCellarId: SHARED });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Destination cellar not found');
+    expect(moveBottleToCellar).not.toHaveBeenCalled();
+  });
+
+  test('a viewer cannot move a bottle out of the cellar', async () => {
+    cellars[SHARED] = shared('viewer');
+    bottle.cellar = SHARED;
+    const res = await post({ toCellarId: DEST });
+    expect(res.status).toBe(403);
+    expect(moveBottleToCellar).not.toHaveBeenCalled();
+  });
+
+  test('a cellar the caller has no role in, or a deleted one, is not a destination', async () => {
+    cellars[SHARED] = { ...shared('editor'), members: [] };
+    let res = await post({ toCellarId: SHARED });
+    expect(res.status).toBe(404);
+
+    cellars[SHARED] = { ...shared('editor'), deletedAt: new Date() };
+    res = await post({ toCellarId: SHARED });
+    expect(res.status).toBe(404);
     expect(moveBottleToCellar).not.toHaveBeenCalled();
   });
 });

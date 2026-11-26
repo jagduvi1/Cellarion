@@ -75,6 +75,29 @@ describe('shared-cellar owner nudge', () => {
     expect(getDataVersion('owner1')).not.toBe(before);
   });
 
+  test('a row about another cellar than the request\'s reaches THAT cellar\'s owner', async () => {
+    // A move into a friend's shared cellar: the request carries the source
+    // cellar (the mover's own), and the move.in row is about the destination.
+    const source = 'c'.repeat(24);
+    const dest = 'd'.repeat(24);
+    Cellar.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ user: 'friend1' }) }) });
+    const before = getDataVersion('friend1');
+    const req = { ...reqFor('mover1'), cellar: { _id: source, user: 'mover1' } };
+    logAudit(req, 'bottle.move.in', { type: 'bottle', cellarId: dest }, {});
+    await new Promise(r => setImmediate(r)); // let the fire-and-forget lookup settle
+    expect(Cellar.findById).toHaveBeenCalledWith(dest);
+    expect(eventBus.emit).toHaveBeenCalledWith('friend1', 'stats_changed', { reason: 'bottle.move.in' });
+    expect(getDataVersion('friend1')).not.toBe(before);
+  });
+
+  test('a row about the request\'s own cellar still takes the owner from the request', () => {
+    const cellarId = 'c'.repeat(24);
+    const req = { ...reqFor('member2'), cellar: { _id: cellarId, user: 'owner2' } };
+    logAudit(req, 'bottle.move.out', { type: 'bottle', cellarId }, {});
+    expect(Cellar.findById).not.toHaveBeenCalled();
+    expect(eventBus.emit).toHaveBeenCalledWith('owner2', 'stats_changed', { reason: 'bottle.move.out' });
+  });
+
   test('a cellarId that is not a plain 24-hex id never reaches the query', () => {
     eventBus.streamCounts.mockReturnValue({ total: 1, users: 1 });
     logAudit(reqFor('u1'), 'cellar.restore', { type: 'cellar', cellarId: { $ne: null } }, {});

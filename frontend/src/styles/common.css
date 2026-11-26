@@ -452,6 +452,7 @@
 .bulk-price-row label { display: flex; flex-direction: column; gap: 0.25rem; }
 .bulk-mode-row { display: flex; flex-direction: row; gap: 1rem; }
 .move-bottle-skipped { color: var(--color-text-secondary); }
+.move-bottle-owner-note { color: var(--color-text-secondary); font-size: 0.9rem; margin: 0.5rem 0 0; }
 
 /* Consume button */
 .btn-consume {

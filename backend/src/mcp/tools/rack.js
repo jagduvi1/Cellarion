@@ -8,7 +8,8 @@ const Rack = require('../../models/Rack');
 const Bottle = require('../../models/Bottle');
 const { registerTool } = require('../registry');
 const {
-  createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
+  createCellar, createGridRack, placeBottleInRack, clearRackSlot,
+  MOVE_MIN_ROLE, findMoveDestination, moveBottleToCellar,
 } = require('../../services/rackOps');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
@@ -227,8 +228,10 @@ registerTool({
   name: 'move_bottle',
   title: 'Move a bottle to another cellar',
   description:
-    'Moves one ACTIVE bottle (or one still on order) to a different cellar the user OWNS. It arrives unplaced (racking is separate). Confirm ' +
-    'the destination first. Reversible via undo_last (moves it back).',
+    'Moves one ACTIVE bottle (or one still on order) to a different cellar. The user must own or edit both cellars, so a bottle can go ' +
+    'into or out of a cellar shared with them as editor. A bottle belongs to the owner of the cellar it is in: moved into a cellar ' +
+    'someone else owns, it becomes theirs. It arrives unplaced (racking is separate). Confirm the destination first, and say whose ' +
+    'cellar it is when it is not the user\'s own. Reversible via undo_last (moves it back) while the user still edits both cellars.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -239,26 +242,25 @@ registerTool({
   handler: async (args, ctx) => {
     const replayed = await replay(ctx, args.idempotency_key, 'move_bottle');
     if (replayed) return replayed;
-    // Source: owner (matches REST requireBottleAccess('owner')).
-    const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'owner');
+    // The REST move's rule on both cellars (rackOps.MOVE_MIN_ROLE).
+    const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, MOVE_MIN_ROLE);
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
-    // Destination: a cellar the user OWNS (not merely edits).
-    const dest = await resolveCellarAccess(ctx.user.id, args.to_cellar_id, 'owner');
-    if (!dest || String(dest.cellar.user) !== String(ctx.user.id)) {
-      return fail('not_found', 'Destination cellar not found among the ones you own.');
+    const destCellar = await findMoveDestination(ctx.user.id, args.to_cellar_id);
+    if (!destCellar) {
+      return fail('not_found', 'Destination cellar not found among the ones you own or edit.');
     }
     const bottle = await Bottle.findById(access.bottle._id);
-    const result = await moveBottleToCellar(bottle, access.cellar, dest.cellar, ctx.req);
+    const result = await moveBottleToCellar(bottle, access.cellar, destCellar, ctx.req);
     if (result.error) {
       return fail(result.error.code === 'conflict' ? 'conflict' : 'invalid_input', result.error.message);
     }
     const envelope = {
-      summary: `Moved bottle to "${dest.cellar.name}" (unplaced)`,
-      data: { bottle_id: bottle._id, to_cellar_id: dest.cellar._id, from_cellar_id: result.from.cellarId, undo: 'undo_last moves it back' },
+      summary: `Moved bottle to "${destCellar.name}" (unplaced)`,
+      data: { bottle_id: bottle._id, to_cellar_id: destCellar._id, from_cellar_id: result.from.cellarId, undo: 'undo_last moves it back' },
     };
     await logAction(ctx, {
-      tool: 'move_bottle', action: 'move', bottle: bottle._id, cellar: dest.cellar._id,
-      detail: { fromCellarId: result.from.cellarId, toCellarId: String(dest.cellar._id) },
+      tool: 'move_bottle', action: 'move', bottle: bottle._id, cellar: destCellar._id,
+      detail: { fromCellarId: result.from.cellarId, toCellarId: String(destCellar._id) },
       result: envelope, idempotencyKey: args.idempotency_key,
     });
     return ok(envelope.summary, envelope.data);
