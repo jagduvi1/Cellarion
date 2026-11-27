@@ -10,6 +10,7 @@ import { bottleSizeLabel } from '../config/bottleSizes';
 import BetaBadge from '../components/BetaBadge';
 import './PickList.css';
 import { formatVintage } from '../utils/vintage';
+import { wallWords } from '../utils/slotLabel';
 
 const BulkConsumeModal = lazy(() => import('../components/BulkConsumeModal'));
 
@@ -275,7 +276,7 @@ export default function PickList() {
                 <span className="pick-list-slot">
                   {it.rack ? (
                     <Link to={buildRackUrl(it.cellar.id, { rackId: it.rack.rackId, bottleId: it.bottleId, inRoom: it.rack.inRoom, preference: rackPref })}>
-                      {t('pickLists.slot', { position: it.rack.position, defaultValue: `slot ${it.rack.position}` })}
+                      {it.rack.wall ? wallWords(it.rack.wall, t) : t('pickLists.slot', { position: it.rack.position, defaultValue: `slot ${it.rack.position}` })}
                     </Link>
                   ) : <span title={it.location || undefined}>{it.location || '—'}</span>}
                 </span>

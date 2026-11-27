@@ -12,6 +12,7 @@ import CellarPageHeader from '../components/CellarPageHeader';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './CellarBook.css';
 import { formatVintage } from '../utils/vintage';
+import { wallWords } from '../utils/slotLabel';
 
 // The cellar bottles endpoint caps page size at 200 — loop until we have
 // every active bottle. Hard ceiling well above any real cellar as a
@@ -193,13 +194,17 @@ function BottleTable({ entries, t }) {
         </tr>
       </thead>
       <tbody>
-        {entries.map(({ position, bottle }) => {
+        {entries.map(({ position, bottle, wall }) => {
           const wine = bottle?.wineDefinition;
           const type = wine?.type || null;
           const window_ = formatDrinkWindow(bottle);
           return (
             <tr key={position != null ? `p${position}` : (bottle?._id || Math.random())}>
-              <td className="cb-col-pos">{position ?? '—'}</td>
+              <td className="cb-col-pos">
+                {position ?? '—'}
+                {/* A wall rack: the box and the spot in it, under the number on the map. */}
+                {wall && <span className="cb-pos-wall">{wallWords(wall, t)}</span>}
+              </td>
               <td>
                 <span className="cb-wine-name">{wine?.name || t('common.unknown', 'Unknown')}</span>
                 {wine?.producer && <span className="cb-wine-producer"> — {wine.producer}</span>}

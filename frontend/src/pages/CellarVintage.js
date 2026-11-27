@@ -38,7 +38,7 @@ import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import { bottleSizeLabel, DEFAULT_SIZE } from '../config/bottleSizes';
 import { sharedBarcode, vintageBarcodeTargets } from '../utils/barcode';
-import { slotLabel } from '../utils/slotLabel';
+import { slotLabel, wallWords } from '../utils/slotLabel';
 import './CellarDetail.css';
 import './BottleDetail.css';
 import './CellarVintage.css';
@@ -248,10 +248,16 @@ function CellarVintage() {
     for (const b of bottles) {
       if (!b.rackInfo) continue;
       const key = String(b.rackInfo.rackId);
-      if (!byRack.has(key)) byRack.set(key, { id: key, name: b.rackInfo.rackName, positions: [] });
-      if (b.rackInfo.position != null) byRack.get(key).positions.push(b.rackInfo.position);
+      if (!byRack.has(key)) byRack.set(key, { id: key, name: b.rackInfo.rackName, positions: [], walls: [] });
+      // A wall rack is read by box and spot, not by slot number.
+      if (b.rackInfo.wall) byRack.get(key).walls.push({ position: b.rackInfo.position, wall: b.rackInfo.wall });
+      else if (b.rackInfo.position != null) byRack.get(key).positions.push(b.rackInfo.position);
     }
-    return [...byRack.values()].map((r) => ({ ...r, positions: r.positions.sort((a, b) => a - b) }));
+    return [...byRack.values()].map((r) => ({
+      ...r,
+      positions: r.positions.sort((a, b) => a - b),
+      walls: r.walls.sort((a, b) => a.position - b.position).map((w) => w.wall),
+    }));
   }, [bottles]);
   const unplaced = bottles.filter((b) => !b.rackInfo).length;
   const totals = useMemo(() => totalsByCurrency(bottles), [bottles]);
@@ -265,9 +271,11 @@ function CellarVintage() {
   const stockItems = [
     ...placements.map((r) => (
       <span key={`rack-${r.id}`} className="cvb-summary-item">
-        <span aria-hidden="true">📍</span> {r.positions.length
-          ? t('cellarVintageBeta.rackSlots', { rack: r.name, slots: r.positions.join(', '), count: r.positions.length })
-          : r.name}
+        <span aria-hidden="true">📍</span> {r.walls.length
+          ? t('places.inRack', '{{rack}} · {{place}}', { rack: r.name, place: r.walls.map((w) => wallWords(w, t)).join('; ') })
+          : r.positions.length
+            ? t('cellarVintageBeta.rackSlots', { rack: r.name, slots: r.positions.join(', '), count: r.positions.length })
+            : r.name}
       </span>
     )),
     placements.length > 0 && unplaced > 0 && (

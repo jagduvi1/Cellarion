@@ -41,6 +41,25 @@ describe('buildCellarBook', () => {
     expect(book.rackSections[0].entries.map(e => e.position)).toEqual([1, 5]);
   });
 
+  it('a wall rack tells each entry its box and the spot in it; another rack does not', () => {
+    // A1 an X of six a triangle (positions 1 to 24), B1 a rack of 3 by 4 (25 to 36).
+    const wall = {
+      _id: 'w', name: 'Cellar wall', type: 'wall', rows: 1, cols: 2,
+      typeConfig: { boxes: [
+        { x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 },
+        { x: 1, y: 0, w: 1, h: 1, kind: 'rack', rows: 3, cols: 4 },
+      ] },
+      slots: [{ position: 30, bottle: bottles[1] }, { position: 8, bottle: bottles[0] }],
+    };
+    const [section] = buildCellarBook([wall], bottles).rackSections;
+    expect(section.entries.map(e => [e.position, e.wall])).toEqual([
+      [8, { box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null }],
+      [30, { box: 'B1', kind: 'rack', section: null, slot: null, row: 2, col: 2 }],
+    ]);
+    expect(section.totalSlots).toBe(36);
+    expect(book.rackSections[0].entries.every(e => e.wall === null)).toBe(true);
+  });
+
   it('skips empty slots and counts filled/total (minus disabled)', () => {
     expect(book.rackSections[0].filledCount).toBe(2);
     expect(book.rackSections[0].totalSlots).toBe(6);

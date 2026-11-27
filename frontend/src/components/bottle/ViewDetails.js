@@ -25,6 +25,7 @@ import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 import { markNotWine } from '../../api/wines';
 import { formatVintage } from '../../utils/vintage';
+import { wallWords } from '../../utils/slotLabel';
 import { useContributionReviewed } from '../../utils/contributionReview';
 
 function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, onWineChanged, onBottleChange, draftNotice = null, recordFold = null }) {
@@ -408,7 +409,7 @@ function ViewDetails({ bottle, rackInfo, cellarHasRacks = false, cellarId, vinta
             to={buildRackUrl(cellarId, { rackId: rackInfo.rackId, bottleId: bottle._id, inRoom: rackInfo.inRoom, preference: user?.preferences?.rackNavigation || 'auto' })}
             className="bd-rack-link"
           >
-            <span aria-hidden="true">{'\u{1F4CD}'}</span> {rackInfo.rackName} &middot; {t('bottleDetail.rackSlot')} {rackInfo.position}
+            <span aria-hidden="true">{'\u{1F4CD}'}</span> {rackInfo.rackName} &middot; {rackInfo.wall ? wallWords(rackInfo.wall, t) : `${t('bottleDetail.rackSlot')} ${rackInfo.position}`}
           </Link>
         </div>
       )}

@@ -25,6 +25,7 @@ import BottleAddedNotice from '../components/BottleAddedNotice';
 import LoadError from '../components/LoadError';
 import BottlesList from '../components/cellar/BottlesList';
 import './CellarDetail.css';
+import { slotPlace } from '../utils/wallLayout';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
 // so it doesn't apply when several cellars are combined).
@@ -534,7 +535,9 @@ function CellarDetail() {
           const inRoom = placedRackIds.has(rack._id.toString());
           rack.slots.forEach(slot => {
             const bid = slot.bottle?._id || slot.bottle;
-            if (bid) map.set(bid.toString(), { rackId: rack._id, rackName: rack.name, position: slot.position, inRoom });
+            // wall: the box and the spot in it, when the rack is a wall.
+            const wall = slotPlace(rack, slot.position);
+            if (bid) map.set(bid.toString(), { rackId: rack._id, rackName: rack.name, position: slot.position, inRoom, ...(wall ? { wall } : {}) });
           });
         });
         setRackMap(map);

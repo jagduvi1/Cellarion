@@ -24,7 +24,7 @@ function groupBottles(bottles) {
   return [...map.values()];
 }
 
-export function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssign, onAssignMany, freeRun, onDisable, onAddNew, onClose }) {
+export function EmptySlotContent({ position, place, zone, apiFetch, cellarId, canEdit, onAssign, onAssignMany, freeRun, onDisable, onAddNew, onClose }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
@@ -82,6 +82,7 @@ export function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, 
       <div className="slot-popup-header">
         <span className="slot-popup-title" id="slot-popup-heading">
           {t('racks.slotPlaceBottle', { position })}
+          {place && <span className="slot-place-chip">{place}</span>}
           {zone && (
             <span className="slot-zone-chip">
               <span className="rack-zone-dot" style={{ background: zone.color || '#888' }} />
@@ -247,7 +248,7 @@ export function DisabledSlotContent({ position, canEdit, onEnable, onClose }) {
 }
 
 // ---- Content for filled slot: show bottle info + actions ----
-export function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, onMove, onConsume, onPour, onClose }) {
+export function FilledSlotContent({ position, place, slot, zone, canEdit, onRemoveFromRack, onMove, onConsume, onPour, onClose }) {
   const { t } = useTranslation();
   const bottle = slot.bottle;
   const wine = bottle?.wineDefinition;
@@ -257,6 +258,7 @@ export function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromR
       <div className="slot-popup-header">
         <span className="slot-popup-title" id="slot-popup-heading">
           {t('racks.slotTitle', { position })}
+          {place && <span className="slot-place-chip">{place}</span>}
           {zone && (
             <span className="slot-zone-chip">
               <span className="rack-zone-dot" style={{ background: zone.color || '#888' }} />

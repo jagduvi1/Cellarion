@@ -302,6 +302,37 @@ describe('ownership scoping', () => {
     expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
   });
 
+  test('get_rack on a wall rack lists its boxes with their positions, and each slot says its box and the spot in it', async () => {
+    const cellarId = new mongoose.Types.ObjectId(oid('c'));
+    // A1 an X of six a triangle (1–24), B1 a rack of 3 × 4 (25–36), C1 closed.
+    const wall = {
+      _id: oid('e'), name: 'Cellar wall', cellar: cellarId, type: 'wall', rows: 1, cols: 3,
+      typeConfig: { boxes: [
+        { x: 2, y: 0, w: 1, h: 1, kind: 'closed' },
+        { x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 },
+        { x: 1, y: 0, w: 1, h: 1, kind: 'rack', rows: 3, cols: 4 },
+      ] },
+      slots: [
+        { position: 30, bottle: { _id: oid('d'), vintage: '2015', wineDefinition: { name: 'Barolo', producer: 'X' } } },
+        { position: 8, bottle: { _id: oid('b'), vintage: '2019', wineDefinition: { name: 'Chablis', producer: 'Y' } } },
+      ],
+      disabledPositions: [], zones: [],
+    };
+    Rack.findOne.mockReturnValueOnce(chain({ cellar: cellarId })).mockReturnValueOnce(chain(wall));
+    Cellar.findById.mockReturnValue(chain({ _id: cellarId, user: ME, members: [], deletedAt: null }));
+    const { data } = parse(await tool('get_rack').handler({ rack_id: oid('e') }, CTX));
+    expect(data).toMatchObject({ type: 'wall', rows: 1, cols: 3 });
+    expect(data.boxes).toEqual([
+      { box: 'A1', kind: 'x', cells_wide: 1, cells_high: 1, per_pile: 6, capacity: 24, positions: { from: 1, to: 24 } },
+      { box: 'B1', kind: 'rack', cells_wide: 1, cells_high: 1, rows: 3, cols: 4, capacity: 12, positions: { from: 25, to: 36 } },
+      { box: 'C1', kind: 'closed', cells_wide: 1, cells_high: 1, capacity: 0, positions: null },
+    ]);
+    expect(data.slots.map((s) => [s.position, s.wall])).toEqual([
+      [8, { box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null }],
+      [30, { box: 'B1', kind: 'rack', section: null, slot: null, row: 2, col: 2 }],
+    ]);
+  });
+
   test('get_rack succeeds for the owner (ObjectId cellar ref) and hides existence from strangers', async () => {
     const cellarId = new mongoose.Types.ObjectId(oid('c'));
     const fullRack = {
