@@ -69,7 +69,6 @@ const eventBus = require('./src/services/eventBus');
 const mcpSessions = require('./src/mcp/sessions');
 const { startScheduler, stopScheduler } = require('./src/services/scheduler');
 const { cleanupOrphanedImages, whenProcessingIdle } = require('./src/services/imageProcessor');
-const { stopImportPhotos } = require('./src/services/importPhotos');
 const { createShutdown } = require('./src/services/shutdown');
 
 const PORT = process.env.PORT || 5000;
@@ -288,8 +287,10 @@ connectDB().then(async () => {
       eventBus.closeAll();
       mcpSessions.closeAllSessions('shutdown');
     },
-    // The import's photo queue ends on a photo's background removal (services/importPhotos).
-    drains: [whenProcessingIdle, stopImportPhotos],
+    // The import's photo queue ends on a photo's background removal. Required
+    // here, not at the top: the routes already loaded it, and server.js itself
+    // stays free of the models (config/runtime.boot.test.js loads it without them).
+    drains: [whenProcessingIdle, () => require('./src/services/importPhotos').stopImportPhotos()],
     closeDb: () => mongoose.disconnect(),
   });
 });
