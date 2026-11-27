@@ -15,6 +15,7 @@ const {
   queryPendingWines,
   validatePendingFix,
   applyPendingFix,
+  mergePendingInto,
   loadPendingWine,
   CREATED_VIA_FILTERS,
   FIELD_MAX,
@@ -52,13 +53,20 @@ registerTool({
     'wine itself is hidden from every other user until a curator completes it, so this queue is what un-hides them. ' +
     'Newest first. Pass created_via to work one source at a time — "import" is typically one user\'s CSV burst and is ' +
     'best cleared in a batch, "ui" is the trickle of label scans. Each row carries image ids: call ' +
-    'get_pending_wine_images to actually READ the label, then fix_pending_wine. Owners are never identified here.',
+    'get_pending_wine_images to actually READ the label, then fix_pending_wine. Owners are never identified here. ' +
+    'The queue also holds wines taken from a member\'s cellar FILE that wait for a curator\'s check (waiting_for_check: ' +
+    'true), on a server that checks imported wines before they are public. Those usually have a complete identity ' +
+    'and no photo: the row is what the file said. Pass kind "needs_check" to work them, OLDEST first (their owners ' +
+    'are waiting in that order). For each: verify the wine exists as written, correct what is wrong, and publish it ' +
+    'with fix_pending_wine identity_checked: true; when it is a wine the registry already holds, merge_pending_wine.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     created_via: z.enum(CREATED_VIA_FILTERS).optional()
       .describe('Narrow to one entry surface — the practical way to work a large import burst'),
+    kind: z.enum(['needs_check', 'needs_identity']).optional()
+      .describe('One half of the queue: "needs_check" = wines from a member\'s file waiting for a curator\'s check, oldest first; "needs_identity" = wines with an incomplete identity only. Omit for both, newest first.'),
     include_unavailable: z.boolean().optional()
       .describe('Also list rows already recorded as having NO producer on the label (excluded by default — they have no work left). Use it to review or reverse that disposition.'),
     limit: z.number().int().min(1).max(50).default(20),
@@ -68,8 +76,8 @@ registerTool({
     const denied = requireSomm(ctx);
     if (denied) return denied;
     const { limit, offset } = pageParams(args, 20, 50);
-    const { rows, total, pendingTotal, unavailableTotal } = await queryPendingWines({
-      limit, offset, createdVia: args.created_via,
+    const { rows, total, pendingTotal, unavailableTotal, uncheckedTotal } = await queryPendingWines({
+      limit, offset, createdVia: args.created_via, kind: args.kind,
       includeUnavailable: args.include_unavailable === true,
     });
     const data = rows.map((r) => ({
@@ -85,6 +93,9 @@ registerTool({
       created_via: r.createdVia,
       bottle_count: r.bottleCount,
       identity_unavailable: r.identityUnavailable,
+      // From a member's file, waiting for a check: published only by
+      // fix_pending_wine identity_checked (or ended by merge_pending_wine).
+      waiting_for_check: r.unchecked,
       scan_image_id: r.scanImageId,
       // The optional BACK label of the same bottle: present when the front scan
       // came back incomplete and the owner took the rescue photo.
@@ -100,7 +111,8 @@ registerTool({
       has_images: !!(r.scanImageId || r.scanImageBackId || r.bottleImageIds.length),
     }));
     return ok(
-      `${pendingTotal} wine(s) awaiting an identity (showing ${data.length} of ${total}${args.created_via ? ` via ${args.created_via}` : ''})` +
+      `${pendingTotal} wine(s) in the pending queue (showing ${data.length} of ${total}${args.created_via ? ` via ${args.created_via}` : ''}${args.kind ? `, ${args.kind}` : ''})` +
+      (uncheckedTotal ? `; ${uncheckedTotal} of them from a member's file, waiting for a check` : '') +
       (unavailableTotal ? `; ${unavailableTotal} more recorded as having no producer on the label` : ''),
       data,
       { page: { limit, offset, total } }
@@ -373,7 +385,11 @@ registerTool({
     'synonyms resolve, unknown varieties are refused, never created). Refuses a wine that is no longer pending. This ' +
     'is SHARED registry data other users will see: base it on the label photo (get_pending_wine_images) or on the ' +
     'somm\'s own knowledge, never on a guess from the broken string. When the label genuinely prints no producer at ' +
-    'all, identity_unavailable clears the row from the queue WITHOUT promoting it — read its description first.',
+    'all, identity_unavailable clears the row from the queue WITHOUT promoting it — read its description first. ' +
+    'A wine with waiting_for_check: true (from a member\'s file) is NOT promoted by a complete producer and name: it ' +
+    'is promoted only by identity_checked: true, sent alone when the record is right as it stands, or together with ' +
+    'the corrections. If that answers a conflict naming an existing wine, the registry already holds it: call ' +
+    'merge_pending_wine with that wine instead.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -398,6 +414,14 @@ registerTool({
         'through a place or a grape you read off the label as a producer. Requires a producer in the same call, and ' +
         'is recorded in the audit log with the rules it overrode.'
       ),
+    identity_checked: z.literal(true).optional()
+      .describe(
+        'For a wine with waiting_for_check: true only. You verified that this wine exists as the record states it ' +
+        'after this call (producer, name, place, type): publish it. Send it alone to confirm the record unchanged, ' +
+        'or with the fields you corrected. Do not send it for a record you could not verify; leave the wine ' +
+        'waiting, or ask its owners (ask_bottle_owner). Only true is accepted: a check is not taken back, a ' +
+        'published wine that turns out wrong is corrected like any registry wine.'
+      ),
     identity_unavailable: z.boolean().optional()
       .describe(
         'LAST RESORT — only after asking the bottle\'s owner (ask_bottle_owner works on pending wines) and being ' +
@@ -416,6 +440,7 @@ registerTool({
     // with the REST PATCH, so the two surfaces cannot drift.
     const patch = {};
     if (args.identity_unavailable !== undefined) patch.identityUnavailable = args.identity_unavailable;
+    if (args.identity_checked !== undefined) patch.identityChecked = args.identity_checked;
     if (args.producer !== undefined) patch.producer = args.producer;
     if (args.name !== undefined) patch.name = args.name;
     if (args.appellation !== undefined) patch.appellation = args.appellation;
@@ -434,7 +459,18 @@ registerTool({
     if (!loaded.ok) return fail(loaded.code, loaded.message);
 
     const applied = await applyPendingFix(loaded.wine, check.clean, ctx.user.id);
-    if (!applied.ok) return fail(applied.code, applied.message);
+    if (!applied.ok) {
+      // A duplicate names the wine it collided with, so the next call can be
+      // the merge instead of a second attempt at the same fix.
+      const twin = applied.duplicate;
+      const hint = twin
+        ? ` The existing wine is "${[twin.producer, twin.name].filter(Boolean).join(' — ')}" (wine_id ${twin.wineId}).` +
+          (twin.published
+            ? ' If this row is that wine, call merge_pending_wine with into_wine_id set to it.'
+            : ' That wine is itself still pending: check or complete it first, then merge this one into it.')
+        : '';
+      return fail(applied.code, `${applied.message}${hint}`);
+    }
     const { wine, promoted, diff, crossFieldOverridden } = applied;
 
     // Same audit action string as the REST PATCH — REST and MCP curation must
@@ -445,17 +481,23 @@ registerTool({
     });
 
     const unavailable = wine.identityUnavailable === true;
+    // Still waiting for a check, with a producer: the fields were written and
+    // the row stays until identity_checked is sent.
+    const waiting = !promoted && wine.uncheckedIdentity === true && !!wine.producer;
     const envelope = {
       summary: promoted
         ? `${wine.producer} — ${wine.name}: identity completed, the wine is now live in the registry`
         : unavailable
           ? `${wine.name}: recorded as having no producer on the label — out of the queue, still not in the registry`
-          : `${wine.name}: saved, but still missing a producer — it stays in the pending queue`,
+          : waiting
+            ? `${wine.producer} — ${wine.name}: saved, still waiting for a check — it stays in the pending queue`
+            : `${wine.name}: saved, but still missing a producer — it stays in the pending queue`,
       data: {
         wine_id: wine._id,
         promoted,
         still_pending: !promoted,
         identity_unavailable: unavailable,
+        waiting_for_check: wine.uncheckedIdentity === true,
         producer: wine.producer || null,
         name: wine.name,
         appellation: wine.appellation || null,
@@ -466,7 +508,9 @@ registerTool({
           ? 'The wine is now searchable, embedded, and its vintages are in the maturity queue.'
           : unavailable
             ? 'It stays hidden from the registry and its owner keeps their bottle. Send identity_unavailable: false to put it back in the queue.'
-            : 'Send a producer to promote it — everything else is optional.',
+            : waiting
+              ? 'Send identity_checked: true once the record is right to publish it.'
+              : 'Send a producer to promote it — everything else is optional.',
       },
     };
     await logAction(ctx, {
@@ -476,6 +520,60 @@ registerTool({
         wineId: String(wine._id), fields: Object.keys(check.clean), promoted,
         ...(crossFieldOverridden ? { crossFieldOverridden } : {}),
       },
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
+  name: 'merge_pending_wine',
+  title: 'Sommelier: a pending wine is one the registry already holds',
+  description:
+    'Ends a row of the pending queue that is the SAME wine as one already published: every bottle that points at the ' +
+    'pending row (with its photos, reviews, wishlist entries and the rest) moves onto the published wine, and the ' +
+    'pending row is removed. The typical case is a second member\'s file naming a wine another member\'s file ' +
+    'already brought in: once the first is checked, fix_pending_wine identity_checked on the second answers a ' +
+    'conflict naming the published wine, and this tool is the answer. Also right for any pending row whose label, ' +
+    'once read, turns out to be a wine the registry has (find it with search_registry). The owners keep their ' +
+    'bottles and everything that is theirs; only the wine their bottles point at changes. Use it only when the two ' +
+    'are the same wine: same producer, same cuvée, same appellation. A different cuvée, colour or sweetness of the ' +
+    'same producer is a different wine: complete or check the pending row instead. The target must be a published ' +
+    'wine. Not undoable.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('The pending row, from list_pending_wines'),
+    into_wine_id: objectId.describe('The published registry wine it is the same as — from the conflict message of fix_pending_wine, or search_registry'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+
+    const loaded = await loadPendingWine(args.wine_id);
+    if (!loaded.ok) return fail(loaded.code, loaded.message);
+    const source = { name: loaded.wine.name, producer: loaded.wine.producer || null };
+
+    const merged = await mergePendingInto(loaded.wine, args.into_wine_id, { req: ctx.req });
+    if (!merged.ok) return fail(merged.code, merged.message);
+    const { target, bottlesMoved } = merged;
+
+    const label = [target.producer, target.name].filter(Boolean).join(' — ');
+    const envelope = {
+      summary: `${[source.producer, source.name].filter(Boolean).join(' — ')}: merged into ${label} (${bottlesMoved} bottle(s) moved)`,
+      data: {
+        merged_wine_id: args.wine_id,
+        into_wine_id: String(target._id),
+        into: { producer: target.producer || null, name: target.name },
+        bottles_moved: bottlesMoved,
+        note: 'The pending row is gone. Its owners\' bottles now show the published wine.',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'merge_pending_wine',
+      action: 'somm_pending_merge',
+      detail: { wineId: String(args.wine_id), intoWineId: String(target._id), bottlesMoved },
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

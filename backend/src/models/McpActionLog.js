@@ -39,9 +39,9 @@ const mcpActionLogSchema = new mongoose.Schema({
     // single-shot on the inquiry itself, so never undo-eligible.
     'inquiry_answer',
     // Curator queue closes (resolve_owner_inquiry, respond_to_wine_report,
-    // fix_pending_wine, review_image): notifications or a registry write are
-    // already out, so never undo-eligible.
-    'somm_owner_inquiry_resolve', 'somm_wine_report_close', 'somm_pending_fix', 'somm_image_review',
+    // fix_pending_wine, merge_pending_wine, review_image): notifications or a
+    // registry write are already out, so never undo-eligible.
+    'somm_owner_inquiry_resolve', 'somm_wine_report_close', 'somm_pending_fix', 'somm_pending_merge', 'somm_image_review',
     // Bottle corrections: delete_bottle (reversible from the
     // snapshot in prev), change_bottle_wine and set_bottle_default_image
     // (reversible); delete_bottle_image (the file is gone) and a wine change
