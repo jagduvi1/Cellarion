@@ -4,16 +4,17 @@
  * photo its owner took in that app; the photo is downloaded here, from an
  * allowed photo store only (config/importPhotoSources), through the SSRF guard
  * (utils/safeImageFetch), and handed to the SAME pipeline as an upload
- * (services/imageOps.ingestBottleImage): sanitised, stored, background
- * removed, and waiting for the image check like any member's photo. Nothing
- * here publishes a photo.
+ * (services/imageOps.ingestBottleImage) with its background KEPT: it is the
+ * owner's own photo, and it comes in as they took it (sanitised, metadata
+ * stripped, at most 2048 px, as every kept photo is), never cut out. Whether
+ * it may show in the public registry is the image curator's decision, as for
+ * any member's photo. Nothing here publishes a photo.
  *
- * In memory, one photo at a time for the whole server, the next one only once
- * no background removal is running: an import of hundreds of wines must not
- * start hundreds of rembg runs. The backend is one process, as its other
- * queues assume. A link is used once and never stored; a restart drops what
- * is still waiting (the shutdown drain lets the current photo finish and says
- * how many were left).
+ * In memory, one photo at a time for the whole server, so an import of
+ * hundreds of wines downloads and encodes one picture after the other. The
+ * backend is one process, as its other queues assume. A link is used once and
+ * never stored; a restart drops what is still waiting (the shutdown drain lets
+ * the current photo finish and says how many were left).
  */
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -24,7 +25,6 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { photoVintage } = require('../utils/imageVintage');
 const { snapshotRequest } = require('../mcp/requestSnapshot');
 const { ingestBottleImage } = require('./imageOps');
-const { whenProcessingIdle } = require('./imageProcessor');
 const { logger, logAudit } = require('./audit');
 
 // More waiting photos than any one import can bring (an import is at most
@@ -81,7 +81,7 @@ async function addPhoto({ bottleId, url, batch }) {
   }
   const result = await ingestBottleImage({
     buffer, userId: batch.req.user.id, userRoles: batch.req.user.roles, bottle, wineDefinitionId,
-    keepBackground: false, via: 'import',
+    keepBackground: true, via: 'import',
   }, batch.req);
   if (result.error) {
     warn(bottle._id, result.error.message);
@@ -113,7 +113,6 @@ async function work() {
     batch.outcomes[outcome] = (batch.outcomes[outcome] || 0) + 1;
     batch.left -= 1;
     if (batch.left === 0) finishBatch(batch);
-    await whenProcessingIdle();
   }
 }
 

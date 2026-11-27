@@ -1,15 +1,14 @@
 // services/importPhotos — copying the photos an import file links to onto the
 // bottles the import created. Pinned: only allowed links, one photo per link,
-// the upload pipeline with no shortcut past the image check, the access and
-// duplicate checks at the time the photo is added, one photo at a time, and
-// a summary row per import that never carries a link.
+// the upload pipeline with the background kept and no shortcut past the image
+// check, the access and duplicate checks at the time the photo is added, one
+// photo at a time, and a summary row per import that never carries a link.
 
 jest.mock('../models/Bottle', () => ({ findById: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({ exists: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
 jest.mock('../utils/safeImageFetch', () => ({ safeFetchImage: jest.fn() }));
 jest.mock('./imageOps', () => ({ ingestBottleImage: jest.fn() }));
-jest.mock('./imageProcessor', () => ({ whenProcessingIdle: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn(), logger: { warn: jest.fn() } }));
 
 const Bottle = require('../models/Bottle');
@@ -17,7 +16,6 @@ const BottleImage = require('../models/BottleImage');
 const Cellar = require('../models/Cellar');
 const { safeFetchImage } = require('../utils/safeImageFetch');
 const { ingestBottleImage } = require('./imageOps');
-const { whenProcessingIdle } = require('./imageProcessor');
 const { logAudit, logger } = require('./audit');
 const {
   queueImportPhotos, stopImportPhotos, whenImportPhotosIdle, resetImportPhotosForTest,
@@ -39,7 +37,6 @@ beforeEach(() => {
   BottleImage.exists.mockResolvedValue(null);
   safeFetchImage.mockResolvedValue({ buffer: Buffer.from('jpeg') });
   ingestBottleImage.mockResolvedValue({ image: { _id: 'img' } });
-  whenProcessingIdle.mockResolvedValue();
 });
 
 const summary = () => logAudit.mock.calls.filter((c) => c[1] === 'import.photos');
@@ -60,13 +57,13 @@ test('one photo per link, on the first bottle that has it; other links are left 
   expect(ingestBottleImage.mock.calls[0][0].bottle).toBe(bottles.b1);
 });
 
-test('the photo goes through the upload pipeline as a member\'s photo, never published by the import', async () => {
+test('the photo goes through the upload pipeline as the owner took it, never published by the import', async () => {
   queueImportPhotos(req, [{ bottleId: 'b1', url: link(1) }], { cellarId: CELLAR });
   await whenImportPhotosIdle();
 
   const [opts, auditReq] = ingestBottleImage.mock.calls[0];
   expect(opts).toMatchObject({
-    userId: USER, userRoles: ['user'], bottle: bottles.b1, wineDefinitionId: 'w-b1', keepBackground: false, via: 'import',
+    userId: USER, userRoles: ['user'], bottle: bottles.b1, wineDefinitionId: 'w-b1', keepBackground: true, via: 'import',
   });
   expect(opts.publish).toBeUndefined();
   expect(opts.credit).toBeUndefined();
@@ -114,14 +111,19 @@ test('a failed download or a file that is no image is counted, and the link neve
   expect(written).not.toContain('firebasestorage');
 });
 
-test('one photo at a time: the next waits until background removal is idle', async () => {
+test('one photo at a time: the next download starts once the previous photo is stored', async () => {
   const order = [];
-  ingestBottleImage.mockImplementation(async ({ bottle: b }) => { order.push(`add ${b._id}`); return { image: {} }; });
-  whenProcessingIdle.mockImplementation(async () => { order.push('idle'); });
+  safeFetchImage.mockImplementation(async (url) => { order.push(`fetch ${url.slice(-1)}`); return { buffer: Buffer.from('jpeg') }; });
+  ingestBottleImage.mockImplementation(async ({ bottle: b }) => {
+    order.push(`store ${b._id} start`);
+    await new Promise((r) => setImmediate(r));
+    order.push(`store ${b._id} done`);
+    return { image: {} };
+  });
   queueImportPhotos(req, [{ bottleId: 'b1', url: link(1) }, { bottleId: 'b2', url: link(2) }], { cellarId: CELLAR });
   await whenImportPhotosIdle();
 
-  expect(order).toEqual(['add b1', 'idle', 'add b2', 'idle']);
+  expect(order).toEqual(['fetch 1', 'store b1 start', 'store b1 done', 'fetch 2', 'store b2 start', 'store b2 done']);
 });
 
 test('at shutdown the photo in hand finishes and no further one starts', async () => {
