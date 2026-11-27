@@ -51,9 +51,21 @@ describe('computeIdentityProvenance — a row with an appellation and no grapes'
     expect(p.grapes).toBe('model');
   });
 
-  test('name and producer are always the model on this path (it canonicalises them)', () => {
-    const p = computeIdentityProvenance(loireRow(), identified());
+  test('a name or producer the model reworded comes from the model', () => {
+    const p = computeIdentityProvenance(loireRow(), identified({ name: 'Sans Pagne Pétillant', producer: 'Domaine Ludovic Chanson' }));
     expect(p.name).toBe('model');
+    expect(p.producer).toBe('model');
+  });
+
+  test('a name and producer minted as the file states them come from the file: a row identified with no model claims none', () => {
+    const p = computeIdentityProvenance(loireRow(), identified());
+    expect(p.name).toBe('file');
+    expect(p.producer).toBe('file');
+    expect(p.country).toBe('file');
+  });
+
+  test('a producer the file does not state never comes from the file', () => {
+    const p = computeIdentityProvenance(loireRow({ producer: '' }), identified());
     expect(p.producer).toBe('model');
   });
 });

@@ -342,6 +342,51 @@ router.patch('/contribution-review', requireReviewSwitcher, async (req, res) => 
   }
 });
 
+// ── How imports treat new wines (config/importPolicy) ──────────────────────
+// Changed by the same authority as the review switch above: checkNewWines
+// decides whether a member's file reaches the shared registry unchecked.
+const asyncHandler = require('../../utils/asyncHandler');
+const IMPORT_POLICY_FIELDS = ['aiLookup', 'checkNewWines'];
+
+// GET /api/admin/settings/import-policy — { aiLookup, checkNewWines,
+// updatedAt, canChange, reviewOn, checking, waiting }: the two switches,
+// whether this admin may change them, whether the server reviews
+// contributions at all (checkNewWines does nothing without it), whether new
+// wines are in fact held back, and how many wines wait for a check now.
+router.get('/import-policy', asyncHandler(async (req, res) => {
+  const importPolicy = require('../../config/importPolicy');
+  const contributionReview = require('../../config/contributionReview');
+  const WineDefinition = require('../../models/WineDefinition');
+  const User = require('../../models/User');
+  let canChange = true;
+  if (superAdminConfigured()) {
+    const me = await User.findById(req.user.id).select('email').lean();
+    canChange = !!me && checkIsSuperAdmin(req, me.email);
+  }
+  const waiting = await WineDefinition.countDocuments({ uncheckedIdentity: true, draft: { $ne: true }, nonWine: { $ne: true } });
+  res.json({ ...importPolicy.get(), canChange, reviewOn: contributionReview.isOn(), checking: importPolicy.checksNewWines(), waiting });
+}));
+
+// PATCH /api/admin/settings/import-policy — body { aiLookup?, checkNewWines? }.
+// Turning checkNewWines off publishes nothing already waiting: those wines
+// stay in the curators' queue until each is checked.
+router.patch('/import-policy', requireReviewSwitcher, asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const sent = IMPORT_POLICY_FIELDS.filter((f) => body[f] !== undefined);
+  if (sent.length === 0) {
+    return res.status(400).json({ error: `Send at least one of: ${IMPORT_POLICY_FIELDS.join(', ')}` });
+  }
+  const bad = sent.find((f) => typeof body[f] !== 'boolean');
+  if (bad) return res.status(400).json({ error: `${bad} must be true or false` });
+
+  const importPolicy = require('../../config/importPolicy');
+  const { aiLookup, checkNewWines } = { ...importPolicy.get(), ...Object.fromEntries(sent.map((f) => [f, body[f]])) };
+  const doc = await updateSiteConfig('importPolicy', { aiLookup, checkNewWines }, req.user.id);
+  importPolicy.set({ aiLookup, checkNewWines, updatedAt: doc?.updatedAt ? new Date(doc.updatedAt).toISOString() : new Date().toISOString() });
+  logAudit(req, 'admin.settings.import_policy.update', {}, { aiLookup, checkNewWines });
+  res.json(importPolicy.get());
+}));
+
 // PATCH /api/admin/settings/new-member-emails — body { enabled }. Turning it
 // on starts from now: accounts created before that never get one.
 router.patch('/new-member-emails', async (req, res) => {

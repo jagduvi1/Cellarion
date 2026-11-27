@@ -1,7 +1,7 @@
 /**
  * The settings an admin changes at run time — rate limits, AI settings, the
- * announcement banner, the feature flags and whether contributions are
- * reviewed — live in SiteConfig and are
+ * announcement banner, the feature flags, whether contributions are
+ * reviewed and how imports treat new wines — live in SiteConfig and are
  * cached in memory by their config modules. server.js calls
  * loadRuntimeConfig() once the database is connected and before the boot
  * migrations, the scheduler and app.listen, so nothing reads a cache before
@@ -17,6 +17,7 @@ const aiConfig = require('./aiConfig');
 const announcement = require('./announcement');
 const featureFlags = require('./featureFlags');
 const contributionReview = require('./contributionReview');
+const importPolicy = require('./importPolicy');
 
 const CONFIGS = [
   ['rateLimits', rateLimits],
@@ -24,6 +25,7 @@ const CONFIGS = [
   ['announcement', announcement],
   ['featureFlags', featureFlags],
   ['contributionReview', contributionReview],
+  ['importPolicy', importPolicy],
 ];
 
 async function loadRuntimeConfig() {
