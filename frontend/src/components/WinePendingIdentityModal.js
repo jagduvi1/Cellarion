@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ImportPolicySwitch from './ImportPolicySwitch';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
-import { sommGetPendingWines, sommFixPendingWine } from '../api/somm';
+import { sommGetPendingWines, sommFixPendingWine, sommMergePendingWine } from '../api/somm';
 
 const PAGE_SIZE = 25;
 
@@ -27,6 +27,8 @@ const PAGE_SIZE = 25;
  *   apiFetch  — from useAuth()
  *   onClose() — close the modal
  */
+const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+
 function WinePendingIdentityModal({ apiFetch, onClose }) {
   const { t } = useTranslation();
 
@@ -47,6 +49,9 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   // non-editing row, so one shared value paints the same red paragraph under
   // all 25 rows and follows the curator through paging.
   const [rowErrors, setRowErrors] = useState({});
+  // The published wine a fix collided with, per row: the fix cannot go
+  // through, and the row is that wine. Offered as a merge.
+  const [duplicates, setDuplicates] = useState({});
   // What the last write answered. It stays through the reload that follows the
   // write, and goes when the curator pages, changes a filter or writes again.
   const [successMsg, setSuccessMsg] = useState(null);
@@ -97,10 +102,44 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       regionName: w.regionName || '',
       countryName: w.countryName || '',
       grapeNames: (w.grapeNames || []).join(', '),
+      // A wine from a file often has none: publishing it without one leaves
+      // every owner with a wine of no colour.
+      type: w.type || '',
     });
   };
 
   const cancelEdit = () => { setEditing(null); setDraft(null); setRowErrors({}); };
+
+  /** A refused write: keep the reason, and the duplicate it names when it names one. */
+  const refused = (wineId, res, data) => {
+    setRowErrors({ [wineId]: data.error || `Failed to save (${res.status})` });
+    setDuplicates(res.status === 409 && data.duplicate?.published ? { [wineId]: data.duplicate } : {});
+  };
+
+  /** The row is the published wine the fix collided with: move its bottles there. */
+  const mergeInto = async (wineId, duplicate) => {
+    const label = [duplicate.producer, duplicate.name].filter(Boolean).join(' — ');
+    if (!window.confirm(t('admin.wines.pendingIdentity.mergeConfirm', { wine: label }))) return;
+    setSaving(true);
+    setSuccessMsg(null);
+    try {
+      const res = await sommMergePendingWine(apiFetch, wineId, duplicate.wineId);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRowErrors({ [wineId]: data.error || `Failed to save (${res.status})` });
+        return;
+      }
+      setRowErrors({});
+      setDuplicates({});
+      setSuccessMsg(data.message);
+      cancelEdit();
+      await refetchAfterWrite();
+    } catch {
+      setRowErrors({ [wineId]: t('common.networkError') });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   /**
    * Re-read the current page after a write, stepping back when the row that
@@ -156,9 +195,10 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       const res = await sommFixPendingWine(apiFetch, wineId, { identityChecked: true });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setRowErrors({ [wineId]: data.error || `Failed to save (${res.status})` });
+        refused(wineId, res, data);
         return;
       }
+      setDuplicates({});
       setSuccessMsg(data.message);
       await refetchAfterWrite();
     } catch {
@@ -183,17 +223,22 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       patch.regionName = draft.regionName.trim();
       if (draft.countryName.trim()) patch.countryName = draft.countryName.trim();
       patch.grapeNames = draft.grapeNames.split(',').map(g => g.trim()).filter(Boolean);
+      if (draft.type) patch.type = draft.type;
       // For a wine that waits for a check, the curator's corrections ARE the
       // check: saving them publishes it, as completing the producer publishes
-      // any other row here.
-      if ((wines || []).find(w => w._id === wineId)?.unchecked) patch.identityChecked = true;
+      // any other row here. Only once it has a producer: without one the
+      // server refuses the check and would save nothing, and a curator must
+      // be able to save the place or the grapes of a row they cannot finish.
+      const row = (wines || []).find(w => w._id === wineId);
+      if (row?.unchecked && (patch.producer || row.producer)) patch.identityChecked = true;
 
       const res = await sommFixPendingWine(apiFetch, wineId, patch);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setRowErrors({ [wineId]: data.error || `Failed to save (${res.status})` });
+        refused(wineId, res, data);
         return;
       }
+      setDuplicates({});
       setSuccessMsg(data.message);
       cancelEdit();
       await refetchAfterWrite();
@@ -387,10 +432,21 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                             placeholder={t('admin.wines.pendingIdentity.regionPlaceholder')}
                             onChange={e => setDraft(d => ({ ...d, regionName: e.target.value }))}
                           />
+                          <select
+                            value={draft.type}
+                            aria-label={t('admin.wines.pendingIdentity.typeLabel')}
+                            onChange={e => setDraft(d => ({ ...d, type: e.target.value }))}
+                          >
+                            <option value="">{t('admin.wines.pendingIdentity.noType')}</option>
+                            {WINE_TYPES.map(v => <option key={v} value={v}>{t(`statistics.typeLabels.${v}`, v)}</option>)}
+                          </select>
                         </div>
                       ) : (
                         <span style={{ fontSize: '0.85rem' }}>
                           {[w.countryName, w.regionName].filter(Boolean).join(' · ') || '—'}
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #666)' }}>
+                            {w.type ? t(`statistics.typeLabels.${w.type}`, w.type) : <em>{t('admin.wines.pendingIdentity.noType')}</em>}
+                          </div>
                         </span>
                       )}
                     </td>
@@ -410,6 +466,16 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                             {t('common.cancel')}
                           </button>
                           {rowErrors[w._id] && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowErrors[w._id]}</div>}
+                          {duplicates[w._id] && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ marginTop: 6 }}
+                              disabled={saving}
+                              onClick={() => mergeInto(w._id, duplicates[w._id])}
+                            >
+                              {t('admin.wines.pendingIdentity.mergeBtn', { wine: [duplicates[w._id].producer, duplicates[w._id].name].filter(Boolean).join(' — ') })}
+                            </button>
+                          )}
                         </>
                       ) : (
                         <>
@@ -456,6 +522,16 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                               : t('admin.wines.pendingIdentity.unavailableBtn')}
                           </button>
                           {rowErrors[w._id] && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowErrors[w._id]}</div>}
+                          {duplicates[w._id] && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ marginTop: 6 }}
+                              disabled={saving}
+                              onClick={() => mergeInto(w._id, duplicates[w._id])}
+                            >
+                              {t('admin.wines.pendingIdentity.mergeBtn', { wine: [duplicates[w._id].producer, duplicates[w._id].name].filter(Boolean).join(' — ') })}
+                            </button>
+                          )}
                         </>
                       )}
                     </td>

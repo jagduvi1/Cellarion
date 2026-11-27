@@ -396,7 +396,7 @@ describe('wines waiting for a check', () => {
     const body = await (await get(tokenFor(['somm']), '?kind=needs_check')).json();
 
     expect(WineDefinition.find.mock.calls[0][0]).toMatchObject({ pendingIdentity: true, uncheckedIdentity: true });
-    expect(chain.sort).toHaveBeenCalledWith({ createdAt: 1 });
+    expect(chain.sort).toHaveBeenCalledWith({ createdAt: 1, _id: 1 });
     expect(body.wines[0]).toMatchObject({ unchecked: true, producer: 'Cave de Kaysersberg' });
     expect(body.uncheckedTotal).toBe(1);
   });
@@ -406,7 +406,7 @@ describe('wines waiting for a check', () => {
     WineDefinition.find.mockReturnValue(chain);
     await get(tokenFor(['somm']), '?kind=everything');
     expect(WineDefinition.find.mock.calls[0][0].uncheckedIdentity).toBeUndefined();
-    expect(chain.sort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(chain.sort).toHaveBeenCalledWith({ createdAt: -1, _id: -1 });
   });
 
   test('a check that duplicates a published wine is a 409 that names it', async () => {
@@ -419,7 +419,7 @@ describe('wines waiting for a check', () => {
 
     expect(res.status).toBe(409);
     expect((await res.json()).duplicate).toEqual({
-      wineId: TWIN, name: 'Kaefferkopf', producer: 'Cave de Kaysersberg', appellation: null, published: true,
+      wineId: TWIN, name: 'Kaefferkopf', producer: 'Cave de Kaysersberg', appellation: null, published: true, nonWine: false,
     });
   });
 
@@ -464,5 +464,30 @@ describe('wines waiting for a check', () => {
 
     expect((await merge(tokenFor(['user']), W1, { intoWineId: TWIN })).status).toBe(403);
     expect(performWineMerge).not.toHaveBeenCalled();
+  });
+});
+
+describe('a wine waiting for a check, through the REST fix', () => {
+  test('a fix without the check says the wine is still waiting, not that it lacks a producer', async () => {
+    WineDefinition.findById.mockResolvedValue(wineDoc({ producer: 'Cave de Kaysersberg', uncheckedIdentity: true }));
+    // The model hook keeps such a row pending; mirror it.
+    const doc = await WineDefinition.findById();
+    doc.save = jest.fn(async () => doc);
+
+    const res = await patch(tokenFor(['somm']), W1, { appellation: 'Alsace Grand Cru' });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.promoted).toBe(false);
+    expect(body.message).toMatch(/still waiting for a check/);
+  });
+
+  test('"no producer on the label" is refused for a wine that has a producer', async () => {
+    WineDefinition.findById.mockResolvedValue(wineDoc({ producer: 'Cave de Kaysersberg', uncheckedIdentity: true }));
+
+    const res = await patch(tokenFor(['somm']), W1, { identityUnavailable: true });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/has a producer/);
   });
 });

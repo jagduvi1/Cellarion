@@ -240,7 +240,7 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   const intro = more > 0
     ? `${bottles.length} wines in your cellar have drink-window updates: ${summary}. Here are ${listed.length} of them:`
     : 'Some bottles in your cellar have drink-window updates:';
-  const moreLine = more > 0 ? `…and ${more} more. Open your cellar to see them all.` : '';
+  const moreLine = more > 0 ? `…and ${more} more. Your cellar shows which wines are ready to drink.` : '';
 
   const rows = listed.map(b => `
     <tr>

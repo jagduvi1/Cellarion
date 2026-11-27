@@ -10,7 +10,8 @@
  *                                 curator reviewed or seeded: one a member's
  *                                 own add created is that member's reading;
  *   3. the registry's own wines   every published wine of this producer is in
- *                                 one country.
+ *                                 one country, and there are at least two:
+ *                                 one wine is one earlier file's word.
  *
  * A name two countries share (a "Monterrei" in each of two countries, a
  * producer bottling on two continents) derives nothing.
@@ -21,6 +22,10 @@ const Country = require('../models/Country');
 const WineDefinition = require('../models/WineDefinition');
 const { normalizeString, normalizeAppellationKey, isIdentitySentinel } = require('../utils/normalize');
 const { logger } = require('./audit');
+
+// A producer's country is read from its published wines only when there are
+// this many: a single wine may itself have come from one member's file.
+const MIN_PRODUCER_WINES = 2;
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -58,12 +63,15 @@ async function fromProducer(producer) {
   // services/importMatching.splitKnownProducerPrefix reads it. The pending,
   // draft and unchecked namespaces never start with a producer, so only
   // published wines answer.
-  const ids = await WineDefinition.distinct('country', {
+  const filter = {
     normalizedKey: new RegExp(`^${escapeRegex(key)}:`),
     nonWine: { $ne: true },
     pendingIdentity: { $ne: true },
-  });
-  return ids.length === 1 ? String(ids[0]) : null;
+  };
+  const ids = await WineDefinition.distinct('country', filter);
+  if (ids.length !== 1) return null;
+  const wines = await WineDefinition.countDocuments(filter, { limit: MIN_PRODUCER_WINES });
+  return wines >= MIN_PRODUCER_WINES ? String(ids[0]) : null;
 }
 
 /**

@@ -291,19 +291,26 @@ const NV_WORDS = new Set([
   'utan argang', 'uten argang', 'uden argang',
   'zonder jaargang', 'zonder jaar', 'geen jaargang',
 ]);
-// "NM" is the French short form (non millésimé) and "MV" a multi-vintage blend.
-// The dotted or slashed ones (o.J., s.a., s/a) need their dots or slash: bare
-// letters in a vintage cell are more likely a column that was mapped wrong.
-const NV_ABBR_RE = /^(n\.?\s?m\.?|m\.?\s?v\.?|o\.\s?j\.?|s\.\s?a\.?|s\/a)$/;
-const MISSING_VINTAGE_RE = /^([-\u2013\u2014]+|\?+|n\/a|none|null|k\.\s?a\.?|0+)$/;
+// The dotted or slashed short forms (N.M., M.V., o.J., s.a., s/a, N/V) are a
+// stated non-vintage. Bare "NM" (the French short form, non millésimé) and
+// "MV" (a multi-vintage blend) are NV too, but FLAGGED like a missing year:
+// two bare letters in a vintage cell can also be a column mapped wrong (a
+// state, an initial), and the review should show them.
+const NV_ABBR_RE = /^(n\.\s?m\.?|m\.\s?v\.?|o\.\s?j\.?|s\.\s?a\.?|s\/a|n\/v)$/;
+const NV_BARE_RE = /^(nm|mv)$/;
+const MISSING_VINTAGE_RE = /^([-\u2013\u2014\u2212]+|\?+|n\/a|n\.a\.?|none|null|k\.\s?a\.?|0+)$/;
 
 export function vintageOrNV(raw) {
   const v = String(raw || '').trim();
   if (!v || v === '9999') return { vintage: 'NV', vintageMissing: true };
   if (NV_RE.test(v) || v === '1001') return { vintage: 'NV' };
-  const plain = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
-  if (MISSING_VINTAGE_RE.test(plain)) return { vintage: 'NV', vintageMissing: true };
-  if (NV_ABBR_RE.test(plain) || NV_WORDS.has(plain.replace(/-/g, ' '))) return { vintage: 'NV' };
+  // Lower case, no accents, one kind of hyphen, single spaces.
+  const plain = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2010\u2011]/g, '-').replace(/\s+/g, ' ');
+  if (MISSING_VINTAGE_RE.test(plain) || NV_BARE_RE.test(plain)) return { vintage: 'NV', vintageMissing: true };
+  // Words: a hyphen reads as a space ("non - vintage"), a closing full stop is dropped.
+  const words = plain.replace(/-/g, ' ').replace(/\s+/g, ' ').replace(/\.$/, '').trim();
+  if (NV_ABBR_RE.test(plain) || NV_WORDS.has(words)) return { vintage: 'NV' };
   return { vintage: v };
 }
 

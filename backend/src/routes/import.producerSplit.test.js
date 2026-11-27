@@ -311,3 +311,18 @@ describe('audit 2026-09-14 hardening of the registry split', () => {
     expect(probes.length).toBeLessThanOrEqual(5);
   });
 });
+
+test('a producer the registry supplied by splitting the name is not minted without a model: the wine is offered whole, with no producer', async () => {
+  // "Louis Jadot" is a producer the registry knows; this cuvée is not in it.
+  WineDefinition.__state.exactByKey.set(JADOT.normalizedKey, JADOT);
+
+  const res = await validate([{ wineName: 'Louis Jadot Cuvée Inconnue', country: 'France', vintage: '2020' }]);
+
+  const [row] = res.body.results;
+  expect(row.status).toBe('ai_new');
+  // The row is shown split, as before…
+  expect(row.item.producer).toBe('Louis Jadot');
+  // …but what would be created keeps the file's own words and no producer.
+  expect(row.aiProposed.name).toBe('Louis Jadot Cuvée Inconnue');
+  expect(row.aiProposed.producer || '').toBe('');
+});

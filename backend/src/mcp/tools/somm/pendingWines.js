@@ -467,7 +467,9 @@ registerTool({
         ? ` The existing wine is "${[twin.producer, twin.name].filter(Boolean).join(' — ')}" (wine_id ${twin.wineId}).` +
           (twin.published
             ? ' If this row is that wine, call merge_pending_wine with into_wine_id set to it.'
-            : ' That wine is itself still pending: check or complete it first, then merge this one into it.')
+            : twin.nonWine
+              ? ' That record is kept as a drink that is not wine, so nothing can be merged into it. Leave this row waiting and list it for the admin.'
+              : ' That wine is itself still pending: check or complete it first, then merge this one into it.')
         : '';
       return fail(applied.code, `${applied.message}${hint}`);
     }

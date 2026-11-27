@@ -29,6 +29,18 @@ export const sommFixPendingWine = (apiFetch, wineId, patch) =>
   });
 
 /**
+ * A pending wine IS a wine the registry already holds: move its bottles onto
+ * that published wine and remove the pending row. The fix answers 409 with
+ * `duplicate` (the wine it collided with) when that is the case.
+ */
+export const sommMergePendingWine = (apiFetch, wineId, intoWineId) =>
+  apiFetch(`/api/somm/pending-wines/${wineId}/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intoWineId }),
+  });
+
+/**
  * Correct a wine's tasting profile. Field-level: omit a key to leave it alone,
  * pass null to clear it.
  */

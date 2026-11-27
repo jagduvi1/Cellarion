@@ -1300,9 +1300,9 @@ describe('a vintage cell that says "no vintage" in words', () => {
 
   it('reads a stated non-vintage as NV, whatever the language, and does not flag it', () => {
     const stated = [
-      'Ohne', 'ohne Jahrgang', 'o.J.', 'o. J.',
-      'Non-Vintage', 'non vintage', 'MV', 'Multi-Vintage',
-      'NM', 'Sans millésime', 'non millésimé',
+      'Ohne', 'ohne Jahrgang', 'Ohne Jahrgang.', 'o.J.', 'o. J.',
+      'Non-Vintage', 'non vintage', 'non - vintage', 'M.V.', 'Multi-Vintage', 'N/V',
+      'N.M.', 'Sans millésime', 'non millésimé',
       'senza annata', 's.a.', 'sin añada', 's/a',
       'Utan årgång', 'Uten årgang', 'zonder jaargang',
     ];
@@ -1310,8 +1310,12 @@ describe('a vintage cell that says "no vintage" in words', () => {
   });
 
   it('reads a placeholder for an empty cell as a missing year: NV, flagged for the review', () => {
-    const placeholders = ['-', '--', '–', '—', '?', 'n/a', 'N/A', 'none', 'k.A.', '0'];
+    const placeholders = ['-', '--', '–', '—', '?', 'n/a', 'N/A', 'n.a.', 'none', 'k.A.', '0'];
     expect(vintagesOf(placeholders)).toEqual(placeholders.map(() => ['NV', true]));
+  });
+
+  it('reads bare "NM" and "MV" as NV but flags them: two letters can also be a column mapped wrong', () => {
+    expect(vintagesOf(['NM', 'MV', 'nm'])).toEqual([['NV', true], ['NV', true], ['NV', true]]);
   });
 
   it('leaves a year, "Unknown" and text it does not know alone', () => {

@@ -193,4 +193,52 @@ describeWithMongo('an import with no AI, on a server that checks imported wines 
     expect(wine).toMatchObject({ pendingIdentity: false, uncheckedIdentity: false, type: 'red' });
     importPolicy.set({ checkNewWines: true });
   });
+
+  test('a wine whose file states no type is stored with none, also when it is published at once', async () => {
+    importPolicy.set({ checkNewWines: false });
+    const { confirmed } = await importFile(BEN, [{ wineName: 'Soave Classico', producer: 'Cantina Esempio', country: 'Italy', vintage: '2022' }]);
+    expect(confirmed).toMatchObject({ created: 1, errors: [] });
+    const wine = await WineDefinition.findOne({ name: 'Soave Classico' }).lean();
+    expect(wine.pendingIdentity).toBe(false);
+    // Not "red": a white counted as red is wrong for everyone who finds it.
+    expect(wine.type ?? null).toBeNull();
+    importPolicy.set({ checkNewWines: true });
+  });
+
+  test('a country column that names no country does not cost the row: the registry\u2019s answer is used', async () => {
+    const { validated, confirmed } = await importFile(ANNA, [
+      { wineName: 'Barolo Cannubi', producer: 'Cantina Esempio', country: 'Piedmont', appellation: 'Barolo', type: 'red', vintage: '2017' },
+    ]);
+    expect(validated.results[0].aiProposed.country).toBe('Italy');
+    expect(confirmed).toMatchObject({ created: 1, errors: [] });
+  });
+
+  test('a curator importing their own file is not handed another member\u2019s waiting wine', async () => {
+    const SOMM = oid();
+    cellars[SOMM] = oid();
+    await mongoose.connection.collection('users').insertOne({ _id: SOMM, username: 'somm', email: 'somm@example.invalid' });
+    await mongoose.connection.collection('cellars').insertOne({ _id: cellars[SOMM], user: SOMM, name: 'Somm cellar', members: [], deletedAt: null });
+    const sommPost = async (path, items) => {
+      const res = await fetch(`${base}/api/bottles/import/${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jwt.sign({ id: String(SOMM), roles: ['user', 'somm'] }, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' })}`,
+        },
+        body: JSON.stringify({ cellarId: String(cellars[SOMM]), items }),
+      });
+      return res.json();
+    };
+    // Anna's Barolo Bussia still waits for a check.
+    expect(await WineDefinition.exists({ _id: barolo._id, uncheckedIdentity: true })).not.toBeNull();
+
+    const validated = await sommPost('validate', [FILE[0]]);
+    expect(validated.results[0].status).toBe('ai_new');
+    expect(JSON.stringify(validated.results[0].matches)).not.toContain(String(barolo._id));
+
+    const confirmed = await sommPost('confirm', validated.results.map(accept));
+    expect(confirmed).toMatchObject({ created: 1, errors: [] });
+    const [bottle] = await Bottle.find({ user: SOMM }).lean();
+    expect(String(bottle.wineDefinition)).not.toBe(String(barolo._id));
+  });
 });

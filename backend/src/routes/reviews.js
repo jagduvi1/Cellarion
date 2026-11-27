@@ -169,6 +169,20 @@ router.get('/wine/:wineId', async (req, res) => {
   }
 });
 
+// A review can be written on a wine that is not registry content yet (its
+// identity is pending, or it waits for a curator's check): its author sees
+// the wine, nobody else may. The feeds carry the wine's name and producer, so
+// such a review is left out of what OTHER members are served. `pendingIdentity`
+// is selected for this test only and never sent.
+const WINE_CARD = { path: 'wineDefinition', select: 'name producer type colour pendingIdentity', populate: { path: 'country', select: 'name' } };
+const servableTo = (viewerId) => (review) =>
+  review.wineDefinition?.pendingIdentity !== true || String(review.author?._id || review.author) === String(viewerId);
+const reviewCard = (review, liked) => {
+  const out = { ...review.toObject(), liked };
+  if (out.wineDefinition) delete out.wineDefinition.pendingIdentity;
+  return out;
+};
+
 // GET /api/reviews/user/:userId - Reviews by a user. The author is populated as
 // on the other review lists: the card links the name and offers Edit and Delete
 // only when author._id is the viewer.
@@ -196,7 +210,7 @@ router.get('/user/:userId', asyncHandler(async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName plan contribution.tier contribution.specialty')
-        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
+        .populate(WINE_CARD),
       Review.countDocuments(filter)
     ]);
 
@@ -205,10 +219,9 @@ router.get('/user/:userId', asyncHandler(async (req, res) => {
     const userVotes = await ReviewVote.find({ user: req.user.id, review: { $in: reviewIds } }).select('review');
     const likedSet = new Set(userVotes.map(v => v.review.toString()));
 
-    const enriched = reviews.map(r => ({
-      ...r.toObject(),
-      liked: likedSet.has(r._id.toString())
-    }));
+    const enriched = reviews
+      .filter(servableTo(req.user.id))
+      .map(r => reviewCard(r, likedSet.has(r._id.toString())));
 
     res.json({ reviews: enriched, total, page, pages: Math.ceil(total / limit) });
 }));
@@ -240,7 +253,7 @@ router.get('/feed', async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName plan contribution.tier contribution.specialty')
-        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
+        .populate(WINE_CARD),
       Review.countDocuments(feedFilter)
     ]);
 
@@ -249,10 +262,9 @@ router.get('/feed', async (req, res) => {
     const userVotes = await ReviewVote.find({ user: req.user.id, review: { $in: reviewIds } }).select('review');
     const likedSet = new Set(userVotes.map(v => v.review.toString()));
 
-    const enriched = reviews.map(r => ({
-      ...r.toObject(),
-      liked: likedSet.has(r._id.toString())
-    }));
+    const enriched = reviews
+      .filter(servableTo(req.user.id))
+      .map(r => reviewCard(r, likedSet.has(r._id.toString())));
 
     res.json({ reviews: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
@@ -292,7 +304,7 @@ router.get('/discover', async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName plan contribution.tier contribution.specialty')
-        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
+        .populate(WINE_CARD),
       Review.countDocuments(discoverFilter)
     ]);
 
@@ -301,10 +313,9 @@ router.get('/discover', async (req, res) => {
     const userVotes = await ReviewVote.find({ user: req.user.id, review: { $in: reviewIds } }).select('review');
     const likedSet = new Set(userVotes.map(v => v.review.toString()));
 
-    const enriched = reviews.map(r => ({
-      ...r.toObject(),
-      liked: likedSet.has(r._id.toString())
-    }));
+    const enriched = reviews
+      .filter(servableTo(req.user.id))
+      .map(r => reviewCard(r, likedSet.has(r._id.toString())));
 
     res.json({ reviews: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {

@@ -75,6 +75,31 @@ const buildDefaultFilters = (sort = DEFAULT_CELLAR_SORT) => ({
 const URL_FILTER_KEYS = ['search', 'type', 'country', 'region', 'appellation',
   'grapes', 'vintage', 'sweetnessCategory', 'minRating', 'maxRating', 'maturity', 'unplaced', 'reserved', 'storage',
   'producer', 'bottleSize', 'purchaseYear', 'ratingBand', 'sort'];
+// The filter selection a link carries in its query string.
+const filtersFromUrl = (searchParams, preferredSort) => ({
+  search: searchParams.get('search') || '',
+  type: searchParams.get('type')?.split(',').filter(Boolean) || [],
+  country: searchParams.get('country')?.split(',').filter(Boolean) || [],
+  region: searchParams.get('region')?.split(',').filter(Boolean) || [],
+  appellation: searchParams.get('appellation')?.split(',').filter(Boolean) || [],
+  grapes: searchParams.get('grapes')?.split(',').filter(Boolean) || [],
+  vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
+  sweetnessCategory: searchParams.get('sweetnessCategory')?.split(',').filter(Boolean) || [],
+  minRating: searchParams.get('minRating') || '',
+  maxRating: searchParams.get('maxRating') || '',
+  // One bucket or several, comma-separated (OR) — e.g. ?maturity=late,declining
+  maturity: toMaturityArray(searchParams.get('maturity')),
+  unplaced: searchParams.get('unplaced') || '',
+  reserved: searchParams.get('reserved') || '',
+  // 'group:<name>' or 'rack:<id>' — where the bottle is stored
+  storage: searchParams.get('storage') || '',
+  producer: searchParams.get('producer') || '',
+  bottleSize: searchParams.get('bottleSize') || '',
+  purchaseYear: searchParams.get('purchaseYear') || '',
+  // A statistics rating band ('61-80'): exactly the bottles counted in it.
+  ratingBand: searchParams.get('ratingBand') || '',
+  sort: searchParams.get('sort') || preferredSort,
+});
 const readSavedFilters = (cellarId) => {
   try {
     const raw = sessionStorage.getItem(FILTERS_STORAGE_PREFIX + cellarId);
@@ -154,30 +179,7 @@ function CellarDetail() {
     const preferredSort = preferredCellarSort(user);
     const hasUrlFilters = URL_FILTER_KEYS.some(k => searchParams.has(k));
     if (!hasUrlFilters) return readSavedFilters(id) || buildDefaultFilters(preferredSort);
-    return {
-      search: searchParams.get('search') || '',
-      type: searchParams.get('type')?.split(',').filter(Boolean) || [],
-      country: searchParams.get('country')?.split(',').filter(Boolean) || [],
-      region: searchParams.get('region')?.split(',').filter(Boolean) || [],
-      appellation: searchParams.get('appellation')?.split(',').filter(Boolean) || [],
-      grapes: searchParams.get('grapes')?.split(',').filter(Boolean) || [],
-      vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
-      sweetnessCategory: searchParams.get('sweetnessCategory')?.split(',').filter(Boolean) || [],
-      minRating: searchParams.get('minRating') || '',
-      maxRating: searchParams.get('maxRating') || '',
-      // One bucket or several, comma-separated (OR) — e.g. ?maturity=late,declining
-      maturity: toMaturityArray(searchParams.get('maturity')),
-      unplaced: searchParams.get('unplaced') || '',
-      reserved: searchParams.get('reserved') || '',
-      // 'group:<name>' or 'rack:<id>' — where the bottle is stored
-      storage: searchParams.get('storage') || '',
-      producer: searchParams.get('producer') || '',
-      bottleSize: searchParams.get('bottleSize') || '',
-      purchaseYear: searchParams.get('purchaseYear') || '',
-      // A statistics rating band ('61-80'): exactly the bottles counted in it.
-      ratingBand: searchParams.get('ratingBand') || '',
-      sort: searchParams.get('sort') || preferredSort
-    };
+    return filtersFromUrl(searchParams, preferredSort);
   });
   // ?scope=owned (chart deep link): read once; applied when the cellar list
   // arrives. Until then the first fetch waits, so the page never flashes this
@@ -285,12 +287,24 @@ function CellarDetail() {
     return () => clearTimeout(searchTimer.current);
   }, [filters.search]);
 
-  // Clear URL search params after they've been read into filter/tab state
+  // Clear URL search params after they've been read into filter/tab state.
+  // A link with filter params can also arrive while a cellar page is already
+  // open: a notification ("40 wines at peak maturity") is clicked from the
+  // bell above this very list, and the route does not remount for it. The
+  // first run only clears (the initializer above read them); every later one
+  // applies the link's filters first, on this cellar or the one it names.
+  const urlFiltersRead = useRef(false);
   useEffect(() => {
-    if (URL_FILTER_KEYS.some(k => searchParams.has(k)) || searchParams.has('tab') || searchParams.has('scope')) {
+    const hasUrlFilters = URL_FILTER_KEYS.some(k => searchParams.has(k));
+    if (urlFiltersRead.current && hasUrlFilters) {
+      setFilters(filtersFromUrl(searchParams, preferredCellarSort(user)));
+      setActiveTab('bottles');
+    }
+    urlFiltersRead.current = true;
+    if (hasUrlFilters || searchParams.has('tab') || searchParams.has('scope')) {
       setSearchParams({}, { replace: true });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Remember the filter/sort selection per cellar so it survives leaving the
   // page (e.g. opening a bottle and coming back). Restored by the initializer.

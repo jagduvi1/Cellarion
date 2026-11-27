@@ -11,7 +11,10 @@
  *     approved public photo (the shared rule, services/photoRetention); such
  *     a photo outlives its bottle and belongs to every owner, so keep;
  *   - every maturity profile is still the auto-seeded 'pending' stub
- *     (a somm reviewed one → keep everything).
+ *     (a somm reviewed one → keep everything);
+ *   - no member content points at it: a wishlist item, a review, a journal
+ *     pairing, a wine-list entry and the rest (services/wineReferences). An
+ *     import to the wishlist creates a wine with no bottle at all.
  * If any guard fails the wine simply stays — the undo of the bottles is
  * already complete and correct.
  *
@@ -22,8 +25,11 @@
  *
  * Callers pass wine ids their OWN ledger row recorded as created (add_bottle
  * detail.wine_created / bulk_add detail.createdWineIds) — never arbitrary ids.
- * Account erasure (services/userData/sharedRegistry.js) passes the departed
- * member's wines that no curator had checked yet, with its own audit action.
+ * Account erasure (services/userData/sharedRegistry.js) and the daily sweep
+ * (services/uncheckedWineSweepJob.js) pass wines that no curator had checked
+ * yet, each with its own audit action and with `onlyIf`: a filter the wine
+ * must still match when it is deleted, so a wine a curator published in the
+ * meantime stays.
  *
  * Returns { removed: boolean, reason?: string }. Never throws.
  */
@@ -36,11 +42,14 @@ const DeletedBottle = require('../models/DeletedBottle');
 const { logAudit } = require('./audit');
 const { REGISTRY_PHOTO } = require('./photoRetention');
 
-async function gcOrphanMintedWine(wineId, req, { action = 'wine.undo_create', via = 'undo' } = {}) {
+async function gcOrphanMintedWine(wineId, req, { action = 'wine.undo_create', via = 'undo', onlyIf = null } = {}) {
   try {
     if (!mongoose.isValidObjectId(wineId)) return { removed: false, reason: 'invalid id' };
-    const wine = await WineDefinition.findById(wineId).select('name producer verifiedChecks');
+    const wine = await WineDefinition.findById(wineId).select('name producer verifiedChecks uncheckedIdentity draft');
     if (!wine) return { removed: false, reason: 'already gone' };
+    if (onlyIf && Object.entries(onlyIf).some(([field, value]) => wine[field] !== value)) {
+      return { removed: false, reason: 'no longer in the state it was to be removed in' };
+    }
 
     const bottleCount = await Bottle.countDocuments({ wineDefinition: wineId });
     if (bottleCount > 0) return { removed: false, reason: `${bottleCount} bottle(s) still reference it` };
@@ -63,6 +72,11 @@ async function gcOrphanMintedWine(wineId, req, { action = 'wine.undo_create', vi
       return { removed: false, reason: 'an admin verified a data-quality check on it' };
     }
 
+    // Member content other than bottles. A failed look-up counts as "in use".
+    const { firstMemberReference } = require('./wineReferences');
+    const reference = await firstMemberReference(wineId);
+    if (reference) return { removed: false, reason: `member content still references it (${reference})` };
+
     // Guards passed — clean up everything the mint created, quietest first.
     await WineVintageProfile.deleteMany({ wineDefinition: wineId, status: 'pending' });
 
@@ -84,8 +98,16 @@ async function gcOrphanMintedWine(wineId, req, { action = 'wine.undo_create', vi
       await WineEmbedding.deleteMany({ wineDefinition: wineId });
     } catch { /* embedding cleanup is best-effort */ }
 
+    // Asked again right before the delete: a bottle added while the clean-up
+    // above ran must not be left pointing at nothing.
+    if (await Bottle.countDocuments({ wineDefinition: wineId }) > 0) {
+      return { removed: false, reason: 'a bottle was added while it was being removed' };
+    }
+    const deleted = await WineDefinition.deleteOne({ _id: wineId, ...(onlyIf || {}) });
+    if (deleted && deleted.deletedCount === 0) {
+      return { removed: false, reason: 'it changed while it was being removed' };
+    }
     require('./search').removeWine(wineId);
-    await WineDefinition.deleteOne({ _id: wineId });
 
     logAudit(req, action,
       { type: 'wine', id: wineId },

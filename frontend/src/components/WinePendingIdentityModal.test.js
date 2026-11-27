@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('../api/somm', () => ({
   sommGetPendingWines: vi.fn(),
   sommFixPendingWine: vi.fn(),
+  sommMergePendingWine: vi.fn(),
 }));
 // The admin's import switches above the queue: their own unit (ImportPolicySwitch.test.js).
 vi.mock('./ImportPolicySwitch', () => ({ default: () => null }));
@@ -15,7 +16,7 @@ vi.mock('react-i18next', () => {
   return { useTranslation: () => ({ t }) };
 });
 
-const { sommGetPendingWines, sommFixPendingWine } = await import('../api/somm');
+const { sommGetPendingWines, sommFixPendingWine, sommMergePendingWine } = await import('../api/somm');
 const WinePendingIdentityModal = (await import('./WinePendingIdentityModal')).default;
 
 const wine = (n) => ({ _id: `w${n}`, name: `Wine ${n}`, producer: '', bottleCount: 1, createdVia: 'scan' });
@@ -179,5 +180,97 @@ describe('a wine from an import that waits for a check', () => {
     await fixFirstRow('Example Estate');
     await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalled());
     expect(sommFixPendingWine.mock.calls[0][2].identityChecked).toBeUndefined();
+  });
+});
+
+describe('what a curator could not do in the queue before', () => {
+  const waiting = (n, extra = {}) => ({ ...wine(n), producer: 'Example Estate', unchecked: true, createdVia: 'import', ...extra });
+  const TWIN = { wineId: 'pub1', name: 'Wine 1', producer: 'Example Estate', published: true };
+
+  test('a waiting wine with no producer can have its other details saved: the check is not sent with it', async () => {
+    queue = [waiting(1, { producer: '' })];
+    sommFixPendingWine.mockResolvedValue(ok({ message: 'Saved' }));
+    renderModal();
+
+    fireEvent.click(await screen.findByText('admin.wines.pendingIdentity.fixBtn'));
+    fireEvent.change(screen.getByPlaceholderText('admin.wines.pendingIdentity.countryPlaceholder'), { target: { value: 'France' } });
+    fireEvent.click(screen.getByText('admin.wines.pendingIdentity.saveAndPublish'));
+
+    await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalled());
+    const patch = sommFixPendingWine.mock.calls[0][2];
+    expect(patch.countryName).toBe('France');
+    expect(patch.identityChecked).toBeUndefined();
+  });
+
+  test('…and once a producer is typed, the save is the check', async () => {
+    queue = [waiting(1, { producer: '' })];
+    sommFixPendingWine.mockResolvedValue(ok({ message: 'Saved' }));
+    renderModal();
+
+    fireEvent.click(await screen.findByText('admin.wines.pendingIdentity.fixBtn'));
+    fireEvent.change(screen.getByPlaceholderText('admin.wines.pendingIdentity.producerPlaceholder'), { target: { value: 'Example Estate' } });
+    fireEvent.click(screen.getByText('admin.wines.pendingIdentity.saveAndPublish'));
+    await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalled());
+    expect(sommFixPendingWine.mock.calls[0][2]).toMatchObject({ producer: 'Example Estate', identityChecked: true });
+  });
+
+  test('the type is shown and can be set: a wine from a file often has none', async () => {
+    queue = [waiting(1, { type: null })];
+    sommFixPendingWine.mockResolvedValue(ok({ message: 'Saved' }));
+    renderModal();
+
+    expect(await screen.findByText('admin.wines.pendingIdentity.noType')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('admin.wines.pendingIdentity.fixBtn'));
+    fireEvent.change(screen.getByLabelText('admin.wines.pendingIdentity.typeLabel'), { target: { value: 'white' } });
+    fireEvent.click(screen.getByText('admin.wines.pendingIdentity.saveAndPublish'));
+
+    await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalled());
+    expect(sommFixPendingWine.mock.calls[0][2].type).toBe('white');
+  });
+
+  test('a type left alone is not sent', async () => {
+    fixSucceeds('done');
+    renderModal();
+    await fixFirstRow('Example Estate');
+    await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalled());
+    expect(sommFixPendingWine.mock.calls[0][2].type).toBeUndefined();
+  });
+
+  test('a publish refused as a duplicate offers the merge into the wine it names, and the merge empties the row', async () => {
+    queue = [waiting(1)];
+    sommFixPendingWine.mockResolvedValue(refused(409, { error: 'identical to an existing registry wine', duplicate: TWIN }));
+    sommMergePendingWine.mockImplementation(async () => { queue = []; return ok({ message: 'Merged into Example Estate — Wine 1.' }); });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderModal();
+
+    fireEvent.click(await screen.findByText('admin.wines.pendingIdentity.publishBtn'));
+    const merge = await screen.findByText(/admin\.wines\.pendingIdentity\.mergeBtn/);
+    expect(merge.textContent).toContain('Example Estate — Wine 1');
+    fireEvent.click(merge);
+
+    await waitFor(() => expect(sommMergePendingWine).toHaveBeenCalledWith(expect.anything(), 'w1', 'pub1'));
+    expect(confirm).toHaveBeenCalled();
+    expect(await screen.findByText('Merged into Example Estate — Wine 1.')).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  test('no merge is offered when the duplicate is not a published wine, or the curator declines', async () => {
+    queue = [waiting(1)];
+    sommFixPendingWine.mockResolvedValue(refused(409, { error: 'identical', duplicate: { ...TWIN, published: false } }));
+    renderModal();
+    fireEvent.click(await screen.findByText('admin.wines.pendingIdentity.publishBtn'));
+    expect(await screen.findByText('identical')).toBeInTheDocument();
+    expect(screen.queryByText(/mergeBtn/)).not.toBeInTheDocument();
+  });
+
+  test('a declined confirmation merges nothing', async () => {
+    queue = [waiting(1)];
+    sommFixPendingWine.mockResolvedValue(refused(409, { error: 'identical', duplicate: TWIN }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderModal();
+    fireEvent.click(await screen.findByText('admin.wines.pendingIdentity.publishBtn'));
+    fireEvent.click(await screen.findByText(/mergeBtn/));
+    expect(sommMergePendingWine).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });

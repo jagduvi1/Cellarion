@@ -105,7 +105,7 @@ module.exports = [
       if (unchecked.length) {
         const { gcOrphanMintedWine } = require('../registryGc');
         for (const id of unchecked) {
-          await gcOrphanMintedWine(id, null, { action: 'wine.unchecked_erasure_delete', via: 'erasure' });
+          await gcOrphanMintedWine(id, null, { action: 'wine.unchecked_erasure_delete', via: 'erasure', onlyIf: { uncheckedIdentity: true } });
         }
       }
       const ids = ctx.draftWineIds || [];

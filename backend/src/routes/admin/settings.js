@@ -349,10 +349,11 @@ const asyncHandler = require('../../utils/asyncHandler');
 const IMPORT_POLICY_FIELDS = ['aiLookup', 'checkNewWines'];
 
 // GET /api/admin/settings/import-policy — { aiLookup, checkNewWines,
-// updatedAt, canChange, reviewOn, checking, waiting }: the two switches,
-// whether this admin may change them, whether the server reviews
+// updatedAt, canChange, reviewOn, checking, waiting, aiAvailable }: the two
+// switches, whether this admin may change them, whether the server reviews
 // contributions at all (checkNewWines does nothing without it), whether new
-// wines are in fact held back, and how many wines wait for a check now.
+// wines are in fact held back, how many wines wait for a check now, and
+// whether an AI provider is configured (aiLookup does nothing without one).
 router.get('/import-policy', asyncHandler(async (req, res) => {
   const importPolicy = require('../../config/importPolicy');
   const contributionReview = require('../../config/contributionReview');
@@ -363,8 +364,12 @@ router.get('/import-policy', asyncHandler(async (req, res) => {
     const me = await User.findById(req.user.id).select('email').lean();
     canChange = !!me && checkIsSuperAdmin(req, me.email);
   }
-  const waiting = await WineDefinition.countDocuments({ uncheckedIdentity: true, draft: { $ne: true }, nonWine: { $ne: true } });
-  res.json({ ...importPolicy.get(), canChange, reviewOn: contributionReview.isOn(), checking: importPolicy.checksNewWines(), waiting });
+  const waiting = await WineDefinition.countDocuments({ uncheckedIdentity: true, identityUnavailable: { $ne: true }, draft: { $ne: true }, nonWine: { $ne: true } });
+  res.json({
+    ...importPolicy.get(), canChange, reviewOn: contributionReview.isOn(), checking: importPolicy.checksNewWines(), waiting,
+    // Whether there is an AI provider to look anything up with at all.
+    aiAvailable: require('../../services/aiProvider').isConfigured(),
+  });
 }));
 
 // PATCH /api/admin/settings/import-policy — body { aiLookup?, checkNewWines? }.

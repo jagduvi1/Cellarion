@@ -30,6 +30,7 @@ jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }
 // of a missing country is its own unit (services/importCountry.test.js).
 jest.mock('../services/importCountry', () => ({ withDerivedCountry: jest.fn(async (identity) => identity) }));
 jest.mock('../middleware/aiBurstLimiter', () => jest.fn((req, res, next) => next()));
+jest.mock('../middleware/importValidateLimiter', () => jest.fn((req, res, next) => next()));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/exchangeRates', () => ({
   getOrCreateDailySnapshot: jest.fn().mockResolvedValue(null),
@@ -284,8 +285,40 @@ describe('a row the registry does not know is identified from its file', () => {
     const res = await validate(['2016', '2017', '2018', '2019', '2020', '2021'].map((vintage) => ({ ...row, vintage })));
 
     for (const r of res.body.results) expect(r.status).toBe('ai_new');
-    expect(withDerivedCountry).toHaveBeenCalledTimes(1);
+    // The file states the country: the registry is not asked for one.
+    expect(withDerivedCountry).not.toHaveBeenCalled();
     expect(findOrCreateWine).toHaveBeenCalledTimes(1);
+  });
+
+  test('a producer\'s range with no country column asks the registry once, not once per wine', async () => {
+    withDerivedCountry.mockImplementation(async (identity) => ({ ...identity, country: 'Germany' }));
+    const res = await validate(['Kabinett', 'Spätlese', 'Auslese', 'Trocken'].map((tier) => (
+      { wineName: `Riesling ${tier}`, producer: 'Weingut Beispiel', region: 'Mosel', vintage: '2021' })));
+
+    for (const r of res.body.results) expect(r.aiProposed.country).toBe('Germany');
+    expect(withDerivedCountry).toHaveBeenCalledTimes(1);
+    withDerivedCountry.mockImplementation(async (identity) => identity);
+  });
+
+  test('a country column that names no country ("California") is not written back over what the registry derived', async () => {
+    withDerivedCountry.mockImplementationOnce(async (identity) => ({ ...identity, country: 'United States' }));
+    const res = await validate([{ wineName: 'Cabernet Sauvignon', producer: 'Example Cellars', country: 'California', region: 'Napa Valley' }]);
+
+    const [row] = res.body.results;
+    expect(row.status).toBe('ai_new');
+    expect(row.aiProposed.country).toBe('United States');
+  });
+
+  test('a country the registry derived for one wine is not moved by another wine of the same producer', async () => {
+    withDerivedCountry
+      .mockImplementationOnce(async (identity) => ({ ...identity, country: 'Spain' }))
+      .mockImplementationOnce(async (identity) => ({ ...identity, country: 'Chile' }));
+    const res = await validate([
+      { wineName: 'Mas La Plana', producer: 'Torres', appellation: 'Penedès' },
+      { wineName: 'Manso de Velasco', producer: 'Torres', region: 'Curicó Valley' },
+    ]);
+
+    expect(res.body.results.map((r) => r.aiProposed.country)).toEqual(['Spain', 'Chile']);
   });
 });
 
@@ -325,6 +358,8 @@ describe('an AI provider is configured, and the server’s import policy turns t
 
     await validate([row]);
     expect(aiBurstLimiter).not.toHaveBeenCalled();
+    // It is not unlimited either: it has a per-member limit of its own.
+    expect(require('../middleware/importValidateLimiter')).toHaveBeenCalledTimes(1);
 
     // With the look-up on, the same request is paced as before.
     importPolicy.set({});

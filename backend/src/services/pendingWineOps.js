@@ -130,7 +130,7 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
 
   const [wines, total, pendingTotal, unavailableTotal, uncheckedTotal] = await Promise.all([
     WineDefinition.find(filter)
-      .sort({ createdAt: needsCheck ? 1 : -1 })
+      .sort(needsCheck ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 })
       .skip(offset)
       .limit(limit)
       .populate('country', 'name')
@@ -143,7 +143,7 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
     // still say how many of those there are.
     WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: { $ne: true }, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
     WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: true, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
-    WineDefinition.countDocuments({ pendingIdentity: true, uncheckedIdentity: true, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
+    WineDefinition.countDocuments({ pendingIdentity: true, uncheckedIdentity: true, identityUnavailable: { $ne: true }, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
   ]);
 
   const ids = wines.map((w) => w._id);
@@ -378,6 +378,16 @@ async function applyPendingFix(wine, clean, userId) {
   // the row simply leaves the WORK list (see the field comment on
   // models/WineDefinition.identityUnavailable). Reversible with `false`.
   if (clean.identityUnavailable !== undefined) {
+    // "The label prints no producer" cannot be said of a row that has one: it
+    // would take a wine waiting for a check out of the queue with nobody left
+    // to publish it.
+    if (clean.identityUnavailable === true && !isIdentitySentinel(wine.producer)) {
+      return {
+        ok: false,
+        code: 'invalid_input',
+        message: 'This wine has a producer, so it cannot be recorded as having none on the label. Correct the record instead, or leave it waiting.',
+      };
+    }
     wine.identityUnavailable = clean.identityUnavailable;
   }
   // The curator's check of a wine taken from a member's own data
@@ -394,8 +404,8 @@ async function applyPendingFix(wine, clean, userId) {
       ok: false,
       code: 'invalid_input',
       message:
-        'This wine cannot be checked as it stands: it has no usable producer or name. Send the producer and name ' +
-        'with identityChecked, or leave identityChecked out to keep the wine waiting.',
+        'This wine cannot be checked as it stands: it has no usable producer or name. Send the producer and the ' +
+        'name together with the check, or leave the check out to keep the wine waiting.',
     };
   }
 
@@ -591,6 +601,9 @@ async function applyPendingFix(wine, clean, userId) {
             wineId: String(twin._id), name: twin.name, producer: twin.producer || null,
             appellation: twin.appellation || null,
             published: twin.pendingIdentity !== true && twin.nonWine !== true,
+            // A record kept outside the wine registry (a spirit, a cider): it
+            // can be neither completed nor merged into.
+            nonWine: twin.nonWine === true,
           };
         }
       } catch { /* the conflict is the answer either way */ }
@@ -755,6 +768,11 @@ async function mergePendingInto(wine, targetWineId, { req = null } = {}) {
   }
   if (targetId === String(wine._id)) {
     return { ok: false, code: 'invalid_input', message: 'A wine cannot be merged into itself' };
+  }
+  // A drink that is not wine is no row of this queue and is never merged
+  // onto a wine, whoever has its id.
+  if (wine.nonWine === true) {
+    return { ok: false, code: 'conflict', message: 'This record is not a wine; it stays outside the wine registry and cannot be merged into a wine.' };
   }
   const target = await WineDefinition.findOne({ _id: { $eq: targetId } }).select('name producer pendingIdentity draft nonWine').lean();
   if (!target || target.draft === true) {

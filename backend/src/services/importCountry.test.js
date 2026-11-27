@@ -13,7 +13,7 @@
 jest.mock('../models/Appellation', () => ({ find: jest.fn() }));
 jest.mock('../models/Region', () => ({ find: jest.fn() }));
 jest.mock('../models/Country', () => ({ findById: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ distinct: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ distinct: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('./audit', () => ({ logger: { warn: jest.fn() } }));
 
 const Appellation = require('../models/Appellation');
@@ -31,6 +31,7 @@ beforeEach(() => {
   Appellation.find.mockReturnValue(docs([]));
   Region.find.mockReturnValue(docs([]));
   WineDefinition.distinct.mockResolvedValue([]);
+  WineDefinition.countDocuments.mockResolvedValue(2);
   Country.findById.mockImplementation((id) => ({ select: () => ({ lean: async () => (NAMES[id] ? { name: NAMES[id] } : null) }) }));
 });
 
@@ -64,6 +65,13 @@ test('last, the producer: every published wine of that producer is in one countr
   expect(field).toBe('country');
   expect(filter.normalizedKey.source).toBe('^cantina esempio:');
   expect(filter).toMatchObject({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } });
+});
+
+test('one published wine of the producer is not proof: it may be one earlier file\'s word', async () => {
+  WineDefinition.distinct.mockResolvedValue(['it']);
+  WineDefinition.countDocuments.mockResolvedValue(1);
+  expect(await deriveCountryName({ producer: 'Cantina Esempio' })).toBeNull();
+  expect(WineDefinition.countDocuments).toHaveBeenCalledWith(expect.any(Object), { limit: 2 });
 });
 
 test('a producer with wines in two countries settles nothing, and a placeholder producer is not asked', async () => {
