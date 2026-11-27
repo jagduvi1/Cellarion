@@ -721,9 +721,12 @@ function CellarRacks() {
 
   // Rename / regroup: PUT name + group and adopt
   // the returned values. An empty group clears it.
-  const handleEditRackSave = async (rackId, { name, group, typeConfig }) => {
+  const handleEditRackSave = async (rackId, { name, group, typeConfig, rows, cols }) => {
     try {
-      const res = await updateRack(apiFetch, rackId, { name, group, ...(typeConfig ? { typeConfig } : {}) });
+      // rows and cols come with a wall's new shape; the server then renumbers
+      // what lies in it, so those are adopted from its answer below.
+      const reshaped = rows !== undefined;
+      const res = await updateRack(apiFetch, rackId, { name, group, ...(typeConfig ? { typeConfig } : {}), ...(reshaped ? { rows, cols } : {}) });
       const data = await res.json();
       if (!res.ok) return { ok: false, error: data.error };
       // Adopt the changed fields only — the rack in state carries populated
@@ -733,6 +736,7 @@ function CellarRacks() {
         name: data.rack.name,
         group: data.rack.group ?? null,
         ...(typeConfig ? { typeConfig: data.rack.typeConfig || typeConfig } : {}),
+        ...(reshaped ? { rows: data.rack.rows, cols: data.rack.cols, slots: data.rack.slots, disabledPositions: data.rack.disabledPositions, zones: data.rack.zones } : {}),
       } : r));
       return { ok: true };
     } catch {
