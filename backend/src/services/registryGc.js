@@ -22,6 +22,8 @@
  *
  * Callers pass wine ids their OWN ledger row recorded as created (add_bottle
  * detail.wine_created / bulk_add detail.createdWineIds) — never arbitrary ids.
+ * Account erasure (services/userData/sharedRegistry.js) passes the departed
+ * member's wines that no curator had checked yet, with its own audit action.
  *
  * Returns { removed: boolean, reason?: string }. Never throws.
  */
@@ -34,7 +36,7 @@ const DeletedBottle = require('../models/DeletedBottle');
 const { logAudit } = require('./audit');
 const { REGISTRY_PHOTO } = require('./photoRetention');
 
-async function gcOrphanMintedWine(wineId, req) {
+async function gcOrphanMintedWine(wineId, req, { action = 'wine.undo_create', via = 'undo' } = {}) {
   try {
     if (!mongoose.isValidObjectId(wineId)) return { removed: false, reason: 'invalid id' };
     const wine = await WineDefinition.findById(wineId).select('name producer verifiedChecks');
@@ -85,9 +87,9 @@ async function gcOrphanMintedWine(wineId, req) {
     require('./search').removeWine(wineId);
     await WineDefinition.deleteOne({ _id: wineId });
 
-    logAudit(req, 'wine.undo_create',
+    logAudit(req, action,
       { type: 'wine', id: wineId },
-      { name: wine.name, producer: wine.producer, via: 'undo' });
+      { name: wine.name, producer: wine.producer, via });
 
     return { removed: true };
   } catch (err) {

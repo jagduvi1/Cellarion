@@ -655,6 +655,34 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // UNCHECKED IDENTITY. A wine taken from a member's own data (a cellar file)
+  // exactly as that data states it: the bottle saves at once, with its name,
+  // producer and country, and the row waits for a curator to check it before
+  // it enters the shared registry. Raw file text is not registry content: it
+  // would reach the public wine pages and search, and split one wine across
+  // every spelling a file uses.
+  //
+  // INVARIANT: uncheckedIdentity ⇒ pendingIdentity (the pre-validate hook
+  // below), so the row inherits every exclusion a pending row has, as a draft
+  // does. What sets it apart:
+  //   - from a DRAFT: curators see it, in the pending queue
+  //     (services/pendingWineOps), and it never expires;
+  //   - from a row pending for a missing producer: it does NOT leave the
+  //     queue when its producer and name are complete. Only a curator's
+  //     explicit check clears the flag (pendingWineOps.applyPendingFix,
+  //     `identityChecked`), and that save promotes through the same hook.
+  // Its normalizedKey lives in the per-creator 'unchecked~' namespace
+  // (utils/normalize.js uncheckedWineKey), so two members' rows of one wine
+  // meet only when a curator checks one. A row with no producer keeps the
+  // pending-namespace key and the empty producer, like any producerless row.
+  //
+  // Erasure (services/userData/sharedRegistry.js): the creator's unchecked
+  // rows are their own data until checked. One no bottle points at any more is
+  // deleted; one another member's bottle holds stays for the curators.
+  uncheckedIdentity: {
+    type: Boolean,
+    default: false
+  },
   // The original label photo this wine was minted from, kept so a curator can
   // READ the label instead of guessing (the whole point of the pending queue).
   // Curation-visible only — never public, never in a bottle gallery; the
@@ -967,8 +995,14 @@ wineDefinitionSchema.pre('validate', function(next) {
   // the first save, but leaving the private state is the creator's explicit
   // publish step (services/wineDraftOps.publishDraft clears `draft` and saves,
   // and THAT save promotes here).
-  if (this.draft === true) this.pendingIdentity = true;
-  if (this.pendingIdentity === true && this.draft !== true &&
+  //
+  // An UNCHECKED row is hidden the same way and kept out of the auto-promote
+  // for the same reason: its identity is usually complete from the first save,
+  // and leaving the queue is the curator's explicit check
+  // (services/pendingWineOps.applyPendingFix clears the flag, and that save
+  // promotes here).
+  if (this.draft === true || this.uncheckedIdentity === true) this.pendingIdentity = true;
+  if (this.pendingIdentity === true && this.draft !== true && this.uncheckedIdentity !== true &&
       !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name) &&
       !isImplausibleIdentity(this.producer, this.name)) {
     this.pendingIdentity = false;

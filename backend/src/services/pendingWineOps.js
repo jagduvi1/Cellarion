@@ -9,6 +9,9 @@
  * incomplete identity — no producer, a sentinel producer, or a geography typed
  * into the producer box (models/WineDefinition.pendingIdentity). They are
  * invisible to everyone but their creator until a curator completes them.
+ * Also in it: wines taken from a member's own data that no curator has
+ * checked yet (models/WineDefinition.uncheckedIdentity). Those usually have a
+ * complete identity and leave the queue on a fix that sends identityChecked.
  *
  * ANONYMISED, deliberately: the row carries the wine, its bottle count and its
  * IMAGES — never the creator's id, username or email. A curator fixes a
@@ -18,6 +21,8 @@
  * The FIX is a plain field write. Promotion is not done here and must not be:
  * the WineDefinition pre-validate hook flips pendingIdentity off as soon as
  * producer + name are both real, so every write path promotes identically.
+ * (An unchecked wine is held back by its own flag; the fix clears that flag
+ * on identityChecked and the same hook then promotes.)
  * What IS done here is the follow-through a promotion needs — search index,
  * embeddings, maturity queue, IndexNow — because a row that was excluded from
  * all four while pending has to be let back in exactly once.
@@ -30,7 +35,7 @@ const Country = require('../models/Country');
 // pendingWineKey comes from utils/normalize (beside generateWineKey), NOT from
 // services/findOrCreateWine: one definition of the key shape, and no dependency
 // from the curation queue onto the resolver's module tree to build a string.
-const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
+const { generateWineKey, pendingWineKey, uncheckedWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
 const { assignClassification } = require('./classificationOps');
 const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = require('../utils/crossFieldChecks');
 // Top-level: labelScanAccess requires nothing at load (its own model require is
@@ -53,7 +58,12 @@ const { WINE_COLOURS, stateColour, colourTypeConflict } = require('../utils/wine
 // row; the rest ride along so one pass can fix everything the misread label
 // got wrong. Deliberately NOT here: type-only/profile fields (set_wine_profile
 // owns those), nonWine (a quarantine proposal), and anything about the bottle.
-const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'classification', 'regionName', 'countryName', 'grapeNames', 'type', 'colour', 'identityUnavailable'];
+//
+// `identityChecked` is the curator's check of a wine taken from a member's own
+// data (models/WineDefinition.uncheckedIdentity): "the identity is right as it
+// stands after this write". It is what lets such a row leave the queue; sent
+// alone it confirms the record unchanged.
+const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'classification', 'regionName', 'countryName', 'grapeNames', 'type', 'colour', 'identityUnavailable', 'identityChecked'];
 /**
  * Not a field — an explicit, audited OVERRIDE of the cross-field refusal below.
  *
@@ -208,6 +218,10 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
       grapeNames: (w.grapes || []).map((g) => g.name).filter(Boolean),
       type: w.type || null,
       identityUnavailable: w.identityUnavailable === true,
+      // true = taken from a member's own data and waiting for a check: the
+      // identity is usually complete, and the row leaves the queue only on a
+      // fix that sends identityChecked.
+      unchecked: w.uncheckedIdentity === true,
       createdAt: w.createdAt,
       createdVia: w.createdVia || null,
       bottleCount: countBy.get(String(w._id)) || 0,
@@ -281,6 +295,15 @@ function validatePendingFix(patch) {
       clean.identityUnavailable = patch.identityUnavailable;
       continue;
     }
+    if (field === 'identityChecked') {
+      // Only `true`: a check is given, never taken back. A checked wine that
+      // turns out wrong is corrected like any registry wine.
+      if (patch.identityChecked !== true) {
+        return { ok: false, error: 'identityChecked must be true (leave it out to keep the wine waiting)' };
+      }
+      clean.identityChecked = true;
+      continue;
+    }
     if (typeof patch[field] !== 'string') {
       return { ok: false, error: `${field} must be a string` };
     }
@@ -346,6 +369,24 @@ async function applyPendingFix(wine, clean, userId) {
   // models/WineDefinition.identityUnavailable). Reversible with `false`.
   if (clean.identityUnavailable !== undefined) {
     wine.identityUnavailable = clean.identityUnavailable;
+  }
+  // The curator's check of a wine taken from a member's own data
+  // (models/WineDefinition.uncheckedIdentity). Clearing the flag is what lets
+  // the pre-validate hook promote the row on the save below; without it the
+  // fields are written and the row keeps waiting.
+  const wasUnchecked = wine.uncheckedIdentity === true;
+  if (clean.identityChecked === true) wine.uncheckedIdentity = false;
+  // A check says the identity is right, so it needs one: refused here with the
+  // reason, where the hook would leave the row in the queue with none.
+  if (clean.identityChecked === true &&
+      (isIdentitySentinel(wine.producer) || isIdentitySentinel(wine.name) || isImplausibleIdentity(wine.producer, wine.name))) {
+    return {
+      ok: false,
+      code: 'invalid_input',
+      message:
+        'This wine cannot be checked as it stands: it has no usable producer or name. Send the producer and name ' +
+        'with identityChecked, or leave identityChecked out to keep the wine waiting.',
+    };
   }
 
   // SHAPE gate, before any DB work. The same predicate the auto-promote hook
@@ -431,7 +472,8 @@ async function applyPendingFix(wine, clean, userId) {
   // Run when the producer was written, or when this save would PROMOTE (the
   // hook's own predicate, predicted here exactly as the key regen below does) —
   // never on an appellation-only touch-up of a row staying in the queue.
-  const willPromote = !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name) &&
+  const willPromote = wine.uncheckedIdentity !== true &&
+    !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name) &&
     !isImplausibleIdentity(wine.producer, wine.name);
   //
   // OVERRIDABLE, explicitly and audibly. The rules read the LIVE
@@ -507,10 +549,20 @@ async function applyPendingFix(wine, clean, userId) {
   // whether the cross-field gate runs) and carries the hook's implausibility
   // term — a row the hook refuses to promote must keep its per-creator
   // pending key.
-  if (clean.name || clean.producer || clean.appellation !== undefined) {
-    wine.normalizedKey = willPromote
-      ? generateWineKey(wine.name, wine.producer, wine.appellation)
-      : pendingWineKey(wine.name, wine.createdBy, wine.appellation);
+  //
+  // A row that stays UNCHECKED keeps its own per-creator namespace, and the
+  // pending one when it has no producer: the rule the mint applies
+  // (services/findOrCreateWine). The check itself moves the key as well, with
+  // no field written, because it is what takes the row out of that namespace.
+  const checkedNow = wasUnchecked && wine.uncheckedIdentity !== true;
+  if (clean.name || clean.producer || clean.appellation !== undefined || checkedNow) {
+    if (willPromote) {
+      wine.normalizedKey = generateWineKey(wine.name, wine.producer, wine.appellation);
+    } else if (wine.uncheckedIdentity === true && !isIdentitySentinel(wine.producer)) {
+      wine.normalizedKey = uncheckedWineKey(wine.name, wine.producer, wine.createdBy, wine.appellation);
+    } else {
+      wine.normalizedKey = pendingWineKey(wine.name, wine.createdBy, wine.appellation);
+    }
   }
 
   // The pre-validate hook promotes; read the outcome rather than deciding it.
@@ -553,6 +605,7 @@ async function applyPendingFix(wine, clean, userId) {
   for (const k of Object.keys(after)) {
     if (before[k] !== after[k]) diff[k] = { from: before[k], to: after[k] };
   }
+  if (checkedNow) diff.identityChecked = { from: false, to: true };
   if (clean.countryName !== undefined) diff.country = { to: clean.countryName || null };
   if (clean.regionName !== undefined) diff.region = { to: clean.regionName || null };
   if (grapeNames !== null) diff.grapes = { to: grapeNames };
