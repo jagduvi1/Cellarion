@@ -41,6 +41,7 @@ const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = requ
 // Top-level: labelScanAccess requires nothing at load (its own model require is
 // lazy), so it adds no module tree to the curation queue.
 const { stampPromotedScanRetention } = require('./labelScanAccess');
+const { isValidId } = require('../utils/validation');
 const { DRAFT_EXCLUDED } = require('./wineVisibility');
 // Not curation work either: a row quarantined as not wine (the Other
 // category) keeps pendingIdentity but never gets an identity completed,
@@ -746,13 +747,16 @@ async function loadPendingWine(wineId) {
  * @returns {{ ok:true, target, bottlesMoved }} | {{ ok:false, code, message }}
  */
 async function mergePendingInto(wine, targetWineId, { req = null } = {}) {
-  if (!mongoose.isValidObjectId(String(targetWineId))) {
+  // The id arrives from a request body: only a 24-hex STRING reaches the
+  // query, never the value as it was sent (an object would be an operator).
+  const targetId = typeof targetWineId === 'string' ? targetWineId : '';
+  if (!isValidId(targetId)) {
     return { ok: false, code: 'invalid_input', message: 'Invalid target wine id' };
   }
-  if (String(targetWineId) === String(wine._id)) {
+  if (targetId === String(wine._id)) {
     return { ok: false, code: 'invalid_input', message: 'A wine cannot be merged into itself' };
   }
-  const target = await WineDefinition.findById(targetWineId).select('name producer pendingIdentity draft nonWine').lean();
+  const target = await WineDefinition.findOne({ _id: { $eq: targetId } }).select('name producer pendingIdentity draft nonWine').lean();
   if (!target || target.draft === true) {
     return { ok: false, code: 'not_found', message: 'No registry wine with that id' };
   }

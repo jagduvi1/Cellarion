@@ -425,9 +425,8 @@ describe('wines waiting for a check', () => {
 
   test('POST /:id/merge moves the row onto the published wine', async () => {
     const row = wineDoc({ producer: 'Cave de Kaysersberg', uncheckedIdentity: true });
-    WineDefinition.findById
-      .mockResolvedValueOnce(row)                                            // the queue row
-      .mockReturnValueOnce(leanDoc({ _id: TWIN, name: 'Kaefferkopf', producer: 'Cave de Kaysersberg', pendingIdentity: false })); // the target
+    WineDefinition.findById.mockResolvedValueOnce(row); // the queue row
+    WineDefinition.findOne.mockReturnValue(leanDoc({ _id: TWIN, name: 'Kaefferkopf', producer: 'Cave de Kaysersberg', pendingIdentity: false })); // the target
     performWineMerge.mockResolvedValue({ bottlesMoved: 3, target: { _id: TWIN, name: 'Kaefferkopf', producer: 'Cave de Kaysersberg' } });
 
     const res = await merge(tokenFor(['somm']), W1, { intoWineId: TWIN });
@@ -435,14 +434,15 @@ describe('wines waiting for a check', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ mergedWineId: W1, intoWineId: TWIN, bottlesMoved: 3 });
     expect(performWineMerge).toHaveBeenCalledWith(W1, TWIN, expect.anything());
+    // The target is looked up by the validated id string, compared for equality.
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({ _id: { $eq: TWIN } });
     // The vintages still in a cellar get their maturity row on the target.
     expect(ensurePendingVintageProfile).toHaveBeenCalledWith(TWIN, '2019');
   });
 
   test('the target must be a published wine: a pending one is a 409 and nothing moves', async () => {
-    WineDefinition.findById
-      .mockResolvedValueOnce(wineDoc({ producer: 'Cave de Kaysersberg', uncheckedIdentity: true }))
-      .mockReturnValueOnce(leanDoc({ _id: TWIN, name: 'Kaefferkopf', pendingIdentity: true }));
+    WineDefinition.findById.mockResolvedValueOnce(wineDoc({ producer: 'Cave de Kaysersberg', uncheckedIdentity: true }));
+    WineDefinition.findOne.mockReturnValue(leanDoc({ _id: TWIN, name: 'Kaefferkopf', pendingIdentity: true }));
 
     const res = await merge(tokenFor(['somm']), W1, { intoWineId: TWIN });
 
@@ -456,6 +456,11 @@ describe('wines waiting for a check', () => {
 
     WineDefinition.findById.mockResolvedValueOnce(wineDoc({ uncheckedIdentity: true }));
     expect((await merge(tokenFor(['somm']), W1, {})).status).toBe(400);
+
+    // An id that is not a plain string never reaches the query.
+    WineDefinition.findById.mockResolvedValueOnce(wineDoc({ uncheckedIdentity: true }));
+    expect((await merge(tokenFor(['somm']), W1, { intoWineId: { $ne: null } })).status).toBe(400);
+    expect(WineDefinition.findOne).not.toHaveBeenCalled();
 
     expect((await merge(tokenFor(['user']), W1, { intoWineId: TWIN })).status).toBe(403);
     expect(performWineMerge).not.toHaveBeenCalled();

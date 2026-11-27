@@ -255,6 +255,8 @@ describeWithMongo('wines waiting for a curator\'s check (real MongoDB)', () => {
       expect(await ops.mergePendingInto(row, String(second))).toMatchObject({ ok: false, code: 'invalid_input' });
       expect(await ops.mergePendingInto(row, String(oid()))).toMatchObject({ ok: false, code: 'not_found' });
       expect(await ops.mergePendingInto(row, 'not-an-id')).toMatchObject({ ok: false, code: 'invalid_input' });
+      // A query operator in place of the id is refused, not run.
+      expect(await ops.mergePendingInto(row, { $ne: null })).toMatchObject({ ok: false, code: 'invalid_input' });
 
       const other = (await mint({ name: 'Brunello', producer: 'Fattoria Esempio', country: 'Italy' }, EVA)).wine._id;
       expect(await ops.mergePendingInto(row, String(other))).toMatchObject({ ok: false, code: 'conflict' });
