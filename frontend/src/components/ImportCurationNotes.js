@@ -1,23 +1,28 @@
 import { useTranslation } from 'react-i18next';
 
 /**
- * The lines on the import's done screen about wines a curator still looks at.
- * Plain lines, no dialog and no extra step: the bottles ARE imported, so this
- * is information, not an action.
+ * The lines on the import's done screen about what still happens after it:
+ * wines a curator still looks at, photos still being copied in. Plain lines,
+ * no dialog and no extra step: the bottles ARE imported, so this is
+ * information, not an action.
  *
  *   pendingIdentityCount  wines that could not be fully identified from the
  *                         file (no producer): a curator completes them;
  *   uncheckedCount        new wines a curator checks before other members can
  *                         see them (a server setting, backend
- *                         config/importPolicy).
+ *                         config/importPolicy);
+ *   photosQueued          photos the file links to, copied onto the bottles
+ *                         in the background (backend services/importPhotos),
+ *                         each then checked like any uploaded photo.
  *
- * Renders nothing when both are zero. Used by pages/ImportBottles.
+ * Renders nothing when all are zero. Used by pages/ImportBottles.
  */
 export default function ImportCurationNotes({ result }) {
   const { t } = useTranslation();
   const incomplete = result?.pendingIdentityCount || 0;
   const unchecked = result?.uncheckedCount || 0;
-  if (!incomplete && !unchecked) return null;
+  const photos = result?.photosQueued || 0;
+  if (!incomplete && !unchecked && !photos) return null;
   return (
     <>
       {incomplete > 0 && (
@@ -30,6 +35,9 @@ export default function ImportCurationNotes({ result }) {
       )}
       {unchecked > 0 && (
         <p className="done-note">{t('importBottles.done.uncheckedNote', { n: unchecked })}</p>
+      )}
+      {photos > 0 && (
+        <p className="done-note">{t('importBottles.done.photosQueuedNote', { n: photos })}</p>
       )}
     </>
   );

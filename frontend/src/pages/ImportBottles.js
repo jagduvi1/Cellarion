@@ -11,7 +11,7 @@ import {
   parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer,
   parseCSV, detectDelimiter, detectPlocFile, parsePlocFiles,
 } from '../utils/importMappers';
-import { buildImportItem as buildImportItemPayload, applyImportOnOrder } from '../utils/importPayload';
+import { buildImportItem as buildImportItemPayload, applyImportOnOrder, applyImportPhotoChoice } from '../utils/importPayload';
 import { prepareImportItems } from '../utils/importPrepare';
 import { describePriceWarning } from '../utils/priceValidation';
 import { summariseImportOutcome, buildImportReportCsv } from '../utils/importReport';
@@ -1033,9 +1033,9 @@ function ImportBottles() {
     setSubmittedRows(importableRows);
     setUserSkippedRows(skippedAtReview);
     setUnresolvedRows(unresolvedAtReview);
-    const items = applyImportOnOrder(importableRows.map(buildImportItem), {
+    const items = applyImportPhotoChoice(applyImportOnOrder(importableRows.map(buildImportItem), {
       onOrder: importOnOrder, expectedArrival: importExpectedArrival,
-    });
+    }), importWarnings);
 
     // Mirror of the backend cap: /confirm refuses more than MAX_IMPORT_ROWS
     // in one request — fail here with guidance instead of a bare 400 after
@@ -1407,7 +1407,7 @@ function ImportBottles() {
       </div>
 
       {parsedItems.length > 0 && detectedFormat === 'receipt' && receiptInfo && renderReceiptSummary()}
-      {parsedItems.length > 0 && <ImportParseWarnings importWarnings={importWarnings} parsedItems={parsedItems} />}
+      {parsedItems.length > 0 && <ImportParseWarnings importWarnings={importWarnings} parsedItems={parsedItems} setImportWarnings={setImportWarnings} />}
       {parsedItems.length > 0 && renderCtDisclosure()}
       {parsedItems.length > 0 && renderVivinoHistoryChoice()}
 
@@ -1913,7 +1913,7 @@ function ImportBottles() {
         </p>
 
         {/* Parse-time warnings (CT truncation / pending bottles on order) + encoding info */}
-        <ImportParseWarnings importWarnings={importWarnings} parsedItems={parsedItems} />
+        <ImportParseWarnings importWarnings={importWarnings} parsedItems={parsedItems} setImportWarnings={setImportWarnings} />
         <div className="import-rack-options import-on-order-review">
           {renderOnOrderChoice()}
         </div>

@@ -20,6 +20,11 @@ import { parsePlocGrapes, buildPlocDateParser } from './importPloc';
 // file a drunk bottle under. A file with consumed counts says so in a warning
 // instead of losing them unseen.
 //
+// The photo column links each wine to the photo its owner took in the app.
+// When the owner ticks "bring in the photos" on the review step, the link goes
+// to the server as it is: the server copies the photo in after the import
+// (backend services/importPhotos), from that app's photo store only.
+//
 // utils/importMappers.js re-exports the public names.
 
 /** Header names per field, in every language seen; compared in normHeader form. */
@@ -44,6 +49,7 @@ const MA_CAVE_COLUMNS = {
   pairings: ['Speise- und Weinpaarungen'],
   comment: ['Kommentar'],
   added: ['Hinzufügedatum'],
+  photo: ['Foto'],
 };
 
 // The columns no other export has together. A file is this app's when every
@@ -165,23 +171,38 @@ export function makeMaCaveMapper(rows) {
       notes,
       ...(rating > 0 ? { rating, ratingScale: '5' } : {}),
       dateAdded: dates.parse(cell(row, 'added')),
+      photoUrl: cell(row, 'photo') || undefined,
     };
   };
 }
 
 /**
- * The notices a Ma Cave à Vins file needs beyond the shared ones: rows whose
- * consumed column is filled (those bottles are not added to the drinking
- * history). parseAndMap adds them to its warnings.
+ * The notices a Ma Cave à Vins file needs beyond the shared ones, which
+ * parseAndMap adds to its warnings:
+ *   macave-consumed-not-imported  rows whose consumed column is filled (those
+ *                                 bottles are not added to the drinking history);
+ *   macave-photos                 how many photos the file links to, with the
+ *                                 owner's choice to bring them in (`include`).
+ *                                 Unticked until the owner ticks it: a photo is
+ *                                 copied only because they asked for it
+ *                                 (utils/importPayload applyImportPhotoChoice).
  *
  * @returns {object[]}
  */
 export function maCaveWarnings(rows) {
   const columns = resolveColumns(rows.length > 0 ? Object.keys(rows[0]) : []);
-  if (!columns.consumed) return [];
-  const filled = rows.filter((r) => {
-    const v = String(r[columns.consumed] ?? '').trim();
-    return v !== '' && !DASH_ONLY.test(v) && v !== '0';
-  }).length;
-  return filled > 0 ? [{ code: 'macave-consumed-not-imported', count: filled, column: columns.consumed }] : [];
+  const cellOf = (r, header) => {
+    const v = String(r[header] ?? '').trim();
+    return DASH_ONLY.test(v) ? '' : v;
+  };
+  const warnings = [];
+  if (columns.consumed) {
+    const filled = rows.filter((r) => { const v = cellOf(r, columns.consumed); return v !== '' && v !== '0'; }).length;
+    if (filled > 0) warnings.push({ code: 'macave-consumed-not-imported', count: filled, column: columns.consumed });
+  }
+  if (columns.photo) {
+    const photos = new Set(rows.map((r) => cellOf(r, columns.photo)).filter(Boolean)).size;
+    if (photos > 0) warnings.push({ code: 'macave-photos', count: photos, include: false });
+  }
+  return warnings;
 }

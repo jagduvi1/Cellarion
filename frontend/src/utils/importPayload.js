@@ -72,6 +72,9 @@ export function buildImportItem(r, selection) {
     // bottle is created ON ORDER, with the expected month when known.
     onOrder: r.item.onOrder,
     expectedArrival: r.item.expectedArrival,
+    // The link to the photo the owner took in another cellar app (a Ma Cave à
+    // Vins export): the server copies it in after the import.
+    photoUrl: r.item.photoUrl,
   };
 }
 
@@ -93,4 +96,17 @@ export function applyImportOnOrder(items, { onOrder, expectedArrival } = {}) {
     } = it;
     return { ...rest, onOrder: true, expectedArrival: expectedArrival || undefined };
   });
+}
+
+/**
+ * The review step's "bring in the photos" choice, applied to the confirm
+ * items: a photo link goes to the server only when the owner ticked the box
+ * on the file's photo notice (utils/importMaCave maCaveWarnings, `include`).
+ * Without a ticked notice every link is left out, so no photo is ever copied
+ * that the owner did not ask for.
+ */
+export function applyImportPhotoChoice(items, importWarnings) {
+  const wanted = (importWarnings || []).some((w) => w.code === 'macave-photos' && w.include === true);
+  if (wanted) return items;
+  return items.map(({ photoUrl, ...rest }) => rest);
 }

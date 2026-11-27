@@ -17,6 +17,12 @@ test('nothing to say: nothing rendered', () => {
   expect(render(<ImportCurationNotes result={null} />).container).toBeEmptyDOMElement();
 });
 
+test('photos still being copied in get their line, on their own too', () => {
+  render(<ImportCurationNotes result={{ photosQueued: 7 }} />);
+  expect(screen.getByText('importBottles.done.photosQueuedNote:{"n":7}')).toBeInTheDocument();
+  expect(screen.queryByText(/pendingIdentityNote|uncheckedNote/)).not.toBeInTheDocument();
+});
+
 test('wines that could not be identified get their line', () => {
   render(<ImportCurationNotes result={{ pendingIdentityCount: 3 }} />);
   expect(screen.getByText('importBottles.done.pendingIdentityNote:{"n":3}')).toBeInTheDocument();

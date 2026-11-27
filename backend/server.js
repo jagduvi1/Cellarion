@@ -287,7 +287,10 @@ connectDB().then(async () => {
       eventBus.closeAll();
       mcpSessions.closeAllSessions('shutdown');
     },
-    drains: [whenProcessingIdle],
+    // The import's photo queue finishes the photo in hand. Required here, not
+    // at the top: the routes already loaded it, and server.js itself stays
+    // free of the models (config/runtime.boot.test.js loads it without them).
+    drains: [whenProcessingIdle, () => require('./src/services/importPhotos').stopImportPhotos()],
     closeDb: () => mongoose.disconnect(),
   });
 });

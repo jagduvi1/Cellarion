@@ -34,6 +34,7 @@ const { sanitizeRackConfigs, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils
 const { RACK_TYPES } = require('../models/Rack');
 // The racks a file names: created before the bottles, filled after them.
 const { createImportRacks, placeImportedBottles } = require('../services/importRacks');
+const { queueImportPhotos } = require('../services/importPhotos');
 const { validatePriceSanity } = require('../utils/priceValidation');
 const { computeUserMediansByCurrency } = require('../services/priceWarnings');
 const { parseCurrency, currencyOrFallback, isSupportedCurrency } = require('../config/currencies');
@@ -905,6 +906,8 @@ router.post('/confirm', async (req, res) => {
     // overflow cleanly into adjacent free slots.
     // Shape: [{ rackName, item, bottleId, sourceIndex }]
     const pendingPlacements = [];
+    // The photo link a row's file gave, by bottle; copied in after the response (services/importPhotos).
+    const photoRows = [];
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -1218,6 +1221,7 @@ router.post('/confirm', async (req, res) => {
 
           await bottle.save();
           created++;
+          if (item.photoUrl) photoRows.push({ bottleId: bottle._id, url: item.photoUrl });
           if (item.addToHistory) {
             createdHistory++;
           } else if (bottle.status === ORDERED_STATUS) {
@@ -1317,6 +1321,7 @@ router.post('/confirm', async (req, res) => {
 
         await bottle.save();
         created++;
+        if (item.photoUrl) photoRows.push({ bottleId: bottle._id, url: item.photoUrl });
         if (item.addToHistory) {
           createdHistory++;
         } else if (bottle.status === ORDERED_STATUS) {
@@ -1411,7 +1416,11 @@ router.post('/confirm', async (req, res) => {
       }),
     });
 
+    // Each photo is checked like any member's upload before others see it.
+    const photosQueued = queueImportPhotos(req, photoRows, { cellarId: cellar._id });
+
     res.json({
+      ...(photosQueued ? { photosQueued } : {}),
       created,
       createdActive,
       // Only when some rows came in on order — the response shape is otherwise unchanged.

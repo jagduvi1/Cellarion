@@ -5353,6 +5353,7 @@
       "plocRackTooBig": "\"{{rack}}\" is {{rows}} x {{cols}}, larger than a Cellarion rack allows (20 x 20). Its bottles will be imported without a position.",
       "plocUnmatchedHistory": "{{count}} history entr(y/ies) refer to wines that are not in the wines file, and were skipped.",
       "maCaveConsumedNotImported": "{{n}} wine(s) in the file have a number in \"{{column}}\". Bottles you have already drunk are not added to your drinking history, because the file does not say when they were drunk.",
+      "maCavePhotos": "Also bring in the {{n}} photo(s) your file links to. They are copied from Ma Cave à Vins onto your bottles, as you took them.",
       "ctPendingOnOrder_one": "{{count}} bottle still on order in CellarTracker will be imported as on order: {{wines}}. It stays out of your cellar until you mark it as arrived.",
       "ctPendingOnOrder_other": "{{count}} bottles still on order in CellarTracker will be imported as on order: {{wines}}. They stay out of your cellar until you mark them as arrived."
     },
@@ -5635,6 +5636,7 @@
       "couldntPlace": "Couldn't place",
       "pendingIdentityNote": "{{n}} wine(s) couldn't be fully identified from your file — the bottles are in your cellar, and our curators will complete the details.",
       "uncheckedNote": "{{n}} new wine(s) from your file are in your cellar. A curator checks their details before other members can see them.",
+      "photosQueuedNote": "{{n}} photo(s) linked in your file are being added to your bottles. They appear within a few minutes.",
       "autoCreatedRacks": "Auto-created racks ({{count}})",
       "unplacedSummary": "Bottles that couldn't be placed in a rack ({{count}})",
       "unplacedRow": "Row {{row}} → rack <1>{{rack}}</1>",

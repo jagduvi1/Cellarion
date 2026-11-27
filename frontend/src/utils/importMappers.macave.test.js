@@ -90,13 +90,28 @@ describe('Ma Cave à Vins: the columns', () => {
     expect(byName('Riesling Kabinett')[0].notes).toBe('Speise- und Weinpaarungen: Fisch');
   });
 
+  it('carries the photo link of a wine that has one', () => {
+    expect(byName('Riesling Kabinett').every((it) => it.photoUrl === PHOTO)).toBe(true);
+    expect(byName('Brut Rosé')[0].photoUrl).toBeUndefined();
+  });
+
   it('strips the blend shares from the grapes', () => {
     expect(byName('Brut Rosé')[0].grapes).toEqual(['Pinot Noir', 'Chardonnay']);
   });
 
   it('warns only about the bottles that really have no vintage', () => {
     const { warnings } = parseAndMap(fileText());
-    expect(warnings).toEqual([{ code: 'vintage-missing', count: 2 }]);
+    expect(warnings.filter((w) => w.code === 'vintage-missing')).toEqual([{ code: 'vintage-missing', count: 2 }]);
+  });
+
+  it('counts the photos the file links to, with the box to bring them in unticked', () => {
+    const { warnings } = parseAndMap(fileText());
+    expect(warnings).toContainEqual({ code: 'macave-photos', count: 1, include: false });
+  });
+
+  it('says nothing about photos when the file links none', () => {
+    const { warnings = [] } = parseAndMap(fileText([ROWS[1], ROWS[2]]));
+    expect(warnings.map((w) => w.code)).not.toContain('macave-photos');
   });
 });
 
