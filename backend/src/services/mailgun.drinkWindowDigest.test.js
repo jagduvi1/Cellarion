@@ -39,3 +39,45 @@ test('says it comes at most weekly and links a stop for just these emails, Setti
   }
   expect(msg.text).toContain('- Château Musar 2008: Past its window');
 });
+
+describe('a long list', () => {
+  const many = (status, n) => Array.from({ length: n }, (_, i) => ({ name: `${status} wine ${i + 1}`, vintage: 2015, status }));
+  const send = async (list) => {
+    mockCreate.mockClear();
+    await sendDrinkWindowDigest('anna@example.com', 'Anna', list, USER);
+    return mockCreate.mock.calls[0][1];
+  };
+  const listedIn = (text) => text.split('\n').filter((l) => l.startsWith('- '));
+
+  test('up to 20 wines are all listed, with no count line', async () => {
+    const msg = await send(many('peak', 20));
+    expect(listedIn(msg.text)).toHaveLength(20);
+    expect(msg.text).toContain('Some bottles in your cellar have drink-window updates:');
+    expect(msg.text).not.toContain('more.');
+  });
+
+  test('beyond 20 it lists 20, counts each status and counts the rest', async () => {
+    const msg = await send([...many('declining', 264), ...many('ending', 91), ...many('peak', 214)]);
+
+    expect(listedIn(msg.text)).toHaveLength(20);
+    for (const body of [msg.text, msg.html]) {
+      expect(body).toContain('569 wines in your cellar have drink-window updates: 264 past their window, 91 with their peak ending soon, 214 at peak. Here are 20 of them:');
+      expect(body).toContain('…and 549 more. Open your cellar to see them all.');
+    }
+    expect(msg.subject).toBe('Cellarion: 569 bottles need your attention');
+    // Every status is shown, the urgent ones first: not 20 wines past their window.
+    const statuses = listedIn(msg.text).map((l) => l.split(': ')[1]);
+    expect(statuses.filter((s) => s.startsWith('Past its window'))).toHaveLength(8);
+    expect(statuses.filter((s) => s.startsWith('Peak ending soon'))).toHaveLength(6);
+    expect(statuses.filter((s) => s.startsWith('Entered peak'))).toHaveLength(6);
+    expect((msg.html.match(/<tr>/g) || []).length).toBe(21);
+  });
+
+  test('a status with few wines gives its free places to the others', async () => {
+    const msg = await send([...many('declining', 2), ...many('peak', 60)]);
+    const statuses = listedIn(msg.text).map((l) => l.split(': ')[1]);
+    expect(statuses.filter((s) => s.startsWith('Past its window'))).toHaveLength(2);
+    expect(statuses.filter((s) => s.startsWith('Entered peak'))).toHaveLength(18);
+    expect(msg.text).toContain('62 wines in your cellar have drink-window updates: 2 past their window, 60 at peak.');
+  });
+});

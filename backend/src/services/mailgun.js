@@ -154,8 +154,44 @@ async function sendPasswordResetEmail(toEmail, username, token) {
   });
 }
 
+// The drink-window email lists at most this many wines; the rest are counted.
+// After an import, or at the turn of the year, hundreds of wines change at once.
+const DIGEST_LIST_MAX = 20;
+const DIGEST_STATUS_ORDER = ['declining', 'ending', 'peak'];
+// Any status that is not peak or ending is worded as past its window.
+const digestStatus = (status) => (status === 'peak' || status === 'ending' ? status : 'declining');
+
 /**
- * Send a drink-window digest email summarising bottles that need attention.
+ * The wines a drink-window email lists when there are more than it shows: an
+ * equal share of each status present, most urgent first, the free places going
+ * to the more urgent statuses. Without the share, a long list would show only
+ * wines past their window.
+ *
+ * @param {Array<{name:string, vintage:string, status:string}>} bottles
+ * @param {number} [max]
+ * @returns {Array<{name:string, vintage:string, status:string}>}
+ */
+function pickDigestLines(bottles, max = DIGEST_LIST_MAX) {
+  if (bottles.length <= max) return bottles;
+  const byStatus = DIGEST_STATUS_ORDER
+    .map((status) => bottles.filter((b) => digestStatus(b.status) === status))
+    .filter((list) => list.length > 0);
+  const share = Math.floor(max / byStatus.length);
+  const picked = byStatus.map((list) => list.slice(0, share));
+  let free = max - picked.reduce((n, list) => n + list.length, 0);
+  for (let i = 0; i < byStatus.length && free > 0; i++) {
+    const extra = byStatus[i].slice(picked[i].length, picked[i].length + free);
+    picked[i].push(...extra);
+    free -= extra.length;
+  }
+  return picked.flat();
+}
+
+/**
+ * Send the drink-window email: the wines whose bottles reached a new status.
+ * Called by services/drinkWindowNotifier.maybeSendDrinkWindowEmail, at most
+ * once a week per member. Lists up to DIGEST_LIST_MAX wines; beyond that it
+ * gives the number per status and counts the rest.
  * @param {string} toEmail
  * @param {string} username
  * @param {Array<{name:string, vintage:string, status:string}>} bottles
@@ -190,16 +226,37 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   const statusColor = (s) =>
     s === 'peak' ? '#2D7A45' : s === 'ending' ? '#D4A373' : '#C0504D';
 
-  const rows = bottles.map(b => `
+  const listed = pickDigestLines(bottles);
+  const more = bottles.length - listed.length;
+  // Only when the list is cut: how many wines there are of each status.
+  const countOf = (status) => bottles.filter((b) => digestStatus(b.status) === status).length;
+  const summary = more > 0
+    ? [
+      [countOf('declining'), 'past their window'],
+      [countOf('ending'), 'with their peak ending soon'],
+      [countOf('peak'), 'at peak'],
+    ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`).join(', ')
+    : '';
+  const intro = more > 0
+    ? `${bottles.length} wines in your cellar have drink-window updates: ${summary}. Here are ${listed.length} of them:`
+    : 'Some bottles in your cellar have drink-window updates:';
+  const moreLine = more > 0 ? `…and ${more} more. Open your cellar to see them all.` : '';
+
+  const rows = listed.map(b => `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;">${escapeHtml(b.name)} ${escapeHtml(b.vintage)}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${statusColor(b.status)};font-weight:600;">
         ${statusLabel(b.status)}
       </td>
     </tr>
-  `).join('');
+  `).join('') + (more > 0 ? `
+    <tr>
+      <td colspan="2" style="padding:8px 12px;color:#666;">${moreLine}</td>
+    </tr>
+  ` : '');
 
-  const textLines = bottles.map(b => `- ${b.name} ${b.vintage}: ${statusLabel(b.status)}`);
+  const textLines = listed.map(b => `- ${b.name} ${b.vintage}: ${statusLabel(b.status)}`);
+  if (more > 0) textLines.push(moreLine);
 
   await mg.messages.create(DOMAIN, {
     from: FROM,
@@ -208,7 +265,7 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
     text: [
       `Hello ${username},`,
       '',
-      'Some bottles in your cellar have drink-window updates:',
+      intro,
       '',
       ...textLines,
       '',
@@ -222,7 +279,7 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
         <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
-        <p>Some bottles in your cellar have drink-window updates:</p>
+        <p>${escapeHtml(intro)}</p>
         <table style="width:100%;border-collapse:collapse;margin:1rem 0;">
           <thead>
             <tr style="background:#f5f5f5;">

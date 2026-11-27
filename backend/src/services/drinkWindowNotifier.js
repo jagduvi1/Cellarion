@@ -3,8 +3,9 @@
  *
  * Checks all users' active bottles against WineVintageProfile drink windows
  * and creates in-app (+ push) notifications when a bottle transitions to a new
- * maturity status. The email gathers them: at most one a week
- * (maybeSendDrinkWindowEmail).
+ * maturity status: one per wine, or one for all the wines of a cellar that
+ * reached the same status in the run when there are several (planNotifications).
+ * The email gathers them: at most one a week (maybeSendDrinkWindowEmail).
  *
  * First run is a "silent seed": it records each bottle's current status
  * without sending notifications, so only future transitions trigger alerts.
@@ -192,10 +193,13 @@ async function processUser(user, isFirstRun) {
     // Determine notification type based on transition
     let notifType = null;
 
-    if (maturityStatus === 'peak' && prevStatus !== 'peak' && prevStatus !== 'ending') {
-      notifType = 'peak';
-    } else if (maturityStatus === 'peak' && windowEnd && (windowEnd - currentYear) <= 1 && prevStatus !== 'ending') {
+    // 'ending' is tested before 'peak': a bottle first seen at peak in the last
+    // year of its window is announced once, as ending. Tested the other way
+    // round it is announced as peak today and as ending tomorrow.
+    if (maturityStatus === 'peak' && windowEnd && (windowEnd - currentYear) <= 1 && prevStatus !== 'ending') {
       notifType = 'ending';
+    } else if (maturityStatus === 'peak' && prevStatus !== 'peak' && prevStatus !== 'ending') {
+      notifType = 'peak';
     } else if (maturityStatus === 'declining' && prevStatus !== 'declining') {
       notifType = 'declining';
     } else if (maturityStatus === 'late' && prevStatus !== 'late' && prevStatus !== 'declining') {
@@ -275,23 +279,70 @@ async function processUser(user, isFirstRun) {
     }
   }
 
-  // Create in-app notifications (also triggers push via the notification service)
-  for (const alert of uniqueAlerts) {
-    const { title, message, type } = buildNotification(alert);
-    // The vintage page of the cellar: its drink window, its bottles and Drink.
-    // Not a ?search= link on the cellar list: that matches other wines of the
-    // same name and other vintages, and does nothing when the cellar is open.
-    const link = `/cellars/${alert.cellarId}/vintages/${alert.wdId}/${encodeURIComponent(alert.vintage || 'NV')}`;
-    // Pass the 'drinkWindow' category so the push gate honours the
-    // drinkWindow.push preference. Without it, createNotification falls back to
-    // the permissive "any push toggle on" path and pushes even when the user
-    // turned drinkWindow.push off.
+  // Create in-app notifications (also triggers push via the notification service).
+  // Pass the 'drinkWindow' category so the push gate honours the
+  // drinkWindow.push preference. Without it, createNotification falls back to
+  // the permissive "any push toggle on" path and pushes even when the user
+  // turned drinkWindow.push off.
+  const notifications = planNotifications(uniqueAlerts);
+  for (const { type, title, message, link } of notifications) {
     await createNotification(user._id, type, title, message, link, 'drinkWindow');
   }
 
   // The email is NOT sent here: maybeSendDrinkWindowEmail sends at most one a
   // week, built from every bottle notified since the last one.
-  return uniqueAlerts.length;
+  return notifications.length;
+}
+
+// From this many wines of one cellar reaching the same status in one run, the
+// bell gets ONE notification for them instead of one each. An import, a first
+// cellar fill and the turn of the year move hundreds of bottles at once.
+const GROUP_FROM = 3;
+
+// The cellar list filtered to the wines a grouped notification is about. The
+// values are the cellar page's ?maturity= buckets (frontend
+// utils/filterLabels.js MATURITY_I18N_KEY); 'ending' has no bucket of its own,
+// those wines are at peak.
+const GROUP_MATURITY_FILTER = { peak: 'peak', ending: 'peak', declining: 'late,declining' };
+
+/**
+ * Turn one run's alerts (one per wine, vintage and status) into the
+ * notifications to create: a wine alone, or with one other, gets its own
+ * notification linking its vintage page; GROUP_FROM or more of one cellar and
+ * status share one, linking the cellar filtered to that status.
+ *
+ * @param {Array<{cellarId, wdId, name, vintage, status}>} alerts
+ * @returns {Array<{type, title, message, link}>}
+ */
+function planNotifications(alerts) {
+  const groups = new Map();
+  for (const alert of alerts) {
+    const key = `${alert.cellarId}:${alert.status}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(alert);
+  }
+
+  const out = [];
+  for (const list of groups.values()) {
+    if (list.length >= GROUP_FROM) {
+      const [first] = list;
+      out.push({
+        ...buildGroupNotification(first, list.length),
+        link: `/cellars/${first.cellarId}?maturity=${GROUP_MATURITY_FILTER[first.status] || GROUP_MATURITY_FILTER.declining}`,
+      });
+      continue;
+    }
+    for (const alert of list) {
+      out.push({
+        ...buildNotification(alert),
+        // The vintage page of the cellar: its drink window, its bottles and Drink.
+        // Not a ?search= link on the cellar list: that matches other wines of the
+        // same name and other vintages, and does nothing when the cellar is open.
+        link: `/cellars/${alert.cellarId}/vintages/${alert.wdId}/${encodeURIComponent(alert.vintage || 'NV')}`,
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -471,6 +522,37 @@ function buildNotification(alert) {
         type: 'drink_window_past',
         title: 'Past its window',
         message: `${wine} has passed its drinking window — drink soon if at all.`
+      };
+  }
+}
+
+/**
+ * One notification for `count` wines of a cellar that reached the same status
+ * in one run, naming the first. It says where the wines ARE, not that they
+ * "entered" a window: after an import most of them were there already.
+ */
+function buildGroupNotification(alert, count) {
+  const wine = alert.vintage && alert.vintage !== 'NV' ? `${alert.name} ${alert.vintage}` : alert.name;
+  const others = count - 1;
+  switch (alert.status) {
+    case 'peak':
+      return {
+        type: 'drink_window_peak',
+        title: `${count} wines at peak maturity`,
+        message: `${wine} and ${others} other wines in your cellar are in their peak drinking window — time to enjoy them!`
+      };
+    case 'ending':
+      return {
+        type: 'drink_window_ending',
+        title: `${count} wines with their peak ending soon`,
+        message: `${wine} and ${others} other wines in your cellar are nearing the end of their peak window — don't miss them!`
+      };
+    case 'declining':
+    default:
+      return {
+        type: 'drink_window_past',
+        title: `${count} wines past their window`,
+        message: `${wine} and ${others} other wines in your cellar have passed their drinking window — drink them soon if at all.`
       };
   }
 }
