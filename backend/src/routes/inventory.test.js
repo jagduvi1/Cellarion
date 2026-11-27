@@ -377,7 +377,8 @@ describe('a read token gets the inventory', () => {
       addedAt: '2025-01-02T10:00:00.000Z', opened: false, consumed: null,
       maturity: 'peak',
       window: { drinkFrom: 2024, peakFrom: null, peakUntil: null, drinkTo: 2040 },
-      location: { rack: id('r1'), rackName: 'Fridge', position: 14, shelf: 2, row: 2, col: 2 },
+      // wall: the box and the spot in it, on a wall rack only.
+      location: { rack: id('r1'), rackName: 'Fridge', position: 14, shelf: 2, row: 2, col: 2, wall: null },
       place: 'Basement, box 3',
       image: '/api/uploads/thumbs/processed/b1own.webp.webp',
       personal: [{ key: 'Closure', type: 'enum', unit: null, value: 'cork', level: 'bottle', by: 'maria' }],
