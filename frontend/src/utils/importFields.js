@@ -275,12 +275,35 @@ export function mapWineType(typeStr) {
 // takes no year below 1900: the bottle would be dropped. No wine has those
 // years, so they are sentinels whichever mapper claimed the file: 1001 is a
 // stated non-vintage, 9999 an unknown year (filed like a blank one).
+//
+// The same goes for the other ways a file says "no vintage". The backend takes
+// a year, "NV" or "Unknown" and refuses anything else: a German file that
+// writes "Ohne" would lose the bottle. A stated non-vintage in another language is
+// NV; a placeholder for an empty cell ("-", "?", "n/a", "0") is a missing year.
 const NV_RE = /^n\.?\s?v\.?$/i;
+// Compared after lower-casing, dropping accents and reading a hyphen as a space.
+const NV_WORDS = new Set([
+  'non vintage', 'nonvintage', 'no vintage', 'multi vintage', 'multivintage',
+  'ohne', 'ohne jahrgang', 'ohne jahr', 'kein jahrgang', 'jahrgangslos',
+  'sans millesime', 'non millesime', 'sans annee',
+  'senza annata', 'non millesimato',
+  'sin anada', 'sin cosecha',
+  'utan argang', 'uten argang', 'uden argang',
+  'zonder jaargang', 'zonder jaar', 'geen jaargang',
+]);
+// "NM" is the French short form (non millésimé) and "MV" a multi-vintage blend.
+// The dotted or slashed ones (o.J., s.a., s/a) need their dots or slash: bare
+// letters in a vintage cell are more likely a column that was mapped wrong.
+const NV_ABBR_RE = /^(n\.?\s?m\.?|m\.?\s?v\.?|o\.\s?j\.?|s\.\s?a\.?|s\/a)$/;
+const MISSING_VINTAGE_RE = /^([-\u2013\u2014]+|\?+|n\/a|none|null|k\.\s?a\.?|0+)$/;
 
 export function vintageOrNV(raw) {
   const v = String(raw || '').trim();
   if (!v || v === '9999') return { vintage: 'NV', vintageMissing: true };
   if (NV_RE.test(v) || v === '1001') return { vintage: 'NV' };
+  const plain = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+  if (MISSING_VINTAGE_RE.test(plain)) return { vintage: 'NV', vintageMissing: true };
+  if (NV_ABBR_RE.test(plain) || NV_WORDS.has(plain.replace(/-/g, ' '))) return { vintage: 'NV' };
   return { vintage: v };
 }
 
