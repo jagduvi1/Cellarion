@@ -9,6 +9,8 @@ const Cellar = require('../models/Cellar');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate, cabinetRows, modularTotalSlots } = require('../utils/rackGeometry');
+const { validateWallConfig } = require('../utils/wallGeometry');
+const { planWallRenumber, renumberWall, renumberOpenedFromSlots } = require('../services/wallEdit');
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
   ARRANGE_SLOT_POPULATE, usablePositionCount,
@@ -70,6 +72,9 @@ function modulesProblem(modules) {
   if (modules.length > MAX_MODULES) return `Maximum ${MAX_MODULES} modules allowed per rack`;
   for (const m of modules) {
     if (!m || !m.type || !RACK_TYPES.includes(m.type)) return `Invalid module type: ${m?.type}`;
+    // A wall is a rack of its own (its boxes are its modules); as a module it
+    // would have no boxes and hold nothing.
+    if (m.type === 'wall') return 'A wall cannot be a module of a modular rack';
     if ((m.rows !== undefined && !isRackDim(m.rows)) || (m.cols !== undefined && !isRackDim(m.cols))) {
       return `Module rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}`;
     }
@@ -339,6 +344,11 @@ router.put('/:id', async (req, res) => {
           || (Array.isArray(effConfig?.shelfRows) ? null : 'shelfRows is required for a cabinet rack');
         if (cabError) return res.status(400).json({ error: cabError });
       }
+      // A wall's boxes must fit the wall it will be, and no other type keeps
+      // a boxes list: switching away from a wall needs the new type's own
+      // typeConfig.
+      const wallError = validateWallConfig(effConfig || {}, effType, effRows, effCols, effModular);
+      if (wallError) return res.status(400).json({ error: wallError });
     }
 
     // Two deep and how the bottles lie are mostly drawing, and the edit form
@@ -373,6 +383,26 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // A wall is numbered box after box (utils/wallGeometry). An edit of a wall
+    // in use is planned here, before the shape changes, so that every bottle
+    // keeps its box; and a rack in use cannot become a wall or stop being
+    // one, because its numbers would mean other places.
+    const shapeSent = type !== undefined || rows !== undefined || cols !== undefined || typeConfig !== undefined;
+    const wasWall = !rack.isModular && rack.type === 'wall';
+    const willBeWall = !willBeModular && (type !== undefined ? type : rack.type) === 'wall';
+    let wallPlan = null;
+    if (shapeSent && wasWall !== willBeWall && numbered) {
+      return res.status(400).json({ error: 'A rack that holds bottles, zones or switched-off slots cannot change to or from a wall. Empty it first.' });
+    }
+    if (shapeSent && wasWall && willBeWall) {
+      wallPlan = await planWallRenumber(rack, {
+        rows: rows !== undefined ? rows : rack.rows,
+        cols: cols !== undefined ? cols : rack.cols,
+        typeConfig: typeConfig !== undefined ? typeConfig : rack.typeConfig,
+      });
+      if (wallPlan.error) return res.status(400).json({ error: wallPlan.error });
+    }
+
     // A shape edit renumbers slots; keep both sides for the audit row below.
     const shapeOf = (r) => ({ type: r.type, rows: r.rows, cols: r.cols, typeConfig: r.typeConfig ? JSON.parse(JSON.stringify(r.typeConfig)) : null });
     const shapeBefore = shapeOf(rack);
@@ -402,6 +432,8 @@ router.put('/:id', async (req, res) => {
       }));
     }
 
+    if (wallPlan) renumberWall(rack, wallPlan, { zonesSent: zones !== undefined });
+
     // Validate that existing slots still fit within new dimensions
     const newMax = getMaxPosition(rack);
     const outOfBounds = rack.slots.filter(s => s.position > newMax);
@@ -425,6 +457,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await rack.save();
+    if (wallPlan) await renumberOpenedFromSlots(rack, wallPlan);
     await rack.populate(SLOT_BOTTLES);
 
     // cellarId so the update shows on the cellar's audit page like rack.create.

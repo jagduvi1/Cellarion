@@ -18,6 +18,7 @@ const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const { logAudit } = require('./audit');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
+const { validateWallConfig } = require('../utils/wallGeometry');
 const { removeFromRacks } = require('./bottleOps');
 const { parseSlotPosition, isValidId } = require('../utils/validation');
 const { getCellarRole } = require('../utils/cellarAccess');
@@ -56,8 +57,8 @@ function normalizeRackGroup(group) {
  * implementation behind the grid branch of REST POST /api/racks and the MCP
  * create_rack tool (the route delegates here). Modular racks stay a REST-only
  * route path (their validation has no MCP twin to drift against). typeConfig
- * (double-height rows, cabinet shelves) is accepted and validated; MCP passes
- * it for a cabinet only.
+ * (double-height rows, cabinet shelves, a wall's boxes) is accepted and
+ * validated; MCP passes it for a cabinet only.
  */
 async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols = 8, typeConfig, group }, req) {
   if (!name || !String(name).trim()) return { error: { status: 400, message: 'Rack name is required' } };
@@ -85,9 +86,13 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
     if (dhrError) return { error: { status: 400, message: dhrError } };
     const cabError = validateCabinetConfig(typeConfig, rack.type, rack.rows, false, rack.cols);
     if (cabError) return { error: { status: 400, message: cabError } };
+    const wallError = validateWallConfig(typeConfig, rack.type, rack.rows, rack.cols, false);
+    if (wallError) return { error: { status: 400, message: wallError } };
     rack.typeConfig = typeConfig;
   } else if (rack.type === 'cabinet') {
     return { error: { status: 400, message: 'shelfRows is required for a cabinet rack' } };
+  } else if (rack.type === 'wall') {
+    return { error: { status: 400, message: 'boxes is required for a wall rack' } };
   }
   try {
     await rack.save();

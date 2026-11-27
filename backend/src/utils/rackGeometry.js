@@ -12,7 +12,10 @@
  *   stack    — single vertical column; height = rows
  *   cube     — grid of sub-modules; outer grid = rows × cols, each module = moduleRows × moduleCols
  *   shelf    — open case storage; rows × cols (same count as grid, different visual)
+ *   wall     — boxes on a grid of rows × cols cells, each with its own content
+ *              (typeConfig.boxes); counted and numbered in utils/wallGeometry.js
  */
+const { wallTotalSlots } = require('./wallGeometry');
 
 /**
  * Filter typeConfig.doubleHeightRows down to the entries that actually
@@ -149,6 +152,11 @@ function totalSlots(type, rows, cols, typeConfig) {
       return cabinetBays(rows, cols, typeConfig)
         .reduce((sum, bay) => sum + cabinetBayCapacity(bay.rows, bay.cols, cabinetBayOpts(bay, twoDeep)), 0);
     }
+
+    case 'wall':
+      // One rack built from boxes; see the POSITION NUMBERING CONTRACT in
+      // utils/wallGeometry.js.
+      return wallTotalSlots(rows, cols, typeConfig);
 
     default: {
       // Fall back to grid behaviour (including double-height rows)

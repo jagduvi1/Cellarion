@@ -48,7 +48,7 @@ const MATURITY = {
   enum: ['not-ready', 'early', 'peak', 'late', 'declining', null],
   description: 'Where the bottle is in its drink window today, or null when it has no window.',
 };
-const RACK_TYPE = { type: 'string', enum: ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'] };
+const RACK_TYPE = { type: 'string', enum: ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet', 'wall'] };
 const CELLAR_ROLE = { type: 'string', enum: ['owner', 'editor', 'viewer'] };
 const BOTTLE_STATUS = {
   type: 'string',
@@ -514,9 +514,9 @@ const schemas = {
       name: { type: 'string' },
       group: { type: ['string', 'null'], description: 'A user-named group, such as a room or an appliance.' },
       type: RACK_TYPE,
-      rows: { type: 'integer', minimum: 1, description: 'Cabinets: the number of shelves.' },
-      cols: { type: 'integer', minimum: 1 },
-      typeConfig: { type: 'object', description: 'Type-specific geometry (shelf rows, two-deep, …). Read `GET /api/inventory` for shelf/row/col instead of computing them.' },
+      rows: { type: 'integer', minimum: 1, description: 'Cabinets: the number of shelves. Walls: how many cells high the wall is.' },
+      cols: { type: 'integer', minimum: 1, description: 'Walls: how many cells wide the wall is.' },
+      typeConfig: { type: 'object', description: 'Type-specific geometry (shelf rows, two-deep, a wall\'s `boxes`, …). Read `GET /api/inventory` for shelf/row/col instead of computing them.' },
       isModular: { type: 'boolean' },
       slots: {
         type: 'array',

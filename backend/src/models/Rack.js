@@ -3,7 +3,11 @@ const mongoose = require('mongoose');
 // 'cabinet' = a wine fridge / climate cabinet: shelves top to bottom, each a
 // bay holding typeConfig.shelfRows[i] rows of `cols` bottles, optionally two
 // deep (neck to neck). Geometry + position contract: utils/rackGeometry.js.
-const RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'];
+// 'wall' = one rack built from boxes on a grid of rows × cols cells, each
+// box with its own content (typeConfig.boxes). Counting, numbering and the
+// rules of an edit: utils/wallGeometry.js.
+const RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet', 'wall'];
+const { BOX_KINDS, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM } = require('../utils/wallGeometry');
 
 const slotSchema = new mongoose.Schema({
   position: { type: Number, required: true },
@@ -19,6 +23,22 @@ const zoneSchema = new mongoose.Schema({
   color:     { type: String, trim: true, maxlength: 20 },
   positions: { type: [Number], default: [] },
 }, { _id: false });
+
+// One box of a wall rack. It keeps its _id for life: an edit of the wall
+// follows a box by that id to keep its bottles in it (wallGeometry.planWallEdit).
+// x, y, w and h are in wall cells; perSection is what one pile of an x, a
+// slash, a backslash or a bin holds; rows and cols are a rack's or the
+// shelves' own.
+const wallBoxSchema = new mongoose.Schema({
+  x:          { type: Number, required: true, min: 0, max: 19 },
+  y:          { type: Number, required: true, min: 0, max: 19 },
+  w:          { type: Number, required: true, min: 1, max: 20 },
+  h:          { type: Number, required: true, min: 1, max: 20 },
+  kind:       { type: String, enum: BOX_KINDS, required: true },
+  perSection: { type: Number, min: 1, max: WALL_MAX_PER_SECTION },
+  rows:       { type: Number, min: 1, max: WALL_MAX_BOX_DIM },
+  cols:       { type: Number, min: 1, max: WALL_MAX_BOX_DIM },
+});
 
 const rackModuleSchema = new mongoose.Schema({
   type:       { type: String, enum: RACK_TYPES, required: true },
@@ -183,7 +203,11 @@ const rackSchema = new mongoose.Schema({
     // UI offers it at creation only, and the update route's resize guard
     // (getMaxPosition recompute) blocks a shrink past placed bottles.
     // Composes with hexFlip, which still decides WHICH rows are offset.
-    hexEqualRows: { type: Boolean, default: false }
+    hexEqualRows: { type: Boolean, default: false },
+    // Wall racks only: the boxes of the wall. Validated in
+    // utils/wallGeometry.validateWallConfig; `default: undefined` so other
+    // racks don't store an empty array.
+    boxes: { type: [wallBoxSchema], default: undefined }
   },
   // Modular rack fields (used when isModular is true)
   isModular: { type: Boolean, default: false },
