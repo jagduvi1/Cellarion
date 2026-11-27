@@ -36,6 +36,8 @@ import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import AnchorPicker from './import/AnchorPicker';
 import CurrencyPicker from './import/CurrencyPicker';
+import ImportFormatCards from './import/ImportFormatCards';
+import ImportParseWarnings from './import/ImportParseWarnings';
 import IntegerField from '../components/IntegerField';
 import ImportCurationNotes from '../components/ImportCurationNotes';
 import {
@@ -1162,56 +1164,6 @@ function ImportBottles() {
     );
   };
 
-  // Non-blocking parse warnings (shown on both upload and review steps).
-  // The CT truncation warning gets elevated styling + a bold headline: a
-  // 25-row page export silently missing 90% of a cellar is the single worst
-  // "looked like it worked" outcome an import can have.
-  const renderImportWarnings = () => (importWarnings.length > 0 || parsedItems.length > MAX_IMPORT_ROWS) && (
-    <div className="import-parse-warnings">
-      {parsedItems.length > MAX_IMPORT_ROWS && (
-        <div className="import-parse-warning-banner import-parse-warning-strong" role="alert">
-          <strong>{t('importBottles.warnings.tooManyRowsTitle', { count: parsedItems.length })}</strong>{' '}
-          {t('importBottles.warnings.tooManyRows', { max: MAX_IMPORT_ROWS })}
-        </div>
-      )}
-      {importWarnings.map((w, i) => (
-        <div
-          key={i}
-          className={`import-parse-warning-banner${w.code === 'ct-truncated' ? ' import-parse-warning-strong' : ''}`}
-          role={w.code === 'ct-truncated' ? 'alert' : undefined}
-        >
-          {w.code === 'ct-truncated' && (
-            <>
-              <strong>{t('importBottles.warnings.ctTruncatedTitle')}</strong>{' '}
-              {t('importBottles.warnings.ctTruncated')}
-            </>
-          )}
-          {w.code === 'ct-pending-skipped' && t('importBottles.warnings.ctPendingSkipped', {
-            count: w.count,
-            wines: (w.wines || []).join(', ')
-          })}
-          {w.code === 'ct-pending-on-order' && t('importBottles.warnings.ctPendingOnOrder', {
-            count: w.count,
-            wines: (w.wines || []).join(', ')
-          })}
-          {w.code === 'no-identity-skipped' && t('importBottles.warnings.noIdentitySkipped', { count: w.count })}
-          {w.code === 'vintage-missing' && t('importBottles.warnings.vintageMissing', { count: w.count })}
-          {w.code === 'price-not-read' && t('importBottles.warnings.priceNotRead', { column: w.column })}
-          {w.code === 'extra-files-ignored' && t('importBottles.warnings.extraFilesIgnored', { count: w.count })}
-          {w.code === 'ploc-placed' && t('importBottles.warnings.plocPlaced', { count: w.count, racks: w.racks })}
-          {w.code === 'ploc-history' && t('importBottles.warnings.plocHistory', { count: w.count })}
-          {w.code === 'ploc-no-cellars' && t('importBottles.warnings.plocNoCellars')}
-          {w.code === 'ploc-no-history' && t('importBottles.warnings.plocNoHistory')}
-          {w.code === 'ploc-rating-scale' && t('importBottles.warnings.plocRatingScale', { scale: w.scale })}
-          {w.code === 'ploc-date-order-assumed' && t('importBottles.warnings.plocDateOrder')}
-          {w.code === 'ploc-extra-slots' && t('importBottles.warnings.plocExtraSlots', { wine: w.wine, slots: w.slots, stock: w.stock })}
-          {w.code === 'ploc-rack-too-big' && t('importBottles.warnings.plocRackTooBig', { rack: w.rack, rows: w.rows, cols: w.cols })}
-          {w.code === 'ploc-unmatched-history' && t('importBottles.warnings.plocUnmatchedHistory', { count: w.count })}
-        </div>
-      ))}
-    </div>
-  );
-
   // CellarTracker auto-map: pattern + placement counts shown on a rack card
   // (both the new-rack and existing-rack variants).
   const renderCtAutoMapLine = (info) => {
@@ -1411,35 +1363,7 @@ function ImportBottles() {
         </button>
       </div>
 
-      <div className="import-instructions">
-        <h3>{t('importBottles.upload.supportedFormats')}</h3>
-        <div className="format-cards">
-          <div className="format-card">
-            <strong>{t('importBottles.upload.cellarionTitle')}</strong>
-            <p>{t('importBottles.upload.cellarionDesc')}</p>
-          </div>
-          <div className="format-card">
-            <strong>{t('importBottles.upload.vivinoTitle')}</strong>
-            <p>{t('importBottles.upload.vivinoDesc')}</p>
-          </div>
-          <div className="format-card">
-            <strong>{t('importBottles.upload.cellartrackerTitle')}</strong>
-            <p>{t('importBottles.upload.cellartrackerDesc')}</p>
-          </div>
-          <div className="format-card">
-            <strong>{t('importBottles.upload.oenoTitle')}</strong>
-            <p>{t('importBottles.upload.oenoDesc')}</p>
-          </div>
-          <div className="format-card">
-            <strong>{t('importBottles.upload.plocTitle')}</strong>
-            <p>{t('importBottles.upload.plocDesc')}</p>
-          </div>
-          <div className="format-card">
-            <strong>{t('importBottles.upload.genericTitle')}</strong>
-            <p>{t('importBottles.upload.genericDesc')}</p>
-          </div>
-        </div>
-      </div>
+      <ImportFormatCards />
 
       <div
         className={`drop-zone ${dragOver ? 'drag-over' : ''} ${parsedItems.length > 0 ? 'has-file' : ''}`}
@@ -1483,7 +1407,7 @@ function ImportBottles() {
       </div>
 
       {parsedItems.length > 0 && detectedFormat === 'receipt' && receiptInfo && renderReceiptSummary()}
-      {parsedItems.length > 0 && renderImportWarnings()}
+      {parsedItems.length > 0 && <ImportParseWarnings importWarnings={importWarnings} parsedItems={parsedItems} />}
       {parsedItems.length > 0 && renderCtDisclosure()}
       {parsedItems.length > 0 && renderVivinoHistoryChoice()}
 
@@ -1989,7 +1913,7 @@ function ImportBottles() {
         </p>
 
         {/* Parse-time warnings (CT truncation / pending bottles on order) + encoding info */}
-        {renderImportWarnings()}
+        <ImportParseWarnings importWarnings={importWarnings} parsedItems={parsedItems} />
         <div className="import-rack-options import-on-order-review">
           {renderOnOrderChoice()}
         </div>
