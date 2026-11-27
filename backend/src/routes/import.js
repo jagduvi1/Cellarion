@@ -17,6 +17,7 @@ const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
 const rateLimitsConfig = require('../config/rateLimits');
+const importPolicy = require('../config/importPolicy');
 const {
   CONSUMED_STATUSES,
   ORDERED_STATUS,
@@ -47,8 +48,9 @@ const {
 // What a row says a wine is: the proposed wine from file and AI, which
 // source supplied each field, and the rows that need no AI at all.
 const {
-  AI_GEOGRAPHY_MIN_CONFIDENCE, buildProposedWine, computeIdentityProvenance, fileCompleteIdentity,
+  AI_GEOGRAPHY_MIN_CONFIDENCE, buildProposedWine, computeIdentityProvenance, fileCompleteIdentity, fileStatedIdentity,
 } = require('../services/importIdentity');
+const { withDerivedCountry } = require('../services/importCountry');
 // The failure reasons grouped for the audit row, and the archive of the
 // file's identity columns.
 const { summariseReasons, writeImportArchive } = require('../services/importArchive');
@@ -84,7 +86,12 @@ const EXACT_THRESHOLD = IMPORT_EXACT_THRESHOLD;
  * Body: { cellarId, items: [{ wineName, producer, country, ... }] }
  * Response: { results: [{ index, item, status, matches: [{ wine, score }] }] }
  */
-router.post('/validate', aiBurstLimiter, async (req, res) => {
+// Whether this import asks the AI provider at all (config/importPolicy).
+const importUsesAi = () => aiProvider.isConfigured() && importPolicy.usesAi();
+// The burst limit paces AI calls; an import that asks no AI has none to pace.
+const validateLimiter = (req, res, next) => (importUsesAi() ? aiBurstLimiter(req, res, next) : next());
+
+router.post('/validate', validateLimiter, async (req, res) => {
   try {
     const { cellarId, items } = req.body;
     // Who the candidate pool is being built FOR — see findWineMatches.
@@ -145,7 +152,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // lookup per unique wine, not a sequential per-row findWineMatches in
     // Pass 3 — the cascade's "zero AI for known wines" intent holds there too.
     // Only the AI fan-out itself (Pass 1b) is gated on availability.
-    const aiConfigured = aiProvider.isConfigured(); // invariant for the whole request
+    // False too when the server's import policy turns the look-up off: every
+    // row is then identified by the registry or by the file itself.
+    const aiConfigured = importUsesAi(); // invariant for the whole request
 
     // Latch a client disconnect as EARLY as possible — before the split
     // probes and the Pass 1a cascade — so a requester that has gone away
@@ -209,7 +218,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // (c) complete-data rows skip AI too (see fileCompleteIdentity): the file
     //     itself becomes the identification and Pass 2 treats it exactly like
     //     an AI answer — matchOnly probe, proposal, the lot;
-    // (d) everything else goes to AI exactly as before.
+    // (d) everything else goes to AI — when there is one to ask. With no
+    //     provider, or with the look-up turned off (config/importPolicy), (c)
+    //     takes every row: see fileStatedIdentity.
     //
     // Grape-colour lookup for (c)'s type inference — built lazily, once, and
     // only if some row actually lacks a type column.
@@ -267,10 +278,13 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // file-stated identity: such a row may match (a)/(b) above, but an
       // unknown wine goes to the model rather than being minted from the
       // guess.
-      const identity = pr.producerFromRegistry ? null : fileCompleteIdentity(
-        pr.item,
-        needsColourMap ? await getGrapeColourOf() : null
-      );
+      // With no AI to ask, the file is the identification for every row,
+      // complete or not, and a country it does not state is read from the
+      // registry where the registry is sure (services/importCountry).
+      const colourMap = needsColourMap ? await getGrapeColourOf() : null;
+      const identity = !aiConfigured
+        ? await withDerivedCountry(fileStatedIdentity(pr.item, colourMap))
+        : (pr.producerFromRegistry ? null : fileCompleteIdentity(pr.item, colourMap));
       if (identity) {
         pr.aiIdentified = identity;
         pr.aiBypassed = true;
@@ -850,6 +864,11 @@ router.post('/confirm', async (req, res) => {
     // mapping). Their BOTTLES imported normally; only the registry entry waits
     // on a curator. Reported once, as a plain line on the done screen.
     let pendingIdentityCount = 0;
+    // Wines this batch minted that wait for a curator's check before anyone
+    // else sees them (config/importPolicy.checksNewWines). Decided once per
+    // request, so one import is not split by a setting changed halfway.
+    const checkNewWines = importPolicy.checksNewWines();
+    let uncheckedCount = 0;
     // Collected rack-placement intents from this batch; processed per-rack
     // after the main loop so multiple bottles claiming the same slot can
     // overflow cleanly into adjacent free slots.
@@ -916,6 +935,7 @@ router.post('/confirm', async (req, res) => {
               grapes: sanitizeGrapeNames(ai.grapes),
             }, req.user.id, {
               createdVia: 'import', allowPending: true,
+              ...(checkNewWines ? { unchecked: true } : {}),
               provenance: computeIdentityProvenance(item, ai),
               // The file's Type/Category named a spirit: a wine this row
               // mints is born non-wine flagged (see below).
@@ -949,12 +969,17 @@ router.post('/confirm', async (req, res) => {
             if (wine) aiWineCache.set(aiKey, wine);
             if (created) {
               outcome = 'created';
-              if (wine.pendingIdentity) pendingIdentityCount++;
+              // A wine waiting for a check is pending too; "could not be
+              // identified" is only the one with no producer.
+              const incomplete = wine.pendingIdentity && !wine.producer;
+              if (incomplete) pendingIdentityCount++;
+              else if (wine.uncheckedIdentity) uncheckedCount++;
               // Same action name as the MCP tools and services/wineCommit, so
               // registry writes read as one audit stream.
               logAudit(req, 'wine.create', { type: 'wine', id: wine._id },
                 { via: 'import', name: wine.name, producer: wine.producer || null,
-                  ...(wine.pendingIdentity ? { pendingIdentity: true } : {}),
+                  ...(incomplete ? { pendingIdentity: true } : {}),
+                  ...(wine.uncheckedIdentity ? { unchecked: true } : {}),
                   // What the CSV actually said, when the gate refused it
                   // — the pending row itself stores ''.
                   ...(producerRejected
@@ -1325,7 +1350,8 @@ router.post('/confirm', async (req, res) => {
       // action: how many registry rows this import left for curation is part
       // of the same event, and splitting it would break the one-line-per-import
       // reading of the audit stream.
-      pendingIdentity: pendingIdentityCount
+      pendingIdentity: pendingIdentityCount,
+      ...(uncheckedCount ? { unchecked: uncheckedCount } : {})
     });
 
     // Archive what the file contained, identity columns only, for 30 days.
@@ -1350,6 +1376,7 @@ router.post('/confirm', async (req, res) => {
         skipped: skipped.length, errors: errors.length,
         ...(errors.length ? { errorReasons: summariseReasons(errors) } : {}),
         pendingIdentity: pendingIdentityCount,
+        ...(uncheckedCount ? { unchecked: uncheckedCount } : {}),
       }),
     });
 
@@ -1367,7 +1394,9 @@ router.post('/confirm', async (req, res) => {
       placed: placedCount,
       overflowed: overflowedCount,
       unplaced: unplacedDetails,
-      pendingIdentityCount
+      pendingIdentityCount,
+      // Only when some wines wait for a check: the shape is otherwise unchanged.
+      ...(uncheckedCount ? { uncheckedCount } : {})
     });
   } catch (error) {
     console.error('Import confirm error:', error);

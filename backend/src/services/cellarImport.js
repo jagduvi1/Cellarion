@@ -41,6 +41,7 @@ const Review = require('../models/Review');
 const WineVintageProfile = require('../models/WineVintageProfile');
 
 const { findOrCreateWine } = require('./findOrCreateWine');
+const importPolicy = require('../config/importPolicy');
 const { logAudit } = require('./audit');
 const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
 const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
@@ -418,13 +419,18 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
       // producer column) still becomes a bottle — it just carries a wine a
       // sommelier finishes, instead of silently degrading to a WineRequest the
       // owner never hears about again.
-      { confirmCreate: true, matchOnly: demoMode, createdVia: 'import', allowPending: !demoMode }
+      { confirmCreate: true, matchOnly: demoMode, createdVia: 'import', allowPending: !demoMode,
+        // The same rule as the file import (routes/import.js /confirm): where
+        // the server checks imported wines, a wine this mints waits for it.
+        ...(!demoMode && importPolicy.checksNewWines() ? { unchecked: true } : {}) }
     );
     if (wine) {
       if (created) {
         result.winesCreated++;
-        if (wine.pendingIdentity) {
+        if (wine.pendingIdentity && !wine.producer) {
           result.pendingIdentityCount = (result.pendingIdentityCount || 0) + 1;
+        } else if (wine.uncheckedIdentity) {
+          result.uncheckedCount = (result.uncheckedCount || 0) + 1;
         }
         // confirmCreate skips the soft-zone prompt by design (imports must not
         // stall) — but a creation that sailed past a >=0.85 candidate is the

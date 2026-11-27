@@ -1,7 +1,7 @@
 /**
- * config/runtime — loads the five settings caches an admin changes at run time
+ * config/runtime — loads the six settings caches an admin changes at run time
  * (rate limits, AI settings, the announcement banner, feature flags, the
- * review of contributions).
+ * review of contributions, how imports treat new wines).
  *
  * WHY THIS TEST EXISTS:
  * server.js awaits loadRuntimeConfig() before the migrations, the scheduler
@@ -21,15 +21,17 @@ jest.mock('./aiConfig', () => ({ load: jest.fn() }));
 jest.mock('./announcement', () => ({ load: jest.fn() }));
 jest.mock('./featureFlags', () => ({ load: jest.fn() }));
 jest.mock('./contributionReview', () => ({ load: jest.fn() }));
+jest.mock('./importPolicy', () => ({ load: jest.fn() }));
 
 const rateLimits = require('./rateLimits');
 const aiConfig = require('./aiConfig');
 const announcement = require('./announcement');
 const featureFlags = require('./featureFlags');
 const contributionReview = require('./contributionReview');
+const importPolicy = require('./importPolicy');
 const { loadRuntimeConfig } = require('./runtime');
 
-const CONFIGS = { rateLimits, aiConfig, announcement, featureFlags, contributionReview };
+const CONFIGS = { rateLimits, aiConfig, announcement, featureFlags, contributionReview, importPolicy };
 
 let warn;
 beforeEach(() => {
@@ -39,7 +41,7 @@ beforeEach(() => {
 });
 afterEach(() => warn.mockRestore());
 
-test('loads each of the five configs exactly once', async () => {
+test('loads each of the six configs exactly once', async () => {
   await loadRuntimeConfig();
   for (const config of Object.values(CONFIGS)) expect(config.load).toHaveBeenCalledTimes(1);
   expect(warn).not.toHaveBeenCalled();
@@ -54,7 +56,7 @@ test('resolves only after every load has resolved, whatever order they finish in
   let done = false;
   const run = loadRuntimeConfig().then(() => { done = true; });
 
-  for (const name of ['featureFlags', 'contributionReview', 'rateLimits', 'announcement']) {
+  for (const name of ['featureFlags', 'contributionReview', 'importPolicy', 'rateLimits', 'announcement']) {
     pending[name].resolve();
     await new Promise((r) => setImmediate(r));
     expect(done).toBe(false);

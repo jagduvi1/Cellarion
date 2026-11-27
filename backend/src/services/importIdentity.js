@@ -148,10 +148,17 @@ function computeIdentityProvenance(item, ai) {
   const filePrad = pradikatOnlyValue(stated(item?.appellation) ? item.appellation.trim() : '');
   const rescuedPrad = filePrad && !pradikatContradictsName(filePrad, ai?.name) ? filePrad : null;
 
+  // Name and producer are the file's when the minted value IS what the file
+  // states: always so for a row identified from the file alone (no model was
+  // asked), and for a model that returned the row's own words. 'model' for a
+  // value nothing in the file states would otherwise be claimed with no model.
+  const sameAsFile = (fileValue, minted) => stated(fileValue) && stated(minted)
+    && normalizeString(fileValue) === normalizeString(minted);
+
   return {
-    name: 'model',
-    producer: 'model',
-    country: stated(item?.country) && !stated(ai?.country) ? 'file' : 'model',
+    name: sameAsFile(item?.wineName, ai?.name) ? 'file' : 'model',
+    producer: sameAsFile(item?.producer, ai?.producer) ? 'file' : 'model',
+    country: stated(item?.country) && (!stated(ai?.country) || sameAsFile(item.country, ai.country)) ? 'file' : 'model',
     region: stated(item?.region) ? 'file' : 'model',
     // Follows the VALUE, not the column it was typed in: a rescued Prädikat
     // leaves the appellation to the model and supplies the classification
@@ -260,21 +267,43 @@ function producerMirroredFromName(aiData, item) {
  * null when the row genuinely needs (or lacks the data to skip) the model.
  */
 function fileCompleteIdentity(item, grapeColourOf) {
+  return identityFromFile(item, grapeColourOf, true);
+}
+
+/**
+ * The identity a row's FILE states, complete or not, for an import that asks
+ * no AI (config/importPolicy, or no provider configured). Same shape and the
+ * same route through Pass 2 as fileCompleteIdentity; what differs is that only
+ * the name is required. A missing or placeholder producer is '' (the mint
+ * makes that a producerless pending row), a country the file does not state
+ * in a form that resolves is null (the caller may still derive one —
+ * services/importCountry), and a type the file neither states nor implies
+ * through its grapes is null: the mint stores no type for a wine that waits
+ * for a curator's check. Returns null for a row with no usable name.
+ * Called by routes/import.js /validate.
+ */
+function fileStatedIdentity(item, grapeColourOf) {
+  return identityFromFile(item, grapeColourOf, false);
+}
+
+function identityFromFile(item, grapeColourOf, requireComplete) {
   const clean = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   const name = clean(item.wineName);
-  const producer = clean(item.producer);
-  if (!name || !producer) return null;
-  if (isUnknownName(name) || isUnknownName(producer)) return null;
+  let producer = clean(item.producer);
+  if (!name || isUnknownName(name)) return null;
+  if (producer && isUnknownName(producer)) producer = null;
+  if (!producer && requireComplete) return null;
 
-  const country = resolveCountryName(clean(item.country) || '');
-  if (!country || !isRecognizedCountry(country)) return null;
+  let country = resolveCountryName(clean(item.country) || '');
+  if (!country || !isRecognizedCountry(country)) country = null;
+  if (!country && requireComplete) return null;
 
   const grapes = sanitizeGrapeNames(item.grapes);
 
   let type = clean(item.type);
   if (!WINE_TYPES.includes(type)) type = null;
-  if (!type && grapes.length > 0) type = typeFromFileGrapes(grapes, grapeColourOf);
-  if (!type) return null;
+  if (!type && grapes.length > 0 && grapeColourOf) type = typeFromFileGrapes(grapes, grapeColourOf);
+  if (!type && requireComplete) return null;
 
   // Same Prädikat routing as the AI path — this path
   // has no model to supply the place, so the appellation is simply left empty
@@ -291,7 +320,7 @@ function fileCompleteIdentity(item, grapeColourOf) {
 
   return {
     name,
-    producer,
+    producer: producer || '',
     country,
     region: clean(item.region),
     appellation: filePradikat ? null : clean(item.appellation),
@@ -307,4 +336,5 @@ module.exports = {
   buildProposedWine,
   computeIdentityProvenance,
   fileCompleteIdentity,
+  fileStatedIdentity,
 };

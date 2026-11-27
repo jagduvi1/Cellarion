@@ -1073,7 +1073,10 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const validTypes = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   // A drink that is not wine (opts.nonWine — the Other category) has no wine
   // type at all: its pill reads "Other" and nothing infers a colour from it.
-  const wineType = nonWine === true ? null : (validTypes.includes(type) ? type : 'red');
+  // A wine waiting for a curator's check with no stated type stores none: its
+  // owner would see a white counted as red, and a wrong value does not prompt
+  // the curator to look the way an absent one does.
+  const wineType = nonWine === true ? null : (validTypes.includes(type) ? type : (unchecked && !draft ? undefined : 'red'));
   // A stated colour (sparkling/dessert/fortified only — the model hook drops it
   // on any other type, and infers rosé from the name when none is stated).
   // Stored on creates only, like classification: never matched or keyed on.
