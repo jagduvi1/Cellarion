@@ -48,7 +48,7 @@ export default function ImportParseWarnings({ importWarnings, parsedItems }) {
           {w.code === 'ploc-extra-slots' && t('importBottles.warnings.plocExtraSlots', { wine: w.wine, slots: w.slots, stock: w.stock })}
           {w.code === 'ploc-rack-too-big' && t('importBottles.warnings.plocRackTooBig', { rack: w.rack, rows: w.rows, cols: w.cols })}
           {w.code === 'ploc-unmatched-history' && t('importBottles.warnings.plocUnmatchedHistory', { count: w.count })}
-          {w.code === 'macave-consumed-not-imported' && t('importBottles.warnings.maCaveConsumedNotImported', { count: w.count, column: w.column })}
+          {w.code === 'macave-consumed-not-imported' && t('importBottles.warnings.maCaveConsumedNotImported', { n: w.count, column: w.column })}
         </div>
       ))}
     </div>

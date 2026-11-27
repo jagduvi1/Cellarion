@@ -19,9 +19,8 @@ test('the consumed-count notice names the count and the file\'s column', () => {
     importWarnings={[{ code: 'macave-consumed-not-imported', count: 2, column: 'Konsumiert' }]}
     parsedItems={[]}
   />);
-  expect(screen.getByText('importBottles.warnings.maCaveConsumedNotImported:{"count":2,"column":"Konsumiert"}')).toBeInTheDocument();
-  expect(enHas('importBottles.warnings.maCaveConsumedNotImported_one')).toBe(true);
-  expect(enHas('importBottles.warnings.maCaveConsumedNotImported_other')).toBe(true);
+  expect(screen.getByText('importBottles.warnings.maCaveConsumedNotImported:{"n":2,"column":"Konsumiert"}')).toBeInTheDocument();
+  expect(enHas('importBottles.warnings.maCaveConsumedNotImported')).toBe(true);
 });
 
 test('the upload step lists the app among the files it reads', () => {
