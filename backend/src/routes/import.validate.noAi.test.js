@@ -15,8 +15,9 @@
 
 process.env.JWT_SECRET = 'test-secret';
 
-// The one behavioural switch under test: AI is NOT configured.
-jest.mock('../services/aiProvider', () => ({ isConfigured: () => false }));
+// The one behavioural switch under test: AI is NOT configured. (The last
+// block configures it and turns the look-up off in the server's import policy.)
+jest.mock('../services/aiProvider', () => ({ isConfigured: jest.fn(() => false) }));
 
 jest.mock('../services/search', () => ({
   getIsAvailable: () => false,
@@ -25,7 +26,10 @@ jest.mock('../services/search', () => ({
 }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
-jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());
+// A row with no AI to ask is identified from its file; the registry look-up
+// of a missing country is its own unit (services/importCountry.test.js).
+jest.mock('../services/importCountry', () => ({ withDerivedCountry: jest.fn(async (identity) => identity) }));
+jest.mock('../middleware/aiBurstLimiter', () => jest.fn((req, res, next) => next()));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/exchangeRates', () => ({
   getOrCreateDailySnapshot: jest.fn().mockResolvedValue(null),
@@ -143,6 +147,8 @@ beforeEach(() => {
   WineDefinition.__state.exactByKey.clear();
   WineDefinition.__state.candidates = [];
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, user: USER_ID, deletedAt: null, members: [] });
+  // The preview probe of a row the registry does not know.
+  findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
 });
 
 test('an exact registry wine resolves as "exact" via the cascade — not per-row fuzzy', async () => {
@@ -214,4 +220,115 @@ test('no-AI responses carry no degradation markers (aiSkipped / aiBudgetExhauste
   expect(res.body.results[0].aiSkipped).toBeUndefined();
   expect(res.body.results[0].aiDebug).toBeUndefined();
   expect(res.body.summary.aiBudgetExhausted).toBeUndefined();
+});
+
+describe('a row the registry does not know is identified from its file', () => {
+  const { withDerivedCountry } = require('../services/importCountry');
+
+  test('a row that states name, producer and country is offered as a new wine, built from the file', async () => {
+    const res = await validate([
+      { wineName: 'Riesling Kabinett', producer: 'Weingut Beispiel', country: 'Germany', region: 'Mosel', type: 'white', vintage: '2021' },
+    ]);
+
+    const [row] = res.body.results;
+    expect(row.status).toBe('ai_new');
+    expect(row.aiBypassed).toBe(true);
+    expect(row.aiProposed).toMatchObject({
+      name: 'Riesling Kabinett', producer: 'Weingut Beispiel', country: 'Germany', region: 'Mosel', type: 'white',
+    });
+    expect(identifyWineFromText).not.toHaveBeenCalled();
+    // The preview never writes: the registry is only probed.
+    expect(findOrCreateWine).toHaveBeenCalledTimes(1);
+    expect(findOrCreateWine.mock.calls[0][2]).toEqual({ matchOnly: true });
+  });
+
+  test('an incomplete row is offered too: a type the file does not state is left empty, never guessed', async () => {
+    const res = await validate([{ wineName: 'Cuvée Sans Type', producer: 'Domaine Exemple', country: 'France', vintage: '2020' }]);
+
+    const [row] = res.body.results;
+    expect(row.status).toBe('ai_new');
+    expect(row.aiProposed).toMatchObject({ name: 'Cuvée Sans Type', producer: 'Domaine Exemple', country: 'France' });
+    expect(row.aiProposed.type ?? null).toBeNull();
+  });
+
+  test('a country the file does not state is taken from the registry when the registry is sure', async () => {
+    withDerivedCountry.mockImplementationOnce(async (identity) => ({ ...identity, country: 'Italy' }));
+
+    const res = await validate([{ wineName: 'Barolo Bussia', producer: 'Cantina Esempio', appellation: 'Barolo' }]);
+
+    const [row] = res.body.results;
+    expect(row.status).toBe('ai_new');
+    expect(row.aiProposed).toMatchObject({ name: 'Barolo Bussia', producer: 'Cantina Esempio', country: 'Italy', appellation: 'Barolo' });
+  });
+
+  test('with no country anywhere the row cannot become a wine: it stays unmatched, to be matched or requested', async () => {
+    const res = await validate([{ wineName: 'Mystery Cuvée', producer: 'Estate Nowhere' }]);
+
+    const [row] = res.body.results;
+    expect(row.status).toBe('no_match');
+    expect(row.aiProposed).toBeUndefined();
+  });
+
+  test('a wine the registry already holds under the file\'s words is matched, not offered as new', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: LA_TACHE, created: false });
+
+    const res = await validate([{ wineName: 'La Tache Grand Cru', producer: 'DRC', country: 'France' }]);
+
+    const [row] = res.body.results;
+    expect(row.status).toBe('ai_match');
+    expect(row.matches[0].wineId).toBe(LA_TACHE._id);
+  });
+
+  test('six bottles of one new wine are one identification, shared by every row', async () => {
+    const row = { wineName: 'Riesling Kabinett', producer: 'Weingut Beispiel', country: 'Germany' };
+    const res = await validate(['2016', '2017', '2018', '2019', '2020', '2021'].map((vintage) => ({ ...row, vintage })));
+
+    for (const r of res.body.results) expect(r.status).toBe('ai_new');
+    expect(withDerivedCountry).toHaveBeenCalledTimes(1);
+    expect(findOrCreateWine).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('an AI provider is configured, and the server’s import policy turns the look-up off', () => {
+  const aiProvider = require('../services/aiProvider');
+  const aiBurstLimiter = require('../middleware/aiBurstLimiter');
+  const importPolicy = require('../config/importPolicy');
+
+  beforeEach(() => {
+    aiProvider.isConfigured.mockReturnValue(true);
+    importPolicy.set({ aiLookup: false });
+  });
+  afterEach(() => {
+    aiProvider.isConfigured.mockReturnValue(false);
+    importPolicy.set({});
+  });
+
+  test('no row goes to the AI: an unknown wine is identified from the file', async () => {
+    const res = await validate([
+      { wineName: 'Riesling Kabinett', producer: 'Weingut Beispiel', country: 'Germany', vintage: '2021' },
+      { wineName: 'Riesling Kabinett', producer: 'Weingut Beispiel', country: 'Germany', vintage: '2020', forceAi: true },
+    ]);
+
+    expect(res.status).toBe(200);
+    for (const row of res.body.results) {
+      expect(row.status).toBe('ai_new');
+      expect(row.aiSkipped).toBeUndefined();
+      expect(row.aiDebug).toBeUndefined();
+    }
+    expect(res.body.summary.aiBudgetExhausted).toBeUndefined();
+    expect(identifyWineFromText).not.toHaveBeenCalled();
+  });
+
+  test('the AI burst limit does not pace an import that asks no AI', async () => {
+    WineDefinition.__state.exactByKey.set(LA_TACHE.normalizedKey, LA_TACHE);
+    const row = { wineName: 'La Tâche', producer: 'Domaine de la Romanée-Conti', vintage: '2018' };
+
+    await validate([row]);
+    expect(aiBurstLimiter).not.toHaveBeenCalled();
+
+    // With the look-up on, the same request is paced as before.
+    importPolicy.set({});
+    await validate([row]);
+    expect(aiBurstLimiter).toHaveBeenCalledTimes(1);
+  });
 });

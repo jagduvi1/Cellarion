@@ -25,6 +25,9 @@ jest.mock('../services/search', () => ({
 }));
 jest.mock('../services/labelScan', () => ({ identifyWineFromText: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
+// A row with no AI to ask is identified from its file; the registry look-up
+// of a missing country is its own unit (services/importCountry.test.js).
+jest.mock('../services/importCountry', () => ({ withDerivedCountry: jest.fn(async (identity) => identity) }));
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/exchangeRates', () => ({
@@ -169,6 +172,8 @@ beforeEach(() => {
   WineDefinition.__state.exactByKey.clear();
   WineDefinition.__state.candidates = [];
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, user: USER_ID, deletedAt: null, members: [] });
+  // The preview probe of a row the registry does not know.
+  findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
 });
 
 test('a producer-less display name is split on a producer the registry knows and resolves exact', async () => {
@@ -209,10 +214,28 @@ test('a display name the registry cannot split keeps its full name and an empty 
 
   expect(res.status).toBe(200);
   const [row] = res.body.results;
-  expect(row.status).toBe('no_match'); // no AI in this harness → fuzzy fallback, nothing to match
+  // No AI in this harness, and the file states no country: nothing to match
+  // and nothing that could be created.
+  expect(row.status).toBe('no_match');
   expect(row.item.wineName).toBe('Kim Crawford Pinot Gris');
   expect(row.item.producer ?? '').toBe('');
-  expect(findOrCreateWine).not.toHaveBeenCalled();
+  // The registry is probed with the file's own words: the whole display name
+  // and NO producer, read-only.
+  expect(findOrCreateWine).toHaveBeenCalledTimes(1);
+  const [identity, , opts] = findOrCreateWine.mock.calls[0];
+  expect(identity).toMatchObject({ name: 'Kim Crawford Pinot Gris', producer: '' });
+  expect(opts).toEqual({ matchOnly: true });
+});
+
+test('a row with no producer that states its country is offered as a new wine with NO producer', async () => {
+  const res = await validate([{ wineName: 'Kim Crawford Pinot Gris', country: 'New Zealand', vintage: '2022' }]);
+
+  const [row] = res.body.results;
+  expect(row.status).toBe('ai_new');
+  expect(row.aiProposed).toMatchObject({ name: 'Kim Crawford Pinot Gris', country: 'New Zealand' });
+  // Never the first word, and never a placeholder: the mint makes an empty
+  // producer a row a curator completes.
+  expect(row.aiProposed.producer || '').toBe('');
 });
 
 test('a split is never attempted on a row that states its producer', async () => {
