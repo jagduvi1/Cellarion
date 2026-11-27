@@ -81,6 +81,11 @@ describe('buildImportItem', () => {
     expect(out.addToWishlist).toBe(true);
   });
 
+  test('forwards the photo link a file gives a wine', () => {
+    const url = 'https://firebasestorage.googleapis.com/v0/b/ma-cave-a-vins-app.appspot.com/o/w%2Fp?alt=media&token=t';
+    expect(buildImportItem({ item: { wineName: 'X', photoUrl: url } }, 'w1').photoUrl).toBe(url);
+  });
+
   test('forwards internalSlot for cellarion round-trips', () => {
     const out = buildImportItem(
       { item: { wineName: 'X', producer: 'Y', rackName: 'Hex', rackPosition: 11, internalSlot: true } },

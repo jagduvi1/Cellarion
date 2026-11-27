@@ -72,6 +72,9 @@ export function buildImportItem(r, selection) {
     // bottle is created ON ORDER, with the expected month when known.
     onOrder: r.item.onOrder,
     expectedArrival: r.item.expectedArrival,
+    // The link to the photo the owner took in another cellar app (a Ma Cave à
+    // Vins export): the server copies it in after the import.
+    photoUrl: r.item.photoUrl,
   };
 }
 

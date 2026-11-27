@@ -90,6 +90,11 @@ describe('Ma Cave à Vins: the columns', () => {
     expect(byName('Riesling Kabinett')[0].notes).toBe('Speise- und Weinpaarungen: Fisch');
   });
 
+  it('carries the photo link of a wine that has one', () => {
+    expect(byName('Riesling Kabinett').every((it) => it.photoUrl === PHOTO)).toBe(true);
+    expect(byName('Brut Rosé')[0].photoUrl).toBeUndefined();
+  });
+
   it('strips the blend shares from the grapes', () => {
     expect(byName('Brut Rosé')[0].grapes).toEqual(['Pinot Noir', 'Chardonnay']);
   });

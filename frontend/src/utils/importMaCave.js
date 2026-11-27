@@ -20,6 +20,10 @@ import { parsePlocGrapes, buildPlocDateParser } from './importPloc';
 // file a drunk bottle under. A file with consumed counts says so in a warning
 // instead of losing them unseen.
 //
+// The photo column links each wine to the photo its owner took in the app.
+// The link goes to the server as it is: the server copies the photo in after
+// the import (backend services/importPhotos), from that app's photo store only.
+//
 // utils/importMappers.js re-exports the public names.
 
 /** Header names per field, in every language seen; compared in normHeader form. */
@@ -44,6 +48,7 @@ const MA_CAVE_COLUMNS = {
   pairings: ['Speise- und Weinpaarungen'],
   comment: ['Kommentar'],
   added: ['Hinzufügedatum'],
+  photo: ['Foto'],
 };
 
 // The columns no other export has together. A file is this app's when every
@@ -165,6 +170,7 @@ export function makeMaCaveMapper(rows) {
       notes,
       ...(rating > 0 ? { rating, ratingScale: '5' } : {}),
       dateAdded: dates.parse(cell(row, 'added')),
+      photoUrl: cell(row, 'photo') || undefined,
     };
   };
 }
