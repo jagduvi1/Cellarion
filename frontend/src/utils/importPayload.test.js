@@ -11,7 +11,7 @@
  */
 import { readFileSync } from 'fs';
 import { describe, test, expect } from 'vitest';
-import { buildImportItem } from './importPayload';
+import { buildImportItem, applyImportPhotoChoice } from './importPayload';
 import { decodeImportBuffer, parseAndMap } from './importMappers';
 
 const FIXTURE = 'src/utils/__fixtures__/cellartracker/bundle/CellarTracker_Inventory.tsv';
@@ -84,6 +84,16 @@ describe('buildImportItem', () => {
   test('forwards the photo link a file gives a wine', () => {
     const url = 'https://firebasestorage.googleapis.com/v0/b/ma-cave-a-vins-app.appspot.com/o/w%2Fp?alt=media&token=t';
     expect(buildImportItem({ item: { wineName: 'X', photoUrl: url } }, 'w1').photoUrl).toBe(url);
+  });
+
+  test('a photo link is sent only when the owner ticked "bring in the photos"', () => {
+    const items = [{ wineName: 'X', photoUrl: 'https://p/1' }, { wineName: 'Y' }];
+    const notice = (include) => [{ code: 'vintage-missing', count: 1 }, { code: 'macave-photos', count: 1, include }];
+    expect(applyImportPhotoChoice(items, notice(true))).toEqual(items);
+    expect(applyImportPhotoChoice(items, notice(false))).toEqual([{ wineName: 'X' }, { wineName: 'Y' }]);
+    // No notice at all (another format, an old draft): no photo either.
+    expect(applyImportPhotoChoice(items, [])).toEqual([{ wineName: 'X' }, { wineName: 'Y' }]);
+    expect(applyImportPhotoChoice(items, undefined)).toEqual([{ wineName: 'X' }, { wineName: 'Y' }]);
   });
 
   test('forwards internalSlot for cellarion round-trips', () => {

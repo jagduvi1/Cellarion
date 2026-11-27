@@ -97,3 +97,16 @@ export function applyImportOnOrder(items, { onOrder, expectedArrival } = {}) {
     return { ...rest, onOrder: true, expectedArrival: expectedArrival || undefined };
   });
 }
+
+/**
+ * The review step's "bring in the photos" choice, applied to the confirm
+ * items: a photo link goes to the server only when the owner ticked the box
+ * on the file's photo notice (utils/importMaCave maCaveWarnings, `include`).
+ * Without a ticked notice every link is left out, so no photo is ever copied
+ * that the owner did not ask for.
+ */
+export function applyImportPhotoChoice(items, importWarnings) {
+  const wanted = (importWarnings || []).some((w) => w.code === 'macave-photos' && w.include === true);
+  if (wanted) return items;
+  return items.map(({ photoUrl, ...rest }) => rest);
+}

@@ -5,7 +5,10 @@ import { MAX_IMPORT_ROWS } from './importConstants';
 // The CT truncation warning gets elevated styling + a bold headline: a
 // 25-row page export silently missing 90% of a cellar is the single worst
 // "looked like it worked" outcome an import can have.
-export default function ImportParseWarnings({ importWarnings, parsedItems }) {
+// A notice may carry a choice: a Ma Cave à Vins file's photo notice is the
+// owner's "bring in the photos" box, kept on the notice itself (so a saved
+// draft keeps it) and read by utils/importPayload applyImportPhotoChoice.
+export default function ImportParseWarnings({ importWarnings, parsedItems, setImportWarnings }) {
   const { t } = useTranslation();
   return (importWarnings.length > 0 || parsedItems.length > MAX_IMPORT_ROWS) && (
     <div className="import-parse-warnings">
@@ -49,6 +52,20 @@ export default function ImportParseWarnings({ importWarnings, parsedItems }) {
           {w.code === 'ploc-rack-too-big' && t('importBottles.warnings.plocRackTooBig', { rack: w.rack, rows: w.rows, cols: w.cols })}
           {w.code === 'ploc-unmatched-history' && t('importBottles.warnings.plocUnmatchedHistory', { count: w.count })}
           {w.code === 'macave-consumed-not-imported' && t('importBottles.warnings.maCaveConsumedNotImported', { n: w.count, column: w.column })}
+          {w.code === 'macave-photos' && (
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={w.include === true}
+                disabled={!setImportWarnings}
+                onChange={(e) => {
+                  const include = e.target.checked;
+                  setImportWarnings((ws) => ws.map((x) => (x.code === 'macave-photos' ? { ...x, include } : x)));
+                }}
+              />
+              <span>{t('importBottles.warnings.maCavePhotos', { n: w.count })}</span>
+            </label>
+          )}
         </div>
       ))}
     </div>
