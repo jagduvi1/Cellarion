@@ -2573,6 +2573,11 @@
         "unavailableUndone": "Back in the queue.",
         "emptyFiltered": "Nothing waiting in this view. {{n}} wine(s) are recorded as having no producer on the label — tick the box above to see them, or clear the source filter.",
         "unavailableBadge": "recorded: no producer on the label",
+        "uncheckedBadge": "waiting for a check",
+        "uncheckedIntro": "A wine marked \"waiting for a check\" came from a member's import, as the file wrote it. Correct what is wrong and save to publish it; a wine that is right as it stands can be published at once.",
+        "publishBtn": "Publish as it is",
+        "publishTitle": "The name, producer and place are right: make this wine visible to everyone.",
+        "saveAndPublish": "Save and publish",
         "frontBackDisagree": "Front/back labels disagree —",
         "showUnavailable": "Show \"no producer on label\" ({{n}})",
         "showUnavailableTitle": "Include the rows already recorded as having no producer on the label. They have no work left, but the record is reversible from here.",
@@ -2828,6 +2833,19 @@
       "turnOff": "Turn review off",
       "turnOn": "Turn review on",
       "superOnly": "Only the super admin can change this on this server."
+    },
+    "importPolicy": {
+      "title": "Imports",
+      "aiOn": "AI look-up: on. A wine in a file that the registry does not know is sent to the AI provider to be identified.",
+      "aiOff": "AI look-up: off. Nothing from a file is sent to an AI provider. A wine the registry does not know is created from what the file says.",
+      "checkOn": "Check new wines: on. A wine an import creates is visible only to its owner until a curator has checked it here.",
+      "checkOff": "Check new wines: off. A wine an import creates is public as soon as it is created.",
+      "checkNoReview": "Check new wines: on, but this server does not review contributions, so imported wines are public at once.",
+      "waiting": "{{n}} wine(s) are waiting for a check.",
+      "turnAiOff": "Turn AI look-up off",
+      "turnAiOn": "Turn AI look-up on",
+      "turnCheckOff": "Stop checking new wines",
+      "turnCheckOn": "Check new wines before they are public"
     }
   },
   "somm": {
@@ -5109,6 +5127,7 @@
     "resultWines_other": "{{count}} new wines added to the registry",
     "resultPendingIdentity_one": "{{count}} wine couldn't be fully identified — the bottle is in your cellar, and our curators will complete the details",
     "resultPendingIdentity_other": "{{count}} wines couldn't be fully identified — the bottles are in your cellar, and our curators will complete the details",
+    "resultUnchecked": "{{n}} new wine(s) wait for a curator's check before other members can see them",
     "resultWineRequests_one": "{{count}} wine submitted for review (couldn't auto-create)",
     "resultWineRequests_other": "{{count}} wines submitted for review (couldn't auto-create)",
     "resultUnplaced_one": "{{count}} bottle couldn't be placed in a rack slot",
@@ -5564,6 +5583,7 @@
       "overflowSuffix": " ({{count}} into adjacent slots)",
       "couldntPlace": "Couldn't place",
       "pendingIdentityNote": "{{n}} wine(s) couldn't be fully identified from your file — the bottles are in your cellar, and our curators will complete the details.",
+      "uncheckedNote": "{{n}} new wine(s) from your file are in your cellar. A curator checks their details before other members can see them.",
       "autoCreatedRacks": "Auto-created racks ({{count}})",
       "unplacedSummary": "Bottles that couldn't be placed in a rack ({{count}})",
       "unplacedRow": "Row {{row}} → rack <1>{{rack}}</1>",
