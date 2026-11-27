@@ -10,6 +10,7 @@ import {
 import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM } from '../../utils/rackLayouts';
 import { swatchType } from '../../utils/wineColour';
 import { CabinetBody, CabinetDoor, CabinetShelfPlank, CABINET_COLORS } from './CabinetParts';
+import WallStructure from './WallStructure';
 
 // ── Bright, visible wine colors by type ──────────────────
 const GLASS_COLORS = {
@@ -716,11 +717,12 @@ export default function RackMesh({
     return n * extraRowH;
   };
 
-  // Cube and modular racks have irregular internal layouts. Reuse the 2D
+  // Cube, wall and modular racks have irregular internal layouts. Reuse the 2D
   // layout engine (rackLayouts.js — source of truth for slot numbering) and
   // scale its coordinates into 3D metres so bottles land in the right cells
   // and the frame is sized to the true footprint.
-  const useScaled = rack.isModular || rackType === 'cube';
+  const isWall = rackType === 'wall' && !rack.isModular;
+  const useScaled = rack.isModular || rackType === 'cube' || isWall;
   const scaledLayout = useMemo(
     () => (useScaled ? buildScaledLayout(rack) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -740,7 +742,8 @@ export default function RackMesh({
   // x-rack is square by construction; honouring a stray widthOverride (e.g.
   // left over from a rack that was switched to x-rack after a width was set)
   // would stretch the slot grid and X-beams out of alignment, so ignore it.
-  const width = rackType === 'x-rack' ? defaultWidth : (widthOverride || defaultWidth);
+  // A wall is true to scale in the same way: its boxes would stretch.
+  const width = (rackType === 'x-rack' || isWall) ? defaultWidth : (widthOverride || defaultWidth);
   const hasShelfBack = rackType === 'shelf' && (rack.typeConfig?.backCols || 0) > 0;
   const depth = depthOverride || (cab ? cab.depth : hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH);
   const innerW = (width - PANEL_THICK * 2);
@@ -923,7 +926,9 @@ export default function RackMesh({
           hovered={hovered}
           lit={cabinetLit}
         />
-      ) : (
+      ) : isWall ? null : (
+        // (A wall has no frame around the whole of it: each box has its own,
+        // drawn by WallStructure below, and the cells without a box stay open.)
         <>
       {/* ── Side panels (full height, open depth) ──── */}
       <mesh position={[-width / 2 + PANEL_THICK / 2, 0, -depth * 0.05]} castShadow>
@@ -957,7 +962,7 @@ export default function RackMesh({
           2D layout), so the simple per-row planks/scallops don't apply — and
           a cabinet brings its own beech shelves (and would get grid cradles
           that do not line up under its narrowed, staggered cells). */}
-      {rackType !== 'x-rack' && rackType !== 'shelf' && rackType !== 'cube' && !isCabinet && !rack.isModular && (
+      {rackType !== 'x-rack' && rackType !== 'shelf' && rackType !== 'cube' && !isWall && !isCabinet && !rack.isModular && (
         <>
           {/* Shelves between rows (thin planks). headroomAbove shifts a
               plank down past the extra headroom of every double-height row
@@ -1042,6 +1047,11 @@ export default function RackMesh({
           />
         )
       ))}
+
+      {/* Wall: the frame, planks and doors of every box */}
+      {isWall && scaledLayout?.wall && (
+        <WallStructure wall={scaledLayout.wall} depth={depth} woodTex={woodTex} frameColor={frameColor} plankColor={shelfColor} />
+      )}
 
       {/* X-Rack: two diagonal beams forming an X */}
       {rackType === 'x-rack' && (() => {
