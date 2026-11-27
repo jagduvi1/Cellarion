@@ -149,3 +149,38 @@ test('a bottle already announced at peak is announced as ending when its last ye
   expect(await processUser({ _id: 'u1' }, false)).toBe(1);
   expect(sent()[0].type).toBe('drink_window_ending');
 });
+
+test('a wine held in two cellars counts in each cellar\'s group', async () => {
+  Cellar.distinct.mockResolvedValue(['cellar1', 'cellar2']);
+  mockBottles([
+    ...['Shared', 'A', 'B'].map((n) => bottle(n, PEAK)),
+    ...['Shared', 'C', 'D'].map((n) => bottle(n, PEAK, { cellar: 'cellar2' })),
+  ]);
+
+  expect(await processUser({ _id: 'u1' }, false)).toBe(2);
+  expect(sent().map((n) => [n.title, n.link])).toEqual([
+    ['3 wines at peak maturity', '/cellars/cellar1?maturity=peak'],
+    ['3 wines at peak maturity', '/cellars/cellar2?maturity=peak'],
+  ]);
+});
+
+test('…and is not announced alone in one cellar when another cellar\'s notification covers it', async () => {
+  Cellar.distinct.mockResolvedValue(['cellar1', 'cellar2']);
+  mockBottles([
+    bottle('Shared', PEAK), bottle('Lone', PEAK),
+    ...['Shared', 'C', 'D'].map((n) => bottle(n, PEAK, { cellar: 'cellar2' })),
+  ]);
+
+  expect(await processUser({ _id: 'u1' }, false)).toBe(2);
+  expect(sent().map((n) => n.link)).toEqual([
+    '/cellars/cellar1/vintages/wd-Lone/2015',
+    '/cellars/cellar2?maturity=peak',
+  ]);
+});
+
+test('a wine alone in each of two cellars is still one notification', async () => {
+  Cellar.distinct.mockResolvedValue(['cellar1', 'cellar2']);
+  mockBottles([bottle('Shared', PEAK), bottle('Shared', PEAK, { cellar: 'cellar2' })]);
+
+  expect(await processUser({ _id: 'u1' }, false)).toBe(1);
+});

@@ -62,7 +62,7 @@ describe('a long list', () => {
     expect(listedIn(msg.text)).toHaveLength(20);
     for (const body of [msg.text, msg.html]) {
       expect(body).toContain('569 wines in your cellar have drink-window updates: 264 past their window, 91 with their peak ending soon, 214 at peak. Here are 20 of them:');
-      expect(body).toContain('…and 549 more. Open your cellar to see them all.');
+      expect(body).toContain('…and 549 more. Your cellar shows which wines are ready to drink.');
     }
     expect(msg.subject).toBe('Cellarion: 569 bottles need your attention');
     // Every status is shown, the urgent ones first: not 20 wines past their window.

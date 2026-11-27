@@ -122,7 +122,9 @@ router.patch('/:id', async (req, res) => {
     res.json({
       message: promoted
         ? 'Identity completed — the wine is now visible in the registry'
-        : 'Saved — the wine still needs a producer and a name to leave the queue',
+        : (wine.uncheckedIdentity === true && wine.producer)
+          ? 'Saved — the wine is still waiting for a check (send identityChecked: true to publish it)'
+          : 'Saved — the wine still needs a producer and a name to leave the queue',
       promoted,
       wine: {
         _id: wine._id,

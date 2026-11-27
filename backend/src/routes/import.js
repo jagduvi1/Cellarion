@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
+const importValidateLimiter = require('../middleware/importValidateLimiter');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const Grape = require('../models/Grape');
@@ -9,7 +10,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { normalizeString, normalizeWineName, resolveCountryName, isIdentitySentinel } = require('../utils/normalize');
+const { normalizeString, normalizeWineName, resolveCountryName, isRecognizedCountry, isIdentitySentinel } = require('../utils/normalize');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { identifyWineFromText } = require('../services/labelScan');
 const aiProvider = require('../services/aiProvider');
@@ -88,14 +89,18 @@ const EXACT_THRESHOLD = IMPORT_EXACT_THRESHOLD;
  */
 // Whether this import asks the AI provider at all (config/importPolicy).
 const importUsesAi = () => aiProvider.isConfigured() && importPolicy.usesAi();
-// The burst limit paces AI calls; an import that asks no AI has none to pace.
-const validateLimiter = (req, res, next) => (importUsesAi() ? aiBurstLimiter(req, res, next) : next());
+// The AI burst limit paces AI calls; an import that asks no AI has none to
+// pace, and gets its own per-member limit, sized for registry reads.
+const validateLimiter = (req, res, next) => (importUsesAi() ? aiBurstLimiter : importValidateLimiter)(req, res, next);
 
 router.post('/validate', validateLimiter, async (req, res) => {
   try {
     const { cellarId, items } = req.body;
     // Who the candidate pool is being built FOR — see findWineMatches.
-    const viewer = { userId: req.user.id, roles: req.user.roles };
+    // No roles on purpose: a curator importing their own cellar is a member
+    // here. With their role they would be shown every hidden wine, and their
+    // bottle would land on another member's wine that waits for a check.
+    const viewer = { userId: req.user.id, roles: [] };
 
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
@@ -238,6 +243,16 @@ router.post('/validate', validateLimiter, async (req, res) => {
       grapeColourOf = (grapeName) => byKey.get(normalizeString(String(grapeName || ''))) || null;
       return grapeColourOf;
     };
+    // One registry look-up per distinct appellation, region and producer of
+    // the request, not one per wine: a file is often one producer's range.
+    const derivedCountries = new Map();
+    const derivedCountry = async (identity) => {
+      if (!identity || identity.country) return identity;
+      const key = [identity.appellation, identity.region, identity.producer].map((v) => normalizeString(v || '')).join('|');
+      if (!derivedCountries.has(key)) derivedCountries.set(key, (await withDerivedCountry(identity)).country || null);
+      const country = derivedCountries.get(key);
+      return country ? { ...identity, country } : identity;
+    };
     for (const pr of uniquePrs) {
       if (clientDisconnected) break; // requester gone — stop the cascade, skip AI entirely
       // A row still without a producer after the registry split runs the
@@ -282,8 +297,15 @@ router.post('/validate', validateLimiter, async (req, res) => {
       // complete or not, and a country it does not state is read from the
       // registry where the registry is sure (services/importCountry).
       const colourMap = needsColourMap ? await getGrapeColourOf() : null;
+      // A producer the REGISTRY supplied by splitting the name is a guess the
+      // file never made: with no model to confirm it, the row is identified
+      // by its whole display name and NO producer, which the mint keeps
+      // hidden until a curator has read it.
+      const stated = pr.producerFromRegistry
+        ? { ...pr.item, wineName: `${pr.item.producer} ${pr.item.wineName}`.trim(), producer: '' }
+        : pr.item;
       const identity = !aiConfigured
-        ? await withDerivedCountry(fileStatedIdentity(pr.item, colourMap))
+        ? await derivedCountry(fileStatedIdentity(stated, colourMap))
         : (pr.producerFromRegistry ? null : fileCompleteIdentity(pr.item, colourMap));
       if (identity) {
         pr.aiIdentified = identity;
@@ -418,6 +440,11 @@ router.post('/validate', validateLimiter, async (req, res) => {
     // the very splits it exists to prevent).
     const countryKey = (v) =>
       (typeof v === 'string' && v.trim()) ? normalizeString(resolveCountryName(v)) : '';
+    // The file's own country column, when it names a country. "California" or
+    // a region mapped to the wrong column is not an anchor: written back over
+    // the identity it would only fail the mint, and cost the row.
+    const fileCountryKey = (item) =>
+      (countryKey(item.country) && isRecognizedCountry(resolveCountryName(item.country)) ? countryKey(item.country) : '');
     for (const rows of aiRowsByProducer.values()) {
       // The FILE is the anchor, and its STATED VALUE is the anchor value —
       // not the AI's echo of it (anchoring on the echo would let an AI that
@@ -426,7 +453,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
       // own file column is corrected back to the file's value, which is also
       // what /confirm then mints.
       for (const pr of rows) {
-        const fileKey = countryKey(pr.item.country);
+        const fileKey = fileCountryKey(pr.item);
         if (fileKey && countryKey(pr.aiIdentified.country) !== fileKey) {
           pr.aiIdentified.country = pr.item.country;
         }
@@ -434,7 +461,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
       const rowKey = (pr) => countryKey(pr.aiIdentified.country);
       const distinct = new Set(rows.map(rowKey).filter(Boolean));
       if (distinct.size === 0) continue; // no row knows a country — nothing to spread
-      const anchors = rows.filter((pr) => countryKey(pr.item.country));
+      const anchors = rows.filter((pr) => fileCountryKey(pr.item));
       let adopted = null;
       if (distinct.size === 1) {
         // Group already agrees — only rows the AI left countryless (which
@@ -444,7 +471,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
         // The file knows best — but only when it names ONE country. Two
         // file-backed countries for one producer is real information
         // (a brand genuinely bottling on two continents): touch nothing.
-        const anchorKeys = new Set(anchors.map((pr) => countryKey(pr.item.country)));
+        const anchorKeys = new Set(anchors.map((pr) => fileCountryKey(pr.item)));
         if (anchorKeys.size !== 1) continue;
         adopted = anchors[0].item.country;
       } else {
@@ -459,10 +486,14 @@ router.post('/validate', validateLimiter, async (req, res) => {
       const adoptedKey = countryKey(adopted);
       for (const pr of rows) {
         // Never overwrite a row the file itself anchored.
-        if (countryKey(pr.item.country)) continue;
+        if (fileCountryKey(pr.item)) continue;
         const own = rowKey(pr);
         if (own === adoptedKey) continue;
         if (!own) { pr.aiIdentified.country = adopted; continue; } // fill the gap
+        // A row identified from the file alone carries no confidence, and its
+        // country is no guess: the registry derived it from the row's own
+        // appellation or region. Another row of the producer does not move it.
+        if (pr.aiBypassed) continue;
         // A row the model is CONFIDENT about keeps its own country: one
         // producer string can be two wineries on two continents (Domaine
         // Chandon FR vs Bodegas Chandon AR — the guard findOrCreateWine

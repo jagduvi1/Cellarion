@@ -322,4 +322,87 @@ describeWithMongo('wines waiting for a curator\'s check (real MongoDB)', () => {
       expect(await reload(published)).not.toBeNull();
     });
   });
+
+  describe('the edges of the waiting state', () => {
+    const [GINA, HUGO] = [oid(), oid()];
+    const DAY = 24 * 60 * 60 * 1000;
+    const age = (id, ms) => mongoose.connection.collection('winedefinitions').updateOne({ _id: id }, { $set: { createdAt: new Date(Date.now() - ms) } });
+
+    test('a waiting wine that only a wishlist item points at is NOT swept (an import to the wishlist makes no bottle)', async () => {
+      const { runUncheckedWineSweep } = require('./uncheckedWineSweepJob');
+      const wished = (await mint({ name: 'Wished Cuvée', producer: 'Quinta Exemplo', country: 'Portugal' }, GINA)).wine._id;
+      await age(wished, 3 * DAY);
+      await mongoose.connection.collection('wishlistitems').insertOne({ user: GINA, wineDefinition: wished, createdAt: new Date() });
+
+      await runUncheckedWineSweep();
+      expect(await reload(wished)).not.toBeNull();
+
+      await mongoose.connection.collection('wishlistitems').deleteMany({ wineDefinition: wished });
+      await runUncheckedWineSweep();
+      expect(await reload(wished)).toBeNull();
+    });
+
+    test('a drink that is not wine never waits for a check: it is not registry content at all', async () => {
+      const res = await findOrCreateWine({ name: 'Single Malt 12', producer: 'Distillery Example', country: 'United Kingdom' },
+        String(GINA), { ...IMPORT, nonWine: true });
+      const row = await reload(res.wine._id);
+      expect(row.nonWine).toBe(true);
+      expect(row.uncheckedIdentity).toBe(false);
+      expect(res.unchecked).toBeUndefined();
+    });
+
+    test('a file-made wine with no stated type stores none, checked or not', async () => {
+      const waiting = await mint({ name: 'Chablis Sans Type', producer: 'Domaine Exemple', country: 'France' }, GINA);
+      expect((await reload(waiting.wine._id)).type ?? null).toBeNull();
+
+      const published = await mint({ name: 'Sancerre Sans Type', producer: 'Domaine Exemple', country: 'France' }, GINA,
+        { allowPending: true, createdVia: 'import' });
+      const row = await reload(published.wine._id);
+      expect(row.pendingIdentity).toBe(false);
+      expect(row.type ?? null).toBeNull();
+    });
+
+    test('once a wine is published, its member\u2019s own waiting twin no longer catches later adds', async () => {
+      const identity = { name: 'Rioja Reserva', producer: 'Bodega Ejemplo Dos', country: 'Spain', type: 'red' };
+      const own = (await mint(identity, HUGO)).wine._id;
+      // The same wine, published through another member's row.
+      const other = (await mint(identity, GINA)).wine._id;
+      expect(await ops.applyPendingFix(await reload(other), { identityChecked: true }, String(CURATOR))).toMatchObject({ ok: true, promoted: true });
+
+      const again = await mint(identity, HUGO);
+      expect(again.created).toBe(false);
+      expect(String(again.wine._id)).toBe(String(other));
+      expect(String(again.wine._id)).not.toBe(String(own));
+    });
+
+    test('an edit that rebuilds the ordinary key leaves a waiting wine in its own namespace, and others can still add the wine', async () => {
+      const identity = { name: 'Etna Rosso', producer: 'Cantina Esempio Tre', country: 'Italy', type: 'red' };
+      const hidden = await reload((await mint(identity, HUGO)).wine._id);
+      // What the admin wine form does on a rename.
+      hidden.name = 'Etna Rosso Riserva';
+      hidden.normalizedKey = generateWineKey(hidden.name, hidden.producer, hidden.appellation);
+      await hidden.save();
+      expect((await reload(hidden._id)).normalizedKey).toBe(`unchecked~${HUGO}:cantina esempio tre:etna rosso riserva:`);
+
+      // Another member adds that very wine the ordinary way: no collision with a row they cannot see.
+      const added = await findOrCreateWine({ ...identity, name: 'Etna Rosso Riserva' }, String(GINA), { allowPending: true, createdVia: 'ui' });
+      expect(added.created).toBe(true);
+      expect(added.wine.pendingIdentity).toBe(false);
+    });
+
+    test('"no producer on the label" cannot take a wine that has a producer out of the queue', async () => {
+      const row = await reload((await mint({ name: 'Soave Classico', producer: 'Cantina Esempio Tre', country: 'Italy' }, HUGO)).wine._id);
+      expect(await ops.applyPendingFix(row, { identityUnavailable: true }, String(CURATOR))).toMatchObject({ ok: false, code: 'invalid_input' });
+      expect((await reload(row._id)).identityUnavailable).toBe(false);
+    });
+
+    test('a record that is not wine is never merged onto a wine, whoever has its id', async () => {
+      const spirit = await findOrCreateWine({ name: 'Grappa', producer: '', country: 'Italy' }, String(HUGO), { allowPending: true, createdVia: 'import', nonWine: true });
+      const row = await reload(spirit.wine._id);
+      expect(row.pendingIdentity).toBe(true);
+      const published = (await mint({ name: 'Valpolicella', producer: 'Cantina Esempio Tre', country: 'Italy', type: 'red' }, GINA, { allowPending: true, createdVia: 'ui' })).wine._id;
+      expect(await ops.mergePendingInto(row, String(published))).toMatchObject({ ok: false, code: 'conflict' });
+      expect(await reload(row._id)).not.toBeNull();
+    });
+  });
 });

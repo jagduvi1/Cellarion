@@ -96,3 +96,13 @@ test('an older or unreachable server shows nothing', async () => {
   await waitFor(() => expect(adminGetImportPolicy).toHaveBeenCalled());
   expect(container).toBeEmptyDOMElement();
 });
+
+test('a server with no AI provider says so and offers no AI switch', async () => {
+  adminGetImportPolicy.mockResolvedValue(ok({ ...DEFAULTS, aiAvailable: false }));
+  render(<ImportPolicySwitch />);
+
+  expect(await screen.findByText(/this server has no AI provider/)).toBeInTheDocument();
+  expect(screen.queryByText('Turn AI look-up off')).not.toBeInTheDocument();
+  // The check for new wines is still offered.
+  expect(screen.getByText('Check new wines before they are public')).toBeInTheDocument();
+});

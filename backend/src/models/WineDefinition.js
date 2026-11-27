@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity, normalizeClassification, isProductionMethodOnly, sweetnessKeySegment, stripSweetnessKeySegment, normalizeSweetnessTerm } = require('../utils/normalize');
+const { generateWineSlug, generateWineKey, pendingWineKey, uncheckedWineKey, PENDING_KEY_PREFIX, UNCHECKED_KEY_PREFIX, isIdentitySentinel, isImplausibleIdentity, normalizeClassification, isProductionMethodOnly, sweetnessKeySegment, stripSweetnessKeySegment, normalizeSweetnessTerm } = require('../utils/normalize');
 require('./Classification'); // registers the model the classifications ref and the save hook use
 require('./SweetnessTerm'); // the same for labelSweetness (the key/slug hook reads the term's word)
 const { computeCanonicalKey } = require('../utils/wineIdentity');
@@ -1021,6 +1021,23 @@ wineDefinitionSchema.pre('validate', function(next) {
   // row this stores. Atomic writes skip this hook:
   // scripts/clear-method-appellations.js is the backfill.
   if (this.isModified('appellation') && isProductionMethodOnly(this.appellation)) this.appellation = null;
+  // An UNCHECKED row keeps its key in a per-creator namespace whoever writes
+  // it. Several writers rebuild the ordinary producer:name:appellation key on
+  // an edit (the admin wine form, a proposal approval, a report fix) without
+  // knowing the row is hidden; with that key a hidden row would hold the
+  // public identity, and every other member's add of the same wine would
+  // collide with a row they cannot see. And the reverse: a row that has left
+  // the state must not keep the namespace.
+  if (typeof this.normalizedKey === 'string' && this.normalizedKey) {
+    const inOwnNamespace = this.normalizedKey.startsWith(UNCHECKED_KEY_PREFIX) || this.normalizedKey.startsWith(PENDING_KEY_PREFIX);
+    if (this.uncheckedIdentity === true && this.draft !== true && !inOwnNamespace) {
+      this.normalizedKey = isIdentitySentinel(this.producer)
+        ? pendingWineKey(this.name, this.createdBy, this.appellation)
+        : uncheckedWineKey(this.name, this.producer, this.createdBy, this.appellation);
+    } else if (this.pendingIdentity !== true && this.normalizedKey.startsWith(UNCHECKED_KEY_PREFIX)) {
+      this.normalizedKey = generateWineKey(this.name, this.producer, this.appellation);
+    }
+  }
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation') || this.isModified('labelSweetness')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation, { sweetness: this.$locals.sweetnessName || null });
   }

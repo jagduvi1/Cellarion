@@ -139,3 +139,46 @@ describe('GET /api/reviews/user/:userId', () => {
     expect(r.body.error).toBe('handled');
   });
 });
+
+describe('a review of a wine that is not registry content yet', () => {
+  // Its author can see the wine; nobody else may, and the feeds carry the
+  // wine's name and producer.
+  const hiddenWineReview = {
+    _id: REVIEW_ID,
+    author: { _id: OWNER_ID },
+    wineDefinition: { name: 'Barolo Bussia', producer: 'Cantina Esempio', pendingIdentity: true },
+    toObject: () => ({
+      _id: REVIEW_ID,
+      author: { _id: OWNER_ID, username: 'owner' },
+      visibility: 'public',
+      wineDefinition: { name: 'Barolo Bussia', producer: 'Cantina Esempio', pendingIdentity: true },
+    }),
+  };
+  const serve = (doc) => Review.find.mockImplementation(() => {
+    const q = { sort: () => q, skip: () => q, limit: () => q, populate: () => q, then: (resolve, reject) => Promise.resolve([doc]).then(resolve, reject) };
+    return q;
+  });
+
+  test('is left out of what another member is served', async () => {
+    serve(hiddenWineReview);
+    const r = await get(`/api/reviews/user/${OWNER_ID}`, OTHER_ID);
+    expect(r.status).toBe(200);
+    expect(r.body.reviews).toEqual([]);
+    expect(JSON.stringify(r.body)).not.toContain('Barolo Bussia');
+  });
+
+  test('is served to its author, without the internal flag', async () => {
+    serve(hiddenWineReview);
+    const r = await get(`/api/reviews/user/${OWNER_ID}`, OWNER_ID);
+    expect(r.body.reviews).toHaveLength(1);
+    expect(r.body.reviews[0].wineDefinition).toEqual({ name: 'Barolo Bussia', producer: 'Cantina Esempio' });
+  });
+
+  test('a review of a published wine is served to everyone, as before', async () => {
+    const published = { ...hiddenWineReview, wineDefinition: { name: 'Barolo', pendingIdentity: false }, toObject: () => ({ _id: REVIEW_ID, author: { _id: OWNER_ID }, wineDefinition: { name: 'Barolo', pendingIdentity: false } }) };
+    serve(published);
+    const r = await get(`/api/reviews/user/${OWNER_ID}`, OTHER_ID);
+    expect(r.body.reviews).toHaveLength(1);
+    expect(r.body.reviews[0].wineDefinition).toEqual({ name: 'Barolo' });
+  });
+});

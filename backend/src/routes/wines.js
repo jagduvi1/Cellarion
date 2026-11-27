@@ -1241,7 +1241,10 @@ router.get('/:id', requireAuth, async (req, res) => {
     // missing id gets.
     const { canSeeWine, isDraftVisibleViaSharedCellar } = require('../services/wineVisibility');
     if (!canSeeWine(wine, { userId: req.user.id, roles: req.user.roles })) {
-      const viaCellar = wine.draft === true && await isDraftVisibleViaSharedCellar(String(wine._id), req.user.id);
+      // The same for a wine waiting for a curator's check: an editor's
+      // import into someone's cellar must leave the owner able to open it.
+      const viaCellar = (wine.draft === true || wine.uncheckedIdentity === true)
+        && await isDraftVisibleViaSharedCellar(String(wine._id), req.user.id);
       if (!viaCellar) return res.status(404).json({ error: 'Wine not found' });
     }
 

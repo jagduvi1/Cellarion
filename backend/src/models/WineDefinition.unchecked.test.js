@@ -88,3 +88,44 @@ describe('the unchecked key namespace', () => {
       .not.toBe(uncheckedWineKey('Kaefferkopf', 'Cave de Kaysersberg', oid()));
   });
 });
+
+describe('the key follows the state, whoever writes it', () => {
+  test('a writer that rebuilds the ordinary key on an unchecked row gets the namespaced key back', async () => {
+    // The admin wine form, a proposal approval and a report fix all rebuild
+    // producer:name:appellation without knowing the row is hidden.
+    const doc = uncheckedDoc();
+    await doc.validate();
+    doc.name = 'Kaefferkopf Riesling';
+    doc.normalizedKey = generateWineKey(doc.name, doc.producer);
+    await doc.validate();
+
+    expect(doc.pendingIdentity).toBe(true);
+    expect(doc.normalizedKey).toBe(uncheckedWineKey('Kaefferkopf Riesling', 'Cave de Kaysersberg', CREATOR));
+  });
+
+  test('with no producer it is the pending-namespace key', async () => {
+    const doc = uncheckedDoc({ producer: '', normalizedKey: generateWineKey('Kaefferkopf', '') });
+    await doc.validate();
+    expect(doc.normalizedKey.startsWith(`pending~${CREATOR}:`)).toBe(true);
+  });
+
+  test('a row that has left the state does not keep the namespace', async () => {
+    const doc = uncheckedDoc();
+    await doc.validate();
+    doc.uncheckedIdentity = false; // the check, by a writer that forgot the key
+    await doc.validate();
+
+    expect(doc.pendingIdentity).toBe(false);
+    expect(doc.normalizedKey).toBe(generateWineKey('Kaefferkopf', 'Cave de Kaysersberg'));
+  });
+
+  test('an ordinary wine and a draft are left alone', async () => {
+    const ordinary = uncheckedDoc({ uncheckedIdentity: false, normalizedKey: generateWineKey('Kaefferkopf', 'Cave de Kaysersberg') });
+    await ordinary.validate();
+    expect(ordinary.normalizedKey).toBe(generateWineKey('Kaefferkopf', 'Cave de Kaysersberg'));
+
+    const draft = uncheckedDoc({ uncheckedIdentity: false, draft: true, normalizedKey: 'draft~x:cave de kaysersberg:kaefferkopf:' });
+    await draft.validate();
+    expect(draft.normalizedKey).toBe('draft~x:cave de kaysersberg:kaefferkopf:');
+  });
+});

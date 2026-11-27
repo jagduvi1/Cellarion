@@ -11,6 +11,9 @@ jest.mock('../models/DeletedBottle', () => ({ countDocuments: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({ countDocuments: jest.fn(), find: jest.fn(), deleteMany: jest.fn().mockResolvedValue({}) }));
 jest.mock('../models/WineEmbedding', () => ({ find: jest.fn(), deleteMany: jest.fn().mockResolvedValue({}) }));
 jest.mock('./search', () => ({ removeWine: jest.fn() }));
+// What members attached to the wine besides bottles (its own unit is the
+// real-database test services/uncheckedWines.mongo.test.js).
+jest.mock('./wineReferences', () => ({ firstMemberReference: jest.fn().mockResolvedValue(null) }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 
@@ -22,6 +25,7 @@ const BottleImage = require('../models/BottleImage');
 const WineEmbedding = require('../models/WineEmbedding');
 const searchService = require('./search');
 const { logAudit } = require('./audit');
+const { firstMemberReference } = require('./wineReferences');
 const { gcOrphanMintedWine } = require('./registryGc');
 
 const WINE_ID = 'a'.repeat(24);
@@ -36,6 +40,7 @@ beforeEach(() => {
   DeletedBottle.countDocuments.mockResolvedValue(0);
   BottleImage.countDocuments.mockResolvedValue(0);
   BottleImage.find.mockResolvedValue([]);
+  firstMemberReference.mockResolvedValue(null);
   WineVintageProfile.countDocuments.mockResolvedValue(0);
   WineEmbedding.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([]) }) });
 });
@@ -162,6 +167,47 @@ describe('gcOrphanMintedWine happy path', () => {
 
   test('never throws — an unexpected model error reports removed:false', async () => {
     Bottle.countDocuments.mockRejectedValue(new Error('mongo hiccup'));
+    const res = await gcOrphanMintedWine(WINE_ID, REQ);
+    expect(res.removed).toBe(false);
+    expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('member content and the state the wine was to be removed in', () => {
+  test('a wishlist item, a review or any other member content keeps the wine', async () => {
+    firstMemberReference.mockResolvedValue('WishlistItem');
+    const res = await gcOrphanMintedWine(WINE_ID, REQ);
+    expect(res).toEqual({ removed: false, reason: 'member content still references it (WishlistItem)' });
+    expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
+    expect(WineVintageProfile.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('a look-up that fails counts as "in use": nothing is deleted', async () => {
+    firstMemberReference.mockRejectedValue(new Error('db down'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect((await gcOrphanMintedWine(WINE_ID, REQ)).removed).toBe(false);
+    warn.mockRestore();
+    expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('onlyIf: a wine that left the state since it was listed stays', async () => {
+    WineDefinition.findById.mockReturnValue(selectable({ _id: WINE_ID, name: 'Barolo', producer: 'P', uncheckedIdentity: false }));
+    const res = await gcOrphanMintedWine(WINE_ID, null, { onlyIf: { uncheckedIdentity: true } });
+    expect(res.removed).toBe(false);
+    expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('onlyIf is repeated in the delete itself, and a delete that matched nothing is not a removal', async () => {
+    WineDefinition.findById.mockReturnValue(selectable({ _id: WINE_ID, name: 'Barolo', producer: 'P', uncheckedIdentity: true }));
+    WineDefinition.deleteOne.mockResolvedValueOnce({ deletedCount: 0 });
+    const res = await gcOrphanMintedWine(WINE_ID, null, { action: 'wine.unchecked_orphan_delete', via: 'sweep', onlyIf: { uncheckedIdentity: true } });
+    expect(WineDefinition.deleteOne).toHaveBeenCalledWith({ _id: WINE_ID, uncheckedIdentity: true });
+    expect(res.removed).toBe(false);
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('a bottle added while the clean-up ran keeps the wine', async () => {
+    Bottle.countDocuments.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
     const res = await gcOrphanMintedWine(WINE_ID, REQ);
     expect(res.removed).toBe(false);
     expect(WineDefinition.deleteOne).not.toHaveBeenCalled();

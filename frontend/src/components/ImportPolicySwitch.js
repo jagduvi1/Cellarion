@@ -57,6 +57,17 @@ export default function ImportPolicySwitch({ onChange }) {
     }
   };
 
+  const aiText = () => {
+    // No provider configured: there is nothing to look anything up with,
+    // whatever the switch says.
+    if (state.aiAvailable === false) {
+      return t('admin.importPolicy.aiNone', 'AI look-up: this server has no AI provider, so nothing from a file is sent to one. A wine the registry does not know is created from what the file says.');
+    }
+    return state.aiLookup
+      ? t('admin.importPolicy.aiOn', 'AI look-up: on. A wine in a file that the registry does not know is sent to the AI provider to be identified.')
+      : t('admin.importPolicy.aiOff', 'AI look-up: off. Nothing from a file is sent to an AI provider. A wine the registry does not know is created from what the file says.');
+  };
+
   const checkText = () => {
     if (!state.checkNewWines) {
       return t('admin.importPolicy.checkOff', 'Check new wines: off. A wine an import creates is public as soon as it is created.');
@@ -71,9 +82,7 @@ export default function ImportPolicySwitch({ onChange }) {
     <div className="alert alert-info" role="region" aria-label={t('admin.importPolicy.title', 'Imports')} style={{ marginBottom: 12 }}>
       <strong>{t('admin.importPolicy.title', 'Imports')}</strong>
       <div style={{ marginTop: '0.25rem' }}>
-        {state.aiLookup
-          ? t('admin.importPolicy.aiOn', 'AI look-up: on. A wine in a file that the registry does not know is sent to the AI provider to be identified.')
-          : t('admin.importPolicy.aiOff', 'AI look-up: off. Nothing from a file is sent to an AI provider. A wine the registry does not know is created from what the file says.')}
+        {aiText()}
       </div>
       <div style={{ marginTop: '0.25rem' }}>
         {checkText()}
@@ -83,11 +92,13 @@ export default function ImportPolicySwitch({ onChange }) {
       </div>
       {state.canChange ? (
         <div style={{ marginTop: '0.5rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="btn btn-small btn-secondary" onClick={() => save({ aiLookup: !state.aiLookup })} disabled={busy}>
-            {state.aiLookup
-              ? t('admin.importPolicy.turnAiOff', 'Turn AI look-up off')
-              : t('admin.importPolicy.turnAiOn', 'Turn AI look-up on')}
-          </button>
+          {state.aiAvailable !== false && (
+            <button type="button" className="btn btn-small btn-secondary" onClick={() => save({ aiLookup: !state.aiLookup })} disabled={busy}>
+              {state.aiLookup
+                ? t('admin.importPolicy.turnAiOff', 'Turn AI look-up off')
+                : t('admin.importPolicy.turnAiOn', 'Turn AI look-up on')}
+            </button>
+          )}
           <button type="button" className="btn btn-small btn-secondary" onClick={() => save({ checkNewWines: !state.checkNewWines })} disabled={busy}>
             {state.checkNewWines
               ? t('admin.importPolicy.turnCheckOff', 'Stop checking new wines')

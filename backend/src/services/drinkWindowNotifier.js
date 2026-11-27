@@ -269,10 +269,12 @@ async function processUser(user, isFirstRun) {
   // still updated for every bottle above, so a second transition (e.g.
   // peak → ending) still fires exactly one new notification when it
   // happens, rather than re-notifying for the same status.
+  // The cellar is part of the key: a wine held in two cellars counts in each
+  // cellar's group (planNotifications names it only once when it stands alone).
   const uniqueAlerts = [];
   const seenKeys = new Set();
   for (const alert of alerts) {
-    const key = `${alert.wdId}:${alert.vintage}:${alert.status}`;
+    const key = `${alert.cellarId}:${alert.wdId}:${alert.vintage}:${alert.status}`;
     if (!seenKeys.has(key)) {
       seenKeys.add(key);
       uniqueAlerts.push(alert);
@@ -322,6 +324,15 @@ function planNotifications(alerts) {
     groups.get(key).push(alert);
   }
 
+  // A wine held in two cellars is in each cellar's group, but gets one
+  // notification of its own at most: it is not announced alone in one cellar
+  // when another cellar's notification already covers it.
+  const wineKey = (alert) => `${alert.wdId}:${alert.vintage}:${alert.status}`;
+  const announced = new Set();
+  for (const list of groups.values()) {
+    if (list.length >= GROUP_FROM) list.forEach((alert) => announced.add(wineKey(alert)));
+  }
+
   const out = [];
   for (const list of groups.values()) {
     if (list.length >= GROUP_FROM) {
@@ -333,6 +344,8 @@ function planNotifications(alerts) {
       continue;
     }
     for (const alert of list) {
+      if (announced.has(wineKey(alert))) continue;
+      announced.add(wineKey(alert));
       out.push({
         ...buildNotification(alert),
         // The vintage page of the cellar: its drink window, its bottles and Drink.

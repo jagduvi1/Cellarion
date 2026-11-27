@@ -65,8 +65,13 @@ test('GET: the switches, whether I may change them, whether wines are in fact he
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     aiLookup: true, checkNewWines: false, updatedAt: null, canChange: true, reviewOn: true, checking: false, waiting: 7,
+    // No provider key in this test: the switch has nothing to switch.
+    aiAvailable: false,
   });
-  expect(WineDefinition.countDocuments).toHaveBeenCalledWith({ uncheckedIdentity: true, draft: { $ne: true }, nonWine: { $ne: true } });
+  // What the queue lists: not the rows recorded as having no producer on the label.
+  expect(WineDefinition.countDocuments).toHaveBeenCalledWith({
+    uncheckedIdentity: true, identityUnavailable: { $ne: true }, draft: { $ne: true }, nonWine: { $ne: true },
+  });
 });
 
 test('GET says when the check is switched on but does nothing, because the server reviews no contributions', async () => {

@@ -133,21 +133,22 @@ describe('H-3 — the candidate pool is scoped to wines the caller may see', () 
     ]);
   });
 
-  test('a CURATOR sees every pending row — but not another user\'s private DRAFT (2026-09-12)', async () => {
-    // Same account (cellar access is a separate axis), somm role added.
+  test('a CURATOR importing their own cellar is scoped like any member: no other member\'s hidden wine is offered', async () => {
+    // Same account (cellar access is a separate axis), somm role added. In
+    // the curation queue that role shows every pending wine; in an import it
+    // must not, or the curator's bottle lands on another member's wine that
+    // is still waiting for a check.
     await validate(tokenFor(ME, ['somm']), [CT_ROW]);
 
     const strategy3 = WineDefinition.find.mock.calls
       .map((c) => c[0])
       .find((f) => JSON.stringify(f).includes('normalizedKey'));
 
-    // The curator clause used to be empty (no $and wrapper). A private draft
-    // is nobody's registry content, not even a curator's, so the clause is
-    // now a draft exclusion — still no pendingIdentity term for curation.
-    expect(strategy3.$and).toBeDefined();
-    const clause = JSON.stringify(strategy3.$and);
-    expect(clause).toContain('"draft":{"$ne":true}');
-    expect(clause).not.toContain('pendingIdentity');
+    expect(strategy3.$and).toHaveLength(2);
+    expect(strategy3.$and[1].$or).toEqual([
+      { pendingIdentity: { $ne: true } },
+      { pendingIdentity: true, createdBy: ME },
+    ]);
   });
 
   test('the exact-key lookup needs no gate — a real producer can never key into pending~', async () => {

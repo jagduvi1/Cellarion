@@ -302,7 +302,7 @@ function identityFromFile(item, grapeColourOf, requireComplete) {
 
   let type = clean(item.type);
   if (!WINE_TYPES.includes(type)) type = null;
-  if (!type && grapes.length > 0 && grapeColourOf) type = typeFromFileGrapes(grapes, grapeColourOf);
+  if (!type && grapes.length > 0) type = typeFromFileGrapes(grapes, grapeColourOf);
   if (!type && requireComplete) return null;
 
   // Same Prädikat routing as the AI path — this path
