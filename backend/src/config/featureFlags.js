@@ -54,6 +54,16 @@ const FEATURES = Object.freeze([
     defaultState: 'beta',
     since: '2026-10-30',
   }),
+  // The wall rack type in the new-rack form: one rack built from boxes
+  // (models/Rack type 'wall', utils/wallGeometry). The type, its storage and
+  // its drawing are there for everyone; the flag only decides who is offered
+  // it when creating a rack. A wall that exists is shown and edited by all.
+  Object.freeze({
+    key: 'wallRack',
+    title: 'A wall built from boxes',
+    defaultState: 'beta',
+    since: '2026-11-27',
+  }),
 ]);
 
 const FEATURE_KEYS = Object.freeze(FEATURES.map((f) => f.key));

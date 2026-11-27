@@ -1,5 +1,6 @@
 import { CABINET_DEFAULT, fitShelfRows } from './cabinetPresets';
 import { cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways } from './rackLayouts';
+import { newWall, toTypeConfig } from './wallEdit';
 
 // The options only a cabinet may carry (the backend rejects them on any other type).
 const CABINET_KEYS = ['shelfRows', 'twoDeep', 'stagger', 'headToTail', 'alternate', 'shelfCols', 'shelfAlternate', 'shelfSideways'];
@@ -12,6 +13,8 @@ const CABINET_KEYS = ['shelfRows', 'twoDeep', 'stagger', 'headToTail', 'alternat
 export function defaultTypeConfig(type) {
   if (type === 'cube') return { moduleRows: 2, moduleCols: 2 };
   if (type === 'x-rack') return { bottlesPerSection: 10 };
+  // A wall of 2 × 2 cells, the size RackTypeSelector's TYPE_DIMENSIONS gives it.
+  if (type === 'wall') return { boxes: newWall().boxes };
   if (type === 'shelf') return { bottlesPerCell: 1, backCols: 0 };
   if (type === 'cabinet') {
     return {
@@ -33,6 +36,8 @@ export function defaultTypeConfig(type) {
  * `rack` is the form's state: { type, rows, cols, typeConfig }.
  */
 export function createRackTypeConfig({ type, rows, cols, typeConfig: formConfig }) {
+  // A wall sends its boxes as the server stores them, without the builder's own keys.
+  if (type === 'wall') return toTypeConfig({ rows, cols, boxes: formConfig?.boxes || [] });
   if (!formConfig || Object.keys(formConfig).length === 0) return undefined;
   const typeConfig = { ...formConfig };
   // Drop double-height rows outside the final row count — the rows

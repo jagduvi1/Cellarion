@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { computeLayout, SLOT_RADIUS } from '../../utils/rackLayouts';
+import { useFeature } from '../../utils/featureFlags';
+import WallDecor from './WallDecor';
 import './RackTypeSelector.css';
 
 const RACK_TYPES = [
@@ -12,6 +14,24 @@ const RACK_TYPES = [
   { key: 'cube',     preview: { rows: 2, cols: 2, typeConfig: { moduleRows: 2, moduleCols: 2 } } },
   { key: 'shelf',    preview: { rows: 3, cols: 2 } },
   { key: 'cabinet',  preview: { rows: 3, cols: 3, typeConfig: { shelfRows: [1, 2, 3], twoDeep: false } } },
+  // One rack built from boxes. Offered while its flag is on for this user
+  // (backend config/featureFlags 'wallRack').
+  {
+    key: 'wall',
+    feature: 'wallRack',
+    preview: {
+      rows: 2,
+      cols: 2,
+      typeConfig: {
+        boxes: [
+          { x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 3 },
+          { x: 1, y: 0, w: 1, h: 1, kind: 'slash', perSection: 6 },
+          { x: 0, y: 1, w: 1, h: 1, kind: 'rack', rows: 3, cols: 3 },
+          { x: 1, y: 1, w: 1, h: 1, kind: 'closed' },
+        ],
+      },
+    },
+  },
 ];
 
 /** Dimension config: which inputs to show per type, with sensible defaults */
@@ -26,16 +46,23 @@ export const TYPE_DIMENSIONS = {
   // Wine cabinet: rows = shelves, cols = bottles across; the per-shelf stack
   // heights + two-deep flag live in typeConfig (see utils/cabinetPresets).
   cabinet:  { showRows: true,  showCols: true,  defaultRows: 5, defaultCols: 6, rowLabel: 'racks.shelvesLabel', colLabel: 'racks.bottlesAcrossLabel', showCabinet: true },
+  // Wall: rows × cols are its cells, set in the builder along with the
+  // boxes (components/racks/WallBuilder; the defaults are utils/wallEdit newWall).
+  wall:     { showRows: false, showCols: false, defaultRows: 2, defaultCols: 2, showWall: true },
 };
 
 export default function RackTypeSelector({ value, onChange }) {
   const { t } = useTranslation();
+  const wallOn = useFeature('wallRack');
+  // A type behind a flag is offered while the flag is on, and stays in the
+  // list while it is the one chosen.
+  const types = RACK_TYPES.filter(({ key, feature }) => !feature || wallOn || value === key);
 
   return (
     <div className="rack-type-selector">
       <label className="rack-type-label">{t('racks.typeLabel')}</label>
       <div className="rack-type-options">
-        {RACK_TYPES.map(({ key, preview }) => (
+        {types.map(({ key, preview }) => (
           <button
             key={key}
             type="button"
@@ -59,7 +86,9 @@ function MiniRackPreview({ type, rows, cols, typeConfig }) {
     [type, rows, cols, typeConfig]
   );
 
-  const r = SLOT_RADIUS * 0.5; // smaller for thumbnail
+  // Smaller for the thumbnail; a wall's cells are large, so its slots are
+  // drawn nearer their own size to stay visible.
+  const r = SLOT_RADIUS * (layout.wall ? 0.8 : 0.5);
   const CELL_SIZE = SLOT_RADIUS * 2 + 8;
   const half = CELL_SIZE / 2;
   const PAD = SLOT_RADIUS; // matches rackLayouts PADDING
@@ -77,17 +106,27 @@ function MiniRackPreview({ type, rows, cols, typeConfig }) {
 
   return (
     <svg
-      viewBox={`0 0 ${layout.viewBox.width} ${layout.viewBox.height}`}
+      viewBox={layout.wall
+        // A wall without its letters and numbers: start at its first cell.
+        ? `${layout.wall.origin.x - 8} ${layout.wall.origin.y - 8} ${layout.viewBox.width - layout.wall.origin.x + 2} ${layout.viewBox.height - layout.wall.origin.y + 2}`
+        : `0 0 ${layout.viewBox.width} ${layout.viewBox.height}`}
       className="rack-type-preview-svg"
       aria-hidden="true"
     >
-      <rect
-        x={0} y={0}
-        width={layout.viewBox.width}
-        height={layout.viewBox.height}
-        rx={4}
-        fill={type === 'cabinet' ? '#2B2D31' : '#C8AD82'}
-      />
+      {layout.wall ? (
+        <WallDecor
+          wall={layout.wall} fill="#C8AD82" frame="#9A7E58" shade={null} frameWidth={7} plankWidth={7}
+          doorFill="#B89A6E" doorLine="#9A7E58" knob="#7A6240" showLabels={false}
+        />
+      ) : (
+        <rect
+          x={0} y={0}
+          width={layout.viewBox.width}
+          height={layout.viewBox.height}
+          rx={4}
+          fill={type === 'cabinet' ? '#2B2D31' : '#C8AD82'}
+        />
+      )}
 
       {/* X-Rack: two diagonal dividers forming an X */}
       {type === 'x-rack' && (

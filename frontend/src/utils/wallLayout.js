@@ -205,6 +205,37 @@ function needCell(box) {
   return onStep(MIN_CELL);
 }
 
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * What a box of this content holds when it is as full as the rest of the
+ * wall: the sizes that fit a box of `w` × `h` cells at the wall's cell size
+ * without making the wall larger. The builder (components/racks/WallBuilder)
+ * offers them when a box gets a new content; the member can change them.
+ */
+export function fitFor(kind, w, h, cell) {
+  const bw = w * cell, bh = h * cell;
+  if (isPile(kind)) {
+    return { perSection: clamp(Math.min(...pilesFor(kind, bw, bh).map((p) => p.length)), 1, MAX_PER_SECTION) };
+  }
+  const across = clamp(Math.floor((bw - 2 * INSET - 8) / CELL), 1, MAX_BOX_DIM);
+  if (kind === 'rack') return { rows: clamp(Math.floor((bh - 2 * INSET - 8) / CELL), 1, MAX_BOX_DIM), cols: across };
+  if (kind === 'shelves') {
+    // Shelves with room above the bottles, never more than fit.
+    const most = Math.floor((bh - 2 * INSET) / (CELL + 12));
+    return { rows: clamp(Math.min(most, Math.round((bh - 2 * INSET) / (CELL * 1.7))), 1, MAX_BOX_DIM), cols: across };
+  }
+  return {};
+}
+
+/** The cell size of a wall whose fullest box is an X of six bottles a triangle: the builder's starting scale. */
+export function defaultCell() {
+  return needCell({ kind: 'x', w: 1, h: 1, perSection: 6 });
+}
+
+/** What identifies a box on screen: its stored id, or the key the builder gave a box not saved yet. */
+export const boxKey = (box, index) => String(box._id ?? box.key ?? `box-${index}`);
+
 // Slot centres of a box drawn at cell size `cell`, from its own top-left
 // corner, in the contract's order.
 function boxSlots(box, cell) {
@@ -289,7 +320,7 @@ export function wallLayout(rows, cols, typeConfig) {
     const capacity = boxCapacity(box);
     for (const p of boxSlots(box, cell)) slots.push({ position: slots.length + 1, cx: left + p.x, cy: top + p.y });
     drawn.push({
-      key: box._id != null ? String(box._id) : `box-${index}`,
+      key: boxKey(box, index),
       label: boxLabel(box),
       kind: box.kind,
       x: left, y: top, width, height, inset: INSET,
@@ -318,6 +349,7 @@ export function wallLayout(rows, cols, typeConfig) {
     totalSlots: slots.length,
     viewBox: { width: originX + safeCols * cell + MARGIN, height: originY + safeRows * cell + MARGIN },
     slots,
-    wall: { cell, boxes: drawn, emptyCells, axes },
+    // `origin` is the top-left corner of cell A1, past the letters and numbers.
+    wall: { cell, origin: { x: originX, y: originY }, boxes: drawn, emptyCells, axes },
   };
 }

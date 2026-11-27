@@ -5,6 +5,10 @@ vi.mock('react-i18next', () => {
   const t = (key, fallback) => (typeof fallback === 'string' ? fallback : key);
   return { useTranslation: () => ({ t }) };
 });
+// The form's type list reads a feature flag, and a flagged type carries a beta
+// strip; neither is what these tests are about.
+vi.mock('../../utils/featureFlags', () => ({ useFeature: () => false }));
+vi.mock('../BetaBadge', () => ({ default: () => null }));
 
 const NewRackForm = (await import('./NewRackForm')).default;
 

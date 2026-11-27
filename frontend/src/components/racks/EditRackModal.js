@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
-import { cabinetShelfAlternate, cabinetShelfSideways, cabinetBays } from '../../utils/rackLayouts';
+import { cabinetShelfAlternate, cabinetShelfSideways, cabinetBays, getTotalSlots } from '../../utils/rackLayouts';
+import { wallFromRack, toTypeConfig, usageByBox } from '../../utils/wallEdit';
+import WallBuilder from './WallBuilder';
 
 /**
  * Rename a rack and set its group — the room or appliance it belongs to
@@ -27,12 +29,21 @@ import { cabinetShelfAlternate, cabinetShelfSideways, cabinetBays } from '../../
  * cabinet. The exception: on a stacked shelf of a one-deep cabinet a bottle across the front leaves one
  * fewer on the level above, so there Two deep stays as created and the
  * route refuses switching that bottle on a loaded cabinet.
+ *
+ * A wall is the one rack whose SHAPE is edited here: its boxes are numbered
+ * one after the other, and the server keeps every bottle in its box when
+ * the wall changes (backend utils/wallGeometry planWallEdit). The builder
+ * is told which boxes hold bottles, so it does not offer what the server
+ * would refuse.
  */
 export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const { t } = useTranslation();
   const [name, setName] = useState(rack.name || '');
   const [group, setGroup] = useState(rack.group || '');
   const isCabinet = rack.type === 'cabinet' && !rack.isModular;
+  const isWall = rack.type === 'wall' && !rack.isModular;
+  const [wall, setWall] = useState(() => (isWall ? wallFromRack(rack) : null));
+  const wallUsage = useMemo(() => (isWall ? usageByBox(rack) : null), [isWall, rack]);
   // Nesting is implied on every bay that alternates; the box is locked only
   // when all of them do (otherwise it still governs the other bays).
   const altList = isCabinet ? cabinetShelfAlternate(rack.rows, rack.typeConfig) : [];
@@ -65,6 +76,10 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
     if (saving) return;
     const trimmed = name.trim();
     if (!trimmed) { setError(t('racks.nameRequired', 'Give the rack a name.')); return; }
+    if (isWall && getTotalSlots('wall', wall.rows, wall.cols, { boxes: wall.boxes }) === 0) {
+      setError(t('racks.wall.needsBoxEdit', 'A wall needs at least one box that holds bottles.'));
+      return;
+    }
     setSaving(true);
     setError('');
     // A cabinet's typeConfig is replaced wholesale by the route, so send the
@@ -75,6 +90,7 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
       name: trimmed,
       group: group.trim(),
       ...(isCabinet ? { typeConfig: { ...(rack.typeConfig || {}), twoDeep, stagger, headToTail: !twoDeep && headToTail, shelfSideways } } : {}),
+      ...(isWall ? { rows: wall.rows, cols: wall.cols, typeConfig: toTypeConfig(wall) } : {}),
     });
     if (result?.ok) {
       onClose();
@@ -85,7 +101,10 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   };
 
   return (
-    <Modal title={t('racks.editRackTitle', 'Rack name and group')} onClose={onClose} showClose trapFocus>
+    <Modal
+      title={isWall ? t('racks.wall.editTitle', 'Wall: name, group and boxes') : t('racks.editRackTitle', 'Rack name and group')}
+      onClose={onClose} showClose trapFocus wide={isWall}
+    >
       <form onSubmit={submit} className="edit-rack-form">
         <label className="form-group">
           <span>{t('racks.nameLabel')}</span>
@@ -107,6 +126,14 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
           </datalist>
           <small className="help-text">{t('racks.groupHint', 'Optional. Racks with the same group are shown together — a room, a fridge, a cooler. Leave it empty for no group.')}</small>
         </label>
+
+        {isWall && (
+          <fieldset className="form-group edit-rack-wall">
+            <legend>{t('racks.wall.editLegend', 'The wall')}</legend>
+            <small className="help-text">{t('racks.wall.editHint', 'Add, change or resize the boxes. Every bottle stays in its box.')}</small>
+            <WallBuilder wall={wall} onChange={setWall} usage={wallUsage} disabled={saving} />
+          </fieldset>
+        )}
 
         {isCabinet && (
           <>

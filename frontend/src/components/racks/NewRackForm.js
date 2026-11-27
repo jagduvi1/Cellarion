@@ -5,6 +5,8 @@ import { getTotalSlots } from '../../utils/rackLayouts';
 import RackRenderer from './RackRenderer';
 import RackTypeSelector, { TYPE_DIMENSIONS } from './RackTypeSelector';
 import CabinetShapeFields from './CabinetShapeFields';
+import WallBuilder from './WallBuilder';
+import BetaBadge from '../BetaBadge';
 import IntegerField from '../IntegerField';
 // Lazy: ShelfView3D pulls in three.js; the form loads it only when its 3D
 // preview is shown.
@@ -89,6 +91,9 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
       <h3>{t('racks.newRackTitle')}</h3>
 
       <RackTypeSelector value={newRack.type} onChange={onTypeChange} />
+      {dims.showWall && (
+        <BetaBadge feature="wallRack" note={t('racks.wall.betaNote', 'Building a wall from boxes is in early access.')} />
+      )}
 
       <div className="new-rack-fields">
         <div className="form-group">
@@ -262,6 +267,14 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
           </div>
         )}
 
+        {dims.showWall && (
+          <WallBuilder
+            wall={{ rows: newRack.rows, cols: newRack.cols, boxes: newRack.typeConfig?.boxes || [] }}
+            onChange={(wall) => setNewRack({ ...newRack, rows: wall.rows, cols: wall.cols, typeConfig: { boxes: wall.boxes } })}
+            disabled={saving}
+          />
+        )}
+
         <button
           type="button"
           className={`btn btn-secondary new-rack-preview-toggle ${showPreview ? 'active' : ''}`}
@@ -269,13 +282,17 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         >
           {showPreview ? t('racks.hidePreview', 'Hide preview') : t('racks.preview', 'Preview')}
         </button>
-        <button type="submit" className="btn btn-primary" disabled={saving}>
+        {/* A wall of closed boxes only holds nothing; the server refuses it. */}
+        <button type="submit" className="btn btn-primary" disabled={saving || (dims.showWall && previewCapacity === 0)}>
           {saving ? t('racks.creating') : t('racks.createRack')}
         </button>
       </div>
 
       <div className="new-rack-preview-hint">
         {t('racks.totalSlots')}: {previewCapacity}
+        {dims.showWall && previewCapacity === 0 && (
+          <> · {t('racks.wall.needsBox', 'Add a box that holds bottles before you create the wall.')}</>
+        )}
       </div>
 
       {showPreview && (
