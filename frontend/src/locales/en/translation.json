@@ -5247,6 +5247,7 @@
       "oenoExport": "Oeno by Vintec",
       "generic": "CSV",
       "ploc": "Ploc",
+      "macave": "Ma Cave à Vins",
       "receipt": "Receipt"
     },
     "receipt": {
@@ -5351,6 +5352,8 @@
       "plocExtraSlots": "\"{{wine}}\" has {{slots}} slot(s) recorded but only {{stock}} bottle(s) in stock, so the extra slots were left empty.",
       "plocRackTooBig": "\"{{rack}}\" is {{rows}} x {{cols}}, larger than a Cellarion rack allows (20 x 20). Its bottles will be imported without a position.",
       "plocUnmatchedHistory": "{{count}} history entr(y/ies) refer to wines that are not in the wines file, and were skipped.",
+      "maCaveConsumedNotImported_one": "{{count}} wine in the file has a number in \"{{column}}\". Bottles you have already drunk are not added to your drinking history, because the file does not say when they were drunk.",
+      "maCaveConsumedNotImported_other": "{{count}} wines in the file have a number in \"{{column}}\". Bottles you have already drunk are not added to your drinking history, because the file does not say when they were drunk.",
       "ctPendingOnOrder_one": "{{count}} bottle still on order in CellarTracker will be imported as on order: {{wines}}. It stays out of your cellar until you mark it as arrived.",
       "ctPendingOnOrder_other": "{{count}} bottles still on order in CellarTracker will be imported as on order: {{wines}}. They stay out of your cellar until you mark them as arrived."
     },
@@ -5417,6 +5420,8 @@
       "encodingLine": "File encoding: {{encoding}}",
       "plocTitle": "Ploc",
       "plocDesc": "Ploc exports several files — select them all at once. The wines file carries your bottles, the cellars file their exact slot positions, and the purchases-and-consumptions file your purchase dates, prices and drinking history.",
+      "maCaveTitle": "Ma Cave à Vins",
+      "maCaveDesc": "The file the Ma Cave à Vins app (My wines cellar) exports, as it is. Its German column names are read today; if yours are in another language, send us a sample and we will add it.",
       "dropHereMulti": "Drop your file here or click to browse — select several at once for a Ploc export"
     },
     "wholeImport": {

@@ -12,6 +12,7 @@ export const MAX_IMPORT_ROWS = 2000;
 
 export const FORMAT_LABEL_KEYS = {
   cellarion: 'importBottles.formats.cellarion',
+  macave: 'importBottles.formats.macave',
   vivino: 'importBottles.formats.vivino',
   cellartracker: 'importBottles.formats.cellartracker',
   'oeno-export': 'importBottles.formats.oenoExport',

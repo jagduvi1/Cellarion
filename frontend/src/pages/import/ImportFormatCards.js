@@ -28,6 +28,10 @@ export default function ImportFormatCards() {
             <p>{t('importBottles.upload.plocDesc')}</p>
           </div>
           <div className="format-card">
+            <strong>{t('importBottles.upload.maCaveTitle')}</strong>
+            <p>{t('importBottles.upload.maCaveDesc')}</p>
+          </div>
+          <div className="format-card">
             <strong>{t('importBottles.upload.genericTitle')}</strong>
             <p>{t('importBottles.upload.genericDesc')}</p>
           </div>
