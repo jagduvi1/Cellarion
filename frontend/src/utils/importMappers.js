@@ -53,6 +53,7 @@ import { parseCSV, throwIfHtmlErrorPage, detectDelimiter } from './importCsv';
 import { splitClassificationFromName } from './importNames';
 import { parseCombinedRackLocation } from './importRacks';
 import { detectOenoExportBoundary, parseOenoExport } from './importOeno';
+import { detectMaCaveFile, makeMaCaveMapper, maCaveWarnings } from './importMaCave';
 import {
   CT_TABLE_MAPPERS, detectCellarTrackerTable, mapCellarTrackerRow, applyCtRackAutoMap,
 } from './importCellarTracker';
@@ -62,6 +63,7 @@ export {
   parsePlocFiles,
 } from './importPloc';
 export { detectOenoExportBoundary, parseOenoExport } from './importOeno';
+export { detectMaCaveFile, makeMaCaveMapper, maCaveWarnings } from './importMaCave';
 export {
   parseCombinedRackLocation, suggestRackDimensions, summariseRacks, getDefaultRackConfig,
   getDefaultAnchor,
@@ -78,7 +80,7 @@ export {
 
 /**
  * Detect the source format from CSV headers.
- * Returns: 'cellarion' | 'vivino' | 'cellartracker' | 'oeno-export' | 'generic'
+ * Returns: 'cellarion' | 'macave' | 'vivino' | 'cellartracker' | 'oeno-export' | 'generic'
  *
  * Note: real Oeno-by-Vintec exports use a two-section CSV (cabinet defs +
  * bottles) detected by `detectOenoExport` against the raw text, not by
@@ -91,6 +93,9 @@ export function detectFormat(headers) {
 
   // Cellarion's own CSV export uses camelCase headers
   if (raw.has('wineName') && raw.has('producer') && raw.has('vintage')) return 'cellarion';
+
+  // Ma Cave à Vins: its column names follow the app's language
+  if (detectMaCaveFile(headers)) return 'macave';
 
   // Vivino export headers
   if (h.has('wine name') || h.has('winery')) return 'vivino';
@@ -433,6 +438,8 @@ export function parseAndMap(text, forceFormat, opts = {}) {
 
   const mapper = format === 'cellarion'
     ? mapCellarionRow
+    : format === 'macave'
+      ? makeMaCaveMapper(rows)
     : format === 'vivino'
       ? mapVivinoRow
     : format === 'cellartracker'
@@ -515,7 +522,7 @@ export function parseAndMap(text, forceFormat, opts = {}) {
     }
   }
 
-  const warnings = [];
+  const warnings = format === 'macave' ? maCaveWarnings(rows) : [];
   // CellarTracker's browser export defaults to "Only wines on this page" =
   // 25 rows. A file with EXACTLY 25 data rows is very likely truncated.
   if (format === 'cellartracker' && rows.length === 25) {
@@ -540,8 +547,9 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   // as numbers. Said out loud instead of importing every bottle without its
   // price in silence.
   if (items.length > 0 && !items.some((it) => it.price != null)) {
-    // "0" is how CellarTracker writes "no price entered" — not a price left unread.
-    const filled = (v) => { const s = v == null ? '' : String(v).trim(); return s !== '' && parseLocaleNumber(s) !== 0; };
+    // "0" is how CellarTracker writes "no price entered", and "-" how other
+    // apps write an empty cell: neither is a price left unread.
+    const filled = (v) => { const s = v == null ? '' : String(v).trim(); return s !== '' && !/^[-\u2013\u2014]+$/.test(s) && parseLocaleNumber(s) !== 0; };
     const priceColumn = headers.find((h) => looksLikePriceHeader(h) && rows.some((r) => filled(r[h])));
     if (priceColumn) warnings.push({ code: 'price-not-read', column: String(priceColumn).trim() });
   }
