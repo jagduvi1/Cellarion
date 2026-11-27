@@ -534,6 +534,19 @@ export const adminSaveContributionReview = (apiFetch, enabled) =>
     body: JSON.stringify({ enabled }),
   });
 
+// How imports treat new wines (backend config/importPolicy):
+// { aiLookup, checkNewWines, updatedAt, canChange, reviewOn, checking, waiting }.
+export const adminGetImportPolicy = (apiFetch) =>
+  apiFetch('/api/admin/settings/import-policy');
+
+// `change` is { aiLookup } or { checkNewWines } (or both); the one not sent keeps its value.
+export const adminSaveImportPolicy = (apiFetch, change) =>
+  apiFetch('/api/admin/settings/import-policy', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify(change),
+  });
+
 export const adminGetNewMemberEmails = (apiFetch) =>
   apiFetch('/api/admin/settings/new-member-emails');
 

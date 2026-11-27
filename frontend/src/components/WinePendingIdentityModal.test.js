@@ -4,6 +4,8 @@ vi.mock('../api/somm', () => ({
   sommGetPendingWines: vi.fn(),
   sommFixPendingWine: vi.fn(),
 }));
+// The admin's import switches above the queue: their own unit (ImportPolicySwitch.test.js).
+vi.mock('./ImportPolicySwitch', () => ({ default: () => null }));
 
 // `t` must keep a stable identity across renders, as react-i18next's real one
 // does: the dialog lists it in useCallback deps, so a fresh function per render
@@ -130,4 +132,52 @@ test('a write that is refused does not sit under the confirmation of the one bef
   expect(screen.queryByText('Wine 1 is now in the registry.')).not.toBeInTheDocument();
   // the row is still there to be tried again
   expect(screen.getByPlaceholderText('admin.wines.pendingIdentity.producerPlaceholder')).toBeInTheDocument();
+});
+
+describe('a wine from an import that waits for a check', () => {
+  const waiting = (n, extra = {}) => ({ ...wine(n), producer: 'Example Estate', unchecked: true, createdVia: 'import', ...extra });
+
+  test('is marked, and one that is right as it stands is published with one click', async () => {
+    queue = [waiting(1), wine(2)];
+    fixSucceeds('Wine 1 is now in the registry.');
+    renderModal();
+
+    expect(await screen.findByText('admin.wines.pendingIdentity.uncheckedBadge')).toBeInTheDocument();
+    expect(screen.getByText(/admin\.wines\.pendingIdentity\.uncheckedIntro/)).toBeInTheDocument();
+    // Only the waiting row offers it: the other row has no producer to publish.
+    const publish = screen.getAllByText('admin.wines.pendingIdentity.publishBtn');
+    expect(publish).toHaveLength(1);
+    fireEvent.click(publish[0]);
+
+    await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalledWith(expect.anything(), 'w1', { identityChecked: true }));
+    expect(await screen.findByText('Wine 1 is now in the registry.')).toBeInTheDocument();
+  });
+
+  test('saving corrections to it is the check: the save publishes it', async () => {
+    queue = [waiting(1)];
+    fixSucceeds('Wine 1 is now in the registry.');
+    renderModal();
+
+    fireEvent.click(await screen.findByText('admin.wines.pendingIdentity.fixBtn'));
+    fireEvent.change(screen.getByPlaceholderText('admin.wines.pendingIdentity.producerPlaceholder'), { target: { value: 'Example Estate & Sons' } });
+    fireEvent.click(screen.getByText('admin.wines.pendingIdentity.saveAndPublish'));
+
+    await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalled());
+    expect(sommFixPendingWine.mock.calls[0][2]).toMatchObject({ producer: 'Example Estate & Sons', identityChecked: true });
+  });
+
+  test('a waiting wine with no producer cannot be published as it is, only fixed', async () => {
+    queue = [waiting(1, { producer: '' })];
+    renderModal();
+    expect(await screen.findByText('admin.wines.pendingIdentity.uncheckedBadge')).toBeInTheDocument();
+    expect(screen.queryByText('admin.wines.pendingIdentity.publishBtn')).not.toBeInTheDocument();
+  });
+
+  test('an ordinary pending row is saved as before, with no check sent', async () => {
+    fixSucceeds('Wine 1 is now in the registry.');
+    renderModal();
+    await fixFirstRow('Example Estate');
+    await waitFor(() => expect(sommFixPendingWine).toHaveBeenCalled());
+    expect(sommFixPendingWine.mock.calls[0][2].identityChecked).toBeUndefined();
+  });
 });

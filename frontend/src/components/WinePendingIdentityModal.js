@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import ImportPolicySwitch from './ImportPolicySwitch';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 import { sommGetPendingWines, sommFixPendingWine } from '../api/somm';
@@ -143,6 +144,30 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
     }
   };
 
+  /**
+   * Publish a wine that waits for a check as it stands: its details are right.
+   * (A wine that needs corrections is published by saving them.)
+   */
+  const publish = async (wineId) => {
+    setSaving(true);
+    setRowErrors({});
+    setSuccessMsg(null);
+    try {
+      const res = await sommFixPendingWine(apiFetch, wineId, { identityChecked: true });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRowErrors({ [wineId]: data.error || `Failed to save (${res.status})` });
+        return;
+      }
+      setSuccessMsg(data.message);
+      await refetchAfterWrite();
+    } catch {
+      setRowErrors({ [wineId]: t('common.networkError') });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const save = async (wineId) => {
     setSaving(true);
     setRowErrors({});
@@ -158,6 +183,10 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       patch.regionName = draft.regionName.trim();
       if (draft.countryName.trim()) patch.countryName = draft.countryName.trim();
       patch.grapeNames = draft.grapeNames.split(',').map(g => g.trim()).filter(Boolean);
+      // For a wine that waits for a check, the curator's corrections ARE the
+      // check: saving them publishes it, as completing the producer publishes
+      // any other row here.
+      if ((wines || []).find(w => w._id === wineId)?.unchecked) patch.identityChecked = true;
 
       const res = await sommFixPendingWine(apiFetch, wineId, patch);
       const data = await res.json().catch(() => ({}));
@@ -206,9 +235,11 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
 
   return (
     <Modal title={t('admin.wines.pendingIdentity.title')} onClose={onClose} showClose wide>
+      <ImportPolicySwitch />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary, #666)' }}>
           {t('admin.wines.pendingIdentity.intro')}
+          {(wines || []).some(w => w.unchecked) && <> {t('admin.wines.pendingIdentity.uncheckedIntro')}</>}
         </span>
         <label style={{ fontSize: '0.85rem' }}>
           {t('admin.wines.pendingIdentity.sourceLabel')}:{' '}
@@ -323,6 +354,11 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                               {t('admin.wines.pendingIdentity.unavailableBadge')}
                             </div>
                           )}
+                          {w.unchecked && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #888)' }}>
+                              {t('admin.wines.pendingIdentity.uncheckedBadge')}
+                            </div>
+                          )}
                           {/* What the front and back labels disagreed about at
                               scan time. The FRONT value is what was stored, so
                               this is usually enough to settle the row without
@@ -368,7 +404,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                       {editing === w._id ? (
                         <>
                           <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => save(w._id)}>
-                            {saving ? t('common.saving') : t('common.save')}
+                            {saving ? t('common.saving') : (w.unchecked ? t('admin.wines.pendingIdentity.saveAndPublish') : t('common.save'))}
                           </button>{' '}
                           <button className="btn btn-secondary btn-sm" disabled={saving} onClick={cancelEdit}>
                             {t('common.cancel')}
@@ -380,6 +416,18 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                           <button className="btn btn-secondary btn-sm" disabled={saving} onClick={() => startEdit(w)}>
                             {t('admin.wines.pendingIdentity.fixBtn')}
                           </button>{' '}
+                          {w.unchecked && w.producer && (
+                            <>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                disabled={saving}
+                                title={t('admin.wines.pendingIdentity.publishTitle')}
+                                onClick={() => publish(w._id)}
+                              >
+                                {t('admin.wines.pendingIdentity.publishBtn')}
+                              </button>{' '}
+                            </>
+                          )}
                           {/* A DISPOSITION, not a fix: the row leaves the queue
                               and the wine stays pending and out of the registry.
                               Last resort — ask the bottle's owner first. */}

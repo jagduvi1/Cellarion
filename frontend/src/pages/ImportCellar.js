@@ -158,6 +158,7 @@ function ImportCellar() {
                 {r.maturityCreated ? <li>{t('importCellar.resultMaturity', { count: r.maturityCreated })}</li> : null}
                 {r.winesCreated ? <li>{t('importCellar.resultWines', { count: r.winesCreated })}</li> : null}
                 {r.pendingIdentityCount ? <li>{t('importCellar.resultPendingIdentity', { count: r.pendingIdentityCount })}</li> : null}
+                {r.uncheckedCount ? <li>{t('importCellar.resultUnchecked', { n: r.uncheckedCount })}</li> : null}
                 {r.wineRequests ? <li>{t('importCellar.resultWineRequests', { count: r.wineRequests })}</li> : null}
                 {r.unplaced?.length ? <li>{t('importCellar.resultUnplaced', { count: r.unplaced.length })}</li> : null}
                 {r.errors?.length ? <li>{t('importCellar.resultErrors', { count: r.errors.length })}</li> : null}
