@@ -587,6 +587,25 @@ describe('resolveCountryName', () => {
     expect(resolveCountryName('   ')).toBe('   ');
   });
 
+  // A German-language export (the Ma Cave à Vins app writes its country names
+  // in the app's language): a name missing here loses the row on import.
+  test('maps German country names that wine files use', () => {
+    expect(resolveCountryName('Luxemburg')).toBe('Luxembourg');
+    expect(resolveCountryName('Slowakei')).toBe('Slovakia');
+    expect(resolveCountryName('Serbien')).toBe('Serbia');
+    expect(resolveCountryName('Zypern')).toBe('Cyprus');
+    expect(resolveCountryName('Russland')).toBe('Russian Federation');
+    expect(resolveCountryName('Polen')).toBe('Poland');
+    expect(resolveCountryName('Irland')).toBe('Ireland');
+    expect(resolveCountryName('Finnland')).toBe('Finland');
+    expect(resolveCountryName('Moldau')).toBe('Moldova');
+    expect(resolveCountryName('Nordmazedonien')).toBe('North Macedonia');
+    expect(resolveCountryName('Armenien')).toBe('Armenia');
+    expect(resolveCountryName('Indien')).toBe('India');
+    expect(resolveCountryName('Vereinigtes Königreich')).toBe('England');
+    expect(resolveCountryName('Vereinigte Staaten von Amerika')).toBe('United States');
+  });
+
   test('maps English abbreviations to canonical names', () => {
     expect(resolveCountryName('USA')).toBe('United States');
     expect(resolveCountryName('U.S.A.')).toBe('United States'); // punctuation stripped

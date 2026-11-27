@@ -1089,6 +1089,20 @@ const COUNTRY_ALIASES = {
   'moldawien':                'Moldova',   // de
   'russia':                   'Russian Federation',
   'ryssland':                 'Russian Federation', // sv
+  'russland':                 'Russian Federation', // de
+  'moldau':                   'Moldova',   // de
+  'luxemburg':                'Luxembourg', // de + sv
+  'slowakei':                 'Slovakia',  // de
+  'serbien':                  'Serbia',    // de + sv
+  'zypern':                   'Cyprus',    // de
+  'polen':                    'Poland',    // de + sv
+  'irland':                   'Ireland',   // de + sv
+  'finnland':                 'Finland',   // de
+  'nordmazedonien':           'North Macedonia', // de
+  'armenien':                 'Armenia',   // de + sv
+  'indien':                   'India',     // de + sv
+  'vereinigtes konigreich':   'England',   // de (Vereinigtes Königreich)
+  'vereinigte staaten von amerika': 'United States', // de
 
   // South America
   'argentine':                'Argentina', // fr

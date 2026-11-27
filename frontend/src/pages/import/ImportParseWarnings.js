@@ -1,15 +1,21 @@
 import { useTranslation } from 'react-i18next';
 import { MAX_IMPORT_ROWS } from './importConstants';
+import { useContributionReviewed } from '../../utils/contributionReview';
 
 // Non-blocking parse warnings (shown on both upload and review steps).
 // The CT truncation warning gets elevated styling + a bold headline: a
 // 25-row page export silently missing 90% of a cellar is the single worst
 // "looked like it worked" outcome an import can have.
 // A notice may carry a choice: a Ma Cave à Vins file's photo notice is the
-// owner's "bring in the photos" box, kept on the notice itself (so a saved
-// draft keeps it) and read by utils/importPayload applyImportPhotoChoice.
+// owner's "bring in the photos" box, kept on the notice itself and read by
+// utils/importPayload applyImportPhotoChoice. It says where the photos go, as
+// every photo upload does, in this server's words (reviewed or not). A
+// resumed draft has no photo links (they never leave the browser that read
+// the file), so its notice says the photos need the file again
+// (utils/importMaCave resumedImportWarnings).
 export default function ImportParseWarnings({ importWarnings, parsedItems, setImportWarnings }) {
   const { t } = useTranslation();
+  const reviewed = useContributionReviewed();
   return (importWarnings.length > 0 || parsedItems.length > MAX_IMPORT_ROWS) && (
     <div className="import-parse-warnings">
       {parsedItems.length > MAX_IMPORT_ROWS && (
@@ -52,19 +58,28 @@ export default function ImportParseWarnings({ importWarnings, parsedItems, setIm
           {w.code === 'ploc-rack-too-big' && t('importBottles.warnings.plocRackTooBig', { rack: w.rack, rows: w.rows, cols: w.cols })}
           {w.code === 'ploc-unmatched-history' && t('importBottles.warnings.plocUnmatchedHistory', { count: w.count })}
           {w.code === 'macave-consumed-not-imported' && t('importBottles.warnings.maCaveConsumedNotImported', { n: w.count, column: w.column })}
+          {w.code === 'macave-none-left' && t('importBottles.warnings.maCaveNoneLeft', { n: w.count })}
+          {w.code === 'macave-photos-need-file' && t('importBottles.warnings.maCavePhotosNeedFile', { n: w.count })}
           {w.code === 'macave-photos' && (
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={w.include === true}
-                disabled={!setImportWarnings}
-                onChange={(e) => {
-                  const include = e.target.checked;
-                  setImportWarnings((ws) => ws.map((x) => (x.code === 'macave-photos' ? { ...x, include } : x)));
-                }}
-              />
-              <span>{t('importBottles.warnings.maCavePhotos', { n: w.count })}</span>
-            </label>
+            <>
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={w.include === true}
+                  disabled={!setImportWarnings}
+                  onChange={(e) => {
+                    const include = e.target.checked;
+                    setImportWarnings((ws) => ws.map((x) => (x.code === 'macave-photos' ? { ...x, include } : x)));
+                  }}
+                />
+                <span>{t('importBottles.warnings.maCavePhotos', { n: w.count })}</span>
+              </label>
+              <p className="rack-options-hint">
+                {reviewed
+                  ? t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')
+                  : t('bottleDetail.imageNoticeUnreviewed', 'Photos are added to the wine registry as soon as you upload them, where everyone on this server can see them.')}
+              </p>
+            </>
           )}
         </div>
       ))}

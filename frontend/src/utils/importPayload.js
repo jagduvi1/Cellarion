@@ -1,3 +1,5 @@
+import { photoLinkFor } from './importPhotoLinks';
+
 /**
  * Builds one /api/bottles/import/confirm item from a review row + the user's
  * selection. Extracted from ImportBottles so the payload boundary is unit-
@@ -72,9 +74,10 @@ export function buildImportItem(r, selection) {
     // bottle is created ON ORDER, with the expected month when known.
     onOrder: r.item.onOrder,
     expectedArrival: r.item.expectedArrival,
-    // The link to the photo the owner took in another cellar app (a Ma Cave à
-    // Vins export): the server copies it in after the import.
-    photoUrl: r.item.photoUrl,
+    // A reference to the photo the owner took in another cellar app (a Ma
+    // Cave à Vins export). The link itself stays in the browser until
+    // applyImportPhotoChoice puts it in, when the owner asked for the photos.
+    photoRef: r.item.photoRef,
   };
 }
 
@@ -99,14 +102,18 @@ export function applyImportOnOrder(items, { onOrder, expectedArrival } = {}) {
 }
 
 /**
- * The review step's "bring in the photos" choice, applied to the confirm
- * items: a photo link goes to the server only when the owner ticked the box
- * on the file's photo notice (utils/importMaCave maCaveWarnings, `include`).
- * Without a ticked notice every link is left out, so no photo is ever copied
- * that the owner did not ask for.
+ * The "bring in the photos" choice, applied to the confirm items. Every item
+ * loses its photo reference and any photo link a file put on it; only when
+ * the owner ticked the box on the file's photo notice (utils/importMaCave
+ * maCaveWarnings, `include`) does an item get its photo link back, from the
+ * links of the file in hand (utils/importPhotoLinks). So no link reaches the
+ * server before /confirm, none without the tick, and a reference from another
+ * file or a resumed draft brings none.
  */
 export function applyImportPhotoChoice(items, importWarnings) {
   const wanted = (importWarnings || []).some((w) => w.code === 'macave-photos' && w.include === true);
-  if (wanted) return items;
-  return items.map(({ photoUrl, ...rest }) => rest);
+  return items.map(({ photoUrl, photoRef, ...rest }) => {
+    const link = wanted ? photoLinkFor(photoRef) : undefined;
+    return link ? { ...rest, photoUrl: link } : rest;
+  });
 }

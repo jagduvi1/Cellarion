@@ -63,6 +63,41 @@ describe('safeFetchImage input validation (pre-network)', () => {
     await expect(safeFetchImage('https://127.0.0.1/x.jpg')).rejects.toThrow(/private or reserved/);
     await expect(safeFetchImage('https://[::1]/x.jpg')).rejects.toThrow(/private or reserved/);
   });
+
+  test('an allowUrl that refuses the first hop stops the download before any network', async () => {
+    await expect(safeFetchImage('https://example.com/x.jpg', { allowUrl: () => false })).rejects.toThrow(/allowed photo store/);
+  });
+});
+
+// A caller held to one photo store (services/importPhotos) must not be led off
+// it by a redirect: allowUrl is asked again on every hop. DNS and https are
+// stubbed so the hop sequence runs without a network.
+describe('safeFetchImage redirects and allowUrl', () => {
+  test('a redirect to a host the caller does not allow is refused', async () => {
+    await jest.isolateModulesAsync(async () => {
+      jest.doMock('dns', () => ({ promises: { lookup: jest.fn(async () => [{ address: '93.184.216.34', family: 4 }]) } }));
+      jest.doMock('https', () => ({
+        request: jest.fn((opts, onResponse) => {
+          const { EventEmitter } = require('events');
+          const req = new EventEmitter();
+          req.destroy = () => {};
+          req.end = () => {
+            const res = new EventEmitter();
+            res.statusCode = 302;
+            res.headers = { location: 'https://elsewhere.example/x.jpg' };
+            res.resume = () => {};
+            onResponse(res);
+          };
+          return req;
+        }),
+      }));
+      const { safeFetchImage: fetchStubbed } = require('./safeImageFetch');
+      const asked = [];
+      const allowUrl = (u) => { asked.push(u.hostname); return u.hostname === 'allowed.example'; };
+      await expect(fetchStubbed('https://allowed.example/a.jpg', { allowUrl })).rejects.toThrow(/allowed photo store/);
+      expect(asked).toEqual(['allowed.example', 'elsewhere.example']);
+    });
+  });
 });
 
 // The DNS pin must speak BOTH lookup callback conventions. Node 20's Happy

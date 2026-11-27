@@ -9,6 +9,9 @@ const { getClientIp } = require('../utils/clientIp');
  * them could pin most of the heap: a few dozen throwaway accounts could
  * restart the backend for everyone.
  *
+ * services/importPhotos keeps one per import for the same reason: its queue
+ * outlives the /confirm request, which carries the whole import body.
+ *
  * This snapshot is what every consumer of `ctx.req` actually reads:
  *   - services/audit.js logAudit: user.id, user.roles, getClientIp(req),
  *     headers['user-agent'], cellar (never set on an MCP request);

@@ -12,6 +12,7 @@
 import { readFileSync } from 'fs';
 import { describe, test, expect } from 'vitest';
 import { buildImportItem, applyImportPhotoChoice } from './importPayload';
+import { startPhotoLinks, photoRefFor } from './importPhotoLinks';
 import { decodeImportBuffer, parseAndMap } from './importMappers';
 
 const FIXTURE = 'src/utils/__fixtures__/cellartracker/bundle/CellarTracker_Inventory.tsv';
@@ -81,19 +82,32 @@ describe('buildImportItem', () => {
     expect(out.addToWishlist).toBe(true);
   });
 
-  test('forwards the photo link a file gives a wine', () => {
-    const url = 'https://firebasestorage.googleapis.com/v0/b/ma-cave-a-vins-app.appspot.com/o/w%2Fp?alt=media&token=t';
-    expect(buildImportItem({ item: { wineName: 'X', photoUrl: url } }, 'w1').photoUrl).toBe(url);
+  test('forwards the photo reference of a row, never a link', () => {
+    const out = buildImportItem({ item: { wineName: 'X', photoRef: 'photo-a-1', photoUrl: 'https://p/1' } }, 'w1');
+    expect(out.photoRef).toBe('photo-a-1');
+    expect(out).not.toHaveProperty('photoUrl');
   });
 
-  test('a photo link is sent only when the owner ticked "bring in the photos"', () => {
-    const items = [{ wineName: 'X', photoUrl: 'https://p/1' }, { wineName: 'Y' }];
+  test('a photo link goes into the items only when the owner ticked "bring in the photos"', () => {
+    const url = 'https://firebasestorage.googleapis.com/v0/b/ma-cave-a-vins-app.appspot.com/o/w%2Fp?alt=media&token=t';
+    startPhotoLinks();
+    const ref = photoRefFor(url);
+    const items = [{ wineName: 'X', photoRef: ref }, { wineName: 'Y' }];
     const notice = (include) => [{ code: 'vintage-missing', count: 1 }, { code: 'macave-photos', count: 1, include }];
-    expect(applyImportPhotoChoice(items, notice(true))).toEqual(items);
+    expect(applyImportPhotoChoice(items, notice(true))).toEqual([{ wineName: 'X', photoUrl: url }, { wineName: 'Y' }]);
     expect(applyImportPhotoChoice(items, notice(false))).toEqual([{ wineName: 'X' }, { wineName: 'Y' }]);
-    // No notice at all (another format, an old draft): no photo either.
+    // No notice at all (another format, a resumed draft): no photo either.
     expect(applyImportPhotoChoice(items, [])).toEqual([{ wineName: 'X' }, { wineName: 'Y' }]);
     expect(applyImportPhotoChoice(items, undefined)).toEqual([{ wineName: 'X' }, { wineName: 'Y' }]);
+  });
+
+  test('a reference from another file, or a link a file put on a row, brings no photo even when ticked', () => {
+    startPhotoLinks();
+    const stale = photoRefFor('https://firebasestorage.googleapis.com/v0/b/ma-cave-a-vins-app.appspot.com/o/old?alt=media');
+    startPhotoLinks(); // the next file read
+    const ticked = [{ code: 'macave-photos', count: 1, include: true }];
+    expect(applyImportPhotoChoice([{ wineName: 'X', photoRef: stale }], ticked)).toEqual([{ wineName: 'X' }]);
+    expect(applyImportPhotoChoice([{ wineName: 'Y', photoUrl: 'https://evil.example/p.jpg' }], ticked)).toEqual([{ wineName: 'Y' }]);
   });
 
   test('forwards internalSlot for cellarion round-trips', () => {

@@ -91,7 +91,7 @@ beforeEach(() => {
 });
 
 test('each created bottle is handed over with its row\'s photo link, and the answer counts what is on its way', async () => {
-  queueImportPhotos.mockReturnValue(1);
+  queueImportPhotos.mockReturnValue({ queued: 1, notQueued: 0 });
   const { status, body } = await confirm([row({ photoUrl: PHOTO }), row({ photoUrl: PHOTO }), row()]);
 
   expect(status).toBe(200);
@@ -101,12 +101,22 @@ test('each created bottle is handed over with its row\'s photo link, and the ans
   expect(rows).toEqual([{ bottleId: 'bottle-0', url: PHOTO }, { bottleId: 'bottle-1', url: PHOTO }]);
   expect(opts).toEqual({ cellarId: CELLAR_ID });
   expect(body.photosQueued).toBe(1);
+  expect(body).not.toHaveProperty('photosNotQueued');
+});
+
+test('photos the queue could not take are counted in the answer', async () => {
+  queueImportPhotos.mockReturnValue({ queued: 0, notQueued: 2 });
+  const { body } = await confirm([row({ photoUrl: PHOTO })]);
+
+  expect(body).not.toHaveProperty('photosQueued');
+  expect(body.photosNotQueued).toBe(2);
 });
 
 test('an import without photo links answers as it always did', async () => {
-  queueImportPhotos.mockReturnValue(0);
+  queueImportPhotos.mockReturnValue({ queued: 0, notQueued: 0 });
   const { body } = await confirm([row()]);
 
   expect(queueImportPhotos.mock.calls[0][1]).toEqual([]);
   expect(body).not.toHaveProperty('photosQueued');
+  expect(body).not.toHaveProperty('photosNotQueued');
 });

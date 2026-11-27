@@ -13,7 +13,9 @@ import { useTranslation } from 'react-i18next';
  *                         config/importPolicy);
  *   photosQueued          photos the file links to, copied onto the bottles
  *                         in the background (backend services/importPhotos),
- *                         each then checked like any uploaded photo.
+ *                         each then handled like any uploaded photo;
+ *   photosNotQueued       photos the server could not take (the member's
+ *                         daily room, a full queue, a restart under way).
  *
  * Renders nothing when all are zero. Used by pages/ImportBottles.
  */
@@ -22,7 +24,8 @@ export default function ImportCurationNotes({ result }) {
   const incomplete = result?.pendingIdentityCount || 0;
   const unchecked = result?.uncheckedCount || 0;
   const photos = result?.photosQueued || 0;
-  if (!incomplete && !unchecked && !photos) return null;
+  const photosLeftOut = result?.photosNotQueued || 0;
+  if (!incomplete && !unchecked && !photos && !photosLeftOut) return null;
   return (
     <>
       {incomplete > 0 && (
@@ -38,6 +41,9 @@ export default function ImportCurationNotes({ result }) {
       )}
       {photos > 0 && (
         <p className="done-note">{t('importBottles.done.photosQueuedNote', { n: photos })}</p>
+      )}
+      {photosLeftOut > 0 && (
+        <p className="done-note">{t('importBottles.done.photosNotQueuedNote', { n: photosLeftOut })}</p>
       )}
     </>
   );

@@ -788,7 +788,10 @@ router.post('/validate', validateLimiter, async (req, res) => {
  *   nonWineHint     — true when the file's Type/Category named a spirit; a
  *                     wine this row mints (aiWine) is created non-wine
  *                     flagged. A matched registry wine is never touched.
- * Response: { created, skipped, errors[], wishlistCreated, ... }
+ *   photoUrl        — a photo the file links to, sent only when the owner chose
+ *                     to bring photos in; copied onto the bottle after the
+ *                     response (services/importPhotos), allowed stores only.
+ * Response: { created, skipped, errors[], wishlistCreated, photosQueued?, photosNotQueued?, ... }
  */
 router.post('/confirm', async (req, res) => {
   try {
@@ -1416,11 +1419,12 @@ router.post('/confirm', async (req, res) => {
       }),
     });
 
-    // Each photo is checked like any member's upload before others see it.
-    const photosQueued = queueImportPhotos(req, photoRows, { cellarId: cellar._id });
+    // Each photo then goes where any member's upload goes (services/importPhotos).
+    const { queued: photosQueued, notQueued: photosNotQueued } = queueImportPhotos(req, photoRows, { cellarId: cellar._id });
 
     res.json({
       ...(photosQueued ? { photosQueued } : {}),
+      ...(photosNotQueued ? { photosNotQueued } : {}),
       created,
       createdActive,
       // Only when some rows came in on order — the response shape is otherwise unchanged.

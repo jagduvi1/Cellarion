@@ -73,6 +73,12 @@ describe('ingestBottleImage → image.attach', () => {
     expect(logAudit.mock.calls[0][3]).toEqual({ via: 'mcp', imageId: String(NEW_IMAGE) });
   });
 
+  test('an import writes no row per photo: its batch writes one import.photos row', async () => {
+    const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: bottle(), via: 'import' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
   test('a registry picture (no bottle) writes no attach row — its own flow audits it', async () => {
     const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', wineDefinitionId: 'w1' }, REQ);
     expect(res.error).toBeUndefined();
@@ -90,6 +96,8 @@ describe('ingestBottleImage → image.attach', () => {
     BottleImage.countDocuments.mockResolvedValue(20);
     const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: bottle() }, REQ);
     expect(res.error.status).toBe(400);
+    // Named, so a caller can tell a full bottle from a picture that is no image.
+    expect(res.error.code).toBe('photo_limit');
     expect(logAudit).not.toHaveBeenCalled();
   });
 });
