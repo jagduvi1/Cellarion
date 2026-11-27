@@ -10,6 +10,7 @@ const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
 const { runMcpSnapshotScrub } = require('./mcpSnapshotRetentionJob');
 const { runScanImageRetentionSweep } = require('./scanImageRetentionJob');
 const { runWineDraftExpirySweep } = require('./wineDraftExpiryJob');
+const { runUncheckedWineSweep } = require('./uncheckedWineSweepJob');
 const { runSearchIndexReconcile } = require('./searchReconcileJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 const { runAiCapAlertCheck } = require('./aiCapAlertJob');
@@ -348,7 +349,20 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC, bridge-contributions hourly :47, api-deprecation-reminders daily 08:11 UTC, inactive-accounts daily 09:13 UTC (off until turned on))');
+  // Wines waiting for a curator's check that no bottle points at any more
+  // (an import redone, a cellar deleted): daily at 05:10 UTC, after the
+  // cellar-retention and trash purges of the night have released their
+  // bottles.
+  cron.schedule('10 5 * * *', async () => {
+    try {
+      const r = await runUncheckedWineSweep();
+      if (r.removed || r.errors) console.log('[scheduler] Unchecked-wine sweep:', JSON.stringify(r));
+    } catch (err) {
+      console.error('[scheduler] Unchecked-wine sweep failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, unchecked-wine-sweep daily 05:10 UTC, drink-window daily 06:00 UTC, new-member-emails daily 17:00 UTC (off until turned on), value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC, bridge-contributions hourly :47, api-deprecation-reminders daily 08:11 UTC, inactive-accounts daily 09:13 UTC (off until turned on))');
 }
 
 /**

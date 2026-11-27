@@ -107,21 +107,29 @@ const CREATED_VIA_FILTERS = ['ui', 'import', 'mcp', 'ai'];
  *   session while still clearing the trickle of 'ui' scans. (Grouping by
  *   import session was the alternative; ImportSession is deleted the moment an
  *   import finishes, so there would be nothing left to group by.)
- * @returns {{ rows, total, pendingTotal, unavailableTotal }}
+ * @param {'needs_check'|'needs_identity'} [opts.kind] one half of the queue:
+ *   the wines taken from a member's own data that wait for a curator's check
+ *   (models/WineDefinition.uncheckedIdentity), OLDEST first, because their
+ *   owners are waiting in the order they imported; or the rows with an
+ *   incomplete identity only. Omitted: both, newest first.
+ * @returns {{ rows, total, pendingTotal, unavailableTotal, uncheckedTotal }}
  */
-async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, includeUnavailable = false } = {}) {
+async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, includeUnavailable = false, kind = null } = {}) {
   // A private draft is pending too (model invariant) but is NOT curation
   // work — it is hidden from curators until its creator publishes it.
   const filter = { pendingIdentity: true, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED };
   if (!includeUnavailable) filter.identityUnavailable = { $ne: true };
+  const needsCheck = kind === 'needs_check';
+  if (needsCheck) filter.uncheckedIdentity = true;
+  else if (kind === 'needs_identity') filter.uncheckedIdentity = { $ne: true };
   // Literal from the static array, never raw input (CodeQL query-injection
   // rule, the aiBudgetRequests pattern).
   const viaIdx = CREATED_VIA_FILTERS.indexOf(String(createdVia || ''));
   if (viaIdx !== -1) filter.createdVia = CREATED_VIA_FILTERS[viaIdx];
 
-  const [wines, total, pendingTotal, unavailableTotal] = await Promise.all([
+  const [wines, total, pendingTotal, unavailableTotal, uncheckedTotal] = await Promise.all([
     WineDefinition.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: needsCheck ? 1 : -1 })
       .skip(offset)
       .limit(limit)
       .populate('country', 'name')
@@ -134,6 +142,7 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
     // still say how many of those there are.
     WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: { $ne: true }, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
     WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: true, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
+    WineDefinition.countDocuments({ pendingIdentity: true, uncheckedIdentity: true, ...DRAFT_EXCLUDED, ...NOT_WINE_EXCLUDED }),
   ]);
 
   const ids = wines.map((w) => w._id);
@@ -242,7 +251,7 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
     };
   });
 
-  return { rows, total, pendingTotal, unavailableTotal };
+  return { rows, total, pendingTotal, unavailableTotal, uncheckedTotal };
 }
 
 /**
@@ -570,10 +579,25 @@ async function applyPendingFix(wine, clean, userId) {
     await wine.save();
   } catch (err) {
     if (err.code === 11000) {
+      // Which wine it collided with, so the caller can name it and offer the
+      // merge (mergePendingInto). Best-effort: the refusal stands without it.
+      let duplicate = null;
+      try {
+        const twin = await WineDefinition.findOne({ normalizedKey: wine.normalizedKey, _id: { $ne: wine._id } })
+          .select('name producer appellation pendingIdentity draft nonWine').lean();
+        if (twin && twin.draft !== true) {
+          duplicate = {
+            wineId: String(twin._id), name: twin.name, producer: twin.producer || null,
+            appellation: twin.appellation || null,
+            published: twin.pendingIdentity !== true && twin.nonWine !== true,
+          };
+        }
+      } catch { /* the conflict is the answer either way */ }
       return {
         ok: false,
         code: 'conflict',
         message: 'This fix would make the wine identical to an existing registry wine — merge them instead (the registry already holds that identity).',
+        ...(duplicate ? { duplicate } : {}),
       };
     }
     if (err?.name === 'VersionError') {
@@ -701,8 +725,72 @@ async function loadPendingWine(wineId) {
   return { ok: true, wine };
 }
 
+/**
+ * A wine in the pending queue IS a wine the registry already holds: move
+ * everything that points at it (bottles, their photos, wishlist items,
+ * reviews and the rest — services/wineMergeOps) onto that published wine and
+ * remove the queue row. This is how the second member's row of a wine ends,
+ * once a curator has checked the first: checking it too is refused as a
+ * duplicate (applyPendingFix answers `duplicate`).
+ *
+ * The target must be a published wine: not pending, not a draft, not a
+ * non-wine record. The bottles' owners keep everything that is theirs; only
+ * the wine their bottles point at changes.
+ *
+ * Called by POST /api/somm/pending-wines/:id/merge and the MCP tool
+ * merge_pending_wine. The merge writes its own audit row (admin.wine.merge).
+ *
+ * @param {object} wine  the queue row, from loadPendingWine
+ * @param {string} targetWineId
+ * @param {{ req?: object }} [opts] req for audit attribution
+ * @returns {{ ok:true, target, bottlesMoved }} | {{ ok:false, code, message }}
+ */
+async function mergePendingInto(wine, targetWineId, { req = null } = {}) {
+  if (!mongoose.isValidObjectId(String(targetWineId))) {
+    return { ok: false, code: 'invalid_input', message: 'Invalid target wine id' };
+  }
+  if (String(targetWineId) === String(wine._id)) {
+    return { ok: false, code: 'invalid_input', message: 'A wine cannot be merged into itself' };
+  }
+  const target = await WineDefinition.findById(targetWineId).select('name producer pendingIdentity draft nonWine').lean();
+  if (!target || target.draft === true) {
+    return { ok: false, code: 'not_found', message: 'No registry wine with that id' };
+  }
+  if (target.pendingIdentity === true || target.nonWine === true) {
+    return {
+      ok: false,
+      code: 'conflict',
+      message: 'The target is not a published wine. Check or complete that wine first, then merge this one into it.',
+    };
+  }
+
+  // The vintages still in a cellar get a maturity row on the target, as a
+  // promotion gives them (runPromotionFollowThrough): read before the merge
+  // re-points the bottles.
+  const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
+  // The label scan moves to the target with the other photos. Give it the
+  // deadline a promotion gives it, or it would sit on a published wine with
+  // none: unreadable and never swept (services/labelScanAccess).
+  await stampPromotedScanRetention(wine);
+
+  // Lazy: the merge service loads every model that references a wine.
+  const { performWineMerge } = require('./wineMergeOps');
+  const merged = await performWineMerge(String(wine._id), String(target._id), req);
+  if (merged.error) {
+    return { ok: false, code: merged.error.status === 404 ? 'not_found' : 'invalid_input', message: merged.error.message };
+  }
+  try {
+    const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
+    for (const v of vintages) if (v) await ensurePendingVintageProfile(target._id, v);
+  } catch (err) {
+    console.warn('[pendingWineOps] maturity seed after merge failed (non-fatal):', err.message);
+  }
+  return { ok: true, target: merged.target, bottlesMoved: merged.bottlesMoved };
+}
+
 module.exports = {
   queryPendingWines,
+  mergePendingInto,
   validatePendingFix,
   applyPendingFix,
   loadPendingWine,

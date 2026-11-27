@@ -25,6 +25,7 @@ jest.mock('./recommendationRetentionJob', () => ({ runRecommendationEmailScrub: 
 jest.mock('./mcpSnapshotRetentionJob', () => ({ runMcpSnapshotScrub: jest.fn() }));
 jest.mock('./scanImageRetentionJob', () => ({ runScanImageRetentionSweep: jest.fn() }));
 jest.mock('./wineDraftExpiryJob', () => ({ runWineDraftExpirySweep: jest.fn() }));
+jest.mock('./uncheckedWineSweepJob', () => ({ runUncheckedWineSweep: jest.fn() }));
 jest.mock('./searchReconcileJob', () => ({ runSearchIndexReconcile: jest.fn() }));
 jest.mock('./securityAlertJob', () => ({ runSecurityAlertCheck: jest.fn() }));
 jest.mock('./aiCapAlertJob', () => ({ runAiCapAlertCheck: jest.fn() }));

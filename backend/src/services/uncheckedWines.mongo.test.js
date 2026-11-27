@@ -216,4 +216,108 @@ describeWithMongo('wines waiting for a curator\'s check (real MongoDB)', () => {
       expect(String(kept.createdBy)).toBe(String(DELETED));
     });
   });
+
+  describe('two members, one wine: the second row is merged into the published one', () => {
+    const [DAVE, EVA] = [oid(), oid()];
+    const CHIANTI = { name: 'Chianti Classico', producer: 'Fattoria Esempio', country: 'Italy', type: 'red' };
+    let first; let second; let secondBottle;
+
+    beforeAll(async () => {
+      first = (await mint(CHIANTI, DAVE)).wine._id;
+      second = (await mint(CHIANTI, EVA)).wine._id;
+      await bottle(first, DAVE);
+      secondBottle = (await bottle(second, EVA)).insertedId;
+    });
+
+    test('the queue can list only the wines waiting for a check, oldest first', async () => {
+      const waiting = await ops.queryPendingWines({ kind: 'needs_check', limit: 50 });
+      const ids = waiting.rows.map((r) => String(r._id));
+      expect(waiting.rows.every((r) => r.unchecked === true)).toBe(true);
+      expect(ids.indexOf(String(first))).toBeLessThan(ids.indexOf(String(second)));
+      expect(waiting.uncheckedTotal).toBe(waiting.total);
+
+      const incomplete = await ops.queryPendingWines({ kind: 'needs_identity', limit: 50 });
+      expect(incomplete.rows.some((r) => r.unchecked === true)).toBe(false);
+    });
+
+    test('checking the second after the first is refused, naming the published wine', async () => {
+      expect(await ops.applyPendingFix(await reload(first), { identityChecked: true }, String(CURATOR))).toMatchObject({ ok: true, promoted: true });
+
+      const refused = await ops.applyPendingFix(await reload(second), { identityChecked: true }, String(CURATOR));
+      expect(refused).toMatchObject({
+        ok: false, code: 'conflict',
+        duplicate: { wineId: String(first), name: 'Chianti Classico', producer: 'Fattoria Esempio', published: true },
+      });
+    });
+
+    test('a waiting wine cannot be merged into itself, a missing wine, or another waiting wine', async () => {
+      const row = await reload(second);
+      expect(await ops.mergePendingInto(row, String(second))).toMatchObject({ ok: false, code: 'invalid_input' });
+      expect(await ops.mergePendingInto(row, String(oid()))).toMatchObject({ ok: false, code: 'not_found' });
+      expect(await ops.mergePendingInto(row, 'not-an-id')).toMatchObject({ ok: false, code: 'invalid_input' });
+
+      const other = (await mint({ name: 'Brunello', producer: 'Fattoria Esempio', country: 'Italy' }, EVA)).wine._id;
+      expect(await ops.mergePendingInto(row, String(other))).toMatchObject({ ok: false, code: 'conflict' });
+      expect(await reload(second)).not.toBeNull();
+    });
+
+    test('the merge moves the member\u2019s bottle onto the published wine and removes the waiting row', async () => {
+      const merged = await ops.mergePendingInto(await reload(second), String(first));
+      expect(merged).toMatchObject({ ok: true, bottlesMoved: 1 });
+      expect(String(merged.target._id)).toBe(String(first));
+
+      expect(await reload(second)).toBeNull();
+      const moved = await mongoose.connection.collection('bottles').findOne({ _id: secondBottle });
+      expect(String(moved.wineDefinition)).toBe(String(first));
+      expect(String(moved.user)).toBe(String(EVA));
+    });
+  });
+
+  describe('a waiting wine nothing points at any more is swept', () => {
+    const FRANK = oid();
+    const DAY = 24 * 60 * 60 * 1000;
+    let orphan; let held; let young; let sweep;
+    const age = (id, ms) => mongoose.connection.collection('winedefinitions').updateOne({ _id: id }, { $set: { createdAt: new Date(Date.now() - ms) } });
+
+    beforeAll(async () => {
+      ({ runUncheckedWineSweep: sweep } = require('./uncheckedWineSweepJob'));
+      orphan = (await mint({ name: 'Orphan Cuvée', producer: 'Bodega Ejemplo', country: 'Spain' }, FRANK)).wine._id;
+      held = (await mint({ name: 'Held Cuvée', producer: 'Bodega Ejemplo', country: 'Spain' }, FRANK)).wine._id;
+      young = (await mint({ name: 'Young Cuvée', producer: 'Bodega Ejemplo', country: 'Spain' }, FRANK)).wine._id;
+      await bottle(held, FRANK);
+      await age(orphan, 3 * DAY);
+      await age(held, 3 * DAY);
+    });
+
+    test('only the old one with no bottle goes: a held wine and one whose import may still be running stay', async () => {
+      const result = await sweep();
+      expect(result).toMatchObject({ removed: 1, errors: 0 });
+      expect(await reload(orphan)).toBeNull();
+      expect(await reload(held)).not.toBeNull();
+      expect(await reload(young)).not.toBeNull();
+    });
+
+    test('a wine whose bottle sits in Recently deleted stays until the trash lets go of it', async () => {
+      const trashed = (await mint({ name: 'Trashed Cuvée', producer: 'Bodega Ejemplo', country: 'Spain' }, FRANK)).wine._id;
+      await age(trashed, 3 * DAY);
+      await mongoose.connection.collection('deletedbottles').insertOne({
+        user: FRANK, cellar: oid(), deletedBy: FRANK, bottleId: oid(), wineDefinition: trashed, batchId: oid(),
+        snapshot: {}, deletedAt: new Date(), purgeAt: new Date(Date.now() + DAY),
+      });
+
+      expect(await sweep()).toMatchObject({ removed: 0, kept: 1 });
+      expect(await reload(trashed)).not.toBeNull();
+
+      await mongoose.connection.collection('deletedbottles').deleteMany({ wineDefinition: trashed });
+      expect(await sweep()).toMatchObject({ removed: 1 });
+      expect(await reload(trashed)).toBeNull();
+    });
+
+    test('a published wine is never a candidate, bottles or not', async () => {
+      const published = (await mint({ name: 'Published Cuvée', producer: 'Bodega Ejemplo', country: 'Spain' }, FRANK, { createdVia: 'ui' })).wine._id;
+      await age(published, 3 * DAY);
+      await sweep();
+      expect(await reload(published)).not.toBeNull();
+    });
+  });
 });
