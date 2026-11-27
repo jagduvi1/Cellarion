@@ -258,7 +258,8 @@ describe('ownership scoping', () => {
       slots: [{ position: 14, bottle: oid('d') }],
     }));
     let body = parse(await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX));
-    expect(body.data.placement).toEqual({ rack_id: oid('e'), rack_name: 'Fridge', position: 14, shelf: 2, row: 2, col: 2 });
+    // wall: the box and the spot in it, on a wall rack only.
+    expect(body.data.placement).toEqual({ rack_id: oid('e'), rack_name: 'Fridge', position: 14, shelf: 2, row: 2, col: 2, wall: null });
     expect(Rack.findOne.mock.results[0].value.select).toHaveBeenCalledWith(expect.stringContaining('typeConfig'));
 
     Rack.findOne.mockReturnValue(chain({

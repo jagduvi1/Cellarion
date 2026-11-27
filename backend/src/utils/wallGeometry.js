@@ -32,6 +32,14 @@
 const BOX_KINDS = ['x', 'slash', 'backslash', 'bin', 'rack', 'shelves', 'closed'];
 // How many separate piles the planks of a box make.
 const PILE_SECTIONS = { x: 4, slash: 2, backslash: 2, bin: 1 };
+// The piles of a box in the contract's order, as someone at the wall would
+// point at them. An open bin is one pile and needs no word.
+const SECTION_NAMES = {
+  x: ['top', 'left', 'right', 'bottom'],
+  slash: ['upper', 'lower'],
+  backslash: ['upper', 'lower'],
+  bin: [null],
+};
 const WALL_MAX_PER_SECTION = 60;
 // Rows and columns of a rack or shelves box.
 const WALL_MAX_BOX_DIM = 20;
@@ -99,6 +107,33 @@ function wallRanges(rows, cols, typeConfig) {
     start += range.capacity;
     return range;
   });
+}
+
+/**
+ * Where a position is, in the words of someone standing at the wall: the box
+ * ("B2"), and inside it either the pile and the bottle's count from the
+ * bottom of that pile, or the row and the bottle's place in the row.
+ * { box, kind, section, slot, row, col }; section and slot are null in a rack
+ * or shelves box, row and col in a pile box. null for a position the wall
+ * does not have. Mirrored by frontend utils/wallLayout.js wallPlace.
+ */
+function wallPlace(rows, cols, typeConfig, position) {
+  if (!Number.isInteger(position) || position < 1) return null;
+  const range = wallRanges(rows, cols, typeConfig).find((r) => position > r.start && position <= r.start + r.capacity);
+  if (!range) return null;
+  const { box } = range;
+  const index = position - range.start - 1;
+  if (isPile(box.kind)) {
+    return {
+      box: range.label, kind: box.kind,
+      section: SECTION_NAMES[box.kind][Math.floor(index / box.perSection)], slot: (index % box.perSection) + 1,
+      row: null, col: null,
+    };
+  }
+  return {
+    box: range.label, kind: box.kind, section: null, slot: null,
+    row: Math.floor(index / box.cols) + 1, col: (index % box.cols) + 1,
+  };
 }
 
 /**
@@ -226,7 +261,7 @@ function planWallEdit(before, after, { bottles = [], marked = [] } = {}) {
 }
 
 module.exports = {
-  BOX_KINDS, PILE_SECTIONS, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM, WALL_MAX_SLOTS,
-  boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel,
+  BOX_KINDS, PILE_SECTIONS, SECTION_NAMES, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM, WALL_MAX_SLOTS,
+  boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel, wallPlace,
   validateWallConfig, planWallEdit,
 };

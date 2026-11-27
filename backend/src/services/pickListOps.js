@@ -24,6 +24,7 @@ const Rack = require('../models/Rack');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { isValidId } = require('../utils/validation');
+const { slotPlace, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
 const { stripHtml } = require('../utils/sanitize');
 const { logAudit } = require('./audit');
 
@@ -245,7 +246,7 @@ async function getPickListView(userId, id) {
     const visibleIds = [...visibleCellars.keys()];
     const [racks, allRacks, layouts] = await Promise.all([
       Rack.find({ cellar: { $in: visibleIds }, deletedAt: null, 'slots.bottle': { $in: seenIds } })
-        .select('name group slots.position slots.bottle cellar createdAt').lean(),
+        .select(`name group slots.position slots.bottle cellar createdAt ${RACK_PLACE_FIELDS}`).lean(),
       // Every rack of these cellars (no slots): the walking order is the rack
       // page's, which a list holding bottles in only some racks must not change.
       Rack.find({ cellar: { $in: visibleIds }, deletedAt: null }).select('cellar group createdAt').sort({ createdAt: 1, _id: 1 }).lean(),
@@ -278,9 +279,12 @@ async function getPickListView(userId, id) {
       for (const s of rack.slots || []) {
         const bid = s.bottle && String(s.bottle);
         if (!bid || !wanted.has(bid)) continue;
+        // wall: the box and the spot in it, for a wall rack only.
+        const wall = slotPlace(rack, s.position);
         slotOf.set(bid, {
           rackId: rack._id, rackName: rack.name, rackGroup: rack.group || null,
           position: s.position, inRoom: inRoom.has(String(rack._id)), order: order.get(String(rack._id)),
+          ...(wall ? { wall } : {}),
         });
       }
     }

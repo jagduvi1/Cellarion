@@ -29,6 +29,7 @@ const { decorateGrapes } = require('../utils/grapeDisplay');
 const { displayProfile } = require('../utils/profileLanguage');
 const mongoose = require('mongoose');
 const { isValidId } = require('../utils/validation');
+const { slotPlace, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
 // shared service so the REST routes and the MCP tools can never drift.
 const {
@@ -502,7 +503,7 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
         const Rack = require('../models/Rack');
         const rack = await Rack.findOne({
           cellar: cellar._id, 'slots.bottle': bottle._id, deletedAt: null,
-        }).select('name slots').lean();
+        }).select(`name slots ${RACK_PLACE_FIELDS}`).lean();
         if (!rack) {
           cellarHasRacks = !!(await Rack.exists({ cellar: cellar._id, deletedAt: null }));
         }
@@ -516,7 +517,9 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
           const inRoom = !!layout?.rackPlacements?.some(
             (rp) => (rp.rack?._id || rp.rack)?.toString() === rack._id.toString()
           );
-          rackInfo = { rackId: rack._id, rackName: rack.name, position: slot ? slot.position : null, inRoom };
+          // wall: the box and the spot in it, for a wall rack only (utils/rackGeometry.slotPlace).
+          const wall = slot ? slotPlace(rack, slot.position) : null;
+          rackInfo = { rackId: rack._id, rackName: rack.name, position: slot ? slot.position : null, inRoom, ...(wall ? { wall } : {}) };
         }
       } catch (err) {
         console.error('Bottle rackInfo lookup failed:', err.message);

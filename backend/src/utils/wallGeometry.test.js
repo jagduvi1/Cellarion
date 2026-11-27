@@ -14,9 +14,9 @@
  */
 const {
   BOX_KINDS, boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel,
-  validateWallConfig, planWallEdit, WALL_MAX_SLOTS,
+  validateWallConfig, planWallEdit, wallPlace, WALL_MAX_SLOTS,
 } = require('./wallGeometry');
-const { totalSlots, getMaxPosition } = require('./rackGeometry');
+const { totalSlots, getMaxPosition, slotPlace, RACK_PLACE_FIELDS } = require('./rackGeometry');
 const { cases } = require('./wallGeometry.cases.json');
 
 const id = (n) => String(n).padStart(24, '0');
@@ -63,6 +63,61 @@ describe('counting a wall', () => {
     expect(wallTotalSlots(3, 3, {})).toBe(0);
     expect(wallTotalSlots(3, 3, undefined)).toBe(0);
     expect(wallTotalSlots(3, 3, { boxes: 'x' })).toBe(0);
+  });
+});
+
+describe('where a position is, in the words of someone at the wall', () => {
+  // A1 an X of six a triangle (1–24), B1 a diagonal of four a half (25–32),
+  // C1 an open bin of five (33–37), A2 a rack of 2 × 3 (38–43), B2 shelves of
+  // 2 × 4 (44–51), C2 closed.
+  const wall = {
+    type: 'wall', rows: 2, cols: 3,
+    typeConfig: { boxes: [
+      box(1, 0, 0, 'x', { perSection: 6 }), box(2, 1, 0, 'slash', { perSection: 4 }), box(3, 2, 0, 'bin', { perSection: 5 }),
+      box(4, 0, 1, 'rack', { rows: 2, cols: 3 }), box(5, 1, 1, 'shelves', { rows: 2, cols: 4 }), box(6, 2, 1, 'closed'),
+    ] },
+  };
+  const at = (position) => wallPlace(wall.rows, wall.cols, wall.typeConfig, position);
+  const pile = (b, kind, section, slot) => ({ box: b, kind, section, slot, row: null, col: null });
+  const cell = (b, kind, row, col) => ({ box: b, kind, section: null, slot: null, row, col });
+
+  test('an X names its triangle and counts the bottle from the bottom of it', () => {
+    expect(at(1)).toEqual(pile('A1', 'x', 'top', 1));
+    expect(at(6)).toEqual(pile('A1', 'x', 'top', 6));
+    expect(at(7)).toEqual(pile('A1', 'x', 'left', 1));
+    expect(at(13)).toEqual(pile('A1', 'x', 'right', 1));
+    expect(at(24)).toEqual(pile('A1', 'x', 'bottom', 6));
+  });
+
+  test('a diagonal box has an upper and a lower half, and an open bin is one pile with no name', () => {
+    expect(at(25)).toEqual(pile('B1', 'slash', 'upper', 1));
+    expect(at(29)).toEqual(pile('B1', 'slash', 'lower', 1));
+    expect(wallPlace(1, 1, { boxes: [box(1, 0, 0, 'backslash', { perSection: 2 })] }, 3)).toEqual(pile('A1', 'backslash', 'lower', 1));
+    expect(at(33)).toEqual(pile('C1', 'bin', null, 1));
+    expect(at(37)).toEqual(pile('C1', 'bin', null, 5));
+  });
+
+  test('a rack and shelves name the row from the top and the bottle from the left', () => {
+    expect(at(38)).toEqual(cell('A2', 'rack', 1, 1));
+    expect(at(43)).toEqual(cell('A2', 'rack', 2, 3));
+    expect(at(44)).toEqual(cell('B2', 'shelves', 1, 1));
+    expect(at(51)).toEqual(cell('B2', 'shelves', 2, 4));
+  });
+
+  test('a position the wall does not have is nowhere', () => {
+    expect(at(52)).toBeNull();
+    expect(at(0)).toBeNull();
+    expect(at(1.5)).toBeNull();
+    expect(at(undefined)).toBeNull();
+  });
+
+  test('only a wall rack has such a place; every other rack answers null', () => {
+    expect(slotPlace(wall, 7)).toEqual(pile('A1', 'x', 'left', 1));
+    expect(slotPlace({ type: 'grid', rows: 4, cols: 6 }, 7)).toBeNull();
+    expect(slotPlace({ type: 'x-rack', rows: 1, cols: 1, typeConfig: { bottlesPerSection: 6 } }, 7)).toBeNull();
+    expect(slotPlace({ ...wall, isModular: true }, 7)).toBeNull();
+    expect(slotPlace(null, 7)).toBeNull();
+    expect(RACK_PLACE_FIELDS.split(' ')).toEqual(expect.arrayContaining(['type', 'rows', 'cols', 'typeConfig']));
   });
 });
 
