@@ -1613,6 +1613,7 @@
     "type_cube": "Modular Cube",
     "type_shelf": "Open Shelf",
     "type_cabinet": "Wine cabinet",
+    "type_wall": "Wall",
     "shelvesLabel": "Shelves",
     "bottlesAcrossLabel": "Bottles across",
     "cabinetPresetLabel": "Start from",

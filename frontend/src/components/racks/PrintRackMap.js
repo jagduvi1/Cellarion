@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { computeLayout, computeModularLayout, SLOT_RADIUS, multiBottleCells, cellNumberSize } from '../../utils/rackLayouts';
 import { swatchType } from '../../utils/wineColour';
+import WallDecor from './WallDecor';
 
 // Print-tuned wine-type palette — same hues as the compact rack view, kept
 // saturated so slots stay distinguishable in color print; the position
@@ -120,6 +121,14 @@ export default function PrintRackMap({ rack }) {
         stroke="#999"
         strokeWidth={1.5}
       />
+      {/* A wall: its boxes, planks and doors in print greys, with the column
+          letters and row numbers a box is named by. */}
+      {layout.wall && (
+        <WallDecor
+          wall={layout.wall} fill="#fff" frame="#999" shade={null} frameWidth={2.5} plankWidth={2.5}
+          doorFill="#F0F0EC" doorLine="#999" knob="#777" labelColor="#444"
+        />
+      )}
       {!cells && layout.slots.map(({ position, cx, cy, isBack, isSideways }) => {
         const r = isBack ? R * 0.7 : R;
         const { shape, number } = slotParts({ position, cx, cy, r, isSideways, numberSize: (ratio) => r * ratio });

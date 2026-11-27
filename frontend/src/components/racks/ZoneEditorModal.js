@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
+import WallDecor from './WallDecor';
 import { computeLayout, computeModularLayout, SLOT_RADIUS, multiBottleCells, cellNumberSize } from '../../utils/rackLayouts';
 
 const ZONE_PALETTE = ['#2E7D32', '#1565C0', '#C62828', '#6A1B9A', '#E65100', '#00838F', '#9E9D24', '#AD1457'];
@@ -174,6 +175,13 @@ export default function ZoneEditorModal({ rack, onSave, onClose }) {
         <svg viewBox={`0 0 ${layout.viewBox.width} ${layout.viewBox.height}`} className="zones-map-svg">
           <rect x={1} y={1} width={layout.viewBox.width - 2} height={layout.viewBox.height - 2} rx={7}
             fill="var(--color-bg)" stroke="var(--color-border)" strokeWidth={1.5} />
+          {layout.wall && (
+            <WallDecor
+              wall={layout.wall} fill="var(--color-bg)" frame="var(--color-border)" shade={null} frameWidth={3} plankWidth={3}
+              doorFill="var(--color-surface-hover)" doorLine="var(--color-border)" knob="var(--color-text-muted)"
+              labelColor="var(--color-text-muted)"
+            />
+          )}
           {!cells && layout.slots.map(({ position, cx, cy, isBack }) => {
             const r = isBack ? R * 0.7 : R;
             return slotTarget(position, cx, cy, r, slotNumber(position, cx, cy, r * 0.6));

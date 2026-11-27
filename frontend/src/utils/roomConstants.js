@@ -115,7 +115,8 @@ export function buildScaledLayout(rack) {
 // True for rack types whose internal layout is irregular and therefore driven
 // by the scaled 2D layout rather than the simple rows × cols grid formulas.
 function usesScaledLayout(rack) {
-  return !!rack.isModular || (rack.type || 'grid') === 'cube';
+  const type = rack.type || 'grid';
+  return !!rack.isModular || type === 'cube' || type === 'wall';
 }
 
 /**
