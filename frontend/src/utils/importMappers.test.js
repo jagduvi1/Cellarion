@@ -1289,3 +1289,33 @@ describe('CellarTracker vintage sentinels in a file no CT fingerprint claims', (
     expect(out.items.map((i) => i.vintage)).toEqual(['1900', '1010']);
   });
 });
+
+describe('a vintage cell that says "no vintage" in words', () => {
+  // The backend takes a year, "NV" or "Unknown". Anything else in the cell is
+  // refused at confirm and that bottle is not imported.
+  const vintagesOf = (cells) => {
+    const out = parseAndMap(`Wine,Producer,Vintage\n${cells.map((c, i) => `Wine ${i},Producer,${c}`).join('\n')}\n`);
+    return out.items.map((i) => [i.vintage, i.vintageMissing === true]);
+  };
+
+  it('reads a stated non-vintage as NV, whatever the language, and does not flag it', () => {
+    const stated = [
+      'Ohne', 'ohne Jahrgang', 'o.J.', 'o. J.',
+      'Non-Vintage', 'non vintage', 'MV', 'Multi-Vintage',
+      'NM', 'Sans millésime', 'non millésimé',
+      'senza annata', 's.a.', 'sin añada', 's/a',
+      'Utan årgång', 'Uten årgang', 'zonder jaargang',
+    ];
+    expect(vintagesOf(stated)).toEqual(stated.map(() => ['NV', false]));
+  });
+
+  it('reads a placeholder for an empty cell as a missing year: NV, flagged for the review', () => {
+    const placeholders = ['-', '--', '–', '—', '?', 'n/a', 'N/A', 'none', 'k.A.', '0'];
+    expect(vintagesOf(placeholders)).toEqual(placeholders.map(() => ['NV', true]));
+  });
+
+  it('leaves a year, "Unknown" and text it does not know alone', () => {
+    expect(vintagesOf(['2019', 'Unknown', '2015er', 'SA', 'OJ', 'Red']))
+      .toEqual([['2019', false], ['Unknown', false], ['2015er', false], ['SA', false], ['OJ', false], ['Red', false]]);
+  });
+});
