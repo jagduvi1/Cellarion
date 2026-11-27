@@ -131,9 +131,9 @@ async function isDraftVisibleViaSharedCellar(wineId, userId) {
  * @param {boolean} [opts.lean=false]
  * @param {boolean} [opts.noDrafts=false]  exclude drafts entirely, even the
  *   caller's own — share/publish surfaces (see wineVisibilityFilter)
- * @param {boolean} [opts.viaSharedCellar=false]  READ surfaces: a draft the
- *   caller cannot see as creator is still returned when a shared cellar they
- *   belong to holds a bottle of it
+ * @param {boolean} [opts.viaSharedCellar=false]  READ surfaces: a draft, or a
+ *   wine waiting for a curator's check, that the caller cannot see as creator
+ *   is still returned when a shared cellar they belong to holds a bottle of it
  * @returns {Promise<object|null>}
  */
 async function findVisibleWine(id, opts = {}) {
@@ -153,8 +153,11 @@ async function findVisibleWine(id, opts = {}) {
   const wine = await build({ _id: String(id), ...wineVisibilityFilter({ userId, roles }, { noDrafts }) });
   if (wine || !viaSharedCellar || noDrafts) return wine;
   // A miss on a read surface: the one other way in is a shared cellar's bottle.
+  // That holds for a draft and for a wine waiting for a curator's check
+  // (models/WineDefinition.uncheckedIdentity): an editor's import into someone
+  // else's cellar must leave the owner and the other members able to read it.
   if (!(await isDraftVisibleViaSharedCellar(String(id), userId))) return null;
-  return build({ _id: String(id), draft: true });
+  return build({ _id: String(id), $or: [{ draft: true }, { uncheckedIdentity: true }] });
 }
 
 module.exports = {

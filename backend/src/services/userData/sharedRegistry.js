@@ -76,6 +76,10 @@ module.exports = [
       // the createdBy reassign below makes them indistinguishable; postPurge
       // decides each one once the user's bottles are gone.
       ctx.draftWineIds = await WineDefinition.distinct('_id', { createdBy: ctx.userId, draft: true });
+      // The same for the wines taken from the user's own data that no curator
+      // has checked yet (models/WineDefinition.uncheckedIdentity): theirs
+      // until checked, so postPurge removes the ones nothing points at.
+      ctx.uncheckedWineIds = await WineDefinition.distinct('_id', { createdBy: ctx.userId, uncheckedIdentity: true, draft: { $ne: true } });
       await WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } });
       await WineDefinition.updateMany({ 'aiProfile.verifiedBy': ctx.userId }, { $set: { 'aiProfile.verifiedBy': ctx.deletedUserId } });
       // The contributor whose request produced this wine, anonymised the same
@@ -92,6 +96,18 @@ module.exports = [
     // is published as it stands — a lost bottle is the worse outcome — and an
     // empty one is deleted. The same two outcomes the expiry job applies.
     postPurge: async (ctx) => {
+      // Unchecked wines first, and independent of the drafts below. One that
+      // no bottle points at any more is deleted: it never became registry
+      // content. One another member's bottle still holds (a shared cellar)
+      // stays in the curators' queue — registryGc keeps any wine with a
+      // bottle, a bottle in Recently deleted, or curated data on it.
+      const unchecked = ctx.uncheckedWineIds || [];
+      if (unchecked.length) {
+        const { gcOrphanMintedWine } = require('../registryGc');
+        for (const id of unchecked) {
+          await gcOrphanMintedWine(id, null, { action: 'wine.unchecked_erasure_delete', via: 'erasure' });
+        }
+      }
       const ids = ctx.draftWineIds || [];
       if (!ids.length) return;
       // Lazy: the draft ops pull the resolver tree; erasure must stay light.
@@ -124,30 +140,38 @@ module.exports = [
         }
       }
     },
-    // Only the drafts are exported: a published registry wine is shared data,
-    // not the user's.
-    exportFragment: async (ctx) => ({
-      draftWines: markTrunc(ctx, 'draftWines',
-        await WineDefinition.find({ createdBy: ctx.userId, draft: true })
-          .select('name producer appellation classification type colour country region grapes createdAt draftExpiresAt createdVia')
-          .populate([{ path: 'country', select: 'name' }, { path: 'region', select: 'name' }, { path: 'grapes', select: 'name' }])
-          .limit(EXPORT_MAX).lean())
-        .map((w) => ({
-          name: w.name,
-          producer: w.producer || null,
-          appellation: w.appellation || null,
-          classification: w.classification || null,
-          type: w.type || null,
-          colour: w.colour || null,
-          country: w.country?.name || null,
-          region: w.region?.name || null,
-          grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
-          createdVia: w.createdVia || null,
-          createdAt: w.createdAt,
-          draftExpiresAt: w.draftExpiresAt || null,
-        })),
-    }),
-    note: 'shared registry; required createdBy + aiProfile.verifiedBy reassigned to [deleted] on erasure; the user\'s PRIVATE DRAFTS are exported, and on erasure published (bottles remain) or deleted (empty)',
+    // Only the user's own wines are exported: their drafts, and the wines
+    // taken from their data that no curator has checked yet. A published
+    // registry wine is shared data, not the user's.
+    exportFragment: async (ctx) => {
+      // Two reads written out, each with its own cap and truncation flag: the
+      // export-caps guard counts the three per entry.
+      const FIELDS = 'name producer appellation classification type colour country region grapes createdAt draftExpiresAt createdVia';
+      const NAMES = [{ path: 'country', select: 'name' }, { path: 'region', select: 'name' }, { path: 'grapes', select: 'name' }];
+      const drafts = await WineDefinition.find({ createdBy: ctx.userId, draft: true })
+        .select(FIELDS).populate(NAMES).limit(EXPORT_MAX).lean();
+      const unchecked = await WineDefinition.find({ createdBy: ctx.userId, uncheckedIdentity: true, draft: { $ne: true } })
+        .select(FIELDS).populate(NAMES).limit(EXPORT_MAX).lean();
+      const identity = (w) => ({
+        name: w.name,
+        producer: w.producer || null,
+        appellation: w.appellation || null,
+        classification: w.classification || null,
+        type: w.type || null,
+        colour: w.colour || null,
+        country: w.country?.name || null,
+        region: w.region?.name || null,
+        grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
+        createdVia: w.createdVia || null,
+        createdAt: w.createdAt,
+      });
+      return {
+        draftWines: markTrunc(ctx, 'draftWines', drafts)
+          .map((w) => ({ ...identity(w), draftExpiresAt: w.draftExpiresAt || null })),
+        uncheckedWines: markTrunc(ctx, 'uncheckedWines', unchecked).map(identity),
+      };
+    },
+    note: 'shared registry; required createdBy + aiProfile.verifiedBy reassigned to [deleted] on erasure; the user\'s PRIVATE DRAFTS are exported, and on erasure published (bottles remain) or deleted (empty); the wines taken from their data and not yet checked by a curator are exported too, and on erasure deleted when no bottle points at them',
   },
   {
     model: Country, category: 'creator-ref', userFields: ['createdBy'],

@@ -619,6 +619,16 @@ const draftProducerKey = (userId) => `${DRAFT_KEY_PREFIX}${String(userId)}`;
 const draftWineKey = (name, producer, userId, appellation = '', { sweetness = null } = {}) =>
   `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeWineName(name)}:${appellationKeySegment(appellation)}${sweetnessKeySegment(sweetness)}`;
 
+// UNCHECKED namespace (a wine taken from a member's own data that no curator
+// has checked yet). Built like the draft key and for the same reason: two
+// members' unchecked rows of one wine stay apart under the unique index, and
+// meet the ordinary namespace only when a curator checks one. A row with no
+// producer keys in the pending namespace instead, like any producerless row.
+// See the `uncheckedIdentity` field note on models/WineDefinition.js.
+const UNCHECKED_KEY_PREFIX = 'unchecked~';
+const uncheckedWineKey = (name, producer, userId, appellation = '', { sweetness = null } = {}) =>
+  `${UNCHECKED_KEY_PREFIX}${String(userId)}:${normalizeString(producer || '')}:${normalizeWineName(name)}:${appellationKeySegment(appellation)}${sweetnessKeySegment(sweetness)}`;
+
 /**
  * Generate a normalized key for wine deduplication
  * Combines producer + wine name + appellation — plus the label sweetness term
@@ -1406,6 +1416,8 @@ module.exports = {
   DRAFT_KEY_PREFIX,
   draftProducerKey,
   draftWineKey,
+  UNCHECKED_KEY_PREFIX,
+  uncheckedWineKey,
   generateWineSlug,
   GRAPE_SYNONYMS,
   normalizeProducerKey,

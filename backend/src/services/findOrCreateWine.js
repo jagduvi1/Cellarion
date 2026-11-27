@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, normalizeString, normalizeWineName, normalizeAppellation, normalizeAppellationKey, normalizeClassification, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, uncheckedWineKey, normalizeString, normalizeWineName, normalizeAppellation, normalizeAppellationKey, normalizeClassification, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 const { assignClassification } = require('./classificationOps');
 
 // A private draft's untouched clock (models/WineDefinition.draftExpiresAt):
@@ -391,7 +391,15 @@ async function unpolluteEstateName({ name, producer, appellation, classification
 // re-runs them at publish), and the row keys into the per-creator 'draft~'
 // namespace. `excludeId`: the publish-time re-check passes the draft's own id
 // so no stage can match the draft against itself.
-async function findOrCreateWine({ name, producer, country, region, appellation, type, colour, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null, nonWine = false } = {}) {
+//
+// `unchecked`: a row this call MINTS is born waiting for a curator's check
+// (models/WineDefinition.uncheckedIdentity): hidden like a pending row and
+// keyed in the per-creator 'unchecked~' namespace, or in the pending one when
+// it has no producer. Nothing else changes: every resolve stage runs, so a
+// published wine still wins over a mint, and the producer gates behave as
+// `allowPending` makes them (pass both). For the surfaces that take a wine
+// from a member's own data without anyone having read it.
+async function findOrCreateWine({ name, producer, country, region, appellation, type, colour, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null, nonWine = false, unchecked = false } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever.
@@ -588,6 +596,16 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       draft: true,
     }).populate(POPULATE);
     if (ownDraft) return { wine: ownDraft, created: false, draft: true };
+  }
+  // The same for an UNCHECKED mint: the creator's own waiting row of this
+  // identity (a second bottle, a retry, the same file imported again). The key
+  // is per-creator, so this too can only find their own row.
+  if (unchecked && !draft && !producerMissing) {
+    const ownUnchecked = await WineDefinition.findOne({
+      normalizedKey: uncheckedWineKey(trimmedName, trimmedProducer, userId, trimmedAppellation),
+      uncheckedIdentity: true,
+    }).populate(POPULATE);
+    if (ownUnchecked) return { wine: ownUnchecked, created: false, unchecked: true };
   }
 
   // 1. Exact match by normalizedKey
@@ -965,7 +983,9 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     ? draftWineKey(trimmedName, producerToStore, userId, trimmedAppellation)
     : producerMissing
       ? pendingWineKey(trimmedName, userId, trimmedAppellation)
-      : generateWineKey(trimmedName, producerToStore, trimmedAppellation);
+      : unchecked
+        ? uncheckedWineKey(trimmedName, producerToStore, userId, trimmedAppellation)
+        : generateWineKey(trimmedName, producerToStore, trimmedAppellation);
 
   // ── Label-variant stage ───────────────────────────────────────────────────
   //
@@ -1098,7 +1118,10 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     // the identity (models/WineDefinition.pendingIdentity). The model's
     // pre-validate hook promotes it automatically once producer + name are both
     // real, so nothing has to remember to clear this.
-    pendingIdentity: producerMissing || draft,
+    pendingIdentity: producerMissing || draft || unchecked,
+    // Waiting for a curator's check; pending by invariant, like a draft. Set
+    // only for such a mint: every other create carries no such field.
+    ...(unchecked && !draft ? { uncheckedIdentity: true } : {}),
     // A private draft is pending by invariant (the hook sets it anyway) and
     // carries its 7-day untouched clock (services/wineDraftExpiryJob).
     draft,
@@ -1140,6 +1163,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   if (nearMiss) created.nearMiss = nearMiss;
   if (producerMissing) created.pendingIdentity = true;
   if (draft) created.draft = true;
+  if (unchecked && !draft) created.unchecked = true;
   // The producer string the cross-field rules refused, for the caller's audit
   // entry. Only ever set on a create, and only when a rule actually fired.
   if (producerRejected) created.producerRejected = producerRejected;
