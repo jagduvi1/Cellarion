@@ -5,6 +5,7 @@
  *
  * Position numbering is 1-based and contiguous (1 through totalSlots).
  */
+import { wallLayout, wallTotalSlots } from './wallLayout';
 
 const SLOT_R = 20;       // slot circle radius
 const SLOT_GAP = 8;      // gap between slots
@@ -684,7 +685,7 @@ function cabinetLayout(rows, cols, typeConfig) {
 
 /**
  * Compute the layout for a given rack type.
- * @param {string} type - one of: grid, x-rack, hex, triangle, stack, cube, shelf, cabinet
+ * @param {string} type - one of: grid, x-rack, hex, triangle, stack, cube, shelf, cabinet, wall
  * @param {number} rows
  * @param {number} cols
  * @param {object} [typeConfig] - extra config (e.g. moduleRows/moduleCols for cube)
@@ -699,6 +700,7 @@ export function computeLayout(type, rows, cols, typeConfig) {
     case 'cube':     return cubeLayout(rows, cols, typeConfig);
     case 'shelf':    return shelfLayout(rows, cols, typeConfig);
     case 'cabinet':  return cabinetLayout(rows, cols, typeConfig);
+    case 'wall':     return wallLayout(rows, cols, typeConfig);
     case 'grid':
     default:         return gridLayout(rows, cols, typeConfig);
   }
@@ -925,6 +927,8 @@ export function getTotalSlots(type, rows, cols, typeConfig) {
     }
     case 'stack':
       return rows;
+    case 'wall':
+      return wallTotalSlots(rows, cols, typeConfig);
     case 'cube': {
       const mr = typeConfig?.moduleRows || 2;
       const mc = typeConfig?.moduleCols || 2;

@@ -1,0 +1,64 @@
+{
+  "about": "Walls with the slot ranges both the server (utils/wallGeometry.js) and the drawing (frontend utils/wallLayout.js) must give them. Boxes are listed out of order on purpose.",
+  "cases": [
+    {
+      "name": "a bin wall with a cupboard: X squares, diagonal squares and two doors",
+      "rows": 3,
+      "cols": 4,
+      "boxes": [
+        { "x": 3, "y": 2, "w": 1, "h": 1, "kind": "slash", "perSection": 14 },
+        { "x": 0, "y": 0, "w": 1, "h": 1, "kind": "slash", "perSection": 14 },
+        { "x": 1, "y": 0, "w": 2, "h": 1, "kind": "closed" },
+        { "x": 3, "y": 0, "w": 1, "h": 1, "kind": "backslash", "perSection": 14 },
+        { "x": 0, "y": 1, "w": 1, "h": 1, "kind": "x", "perSection": 6 },
+        { "x": 1, "y": 1, "w": 1, "h": 1, "kind": "x", "perSection": 6 },
+        { "x": 2, "y": 1, "w": 1, "h": 1, "kind": "x", "perSection": 6 },
+        { "x": 3, "y": 1, "w": 1, "h": 1, "kind": "x", "perSection": 6 },
+        { "x": 0, "y": 2, "w": 1, "h": 1, "kind": "backslash", "perSection": 14 },
+        { "x": 1, "y": 2, "w": 1, "h": 1, "kind": "slash", "perSection": 14 },
+        { "x": 2, "y": 2, "w": 1, "h": 1, "kind": "backslash", "perSection": 14 }
+      ],
+      "total": 264,
+      "ranges": [
+        ["A1", 0, 28], ["B1", 28, 0], ["D1", 28, 28],
+        ["A2", 56, 24], ["B2", 80, 24], ["C2", 104, 24], ["D2", 128, 24],
+        ["A3", 152, 28], ["B3", 180, 28], ["C3", 208, 28], ["D3", 236, 28]
+      ]
+    },
+    {
+      "name": "boxes of different sizes: a tall rack, wide shelves, an open bin and empty wall",
+      "rows": 3,
+      "cols": 4,
+      "boxes": [
+        { "x": 0, "y": 0, "w": 1, "h": 3, "kind": "rack", "rows": 16, "cols": 5 },
+        { "x": 1, "y": 0, "w": 2, "h": 1, "kind": "shelves", "rows": 3, "cols": 10 },
+        { "x": 3, "y": 0, "w": 1, "h": 1, "kind": "bin", "perSection": 30 },
+        { "x": 1, "y": 1, "w": 1, "h": 1, "kind": "x", "perSection": 6 },
+        { "x": 1, "y": 2, "w": 2, "h": 1, "kind": "closed" }
+      ],
+      "total": 164,
+      "ranges": [["A1", 0, 80], ["B1", 80, 30], ["D1", 110, 30], ["B2", 140, 24], ["B3", 164, 0]]
+    },
+    {
+      "name": "a single X box is a wall too",
+      "rows": 1,
+      "cols": 1,
+      "boxes": [{ "x": 0, "y": 0, "w": 1, "h": 1, "kind": "x", "perSection": 10 }],
+      "total": 40,
+      "ranges": [["A1", 0, 40]]
+    },
+    {
+      "name": "stored boxes that do not lie inside the wall, or of an unknown kind, hold nothing",
+      "rows": 1,
+      "cols": 2,
+      "boxes": [
+        { "x": 0, "y": 0, "w": 1, "h": 1, "kind": "bin", "perSection": 12 },
+        { "x": 1, "y": 0, "w": 2, "h": 1, "kind": "bin", "perSection": 12 },
+        { "x": 1, "y": 0, "w": 1, "h": 1, "kind": "barrel", "perSection": 12 },
+        { "x": 0, "y": 1, "w": 1, "h": 1, "kind": "x", "perSection": 6 }
+      ],
+      "total": 12,
+      "ranges": [["A1", 0, 12]]
+    }
+  ]
+}

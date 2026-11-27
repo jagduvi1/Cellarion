@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { computeLayout, computeModularLayout, SLOT_RADIUS, SLOT_HIT_FACTOR, minSlotDistance, multiBottleCells } from '../../utils/rackLayouts';
 import useSlotDrag from '../../hooks/useSlotDrag';
+import WallDecor from './WallDecor';
 import { isReserved } from '../../utils/reservation';
 import { swatchType } from '../../utils/wineColour';
 import './RackRenderer.css';
@@ -216,30 +217,39 @@ export default function RackRenderer({
             </pattern>
           </defs>
 
-          {/* Wood background with grain */}
-          <rect
-            x={0} y={0}
-            width={layout.viewBox.width}
-            height={layout.viewBox.height}
-            rx={8}
-            fill="url(#wood-grain)"
-          />
+          {/* A wall is its boxes: each has its own wood and frame, and the
+              cells no box covers stay open. Every other rack is one panel. */}
+          {layout.wall ? (
+            <WallDecor wall={layout.wall} fill="url(#wood-grain)" />
+          ) : (
+            <>
+              {/* Wood background with grain */}
+              <rect
+                x={0} y={0}
+                width={layout.viewBox.width}
+                height={layout.viewBox.height}
+                rx={8}
+                fill="url(#wood-grain)"
+              />
 
-          {/* Frame border */}
-          <rect
-            x={1} y={1}
-            width={layout.viewBox.width - 2}
-            height={layout.viewBox.height - 2}
-            rx={7}
-            fill="none"
-            stroke={WOOD_FRAME}
-            strokeWidth={3}
-          />
+              {/* Frame border */}
+              <rect
+                x={1} y={1}
+                width={layout.viewBox.width - 2}
+                height={layout.viewBox.height - 2}
+                rx={7}
+                fill="none"
+                stroke={WOOD_FRAME}
+                strokeWidth={3}
+              />
+            </>
+          )}
 
           {/* Shelf lines (horizontal) between rows. X-racks have no shelves —
               their many distinct slot heights would draw spurious planks
-              straight through the diagonal dividers below. */}
-          {!layout.isXRack && <ShelfLines layout={layout} />}
+              straight through the diagonal dividers below. A wall draws
+              the planks of its own boxes (WallDecor above). */}
+          {!layout.isXRack && !layout.wall && <ShelfLines layout={layout} />}
 
           {/* Module separators for cube type */}
           {!isModular && rack.type === 'cube' && <CubeModuleLines rack={rack} layout={layout} />}
