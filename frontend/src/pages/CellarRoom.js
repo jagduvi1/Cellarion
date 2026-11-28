@@ -1213,7 +1213,8 @@ export default function CellarRoom() {
                         onChange={(e) => handlePlacementField('scaleOverride', e.target.value || null)}
                       />
                     </div>
-                    {selectedRack.type !== 'x-rack' && (
+                    {/* An X-rack and a wall are drawn true to scale: no width or depth to set. */}
+                    {selectedRack.type !== 'x-rack' && selectedRack.type !== 'wall' && (
                       <>
                         <div className="form-group form-group-inline">
                           <label>{t('room.rackWidth', 'Width (m)')}</label>

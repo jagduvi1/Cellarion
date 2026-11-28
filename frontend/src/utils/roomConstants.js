@@ -96,20 +96,48 @@ const SVG_TO_M = CELL_W / CELL_SIZE;
  * the SVG y-down axis flipped to 3D y-up.
  *
  * Returns { positions: [{ position, x, y, z }], innerW, innerH } in metres.
+ *
+ * A wall rack is measured by its cells alone (the flat drawing has column
+ * letters and row numbers around them, which the room does not), and its
+ * answer carries `wall`: every box with its planks and doors in the same
+ * metres, for components/room/WallStructure.js.
  */
 export function buildScaledLayout(rack) {
   const layout = rack.isModular
     ? computeModularLayout(rack.modules || [])
     : computeLayout(rack.type || 'grid', rack.rows || 4, rack.cols || 4, rack.typeConfig);
-  const vbW = layout.viewBox.width || 0;
-  const vbH = layout.viewBox.height || 0;
+  const left = layout.wall ? layout.wall.origin.x : 0;
+  const top = layout.wall ? layout.wall.origin.y : 0;
+  const vbW = layout.wall ? layout.wall.size.width : (layout.viewBox.width || 0);
+  const vbH = layout.wall ? layout.wall.size.height : (layout.viewBox.height || 0);
+  // SVG point → metres from the rack's centre, y up.
+  const mx = (x) => (x - left - vbW / 2) * SVG_TO_M;
+  const my = (y) => (vbH / 2 - (y - top)) * SVG_TO_M;
   const positions = (layout.slots || []).map(s => ({
     position: s.position,
-    x: (s.cx - vbW / 2) * SVG_TO_M,
-    y: (vbH / 2 - s.cy) * SVG_TO_M,
+    x: mx(s.cx),
+    y: my(s.cy),
     z: 0,
   }));
-  return { positions, innerW: vbW * SVG_TO_M, innerH: vbH * SVG_TO_M };
+  const scaled = { positions, innerW: vbW * SVG_TO_M, innerH: vbH * SVG_TO_M };
+  if (layout.wall) {
+    scaled.wall = {
+      boxes: layout.wall.boxes.map((b) => ({
+        key: b.key,
+        kind: b.kind,
+        cx: mx(b.x + b.width / 2),
+        cy: my(b.y + b.height / 2),
+        w: b.width * SVG_TO_M,
+        h: b.height * SVG_TO_M,
+        planks: b.planks.map((p) => ({ x1: mx(p.x1), y1: my(p.y1), x2: mx(p.x2), y2: my(p.y2) })),
+        doors: b.doors.map((d) => ({
+          cx: mx(d.x + d.width / 2), cy: my(d.y + d.height / 2), w: d.width * SVG_TO_M, h: d.height * SVG_TO_M,
+          knobX: mx(d.knobX), knobY: my(d.knobY),
+        })),
+      })),
+    };
+  }
+  return scaled;
 }
 
 // True for rack types whose internal layout is irregular and therefore driven
@@ -197,7 +225,9 @@ export function getRackWorldDims(rack, placement) {
   const defaultW = usesScaledLayout(rack)
     ? buildScaledLayout(rack).innerW + PANEL_THICK * 2
     : getDisplayDims(rack).displayCols * CELL_W + PANEL_THICK * 2;
-  const w = placement.widthOverride || defaultW;
+  // A wall is true to scale by construction, like an X-rack: the room draws
+  // it at its own width whatever a stored override says (RackMesh).
+  const w = (rack.type === 'wall' && !rack.isModular) ? defaultW : (placement.widthOverride || defaultW);
   const d = placement.depthOverride || getDefaultRackDepth(rack);
   const scale = placement.scaleOverride || 1;
   const rot = (placement.rotation || 0) % 360;

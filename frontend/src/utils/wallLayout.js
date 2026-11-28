@@ -398,6 +398,7 @@ export function wallLayout(rows, cols, typeConfig) {
     viewBox: { width: originX + safeCols * cell + MARGIN, height: originY + safeRows * cell + MARGIN },
     slots,
     // `origin` is the top-left corner of cell A1, past the letters and numbers.
-    wall: { cell, origin: { x: originX, y: originY }, boxes: drawn, emptyCells, axes },
+    // `size` is the cells alone, without the gutter and the margin around them.
+    wall: { cell, origin: { x: originX, y: originY }, size: { width: safeCols * cell, height: safeRows * cell }, boxes: drawn, emptyCells, axes },
   };
 }
