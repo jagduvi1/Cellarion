@@ -39,6 +39,10 @@ function AddToWishlist() {
   const [adoptingId, setAdoptingId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
+  // The query the shown results answer — the typed-in way out is offered for
+  // a finished search only, not for text still being typed.
+  const [searchedFor, setSearchedFor] = useState('');
+  const searchDone = !loading && !!searchedFor && searchedFor === search.trim();
   const searchSeq = useRef(0);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
@@ -411,6 +415,7 @@ function AddToWishlist() {
         if (seq !== searchSeq.current) return;
         setWines(Array.isArray(data.wines) ? data.wines : []);
         setRegistryWines(Array.isArray(data.registryWines) ? data.registryWines : []);
+        setSearchedFor(query);
       })
       // Said, not just swallowed: a failed search that keeps the previous
       // list reads as the answer to this one.
@@ -422,6 +427,20 @@ function AddToWishlist() {
       })
       .finally(() => { if (seq === searchSeq.current) setLoading(false); });
   }, [search, apiFetch, clearAi]);
+
+  // The wine isn't in the library (or the AI couldn't place it): type it in,
+  // in the same form a misread label opens — the twin of AddBottle's
+  // enterWineByHand. The save mints it, and an incomplete identity becomes a
+  // pending wine a curator completes.
+  const enterWineByHand = () => {
+    setPendingWineData({
+      name: search.trim(), producer: '', country: '', region: '', appellation: '',
+      classification: '', type: '', grapes: '',
+    });
+    setAiSearchError(null);
+    setError(null);
+    setShowManualForm(true);
+  };
 
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter') handleSearch();
@@ -1028,10 +1047,28 @@ function AddToWishlist() {
                 </div>
               )}
 
+              {/* ── AI error: type the wine in (the item is still saved), or
+                   ask for it to be added to the library ── */}
               {aiSearchError && !aiSearching && (
                 <div className="ai-error-state">
                   <p className="error-text">{aiSearchError}</p>
+                  <div className="ai-error-actions">
+                    <button type="button" className="btn btn-primary btn-small" onClick={enterWineByHand}>
+                      {t('addBottle.enterByHand', 'Enter it yourself')}
+                    </button>
+                    <Link to="/wine-requests" className="btn btn-secondary btn-small">
+                      {t('addBottle.submitWineRequest')}
+                    </Link>
+                  </div>
                 </div>
+              )}
+
+              {/* ── After any finished search: the way out when none of the
+                   results is the wine, without going through the AI ── */}
+              {searchDone && !aiSearching && !aiSearchError && (
+                <button type="button" className="wine-select-manual-link" onClick={enterWineByHand}>
+                  {t('addBottle.notListedEnterByHand', 'Not listed? Enter the wine yourself →')}
+                </button>
               )}
             </>
           )}
