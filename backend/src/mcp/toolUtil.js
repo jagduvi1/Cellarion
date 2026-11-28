@@ -6,6 +6,7 @@ const { z } = require('zod');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const { getCellarRole } = require('../utils/cellarAccess');
+const { compactPlace } = require('../utils/wallGeometry');
 const { isValidId } = require('../utils/validation');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 
@@ -267,14 +268,12 @@ const FIELD_DESCRIPTIONS = {
 
 /**
  * A bottle's place in a wall rack (rackGeometry.slotPlace) as the tools give
- * it: only the keys that say something. A pile: { box, kind, section, slot }
- * (no section in an open bin; slot 1 is the lowest bottle). A rack or shelves
- * box: { box, kind, row, col }. null stays null (not a wall, or no such slot).
+ * it: only the keys that say something (wallGeometry.compactPlace). A pile:
+ * { box, kind, section, slot } (no section in an open bin; slot 1 is the
+ * lowest bottle). A rack or shelves box: { box, kind, row, col }. null stays
+ * null (not a wall, or no such slot).
  */
-function wallSpot(place) {
-  if (!place) return null;
-  return Object.fromEntries(Object.entries(place).filter(([, v]) => v !== null && v !== undefined));
-}
+const wallSpot = compactPlace;
 
 /** The same place as words for a summary line: "box B2, left pile, 3 from the bottom". */
 function wallText(place) {

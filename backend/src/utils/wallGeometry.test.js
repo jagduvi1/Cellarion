@@ -339,8 +339,11 @@ describe('knowing that an edit gave slots new numbers', () => {
     expect(wallNumbering(2, 2, withDoor)).toBe(wallNumbering(1, 2, tc(6)));
   });
 
-  test('a box that grows, moves, or is swapped with another changes it', () => {
+  test('a box that grows, changes places with another, or is another box changes it; one moved past no other does not', () => {
     const before = wallNumbering(1, 2, tc(6));
+    // The bin moves one cell to the right into empty wall: still the second box, the same numbers.
+    const moved = { boxes: [tc(6).boxes[0], { ...tc(6).boxes[1], x: 2 }] };
+    expect(wallNumbering(1, 3, moved)).toBe(before);
     expect(wallNumbering(1, 2, tc(7))).not.toBe(before);
     const swapped = { boxes: [{ ...tc(6).boxes[0], x: 1 }, { ...tc(6).boxes[1], x: 0 }] };
     expect(wallNumbering(1, 2, swapped)).not.toBe(before);
@@ -353,9 +356,19 @@ describe('knowing that an edit gave slots new numbers', () => {
     expect(renumberedSince({ renumberedAt: edited }, new Date('2026-05-01T10:00:00Z'))).toBe(true);
     expect(renumberedSince({ renumberedAt: edited }, new Date('2026-05-03T10:00:00Z'))).toBe(false);
     expect(renumberedSince({ renumberedAt: edited.toISOString() }, '2026-05-01T10:00:00Z')).toBe(true);
-    // A rack never renumbered, or a memory without a time: as before.
+    // A rack never renumbered, or a memory without a time: the number is used.
     expect(renumberedSince({}, new Date())).toBe(false);
     expect(renumberedSince({ renumberedAt: edited }, undefined)).toBe(false);
     expect(renumberedSince(null, new Date())).toBe(false);
+  });
+});
+
+describe('a place in the short form the tools answer in', () => {
+  const { compactPlace } = require('./wallGeometry');
+  test('only the keys that say something are kept, and nothing stays nothing', () => {
+    expect(compactPlace({ box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null })).toEqual({ box: 'A1', kind: 'x', section: 'left', slot: 2 });
+    expect(compactPlace({ box: 'B1', kind: 'bin', section: null, slot: 4, row: null, col: null })).toEqual({ box: 'B1', kind: 'bin', slot: 4 });
+    expect(compactPlace({ box: 'C1', kind: 'shelves', section: null, slot: null, row: 2, col: 3 })).toEqual({ box: 'C1', kind: 'shelves', row: 2, col: 3 });
+    expect(compactPlace(null)).toBeNull();
   });
 });

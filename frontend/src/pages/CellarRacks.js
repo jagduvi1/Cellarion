@@ -741,8 +741,9 @@ function CellarRacks() {
         ...(typeConfig ? { typeConfig: data.rack.typeConfig || typeConfig } : {}),
         ...(reshaped ? { rows: data.rack.rows, cols: data.rack.cols, slots: data.rack.slots, disabledPositions: data.rack.disabledPositions, zones: data.rack.zones } : {}),
       } : r));
-      // New numbers: nothing on the page may go on naming an old one.
-      if (reshaped) {
+      // New numbers (the server stamps them; a rename of a wall has none):
+      // nothing on the page may go on naming an old one.
+      if (data.rack.renumberedAt !== racks.find(r => r._id === rackId)?.renumberedAt) {
         setMoving(m => (m?.rackId === rackId ? null : m));
         setDrunkNotice(n => (n?.slot?.rackId === rackId ? { ...n, slot: null } : n));
         clearArrangeRecord(rackId);

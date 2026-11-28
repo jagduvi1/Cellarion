@@ -19,7 +19,7 @@ const Rack = require('../../models/Rack');
 const McpActionLog = require('../../models/McpActionLog');
 const { registerTool } = require('../registry');
 const { getMaxPosition, slotPlacer } = require('../../utils/rackGeometry');
-const { wallFillOrder } = require('../../utils/wallGeometry');
+const { wallFillOrder, renumberedSince } = require('../../utils/wallGeometry');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../../utils/rackArrange');
 // The slot load, usable count, maturity annotation and the one-save atomic
 // apply live in services/rackOps — shared with the web Arrange endpoints
@@ -188,6 +188,11 @@ registerTool({
     // move since makes the stored plan stale (it could drop a new bottle).
     if (!sameOccupancy(occupancyOf(rack), before)) {
       return fail('conflict', 'The rack has changed since the preview — run a fresh preview.');
+    }
+    // A wall edited since may hold the same bottles at the same numbers
+    // while the numbers the plan moves them to now name other places.
+    if (renumberedSince(rack, preview.createdAt)) {
+      return fail('conflict', 'The wall has changed since the preview — run a fresh preview.');
     }
 
     // Budget is charged before the claim/save and is NOT refunded if either

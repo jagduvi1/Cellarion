@@ -61,6 +61,16 @@ describe('the fill order of a wall', () => {
     expect(got.slice(0, 7)).toEqual([23, 22, 21, 20, 19, 18, 17]);
   });
 
+  test('the piles of an X are taken from the corner: the nearer side pile first, the lower pile first from below', () => {
+    const x = { boxes: [{ x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 1 }] };
+    // One bottle a pile, so the order of the positions is the order of the piles: 1 top, 2 left, 3 right, 4 bottom.
+    const from = (corner) => wallFillOrder(1, 1, x, { count: 4, corner });
+    expect(from('top-left')).toEqual([1, 2, 3, 4]);
+    expect(from('top-right')).toEqual([1, 3, 2, 4]);
+    expect(from('bottom-left')).toEqual([4, 2, 3, 1]);
+    expect(from('bottom-right')).toEqual([4, 3, 2, 1]);
+  });
+
   test('a closed box and a wall without boxes give no places', () => {
     expect(wallFillOrder(1, 1, { boxes: [{ x: 0, y: 0, w: 1, h: 1, kind: 'closed' }] }, { count: 3 })).toEqual([]);
     expect(wallFillOrder(1, 1, undefined, { count: 3 })).toEqual([]);

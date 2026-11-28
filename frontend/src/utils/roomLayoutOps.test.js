@@ -351,8 +351,20 @@ describe('autoLayoutFor', () => {
     const half = (r) => getRackWorldDims(r, {}).halfW;
     expect(half(wall)).toBeGreaterThan(0.75);
     expect(second.position.x - first.position.x).toBeGreaterThanOrEqual(half(wall) + half(rack('a')));
-    // Two ordinary racks keep the step they always had.
+    // Two ordinary racks stand 1.5 m apart.
     expect(third.position.x - second.position.x).toBeCloseTo(1.5);
+  });
+
+  test('a wall too wide for its spot is pushed off the room\'s wall, and the next rack stands clear of where it ends up', () => {
+    const wide = {
+      _id: 'w', name: 'w', type: 'wall', rows: 1, cols: 8, slots: [],
+      typeConfig: { boxes: Array.from({ length: 8 }, (_, x) => ({ x, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 })) },
+    };
+    const { rackPlacements: [first, second] } = autoLayoutFor('c1', [wide, rack('a')]);
+    const half = (r) => getRackWorldDims(r, {}).halfW;
+    expect(half(wide)).toBeGreaterThan(2);
+    expect(first.position.x).toBeGreaterThan(-3);
+    expect(second.position.x - first.position.x).toBeGreaterThanOrEqual(half(wide) + half(rack('a')));
   });
 });
 

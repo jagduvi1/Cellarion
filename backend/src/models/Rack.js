@@ -229,7 +229,7 @@ const rackSchema = new mongoose.Schema({
   rfidTag:   { type: String },
   // When an edit of a wall last gave slots new numbers (PUT /api/racks/:id).
   // A slot number remembered before this no longer names the same place:
-  // utils/rackGeometry.renumberedSince.
+  // utils/wallGeometry.renumberedSince.
   renumberedAt: { type: Date },
   // Soft-delete: set when deleted, null when active
   deletedAt: { type: Date, default: null }

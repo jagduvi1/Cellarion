@@ -122,7 +122,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const { bottle } = result;
     const ownPhotos = row.detail?.own_photos_deleted || 0;
     const envelope = {
-      summary: `Undid delete — ${bottleLabel(bottle)} is back${result.placed ? ` in its rack slot ${result.position}` : (snapshot.rack ? ' (unplaced: its old slot is taken now)' : '')}${ownPhotos ? `; its ${ownPhotos} own photo(s) could not be restored` : ''}`,
+      summary: `Undid delete — ${bottleLabel(bottle)} is back${result.placed ? ` in its rack slot ${result.position}` : (snapshot.rack ? ' (unplaced: its old slot is not free any more)' : '')}${ownPhotos ? `; its ${ownPhotos} own photo(s) could not be restored` : ''}`,
       data: { undone: 'delete_bottle', bottle_id: bottle._id, status: bottle.status, placed: result.placed, position: result.position, photos_restored: false },
     };
     await logAction(ctx, { tool: 'undo_last', action: 'add', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });

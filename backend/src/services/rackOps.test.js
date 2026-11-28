@@ -359,6 +359,8 @@ describe('moveBottleToCellar', () => {
     expect(res.error).toBeUndefined();
     expect(b.cellar).toBe('c2');
     expect(order).toEqual(['save', 'unplace']); // move committed before the slot is freed
+    // The slot an opened bottle had left stays behind with its cellar.
+    expect(b.openedFromSlot).toBeNull();
     expect(b.cellarHistory).toHaveLength(2);    // backfilled origin + new
     expect(b.cellarHistory[1]).toMatchObject({ cellar: 'c2', cellarName: 'Dest' });
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.move.out', expect.objectContaining({ cellarId: 'c1' }), expect.anything());

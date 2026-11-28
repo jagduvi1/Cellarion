@@ -414,15 +414,16 @@ router.put('/:id', async (req, res) => {
     }
     const numberingBefore = wasWall ? wallNumbering(rack.rows, rack.cols, rack.typeConfig) : null;
     if (shapeSent && wasWall && willBeWall) {
-      wallPlan = await planWallRenumber(rack, {
+      const after = {
         rows: rows !== undefined ? rows : rack.rows,
         cols: cols !== undefined ? cols : rack.cols,
         typeConfig: typeConfig !== undefined ? typeConfig : rack.typeConfig,
-      });
+      };
+      wallPlan = await planWallRenumber(rack, after);
       if (wallPlan.error) return res.status(400).json({ error: wallPlan.error });
       // Zones sent along would be in the old numbering or in the new, and
       // nothing in the request says which.
-      const renumbers = wallPlan.dropped.size > 0 || [...wallPlan.move].some(([from, to]) => from !== to);
+      const renumbers = wallNumbering(after.rows, after.cols, after.typeConfig) !== numberingBefore;
       if (zones !== undefined && renumbers) {
         return res.status(400).json({ error: 'This change gives slots of the wall new numbers. Send the zones in a request of their own, before or after it.' });
       }

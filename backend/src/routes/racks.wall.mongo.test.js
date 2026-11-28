@@ -293,6 +293,14 @@ describeWithMongo('a wall rack through the REST routes (real MongoDB)', () => {
     // With a shape that changes no number, zones are welcome.
     expect((await call('PUT', `/${wall._id}`, { typeConfig: { boxes: grown }, zones: [{ name: 'Reds', positions: [1] }] })).status).toBe(200);
 
+    // With no bottle, zone or switched-off slot to move, an edit that swaps two
+    // boxes still gives every number another place.
+    const bare = await newWall('Bare');
+    const bareBoxes = (await stored(bare._id)).typeConfig.boxes.map((x) => ({ ...x, _id: String(x._id) }));
+    const swapped = bareBoxes.map((x) => (x.kind === 'x' ? { ...x, x: 2 } : x.kind === 'bin' ? { ...x, x: 0 } : x));
+    const swapWithZones = await call('PUT', `/${bare._id}`, { typeConfig: { boxes: swapped }, zones: [{ name: 'Whites', positions: [1] }] });
+    expect(swapWithZones.body.error).toMatch(/Send the zones in a request of their own/);
+
     const nullId = await call('PUT', `/${wall._id}`, { typeConfig: { boxes: [...grown, { _id: null, x: 0, y: 1, w: 1, h: 1, kind: 'bin', perSection: 2 }] }, rows: 2, cols: 3 });
     expect(nullId.body.error).toMatch(/leave _id out for a new box/);
     // A size the content does not use is refused in the route's words, not the schema's.

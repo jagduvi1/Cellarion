@@ -12,6 +12,7 @@ const User = require('../models/User');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const { slotPlacer, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
+const { compactPlace } = require('../utils/wallGeometry');
 const WineDefinition = require('../models/WineDefinition');
 const { NOT_IN_CELLAR_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const { classifyMaturity, buildProfileMap, maturityLabel, resolveEffectiveWindow } = require('../utils/maturityUtils');
@@ -200,7 +201,7 @@ async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
       if (!wanted.has(bid)) continue;
       // wall: on a wall rack, the box and the spot in it (pile + count from the bottom, or row + col).
       const wall = placeOf(s.position);
-      positionOf.set(bid, { rack: rack.name, position: s.position, ...(wall ? { wall } : {}) });
+      positionOf.set(bid, { rack: rack.name, position: s.position, ...(wall ? { wall: compactPlace(wall) } : {}) });
     }
   }
 

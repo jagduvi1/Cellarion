@@ -122,6 +122,17 @@ function wallPlace(rows, cols, typeConfig, position) {
 }
 
 /**
+ * A place with only the keys that say something, the form the MCP tools
+ * answer in (mcp/toolUtil.wallSpot, services/drinkingService): a pile is
+ * { box, kind, section, slot } (no section in an open bin), a rack or
+ * shelves box { box, kind, row, col }. null stays null.
+ */
+function compactPlace(place) {
+  if (!place) return null;
+  return Object.fromEntries(Object.entries(place).filter(([, v]) => v !== null && v !== undefined));
+}
+
+/**
  * wallPlace for many positions of one wall: the boxes are walked once, and
  * the function that comes back answers each position. For a caller that
  * reports every bottle of a rack (rackGeometry.slotPlacer).
@@ -248,9 +259,17 @@ function wallFillOrder(rows, cols, typeConfig, { count = 0, disabled = [], corne
   const empty = [];
   let left = Math.max(0, count);
   const steps = (n, backwards) => Array.from({ length: n }, (_, i) => (backwards ? n - 1 - i : i));
+  // The piles of a box from the corner: the X's nearer side pile before the
+  // farther one (its sections are top, left, right, bottom), the lower pile
+  // first from a bottom corner.
+  const piles = (kind) => {
+    if (kind !== 'x') return steps(PILE_SECTIONS[kind], fromBottom);
+    const sides = fromRight ? [2, 1] : [1, 2];
+    return fromBottom ? [3, ...sides, 0] : [0, ...sides, 3];
+  };
   for (const { box, start } of ranges) {
     if (isPile(box.kind)) {
-      for (const section of steps(PILE_SECTIONS[box.kind], fromBottom)) {
+      for (const section of piles(box.kind)) {
         const pile = steps(box.perSection, false)
           .map((i) => start + section * box.perSection + i + 1)
           .filter((p) => !off.has(p));
@@ -389,6 +408,6 @@ function planWallEdit(before, after, { bottles = [], marked = [] } = {}) {
 
 module.exports = {
   BOX_KINDS, PILE_SECTIONS, SECTION_NAMES, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM, WALL_MAX_SLOTS,
-  boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel, wallPlace, wallPlacer,
+  boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel, wallPlace, wallPlacer, compactPlace,
   validateWallConfig, importedRackShape, planWallEdit, wallNumbering, wallFillOrder, renumberedSince,
 };

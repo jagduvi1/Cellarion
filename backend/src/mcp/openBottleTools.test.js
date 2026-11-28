@@ -523,7 +523,7 @@ describe('take_out_of_rack', () => {
     expect(doc.openedAt).toEqual(entry.prev.openedAt);
     expect(doc.openedFromSlot).toBeNull();
 
-    // Not renumbered since: the slot is remembered again, as before.
+    // Not renumbered since: the slot is remembered again.
     McpActionLog.findOne.mockReturnValue(chain({ ...entry, _id: 'log11' }));
     const again = ownBottle();
     Rack.exists.mockResolvedValue(null);

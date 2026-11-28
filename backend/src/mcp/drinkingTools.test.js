@@ -140,6 +140,19 @@ describe('what_should_i_open_tonight', () => {
     expect(c.wine.grapes).toEqual(['Nebbiolo']);
   });
 
+  // "Open the Barolo tonight" ends with someone walking to the cellar.
+  test('a candidate lying in a wall rack says its box and the spot in it, in the short form', async () => {
+    const b = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    wireCandidates([b]);
+    Rack.find.mockReturnValue(chain([{
+      name: 'Cellar wall', type: 'wall', rows: 1, cols: 1,
+      typeConfig: { boxes: [{ x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 }] },
+      slots: [{ position: 9, bottle: b._id }],
+    }]));
+    const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('3')));
+    expect(parse(res).data[0].location).toEqual({ rack: 'Cellar wall', position: 9, wall: { box: 'A1', kind: 'x', section: 'left', slot: 3 } });
+  });
+
   test('wine_type filters the pool; max_price drops unpriced bottles with a warning', async () => {
     const cheapRed = mkBottle({ price: 10, currency: 'EUR', drinkTo: THIS_YEAR + 2 });
     const priceyRed = mkBottle({ price: 200, currency: 'EUR', drinkTo: THIS_YEAR + 2 });

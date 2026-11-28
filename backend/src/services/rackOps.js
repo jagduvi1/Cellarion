@@ -387,6 +387,9 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
     await keepJourneyToNewOwner(bottle, destCellar.user);
   }
   bottle.addedToCellarAt = now;
+  // The slot an opened bottle left is in a rack of the cellar it leaves: it
+  // arrives unplaced, and nothing keeps that number true while it is away.
+  bottle.openedFromSlot = null;
   bottle.cellarHistory.push({ cellar: destCellar._id, cellarName: destCellar.name, enteredAt: now });
   try {
     await bottle.save();

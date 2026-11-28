@@ -28,7 +28,7 @@ import { wallWords } from '../../utils/slotLabel';
  *
  * Props:
  *  - rack:      the rack document (slots populated)
- *  - onPreview: async (strategy, positionOrder) => ({ ok, data|error })
+ *  - onPreview: async (strategy, positionOrder, corner) => ({ ok, data|error })
  *  - onApply:   async (target, before) => ({ ok, error? })   — also used for undo
  *  - onClose
  */

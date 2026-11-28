@@ -462,6 +462,9 @@ export function autoLayoutFor(cellarId, racks) {
     if (lastHalf !== null) x += Math.max(1.5, lastHalf + halfW + 0.2);
     lastHalf = halfW;
     const clamped = clampToRoom(x, -3, r, {}, DEFAULT_DIMENSIONS);
+    // From where the rack really stands: one too wide for its spot is pushed
+    // off the wall of the room.
+    x = clamped.x;
     return {
       rack: r._id,
       position: { x: clamped.x, y: 0, z: clamped.z },
