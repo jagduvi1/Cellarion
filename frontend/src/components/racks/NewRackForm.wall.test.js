@@ -43,6 +43,19 @@ function Page({ onCreate }) {
 }
 const typeButton = (name) => screen.queryByRole('button', { name });
 
+// The types a cellar is put together from stand first: the grid, the wine
+// cabinet and the wall, before the single shapes.
+test('the wine cabinet and the wall come right after the grid; without the flag the cabinet does', () => {
+  const names = (container) => [...container.querySelectorAll('.rack-type-option .rack-type-name')].map((el) => el.textContent.replace('racks.type_', ''));
+  wallOn = true;
+  const on = render(<Page onCreate={vi.fn()} />);
+  expect(names(on.container)).toEqual(['grid', 'cabinet', 'wall', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf']);
+  on.unmount();
+  wallOn = false;
+  const off = render(<Page onCreate={vi.fn()} />);
+  expect(names(off.container)).toEqual(['grid', 'cabinet', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf']);
+});
+
 test('without the flag the form offers no wall', () => {
   wallOn = false;
   render(<Page onCreate={vi.fn()} />);
