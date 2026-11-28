@@ -23,6 +23,12 @@ test('photos still being copied in get their line, on their own too', () => {
   expect(screen.queryByText(/pendingIdentityNote|uncheckedNote/)).not.toBeInTheDocument();
 });
 
+test('photos the server could not take get their own line', () => {
+  render(<ImportCurationNotes result={{ photosQueued: 4, photosNotQueued: 2 }} />);
+  expect(screen.getByText('importBottles.done.photosQueuedNote:{"n":4}')).toBeInTheDocument();
+  expect(screen.getByText('importBottles.done.photosNotQueuedNote:{"n":2}')).toBeInTheDocument();
+});
+
 test('wines that could not be identified get their line', () => {
   render(<ImportCurationNotes result={{ pendingIdentityCount: 3 }} />);
   expect(screen.getByText('importBottles.done.pendingIdentityNote:{"n":3}')).toBeInTheDocument();

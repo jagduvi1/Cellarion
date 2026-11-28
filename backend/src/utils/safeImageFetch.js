@@ -1,6 +1,7 @@
 /**
  * SSRF-guarded image download for server-side "attach image by URL" (the MCP
- * attach_bottle_image tool). The backend lives on a Docker network with
+ * attach_bottle_image tool, and the photos an import file links to in
+ * services/importPhotos). The backend lives on a Docker network with
  * internal services (mongo, meilisearch, rembg) and on a VM with
  * cloud metadata endpoints — a naive fetch(url) would let a caller aim
  * requests at any of them. Guards, in order:
@@ -25,6 +26,7 @@ const https = require('https');
 const MAX_BYTES = 10 * 1024 * 1024; // matches the REST upload cap
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 10 * 1000;
+const DNS_TIMEOUT_MS = 5 * 1000;
 
 /** True for any address a server-side fetch must never touch. */
 function isPrivateAddress(addr) {
@@ -107,10 +109,18 @@ async function resolvePublicAddress(hostname) {
     return { address: host, family: net.isIP(host) };
   }
   let records;
+  // The lookup has its own deadline: the request's wall clock starts only
+  // after it, and a resolver that never answers would hold the caller forever.
+  let timer;
   try {
-    records = await dns.promises.lookup(host, { all: true, verbatim: true });
+    records = await Promise.race([
+      dns.promises.lookup(host, { all: true, verbatim: true }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), DNS_TIMEOUT_MS); timer.unref?.(); }),
+    ]);
   } catch {
     throw new Error('URL hostname could not be resolved');
+  } finally {
+    clearTimeout(timer);
   }
   if (!records.length) throw new Error('URL hostname could not be resolved');
   // EVERY record must be public — a mixed set is an attack, not a CDN.
@@ -221,8 +231,13 @@ function fetchOnce(urlObj, pinned) {
 /**
  * Download an image from a caller-supplied https URL with the full guard
  * stack. Throws Error with a message safe to surface to the caller.
+ *
+ * `allowUrl(urlObj)`, when given, must accept EVERY hop, the first and each
+ * redirect: a caller limited to one photo store (services/importPhotos) is
+ * never led off it by a redirect. Callers: the MCP attach_bottle_image tool
+ * (any public https host) and services/importPhotos (its allowlist).
  */
-async function safeFetchImage(rawUrl) {
+async function safeFetchImage(rawUrl, { allowUrl } = {}) {
   let urlObj;
   try {
     urlObj = new URL(String(rawUrl));
@@ -233,6 +248,7 @@ async function safeFetchImage(rawUrl) {
     if (urlObj.protocol !== 'https:') throw new Error('image_url must be https');
     if (urlObj.port && urlObj.port !== '443') throw new Error('image_url must use the default https port');
     if (urlObj.username || urlObj.password) throw new Error('image_url must not carry credentials');
+    if (allowUrl && !allowUrl(urlObj)) throw new Error('image URL is not on an allowed photo store');
     const pinned = await resolvePublicAddress(urlObj.hostname);
     const result = await fetchOnce(urlObj, pinned);
     if (result.redirect !== undefined) {

@@ -9,7 +9,7 @@ import { getRacks } from '../api/racks';
 import { track } from '../utils/track';
 import {
   parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer,
-  parseCSV, detectDelimiter, detectPlocFile, parsePlocFiles,
+  parseCSV, detectDelimiter, detectPlocFile, parsePlocFiles, resumedImportWarnings,
 } from '../utils/importMappers';
 import { buildImportItem as buildImportItemPayload, applyImportOnOrder, applyImportPhotoChoice } from '../utils/importPayload';
 import { prepareImportItems } from '../utils/importPrepare';
@@ -355,7 +355,7 @@ function ImportBottles() {
       // Restore parse-time notices/metadata so the ct-truncated banner and the
       // encoding/table/fallback notes reappear on resume.
       const meta = restoreSessionMeta(s);
-      setImportWarnings(meta.importWarnings);
+      setImportWarnings(resumedImportWarnings(meta.importWarnings));
       setDetectedEncoding(meta.detectedEncoding);
       setCtTable(meta.ctTable);
       setCtTextFallback(meta.ctTextFallback);

@@ -1,11 +1,12 @@
 /**
- * Bottle-image ingestion — ONE implementation for both surfaces (the REST
- * upload route in routes/images.js and the MCP attach_bottle_image tool), so
- * validation, sanitisation, per-bottle caps, persistence and the background-
- * removal hand-off can never drift (same rule as bottleOps/rackOps/journalOps).
+ * Bottle-image ingestion — ONE implementation for every surface (the REST
+ * upload route in routes/images.js, the MCP attach_bottle_image tool and the
+ * photos an import brings in, services/importPhotos), so validation,
+ * sanitisation, per-bottle caps, persistence and the background-removal
+ * hand-off can never drift (same rule as bottleOps/rackOps/journalOps).
  *
  * The pipeline takes a BUFFER (REST reads multer's temp file into one; MCP
- * decodes base64 or a guarded URL download): sanitizeImageBuffer validates it
+ * decodes base64 or a guarded URL download, as the import does): sanitizeImageBuffer validates it
  * decodes, is a supported format (jpeg/png/webp), is within the pixel bomb
  * cap, and re-encodes with metadata (EXIF/GPS) stripped — fail closed. The
  * CLEAN bytes are what get persisted under a fresh random name; caller input
@@ -70,7 +71,7 @@ function sanitizeCredit(credit, userRoles) {
  *   kicked off. The worker keeps an already-approved row approved; a row
  *   approved after the hand-off raced it and usually ended 'processed' —
  *   invisible in every gallery.
- * @param {'web'|'mcp'|'import'} [opts.via='web']   the surface, named in the audit row
+ * @param {'web'|'mcp'|'import'} [opts.via='web']   the surface, named in the audit row ('import' writes none per photo)
  * @param {object}  req                    for downstream audit attribution
  * @returns {{ image }} | {{ error: { status, message } }}
  */
@@ -82,7 +83,7 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
   if (bottle) {
     const imageCount = await BottleImage.countDocuments({ bottle: bottle._id });
     if (imageCount >= MAX_IMAGES_PER_BOTTLE) {
-      return { error: { status: 400, message: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` } };
+      return { error: { status: 400, code: 'photo_limit', message: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` } };
     }
   }
 
@@ -169,10 +170,13 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
     image = (await BottleImage.findById(image._id)) || image;
   }
 
-  // One attach row for both surfaces, and only for a photo put on a bottle:
-  // the admin flows that publish a registry picture write their own row, and
-  // a photo uploaded before its bottle exists is audited when it is linked.
-  if (bottle) {
+  // One attach row per photo put on a bottle: the admin flows that publish a
+  // registry picture write their own row, a photo uploaded before its bottle
+  // exists is audited when it is linked, and an import writes ONE
+  // 'import.photos' row for its batch (services/importPhotos) rather than a
+  // row per photo, which would push the rest of the cellar's history off its
+  // activity page.
+  if (bottle && via !== 'import') {
     const { logAudit } = require('./audit');
     logAudit(req, 'image.attach', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
       { via, imageId: String(image._id) });

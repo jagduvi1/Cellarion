@@ -8,7 +8,7 @@
  * break inside quotes.
  */
 import { describe, it, expect } from 'vitest';
-import { parseAndMap, detectFormat, detectMaCaveFile } from './importMappers';
+import { parseAndMap, detectFormat, detectMaCaveFile, resumedImportWarnings } from './importMappers';
 
 const HEADER = 'Name;Kategorie;Jahrgang;Land;Region;Unterregion;Appellation;Winzer / Weingut;Standort;Kaufpreis;Marktwert;Währung;Menge;Kaufpreis gesamt;Marktwert gesamt;Kapazität;Konsumiert;Bewertung (/5);Lagerung;Alkoholgehalt;Rebsorten;Speise- und Weinpaarungen;Kommentar;Hinzufügedatum;Foto';
 const PHOTO = 'https://firebasestorage.googleapis.com/v0/b/ma-cave-a-vins-app.appspot.com/o/wines%2Fexample%2Fphoto-1?alt=media&token=example';
@@ -90,9 +90,13 @@ describe('Ma Cave à Vins: the columns', () => {
     expect(byName('Riesling Kabinett')[0].notes).toBe('Speise- und Weinpaarungen: Fisch');
   });
 
-  it('carries the photo link of a wine that has one', () => {
-    expect(byName('Riesling Kabinett').every((it) => it.photoUrl === PHOTO)).toBe(true);
-    expect(byName('Brut Rosé')[0].photoUrl).toBeUndefined();
+  it('carries a reference to the photo link, never the link itself', () => {
+    const riesling = byName('Riesling Kabinett');
+    const ref = riesling[0].photoRef;
+    expect(ref).toMatch(/^photo-/);
+    expect(riesling.every((it) => it.photoRef === ref)).toBe(true);
+    expect(JSON.stringify(items)).not.toContain('firebasestorage');
+    expect(byName('Brut Rosé')[0].photoRef).toBeUndefined();
   });
 
   it('strips the blend shares from the grapes', () => {
@@ -133,6 +137,68 @@ describe('Ma Cave à Vins: the producer in the name', () => {
   it('leaves a name that only starts with the same letters', () => {
     const { items } = parseAndMap(fileText([row('Beispielhof Cuvée', 'Beispiel')]));
     expect(items[0].wineName).toBe('Beispielhof Cuvée');
+  });
+
+  it('leaves a name the producer joins with a hyphen', () => {
+    expect(parseAndMap(fileText([row('Müller-Thurgau trocken', 'Müller')])).items[0].wineName).toBe('Müller-Thurgau trocken');
+    expect(parseAndMap(fileText([row('Muster - Spätlese', 'Muster')])).items[0].wineName).toBe('Spätlese');
+  });
+});
+
+describe('Ma Cave à Vins: values beyond the plain shapes', () => {
+  const withCells = (cells) => {
+    const base = ROWS[1].split(';');
+    for (const [i, v] of Object.entries(cells)) base[i] = v;
+    return base.join(';');
+  };
+  const read = (cells) => parseAndMap(fileText([withCells(cells)]));
+
+  it('reads blend shares written after the grape, and grapes split by "/"', () => {
+    expect(read({ 20: 'Cabernet Sauvignon 60%, Merlot 40%' }).items[0].grapes).toEqual(['Cabernet Sauvignon', 'Merlot']);
+    expect(read({ 20: 'Grenache/Syrah/Mourvèdre' }).items[0].grapes).toEqual(['Grenache', 'Syrah', 'Mourvèdre']);
+  });
+
+  it('reads the style before the colour, and flags a spirit instead of giving it a wine colour', () => {
+    expect(read({ 1: 'Schaumwein rosé' }).items[0].type).toBe('sparkling');
+    expect(read({ 1: 'Süß' }).items[0].type).toBe('dessert');
+    expect(read({ 1: 'Weißherbst' }).items[0].type).toBe('rosé');
+    const spirit = read({ 1: 'Spirituosen' }).items[0];
+    expect(spirit.type).toBeNull();
+    expect(spirit.nonWineHint).toBe(true);
+    expect(read({ 1: 'Rot' }).items[0].nonWineHint).toBeUndefined();
+  });
+
+  it('reads an empty bottle count as none left when the consumed column has a number', () => {
+    const drunkUp = read({ 12: '-', 16: '6' });
+    expect(drunkUp.items).toHaveLength(0);
+    expect(drunkUp.warnings).toContainEqual({ code: 'macave-none-left', count: 1 });
+    // With nothing drunk either, the row itself is one bottle.
+    expect(read({ 12: '-', 16: '-' }).items).toHaveLength(1);
+  });
+
+  it('says when a wine with no bottle left is not added', () => {
+    const { warnings } = parseAndMap(fileText([ROWS[0], ROWS[3]]));
+    expect(warnings).toContainEqual({ code: 'macave-none-left', count: 1 });
+  });
+
+  it('recognises the producer header written without spaces around the "/"', () => {
+    expect(detectMaCaveFile(HEADER.replace('Winzer / Weingut', 'Winzer/Weingut').split(';'))).toBe(true);
+  });
+});
+
+describe('Ma Cave à Vins: the photo links', () => {
+  it('counts only photos of bottles that come in, on the allowed photo store', () => {
+    const local = ROWS[1].replace(/;$/, ';file:///Users/me/photo.jpg');
+    const noneLeft = ROWS[3].replace(/;$/, `;${PHOTO.replace('photo-1', 'photo-9')}`);
+    const { items, warnings } = parseAndMap(fileText([ROWS[0], local, noneLeft]));
+    expect(items.find((it) => it.wineName === 'Spätburgunder Alte Reben').photoRef).toBeUndefined();
+    expect(warnings).toContainEqual({ code: 'macave-photos', count: 1, include: false });
+  });
+
+  it('a resumed draft says its photos need the file again, instead of offering the box', () => {
+    expect(resumedImportWarnings([{ code: 'vintage-missing', count: 2 }, { code: 'macave-photos', count: 3 }]))
+      .toEqual([{ code: 'vintage-missing', count: 2 }, { code: 'macave-photos-need-file', count: 3 }]);
+    expect(resumedImportWarnings(undefined)).toEqual([]);
   });
 });
 

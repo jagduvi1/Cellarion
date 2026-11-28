@@ -42,6 +42,8 @@
  * …and, when a CT Location's bin codes follow a consistent pattern, the rack
  * fields above are auto-derived per bottle (see applyCtRackAutoMap +
  * binCodeParser.js). The freeform `location` string is always kept as well.
+ * Ma Cave à Vins imports emit `photoRef` (a reference to the photo link kept
+ * in the browser, utils/importPhotoLinks) and `nonWineHint` for a spirit.
  */
 
 import { normalizeBottleSize } from '../config/bottleSizes';
@@ -63,7 +65,7 @@ export {
   parsePlocFiles,
 } from './importPloc';
 export { detectOenoExportBoundary, parseOenoExport } from './importOeno';
-export { detectMaCaveFile, makeMaCaveMapper, maCaveWarnings } from './importMaCave';
+export { detectMaCaveFile, makeMaCaveMapper, maCaveWarnings, resumedImportWarnings } from './importMaCave';
 export {
   parseCombinedRackLocation, suggestRackDimensions, summariseRacks, getDefaultRackConfig,
   getDefaultAnchor,
@@ -388,6 +390,8 @@ export function parseJSON(text) {
  *       imported ON ORDER (onOrder: true), kept out of the cellar until arrival
  *     { code: 'no-identity-skipped', count }         \u2014 rows with neither a
  *       wine name nor a producer skipped (e.g. failed Vivino scans)
+ *     Ma Cave à Vins files add their own notices: utils/importMaCave
+ *       maCaveWarnings (consumed counts, wines with none left, the photo box).
  * @throws Error with code 'ct-error-page' for HTML error pages, or
  *   'ct-availability' for CT's Availability statistics table.
  */
@@ -522,7 +526,7 @@ export function parseAndMap(text, forceFormat, opts = {}) {
     }
   }
 
-  const warnings = format === 'macave' ? maCaveWarnings(rows) : [];
+  const warnings = format === 'macave' ? maCaveWarnings(rows, items) : [];
   // CellarTracker's browser export defaults to "Only wines on this page" =
   // 25 rows. A file with EXACTLY 25 data rows is very likely truncated.
   if (format === 'cellartracker' && rows.length === 25) {

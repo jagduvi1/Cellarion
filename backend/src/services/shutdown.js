@@ -59,7 +59,7 @@ function timedOut(promise, ms) {
  * @param {import('http').Server} [opts.server]
  * @param {() => any} [opts.stopJobs]       stop scheduled jobs and timers
  * @param {() => any} [opts.closeStreams]   end SSE streams and MCP sessions
- * @param {Array<() => Promise>} [opts.drains] work to let finish (background removals)
+ * @param {Array<() => Promise>} [opts.drains] work to let finish (background removals, the import's photo queue)
  * @param {() => Promise} [opts.closeDb]
  * @param {number} [opts.budgetMs]
  * @param {(code: number) => void} [opts.exit]
