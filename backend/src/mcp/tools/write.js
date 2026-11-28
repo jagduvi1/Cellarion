@@ -7,7 +7,8 @@
 // match, fuzzy scoring, soft-zone). MCP is deliberately STRICTER than REST:
 // sibling matching stays ON even for confirmed creates, and every wine minted
 // here is stamped createdVia:'mcp' + audited (wine.create), so admins can
-// review AI-created wines as a class.
+// review AI-created wines as a class. That new_wine path is mcp/mintWine,
+// shared with add_to_wishlist.
 //
 // AI cost: creating a bottle fires the same fire-and-forget embed/enrich calls
 // as the web app, which carry their own kill-switch + per-user budget gates —
@@ -23,8 +24,7 @@ const { addBottle, updateBottleFields, markArrived } = require('../../services/b
 const { parseExpectedArrival } = require('../../utils/onOrder');
 const { ORDERED_STATUS } = require('../../config/constants');
 const { findLotSiblings, pickLotFields, LOT_FIELDS, LOT_FIELDS_ON_REQUEST, LOT_LIMIT } = require('../../services/bottleLot');
-const { logAudit } = require('../../services/audit');
-const { announceMintedWine } = require('../../services/wineCommit');
+const { resolveOrMintMcpWine } = require('../mintWine');
 const { isValidId } = require('../../utils/validation');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { parseCurrency } = require('../../config/currencies');
@@ -206,64 +206,16 @@ registerTool({
       });
       if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
     } else {
-      const { findOrCreateWine } = require('../../services/findOrCreateWine');
-      if (!args.new_wine.type && args.new_wine.category !== 'other') {
-        return fail('invalid_input', 'new_wine.type is required unless category is "other" (a drink that is not wine).');
-      }
-      let result;
-      try {
-        // Sibling matching stays ON even when confirmed — stricter than REST,
-        // deliberately: an exact producer+name sibling IS the same wine.
-        result = await findOrCreateWine(args.new_wine, ctx.user.id, {
-          confirmCreate: !!args.confirm_new_wine,
-          skipSiblingMatch: false,
-          createdVia: 'mcp',
-          // Commit path: an unreadable/absent producer files a pending row
-          // instead of 400-ing the user's bottle away. The strict gates still
-          // apply to the deliberate registry-curation tool
-          // (admin_add_registry_wine), which never passes this.
-          allowPending: true,
-          // PRIVATE DRAFT: the row stays the user's until publish_wine.
-          // Strictly boolean true.
-          draft: args.draft === true,
-          // The Other category: born outside the shared wine registry.
-          nonWine: args.new_wine.category === 'other',
-        });
-      } catch (err) {
-        if (err?.status === 400) return fail('invalid_input', err.message);
-        throw err;
-      }
-      if (!result.wine && result.candidates?.length) {
-        return fail('conflict',
-          'Very similar wines already exist — use one of these wine_ids, or call again with confirm_new_wine:true ONLY if the user confirms it is genuinely different: ' +
-          result.candidates.map((c) => `${c.wine.name} — ${c.wine.producer} (wine_id ${c.wine._id}, score ${c.score})`).join('; '));
-      }
-      // A no-wine result with no candidates either: the branch
-      // above only covers the candidates case, so this fell through to
-      // `wineDoc.name` and threw a 500. bulk.js:224 already handles it as a
-      // failure rather than a crash — mirror that.
-      if (!result.wine) {
-        return fail('unavailable', 'The registry could not resolve or create that wine — retry, or pick a wine_id with resolve_wine.');
-      }
-      wineDoc = result.wine;
-      wineCreated = !!result.created;
-      if (wineCreated) {
-        logAudit(ctx.req, 'wine.create',
-          { type: 'wine', id: wineDoc._id },
-          { via: 'mcp', name: wineDoc.name, producer: wineDoc.producer || null,
-            // A draft is pending by invariant; for the audit "pendingIdentity"
-            // keeps meaning "the producer was missing".
-            ...(wineDoc.pendingIdentity && !wineDoc.draft ? { pendingIdentity: true } : {}),
-            ...(wineDoc.draft ? { draft: true } : {}),
-            // The refused producer string survives ONLY here —
-            // the pending row stores '', and a curator needs what the label
-            // scan / caller actually said.
-            ...(result.producerRejected
-              ? { rejectedProducer: result.producerRejected.producer, rejectedByCheck: result.producerRejected.check }
-              : {}) });
-        // The REST mint's IndexNow rule (pending rows and drafts excluded).
-        announceMintedWine(wineDoc);
-      }
+      // The registry chokepoint, the wine.create audit and IndexNow: shared
+      // with add_to_wishlist (mcp/mintWine).
+      const minted = await resolveOrMintMcpWine(ctx, args.new_wine, {
+        confirm: args.confirm_new_wine,
+        draft: args.draft === true,
+        nonWine: args.new_wine.category === 'other',
+      });
+      if (minted.failure) return minted.failure;
+      wineDoc = minted.wine;
+      wineCreated = minted.created;
     }
 
     const result = await addBottle(access.cellar, wineDoc, {

@@ -2,7 +2,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const WishlistItem = require('../models/WishlistItem');
-const { logAudit } = require('../services/audit');
 const { escapeRegex } = require('../utils/sanitize');
 // Mint-at-commit for the POST route's `newWine` branch (shared with POST
 // /api/bottles) — findOrCreateWine itself is lazy-required inside the service.
@@ -10,14 +9,11 @@ const { resolveOrMintWine } = require('../services/wineCommit');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { MEMBER_WINE_HIDDEN_FIELDS } = require('../config/constants');
 const { errorBody } = require('../config/errorCodes');
-const { normalizeShopUrl } = require('../utils/shopUrl');
+const {
+  parseNewItemFields, addWishlistItem, updateWishlistItem, removeWishlistItem,
+} = require('../services/wishlistOps');
 
 const router = express.Router();
-
-// What a wishlist response may say about a registry wine. Never createdBy,
-// scanImage, normalizedKey or canonicalKey — see the populate comments below.
-const WINE_RESPONSE_SELECT =
-  'name producer slug type colour appellation classification country region grapes image communityRating aiProfile lwin pendingIdentity';
 
 // All wishlist routes require authentication
 router.use(requireAuth);
@@ -177,6 +173,12 @@ router.get('/', async (req, res) => {
   }
 });
 
+// The item's own work — field checks, the duplicate check, the write, the
+// audit row — is services/wishlistOps, the same body the MCP wishlist tools
+// call. An error answers with its code where it has one.
+const sendError = (res, error) => res.status(error.status).json(
+  error.code ? errorBody(error.code) : { error: error.message });
+
 /**
  * POST /api/wishlist
  * Add a wine to the authenticated user's wishlist.
@@ -197,7 +199,7 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { wineDefinitionId, newWine, vintage, notes, priority, shopUrl } = req.body;
+    const { wineDefinitionId, newWine } = req.body;
 
     if ((!wineDefinitionId && !newWine) || (wineDefinitionId && newWine)) {
       return res.status(400).json({ error: 'Provide wineDefinitionId or newWine (exactly one)' });
@@ -206,21 +208,8 @@ router.post('/', async (req, res) => {
     // Item-field validation BEFORE any registry work: a 400 on
     // notes/priority/vintage after the mint would leave the exact orphan
     // mint-at-commit exists to prevent.
-    const safeVintage = vintage != null ? String(vintage) : '';
-    if (notes != null && typeof notes !== 'string') {
-      return res.status(400).json({ error: 'Notes must be text' });
-    }
-    if (notes && notes.length > 2000) {
-      return res.status(400).json({ error: 'Notes must be 2000 characters or less' });
-    }
-    if (priority && !['low', 'medium', 'high'].includes(priority)) {
-      return res.status(400).json({ error: 'Priority must be low, medium, or high' });
-    }
-    if (safeVintage && safeVintage.length > 20) {
-      return res.status(400).json({ error: 'Vintage must be 20 characters or less' });
-    }
-    const shop = normalizeShopUrl(shopUrl);
-    if (shop.error) return res.status(400).json(errorBody('wishlist_shop_url_invalid'));
+    const parsed = parseNewItemFields(req.body);
+    if (parsed.error) return sendError(res, parsed.error);
 
     let resolvedWineId;
     if (newWine) {
@@ -252,7 +241,7 @@ router.post('/', async (req, res) => {
       }
       // The id was taken on trust — no existence check at all, so a wish could
       // be filed against any id, including a stranger's pending row, whose
-      // name then came back through the populate above.
+      // name then came back through the populated item.
       const wine = await findVisibleWine(wineDefinitionId, {
         // noDrafts: a wishlist item on an empty draft would be orphaned by its expiry.
         userId: req.user.id, roles: req.user.roles, select: '_id', lean: true, noDrafts: true,
@@ -261,54 +250,9 @@ router.post('/', async (req, res) => {
       resolvedWineId = wineDefinitionId;
     }
 
-    // Prevent duplicates: same user + same wine + same vintage (or both null).
-    // Runs AFTER the newWine resolve on purpose: a freshly MINTED wine can't
-    // have a duplicate item (nothing references its new id yet), so a 409 here
-    // only ever follows a resolve-to-existing — no orphan wine is left behind.
-    const dupFilter = {
-      user: req.user.id,
-      wineDefinition: resolvedWineId,
-      status: 'wanted'
-    };
-    if (safeVintage) {
-      dupFilter.vintage = safeVintage;
-    } else {
-      dupFilter.$or = [{ vintage: null }, { vintage: { $exists: false } }, { vintage: '' }];
-    }
-    const existing = await WishlistItem.findOne(dupFilter);
-    if (existing) {
-      return res.status(409).json({ error: 'This wine is already on your wishlist' });
-    }
-
-    const item = await WishlistItem.create({
-      user: req.user.id,
-      wineDefinition: resolvedWineId,
-      vintage: safeVintage || undefined,
-      notes: notes || undefined,
-      shopUrl: shop.url || undefined,
-      priority: priority || 'medium'
-    });
-
-    // Populate for response
-    const populated = await WishlistItem.findById(item._id)
-      .populate({
-        path: 'wineDefinition',
-        // EXPLICIT select. Without it the whole registry
-        // document came back — including createdBy, scanImage and
-        // normalizedKey, and a pending row's normalizedKey IS
-        // `pending~<creator-id>:…`, so the projection itself handed out
-        // another user's id.
-        select: WINE_RESPONSE_SELECT,
-        populate: [
-          { path: 'country' },
-          { path: 'region' },
-          { path: 'grapes' }
-        ]
-      });
-
-    logAudit(req, 'wishlist.add', { type: 'wishlistItem', id: item._id }, { wineDefinitionId: resolvedWineId });
-
-    res.status(201).json({ item: populated });
+    const added = await addWishlistItem({ req }, resolvedWineId, parsed.fields);
+    if (added.error) return sendError(res, added.error);
+    res.status(201).json({ item: added.item });
   } catch (err) {
     console.error('[wishlist] POST / error:', err);
     res.status(500).json({ error: 'Failed to add to wishlist' });
@@ -322,72 +266,10 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid wishlist item ID' });
-    }
-
-    const item = await WishlistItem.findById(id);
-    if (!item) return res.status(404).json({ error: 'Wishlist item not found' });
-    if (item.user.toString() !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const { notes, priority, status, vintage, shopUrl } = req.body;
-
-    // null clears a field (mirrors POST's "absent" semantics) — guard before
-    // reading .length, and never store the literal string 'null'.
-    if (notes !== undefined) {
-      const safeNotes = notes != null ? String(notes) : '';
-      if (safeNotes.length > 2000) return res.status(400).json({ error: 'Notes must be 2000 characters or less' });
-      item.notes = safeNotes || undefined;
-    }
-    if (priority !== undefined) {
-      if (!['low', 'medium', 'high'].includes(priority)) return res.status(400).json({ error: 'Invalid priority' });
-      item.priority = priority;
-    }
-    if (status !== undefined) {
-      if (!['wanted', 'bought'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
-      if (status === 'bought' && item.status !== 'bought') {
-        item.boughtAt = new Date();
-      }
-      if (status === 'wanted') {
-        item.boughtAt = null;
-      }
-      item.status = status;
-    }
-    if (vintage !== undefined) {
-      const safeVin = vintage != null ? String(vintage) : '';
-      if (safeVin.length > 20) return res.status(400).json({ error: 'Vintage too long' });
-      item.vintage = safeVin || undefined;
-    }
-    if (shopUrl !== undefined) {
-      const shop = normalizeShopUrl(shopUrl);
-      if (shop.error) return res.status(400).json(errorBody('wishlist_shop_url_invalid'));
-      item.shopUrl = shop.url || undefined;
-    }
-
-    await item.save();
-
-    const populated = await WishlistItem.findById(item._id)
-      .populate({
-        path: 'wineDefinition',
-        // EXPLICIT select. Without it the whole registry
-        // document came back — including createdBy, scanImage and
-        // normalizedKey, and a pending row's normalizedKey IS
-        // `pending~<creator-id>:…`, so the projection itself handed out
-        // another user's id.
-        select: WINE_RESPONSE_SELECT,
-        populate: [
-          { path: 'country' },
-          { path: 'region' },
-          { path: 'grapes' }
-        ]
-      });
-
-    logAudit(req, 'wishlist.update', { type: 'wishlistItem', id });
-
-    res.json({ item: populated });
+    const updated = await updateWishlistItem({ req }, req.params.id, { notes, priority, status, vintage, shopUrl });
+    if (updated.error) return sendError(res, updated.error);
+    res.json({ item: updated.item });
   } catch (err) {
     console.error('[wishlist] PUT /:id error:', err);
     res.status(500).json({ error: 'Failed to update wishlist item' });
@@ -400,21 +282,8 @@ router.put('/:id', async (req, res) => {
  */
 router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid wishlist item ID' });
-    }
-
-    const item = await WishlistItem.findById(id);
-    if (!item) return res.status(404).json({ error: 'Wishlist item not found' });
-    if (item.user.toString() !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    await item.deleteOne();
-
-    logAudit(req, 'wishlist.remove', { type: 'wishlistItem', id });
-
+    const removed = await removeWishlistItem({ req }, req.params.id);
+    if (removed.error) return sendError(res, removed.error);
     res.json({ message: 'Removed from wishlist' });
   } catch (err) {
     console.error('[wishlist] DELETE /:id error:', err);
