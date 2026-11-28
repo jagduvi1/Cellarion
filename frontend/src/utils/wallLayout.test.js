@@ -14,7 +14,9 @@
 import { describe, test, expect } from 'vitest';
 import backendWall from '../../../backend/src/utils/wallGeometry.js';
 import caseFile from '../../../backend/src/utils/wallGeometry.cases.json';
-import { wallLayout, wallTotalSlots, wallBoxes, boxCapacity, boxLabel, BOX_KINDS, PILE_SECTIONS } from './wallLayout';
+import {
+  wallLayout, wallTotalSlots, wallBoxes, boxCapacity, boxLabel, wallPlace, slotPlace, BOX_KINDS, PILE_SECTIONS, SECTION_NAMES,
+} from './wallLayout';
 import { computeLayout, getTotalSlots, SLOT_RADIUS, CELL_SIZE, minSlotDistance } from './rackLayouts';
 
 const { cases } = caseFile;
@@ -54,6 +56,22 @@ describe('the drawing counts a wall as the server does', () => {
       expect(wallBoxes(w.rows, w.cols, config).map(boxLabel)).toEqual(backendWall.wallBoxes(w.rows, w.cols, config).map(backendWall.boxLabel));
       for (const b of w.boxes) expect(boxCapacity(b)).toBe(backendWall.boxCapacity(b));
     }
+  });
+
+  test('a position is told as the same box and spot on both sides, for every slot of every case', () => {
+    expect(SECTION_NAMES).toEqual(backendWall.SECTION_NAMES);
+    for (const c of [...cases, everyKind(7)]) {
+      const config = { boxes: c.boxes };
+      const total = wallTotalSlots(c.rows, c.cols, config);
+      for (let position = 0; position <= total + 1; position++) {
+        expect(wallPlace(c.rows, c.cols, config, position)).toEqual(backendWall.wallPlace(c.rows, c.cols, config, position));
+      }
+    }
+    const w = everyKind(7);
+    const rack = { type: 'wall', rows: w.rows, cols: w.cols, typeConfig: { boxes: w.boxes } };
+    expect(slotPlace(rack, 8)).toEqual({ box: 'A1', kind: 'x', section: 'left', slot: 1, row: null, col: null });
+    expect(slotPlace({ ...rack, type: 'grid' }, 8)).toBeNull();
+    expect(slotPlace(null, 8)).toBeNull();
   });
 
   test('the layout engine every rack view calls knows the wall', () => {

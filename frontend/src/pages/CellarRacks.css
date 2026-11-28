@@ -1018,6 +1018,21 @@
 }
 
 /* Zone chip in the slot popup title */
+/* In a wall rack: the box and the spot in it, beside the slot number. */
+.slot-place-chip {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .slot-zone-chip {
   display: inline-flex;
   align-items: center;

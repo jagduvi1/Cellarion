@@ -98,6 +98,14 @@
   vertical-align: top;
 }
 
+/* A wall rack: the box and the spot in it, under the slot number. */
+.cb-pos-wall {
+  display: block;
+  font-weight: 400;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 .cb-col-pos {
   width: 3rem;
   font-variant-numeric: tabular-nums;

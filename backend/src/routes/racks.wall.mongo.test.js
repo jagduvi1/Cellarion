@@ -45,8 +45,8 @@ describeWithMongo('a wall rack through the REST routes (real MongoDB)', () => {
   let server; let base; let token;
   let Rack; let Bottle; let user; let cellar;
 
-  const call = async (method, path, body) => {
-    const res = await fetch(`${base}/api/racks${path}`, {
+  const call = async (method, path, body, root = '/api/racks') => {
+    const res = await fetch(`${base}${root}${path}`, {
       method,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -86,6 +86,7 @@ describeWithMongo('a wall rack through the REST routes (real MongoDB)', () => {
     const app = express();
     app.use(express.json({ limit: '2mb' }));
     app.use('/api/racks', require('./racks'));
+    app.use('/api/bottles', require('./bottles'));
     server = http.createServer(app).listen(0);
     base = `http://127.0.0.1:${server.address().port}`;
   }, 120000);
@@ -176,6 +177,23 @@ describeWithMongo('a wall rack through the REST routes (real MongoDB)', () => {
     expect((await call('DELETE', `/${rack._id}/slots/26`)).status).toBe(200);
     expect((await call('PUT', `/${rack._id}`, { typeConfig: { boxes } })).status).toBe(200);
     expect((await stored(rack._id)).typeConfig.boxes.map((x) => x.kind)).toEqual(['x', 'bin']);
+  });
+
+  test('the bottle page is told the box and the spot of a bottle in a wall, and nothing of the kind for another rack', async () => {
+    const wall = await newWall('Placed wall');
+    const [inPile, inRack, inGrid] = await Promise.all(['2019', '2020', '2021'].map(bottle));
+    await call('PUT', `/${wall._id}/slots/8`, { bottleId: String(inPile._id) });
+    await call('PUT', `/${wall._id}/slots/30`, { bottleId: String(inRack._id) });
+    const grid = (await call('POST', '', { cellar: String(cellar._id), name: 'Plain grid', type: 'grid', rows: 2, cols: 3 })).body.rack;
+    await call('PUT', `/${grid._id}/slots/2`, { bottleId: String(inGrid._id) });
+
+    const page = async (b) => (await call('GET', `/${b._id}`, undefined, '/api/bottles')).body.rackInfo;
+    // Position 8 is the second bottle of the X's left triangle; 30 is the rack's second row, second bottle.
+    expect(await page(inPile)).toMatchObject({ rackName: 'Placed wall', position: 8, wall: { box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null } });
+    expect(await page(inRack)).toMatchObject({ position: 30, wall: { box: 'B1', kind: 'rack', section: null, slot: null, row: 2, col: 2 } });
+    const plain = await page(inGrid);
+    expect(plain).toMatchObject({ rackName: 'Plain grid', position: 2 });
+    expect(plain).not.toHaveProperty('wall');
   });
 
   test('a rack in use cannot become a wall, and a wall in use cannot stop being one', async () => {

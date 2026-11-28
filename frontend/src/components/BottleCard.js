@@ -9,6 +9,7 @@ import { isReserved, reservationSummary } from '../utils/reservation';
 import BottlePlaceholder from './BottlePlaceholder';
 import './BottleCard.css';
 import { formatVintage } from '../utils/vintage';
+import { wallWords } from '../utils/slotLabel';
 
 const MATURITY_LABELS = {
   'not-ready': { key: 'maturity.notReady', cls: 'maturity-badge--not-ready' },
@@ -37,9 +38,12 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   const rackInfo = isGroup ? null : rackMap?.get(bottle._id);
   // "slot" is the bottle page's already-translated word (drinkOne.slot is
   // English-only in the other locales).
-  const rackBadgeText = rackInfo && (rackInfo.position != null
-    ? `${rackInfo.rackName} · ${t('bottleDetail.rackSlot', 'slot')} ${rackInfo.position}`
-    : rackInfo.rackName);
+  // In a wall rack the badge names the box and the spot in it instead.
+  const rackBadgeText = rackInfo && (rackInfo.wall
+    ? `${rackInfo.rackName} · ${wallWords(rackInfo.wall, t)}`
+    : rackInfo.position != null
+      ? `${rackInfo.rackName} · ${t('bottleDetail.rackSlot', 'slot')} ${rackInfo.position}`
+      : rackInfo.rackName);
   // "Unplaced" = the caller knows this cellar's rack layout (single-cellar view
   // of a cellar that has racks) and this active bottle isn't in any slot — i.e.
   // it's been added but not shelved. Suppressed for groups (members may differ)

@@ -5,6 +5,7 @@
  * Pure functions so the page component stays thin and this stays testable.
  */
 import { getTotalSlots, getModularTotalSlots } from './rackLayouts';
+import { slotPlace } from './wallLayout';
 
 /**
  * Build the book model:
@@ -19,7 +20,8 @@ export function buildCellarBook(racks, bottles) {
   const rackSections = (racks || []).map(rack => {
     const entries = (rack.slots || [])
       .filter(s => s.bottle)
-      .map(s => ({ position: s.position, bottle: s.bottle }))
+      // wall: in a wall rack, the box and the spot in it (null elsewhere).
+      .map(s => ({ position: s.position, bottle: s.bottle, wall: slotPlace(rack, s.position) }))
       .sort((a, b) => a.position - b.position);
     for (const e of entries) placedIds.add(idOf(e.bottle));
     const totalSlots = rack.isModular && rack.modules?.length > 0

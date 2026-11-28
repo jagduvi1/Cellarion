@@ -10,6 +10,7 @@
  *
  * Pure: no storage, no network. utils/offlineSnapshot.js feeds it.
  */
+import { slotPlace } from './wallLayout';
 
 import { sweetnessFilterValueOf } from './sweetnessCategory';
 
@@ -33,7 +34,10 @@ export function indexSnapshot(snapshot) {
     if (!racksByCellar.has(cid)) racksByCellar.set(cid, []);
     racksByCellar.get(cid).push(r);
     for (const s of r.slots || []) {
-      if (s.bottle) placement.set(String(s.bottle), { rackId: r._id, rackName: r.name, position: s.position, inRoom: false });
+      if (!s.bottle) continue;
+      // wall: the box and the spot in it, when the rack is a wall.
+      const wall = slotPlace(r, s.position);
+      placement.set(String(s.bottle), { rackId: r._id, rackName: r.name, position: s.position, inRoom: false, ...(wall ? { wall } : {}) });
     }
   }
   return { snapshot, bottles, bottleById, cellarById, racksByCellar, placement };

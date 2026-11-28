@@ -15,7 +15,7 @@
  *   wall     — boxes on a grid of rows × cols cells, each with its own content
  *              (typeConfig.boxes); counted and numbered in utils/wallGeometry.js
  */
-const { wallTotalSlots } = require('./wallGeometry');
+const { wallTotalSlots, wallPlace } = require('./wallGeometry');
 
 /**
  * Filter typeConfig.doubleHeightRows down to the entries that actually
@@ -539,8 +539,23 @@ function slotLocation(rack, position) {
   return none;
 }
 
+/**
+ * Where a position of a WALL rack is: its box and the place in it
+ * (wallGeometry.wallPlace). null for every other rack, whose slot number
+ * (with slotLocation's shelf, row and col where it has them) is the place.
+ * Attached as `wall` wherever a bottle's slot is reported: the bottle page
+ * and the cellar's lists (rackInfo), pick lists, GET /api/inventory and the
+ * MCP get_bottle placement. A caller needs RACK_PLACE_FIELDS on the rack.
+ */
+function slotPlace(rack, position) {
+  if (!rack || rack.isModular || rack.type !== 'wall') return null;
+  return wallPlace(rack.rows, rack.cols, rack.typeConfig, position);
+}
+// What a rack query must select for slotPlace (and slotLocation).
+const RACK_PLACE_FIELDS = 'type rows cols typeConfig isModular';
+
 module.exports = {
-  slotLocation,
+  slotLocation, slotPlace, RACK_PLACE_FIELDS,
   totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows,
   cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
   cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetBayOpts, cabinetRows,

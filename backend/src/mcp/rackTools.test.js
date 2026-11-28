@@ -278,6 +278,45 @@ describe('rack groups', () => {
     expect(body.summary).toMatch(/wine cabinet "Fridge".*2 shelves, 5 across, 25 bottles/);
   });
 
+  test('create_rack type "wall" needs boxes, stores them under the names the rack model has, and counts what they hold', async () => {
+    ownCellar();
+    const bad = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'Wall', type: 'wall', rows: 1, cols: 3 }, CTX));
+    expect(bad.error.code).toBe('invalid_input');
+    expect(bad.error.message).toMatch(/boxes is required for a wall/);
+    const misuse = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'G', rows: 2, cols: 5, boxes: [{ x: 0, y: 0, kind: 'bin', per_pile: 4 }] }, CTX));
+    expect(misuse.error.message).toMatch(/type "wall" only/);
+    expect(rackOps.createGridRack).not.toHaveBeenCalled();
+
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'Cellar wall', group: null } });
+    const body = parse(await tool('create_rack').handler({
+      cellar_id: oid('c'), name: 'Cellar wall', type: 'wall', rows: 1, cols: 3,
+      boxes: [
+        { x: 0, y: 0, kind: 'x', per_pile: 6 },
+        { x: 1, y: 0, w: 1, h: 1, kind: 'rack', rows: 3, cols: 4 },
+        { x: 2, y: 0, kind: 'closed' },
+      ],
+    }, CTX));
+    expect(rackOps.createGridRack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'wall', rows: 1, cols: 3,
+        typeConfig: { boxes: [
+          { x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 },
+          { x: 1, y: 0, w: 1, h: 1, kind: 'rack', rows: 3, cols: 4 },
+          { x: 2, y: 0, w: 1, h: 1, kind: 'closed' },
+        ] },
+      }),
+      expect.anything()
+    );
+    // 4 × 6 in the X, 3 × 4 in the rack, none behind the doors.
+    expect(body.data).toMatchObject({ type: 'wall', rows: 1, cols: 3, capacity: 36, boxes: 3 });
+    expect(body.summary).toMatch(/wall "Cellar wall".*3 cells wide, 1 high, 3 boxes, 36 bottles/);
+    // What the tool hands on is a wall the server stores.
+    const { validateWallConfig } = require('../utils/wallGeometry');
+    const sent = rackOps.createGridRack.mock.calls[0][1];
+    expect(validateWallConfig(sent.typeConfig, 'wall', sent.rows, sent.cols, false)).toBeNull();
+  });
+
   test('create_rack cabinet with head_to_tail passes it through, and it is cabinet-only', async () => {
     ownCellar();
     const misuse = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'G', rows: 2, cols: 6, head_to_tail: true }, CTX));

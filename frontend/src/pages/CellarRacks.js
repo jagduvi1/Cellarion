@@ -10,6 +10,8 @@ import { getRacks, deleteRack, updateSlot, clearSlot, moveSlot, createRack, upda
 import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
+import { slotPlace } from '../utils/wallLayout';
+import { wallWords } from '../utils/slotLabel';
 import { readPlaceQueue, planAutoPlace, withoutPlaced } from '../utils/placeQueue';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
@@ -1292,6 +1294,8 @@ function CellarRacks() {
             if (!occupiedPos.has(p) && !disabledPos.has(p)) popupFreeRun++;
           }
         }
+        // In a wall rack: the box and the spot in it, shown beside the slot number.
+        const popupPlace = popupRack ? wallWords(slotPlace(popupRack, activePopup.position), t) : '';
         return (
           <div className="slot-modal-overlay" onClick={() => setActivePopup(null)}>
             <DialogBox
@@ -1303,6 +1307,7 @@ function CellarRacks() {
               {activePopup.slot ? (
                 <FilledSlotContent
                   position={activePopup.position}
+                  place={popupPlace}
                   slot={activePopup.slot}
                   zone={popupZone}
                   canEdit={canEdit}
@@ -1337,6 +1342,7 @@ function CellarRacks() {
                   apiFetch={apiFetch}
                   cellarId={id}
                   canEdit={canEdit}
+                  place={popupPlace}
                   freeRun={popupFreeRun}
                   onAssignMany={canEdit
                     ? (bottleIds) => handleAssignMany(activePopup.rackId, activePopup.position, bottleIds)

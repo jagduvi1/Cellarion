@@ -50,6 +50,7 @@ const scopeVersion = (ownerIds) => [...new Set(ownerIds.map((id) => String(id &&
   .map((id) => `${id}:${getDataVersion(id)}`)
   .join(',');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
+const { slotPlace, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
 const { sweetnessQueryValue, attachSweetnessCategoriesIfReadable } = require('../services/sweetnessCategory');
 // Which picture each card of a bottle list shows.
 const { attachBottleImageUrls } = require('../services/bottleImageUrls');
@@ -512,7 +513,7 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
       try {
         const ids = bottles.map((b) => b._id);
         const racks = await Rack.find({ cellar: cellar._id, deletedAt: null, 'slots.bottle': { $in: ids } })
-          .select('name group slots').lean();
+          .select(`name group slots ${RACK_PLACE_FIELDS}`).lean();
         const wanted = new Set(ids.map(String));
         let inRoomRacks = null;
         for (const rack of racks) {
@@ -524,7 +525,9 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
               const layout = await CellarLayout.findOne({ cellar: cellar._id }).select('rackPlacements.rack').lean();
               inRoomRacks = new Set((layout?.rackPlacements || []).map((rp) => String(rp.rack?._id || rp.rack)));
             }
-            slotOf[bid] = { rackId: rack._id, rackName: rack.name, rackGroup: rack.group || null, position: slot.position, inRoom: inRoomRacks.has(String(rack._id)) };
+            // wall: the box and the spot in it, for a wall rack only.
+            const wall = slotPlace(rack, slot.position);
+            slotOf[bid] = { rackId: rack._id, rackName: rack.name, rackGroup: rack.group || null, position: slot.position, inRoom: inRoomRacks.has(String(rack._id)), ...(wall ? { wall } : {}) };
           }
         }
       } catch (err) {

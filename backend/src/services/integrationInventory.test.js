@@ -107,7 +107,7 @@ describe('assembleInventory — the contract', () => {
       consumed: null,
       maturity: 'early',
       window: { drinkFrom: NOW_YEAR - 1, peakFrom: NOW_YEAR + 2, peakUntil: NOW_YEAR + 6, drinkTo: NOW_YEAR + 10 },
-      location: { rack: 'r1', rackName: 'Left cabinet', position: 14, shelf: 2, row: 2, col: 2 },
+      location: { rack: 'r1', rackName: 'Left cabinet', position: 14, shelf: 2, row: 2, col: 2, wall: null },
       place: 'Basement, box 3',
       image: '/api/uploads/thumbs/processed/own.webp.webp',
       personal: [{ key: 'Closure', type: 'enum', unit: null, value: 'cork', level: 'bottle', by: 'johan' }],
@@ -233,8 +233,27 @@ describe('assembleInventory — the contract', () => {
       ],
       bottles: [bottle(), bottle({ _id: 'b2' })],
     });
-    expect(s.bottles[0].location).toEqual({ rack: 'r2', rackName: 'Wall', position: 8, shelf: null, row: 2, col: 2 });
-    expect(s.bottles[1].location).toEqual({ rack: 'r3', rackName: 'Hex', position: 3, shelf: null, row: null, col: null });
+    expect(s.bottles[0].location).toEqual({ rack: 'r2', rackName: 'Wall', position: 8, shelf: null, row: 2, col: 2, wall: null });
+    expect(s.bottles[1].location).toEqual({ rack: 'r3', rackName: 'Hex', position: 3, shelf: null, row: null, col: null, wall: null });
+  });
+
+  test('a slot of a wall rack names its box and the spot in it', () => {
+    const s = inv({
+      racks: [{
+        _id: 'r4', cellar: 'c1', name: 'Bin wall', type: 'wall', rows: 1, cols: 2,
+        typeConfig: { boxes: [
+          { x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 },
+          { x: 1, y: 0, w: 1, h: 1, kind: 'rack', rows: 3, cols: 4 },
+        ] },
+        slots: [{ position: 8, bottle: 'b1' }, { position: 30, bottle: 'b2' }],
+      }],
+      bottles: [bottle(), bottle({ _id: 'b2' })],
+    });
+    expect(s.bottles[0].location).toEqual({
+      rack: 'r4', rackName: 'Bin wall', position: 8, shelf: null, row: null, col: null,
+      wall: { box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null },
+    });
+    expect(s.bottles[1].location.wall).toEqual({ box: 'B1', kind: 'rack', section: null, slot: null, row: 2, col: 2 });
   });
 
   test('leftovers of a cellar not in the list (soft-deleted) are dropped, bottles and racks', () => {

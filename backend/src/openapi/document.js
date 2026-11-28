@@ -334,6 +334,20 @@ const schemas = {
       shelf: { type: ['integer', 'null'], minimum: 1, description: 'Wine fridges (cabinet racks): 1 = the top shelf. Null on other rack types.' },
       row: { type: ['integer', 'null'], minimum: 1, description: 'Cabinets: the row within the shelf, 1 = resting on the shelf. Grids: the row from the top. Null on other types.' },
       col: { type: ['integer', 'null'], minimum: 1, description: 'The slot within the row, left to right. Null where the rack has no rows.' },
+      wall: { description: 'Wall racks: the box the bottle lies in and the spot in that box. Null on every other rack type.', oneOf: [{ type: 'null' }, ref('WallPlace')] },
+    },
+  },
+  WallPlace: {
+    type: 'object',
+    description: 'A spot in a wall rack (a rack built from boxes). A pile box (an X, a diagonal, an open bin) names the pile and counts the bottle from the bottom of it; a rack or shelves box names the row and the bottle in the row.',
+    required: ['box', 'kind', 'section', 'slot', 'row', 'col'],
+    properties: {
+      box: { type: 'string', description: 'The box, by column letter and row number of its top-left cell: "B2".' },
+      kind: { type: 'string', enum: ['x', 'slash', 'backslash', 'bin', 'rack', 'shelves'], description: 'What the box is: an X of four piles, a diagonal either way (two piles), an open bin, a rack of single slots, or shelves.' },
+      section: { type: ['string', 'null'], enum: ['top', 'left', 'right', 'bottom', 'upper', 'lower', null], description: 'The pile inside an X (top, left, right, bottom) or a diagonal box (upper, lower). Null in an open bin, a rack and shelves.' },
+      slot: { type: ['integer', 'null'], minimum: 1, description: 'In a pile: the bottle counted from the bottom of its pile. Null in a rack and shelves.' },
+      row: { type: ['integer', 'null'], minimum: 1, description: 'In a rack: the row from the top. In shelves: the shelf from the top. Null in a pile.' },
+      col: { type: ['integer', 'null'], minimum: 1, description: 'In a rack or shelves: the bottle in the row, left to right. Null in a pile.' },
     },
   },
   PersonalEntry: {
@@ -491,7 +505,10 @@ const schemas = {
         oneOf: [{ type: 'null' }, {
           type: 'object',
           required: ['rackId', 'rackName', 'position'],
-          properties: { rackId: OBJECT_ID, rackName: { type: 'string' }, position: { type: 'integer', minimum: 1 } },
+          properties: {
+            rackId: OBJECT_ID, rackName: { type: 'string' }, position: { type: 'integer', minimum: 1 },
+            wall: { ...ref('WallPlace'), description: 'Present when the rack is a wall: the box and the spot in it.' },
+          },
         }],
       },
       defaultImageUrl: { type: ['string', 'null'] },

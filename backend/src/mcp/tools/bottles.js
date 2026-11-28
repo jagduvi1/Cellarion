@@ -13,7 +13,7 @@ const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
 const { WINE_POPULATE, WINE_POPULATE_LIST, CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../../config/constants');
 const { registerTool } = require('../registry');
-const { slotLocation } = require('../../utils/rackGeometry');
+const { slotLocation, slotPlace } = require('../../utils/rackGeometry');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess,
@@ -420,7 +420,8 @@ async function buildBottleDetail(userId, bottleId) {
         : null,
       // shelf: cabinets only (1 = top); row: from the plank up on a cabinet
       // shelf, the grid row on a grid; col: left to right. null elsewhere.
-      placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position, ...slotLocation(rack, slot.position) } : null,
+      // wall: on a wall rack, the box ("B2") and the spot in it; null elsewhere.
+      placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position, ...slotLocation(rack, slot.position), wall: slotPlace(rack, slot.position) } : null,
       photos,
       cellar: { cellar_id: cellar._id, name: cellar.name, your_role: role },
       added_at: b.addedToCellarAt || b.createdAt,

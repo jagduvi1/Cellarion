@@ -17,6 +17,7 @@ const {
 } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
 const { totalSlots } = require('../../utils/rackGeometry');
+const { BOX_KINDS, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM } = require('../../utils/wallGeometry');
 
 // Load a rack + confirm the caller can edit its cellar. Returns { rack, cellar }
 // or null (missing/foreign → not_found, same as the rest of the surface).
@@ -74,7 +75,9 @@ registerTool({
     'GrandCru 5001: 5 shelves 6 across, shelf_rows [8,8,8,8,8], shelf_cols [4,6,6,6,4], shelf_alternate ' +
     '[false,true,true,true,false] = 196); shelf_sideways sets how each shelf\'s bottles lie — "front" = the first bottle of the ' +
     'shelf\'s bottom row lies across the front of the others (a slim fridge), "all" = every bottle lies across (a bottom bin), ' +
-    '"" = front to back (drawing only, except "front" on a stacked one-deep shelf — see shelf_sideways). Confirm name and shape first; group is the optional room or appliance label ' +
+    '"" = front to back (drawing only, except "front" on a stacked one-deep shelf — see shelf_sideways). ' +
+    'type "wall": one rack built from boxes, for shelving made of wine cubes, diagonal bins, shelves and cupboards — rows × cols ' +
+    'are the wall\'s cells and boxes lists what stands where (see boxes). Confirm name and shape first; group is the optional room or appliance label ' +
     'the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name list_racks already shows so racks ' +
     'section together. For other rack shapes, modular racks, zones or disabled slots, use the web app. Reversible ' +
     'via undo_last while the rack is still empty.',
@@ -83,9 +86,20 @@ registerTool({
   inputSchema: {
     cellar_id: objectId,
     name: z.string().min(1).max(120),
-    type: z.enum(['grid', 'cabinet']).default('grid').describe('"grid" = rows × cols slots; "cabinet" = a wine fridge with shelves (see shelf_rows)'),
-    rows: z.number().int().min(1).max(20).default(4).describe('Rows of slots (grid) or number of shelves (cabinet)'),
-    cols: z.number().int().min(1).max(20).default(8).describe('Slots per row (grid) or bottles across one row (cabinet)'),
+    type: z.enum(['grid', 'cabinet', 'wall']).default('grid').describe('"grid" = rows × cols slots; "cabinet" = a wine fridge with shelves (see shelf_rows); "wall" = one rack built from boxes (see boxes)'),
+    rows: z.number().int().min(1).max(20).default(4).describe('Rows of slots (grid), number of shelves (cabinet), or cells high (wall)'),
+    cols: z.number().int().min(1).max(20).default(8).describe('Slots per row (grid), bottles across one row (cabinet), or cells wide (wall)'),
+    boxes: z.array(z.object({
+      x: z.number().int().min(0).max(19).describe('Column of the box\'s top-left cell, 0 = the left-most'),
+      y: z.number().int().min(0).max(19).describe('Row of the box\'s top-left cell, 0 = the top'),
+      w: z.number().int().min(1).max(20).default(1).describe('Cells wide'),
+      h: z.number().int().min(1).max(20).default(1).describe('Cells high'),
+      kind: z.enum(BOX_KINDS).describe('"x" = two crossing planks, four triangular piles; "slash" = one plank from bottom left to top right, two piles; "backslash" = one plank from top left to bottom right, two piles; "bin" = an open bin, one pile; "rack" = single slots in rows; "shelves" = bottles standing on shelves; "closed" = doors or a drawer, holds no bottles'),
+      per_pile: z.number().int().min(1).max(WALL_MAX_PER_SECTION).optional().describe('Bottles in each pile of an x, slash, backslash or bin'),
+      rows: z.number().int().min(1).max(WALL_MAX_BOX_DIM).optional().describe('rack: rows of slots; shelves: number of shelves'),
+      cols: z.number().int().min(1).max(WALL_MAX_BOX_DIM).optional().describe('rack: slots per row; shelves: bottles per shelf'),
+    })).min(1).max(400).optional()
+      .describe('Wall only: the boxes on the wall\'s grid of rows × cols cells. A box covers one cell or a rectangle of cells; boxes must not overlap, and a cell no box covers is empty wall. A wine cube with an X holding six bottles a triangle: { x: 0, y: 0, kind: "x", per_pile: 6 }. Required for type "wall".'),
     shelf_rows: z.array(z.number().int().min(1).max(12)).min(1).max(20).optional()
       .describe('Cabinet only: rows of bottles per shelf, top shelf first, one entry per shelf (must equal rows). Required for type "cabinet".'),
     two_deep: z.boolean().optional().describe('Cabinet only: bottles lie neck to neck, two rows deep per level (default true)'),
@@ -122,16 +136,35 @@ registerTool({
     } else if (['shelf_rows', 'two_deep', 'stagger', 'head_to_tail', 'alternate', 'shelf_cols', 'shelf_alternate', 'shelf_sideways'].some((k) => args[k] !== undefined)) {
       return fail('invalid_input', 'shelf_rows, two_deep, stagger, head_to_tail, alternate, shelf_cols, shelf_alternate and shelf_sideways apply to type "cabinet" only');
     }
+    if (type === 'wall') {
+      if (!Array.isArray(args.boxes)) {
+        return fail('invalid_input', 'boxes is required for a wall: the boxes on its grid of rows × cols cells, each { x, y, kind } with what it holds');
+      }
+      // The stored names (models/Rack wallBoxSchema); the rules are checked by
+      // createGridRack through utils/wallGeometry.validateWallConfig.
+      typeConfig = {
+        boxes: args.boxes.map((b) => ({
+          x: b.x, y: b.y, w: b.w ?? 1, h: b.h ?? 1, kind: b.kind,
+          ...(b.per_pile !== undefined ? { perSection: b.per_pile } : {}),
+          ...(b.rows !== undefined ? { rows: b.rows } : {}),
+          ...(b.cols !== undefined ? { cols: b.cols } : {}),
+        })),
+      };
+    } else if (args.boxes !== undefined) {
+      return fail('invalid_input', 'boxes applies to type "wall" only');
+    }
     const result = await createGridRack(access.cellar, { name: args.name, type, rows: args.rows, cols: args.cols, typeConfig, group: args.group }, ctx.req);
     if (result.error) {
       return fail(result.error.code === 'duplicate' ? 'conflict' : 'invalid_input', result.error.message);
     }
     // Geometry owns the count: an alternating cabinet's rows are not all `cols` wide.
-    const capacity = type === 'cabinet' ? totalSlots('cabinet', args.rows, args.cols, typeConfig) : args.rows * args.cols;
+    const capacity = type === 'grid' ? args.rows * args.cols : totalSlots(type, args.rows, args.cols, typeConfig);
     const envelope = {
       summary: type === 'cabinet'
         ? `Created wine cabinet "${result.rack.name}" in "${access.cellar.name}": ${args.rows} shelves, ${args.cols} across, ${capacity} bottles`
-        : `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
+        : type === 'wall'
+          ? `Created wall "${result.rack.name}" in "${access.cellar.name}": ${args.cols} cells wide, ${args.rows} high, ${typeConfig.boxes.length} boxes, ${capacity} bottles`
+          : `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
       data: {
         rack_id: result.rack._id, cellar_id: access.cellar._id, type, rows: args.rows, cols: args.cols, capacity,
         ...(type === 'cabinet' ? {
@@ -139,6 +172,7 @@ registerTool({
           head_to_tail: args.head_to_tail === true,
           shelf_cols: args.shelf_cols || null, shelf_alternate: args.shelf_alternate || null, shelf_sideways: args.shelf_sideways || null,
         } : {}),
+        ...(type === 'wall' ? { boxes: typeConfig.boxes.length } : {}),
         group: result.rack.group || null, undo: 'undo_last deletes it while still empty',
       },
     };

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import { getTotalSlots, getModularTotalSlots } from '../../utils/rackLayouts';
+import { slotPlace } from '../../utils/wallLayout';
+import { wallWords } from '../../utils/slotLabel';
 import { formatVintage } from '../../utils/vintage';
 
 /**
@@ -19,6 +21,12 @@ export default function RackAuditModal({ rack, canEdit, onClearSlot, onClose }) 
   const [results, setResults] = useState({}); // position -> 'ok' | 'issue' | 'skipped'
   const [resolved, setResolved] = useState({}); // position -> true once fixed from the report
   const [clearing, setClearing] = useState(null); // position being cleared
+
+  // What a slot is called: its number, or in a wall rack its box and the spot in it.
+  const slotName = (position) => {
+    const wall = slotPlace(rack, position);
+    return wall ? wallWords(wall, t) : t('audit.slotLabel', 'Slot {{position}}', { position });
+  };
 
   const maxPosition = rack.isModular && rack.modules?.length > 0
     ? getModularTotalSlots(rack.modules)
@@ -100,7 +108,7 @@ export default function RackAuditModal({ rack, canEdit, onClearSlot, onClose }) 
           <p className="audit-step-count">{index + 1} / {items.length}</p>
 
           <div className="audit-card">
-            <div className="audit-position">{t('audit.slotLabel', 'Slot {{position}}', { position: current.position })}</div>
+            <div className="audit-position">{slotName(current.position)}</div>
             {current.slot ? (
               <>
                 <div className="audit-expected">{wineLabel(current.slot)}</div>
@@ -154,7 +162,7 @@ export default function RackAuditModal({ rack, canEdit, onClearSlot, onClose }) 
               {issues.map(it => (
                 <div key={it.position} className={`audit-issue ${resolved[it.position] ? 'resolved' : ''}`}>
                   <div className="audit-issue-info">
-                    <strong>{t('audit.slotLabel', 'Slot {{position}}', { position: it.position })}</strong>
+                    <strong>{slotName(it.position)}</strong>
                     <span>
                       {it.slot
                         ? t('audit.issueFilled', 'Expected {{wine}} — not there or different', { wine: wineLabel(it.slot) })

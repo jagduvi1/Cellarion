@@ -81,6 +81,54 @@ export function boxLabel(box) {
   return `${columnLetters(box.x)}${box.y + 1}`;
 }
 
+// The piles of a box in the contract's order, as someone at the wall would
+// point at them. An open bin is one pile and needs no word.
+export const SECTION_NAMES = {
+  x: ['top', 'left', 'right', 'bottom'],
+  slash: ['upper', 'lower'],
+  backslash: ['upper', 'lower'],
+  bin: [null],
+};
+
+/**
+ * Where a position of a wall is: the box ("B2"), and in it either the pile
+ * and the bottle's count from the bottom of that pile, or the row and the
+ * bottle's place in the row. { box, kind, section, slot, row, col }, or null
+ * for a position the wall does not have. Mirrors backend wallGeometry
+ * wallPlace, which the server sends as `wall` with a bottle's slot; this one
+ * serves the screens that hold the rack itself (utils/slotLabel.js has the
+ * words).
+ */
+export function wallPlace(rows, cols, typeConfig, position) {
+  if (!Number.isInteger(position) || position < 1) return null;
+  let start = 0;
+  for (const box of wallBoxes(rows, cols, typeConfig)) {
+    const capacity = boxCapacity(box);
+    if (position <= start + capacity) {
+      const index = position - start - 1;
+      if (isPile(box.kind)) {
+        return {
+          box: boxLabel(box), kind: box.kind,
+          section: SECTION_NAMES[box.kind][Math.floor(index / box.perSection)], slot: (index % box.perSection) + 1,
+          row: null, col: null,
+        };
+      }
+      return {
+        box: boxLabel(box), kind: box.kind, section: null, slot: null,
+        row: Math.floor(index / box.cols) + 1, col: (index % box.cols) + 1,
+      };
+    }
+    start += capacity;
+  }
+  return null;
+}
+
+/** That place for a rack as a page holds it: null unless the rack is a wall. */
+export function slotPlace(rack, position) {
+  if (!rack || rack.isModular || rack.type !== 'wall') return null;
+  return wallPlace(rack.rows, rack.cols, rack.typeConfig, position);
+}
+
 // ── Piles ───────────────────────────────────────────────────────────────────
 
 // The areas the planks of a pile box divide it into, in the contract's order.

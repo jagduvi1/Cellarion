@@ -28,6 +28,14 @@ describe('BottleCard rack badge', () => {
     expect(screen.getByRole('link', { name: /Fridge · slot 12/ })).toBeInTheDocument();
   });
 
+  test('in a wall rack the badge names the box and the spot in it, not a slot number', () => {
+    const wall = { box: 'B2', kind: 'x', section: 'left', slot: 3, row: null, col: null };
+    const rackMap = new Map([['b1', { rackId: 'r1', rackName: 'Cellar wall', position: 98, inRoom: false, wall }]]);
+    render(<MemoryRouter><BottleCard bottle={BOTTLE} rackMap={rackMap} cellarId="c1" viewMode="list" /></MemoryRouter>);
+    const badge = screen.getByRole('link', { name: /Cellar wall · B2 left · 3/ });
+    expect(badge.textContent).not.toMatch(/98|slot/);
+  });
+
   test('a rack slot without a number shows the rack name alone', () => {
     const rackMap = new Map([['b1', { rackId: 'r1', rackName: 'Bin', position: null, inRoom: false }]]);
     render(<MemoryRouter><BottleCard bottle={BOTTLE} rackMap={rackMap} cellarId="c1" viewMode="list" /></MemoryRouter>);
