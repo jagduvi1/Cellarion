@@ -36,7 +36,7 @@ const rel = (f) => path.relative(SRC, f).split(path.sep).join('/');
 const KNOWN_SAFE = {
   'models/WineDefinition.js': ['*'], // the invariant and the hook live here
   'mcp/tools/bulk.js': ['pendingIdentity: true } : {}'],        // audit detail, not a gate
-  'mcp/tools/write.js': ['pendingIdentity: true } : {}', 'const pendingIdentity = wineDoc.pendingIdentity === true'], // audit / response flag
+  'mcp/tools/write.js': ['const pendingIdentity = wineDoc.pendingIdentity === true'], // response flag
   'mcp/tools/publicContent.js': ['wine.pendingIdentity === true'], // skip guard: hides drafts too
   'routes/import.js': ['pendingIdentity: true } : {}'],          // audit detail
   'routes/somm/pendingWines.js': ['pendingIdentity: wine.pendingIdentity === true'], // response flag on a queue-loaded row
