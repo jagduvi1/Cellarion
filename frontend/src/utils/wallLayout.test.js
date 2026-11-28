@@ -16,6 +16,7 @@ import backendWall from '../../../backend/src/utils/wallGeometry.js';
 import caseFile from '../../../backend/src/utils/wallGeometry.cases.json';
 import {
   wallLayout, wallTotalSlots, wallBoxes, boxCapacity, boxLabel, wallPlace, slotPlace, BOX_KINDS, PILE_SECTIONS, SECTION_NAMES,
+  WALL_MAX_SLOTS,
 } from './wallLayout';
 import { computeLayout, getTotalSlots, SLOT_RADIUS, CELL_SIZE, minSlotDistance } from './rackLayouts';
 
@@ -223,5 +224,33 @@ describe('where the slots of a wall are drawn', () => {
     // utils/wallLayout.js keeps its own copy of these two numbers.
     expect(SLOT_RADIUS).toBe(20);
     expect(CELL_SIZE).toBe(48);
+  });
+});
+
+describe('a box that states no valid size', () => {
+  // The server counts such a box as holding nothing. Drawn all the same, its
+  // slots would take the numbers of the boxes after it, and every bottle
+  // there would be shown in the wrong place.
+  const good = { x: 1, y: 0, w: 1, h: 1, kind: 'bin', perSection: 5 };
+  test.each([
+    ['an X with no size', { x: 0, y: 0, w: 1, h: 1, kind: 'x' }],
+    ['a size given as text', { x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: '6' }],
+    ['a pile past the limit', { x: 0, y: 0, w: 1, h: 1, kind: 'slash', perSection: 61 }],
+    ['a rack with no rows', { x: 0, y: 0, w: 1, h: 1, kind: 'rack', cols: 4 }],
+  ])('%s is drawn empty, and the box after it keeps its numbers', (_name, bad) => {
+    const typeConfig = { boxes: [bad, good] };
+    const layout = wallLayout(1, 2, typeConfig);
+    expect(backendWall.wallTotalSlots(1, 2, typeConfig)).toBe(5);
+    expect(layout.totalSlots).toBe(5);
+    expect(layout.slots.map((s) => s.position)).toEqual([1, 2, 3, 4, 5]);
+    for (const s of layout.slots) {
+      expect(Number.isFinite(s.cx) && Number.isFinite(s.cy)).toBe(true);
+      expect(s.cx).toBeGreaterThan(layout.wall.origin.x + layout.wall.cell);
+    }
+    expect(layout.wall.cell).toBeLessThan(400);
+  });
+
+  test('the most a wall may hold is the server\'s number', () => {
+    expect(WALL_MAX_SLOTS).toBe(backendWall.WALL_MAX_SLOTS);
   });
 });

@@ -34,6 +34,8 @@ const MIN_CELL = 170;
 const CELL_STEP = 6;
 // Far beyond what the largest box asks for; it only bounds the search.
 const MAX_CELL = 3000;
+// The most a wall may hold (backend utils/wallGeometry.js WALL_MAX_SLOTS).
+export const WALL_MAX_SLOTS = 10000;
 
 const isInt = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
 const isPile = (kind) => Object.prototype.hasOwnProperty.call(PILE_SECTIONS, kind);
@@ -231,6 +233,8 @@ const onStep = (v) => Math.ceil(v / CELL_STEP) * CELL_STEP;
 // The smallest cell at which this box holds what it says.
 const needCache = new Map();
 function needCell(box) {
+  // A box that states no valid size holds nothing and asks for no room.
+  if (boxCapacity(box) === 0) return onStep(MIN_CELL);
   if (isPile(box.kind)) {
     const key = `${box.kind}:${box.w}:${box.h}:${box.perSection}`;
     let need = needCache.get(key);
@@ -287,6 +291,8 @@ export const boxKey = (box, index) => String(box._id ?? box.key ?? `box-${index}
 // Slot centres of a box drawn at cell size `cell`, from its own top-left
 // corner, in the contract's order.
 function boxSlots(box, cell) {
+  // As the count has it (boxCapacity): no slot is drawn that has no position.
+  if (boxCapacity(box) === 0) return [];
   const w = box.w * cell, h = box.h * cell;
   if (isPile(box.kind)) {
     return pilesFor(box.kind, w, h).flatMap((p) => {

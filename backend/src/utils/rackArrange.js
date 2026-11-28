@@ -13,6 +13,8 @@
  */
 
 const ARRANGE_STRATEGIES = ['maturity', 'type', 'vintage'];
+// The corner an arrangement starts from; the web form's picker sends one.
+const ARRANGE_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
 
 // Urgency first: what must be drunk soon belongs in the first slots.
 const MATURITY_RANK = {
@@ -116,4 +118,4 @@ function buildArrangePlan(entries, maxPosition, disabledPositions, strategy, pos
   return { target, changes };
 }
 
-module.exports = { ARRANGE_STRATEGIES, COMPARATORS, buildArrangePlan };
+module.exports = { ARRANGE_STRATEGIES, ARRANGE_CORNERS, COMPARATORS, buildArrangePlan };

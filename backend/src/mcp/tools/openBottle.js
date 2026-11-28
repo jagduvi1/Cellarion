@@ -25,11 +25,14 @@ const {
 } = require('../../utils/openBottleUtils');
 const { CONSUMED_STATUSES } = require('../../config/constants');
 const { logAction, replay } = require('../actionLedger');
-const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
+const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess, wallSpot, wallText } = require('../toolUtil');
 
 const bottleLabel = (b) => `bottle ${b._id} (vintage ${b.vintage})`;
-const slotLabel = (s) => `${s.rackName ? `rack "${s.rackName}"` : 'its rack'}, slot ${s.position}`;
-const slotData = (s) => (s ? { rack_id: s.rackId, rack_name: s.rackName || null, position: s.position } : null);
+// A wall rack's slot is said as its box and the spot in it (s.wall, from bottleOps).
+const slotLabel = (s) => `${s.rackName ? `rack "${s.rackName}"` : 'its rack'}, ${s.wall ? wallText(s.wall) : `slot ${s.position}`}`;
+const slotData = (s) => (s
+  ? { rack_id: s.rackId, rack_name: s.rackName || null, position: s.position, ...(s.wall ? { wall: wallSpot(s.wall) } : {}) }
+  : null);
 
 const TAKE_OUT_OF_RACK = z.boolean().optional()
   .describe('true when the opened bottle no longer sits in its rack (recorked on the counter, in the fridge door): ' +

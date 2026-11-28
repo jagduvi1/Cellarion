@@ -177,3 +177,25 @@ describe('a wall in use', () => {
     expect(usageByBox(null).size).toBe(0);
   });
 });
+
+describe('the bounds of the wall and the start of a box', () => {
+  // The server stores a wall up to 20 cells each way, and another client (the
+  // MCP create_rack tool) makes them. With a lower bound here, such a wall
+  // would open with a height field no value can satisfy, and the form would
+  // refuse every save, a rename included.
+  test('the builder takes a wall as large as the server stores, and changing one side leaves the other', () => {
+    expect([WALL_MAX_ROWS, WALL_MAX_COLS]).toEqual([20, 20]);
+    const tall = { rows: 15, cols: 1, boxes: [{ key: 'a', x: 0, y: 14, w: 1, h: 1, kind: 'bin', perSection: 4 }] };
+    expect(setGrid(tall, tall.rows, 3)).toMatchObject({ rows: 15, cols: 3 });
+    expect(setGrid(tall, 20, 1)).toMatchObject({ rows: 20, cols: 1 });
+    expect(valid(setGrid(tall, 20, 20))).toBeNull();
+  });
+
+  test('a box put beside only a closed box still starts at the usual size', () => {
+    const wall = { rows: 1, cols: 2, boxes: [{ key: 'door', x: 0, y: 0, w: 1, h: 1, kind: 'closed' }] };
+    expect(cellOf(wall)).toBeLessThan(defaultCell());
+    const { wall: next } = addBox(wall, 1, 0, 'x');
+    expect(boxAt(next, 1, 0)).toMatchObject({ kind: 'x', perSection: 6 });
+    expect(valid(next)).toBeNull();
+  });
+});

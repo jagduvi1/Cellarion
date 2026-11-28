@@ -15,7 +15,7 @@
  *   wall     — boxes on a grid of rows × cols cells, each with its own content
  *              (typeConfig.boxes); counted and numbered in utils/wallGeometry.js
  */
-const { wallTotalSlots, wallPlace } = require('./wallGeometry');
+const { wallTotalSlots, wallPlace, wallPlacer } = require('./wallGeometry');
 
 /**
  * Filter typeConfig.doubleHeightRows down to the entries that actually
@@ -544,18 +544,31 @@ function slotLocation(rack, position) {
  * (wallGeometry.wallPlace). null for every other rack, whose slot number
  * (with slotLocation's shelf, row and col where it has them) is the place.
  * Attached as `wall` wherever a bottle's slot is reported: the bottle page
- * and the cellar's lists (rackInfo), pick lists, GET /api/inventory and the
- * MCP get_bottle placement. A caller needs RACK_PLACE_FIELDS on the rack.
+ * and the cellar's lists (rackInfo), pick lists, GET /api/inventory, and the
+ * MCP tools that name a slot (get_bottle, get_rack, place_bottle,
+ * unplace_bottle, auto_arrange, the pick list and tonight's candidates, the
+ * open-bottle answers). A caller needs RACK_PLACE_FIELDS on the rack.
  */
 function slotPlace(rack, position) {
   if (!rack || rack.isModular || rack.type !== 'wall') return null;
   return wallPlace(rack.rows, rack.cols, rack.typeConfig, position);
 }
+
+const NO_PLACE = () => null;
+/**
+ * slotPlace for every bottle of one rack: `slotPlacer(rack)(position)`. The
+ * wall's boxes are walked once per rack, not once per bottle. For the lists
+ * (the cellar's bottles, pick lists, GET /api/inventory, MCP get_rack).
+ */
+function slotPlacer(rack) {
+  if (!rack || rack.isModular || rack.type !== 'wall') return NO_PLACE;
+  return wallPlacer(rack.rows, rack.cols, rack.typeConfig);
+}
 // What a rack query must select for slotPlace (and slotLocation).
 const RACK_PLACE_FIELDS = 'type rows cols typeConfig isModular';
 
 module.exports = {
-  slotLocation, slotPlace, RACK_PLACE_FIELDS,
+  slotLocation, slotPlace, slotPlacer, RACK_PLACE_FIELDS,
   totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows,
   cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
   cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetBayOpts, cabinetRows,

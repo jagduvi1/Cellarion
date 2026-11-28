@@ -48,7 +48,11 @@ const MATURITY = {
   enum: ['not-ready', 'early', 'peak', 'late', 'declining', null],
   description: 'Where the bottle is in its drink window today, or null when it has no window.',
 };
-const RACK_TYPE = { type: 'string', enum: ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet', 'wall'] };
+const RACK_TYPE = {
+  type: 'string',
+  enum: ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet', 'wall'],
+  description: 'The kind of rack. Values may be added, never renamed or removed.',
+};
 const CELLAR_ROLE = { type: 'string', enum: ['owner', 'editor', 'viewer'] };
 const BOTTLE_STATUS = {
   type: 'string',
@@ -343,8 +347,8 @@ const schemas = {
     required: ['box', 'kind', 'section', 'slot', 'row', 'col'],
     properties: {
       box: { type: 'string', description: 'The box, by column letter and row number of its top-left cell: "B2".' },
-      kind: { type: 'string', enum: ['x', 'slash', 'backslash', 'bin', 'rack', 'shelves'], description: 'What the box is: an X of four piles, a diagonal either way (two piles), an open bin, a rack of single slots, or shelves.' },
-      section: { type: ['string', 'null'], enum: ['top', 'left', 'right', 'bottom', 'upper', 'lower', null], description: 'The pile inside an X (top, left, right, bottom) or a diagonal box (upper, lower). Null in an open bin, a rack and shelves.' },
+      kind: { type: 'string', enum: ['x', 'slash', 'backslash', 'bin', 'rack', 'shelves'], description: 'What the box is: an X of four piles, a diagonal either way (two piles), an open bin, a rack of single slots, or shelves. Values may be added, never renamed or removed.' },
+      section: { type: ['string', 'null'], enum: ['top', 'left', 'right', 'bottom', 'upper', 'lower', null], description: 'The pile inside an X (top, left, right, bottom) or a diagonal box (upper, lower). Null in an open bin, a rack and shelves. Values may be added, never renamed or removed.' },
       slot: { type: ['integer', 'null'], minimum: 1, description: 'In a pile: the bottle counted from the bottom of its pile. Null in a rack and shelves.' },
       row: { type: ['integer', 'null'], minimum: 1, description: 'In a rack: the row from the top. In shelves: the shelf from the top. Null in a pile.' },
       col: { type: ['integer', 'null'], minimum: 1, description: 'In a rack or shelves: the bottle in the row, left to right. Null in a pile.' },
@@ -799,7 +803,7 @@ const examples = {
       notes: 'For a birthday', purchaseDate: '2024-05-01', purchaseLocation: 'Wine shop',
       addedAt: '2025-01-02T10:00:00.000Z', opened: false, consumed: null, maturity: 'peak',
       window: { drinkFrom: 2022, peakFrom: 2025, peakUntil: 2032, drinkTo: 2038 },
-      location: { rack: ID.rack, rackName: 'Wine fridge', position: 5, shelf: 2, row: 1, col: 2 },
+      location: { rack: ID.rack, rackName: 'Wine fridge', position: 5, shelf: 2, row: 1, col: 2, wall: null },
       place: null, image: THUMB,
       personal: [{ key: 'Closure', type: 'text', unit: null, value: 'cork', level: 'bottle', by: 'alice' }],
     }],

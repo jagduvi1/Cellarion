@@ -265,7 +265,29 @@ const FIELD_DESCRIPTIONS = {
   sweetnessStyle: 'The sweetness term the wine is KNOWN by when its LABEL prints none (feinherb, fruchtsüß, edelsüß …), as { term, source, source_url }: `term` as list_sweetness_terms has it; `source` "producer" (the producer\'s own wording) or "trade" (a merchant, a critic, a wine database); `source_url` the page that names this term for this wine (evidence_url is used when it is left out; one of the two is required). A term with a legal definition (regulated: true: trocken, halbtrocken, Brut …) only from the producer. Never a taste impression, never worked out from a Kabinett/Spätlese tier or the alcohol, and never a word the label itself prints. Descriptive: no part of the wine\'s identity.',
 };
 
+/**
+ * A bottle's place in a wall rack (rackGeometry.slotPlace) as the tools give
+ * it: only the keys that say something. A pile: { box, kind, section, slot }
+ * (no section in an open bin; slot 1 is the lowest bottle). A rack or shelves
+ * box: { box, kind, row, col }. null stays null (not a wall, or no such slot).
+ */
+function wallSpot(place) {
+  if (!place) return null;
+  return Object.fromEntries(Object.entries(place).filter(([, v]) => v !== null && v !== undefined));
+}
+
+/** The same place as words for a summary line: "box B2, left pile, 3 from the bottom". */
+function wallText(place) {
+  if (!place) return '';
+  if (place.row != null) {
+    return `box ${place.box}, ${place.kind === 'shelves' ? 'shelf' : 'row'} ${place.row}, ${place.col} from the left`;
+  }
+  return `box ${place.box}, ${place.section ? `${place.section} pile, ` : ''}${place.slot} from the bottom`;
+}
+
 module.exports = {
+  wallSpot,
+  wallText,
   classificationsOut,
   labelSweetnessOut,
   labelSweetnessFields,

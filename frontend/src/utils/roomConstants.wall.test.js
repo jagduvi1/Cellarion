@@ -72,7 +72,8 @@ describe('a wall rack scaled into the 3D room', () => {
   });
 
   it('the room sizes the wall by its cells, whatever width was stored for the rack before', () => {
-    expect(getRackHeight(WALL)).toBeCloseTo(scaled.innerH + PANEL_THICK * 2);
+    // No frame around a wall: it is as high as its cells and stands on the floor.
+    expect(getRackHeight(WALL)).toBeCloseTo(scaled.innerH);
     const own = getRackWorldDims(WALL, {});
     expect(own.halfW * 2).toBeCloseTo(scaled.innerW + PANEL_THICK * 2);
     expect(getRackWorldDims(WALL, { widthOverride: 9 }).halfW).toBe(own.halfW);

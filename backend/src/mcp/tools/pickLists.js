@@ -6,7 +6,7 @@
 // confirm:true.
 const { z } = require('zod');
 const { registerTool } = require('../registry');
-const { ok, fail, objectId } = require('../toolUtil');
+const { ok, fail, objectId, wallSpot } = require('../toolUtil');
 const {
   listPickLists, createPickList, renamePickList, addToPickList, removeFromPickList,
   setPicked, deletePickList, getPickListView,
@@ -28,6 +28,8 @@ const itemOut = (it) => (it.state === 'unavailable'
       cellar: it.cellar.name,
       rack: it.rack ? it.rack.rackName : null,
       slot: it.rack ? it.rack.position : null,
+      // A wall rack: the box and the spot in it, the words to send someone to the bottle with.
+      ...(it.rack && it.rack.wall ? { wall: wallSpot(it.rack.wall) } : {}),
       location: it.rack ? null : it.location,
     });
 

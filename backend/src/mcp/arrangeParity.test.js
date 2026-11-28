@@ -169,3 +169,46 @@ describe('auto_arrange plans with the same data as the web preview', () => {
     expect(McpActionLog.create).not.toHaveBeenCalled();
   });
 });
+
+// In a wall the numbers of a pile count from the lowest bottle up. Filled by
+// number, the bottle to drink first would lie at the bottom of the pile. The
+// tool takes the same order as the web preview (wallGeometry.wallFillOrder).
+describe('auto_arrange on a wall rack', () => {
+  test('fills a pile from its lowest places with the first bottle on top, and says each move by box and spot', async () => {
+    // One X box of three a pile. Stored the wrong way round in the top pile:
+    // the oldest vintage lowest.
+    const rack = {
+      ...mkRack([
+        { position: 1, bottle: bottleDoc('1', { vintage: '2000' }) },
+        { position: 2, bottle: bottleDoc('2', { vintage: '2010' }) },
+        { position: 3, bottle: bottleDoc('3', { vintage: '2020' }) },
+      ]),
+      name: 'Cellar wall', type: 'wall', rows: 1, cols: 1,
+      typeConfig: { boxes: [{ x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 3 }] },
+    };
+    wireRackLoad(rack);
+
+    const body = parse(await autoArrange({ rack_id: oid('e'), strategy: 'vintage' }));
+
+    // Oldest first = on top (the third place from the bottom).
+    const target = Object.fromEntries(McpActionLog.create.mock.calls[0][0].prev.target.map((t) => [t.bottleId, t.position]));
+    expect(target).toEqual({ [oid('1')]: 3, [oid('2')]: 2, [oid('3')]: 1 });
+    expect(body.data.bottles_moving).toBe(2);
+    const move = body.data.moves.find((m) => m.bottle.includes('Wine 1'));
+    expect(move).toMatchObject({
+      from: 1, to: 3,
+      from_wall: { box: 'A1', kind: 'x', section: 'top', slot: 1 },
+      to_wall: { box: 'A1', kind: 'x', section: 'top', slot: 3 },
+    });
+  });
+
+  test('a rack that is no wall keeps its order by number, and its moves say no box', async () => {
+    const rack = mkRack([
+      { position: 3, bottle: bottleDoc('1', { vintage: '2000' }) },
+      { position: 4, bottle: bottleDoc('2', { vintage: '2010' }) },
+    ]);
+    wireRackLoad(rack);
+    const body = parse(await autoArrange({ rack_id: oid('e'), strategy: 'vintage' }));
+    expect(body.data.moves[0]).toEqual({ bottle: expect.stringContaining('Wine 1'), from: 3, to: 1 });
+  });
+});

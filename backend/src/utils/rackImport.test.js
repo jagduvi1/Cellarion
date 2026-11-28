@@ -141,6 +141,24 @@ describe('computeRackPosition', () => {
   });
 });
 
+// A wall's rows and cols are its cells; its slots are numbered box after box.
+// Read as a grid of rows × cols, slot 40 of a 2 × 2 wall of X boxes would be
+// refused as beyond row 2, and row 2, col 2 would land in slot 4.
+describe('computeRackPosition for a wall rack', () => {
+  const wall = { rackType: 'wall', rackRows: 2, rackCols: 2 };
+
+  test('a slot number is the slot, whatever corner the file counts from', () => {
+    expect(computeRackPosition({ ...wall, position: 40 })).toEqual({ position: 40 });
+    expect(computeRackPosition({ ...wall, position: '5', anchor: 'bottom-left' })).toEqual({ position: 5 });
+    expect(computeRackPosition({ ...wall, position: 3, anchor: 'top-right' })).toEqual({ position: 3 });
+  });
+
+  test('a row and column is no slot of a wall', () => {
+    expect(computeRackPosition({ ...wall, row: 2, col: 2 })).toEqual({ error: 'A wall rack takes a slot number, not a row and column' });
+    expect(computeRackPosition({ ...wall, position: 0 }).error).toBe('Invalid position');
+  });
+});
+
 describe('suggestRackDimensions', () => {
   test('single row for tiny racks (≤ 6)', () => {
     expect(suggestRackDimensions(5)).toEqual({ rows: 1, cols: 5 });

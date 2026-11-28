@@ -15,8 +15,10 @@ import {
   wallLayout, fitFor, defaultCell, boxKey, boxLabel, boxCapacity, PILE_SECTIONS,
 } from './wallLayout';
 
+// The server's bounds for a rack's rows and cols (backend models/Rack.js): a
+// wall another client made that large must open here with fields it can keep.
 export const WALL_MAX_COLS = 20;
-export const WALL_MAX_ROWS = 12;
+export const WALL_MAX_ROWS = 20;
 export const MAX_PER_SECTION = 60;
 export const MAX_BOX_DIM = 20;
 
@@ -75,7 +77,9 @@ export const toTypeConfig = (wall) => ({ boxes: wall.boxes.map(stored) });
 /** Put a box of one cell on empty wall. Returns { wall, key }; the wall unchanged when the cell is taken. */
 export function addBox(wall, x, y, kind) {
   if (x < 0 || y < 0 || x >= wall.cols || y >= wall.rows || boxAt(wall, x, y)) return { wall, key: null };
-  const box = { key: freshKey(), x, y, w: 1, h: 1, kind, ...fitFor(kind, 1, 1, cellOf(wall)) };
+  // At least the starting scale: beside only closed or small boxes the wall's
+  // cell is the smallest there is, and an X would start with one bottle a pile.
+  const box = { key: freshKey(), x, y, w: 1, h: 1, kind, ...fitFor(kind, 1, 1, Math.max(cellOf(wall), defaultCell())) };
   return { wall: { ...wall, boxes: [...wall.boxes, box] }, key: box.key };
 }
 

@@ -199,6 +199,9 @@ export function getGridExtraHeight(rack) {
  * Compute full rack height in metres (outer frame included).
  */
 export function getRackHeight(rack) {
+  // A wall has no frame around the whole of it: its lowest boxes stand on
+  // the floor (RackMesh).
+  if (rack.type === 'wall' && !rack.isModular) return buildScaledLayout(rack).innerH;
   if (usesScaledLayout(rack)) {
     return buildScaledLayout(rack).innerH + PANEL_THICK * 2;
   }

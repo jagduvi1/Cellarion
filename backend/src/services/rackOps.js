@@ -58,7 +58,7 @@ function normalizeRackGroup(group) {
  * create_rack tool (the route delegates here). Modular racks stay a REST-only
  * route path (their validation has no MCP twin to drift against). typeConfig
  * (double-height rows, cabinet shelves, a wall's boxes) is accepted and
- * validated; MCP passes it for a cabinet only.
+ * validated; MCP passes it for a cabinet and for a wall.
  */
 async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols = 8, typeConfig, group }, req) {
   if (!name || !String(name).trim()) return { error: { status: 400, message: 'Rack name is required' } };

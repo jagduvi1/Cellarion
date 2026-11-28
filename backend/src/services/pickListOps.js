@@ -24,7 +24,7 @@ const Rack = require('../models/Rack');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { isValidId } = require('../utils/validation');
-const { slotPlace, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
+const { slotPlacer, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
 const { stripHtml } = require('../utils/sanitize');
 const { logAudit } = require('./audit');
 
@@ -276,11 +276,12 @@ async function getPickListView(userId, id) {
     }
     const wanted = new Set(seenIds.map(String));
     for (const rack of racks) {
+      const placeOf = slotPlacer(rack);
       for (const s of rack.slots || []) {
         const bid = s.bottle && String(s.bottle);
         if (!bid || !wanted.has(bid)) continue;
         // wall: the box and the spot in it, for a wall rack only.
-        const wall = slotPlace(rack, s.position);
+        const wall = placeOf(s.position);
         slotOf.set(bid, {
           rackId: rack._id, rackName: rack.name, rackGroup: rack.group || null,
           position: s.position, inRoom: inRoom.has(String(rack._id)), order: order.get(String(rack._id)),

@@ -24,7 +24,8 @@ const { parseExpectedArrival } = require('../utils/onOrder');
 const { logAudit } = require('./audit');
 const { learnBarcodeSoon } = require('./barcodeRegistry');
 const Rack = require('../models/Rack');
-const { getMaxPosition } = require('../utils/rackGeometry');
+const { getMaxPosition, slotPlace, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
+const { renumberedSince } = require('../utils/wallGeometry');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
@@ -191,11 +192,11 @@ const MAX_POURS = 100;
 // weekend") — matches the longest preservation freshness window (coravin).
 const MAX_OPEN_BACKDATE_MS = 90 * 24 * 60 * 60 * 1000;
 
-/** The rack slot a bottle sits in now, or null. */
+/** The rack slot a bottle sits in now, or null. `wall`: the box and spot, on a wall rack. */
 async function currentRackSlot(bottleId) {
-  const rack = await Rack.findOne({ 'slots.bottle': bottleId }).select('name slots').lean();
+  const rack = await Rack.findOne({ 'slots.bottle': bottleId }).select(`name slots ${RACK_PLACE_FIELDS}`).lean();
   const slot = rack && rack.slots.find((s) => String(s.bottle) === String(bottleId));
-  return slot ? { rack: rack._id, rackName: rack.name, position: slot.position } : null;
+  return slot ? { rack: rack._id, rackName: rack.name, position: slot.position, wall: slotPlace(rack, slot.position) } : null;
 }
 
 /**
@@ -226,7 +227,8 @@ async function putBackInSlot(bottleId, cellarId, from) {
     if (err.name === 'VersionError' || err.code === 11000) return null;
     throw err;
   }
-  return { rackId: rack._id, rackName: rack.name, position: pos };
+  const wall = slotPlace(rack, pos);
+  return { rackId: rack._id, rackName: rack.name, position: pos, ...(wall ? { wall } : {}) };
 }
 
 /**
@@ -279,7 +281,7 @@ async function openBottle(bottle, { preservationMethod, openedAt, takeOutOfRack 
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
     { preservationMethod, ...(slot ? { takenOutOfRack: true } : {}) }
   );
-  return { bottle, takenOutOf: slot ? { rackId: slot.rack, rackName: slot.rackName, position: slot.position } : null };
+  return { bottle, takenOutOf: slot ? { rackId: slot.rack, rackName: slot.rackName, position: slot.position, ...(slot.wall ? { wall: slot.wall } : {}) } : null };
 }
 
 /**
@@ -1090,7 +1092,8 @@ async function snapshotBottleForDelete(bottle) {
   return {
     snapshot: {
       bottle: raw,
-      rack: slot ? { rackId: rack._id, position: slot.position } : null,
+      // `at`: a wall edit after this gives the number another meaning (see the restore).
+      rack: slot ? { rackId: rack._id, position: slot.position, at: new Date() } : null,
       registryPhotoIds: registryPhotos.map((p) => p._id),
       wineRequest,
     },
@@ -1162,7 +1165,7 @@ async function restoreDeletedBottle(snapshot, req, { via = 'undo' } = {}) {
     placed = !!(await bestEffort('rack slot', async () => {
       const rack = await Rack.findOne({ _id: snapshot.rack.rackId, deletedAt: null });
       const taken = rack && (rack.slots || []).some((s) => s.position === snapshot.rack.position);
-      if (!rack || taken) return false;
+      if (!rack || taken || renumberedSince(rack, snapshot.rack.at)) return false;
       // Lazy: services/rackOps top-requires this module.
       const { placeBottleInRack } = require('./rackOps');
       const r = await placeBottleInRack(rack, snapshot.rack.position, raw._id, req);

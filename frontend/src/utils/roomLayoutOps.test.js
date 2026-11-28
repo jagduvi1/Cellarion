@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { getRackHeight, clampToRoom } from './roomConstants';
+import { getRackHeight, getRackWorldDims, clampToRoom } from './roomConstants';
 import {
   DEFAULT_DIMENSIONS, dragRack, changeRoomDimension, rotateRacks, addRackToRoom, stackRackOnTarget,
   unstackRack, linkRackToTarget, unlinkRack, removeRacksFromRoom, setPlacementField, nudgeRacks,
@@ -338,6 +338,21 @@ describe('autoLayoutFor', () => {
 
   test('a cellar without racks gets an empty room', () => {
     expect(autoLayoutFor('c1', []).rackPlacements).toEqual([]);
+  });
+
+  // A wall is as wide as its drawing (three X boxes: close to two metres),
+  // far more than the 1.5 m the racks stand apart.
+  test('a rack wider than the usual step pushes the next one on, so they do not stand in each other', () => {
+    const wall = {
+      _id: 'w', name: 'w', type: 'wall', rows: 1, cols: 3, slots: [],
+      typeConfig: { boxes: [0, 1, 2].map((x) => ({ x, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 })) },
+    };
+    const { rackPlacements: [first, second, third] } = autoLayoutFor('c1', [wall, rack('a'), rack('b')]);
+    const half = (r) => getRackWorldDims(r, {}).halfW;
+    expect(half(wall)).toBeGreaterThan(0.75);
+    expect(second.position.x - first.position.x).toBeGreaterThanOrEqual(half(wall) + half(rack('a')));
+    // Two ordinary racks keep the step they always had.
+    expect(third.position.x - second.position.x).toBeCloseTo(1.5);
   });
 });
 

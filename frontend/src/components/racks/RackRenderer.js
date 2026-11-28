@@ -22,6 +22,8 @@ const EMPTY_FILL   = '#C4A478';
 const EMPTY_STROKE  = '#B09060';
 const ACTIVE_STROKE = '#7A1E2D';
 const WOOD_BG       = '#DCC8A4';
+// A wall's slots are never drawn smaller than 16 px across (see the svg below).
+const WALL_MIN_SCALE = 16 / (SLOT_RADIUS * 2);
 const WOOD_FRAME    = '#C8AD82';
 const SHELF_COLOR   = '#D4BA94';
 // Disabled (unusable) slots — muted, greyed-out wood tones
@@ -206,6 +208,13 @@ export default function RackRenderer({
           ref={svgRef}
           viewBox={`0 0 ${layout.viewBox.width} ${layout.viewBox.height}`}
           className={`rack-svg ${drag ? 'rack-svg--dragging' : ''}`}
+          // A wall is drawn true to scale, so a wide one would shrink its slots
+          // to a few pixels on a narrow screen. It keeps a least size and the
+          // wrapper scrolls sideways.
+          style={layout.wall ? {
+            minWidth: `${Math.round(layout.viewBox.width * WALL_MIN_SCALE)}px`,
+            minHeight: `${Math.round(layout.viewBox.height * WALL_MIN_SCALE)}px`,
+          } : undefined}
           role="group"
           aria-label={`${rack.name} rack`}
         >

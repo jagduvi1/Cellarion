@@ -101,6 +101,27 @@ describe('create_cellar / create_rack', () => {
 });
 
 describe('place_bottle', () => {
+  // In a wall a position is a number nobody can check by eye; the answer
+  // says the box and the spot, so a wrong pile is seen before the user walks
+  // to the cellar.
+  test('on a wall rack the answer says which box and spot the position is, and so does unplace', async () => {
+    const wall = {
+      _id: oid('e'), cellar: oid('c'), name: 'Cellar wall', type: 'wall', rows: 1, cols: 2,
+      typeConfig: { boxes: [{ x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 }, { x: 1, y: 0, w: 1, h: 1, kind: 'shelves', rows: 2, cols: 5 }] },
+    };
+    Rack.findOne.mockReturnValue(chain(wall));
+    ownCellar();
+    rackOps.placeBottleInRack.mockResolvedValue({ rack: {}, displaced: null, previousPosition: null, position: 9 });
+    const placed = parse(await tool('place_bottle').handler({ rack_id: oid('e'), position: 9, bottle_id: oid('d') }, CTX));
+    expect(placed.data).toMatchObject({ position: 9, wall: { box: 'A1', kind: 'x', section: 'left', slot: 3 } });
+    expect(placed.summary).toBe('Placed bottle in "Cellar wall" position 9 (box A1, left pile, 3 from the bottom)');
+
+    rackOps.clearRackSlot.mockResolvedValue({ cleared: oid('d') });
+    const cleared = parse(await tool('unplace_bottle').handler({ rack_id: oid('e'), position: 32 }, CTX));
+    expect(cleared.data).toMatchObject({ position: 32, wall: { box: 'B1', kind: 'shelves', row: 2, col: 3 } });
+    expect(cleared.summary).toBe('Cleared position 32 (box B1, shelf 2, 3 from the left) in "Cellar wall"');
+  });
+
   test('reports the displaced bottle + records rack/position for undo', async () => {
     Rack.findOne.mockReturnValue(chain({ _id: oid('e'), cellar: oid('c') }));
     ownCellar();
@@ -315,6 +336,42 @@ describe('rack groups', () => {
     const { validateWallConfig } = require('../utils/wallGeometry');
     const sent = rackOps.createGridRack.mock.calls[0][1];
     expect(validateWallConfig(sent.typeConfig, 'wall', sent.rows, sent.cols, false)).toBeNull();
+  });
+
+  // The shared check answers in the stored field name (perSection), which
+  // this tool does not have: a model that then sends `perSection` has it
+  // dropped and gets the same answer again.
+  test('create_rack type "wall" says what a box lacks in its own field names, and stores only what the box uses', async () => {
+    ownCellar();
+    const call = (boxes, extra = {}) => tool('create_rack').handler({ cellar_id: oid('c'), name: 'W', type: 'wall', boxes, ...extra }, CTX);
+    const noPile = parse(await call([{ x: 0, y: 0, kind: 'x' }]));
+    expect(noPile.error).toMatchObject({ code: 'invalid_input' });
+    expect(noPile.error.message).toBe('The "x" box at x 0, y 0 needs per_pile: the bottles in each of its piles (1 to 60)');
+    const noRows = parse(await call([{ x: 1, y: 0, kind: 'shelves', rows: 3 }]));
+    expect(noRows.error.message).toBe('The "shelves" box at x 1, y 0 needs rows and cols (1 to 20 each)');
+    expect(rackOps.createGridRack).not.toHaveBeenCalled();
+
+    // No rows or cols given: the wall is as large as its boxes reach.
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'W', group: null } });
+    const body = parse(await call([
+      { x: 0, y: 0, kind: 'bin', per_pile: 5, rows: 9, cols: 9 },
+      { x: 1, y: 0, w: 2, h: 2, kind: 'rack', rows: 2, cols: 3, per_pile: 7 },
+    ]));
+    const sent = rackOps.createGridRack.mock.calls[0][1];
+    expect(sent).toMatchObject({ rows: 2, cols: 3 });
+    expect(sent.typeConfig.boxes).toEqual([
+      { x: 0, y: 0, w: 1, h: 1, kind: 'bin', perSection: 5 },
+      { x: 1, y: 0, w: 2, h: 2, kind: 'rack', rows: 2, cols: 3 },
+    ]);
+    expect(body.data).toMatchObject({ rows: 2, cols: 3, capacity: 11 });
+  });
+
+  test('create_rack still makes a 4 × 8 grid when no size is given', async () => {
+    ownCellar();
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'R', group: null } });
+    const body = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'R' }, CTX));
+    expect(rackOps.createGridRack.mock.calls[0][1]).toMatchObject({ type: 'grid', rows: 4, cols: 8 });
+    expect(body.data).toMatchObject({ rows: 4, cols: 8, capacity: 32 });
   });
 
   test('create_rack cabinet with head_to_tail passes it through, and it is cabinet-only', async () => {

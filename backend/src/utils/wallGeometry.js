@@ -118,21 +118,40 @@ function wallRanges(rows, cols, typeConfig) {
  * does not have. Mirrored by frontend utils/wallLayout.js wallPlace.
  */
 function wallPlace(rows, cols, typeConfig, position) {
-  if (!Number.isInteger(position) || position < 1) return null;
-  const range = wallRanges(rows, cols, typeConfig).find((r) => position > r.start && position <= r.start + r.capacity);
-  if (!range) return null;
-  const { box } = range;
-  const index = position - range.start - 1;
-  if (isPile(box.kind)) {
+  return wallPlacer(rows, cols, typeConfig)(position);
+}
+
+/**
+ * wallPlace for many positions of one wall: the boxes are walked once, and
+ * the function that comes back answers each position. For a caller that
+ * reports every bottle of a rack (rackGeometry.slotPlacer).
+ */
+function wallPlacer(rows, cols, typeConfig) {
+  const ranges = wallRanges(rows, cols, typeConfig).filter((r) => r.capacity > 0);
+  return (position) => {
+    if (!Number.isInteger(position) || position < 1) return null;
+    // The ranges are in position order: the last one starting below the position.
+    let lo = 0;
+    let hi = ranges.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (ranges[mid].start < position) lo = mid; else hi = mid - 1;
+    }
+    const range = ranges[lo];
+    if (!range || position <= range.start || position > range.start + range.capacity) return null;
+    const { box } = range;
+    const index = position - range.start - 1;
+    if (isPile(box.kind)) {
+      return {
+        box: range.label, kind: box.kind,
+        section: SECTION_NAMES[box.kind][Math.floor(index / box.perSection)], slot: (index % box.perSection) + 1,
+        row: null, col: null,
+      };
+    }
     return {
-      box: range.label, kind: box.kind,
-      section: SECTION_NAMES[box.kind][Math.floor(index / box.perSection)], slot: (index % box.perSection) + 1,
-      row: null, col: null,
+      box: range.label, kind: box.kind, section: null, slot: null,
+      row: Math.floor(index / box.cols) + 1, col: (index % box.cols) + 1,
     };
-  }
-  return {
-    box: range.label, kind: box.kind, section: null, slot: null,
-    row: Math.floor(index / box.cols) + 1, col: (index % box.cols) + 1,
   };
 }
 
@@ -163,10 +182,14 @@ function validateWallConfig(typeConfig, effectiveType, rows, cols, effectiveModu
       return `Each box needs whole numbers x, y, w and h that keep it inside the wall (${cols} wide, ${rows} high)`;
     }
     const label = boxLabel(b);
-    if (isPile(b.kind) && !isInt(b.perSection, 1, WALL_MAX_PER_SECTION)) {
+    // A size the box's kind has no use for is stored all the same, so it is
+    // held to the same bounds here.
+    const sized = (v, max) => v === undefined || v === null || isInt(v, 1, max);
+    if (!sized(b.perSection, WALL_MAX_PER_SECTION) || (isPile(b.kind) && !isInt(b.perSection, 1, WALL_MAX_PER_SECTION))) {
       return `Box ${label}: perSection must be a whole number between 1 and ${WALL_MAX_PER_SECTION}`;
     }
-    if (isGrid(b.kind) && !(isInt(b.rows, 1, WALL_MAX_BOX_DIM) && isInt(b.cols, 1, WALL_MAX_BOX_DIM))) {
+    if (!sized(b.rows, WALL_MAX_BOX_DIM) || !sized(b.cols, WALL_MAX_BOX_DIM)
+      || (isGrid(b.kind) && !(isInt(b.rows, 1, WALL_MAX_BOX_DIM) && isInt(b.cols, 1, WALL_MAX_BOX_DIM)))) {
       return `Box ${label}: rows and cols must be whole numbers between 1 and ${WALL_MAX_BOX_DIM}`;
     }
     for (let y = b.y; y < b.y + b.h; y++) {
@@ -175,6 +198,9 @@ function validateWallConfig(typeConfig, effectiveType, rows, cols, effectiveModu
         taken[y * cols + x] = true;
       }
     }
+    // A stored box has an id and a new one states none. null is neither: it
+    // would be stored as a box no later edit could follow.
+    if (b._id === null) return `Box ${label}: leave _id out for a new box`;
     const id = boxId(b);
     if (id !== null) {
       if (!/^[0-9a-f]{24}$/.test(id)) return `Box ${label}: _id is not a valid id`;
@@ -186,6 +212,107 @@ function validateWallConfig(typeConfig, effectiveType, rows, cols, effectiveModu
   if (total < 1) return 'A wall needs at least one box that holds bottles';
   if (total > WALL_MAX_SLOTS) return `A rack can hold at most ${WALL_MAX_SLOTS} slots in total`;
   return null;
+}
+
+/**
+ * Everything the numbering of a wall depends on, as one string: while it
+ * stays the same, every position is the same place in the same box. The
+ * rack-update route compares it across an edit (Rack.renumberedAt).
+ */
+function wallNumbering(rows, cols, typeConfig) {
+  return wallRanges(rows, cols, typeConfig)
+    .filter((r) => r.capacity > 0)
+    .map(({ box, id, start }) => `${id}:${start}:${box.kind}:${isPile(box.kind) ? box.perSection : `${box.rows}x${box.cols}`}`)
+    .join('|');
+}
+
+/**
+ * The order in which an arrangement fills a wall with `count` bottles, the
+ * first bottle (the one to reach for first) first. Boxes are taken one after
+ * another from the given corner and each is filled before the next. Bottles
+ * in a pile lie on one another, so the bottles a pile gets take its lowest
+ * places and the first of them lies on top; a rack or shelves box is read
+ * from the same corner. Switched-off positions are left out. The positions
+ * that stay empty follow, so the answer lists every usable position once.
+ * Callers: the Arrange preview (routes/racks.js) and MCP auto_arrange, which
+ * hand it to rackArrange.buildArrangePlan as the fill order.
+ */
+function wallFillOrder(rows, cols, typeConfig, { count = 0, disabled = [], corner = 'top-left' } = {}) {
+  const off = new Set(disabled);
+  const fromBottom = String(corner).startsWith('bottom');
+  const fromRight = String(corner).endsWith('right');
+  const ranges = wallRanges(rows, cols, typeConfig).filter((r) => r.capacity > 0);
+  ranges.sort((a, b) => (fromBottom ? (b.box.y + b.box.h) - (a.box.y + a.box.h) : a.box.y - b.box.y)
+    || (fromRight ? (b.box.x + b.box.w) - (a.box.x + a.box.w) : a.box.x - b.box.x));
+  const filled = [];
+  const empty = [];
+  let left = Math.max(0, count);
+  const steps = (n, backwards) => Array.from({ length: n }, (_, i) => (backwards ? n - 1 - i : i));
+  for (const { box, start } of ranges) {
+    if (isPile(box.kind)) {
+      for (const section of steps(PILE_SECTIONS[box.kind], fromBottom)) {
+        const pile = steps(box.perSection, false)
+          .map((i) => start + section * box.perSection + i + 1)
+          .filter((p) => !off.has(p));
+        const share = Math.min(left, pile.length);
+        for (let i = share - 1; i >= 0; i--) filled.push(pile[i]);
+        for (let i = share; i < pile.length; i++) empty.push(pile[i]);
+        left -= share;
+      }
+    } else {
+      for (const row of steps(box.rows, fromBottom)) {
+        for (const col of steps(box.cols, fromRight)) {
+          const p = start + row * box.cols + col + 1;
+          if (off.has(p)) continue;
+          if (left > 0) { filled.push(p); left -= 1; } else empty.push(p);
+        }
+      }
+    }
+  }
+  return [...filled, ...empty];
+}
+
+/**
+ * Whether a rack's slots were given new numbers after `when`: an edit of a
+ * wall renumbers every box after the one that changed (Rack.renumberedAt,
+ * set by PUT /api/racks/:id). A slot number remembered before that, in a
+ * deleted bottle's snapshot or an MCP undo row, no longer names the place it
+ * was taken from. Callers: bottleOps.restoreDeletedBottle and
+ * mcp/structuralUndo (mcp/revert asks the database the same). False when
+ * either time is unknown.
+ */
+function renumberedSince(rack, when) {
+  const at = rack && rack.renumberedAt ? new Date(rack.renumberedAt).getTime() : NaN;
+  const since = when ? new Date(when).getTime() : NaN;
+  return Number.isFinite(at) && Number.isFinite(since) && at > since;
+}
+
+// What a box is stored with (models/Rack wallBoxSchema), its _id apart.
+const BOX_FIELDS = ['x', 'y', 'w', 'h', 'kind', 'perSection', 'rows', 'cols'];
+
+/**
+ * The shape of a rack as an import states it, made safe to store. An import
+ * builds the rack document itself, so nothing else holds its boxes to the
+ * rules a request is held to. A wall's boxes are reduced to their own fields
+ * (a file's box ids are not carried: each stored box gets a new one) and
+ * checked with validateWallConfig; a wall that fails comes back as a plain
+ * grid, as a rack of an unknown type does. `boxes` on any other rack is
+ * dropped. Caller: services/cellarImport.createRacks (a bottle-file import
+ * cannot state a wall at all: utils/rackImport.sanitizeRackConfigs).
+ * Returns { type, typeConfig }.
+ */
+function importedRackShape(type, rows, cols, typeConfig) {
+  const rest = typeConfig && typeof typeConfig === 'object' ? { ...typeConfig } : undefined;
+  if (rest) delete rest.boxes;
+  if (type !== 'wall') return { type, typeConfig: rest };
+  const stated = typeConfig && typeof typeConfig === 'object' ? typeConfig.boxes : null;
+  if (Array.isArray(stated) && stated.length <= rows * cols) {
+    const boxes = stated.map((b) => (b && typeof b === 'object'
+      ? Object.fromEntries(BOX_FIELDS.filter((k) => b[k] !== undefined && b[k] !== null).map((k) => [k, b[k]]))
+      : b));
+    if (validateWallConfig({ boxes }, 'wall', rows, cols, false) === null) return { type: 'wall', typeConfig: { boxes } };
+  }
+  return { type: 'grid', typeConfig: rest };
 }
 
 // A slot's place inside its box after the box changed size: the same pile and
@@ -262,6 +389,6 @@ function planWallEdit(before, after, { bottles = [], marked = [] } = {}) {
 
 module.exports = {
   BOX_KINDS, PILE_SECTIONS, SECTION_NAMES, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM, WALL_MAX_SLOTS,
-  boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel, wallPlace,
-  validateWallConfig, planWallEdit,
+  boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel, wallPlace, wallPlacer,
+  validateWallConfig, importedRackShape, planWallEdit, wallNumbering, wallFillOrder, renumberedSince,
 };

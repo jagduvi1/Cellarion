@@ -50,6 +50,7 @@ const { encodeKeptPhoto, KEPT_EXTENSION } = require('./photoFormat');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
 const { planRackCreations, placeBottlesInRack, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { getMaxPosition, fitCabinetTypeConfig } = require('../utils/rackGeometry');
+const { importedRackShape } = require('../utils/wallGeometry');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { normalizeBarcode } = require('../utils/barcode');
@@ -342,6 +343,12 @@ async function createRacks(cellarId, userId, cellar, items, result) {
       cols: clampDim(spec?.cols || inf.cols, 1),
     };
     if (spec?.typeConfig) rackData.typeConfig = spec.typeConfig;
+    // A wall from a (possibly hand-edited) export is held to the rules a
+    // request is held to; one that fails them is stored as a plain grid.
+    // Boxes on any other rack are dropped.
+    const shape = importedRackShape(safeType, rackData.rows, rackData.cols, rackData.typeConfig);
+    rackData.type = shape.type;
+    if (shape.typeConfig) rackData.typeConfig = shape.typeConfig; else delete rackData.typeConfig;
     // A cabinet from a (possibly hand-edited) export is stored with a fitted,
     // bounded shelf list — never a missing, short or million-entry one.
     if (safeType === 'cabinet') {

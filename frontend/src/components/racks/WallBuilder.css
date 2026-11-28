@@ -30,11 +30,15 @@
 .wall-builder input[type="number"] { width: 6rem; }
 .wall-builder-hint { margin: 0; flex: 1 1 14rem; }
 
+/* A wide wall keeps its boxes large enough to tap (the drawing's least size
+   is set on it: WallBuilder) and scrolls sideways here. */
 .wall-builder-canvas {
   background: var(--color-surface-hover);
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 0.6rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .wall-builder-svg {
   display: block;

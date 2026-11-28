@@ -173,6 +173,11 @@ app.use('/api/wine-lists', express.json({ limit: '1mb' }));
 // Pick lists: up to 500 bottle ids per request (~14 kB of JSON) — past the
 // 10 kb default.
 app.use('/api/pick-lists', express.json({ limit: '32kb' }));
+// Racks: a wall's shape (up to 400 boxes), a zone's positions, and an
+// arrangement (the old and the new slot of every bottle in the rack, up to
+// routes/racks MAX_RACK_SLOTS of each) all pass the 10 kb default long
+// before the routes' own limits.
+app.use('/api/racks', express.json({ limit: '1200kb' }));
 // MCP: the anonymous public surface stays tiny (no image tool) — registered
 // BEFORE the personal /api/mcp rule so /api/mcp/public matches it first (the
 // first express.json to parse wins). The personal endpoint allows a larger

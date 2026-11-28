@@ -130,6 +130,13 @@ async function seedContractData() {
     cellar: home._id, user: alice._id, name: 'Grid', type: 'grid', rows: 2, cols: 3,
     slots: [{ position: 4, bottle: b2._id }],
   });
+  // A wall of two boxes: an X of three bottles a pile, and two shelves of
+  // three. Position 5 is the second bottle of the X's left pile.
+  const wall = await Rack.create({
+    cellar: home._id, user: alice._id, name: 'Cellar wall', type: 'wall', rows: 1, cols: 2,
+    typeConfig: { boxes: [{ x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 3 }, { x: 1, y: 0, w: 1, h: 1, kind: 'shelves', rows: 2, cols: 3 }] },
+    slots: [{ position: 5, bottle: cleared._id }],
+  });
 
   // Personal data: one bottle-level entry, one wine-level entry by a member.
   const closure = await PersonalDataKey.create({ user: alice._id, name: 'Closure', nameKey: 'closure', type: 'text' });
@@ -157,7 +164,7 @@ async function seedContractData() {
   return {
     users: { alice, bob, carol },
     cellars: { home, shared },
-    racks: { fridge, grid },
+    racks: { fridge, grid, wall },
     wines: { red, white },
     bottles: { b1, b2, b3, b4, drunk, ordered, consumable, late, cleared, bobs },
     tokens,

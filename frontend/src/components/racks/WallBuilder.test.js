@@ -36,12 +36,12 @@ test('a new wall shows its four boxes; tapping one opens it, and another content
 
   fireEvent.click(box('B1'));
   expect(screen.getByText('Box B1')).toBeTruthy();
-  expect(screen.getByText('Holds 24 bottles')).toBeTruthy();
+  expect(screen.getByText('Holds 24 bottle(s)')).toBeTruthy();
   expect(kind('X').getAttribute('aria-pressed')).toBe('true');
 
   fireEvent.click(kind('Diagonal /'));
   expect(latest.boxes.find((b) => b.x === 1 && b.y === 0)).toMatchObject({ kind: 'slash', perSection: 14 });
-  expect(screen.getByText('Holds 28 bottles')).toBeTruthy();
+  expect(screen.getByText('Holds 28 bottle(s)')).toBeTruthy();
   expect(screen.getByLabelText('Bottles per half').value).toBe('14');
   expect(serverSays()).toBeNull();
 });
@@ -51,7 +51,7 @@ test('what a box holds is typed in, and a closed box asks for nothing', () => {
   fireEvent.click(box('A1'));
   fireEvent.change(screen.getByLabelText('Bottles per triangle'), { target: { value: '9' } });
   expect(latest.boxes[0].perSection).toBe(9);
-  expect(screen.getByText('Holds 36 bottles')).toBeTruthy();
+  expect(screen.getByText('Holds 36 bottle(s)')).toBeTruthy();
 
   fireEvent.click(kind('Rack'));
   fireEvent.change(screen.getByLabelText('Rows'), { target: { value: '4' } });
@@ -117,7 +117,7 @@ test('on a wall in use, a box with bottles in it keeps its content, cannot be re
   render(<Harness start={wallFromRack(rack)} usage={usageByBox(rack)} />);
 
   fireEvent.click(box('A1'));
-  expect(screen.getByText(/^2 bottles lie in this box\./)).toBeTruthy();
+  expect(screen.getByText(/^This box has 2 bottle\(s\) in it\./)).toBeTruthy();
   expect(kind('X').disabled).toBe(false);
   for (const name of ['Diagonal /', 'Rack', 'Open bin', 'Closed']) expect(kind(name).disabled).toBe(true);
   expect(screen.getByRole('button', { name: 'Remove this box' }).disabled).toBe(true);
@@ -125,7 +125,7 @@ test('on a wall in use, a box with bottles in it keeps its content, cannot be re
 
   // The empty box beside it is free.
   fireEvent.click(box('B1'));
-  expect(screen.queryByText(/lie in this box/)).toBeNull();
+  expect(screen.queryByText(/^This box has/)).toBeNull();
   expect(kind('Open bin').disabled).toBe(false);
   expect(screen.getByRole('button', { name: 'Remove this box' }).disabled).toBe(false);
 });
@@ -137,4 +137,55 @@ test('a box can be chosen from the keyboard', () => {
   fireEvent.keyDown(target, { key: 'Enter' });
   expect(screen.getByText('Box A2')).toBeTruthy();
   expect(target.getAttribute('aria-pressed')).toBe('true');
+});
+
+// Adding or removing a box replaces the panel under the button that was
+// pressed. Left alone, the keyboard's place falls back to the page (and, in
+// the edit dialog, out of the dialog).
+test('after adding or removing a box the keyboard is in the new panel, on the content chosen there', () => {
+  render(<Harness start={setGrid(newWall(), 2, 3)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Empty wall at C1, add a box' }));
+  fireEvent.click(kind('Shelves'));
+  expect(screen.getByText('Box C1')).toBeTruthy();
+  expect(document.activeElement).toBe(kind('Shelves'));
+  expect(kind('Shelves').getAttribute('aria-pressed')).toBe('true');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove this box' }));
+  expect(screen.getByText('Empty wall at C1')).toBeTruthy();
+  expect(document.activeElement).toBe(kind('X'));
+});
+
+// The builder sits inside the rack form: Enter in a number field would create
+// or save the rack in the middle of an edit.
+test('Enter in a number field of the builder does not submit the form around it', () => {
+  const onSubmit = vi.fn((e) => e.preventDefault());
+  render(<form onSubmit={onSubmit}><Harness start={newWall()} /><button type="submit">Create</button></form>);
+  fireEvent.click(box('A1'));
+  const field = screen.getByLabelText('Bottles per triangle');
+  const notStopped = fireEvent.keyDown(field, { key: 'Enter' });
+  expect(notStopped).toBe(false);
+  // A key on a box still chooses it.
+  fireEvent.keyDown(box('B1'), { key: 'Enter' });
+  expect(screen.getByText('Box B1')).toBeTruthy();
+});
+
+test('a wall as high as the server stores opens with a height it can keep', () => {
+  const tall = { rows: 15, cols: 1, boxes: [{ _id: 'cccccccccccccccccccccccc', x: 0, y: 14, w: 1, h: 1, kind: 'bin', perSection: 4 }] };
+  render(<Harness start={tall} />);
+  const height = screen.getByLabelText('Wall height (cells)');
+  expect(height.value).toBe('15');
+  expect(Number(height.getAttribute('max'))).toBeGreaterThanOrEqual(15);
+  expect(Number(height.getAttribute('min'))).toBe(15);
+  // Widening the wall leaves its height alone.
+  fireEvent.change(screen.getByLabelText('Wall width (cells)'), { target: { value: '2' } });
+  expect(latest).toMatchObject({ rows: 15, cols: 2 });
+  expect(serverSays()).toBeNull();
+});
+
+test('a wall past what a rack may hold is said at once, not at the save', () => {
+  const full = { x: 0, y: 0, w: 1, h: 1, kind: 'rack', rows: 20, cols: 20 };
+  const boxes = Array.from({ length: 26 }, (_, i) => ({ ...full, key: `k${i}`, x: i % 13, y: Math.floor(i / 13) }));
+  render(<Harness start={{ rows: 2, cols: 13, boxes }} />);
+  expect(screen.getByRole('alert').textContent).toBe('This wall would hold 10400 bottles. A rack can hold at most 10000: make a box smaller or take one away.');
+  expect(serverSays()).toMatch(/at most 10000 slots/);
 });

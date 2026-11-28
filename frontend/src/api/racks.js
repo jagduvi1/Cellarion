@@ -30,11 +30,13 @@ export const moveSlot = (apiFetch, rackId, fromPosition, toPosition, expect = {}
 // Auto-arrange — server-side engine (same one the MCP auto_arrange tool uses).
 // preview computes the plan; apply takes it back ({ target, before }) and the
 // server re-validates everything. Undo = apply with target/before swapped.
-export const previewArrange = (apiFetch, rackId, { strategy, positionOrder }) =>
+// `corner` is where the filling starts; a wall is ordered from it by the
+// server, every other rack by the `positionOrder` sent with it.
+export const previewArrange = (apiFetch, rackId, { strategy, positionOrder, corner }) =>
   apiFetch(`/api/racks/${rackId}/arrange/preview`, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ strategy, positionOrder }),
+    body: JSON.stringify({ strategy, positionOrder, corner }),
   });
 
 export const applyArrange = (apiFetch, rackId, { target, before }) =>

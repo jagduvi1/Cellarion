@@ -11,6 +11,7 @@
 const User = require('../models/User');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
+const { slotPlacer, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
 const WineDefinition = require('../models/WineDefinition');
 const { NOT_IN_CELLAR_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const { classifyMaturity, buildProfileMap, maturityLabel, resolveEffectiveWindow } = require('../utils/maturityUtils');
@@ -186,15 +187,20 @@ async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
       : [],
     bottleIds.length
       ? Rack.find({ cellar: { $in: cellarIds }, deletedAt: null, 'slots.bottle': { $in: bottleIds } })
-          .select('name slots.position slots.bottle').lean()
+          .select(`name slots.position slots.bottle ${RACK_PLACE_FIELDS}`).lean()
       : [],
   ]);
   const tasteOf = new Map(wines.map((w) => [String(w._id), w.aiProfile]));
   const positionOf = new Map();
+  const wanted = new Set(bottleIds.map(String));
   for (const rack of racks) {
+    const placeOf = slotPlacer(rack);
     for (const s of rack.slots || []) {
       const bid = String(s.bottle);
-      if (bottleIds.some((id) => String(id) === bid)) positionOf.set(bid, { rack: rack.name, position: s.position });
+      if (!wanted.has(bid)) continue;
+      // wall: on a wall rack, the box and the spot in it (pile + count from the bottom, or row + col).
+      const wall = placeOf(s.position);
+      positionOf.set(bid, { rack: rack.name, position: s.position, ...(wall ? { wall } : {}) });
     }
   }
 

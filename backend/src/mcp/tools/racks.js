@@ -3,25 +3,38 @@
 // bounded instead of dumping every slot of every rack.
 const Rack = require('../../models/Rack');
 const { registerTool } = require('../registry');
-const { getMaxPosition, slotPlace } = require('../../utils/rackGeometry');
-const { wallRanges } = require('../../utils/wallGeometry');
-const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess } = require('../toolUtil');
+const { getMaxPosition, slotPlacer } = require('../../utils/rackGeometry');
+const { wallRanges, PILE_SECTIONS, SECTION_NAMES } = require('../../utils/wallGeometry');
+const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, wallSpot } = require('../toolUtil');
 
 // A wall rack is one rack built from boxes (utils/wallGeometry). Its boxes in
 // position order, each with what it is, how many cells it covers, what it
-// holds and the positions it has; a closed box has none.
+// holds and the positions it has; a closed box has none. A box of several
+// piles names each pile with its positions, so a spot nobody lies in yet
+// can be found too ("B2, left pile"): inside a pile the positions count
+// from the lowest bottle up.
 const isWall = (r) => r.type === 'wall' && !r.isModular;
 function wallBoxesOf(r) {
-  return wallRanges(r.rows, r.cols, r.typeConfig).map(({ box, label, start, capacity }) => ({
-    box: label,
-    kind: box.kind,
-    cells_wide: box.w,
-    cells_high: box.h,
-    ...(box.perSection != null && capacity ? { per_pile: box.perSection } : {}),
-    ...(box.kind === 'rack' || box.kind === 'shelves' ? { rows: box.rows, cols: box.cols } : {}),
-    capacity,
-    positions: capacity ? { from: start + 1, to: start + capacity } : null,
-  }));
+  return wallRanges(r.rows, r.cols, r.typeConfig).map(({ box, label, start, capacity }) => {
+    const piles = capacity && PILE_SECTIONS[box.kind] ? PILE_SECTIONS[box.kind] : 0;
+    return {
+      box: label,
+      kind: box.kind,
+      cells_wide: box.w,
+      cells_high: box.h,
+      ...(piles ? { per_pile: box.perSection } : {}),
+      ...(box.kind === 'rack' || box.kind === 'shelves' ? { rows: box.rows, cols: box.cols } : {}),
+      capacity,
+      positions: capacity ? { from: start + 1, to: start + capacity } : null,
+      ...(piles > 1
+        ? {
+          piles: SECTION_NAMES[box.kind].map((section, i) => ({
+            section, positions: { from: start + i * box.perSection + 1, to: start + (i + 1) * box.perSection },
+          })),
+        }
+        : {}),
+    };
+  });
 }
 
 registerTool({
@@ -78,7 +91,10 @@ registerTool({
     'Full slot map of one rack: every occupied position with its bottle (wine, producer, vintage), plus zones and ' +
     'disabled positions. Call when the user asks where something is, what is in a rack, or before reasoning about placement. ' +
     'For a rack of type "wall" (one rack built from boxes) it also lists the boxes with what each is and the positions it holds, ' +
-    'and each slot says its box and the spot in it (wall): say "box B2, left pile, third from the bottom", not the position number.',
+    'and each slot says its box and the spot in it (wall): say "box B2, left pile, third from the bottom", not the position number. ' +
+    'A box with several piles (kind x, slash, backslash) names each pile with its positions (piles); inside a pile, and in an open bin, ' +
+    'the positions count from the lowest bottle up, and in a rack or shelves box row by row from the top, left to right. ' +
+    'That is how to find the position of an empty spot the user points at ("put it in B2, left pile": the lowest free position of that pile).',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: { rack_id: objectId.describe('Rack id from list_racks') },
@@ -99,6 +115,7 @@ registerTool({
       })
       .lean();
     if (!rack) return fail('not_found', NOT_FOUND);
+    const placeOf = slotPlacer(rack);
     const slots = (rack.slots || [])
       .filter((s) => s.bottle)
       .map((s) => ({
@@ -113,7 +130,7 @@ registerTool({
           : null,
         vintage: s.bottle.vintage,
         // A wall rack: the box and the spot in it (pile + count from the bottom, or row + col).
-        ...(isWall(rack) ? { wall: slotPlace(rack, s.position) } : {}),
+        ...(isWall(rack) ? { wall: wallSpot(placeOf(s.position)) } : {}),
       }))
       .sort((a, b) => a.position - b.position);
     const capacity = Math.max(getMaxPosition(rack) - (rack.disabledPositions || []).length, 0);
