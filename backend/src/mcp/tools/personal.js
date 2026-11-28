@@ -143,6 +143,9 @@ registerTool({
       }
       return failFrom(added.error);
     }
+    // A response flag, not a gate. A wishlist wine is never a private draft
+    // (noDrafts on the wine_id path, draft:false on the mint), so a pending
+    // row here is one whose producer was missing.
     const pendingIdentity = wine.pendingIdentity === true;
     const item = wishlistItemOut(added.item);
     return ok(
