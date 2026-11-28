@@ -122,7 +122,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const { bottle } = result;
     const ownPhotos = row.detail?.own_photos_deleted || 0;
     const envelope = {
-      summary: `Undid delete — ${bottleLabel(bottle)} is back${result.placed ? ` in its rack slot ${result.position}` : (snapshot.rack ? ' (unplaced: its old slot is taken now)' : '')}${ownPhotos ? `; its ${ownPhotos} own photo(s) could not be restored` : ''}`,
+      summary: `Undid delete — ${bottleLabel(bottle)} is back${result.placed ? ` in its rack slot ${result.position}` : (snapshot.rack ? ' (unplaced: its old slot is not free any more)' : '')}${ownPhotos ? `; its ${ownPhotos} own photo(s) could not be restored` : ''}`,
       data: { undone: 'delete_bottle', bottle_id: bottle._id, status: bottle.status, placed: result.placed, position: result.position, photos_restored: false },
     };
     await logAction(ctx, { tool: 'undo_last', action: 'add', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
@@ -1007,6 +1007,12 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     }
     const prev = row.prev || {};
     if (!prev.openedAt) return fail('conflict', 'That close recorded no previous open state; nothing to restore.');
+    // A wall edited since the close: the slot the bottle had left has another
+    // number now, so it comes back open without one.
+    const renumbered = prev.openedFromSlot && row.createdAt
+      ? await Rack.exists({ _id: prev.openedFromSlot.rack, renumberedAt: { $gt: row.createdAt } })
+      : null;
+    const slotStillMeant = !renumbered;
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
     try {
@@ -1014,7 +1020,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       bottle.preservationMethod = prev.preservationMethod || undefined;
       bottle.pours = (prev.pours || []).map((p) => ({ at: p.at, ml: p.ml }));
       bottle.openBottleNotifiedAt = prev.openBottleNotifiedAt ? new Date(prev.openBottleNotifiedAt) : null;
-      bottle.openedFromSlot = prev.openedFromSlot
+      bottle.openedFromSlot = prev.openedFromSlot && slotStillMeant
         ? { rack: prev.openedFromSlot.rack, position: prev.openedFromSlot.position }
         : null;
       await bottle.save();

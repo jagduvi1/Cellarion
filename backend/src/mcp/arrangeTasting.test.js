@@ -208,6 +208,18 @@ describe('auto_arrange apply', () => {
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'rack.arrange', expect.anything(), expect.objectContaining({ via: 'mcp' }));
   });
 
+  // The bottles can sit at the same numbers after an edit of a wall while the
+  // numbers the plan moves them to name other places.
+  test('a wall renumbered since the preview → conflict, nothing saved, budget untouched', async () => {
+    const rack = { ...mkRack(), type: 'wall', renumberedAt: new Date(Date.now() + 1000) };
+    McpActionLog.findOne.mockReturnValue(chain(preview(rack)));
+    wireRackLoad(rack);
+    const res = await tool('auto_arrange').handler({ mode: 'apply', preview_id: oid('f') }, CTX);
+    expect(parse(res).error).toMatchObject({ code: 'conflict', message: expect.stringMatching(/wall has changed since the preview/) });
+    expect(rack.save).not.toHaveBeenCalled();
+    expect(takeMutationSlot).not.toHaveBeenCalled();
+  });
+
   test('rack changed since preview → conflict, nothing saved, budget untouched', async () => {
     const rack = mkRack();
     rack.slots[1].bottle = bottleDoc('3'); // someone re-placed a bottle since

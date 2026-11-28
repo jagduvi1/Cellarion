@@ -50,7 +50,7 @@ const scopeVersion = (ownerIds) => [...new Set(ownerIds.map((id) => String(id &&
   .map((id) => `${id}:${getDataVersion(id)}`)
   .join(',');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
-const { slotPlace, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
+const { slotPlacer, RACK_PLACE_FIELDS } = require('../utils/rackGeometry');
 const { sweetnessQueryValue, attachSweetnessCategoriesIfReadable } = require('../services/sweetnessCategory');
 // Which picture each card of a bottle list shows.
 const { attachBottleImageUrls } = require('../services/bottleImageUrls');
@@ -517,6 +517,7 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
         const wanted = new Set(ids.map(String));
         let inRoomRacks = null;
         for (const rack of racks) {
+          const placeOf = slotPlacer(rack);
           for (const slot of rack.slots || []) {
             const bid = slot.bottle && String(slot.bottle);
             if (!bid || !wanted.has(bid)) continue;
@@ -526,7 +527,7 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
               inRoomRacks = new Set((layout?.rackPlacements || []).map((rp) => String(rp.rack?._id || rp.rack)));
             }
             // wall: the box and the spot in it, for a wall rack only.
-            const wall = slotPlace(rack, slot.position);
+            const wall = placeOf(slot.position);
             slotOf[bid] = { rackId: rack._id, rackName: rack.name, rackGroup: rack.group || null, position: slot.position, inRoom: inRoomRacks.has(String(rack._id)), ...(wall ? { wall } : {}) };
           }
         }

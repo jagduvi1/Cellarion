@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { wallLayout, BOX_KINDS } from '../../utils/wallLayout';
+import { wallLayout, BOX_KINDS, WALL_MAX_SLOTS } from '../../utils/wallLayout';
 import {
   addBox, removeBox, setKind, setHolds, setSpan, maxSpan, setGrid, minGrid, boxAt, findBox,
   boxCapacity, WALL_MAX_COLS, WALL_MAX_ROWS, MAX_PER_SECTION, MAX_BOX_DIM,
@@ -38,6 +38,14 @@ function KindIcon({ kind }) {
   );
 }
 
+// Enter in one of the builder's number fields would submit the form around
+// it and create or save the rack in the middle of an edit.
+const keepEnter = (e) => {
+  if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault();
+};
+// A box's least drawn size on a narrow screen, so it stays large enough to tap.
+const MIN_BOX_PX = 48;
+
 const onKey = (run) => (e) => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
   e.preventDefault();
@@ -59,6 +67,18 @@ export default function WallBuilder({ wall, onChange, usage, disabled = false })
   const { t } = useTranslation();
   const [sel, setSel] = useState(null);
   const layout = useMemo(() => wallLayout(wall.rows, wall.cols, { boxes: wall.boxes }), [wall]);
+  // Adding or removing a box replaces the panel under the button that was
+  // pressed. The keyboard's place moves into the new panel, on the content
+  // that is chosen there, or it would be lost to the page.
+  const panelRef = useRef(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    const panel = panelRef.current;
+    const next = panel && (panel.querySelector('.wall-builder-kind.selected:not(:disabled)') || panel.querySelector('.wall-builder-kind:not(:disabled)'));
+    if (next) next.focus();
+  });
   const min = minGrid(wall);
 
   const box = sel?.type === 'box' ? findBox(wall, sel.key) : null;
@@ -74,7 +94,10 @@ export default function WallBuilder({ wall, onChange, usage, disabled = false })
     if (!cell) return;
     const added = addBox(wall, cell.x, cell.y, kind);
     onChange(added.wall);
-    if (added.key) setSel({ type: 'box', key: added.key });
+    if (added.key) {
+      setSel({ type: 'box', key: added.key });
+      refocus.current = true;
+    }
   };
 
   const kindButtons = (current, locked) => (
@@ -96,7 +119,7 @@ export default function WallBuilder({ wall, onChange, usage, disabled = false })
   );
 
   return (
-    <div className="wall-builder">
+    <div className="wall-builder" onKeyDown={keepEnter}>
       <div className="wall-builder-grid">
         <label className="form-group">
           <span>{t('racks.wall.cellsWide', 'Wall width (cells)')}</span>
@@ -121,6 +144,7 @@ export default function WallBuilder({ wall, onChange, usage, disabled = false })
         <svg
           viewBox={`0 0 ${layout.viewBox.width} ${layout.viewBox.height}`}
           className="wall-builder-svg"
+          style={{ minWidth: `${wall.cols * MIN_BOX_PX}px`, minHeight: `${wall.rows * MIN_BOX_PX}px` }}
           role="group"
           aria-label={t('racks.wall.canvasLabel', { cols: wall.cols, rows: wall.rows, defaultValue: 'The wall, {{cols}} cells wide and {{rows}} high' })}
         >
@@ -167,7 +191,7 @@ export default function WallBuilder({ wall, onChange, usage, disabled = false })
                   role="button"
                   tabIndex={disabled ? -1 : 0}
                   aria-pressed={!!on}
-                  aria-label={t('racks.wall.boxAria', { label: b.label, kind: kindName(b.kind), n: b.capacity, defaultValue: 'Box {{label}}, {{kind}}, {{n}} bottles' })}
+                  aria-label={t('racks.wall.boxAria', { label: b.label, kind: kindName(b.kind), n: b.capacity, defaultValue: 'Box {{label}}, {{kind}}, {{n}} bottle(s)' })}
                   onClick={disabled ? undefined : pick}
                   onKeyDown={disabled ? undefined : onKey(pick)}
                 />
@@ -177,20 +201,26 @@ export default function WallBuilder({ wall, onChange, usage, disabled = false })
         </svg>
       </div>
 
-      <div className="wall-builder-panel" aria-live="polite">
+      {layout.totalSlots > WALL_MAX_SLOTS && (
+        <p className="error-message" role="alert">
+          {t('racks.wall.tooMany', { n: layout.totalSlots, max: WALL_MAX_SLOTS, defaultValue: 'This wall would hold {{n}} bottles. A rack can hold at most {{max}}: make a box smaller or take one away.' })}
+        </p>
+      )}
+
+      <div className="wall-builder-panel" aria-live="polite" ref={panelRef}>
         {box && drawn && (
           <>
             <div className="wall-builder-panel-head">
               <strong>{t('racks.wall.boxTitle', { label: drawn.label, defaultValue: 'Box {{label}}' })}</strong>
               <span className="wall-builder-sub">
                 {boxCapacity(box) > 0
-                  ? t('racks.wall.boxHolds', { n: boxCapacity(box), defaultValue: 'Holds {{n}} bottles' })
+                  ? t('racks.wall.boxHolds', { n: boxCapacity(box), defaultValue: 'Holds {{n}} bottle(s)' })
                   : t('racks.wall.boxHoldsNone', 'Holds no bottles')}
               </span>
             </div>
             {used && (
               <p className="help-text wall-builder-used">
-                {t('racks.wall.inUse', { n: used.bottles, defaultValue: '{{n}} bottles lie in this box. Move them out before you remove it or change what is inside. It can still grow.' })}
+                {t('racks.wall.inUse', { n: used.bottles, defaultValue: 'This box has {{n}} bottle(s) in it. Move them out before you remove it or change what is inside. It can still grow.' })}
               </p>
             )}
             <div className="wall-builder-section">
@@ -239,6 +269,7 @@ export default function WallBuilder({ wall, onChange, usage, disabled = false })
               onClick={() => {
                 onChange(removeBox(wall, sel.key));
                 setSel({ type: 'cell', x: box.x, y: box.y });
+                refocus.current = true;
               }}
             >
               {t('racks.wall.remove', 'Remove this box')}

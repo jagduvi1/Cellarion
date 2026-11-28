@@ -2,9 +2,7 @@ import { Suspense, useMemo, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import RackMesh from '../room/RackMesh';
-import {
-  CELL_W, PANEL_THICK, getDisplayDims, getRackHeight, getDefaultRackDepth,
-} from '../../utils/roomConstants';
+import { getRackWorldDims, getRackHeight, getDefaultRackDepth } from '../../utils/roomConstants';
 import './ShelfView3D.css';
 
 /**
@@ -23,11 +21,11 @@ import './ShelfView3D.css';
 export default function ShelfView3D({ rack, activePosition, highlightPos, onSlotClick, pullOut = true }) {
   const orbitRef = useRef();
 
-  // Compute reasonable rack dimensions for camera placement (matches the
-  // formulas RackMesh uses internally so the camera frames the rack tightly).
-  const { displayCols } = getDisplayDims(rack);
+  // The rack's real size, from the helpers RackMesh and RoomScene use, so the
+  // camera frames the whole body: a wall or a cube is as wide as its drawing,
+  // not as its cell count.
   const isCabinet = (rack.type || 'grid') === 'cabinet';
-  const width  = displayCols * CELL_W + PANEL_THICK * 2;
+  const width  = getRackWorldDims(rack, {}).halfW * 2;
   // Same helpers RackMesh and RoomScene use, so the camera frames the real
   // body — cabinet bays and double-height rows included.
   const height = getRackHeight(rack);

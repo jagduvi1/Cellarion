@@ -11,6 +11,7 @@ const Bottle = require('../models/Bottle');
 const McpActionLog = require('../models/McpActionLog');
 const { logAudit } = require('../services/audit');
 const { getMaxPosition } = require('../utils/rackGeometry');
+const { renumberedSince } = require('../utils/wallGeometry');
 const {
   placeBottleInRack, clearRackSlot, MOVE_MIN_ROLE, findMoveDestination, moveBottleToCellar,
 } = require('../services/rackOps');
@@ -137,6 +138,9 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     if (pos > getMaxPosition(rack)) {
       return fail('conflict', 'That rack was resized and the slot no longer exists; nothing was changed.');
     }
+    if (renumberedSince(rack, last.createdAt)) {
+      return fail('conflict', 'That wall was changed since and its slots have new numbers; nothing was changed. Put the bottle where it belongs with place_bottle.');
+    }
     const occupied = rack.slots.find((s) => s.position === pos && String(s.bottle) !== String(bottleId));
     if (occupied) return fail('conflict', `Position ${pos} is occupied again; cannot restore. Nothing was changed.`);
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
@@ -153,6 +157,9 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     if (!rack) return fail('conflict', 'That rack no longer exists; nothing was changed.');
     const access = await resolveCellarAccess(ctx.user.id, rack.cellar, 'editor');
     if (!access) return fail('conflict', 'You no longer have access to that rack; nothing was changed.');
+    if (renumberedSince(rack, last.createdAt)) {
+      return fail('conflict', 'That wall was changed since and its slots have new numbers; undo the arrangement manually. Nothing was changed.');
+    }
     const before = last.prev?.before;
     const target = last.detail?.target;
     if (!Array.isArray(before) || !Array.isArray(target)) {

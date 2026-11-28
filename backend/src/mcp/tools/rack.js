@@ -1,5 +1,6 @@
-// Cellar / rack / placement write tools; auto-arrange is in arrange.js. Grid
-// racks only (modular racks, zones, disabled-slot management: the web app).
+// Cellar / rack / placement write tools; auto-arrange is in arrange.js. A grid,
+// a cabinet or a wall (modular racks, zones, disabled-slot management and
+// changing a rack's shape: the web app).
 // All mutations run through services/rackOps — the SAME code the REST routes
 // use, so the procedural one-bottle-per-slot invariant and the move ordering
 // can't drift between surfaces.
@@ -13,11 +14,11 @@ const {
 } = require('../../services/rackOps');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
-  resolveCellarAccess, resolveBottleAccess,
+  resolveCellarAccess, resolveBottleAccess, wallSpot, wallText,
 } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
-const { totalSlots } = require('../../utils/rackGeometry');
-const { BOX_KINDS, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM } = require('../../utils/wallGeometry');
+const { totalSlots, slotPlace } = require('../../utils/rackGeometry');
+const { BOX_KINDS, PILE_SECTIONS, WALL_MAX_PER_SECTION, WALL_MAX_BOX_DIM } = require('../../utils/wallGeometry');
 
 // Load a rack + confirm the caller can edit its cellar. Returns { rack, cellar }
 // or null (missing/foreign → not_found, same as the rest of the surface).
@@ -87,8 +88,8 @@ registerTool({
     cellar_id: objectId,
     name: z.string().min(1).max(120),
     type: z.enum(['grid', 'cabinet', 'wall']).default('grid').describe('"grid" = rows × cols slots; "cabinet" = a wine fridge with shelves (see shelf_rows); "wall" = one rack built from boxes (see boxes)'),
-    rows: z.number().int().min(1).max(20).default(4).describe('Rows of slots (grid), number of shelves (cabinet), or cells high (wall)'),
-    cols: z.number().int().min(1).max(20).default(8).describe('Slots per row (grid), bottles across one row (cabinet), or cells wide (wall)'),
+    rows: z.number().int().min(1).max(20).optional().describe('Rows of slots (grid), number of shelves (cabinet), or cells high (wall). Default 4; a wall: as high as its boxes reach'),
+    cols: z.number().int().min(1).max(20).optional().describe('Slots per row (grid), bottles across one row (cabinet), or cells wide (wall). Default 8; a wall: as wide as its boxes reach'),
     boxes: z.array(z.object({
       x: z.number().int().min(0).max(19).describe('Column of the box\'s top-left cell, 0 = the left-most'),
       y: z.number().int().min(0).max(19).describe('Row of the box\'s top-left cell, 0 = the top'),
@@ -121,6 +122,12 @@ registerTool({
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
     const type = args.type || 'grid';
+    // A wall is as large as its boxes reach when the caller states no size.
+    const reach = (from, span) => (type === 'wall' && Array.isArray(args.boxes)
+      ? Math.min(20, Math.max(...args.boxes.map((b) => b[from] + (b[span] ?? 1))))
+      : undefined);
+    const rows = args.rows ?? reach('y', 'h') ?? 4;
+    const cols = args.cols ?? reach('x', 'w') ?? 8;
     let typeConfig;
     if (type === 'cabinet') {
       if (!Array.isArray(args.shelf_rows)) {
@@ -140,33 +147,44 @@ registerTool({
       if (!Array.isArray(args.boxes)) {
         return fail('invalid_input', 'boxes is required for a wall: the boxes on its grid of rows × cols cells, each { x, y, kind } with what it holds');
       }
-      // The stored names (models/Rack wallBoxSchema); the rules are checked by
-      // createGridRack through utils/wallGeometry.validateWallConfig.
+      // What a box must state, said in this tool's own field names: the
+      // shared check below answers in the stored ones (perSection).
+      for (const b of args.boxes) {
+        const where = `The "${b.kind}" box at x ${b.x}, y ${b.y}`;
+        if (PILE_SECTIONS[b.kind] && b.per_pile === undefined) {
+          return fail('invalid_input', `${where} needs per_pile: the bottles in each of its piles (1 to ${WALL_MAX_PER_SECTION})`);
+        }
+        if ((b.kind === 'rack' || b.kind === 'shelves') && (b.rows === undefined || b.cols === undefined)) {
+          return fail('invalid_input', `${where} needs rows and cols (1 to ${WALL_MAX_BOX_DIM} each)`);
+        }
+      }
+      // The stored names (models/Rack wallBoxSchema), and of the sizes only
+      // what the box's kind uses; the rules are checked by createGridRack
+      // through utils/wallGeometry.validateWallConfig.
       typeConfig = {
         boxes: args.boxes.map((b) => ({
           x: b.x, y: b.y, w: b.w ?? 1, h: b.h ?? 1, kind: b.kind,
-          ...(b.per_pile !== undefined ? { perSection: b.per_pile } : {}),
-          ...(b.rows !== undefined ? { rows: b.rows } : {}),
-          ...(b.cols !== undefined ? { cols: b.cols } : {}),
+          ...(PILE_SECTIONS[b.kind] ? { perSection: b.per_pile } : {}),
+          ...(b.kind === 'rack' || b.kind === 'shelves' ? { rows: b.rows, cols: b.cols } : {}),
         })),
       };
     } else if (args.boxes !== undefined) {
       return fail('invalid_input', 'boxes applies to type "wall" only');
     }
-    const result = await createGridRack(access.cellar, { name: args.name, type, rows: args.rows, cols: args.cols, typeConfig, group: args.group }, ctx.req);
+    const result = await createGridRack(access.cellar, { name: args.name, type, rows, cols, typeConfig, group: args.group }, ctx.req);
     if (result.error) {
       return fail(result.error.code === 'duplicate' ? 'conflict' : 'invalid_input', result.error.message);
     }
     // Geometry owns the count: an alternating cabinet's rows are not all `cols` wide.
-    const capacity = type === 'grid' ? args.rows * args.cols : totalSlots(type, args.rows, args.cols, typeConfig);
+    const capacity = type === 'grid' ? rows * cols : totalSlots(type, rows, cols, typeConfig);
     const envelope = {
       summary: type === 'cabinet'
-        ? `Created wine cabinet "${result.rack.name}" in "${access.cellar.name}": ${args.rows} shelves, ${args.cols} across, ${capacity} bottles`
+        ? `Created wine cabinet "${result.rack.name}" in "${access.cellar.name}": ${rows} shelves, ${cols} across, ${capacity} bottles`
         : type === 'wall'
-          ? `Created wall "${result.rack.name}" in "${access.cellar.name}": ${args.cols} cells wide, ${args.rows} high, ${typeConfig.boxes.length} boxes, ${capacity} bottles`
-          : `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
+          ? `Created wall "${result.rack.name}" in "${access.cellar.name}": ${cols} cells wide, ${rows} high, ${typeConfig.boxes.length} boxes, ${capacity} bottles`
+          : `Created ${rows}×${cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
       data: {
-        rack_id: result.rack._id, cellar_id: access.cellar._id, type, rows: args.rows, cols: args.cols, capacity,
+        rack_id: result.rack._id, cellar_id: access.cellar._id, type, rows, cols, capacity,
         ...(type === 'cabinet' ? {
           shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false, stagger: args.stagger !== false, alternate: args.alternate === true,
           head_to_tail: args.head_to_tail === true,
@@ -189,8 +207,9 @@ registerTool({
   title: 'Place a bottle into a rack slot',
   description:
     'Puts one of the user\'s bottles into a specific rack position (the bottle must be in that rack\'s cellar). Moves ' +
-    'the bottle if it was placed elsewhere, and reports any bottle displaced from the target slot. Reversible via ' +
-    'undo_last (clears the slot again).',
+    'the bottle if it was placed elsewhere, and reports any bottle displaced from the target slot. On a wall rack the ' +
+    'answer says which box and spot that position is (wall): check it is the place the user meant, and find the ' +
+    'position of a box or pile with get_rack first. Reversible via undo_last (clears the slot again).',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -209,10 +228,12 @@ registerTool({
       const code = result.error.code === 'conflict' ? 'conflict' : (result.error.status === 404 ? 'not_found' : 'invalid_input');
       return fail(code, result.error.message);
     }
+    // A wall rack: the box and the spot in it, to hold against what the user meant.
+    const wall = slotPlace(access.rack, result.position);
     const envelope = {
-      summary: `Placed bottle in "${access.rack.name}" position ${result.position}${result.displaced ? ' (displaced the bottle that was there)' : ''}`,
+      summary: `Placed bottle in "${access.rack.name}" position ${result.position}${wall ? ` (${wallText(wall)})` : ''}${result.displaced ? ' (displaced the bottle that was there)' : ''}`,
       data: {
-        rack_id: access.rack._id, position: result.position, bottle_id: args.bottle_id,
+        rack_id: access.rack._id, position: result.position, ...(wall ? { wall: wallSpot(wall) } : {}), bottle_id: args.bottle_id,
         displaced_bottle_id: result.displaced, moved_from_position: result.previousPosition,
         undo: 'undo_last removes this bottle from the slot',
       },
@@ -245,9 +266,13 @@ registerTool({
     if (!access) return fail('not_found', 'No such rack, or you have no access to it. Use list_racks for valid ids.');
     const result = await clearRackSlot(access.rack, args.position, ctx.req);
     if (result.error) return fail(result.error.code === 'conflict' ? 'conflict' : 'invalid_input', result.error.message);
+    const wall = slotPlace(access.rack, args.position);
     const envelope = {
-      summary: `Cleared position ${args.position} in "${access.rack.name}"`,
-      data: { rack_id: access.rack._id, position: args.position, removed_bottle_id: result.cleared, undo: result.cleared ? 'undo_last puts the bottle back' : null },
+      summary: `Cleared position ${args.position}${wall ? ` (${wallText(wall)})` : ''} in "${access.rack.name}"`,
+      data: {
+        rack_id: access.rack._id, position: args.position, ...(wall ? { wall: wallSpot(wall) } : {}),
+        removed_bottle_id: result.cleared, undo: result.cleared ? 'undo_last puts the bottle back' : null,
+      },
     };
     await logAction(ctx, {
       tool: 'unplace_bottle', action: 'unplace', bottle: result.cleared || undefined, cellar: access.rack.cellar,

@@ -3,7 +3,7 @@
 // nothing changes. pages/CellarRoom.js calls them through its undo history
 // and keeps everything else (selection, modes, saving).
 
-import { getRackHeight, clampToRoom } from './roomConstants';
+import { getRackHeight, getRackWorldDims, clampToRoom } from './roomConstants';
 
 // The room a cellar gets before its owner has set one.
 export const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -453,8 +453,18 @@ export function layoutForSave(layout) {
  * north wall of the default room, each kept inside it.
  */
 export function autoLayoutFor(cellarId, racks) {
-  const autoPlace = racks.map((r, i) => {
-    const clamped = clampToRoom(-3 + i * 1.5, -3, r, {}, DEFAULT_DIMENSIONS);
+  // 1.5 m from one rack's middle to the next; a rack too wide for that (a
+  // wall) pushes the next one on, so they do not stand in each other.
+  let x = -3;
+  let lastHalf = null;
+  const autoPlace = racks.map((r) => {
+    const { halfW } = getRackWorldDims(r, {});
+    if (lastHalf !== null) x += Math.max(1.5, lastHalf + halfW + 0.2);
+    lastHalf = halfW;
+    const clamped = clampToRoom(x, -3, r, {}, DEFAULT_DIMENSIONS);
+    // From where the rack really stands: one too wide for its spot is pushed
+    // off the wall of the room.
+    x = clamped.x;
     return {
       rack: r._id,
       position: { x: clamped.x, y: 0, z: clamped.z },

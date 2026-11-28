@@ -15,7 +15,9 @@ const { logger } = require('./audit');
  * 400), else the plan for renumberWall and renumberOpenedFromSlots.
  */
 async function planWallRenumber(rack, after) {
-  const opened = await Bottle.find({ 'openedFromSlot.rack': rack._id }).select('openedFromSlot').lean();
+  // Within the rack's cellar (an indexed field): a bottle can only be put back
+  // into a rack of the cellar it is in (bottleOps.putBackInSlot).
+  const opened = await Bottle.find({ cellar: rack.cellar, 'openedFromSlot.rack': rack._id }).select('openedFromSlot').lean();
   const plan = planWallEdit(
     { rows: rack.rows, cols: rack.cols, typeConfig: rack.typeConfig },
     after,
@@ -53,8 +55,9 @@ function renumberWall(rack, plan, { zonesSent = false } = {}) {
 /**
  * After the rack is saved: point each opened bottle at the new number of the
  * slot it left, or forget the slot when the edit removed it. A failure here
- * leaves the rack correct and only loses "put it back where it was" for those
- * bottles, so it is logged, never thrown.
+ * leaves the rack correct, so it is logged, never thrown; but the old number
+ * now names another slot, so those bottles are then made to forget theirs
+ * (no way back is better than a wrong one).
  */
 async function renumberOpenedFromSlots(rack, plan) {
   const ops = (plan.opened || [])
@@ -71,6 +74,14 @@ async function renumberOpenedFromSlots(rack, plan) {
     await Bottle.bulkWrite(ops, { ordered: false });
   } catch (err) {
     logger.warn({ err: err.message, rack: String(rack._id), bottles: ops.length }, 'wall edit: could not renumber the slots opened bottles left');
+    try {
+      await Bottle.updateMany(
+        { _id: { $in: ops.map((o) => o.updateOne.filter._id) }, 'openedFromSlot.rack': rack._id },
+        { $set: { openedFromSlot: null } },
+      );
+    } catch (err2) {
+      logger.warn({ err: err2.message, rack: String(rack._id), bottles: ops.length }, 'wall edit: could not clear the slots opened bottles left either');
+    }
   }
 }
 

@@ -748,7 +748,8 @@ export default function RackMesh({
   const depth = depthOverride || (cab ? cab.depth : hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH);
   const innerW = (width - PANEL_THICK * 2);
   const innerH = baseInnerH;
-  const height = innerH + PANEL_THICK * 2;
+  // No frame around a wall, so none is counted (roomConstants.getRackHeight).
+  const height = isWall ? innerH : innerH + PANEL_THICK * 2;
   const effectiveCellW = innerW / displayCols;
   const rotRad = (rotation * Math.PI) / 180;
 

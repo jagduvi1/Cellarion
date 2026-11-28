@@ -9,7 +9,7 @@ const Cellar = require('../models/Cellar');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate, cabinetRows, modularTotalSlots } = require('../utils/rackGeometry');
-const { validateWallConfig } = require('../utils/wallGeometry');
+const { validateWallConfig, wallNumbering, wallFillOrder } = require('../utils/wallGeometry');
 const { planWallRenumber, renumberWall, renumberOpenedFromSlots } = require('../services/wallEdit');
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
@@ -17,7 +17,7 @@ const {
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
   normalizeRackGroup, moveRackBottles,
 } = require('../services/rackOps');
-const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange');
+const { ARRANGE_STRATEGIES, ARRANGE_CORNERS, buildArrangePlan } = require('../utils/rackArrange');
 const { isValidId, parseSlotPosition } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -260,6 +260,12 @@ router.put('/:id', async (req, res) => {
 
     const { name, type, rows, cols, typeConfig, isModular, modules, rfidTag, zones, group } = req.body;
 
+    // The checks below read it as sent and Mongoose stores it cast: only a
+    // real boolean means the same to both.
+    if (isModular !== undefined && typeof isModular !== 'boolean') {
+      return res.status(400).json({ error: 'isModular must be true or false' });
+    }
+
     // Validate zones if provided: bounded count, named, valid hex color,
     // integer positions, and no position in more than one zone.
     if (zones !== undefined) {
@@ -290,12 +296,22 @@ router.put('/:id', async (req, res) => {
     }
 
     // A modules list is checked whenever one is sent for a rack that is, or is
-    // becoming, modular: `isModular` need not be in the request.
+    // becoming, modular: `isModular` need not be in the request. A list sent
+    // for a rack that is not modular is checked too (only an empty one needs
+    // none), and so is the stored list when `isModular` alone switches it on:
+    // no list is ever stored or used unchecked.
     const willBeModular = isModular !== undefined ? !!isModular : !!rack.isModular;
-    if (modules !== undefined && willBeModular) {
-      const problem = modulesProblem(modules);
+    let modulesToCheck;
+    if (modules !== undefined) {
+      if (willBeModular || !Array.isArray(modules) || modules.length > 0) modulesToCheck = modules;
+    } else if (willBeModular && !rack.isModular) {
+      modulesToCheck = rack.modules;
+    }
+    if (modulesToCheck !== undefined) {
+      const problem = modulesProblem(modulesToCheck);
       if (problem) return res.status(400).json({ error: problem });
-    } else if (type && !RACK_TYPES.includes(type)) {
+    }
+    if (!(modules !== undefined && willBeModular) && type && !RACK_TYPES.includes(type)) {
       return res.status(400).json({ error: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` });
     }
 
@@ -332,8 +348,9 @@ router.put('/:id', async (req, res) => {
     // cols narrower than a stored per-shelf width (a cols-only PUT must not
     // leave a cabinet no later edit could save). Only when the SHAPE is in the
     // request — a rename, group, zone or NFC edit must never trip over a
-    // stored list.
-    if (type !== undefined || rows !== undefined || cols !== undefined || typeConfig !== undefined) {
+    // stored list. `isModular` is part of the shape: switched on or off, the
+    // stored type and typeConfig start or stop counting.
+    if (type !== undefined || rows !== undefined || cols !== undefined || typeConfig !== undefined || isModular !== undefined) {
       const effType = type !== undefined ? type : rack.type;
       const effRows = rows !== undefined ? rows : rack.rows;
       const effModular = isModular !== undefined ? isModular : rack.isModular;
@@ -391,16 +408,25 @@ router.put('/:id', async (req, res) => {
     const wasWall = !rack.isModular && rack.type === 'wall';
     const willBeWall = !willBeModular && (type !== undefined ? type : rack.type) === 'wall';
     let wallPlan = null;
-    if (shapeSent && wasWall !== willBeWall && numbered) {
+    // Whatever in the request makes it so: the type, or the modular switch.
+    if (wasWall !== willBeWall && numbered) {
       return res.status(400).json({ error: 'A rack that holds bottles, zones or switched-off slots cannot change to or from a wall. Empty it first.' });
     }
+    const numberingBefore = wasWall ? wallNumbering(rack.rows, rack.cols, rack.typeConfig) : null;
     if (shapeSent && wasWall && willBeWall) {
-      wallPlan = await planWallRenumber(rack, {
+      const after = {
         rows: rows !== undefined ? rows : rack.rows,
         cols: cols !== undefined ? cols : rack.cols,
         typeConfig: typeConfig !== undefined ? typeConfig : rack.typeConfig,
-      });
+      };
+      wallPlan = await planWallRenumber(rack, after);
       if (wallPlan.error) return res.status(400).json({ error: wallPlan.error });
+      // Zones sent along would be in the old numbering or in the new, and
+      // nothing in the request says which.
+      const renumbers = wallNumbering(after.rows, after.cols, after.typeConfig) !== numberingBefore;
+      if (zones !== undefined && renumbers) {
+        return res.status(400).json({ error: 'This change gives slots of the wall new numbers. Send the zones in a request of their own, before or after it.' });
+      }
     }
 
     // A shape edit renumbers slots; keep both sides for the audit row below.
@@ -432,7 +458,10 @@ router.put('/:id', async (req, res) => {
       }));
     }
 
-    if (wallPlan) renumberWall(rack, wallPlan, { zonesSent: zones !== undefined });
+    if (wallPlan) {
+      renumberWall(rack, wallPlan, { zonesSent: zones !== undefined });
+      if (wallNumbering(rack.rows, rack.cols, rack.typeConfig) !== numberingBefore) rack.renumberedAt = new Date();
+    }
 
     // Validate that existing slots still fit within new dimensions
     const newMax = getMaxPosition(rack);
@@ -462,7 +491,20 @@ router.put('/:id', async (req, res) => {
 
     // cellarId so the update shows on the cellar's audit page like rack.create.
     const shapeAfter = shapeOf(rack);
-    const shapeChanged = JSON.stringify(shapeBefore) !== JSON.stringify(shapeAfter);
+    // Only a change of shape is recorded as one. The two hex flags have a
+    // schema default that a loaded rack carries and a typeConfig set from a
+    // request does not (until the rack is loaded again), and the order of an
+    // object's keys says nothing: neither makes a rename a change of shape.
+    const sorted = (v) => {
+      if (Array.isArray(v)) return v.map(sorted);
+      if (!v || typeof v !== 'object') return v;
+      return Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted(v[k])]));
+    };
+    const shapeKey = (s) => JSON.stringify(sorted({
+      ...s,
+      typeConfig: s.typeConfig && { ...s.typeConfig, hexFlip: !!s.typeConfig.hexFlip, hexEqualRows: !!s.typeConfig.hexEqualRows },
+    }));
+    const shapeChanged = shapeKey(shapeBefore) !== shapeKey(shapeAfter);
     logAudit(req, 'rack.update', { type: 'rack', id: rack._id, cellarId: rack.cellar }, {
       name: rack.name,
       group: rack.group || null,
@@ -657,9 +699,12 @@ router.post('/:id/move-bottles', async (req, res) => {
 // but never inject, clone, or drop a bottle. Undo is the same apply endpoint
 // with target/before swapped — restoring the previous layout IS an arrangement.
 
-// POST /api/racks/:id/arrange/preview — body { strategy, positionOrder? }.
+// POST /api/racks/:id/arrange/preview — body { strategy, positionOrder?, corner? }.
 // positionOrder is the client's geometric fill order (corner picker); the
 // server treats it as a priority list of positions, defaulting to ascending.
+// A wall is the exception: bottles in a pile lie on one another, so its
+// order is worked out here from `corner` (wallGeometry.wallFillOrder, the
+// same as MCP auto_arrange) and a positionOrder sent for it is not used.
 router.post('/:id/arrange/preview', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -675,8 +720,13 @@ router.post('/:id/arrange/preview', async (req, res) => {
     if (!(await rackAccess(req, res, rack, 'editor', 'Not authorized to modify rack slots'))) return;
 
     const maxPos = getMaxPosition(rack);
+    const isWall = !rack.isModular && rack.type === 'wall';
+    const corner = req.body?.corner === undefined ? 'top-left' : req.body.corner;
+    if (!ARRANGE_CORNERS.includes(corner)) {
+      return res.status(400).json({ error: `Invalid corner. Must be one of: ${ARRANGE_CORNERS.join(', ')}` });
+    }
     let positionOrder;
-    if (req.body?.positionOrder !== undefined) {
+    if (!isWall && req.body?.positionOrder !== undefined) {
       const order = req.body.positionOrder;
       const valid = Array.isArray(order) && order.length <= maxPos * 2 &&
         order.every((p) => Number.isInteger(p) && p >= 1 && p <= maxPos) &&
@@ -688,6 +738,11 @@ router.post('/:id/arrange/preview', async (req, res) => {
     const entries = await buildAnnotatedEntries(rack);
     if (entries.length === 0) {
       return res.json({ strategy, bottlesTotal: 0, changes: [], target: [], before: [] });
+    }
+    if (isWall) {
+      positionOrder = wallFillOrder(rack.rows, rack.cols, rack.typeConfig, {
+        count: entries.length, disabled: rack.disabledPositions || [], corner,
+      });
     }
     const usableCount = usablePositionCount(rack, positionOrder);
     if (entries.length > usableCount) {
@@ -723,7 +778,7 @@ router.post('/:id/arrange/apply', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { target, before } = req.body || {};
-    const MAX_ENTRIES = 1000; // far above any real rack; bounds the body work
+    const MAX_ENTRIES = MAX_RACK_SLOTS; // one entry per bottle; bounds the body work
     if (!Array.isArray(target) || !Array.isArray(before) || target.length > MAX_ENTRIES || before.length > MAX_ENTRIES) {
       return res.status(400).json({ error: 'target and before arrays are required' });
     }

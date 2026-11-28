@@ -6,6 +6,7 @@
 const { buildOpenApiDocument } = require('./document');
 const { createValidator } = require('./validator');
 const { RACK_TYPES } = require('../models/Rack');
+const { BOX_KINDS, SECTION_NAMES, boxCapacity } = require('../utils/wallGeometry');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const SweetnessTerm = require('../models/SweetnessTerm');
@@ -100,6 +101,10 @@ test('the validator rejects what the document does not allow', () => {
 
 test('enums are the code\'s', () => {
   expect(S.RackSummary.properties.type.enum).toEqual(RACK_TYPES);
+  // A place is in a box that holds bottles: every kind but the closed one.
+  expect(values(S.WallPlace.properties.kind)).toEqual(BOX_KINDS.filter((kind) => boxCapacity({ kind, perSection: 1, rows: 1, cols: 1 }) > 0));
+  expect([...values(S.WallPlace.properties.section)].sort())
+    .toEqual([...new Set(Object.values(SECTION_NAMES).flat().filter(Boolean))].sort());
   expect([...values(S.Bottle.properties.status)].sort()).toEqual([...Bottle.schema.path('status').enumValues].sort());
   expect(values(S.ConsumeRequest.properties.reason)).toEqual(CONSUMED_STATUSES);
   expect(values(S.Bottle.properties.consumedReason)).toEqual(CONSUMED_STATUSES);

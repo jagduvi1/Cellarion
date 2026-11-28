@@ -34,6 +34,8 @@ import { suspendBackToClose, pageEntryState } from '../utils/useBackToClose';
 import './CellarRoom.css';
 import { formatVintage } from '../utils/vintage';
 import { canEditCellar } from '../utils/cellarRole';
+import { slotPlace } from '../utils/wallLayout';
+import { wallWords } from '../utils/slotLabel';
 
 // True when a keyboard event originates from an editable field, so global
 // shortcuts (arrow-move, Ctrl+Z/Y) don't hijack typing in the room's inputs.
@@ -505,6 +507,11 @@ export default function CellarRoom() {
 
   const selectedRack = racks.find(r => r._id === selectedRackId);
   const canEdit = canEditCellar(cellar);
+  // A slot as the panels say it: in a wall rack its box and the spot in it.
+  const slotText = (rack, position) => {
+    const place = slotPlace(rack, position);
+    return place ? wallWords(place, t) : `${t('room.slot', 'slot')} ${position}`;
+  };
   const dims = layout?.roomDimensions || DEFAULT_DIMENSIONS;
   const placements = layout?.rackPlacements || [];
 
@@ -1030,7 +1037,7 @@ export default function CellarRoom() {
                   {bottle?.notes && <p className="room-bottle-notes">{bottle.notes}</p>}
                   {rackObj && (
                     <p className="room-bottle-rack">
-                      {t('room.inRack', 'In rack')}: {rackObj.name} ({t('room.slot', 'slot')} {selectedBottle.slot.position})
+                      {t('room.inRack', 'In rack')}: {rackObj.name} ({slotText(rackObj, selectedBottle.slot.position)})
                     </p>
                   )}
                 </div>
@@ -1068,7 +1075,7 @@ export default function CellarRoom() {
                 </div>
                 {rackObj && (
                   <p className="room-bottle-rack" style={{ margin: '0 0 0.5rem' }}>
-                    {rackObj.name} &middot; {t('room.slot', 'slot')} {emptySlotTarget.position}
+                    {rackObj.name} &middot; {slotText(rackObj, emptySlotTarget.position)}
                   </p>
                 )}
                 <input

@@ -18,7 +18,8 @@ const { z } = require('zod');
 const Rack = require('../../models/Rack');
 const McpActionLog = require('../../models/McpActionLog');
 const { registerTool } = require('../registry');
-const { getMaxPosition } = require('../../utils/rackGeometry');
+const { getMaxPosition, slotPlacer } = require('../../utils/rackGeometry');
+const { wallFillOrder, renumberedSince } = require('../../utils/wallGeometry');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../../utils/rackArrange');
 // The slot load, usable count, maturity annotation and the one-save atomic
 // apply live in services/rackOps — shared with the web Arrange endpoints
@@ -27,7 +28,7 @@ const {
   ARRANGE_SLOT_POPULATE, usablePositionCount, buildAnnotatedEntries, applyArrangement,
 } = require('../../services/rackOps');
 const { isValidId } = require('../../utils/validation');
-const { ok, fail, objectId, resolveCellarAccess } = require('../toolUtil');
+const { ok, fail, objectId, resolveCellarAccess, wallSpot } = require('../toolUtil');
 const { logAction, trimOutstandingPreviews } = require('../actionLedger');
 const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
 
@@ -72,7 +73,9 @@ registerTool({
   title: 'Auto-arrange a rack (preview, then apply)',
   description:
     'Reorders one rack\'s bottles by a strategy — "maturity" puts drink-soonest bottles in the first (top-left, most ' +
-    'accessible) slots, "type" groups by style, "vintage" sorts chronologically. TWO steps: preview computes the move ' +
+    'accessible) slots, "type" groups by style, "vintage" sorts chronologically. On a wall rack the boxes are filled one ' +
+    'after another from the top left; in a pile the bottles take the lowest places and the first of them lies on top, and ' +
+    'each move also says the box and the spot (from_wall, to_wall). TWO steps: preview computes the move ' +
     'list without changing anything — SHOW IT TO THE USER; apply (with the preview_id, after their approval) updates ' +
     'the whole rack atomically. The returned move list is the user\'s guide for physically re-shelving. One undo_last ' +
     'restores the previous layout. Disabled slots stay empty; zone assignments are IGNORED (bottles may land in other ' +
@@ -111,13 +114,22 @@ registerTool({
           `This rack holds ${entries.length} bottle(s) but only ${usableCount} usable position(s) — free up or re-enable slots in the web app before arranging.`);
       }
 
-      const { target, changes } = buildArrangePlan(entries, getMaxPosition(rack), rack.disabledPositions || [], strategy);
+      // A wall is filled box by box and pile by pile (the same order as the web's Arrange preview).
+      const isWall = !rack.isModular && rack.type === 'wall';
+      const order = isWall
+        ? wallFillOrder(rack.rows, rack.cols, rack.typeConfig, { count: entries.length, disabled: rack.disabledPositions || [] })
+        : undefined;
+      const { target, changes } = buildArrangePlan(entries, getMaxPosition(rack), rack.disabledPositions || [], strategy, order);
       if (changes.length === 0) {
         return ok(`Rack "${rack.name}" is already arranged by ${strategy} — nothing to move`, { changes: [] });
       }
 
       const before = occupancyOf(rack);
-      const moveList = changes.map((c) => ({ bottle: labelOf(c.bottle), from: c.from, to: c.to }));
+      const placeOf = slotPlacer(rack);
+      const moveList = changes.map((c) => ({
+        bottle: labelOf(c.bottle), from: c.from, to: c.to,
+        ...(isWall ? { from_wall: wallSpot(placeOf(c.from)), to_wall: wallSpot(placeOf(c.to)) } : {}),
+      }));
       // A preview costs one write slot and evicts the oldest unconsumed ones
       // — the early returns above (empty / already arranged /
       // overflow) stay free because they store nothing.
@@ -176,6 +188,11 @@ registerTool({
     // move since makes the stored plan stale (it could drop a new bottle).
     if (!sameOccupancy(occupancyOf(rack), before)) {
       return fail('conflict', 'The rack has changed since the preview — run a fresh preview.');
+    }
+    // A wall edited since may hold the same bottles at the same numbers
+    // while the numbers the plan moves them to now name other places.
+    if (renumberedSince(rack, preview.createdAt)) {
+      return fail('conflict', 'The wall has changed since the preview — run a fresh preview.');
     }
 
     // Budget is charged before the claim/save and is NOT refunded if either

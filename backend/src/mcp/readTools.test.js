@@ -322,14 +322,25 @@ describe('ownership scoping', () => {
     Cellar.findById.mockReturnValue(chain({ _id: cellarId, user: ME, members: [], deletedAt: null }));
     const { data } = parse(await tool('get_rack').handler({ rack_id: oid('e') }, CTX));
     expect(data).toMatchObject({ type: 'wall', rows: 1, cols: 3 });
+    // A box of several piles names each with its positions: that is how a
+    // spot nobody lies in yet is found ("put it in A1, left pile").
     expect(data.boxes).toEqual([
-      { box: 'A1', kind: 'x', cells_wide: 1, cells_high: 1, per_pile: 6, capacity: 24, positions: { from: 1, to: 24 } },
+      {
+        box: 'A1', kind: 'x', cells_wide: 1, cells_high: 1, per_pile: 6, capacity: 24, positions: { from: 1, to: 24 },
+        piles: [
+          { section: 'top', positions: { from: 1, to: 6 } },
+          { section: 'left', positions: { from: 7, to: 12 } },
+          { section: 'right', positions: { from: 13, to: 18 } },
+          { section: 'bottom', positions: { from: 19, to: 24 } },
+        ],
+      },
       { box: 'B1', kind: 'rack', cells_wide: 1, cells_high: 1, rows: 3, cols: 4, capacity: 12, positions: { from: 25, to: 36 } },
       { box: 'C1', kind: 'closed', cells_wide: 1, cells_high: 1, capacity: 0, positions: null },
     ]);
+    // Only the keys that say something: a slot map lists every bottle.
     expect(data.slots.map((s) => [s.position, s.wall])).toEqual([
-      [8, { box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null }],
-      [30, { box: 'B1', kind: 'rack', section: null, slot: null, row: 2, col: 2 }],
+      [8, { box: 'A1', kind: 'x', section: 'left', slot: 2 }],
+      [30, { box: 'B1', kind: 'rack', row: 2, col: 2 }],
     ]);
   });
 

@@ -37,6 +37,20 @@ test('get_pick_list: rack and slot per bottle; an unavailable bottle says nothin
   const data = parse(await tool('get_pick_list').handler({ pick_list_id: L }, CTX)).data;
   expect(data.items[0]).toMatchObject({ wine: 'Brezza — Barolo', cellar: 'Home', rack: 'Fridge', slot: 12, picked: true });
   expect(data.items[1]).toEqual({ bottle_id: B2, state: 'unavailable', picked: false });
+  expect(data.items[0]).not.toHaveProperty('wall');
+});
+
+// A pick list is what someone walks to the cellar with.
+test('get_pick_list: a bottle in a wall rack says its box and the spot in it', async () => {
+  ops.getPickListView.mockResolvedValue({ list: { id: L, name: 'Dinner', count: 1, picked: 0, items: [
+    {
+      bottleId: B1, state: 'in_cellar', pickedAt: null, wine: { producer: 'Brezza', name: 'Barolo' }, vintage: '2018', bottleSize: '750ml', cellar: { name: 'Home' }, location: null,
+      rack: { rackName: 'Cellar wall', position: 9, wall: { box: 'A1', kind: 'x', section: 'left', slot: 3, row: null, col: null } },
+    },
+  ] } });
+  const data = parse(await tool('get_pick_list').handler({ pick_list_id: L }, CTX)).data;
+  expect(data.items[0]).toMatchObject({ rack: 'Cellar wall', slot: 9, wall: { box: 'A1', kind: 'x', section: 'left', slot: 3 } });
+  expect(data.items[0].wall).not.toHaveProperty('row');
 });
 
 test('errors map to MCP codes', async () => {

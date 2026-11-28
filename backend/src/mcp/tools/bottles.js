@@ -17,7 +17,7 @@ const { slotLocation, slotPlace } = require('../../utils/rackGeometry');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess,
-  wineSummary, bottleSummary, pageParams, hasContent, classificationsOut,
+  wineSummary, bottleSummary, pageParams, hasContent, classificationsOut, wallSpot,
 } = require('../toolUtil');
 const { photosForBottle, photoPresence } = require('../../services/photoState');
 const { servingAdvice, servingSentence } = require('../../utils/servingUtils');
@@ -267,7 +267,8 @@ registerTool({
   title: 'Get one bottle',
   description:
     'Full detail for one bottle: wine (incl. tasting profile when enriched), vintage, price, ratings, personal drink ' +
-    'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement (position, and shelf / row / col where the rack has them), cellar, ' +
+    'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement (position, and shelf / row / col where the rack has them; ' +
+    'on a wall rack placement.wall is the box and the spot in it), cellar, ' +
     'consumption info if consumed, and photos — every photo that applies to the bottle with its state (queued, ' +
     'processing, awaiting_review, published, rejected), so an upload can be confirmed and a duplicate avoided; ' +
     'photos.label_scans lists the frames the user scanned to identify the wine. The URLs are for people; to SEE ' +
@@ -421,7 +422,7 @@ async function buildBottleDetail(userId, bottleId) {
       // shelf: cabinets only (1 = top); row: from the plank up on a cabinet
       // shelf, the grid row on a grid; col: left to right. null elsewhere.
       // wall: on a wall rack, the box ("B2") and the spot in it; null elsewhere.
-      placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position, ...slotLocation(rack, slot.position), wall: slotPlace(rack, slot.position) } : null,
+      placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position, ...slotLocation(rack, slot.position), wall: wallSpot(slotPlace(rack, slot.position)) } : null,
       photos,
       cellar: { cellar_id: cellar._id, name: cellar.name, your_role: role },
       added_at: b.addedToCellarAt || b.createdAt,

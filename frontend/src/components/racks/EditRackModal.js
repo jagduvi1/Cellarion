@@ -4,6 +4,7 @@ import Modal from '../Modal';
 import { cabinetShelfAlternate, cabinetShelfSideways, cabinetBays, getTotalSlots } from '../../utils/rackLayouts';
 import { wallFromRack, toTypeConfig, usageByBox } from '../../utils/wallEdit';
 import WallBuilder from './WallBuilder';
+import { WALL_MAX_SLOTS } from '../../utils/wallLayout';
 
 /**
  * Rename a rack and set its group — the room or appliance it belongs to
@@ -76,10 +77,13 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
     if (saving) return;
     const trimmed = name.trim();
     if (!trimmed) { setError(t('racks.nameRequired', 'Give the rack a name.')); return; }
-    if (isWall && getTotalSlots('wall', wall.rows, wall.cols, { boxes: wall.boxes }) === 0) {
+    const wallTotal = isWall ? getTotalSlots('wall', wall.rows, wall.cols, { boxes: wall.boxes }) : 0;
+    if (isWall && wallTotal === 0) {
       setError(t('racks.wall.needsBoxEdit', 'A wall needs at least one box that holds bottles.'));
       return;
     }
+    // The builder says so under the wall; here it only stops the save.
+    if (wallTotal > WALL_MAX_SLOTS) return;
     setSaving(true);
     setError('');
     // A cabinet's typeConfig is replaced wholesale by the route, so send the

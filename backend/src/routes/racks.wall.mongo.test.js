@@ -219,4 +219,150 @@ describeWithMongo('a wall rack through the REST routes (real MongoDB)', () => {
     expect(became.status).toBe(200);
     expect((await stored(empty._id)).typeConfig.boxes).toHaveLength(3);
   });
+
+  // The type is one way a rack stops being a wall and the modular switch is
+  // another: the wall rule holds for both.
+  test('the modular switch is no way around the wall rule, and a list of modules is checked whenever one is sent', async () => {
+    const wall = await newWall('Not modular');
+    const b = await bottle('2001');
+    await call('PUT', `/${wall._id}/slots/3`, { bottleId: String(b._id) });
+    const modules = [{ type: 'grid', rows: 5, cols: 10 }];
+    expect((await call('PUT', `/${wall._id}`, { isModular: true, modules })).status).toBe(400);
+    expect((await call('PUT', `/${wall._id}`, { isModular: true, modules, typeConfig: {} })).body.error).toMatch(/cannot change to or from a wall/);
+    expect(await stored(wall._id)).toMatchObject({ type: 'wall', isModular: false, modules: [] });
+    expect((await call('PUT', `/${wall._id}`, { isModular: 'false' })).body).toEqual({ error: 'isModular must be true or false' });
+
+    const grid = (await call('POST', '', { cellar: String(cellar._id), name: 'Plain', type: 'grid', rows: 2, cols: 3 })).body.rack;
+    // Stored on a plain rack, the list would wait unchecked for a later `isModular: true`.
+    const many = Array.from({ length: 60 }, () => ({ type: 'grid', rows: 2, cols: 2 }));
+    expect((await call('PUT', `/${grid._id}`, { modules: many })).body.error).toMatch(/Maximum \d+ modules/);
+    expect((await call('PUT', `/${grid._id}`, { modules: [{ type: 'wall', rows: 1, cols: 1 }] })).body.error).toBe('A wall cannot be a module of a modular rack');
+    expect((await stored(grid._id)).modules).toEqual([]);
+    // An empty list on a plain rack says nothing and is taken.
+    expect((await call('PUT', `/${grid._id}`, { modules: [], name: 'Plain rack' })).status).toBe(200);
+    // Switched on with no list: the stored (empty) one is what gets checked.
+    expect((await call('PUT', `/${grid._id}`, { isModular: true })).body.error).toBe('Modular racks must have at least one module');
+  });
+
+  test('an edit that gives slots new numbers is stamped on the rack; a rename is not, and writes no change of shape', async () => {
+    const AuditLog = require('../models/AuditLog');
+    const wall = await newWall('Stamped');
+    const sameShape = async () => {
+      const now = await stored(wall._id);
+      return { rows: now.rows, cols: now.cols, typeConfig: { boxes: now.typeConfig.boxes.map((x) => ({ ...x, _id: String(x._id) })) } };
+    };
+
+    // What the edit form sends for a rename: the name with the unchanged shape.
+    expect((await call('PUT', `/${wall._id}`, { name: 'Stamped wall', ...(await sameShape()) })).status).toBe(200);
+    expect((await stored(wall._id)).renumberedAt).toBeUndefined();
+
+    const grown = await sameShape();
+    grown.typeConfig.boxes[0].perSection = 7;
+    const before = Date.now();
+    expect((await call('PUT', `/${wall._id}`, grown)).status).toBe(200);
+    const at = (await stored(wall._id)).renumberedAt;
+    expect(at).toBeInstanceOf(Date);
+    expect(at.getTime()).toBeGreaterThanOrEqual(before - 1000);
+
+    // The audit rows are written after the answers.
+    let rows = [];
+    for (let i = 0; i < 40 && rows.length < 2; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      rows = await AuditLog.find({ action: 'rack.update', 'resource.id': wall._id }).sort({ timestamp: 1 }).lean();
+    }
+    expect(rows).toHaveLength(2);
+    expect(rows[0].detail).not.toHaveProperty('shape');
+    expect(rows[1].detail.shape.to.typeConfig.boxes[0].perSection).toBe(7);
+  });
+
+  test('zones cannot ride along with an edit that renumbers, and a box cannot be stored without an id', async () => {
+    const wall = await newWall('Zoned');
+    expect((await call('PUT', `/${wall._id}`, { zones: [{ name: 'Whites', positions: [37, 38] }] })).status).toBe(200);
+    const now = await stored(wall._id);
+    const boxes = now.typeConfig.boxes.map((x) => ({ ...x, _id: String(x._id) }));
+
+    // The X grows: the bin's 37 and 38 become 41 and 42. Zones sent with it
+    // could be in either numbering.
+    const grown = boxes.map((x) => (x.kind === 'x' ? { ...x, perSection: 7 } : x));
+    const both = await call('PUT', `/${wall._id}`, { typeConfig: { boxes: grown }, zones: [{ name: 'Whites', positions: [37, 38] }] });
+    expect(both).toMatchObject({ status: 400, body: { error: expect.stringMatching(/Send the zones in a request of their own/) } });
+    expect((await stored(wall._id)).zones.map((z) => z.positions)).toEqual([[37, 38]]);
+    // Alone, the edit carries the zone along.
+    expect((await call('PUT', `/${wall._id}`, { typeConfig: { boxes: grown } })).status).toBe(200);
+    expect((await stored(wall._id)).zones.map((z) => z.positions)).toEqual([[41, 42]]);
+    // With a shape that changes no number, zones are welcome.
+    expect((await call('PUT', `/${wall._id}`, { typeConfig: { boxes: grown }, zones: [{ name: 'Reds', positions: [1] }] })).status).toBe(200);
+
+    // With no bottle, zone or switched-off slot to move, an edit that swaps two
+    // boxes still gives every number another place.
+    const bare = await newWall('Bare');
+    const bareBoxes = (await stored(bare._id)).typeConfig.boxes.map((x) => ({ ...x, _id: String(x._id) }));
+    const swapped = bareBoxes.map((x) => (x.kind === 'x' ? { ...x, x: 2 } : x.kind === 'bin' ? { ...x, x: 0 } : x));
+    const swapWithZones = await call('PUT', `/${bare._id}`, { typeConfig: { boxes: swapped }, zones: [{ name: 'Whites', positions: [1] }] });
+    expect(swapWithZones.body.error).toMatch(/Send the zones in a request of their own/);
+
+    const nullId = await call('PUT', `/${wall._id}`, { typeConfig: { boxes: [...grown, { _id: null, x: 0, y: 1, w: 1, h: 1, kind: 'bin', perSection: 2 }] }, rows: 2, cols: 3 });
+    expect(nullId.body.error).toMatch(/leave _id out for a new box/);
+    // A size the content does not use is refused in the route's words, not the schema's.
+    const stray = await call('PUT', `/${wall._id}`, { typeConfig: { boxes: grown.map((x) => (x.kind === 'x' ? { ...x, rows: 99 } : x)) } });
+    expect(stray.body.error).toBe('Box A1: rows and cols must be whole numbers between 1 and 20');
+  });
+
+  test('the Arrange preview fills a wall pile by pile from the corner, whatever order the client sends', async () => {
+    const wall = await newWall('Arranged');
+    // Three bottles at the bottom of the bin (37–39), the oldest lowest.
+    const [oldest, middle, youngest] = await Promise.all(['1990', '2000', '2010'].map(bottle));
+    for (const [position, b] of [[37, oldest], [38, middle], [39, youngest]]) {
+      await call('PUT', `/${wall._id}/slots/${position}`, { bottleId: String(b._id) });
+    }
+    const targetOf = (res) => Object.fromEntries(res.body.target.map((t) => [t.bottleId, t.position]));
+
+    // From the top left: the X's top pile (1–6) takes all three, the first on top.
+    const first = await call('POST', `/${wall._id}/arrange/preview`, { strategy: 'vintage', positionOrder: [46, 45, 44] });
+    expect(first.status).toBe(200);
+    expect(targetOf(first)).toEqual({ [String(oldest._id)]: 3, [String(middle._id)]: 2, [String(youngest._id)]: 1 });
+    // From the bottom right: the bin again, turned over.
+    const last = await call('POST', `/${wall._id}/arrange/preview`, { strategy: 'vintage', corner: 'bottom-right' });
+    expect(targetOf(last)).toEqual({ [String(oldest._id)]: 39, [String(middle._id)]: 38, [String(youngest._id)]: 37 });
+    expect((await call('POST', `/${wall._id}/arrange/preview`, { strategy: 'vintage', corner: 'middle' })).status).toBe(400);
+
+    // The plan applies as any other does.
+    const applied = await call('POST', `/${wall._id}/arrange/apply`, { target: first.body.target, before: first.body.before });
+    expect(applied.status).toBe(200);
+    expect(await placed(wall._id)).toEqual({ [String(oldest._id)]: 3, [String(middle._id)]: 2, [String(youngest._id)]: 1 });
+  });
+
+  // An import builds the rack document itself, so the request's rules are not
+  // in its way unless it asks for them.
+  test('a cellar file with a wall: a valid one comes in as it is, one that breaks the rules as a plain grid', async () => {
+    const { parseCellarExport, importCellar } = require('../services/cellarImport');
+    const stack = Array.from({ length: 300 }, () => ({ x: 0, y: 0, w: 1, h: 1, kind: 'rack', rows: 20, cols: 20 }));
+    const parsed = parseCellarExport({
+      cellars: [{
+        cellarName: 'From a file',
+        racks: [
+          { name: 'Good wall', type: 'wall', rows: 1, cols: 3, typeConfig: { boxes: BOXES.map((x, i) => ({ ...x, _id: `${i}`.repeat(24), junk: 1 })) }, disabledPositions: [46, 47] },
+          { name: 'Stacked wall', type: 'wall', rows: 1, cols: 1, typeConfig: { boxes: stack } },
+          { name: 'Grid with boxes', type: 'grid', rows: 2, cols: 3, typeConfig: { boxes: BOXES } },
+        ],
+        bottles: [],
+      }],
+    });
+    const result = await importCellar(user._id, parsed.cellars[0], { targetName: 'From a file', mode: 'create' });
+    expect(result.racksCreated).toBe(3);
+    const Cellar = require('../models/Cellar');
+    const target = await Cellar.findOne({ name: 'From a file' }).lean();
+    const byName = Object.fromEntries((await Rack.find({ cellar: target._id }).lean()).map((r) => [r.name, r]));
+
+    expect(byName['Good wall'].type).toBe('wall');
+    expect(byName['Good wall'].typeConfig.boxes.map((x) => [x.kind, x.perSection ?? null, x.rows ?? null])).toEqual([['x', 6, null], ['rack', null, 3], ['bin', 10, null]]);
+    expect(byName['Good wall'].typeConfig.boxes[0]).not.toHaveProperty('junk');
+    // Clamped to what the wall holds (46).
+    expect(byName['Good wall'].disabledPositions).toEqual([46]);
+
+    expect(byName['Stacked wall'].type).toBe('grid');
+    expect(byName['Stacked wall'].typeConfig?.boxes).toBeUndefined();
+    expect(byName['Grid with boxes'].type).toBe('grid');
+    expect(byName['Grid with boxes'].typeConfig?.boxes).toBeUndefined();
+  });
 });

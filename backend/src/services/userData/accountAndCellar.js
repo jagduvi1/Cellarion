@@ -115,7 +115,10 @@ module.exports = [
       // slot ref in that cellar's racks — pull those slots too.
       await Rack.updateMany(
         { 'slots.bottle': { $in: bottleIds } },
-        { $pull: { slots: { bottle: { $in: bottleIds } } } }
+        // The version goes up with it, as with every other writer of slots: a
+        // save of that rack loaded before this pull must fail, not write its
+        // positions onto the slots that moved up.
+        { $pull: { slots: { bottle: { $in: bottleIds } } }, $inc: { __v: 1 } }
       );
     },
     exportFragment: async (ctx) => ({ bottles: markTrunc(ctx, 'bottles', await Bottle.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),

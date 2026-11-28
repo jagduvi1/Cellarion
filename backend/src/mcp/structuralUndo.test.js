@@ -87,3 +87,34 @@ test('a post-claim placement failure UNCLAIMS the row (stays retryable)', async 
   expect(McpActionLog.findOneAndUpdate).toHaveBeenCalled(); // claimed
   expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: oid('f') }, { $set: { reversed: false } }); // unclaimed
 });
+
+// An edit of a wall gives every box after the changed one new numbers
+// (Rack.renumberedAt). The position in the ledger row would then be another
+// place in another box, so the undo is refused and nothing is claimed.
+test('an unplace is not undone into a wall whose slots were renumbered since', async () => {
+  const done = new Date('2026-05-01T10:00:00Z');
+  Bottle.findById.mockResolvedValue({ _id: BOTTLE, status: 'active', cellar: CELLAR });
+  Rack.findOne.mockResolvedValue({ _id: RACK, cellar: CELLAR, slots: [], renumberedAt: new Date('2026-05-02T10:00:00Z') });
+  const res = await undoStructural({ ...unplaceRow(), createdAt: done }, CTX, helpers);
+  expect(res.ok).toBe(false);
+  expect(res.message).toMatch(/slots have new numbers/);
+  expect(placeBottleInRack).not.toHaveBeenCalled();
+  expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+
+  // Renumbered before the unplace: the number is in today's numbering.
+  Rack.findOne.mockResolvedValue({ _id: RACK, cellar: CELLAR, slots: [], renumberedAt: new Date('2026-04-30T10:00:00Z') });
+  placeBottleInRack.mockResolvedValue({ ok: true });
+  expect((await undoStructural({ ...unplaceRow(), createdAt: done }, CTX, helpers)).ok).toBe(true);
+});
+
+test('an arrangement is not undone on a wall whose slots were renumbered since', async () => {
+  Rack.findOne.mockResolvedValue({ _id: RACK, cellar: CELLAR, slots: [{ position: 1, bottle: BOTTLE }], renumberedAt: new Date('2026-05-02T10:00:00Z') });
+  const row = {
+    _id: oid('f'), action: 'arrange', cellar: CELLAR, createdAt: new Date('2026-05-01T10:00:00Z'),
+    detail: { rackId: RACK, target: [{ position: 1, bottleId: BOTTLE }] }, prev: { before: [{ position: 2, bottleId: BOTTLE }] },
+  };
+  const res = await undoStructural(row, CTX, helpers);
+  expect(res.ok).toBe(false);
+  expect(res.message).toMatch(/slots have new numbers/);
+  expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+});

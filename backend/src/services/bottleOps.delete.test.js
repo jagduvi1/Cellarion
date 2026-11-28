@@ -69,7 +69,8 @@ describe('snapshotBottleForDelete', () => {
     expect(out.ownPhotos).toBe(2);
     expect(out.snapshot).toEqual({
       bottle: RAW,
-      rack: { rackId: 'rk', position: 4 },
+      // `at`: a wall edited after this moment numbers its slots anew.
+      rack: { rackId: 'rk', position: 4, at: expect.any(Date) },
       registryPhotoIds: ['reg1'],
       wineRequest: { _id: 'r1', status: 'pending', wineName: 'X' },
     });
@@ -152,6 +153,25 @@ describe('restoreDeletedBottle', () => {
     await restoreDeletedBottle(SNAP, REQ);
     expect(Bottle.collection.insertOne.mock.calls[0][0].defaultImage).toBeNull();
     expect(SNAP.bottle.defaultImage).toBe('own1'); // the snapshot itself is not mutated
+  });
+
+  // An edit of a wall renumbers every box after the one that changed. The
+  // number in the snapshot would then be another place, in another box, and
+  // the bottle would be shown lying there.
+  test('a wall renumbered since the bottle was deleted: back unplaced, never at the old number', async () => {
+    worldIntact();
+    const deletedAt = new Date('2026-05-01T10:00:00Z');
+    const snap = { ...SNAP, rack: { ...SNAP.rack, at: deletedAt } };
+    Rack.findOne.mockResolvedValue({ _id: 'rk', slots: [], renumberedAt: new Date('2026-05-02T10:00:00Z') });
+    const out = await restoreDeletedBottle(snap, REQ);
+    expect(placeBottleInRack).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ placed: false, position: null });
+
+    // Renumbered BEFORE the delete: the number was taken in today's numbering.
+    Bottle.exists.mockResolvedValue(null);
+    Rack.findOne.mockResolvedValue({ _id: 'rk', slots: [], renumberedAt: new Date('2026-04-30T10:00:00Z') });
+    placeBottleInRack.mockResolvedValue({});
+    expect(await restoreDeletedBottle(snap, REQ)).toMatchObject({ placed: true, position: 4 });
   });
 
   test('a slot taken since: back unplaced', async () => {

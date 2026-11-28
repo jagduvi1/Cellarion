@@ -13,6 +13,8 @@ import {
   saveArrangeCorner,
 } from '../../utils/rackArrange';
 import { formatVintage } from '../../utils/vintage';
+import { slotPlace } from '../../utils/wallLayout';
+import { wallWords } from '../../utils/slotLabel';
 
 /**
  * "Organize this rack" — pick a strategy and fill corner, preview which
@@ -26,7 +28,7 @@ import { formatVintage } from '../../utils/vintage';
  *
  * Props:
  *  - rack:      the rack document (slots populated)
- *  - onPreview: async (strategy, positionOrder) => ({ ok, data|error })
+ *  - onPreview: async (strategy, positionOrder, corner) => ({ ok, data|error })
  *  - onApply:   async (target, before) => ({ ok, error? })   — also used for undo
  *  - onClose
  */
@@ -42,7 +44,16 @@ export default function ArrangeModal({ rack, onPreview, onApply, onClose }) {
   const [plan, setPlan] = useState(null); // server preview: { changes, target, before, bottlesTotal }
   const [error, setError] = useState(null);
 
-  const fillOrder = useMemo(() => buildFillOrder(rack, corner), [rack, corner]);
+  // A wall's fill order is the server's: bottles in a pile lie on one another,
+  // so it fills box after box from the corner and puts the first bottle of a
+  // pile on top (backend wallGeometry.wallFillOrder). It gets the corner alone.
+  const isWall = rack.type === 'wall' && !rack.isModular;
+  const fillOrder = useMemo(() => (isWall ? undefined : buildFillOrder(rack, corner)), [rack, corner, isWall]);
+  // A slot of a wall is said as its box and the spot in it.
+  const spot = (position) => {
+    const place = isWall ? slotPlace(rack, position) : null;
+    return place ? wallWords(place, t) : position;
+  };
 
   // Server-side preview whenever the inputs change (only while picking).
   useEffect(() => {
@@ -50,7 +61,7 @@ export default function ArrangeModal({ rack, onPreview, onApply, onClose }) {
     let cancelled = false;
     setBusy('preview');
     setError(null);
-    onPreview(strategy, fillOrder).then((res) => {
+    onPreview(strategy, fillOrder, corner).then((res) => {
       if (cancelled) return;
       if (res.ok) setPlan(res.data);
       else {
@@ -61,7 +72,7 @@ export default function ArrangeModal({ rack, onPreview, onApply, onClose }) {
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strategy, fillOrder, view]);
+  }, [strategy, fillOrder, corner, view]);
 
   const canUndo = useMemo(
     () => !!record && canUndoArrange(record, rack.slots),
@@ -138,12 +149,12 @@ export default function ArrangeModal({ rack, onPreview, onApply, onClose }) {
         <tbody>
           {changes.map(c => (
             <tr key={c.to}>
-              <td className="arrange-pos">{c.to}</td>
+              <td className="arrange-pos">{spot(c.to)}</td>
               <td>
                 {c.name || t('common.unknown', 'Unknown')}
                 {c.vintage ? ` (${formatVintage(c.vintage, t)})` : ''}
               </td>
-              <td className="arrange-pos arrange-pos--from">{c.from}</td>
+              <td className="arrange-pos arrange-pos--from">{spot(c.from)}</td>
             </tr>
           ))}
         </tbody>
@@ -198,6 +209,7 @@ export default function ArrangeModal({ rack, onPreview, onApply, onClose }) {
                 </button>
               ))}
             </div>
+            {isWall && <p className="help-text">{t('arrange.wallHint', 'A wall is filled box after box from that corner. In a pile, the first bottle lies on top.')}</p>}
           </div>
 
           {busy === 'preview' && (

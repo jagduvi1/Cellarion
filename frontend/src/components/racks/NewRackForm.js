@@ -6,6 +6,7 @@ import RackRenderer from './RackRenderer';
 import RackTypeSelector, { TYPE_DIMENSIONS } from './RackTypeSelector';
 import CabinetShapeFields from './CabinetShapeFields';
 import WallBuilder from './WallBuilder';
+import { WALL_MAX_SLOTS } from '../../utils/wallLayout';
 import BetaBadge from '../BetaBadge';
 import IntegerField from '../IntegerField';
 // Lazy: ShelfView3D pulls in three.js; the form loads it only when its 3D
@@ -282,8 +283,9 @@ export default function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmi
         >
           {showPreview ? t('racks.hidePreview', 'Hide preview') : t('racks.preview', 'Preview')}
         </button>
-        {/* A wall of closed boxes only holds nothing; the server refuses it. */}
-        <button type="submit" className="btn btn-primary" disabled={saving || (dims.showWall && previewCapacity === 0)}>
+        {/* A wall of closed boxes only holds nothing, and one past the limit holds
+            too much; the server refuses both (the builder says the second). */}
+        <button type="submit" className="btn btn-primary" disabled={saving || (dims.showWall && (previewCapacity === 0 || previewCapacity > WALL_MAX_SLOTS))}>
           {saving ? t('racks.creating') : t('racks.createRack')}
         </button>
       </div>

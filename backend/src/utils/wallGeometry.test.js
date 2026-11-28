@@ -14,9 +14,10 @@
  */
 const {
   BOX_KINDS, boxCapacity, wallBoxes, wallTotalSlots, wallRanges, boxLabel,
-  validateWallConfig, planWallEdit, wallPlace, WALL_MAX_SLOTS,
+  validateWallConfig, planWallEdit, wallPlace, wallPlacer, WALL_MAX_SLOTS,
+  importedRackShape, wallNumbering, renumberedSince,
 } = require('./wallGeometry');
-const { totalSlots, getMaxPosition, slotPlace, RACK_PLACE_FIELDS } = require('./rackGeometry');
+const { totalSlots, getMaxPosition, slotPlace, slotPlacer, RACK_PLACE_FIELDS } = require('./rackGeometry');
 const { cases } = require('./wallGeometry.cases.json');
 
 const id = (n) => String(n).padStart(24, '0');
@@ -165,6 +166,20 @@ describe('a wall a request may store', () => {
     expect(problem([{ x: 0, y: 0, w: 1, h: 1, kind: 'bin', perSection: 3 }])).toBeNull();
   });
 
+  // Stored as null, the box would have no id for any later edit to follow:
+  // once a bottle lay in it, every save of the wall would be refused.
+  test('an _id of null is refused: a new box states none', () => {
+    expect(problem([{ ...ok[0], _id: null }])).toMatch(/Box A1: leave _id out for a new box/);
+  });
+
+  // The schema would refuse these at save, in its own words; the route answers first.
+  test('a size the content has no use for is held to the same bounds', () => {
+    expect(problem([{ ...ok[0], rows: 99 }])).toMatch(/Box A1: rows and cols/);
+    expect(problem([{ ...ok[0], cols: 0 }])).toMatch(/Box A1: rows and cols/);
+    expect(problem([box(1, 0, 0, 'rack', { rows: 2, cols: 2, perSection: 61 })])).toMatch(/Box A1: perSection/);
+    expect(problem([{ ...ok[0], rows: 2, cols: 3 }])).toBeNull();
+  });
+
   test('a wall holds no more slots than a rack may', () => {
     const boxes = [];
     for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) boxes.push({ x, y, w: 1, h: 1, kind: 'rack', rows: 6, cols: 6 });
@@ -259,5 +274,101 @@ describe('editing a wall keeps every bottle in its box', () => {
     const { error } = planWallEdit(before, after, { bottles: [3, 40, 41] });
     expect(error).toMatch(/box A1 would no longer have the place of 1 bottle/);
     expect(error).toMatch(/box C1 holds 2 bottle\(s\) and would be removed/);
+  });
+});
+
+describe('the shape of a rack an import states', () => {
+  const boxes = [
+    { x: 0, y: 0, w: 1, h: 1, kind: 'x', perSection: 6 },
+    { x: 1, y: 0, w: 1, h: 1, kind: 'shelves', rows: 2, cols: 3 },
+  ];
+
+  test('a valid wall is kept, each box reduced to its own fields', () => {
+    const stated = boxes.map((b, i) => ({ ...b, _id: id(i + 1), junk: true, perSection: b.perSection ?? null }));
+    expect(importedRackShape('wall', 1, 2, { boxes: stated, bottlesPerCell: 3 })).toEqual({ type: 'wall', typeConfig: { boxes } });
+  });
+
+  // An import builds the rack document itself; nothing else holds its boxes to
+  // the rules. Unchecked, a file could store a wall of millions of slots, which
+  // every member of the cellar would then be asked to draw.
+  test('a wall that breaks the rules comes in as a plain grid', () => {
+    const grid = { type: 'grid', typeConfig: {} };
+    const stack = Array.from({ length: 500 }, () => ({ x: 0, y: 0, w: 1, h: 1, kind: 'rack', rows: 20, cols: 20 }));
+    expect(importedRackShape('wall', 1, 1, { boxes: stack })).toEqual(grid);
+    expect(importedRackShape('wall', 1, 2, { boxes: [boxes[0], { ...boxes[1], x: 0 }] })).toEqual(grid);
+    const huge = [];
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) huge.push({ x, y, w: 1, h: 1, kind: 'rack', rows: 20, cols: 20 });
+    expect(importedRackShape('wall', 20, 20, { boxes: huge })).toEqual(grid);
+    expect(importedRackShape('wall', 1, 2, { boxes: [{ ...boxes[0], x: '0' }] })).toEqual(grid);
+    expect(importedRackShape('wall', 1, 2, { boxes: 'all of them' })).toEqual(grid);
+    expect(importedRackShape('wall', 1, 2, undefined)).toEqual({ type: 'grid', typeConfig: undefined });
+  });
+
+  test('boxes on any other rack are dropped, the rest of its shape kept', () => {
+    expect(importedRackShape('cabinet', 2, 3, { shelfRows: [1, 1], boxes })).toEqual({ type: 'cabinet', typeConfig: { shelfRows: [1, 1] } });
+    expect(importedRackShape('grid', 2, 3, undefined)).toEqual({ type: 'grid', typeConfig: undefined });
+  });
+});
+
+describe('the place of every bottle of one wall', () => {
+  test.each(cases.map((c) => [c.name, c]))('one walk of the boxes answers as wallPlace does: %s', (_name, c) => {
+    const typeConfig = { boxes: c.boxes };
+    const placeOf = wallPlacer(c.rows, c.cols, typeConfig);
+    for (let p = -1; p <= c.total + 2; p++) expect(placeOf(p)).toEqual(wallPlace(c.rows, c.cols, typeConfig, p));
+    expect(placeOf(1.5)).toBeNull();
+    expect(placeOf('3')).toBeNull();
+  });
+
+  test('a rack answers through slotPlacer: a wall with its places, any other rack with null', () => {
+    const c = cases[0];
+    const rack = { type: 'wall', rows: c.rows, cols: c.cols, typeConfig: { boxes: c.boxes } };
+    expect(slotPlacer(rack)(1)).toEqual(slotPlace(rack, 1));
+    expect(slotPlacer({ type: 'grid', rows: 2, cols: 2 })(1)).toBeNull();
+    expect(slotPlacer({ ...rack, isModular: true })(1)).toBeNull();
+    expect(slotPlacer(null)(1)).toBeNull();
+  });
+});
+
+describe('knowing that an edit gave slots new numbers', () => {
+  const tc = (per) => ({ boxes: [box(1, 0, 0, 'x', { perSection: per }), box(2, 1, 0, 'bin', { perSection: 4 })] });
+
+  test('the numbering of a wall is the same while every position is the same place', () => {
+    expect(wallNumbering(1, 2, tc(6))).toBe(wallNumbering(1, 2, tc(6)));
+    // A closed box, or more empty wall, numbers nothing.
+    const withDoor = { boxes: [...tc(6).boxes, box(3, 0, 1, 'closed')] };
+    expect(wallNumbering(2, 2, withDoor)).toBe(wallNumbering(1, 2, tc(6)));
+  });
+
+  test('a box that grows, changes places with another, or is another box changes it; one moved past no other does not', () => {
+    const before = wallNumbering(1, 2, tc(6));
+    // The bin moves one cell to the right into empty wall: still the second box, the same numbers.
+    const moved = { boxes: [tc(6).boxes[0], { ...tc(6).boxes[1], x: 2 }] };
+    expect(wallNumbering(1, 3, moved)).toBe(before);
+    expect(wallNumbering(1, 2, tc(7))).not.toBe(before);
+    const swapped = { boxes: [{ ...tc(6).boxes[0], x: 1 }, { ...tc(6).boxes[1], x: 0 }] };
+    expect(wallNumbering(1, 2, swapped)).not.toBe(before);
+    const other = { boxes: [box(9, 0, 0, 'x', { perSection: 6 }), tc(6).boxes[1]] };
+    expect(wallNumbering(1, 2, other)).not.toBe(before);
+  });
+
+  test('a slot number remembered before the edit is no longer trusted', () => {
+    const edited = new Date('2026-05-02T10:00:00Z');
+    expect(renumberedSince({ renumberedAt: edited }, new Date('2026-05-01T10:00:00Z'))).toBe(true);
+    expect(renumberedSince({ renumberedAt: edited }, new Date('2026-05-03T10:00:00Z'))).toBe(false);
+    expect(renumberedSince({ renumberedAt: edited.toISOString() }, '2026-05-01T10:00:00Z')).toBe(true);
+    // A rack never renumbered, or a memory without a time: the number is used.
+    expect(renumberedSince({}, new Date())).toBe(false);
+    expect(renumberedSince({ renumberedAt: edited }, undefined)).toBe(false);
+    expect(renumberedSince(null, new Date())).toBe(false);
+  });
+});
+
+describe('a place in the short form the tools answer in', () => {
+  const { compactPlace } = require('./wallGeometry');
+  test('only the keys that say something are kept, and nothing stays nothing', () => {
+    expect(compactPlace({ box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null })).toEqual({ box: 'A1', kind: 'x', section: 'left', slot: 2 });
+    expect(compactPlace({ box: 'B1', kind: 'bin', section: null, slot: 4, row: null, col: null })).toEqual({ box: 'B1', kind: 'bin', slot: 4 });
+    expect(compactPlace({ box: 'C1', kind: 'shelves', section: null, slot: null, row: 2, col: 3 })).toEqual({ box: 'C1', kind: 'shelves', row: 2, col: 3 });
+    expect(compactPlace(null)).toBeNull();
   });
 });

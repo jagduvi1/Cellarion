@@ -207,7 +207,13 @@ const rackSchema = new mongoose.Schema({
     // Wall racks only: the boxes of the wall. Validated in
     // utils/wallGeometry.validateWallConfig; `default: undefined` so other
     // racks don't store an empty array.
-    boxes: { type: [wallBoxSchema], default: undefined }
+    boxes: {
+      type: [wallBoxSchema],
+      default: undefined,
+      // The last line of defence for a path that builds a rack without
+      // validateWallConfig: a wall has at most one box per cell.
+      validate: { validator: (v) => !v || v.length <= 400, message: 'A wall cannot have more than 400 boxes' },
+    }
   },
   // Modular rack fields (used when isModular is true)
   isModular: { type: Boolean, default: false },
@@ -221,6 +227,10 @@ const rackSchema = new mongoose.Schema({
   disabledPositions: { type: [Number], default: [] },
   zones:     { type: [zoneSchema], default: [] },
   rfidTag:   { type: String },
+  // When an edit of a wall last gave slots new numbers (PUT /api/racks/:id).
+  // A slot number remembered before this no longer names the same place:
+  // utils/wallGeometry.renumberedSince.
+  renumberedAt: { type: Date },
   // Soft-delete: set when deleted, null when active
   deletedAt: { type: Date, default: null }
 }, { timestamps: true, optimisticConcurrency: true });

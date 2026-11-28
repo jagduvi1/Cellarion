@@ -504,6 +504,33 @@ describe('take_out_of_rack', () => {
     expect(bottleOps.removeFromRacks).toHaveBeenCalledWith(doc._id);
   });
 
+  // An edit of a wall gives the slots after the changed box new numbers. The
+  // slot in the ledger row is then another place: the bottle comes back open
+  // with no slot to return to, rather than a wrong one.
+  test('undoing a close after the wall was renumbered forgets the slot the bottle had left', async () => {
+    const closedAt = new Date('2026-07-29T19:00:00Z');
+    const from = { rack: oid('e'), position: 7 };
+    const entry = {
+      _id: 'log10', action: 'close', bottle: bottleRef(), reversed: false, createdAt: closedAt,
+      detail: { pours: 0 },
+      prev: { openedAt: new Date('2026-07-28T19:00:00Z'), preservationMethod: 'recorked', pours: [], openBottleNotifiedAt: null, openedFromSlot: from },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(entry));
+    const doc = ownBottle();
+    Rack.exists.mockImplementation(async (q) => (q.renumberedAt ? { _id: oid('e') } : null));
+    await tool('undo_last').handler({}, CTX);
+    expect(Rack.exists).toHaveBeenCalledWith({ _id: from.rack, renumberedAt: { $gt: closedAt } });
+    expect(doc.openedAt).toEqual(entry.prev.openedAt);
+    expect(doc.openedFromSlot).toBeNull();
+
+    // Not renumbered since: the slot is remembered again.
+    McpActionLog.findOne.mockReturnValue(chain({ ...entry, _id: 'log11' }));
+    const again = ownBottle();
+    Rack.exists.mockResolvedValue(null);
+    await tool('undo_last').handler({}, CTX);
+    expect(again.openedFromSlot).toEqual(from);
+  });
+
   test('undoing a close leaves the bottle where it is once it moved from that slot', async () => {
     const entry = {
       _id: 'log9', action: 'close', bottle: bottleRef(), reversed: false,

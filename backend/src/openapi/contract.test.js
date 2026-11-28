@@ -175,7 +175,12 @@ describeWithMongo('public API contract', () => {
     expect(ids).not.toContain(b('drunk'));
     expect(ids).not.toContain(b('ordered'));
     const placed = first.body.bottles.find((x) => x.id === b('b1'));
-    expect(placed.location).toMatchObject({ position: 5, shelf: 2, row: 1, col: 2 });
+    expect(placed.location).toMatchObject({ position: 5, shelf: 2, row: 1, col: 2, wall: null });
+    // A bottle in a wall rack: its box and the spot in it.
+    expect(first.body.bottles.find((x) => x.id === b('cleared')).location).toMatchObject({
+      position: 5, shelf: null, row: null, col: null,
+      wall: { box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null },
+    });
     expect(placed.personal).toEqual([expect.objectContaining({ key: 'Closure', value: 'cork', level: 'bottle', by: 'alice' })]);
     const wine = first.body.wines[String(world.wines.red._id)];
     expect(wine.profile).not.toHaveProperty('description');
@@ -264,6 +269,9 @@ describeWithMongo('public API contract', () => {
     await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('b4') } });
     const cleared = await expectContract('getBottle', 200, { token: 'read', params: { bottleId: b('cleared') } });
     expect(cleared.body.bottle).toMatchObject({ location: null, notes: null, purchaseLocation: null });
+    expect(cleared.body.rackInfo).toMatchObject({
+      rackName: 'Cellar wall', position: 5, wall: { box: 'A1', kind: 'x', section: 'left', slot: 2, row: null, col: null },
+    });
     await expectContract('getBottle', 401, { token: 'revoked', params: { bottleId: b('b1') } });
     await expectContract('getBottle', 403, { token: 'consume', params: { bottleId: b('b1') } });
     await expectContract('getBottle', 404, { token: 'read', params: { bottleId: ID_ZERO } });
@@ -272,7 +280,7 @@ describeWithMongo('public API contract', () => {
   test('racks', async () => {
     const home = String(world.cellars.home._id);
     const res = await expectContract('listRacks', 200, { token: 'read', query: `?cellar=${home}&summary=1` });
-    expect(res.body.racks.map((r) => r.type).sort()).toEqual(['cabinet', 'grid']);
+    expect(res.body.racks.map((r) => r.type).sort()).toEqual(['cabinet', 'grid', 'wall']);
     await expectContract('listRacks', 400, { token: 'read', query: `?cellar=${home}` });
     await expectContract('listRacks', 401, { token: 'revoked', query: `?cellar=${home}&summary=1` });
     await expectContract('listRacks', 403, { token: 'consume', query: `?cellar=${home}&summary=1` });

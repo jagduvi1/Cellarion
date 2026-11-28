@@ -33,7 +33,7 @@ const WineDefinition = require('../models/WineDefinition');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { classifyMaturity, buildProfileMap, resolveEffectiveWindow } = require('../utils/maturityUtils');
 const { decorateGrapes } = require('../utils/grapeDisplay');
-const { slotLocation, slotPlace } = require('../utils/rackGeometry');
+const { slotLocation, slotPlacer } = require('../utils/rackGeometry');
 const { thumbPath } = require('../utils/thumbPath');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const { snapshotTag } = require('./offlineSnapshot');
@@ -244,6 +244,7 @@ function assembleInventory({
   for (const r of racks) {
     if (!cellarIds.has(idOf(r.cellar))) continue;
     outRacks.push({ id: String(r._id), cellar: idOf(r.cellar), name: text(r.name) });
+    const wallPlaceOf = slotPlacer(r);
     for (const s of r.slots || []) {
       const bid = idOf(s && s.bottle);
       if (!bid || placeOf.has(bid)) continue;
@@ -254,7 +255,7 @@ function assembleInventory({
         position,
         ...slotLocation(r, position),
         // A wall rack: the box and the spot in it. null on every other rack.
-        wall: slotPlace(r, position),
+        wall: wallPlaceOf(position),
       });
     }
   }

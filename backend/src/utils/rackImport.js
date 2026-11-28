@@ -71,6 +71,18 @@ function computeRackPosition({
     return { position: p };
   }
 
+  // A wall is numbered box after box (utils/wallGeometry.js). Its rows and
+  // cols are cells, not slots: a row and column names no slot of it, and no
+  // corner turns its numbers round. Only a slot number places a bottle.
+  if (rackType === 'wall') {
+    if (position === undefined || position === null || position === '') {
+      return { error: 'A wall rack takes a slot number, not a row and column' };
+    }
+    const p = parseInt(position, 10);
+    if (isNaN(p) || p < 1) return { error: 'Invalid position' };
+    return { position: p };
+  }
+
   const cols = parseInt(rackCols, 10);
   const rows = parseInt(rackRows, 10);
   const bpc = Math.max(1, parseInt(bottlesPerCell, 10) || 1);
@@ -536,7 +548,9 @@ function sanitizeRackConfigs(rawRackConfigs, { positionAnchor, rackTypes: RACK_T
       if (!rows || !cols) continue;
 
       const entry = { rows, cols };
-      if (cfg.type && RACK_TYPES.includes(cfg.type)) entry.type = cfg.type;
+      // Not a wall: this request has no way to state its boxes, and a wall
+      // without boxes holds nothing.
+      if (cfg.type && cfg.type !== 'wall' && RACK_TYPES.includes(cfg.type)) entry.type = cfg.type;
 
       if (cfg.typeConfig && typeof cfg.typeConfig === 'object') {
         const tc = {};

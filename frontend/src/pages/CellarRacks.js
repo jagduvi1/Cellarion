@@ -11,6 +11,7 @@ import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import { slotPlace } from '../utils/wallLayout';
+import { clearArrangeRecord } from '../utils/rackArrange';
 import { wallWords } from '../utils/slotLabel';
 import { readPlaceQueue, planAutoPlace, withoutPlaced } from '../utils/placeQueue';
 import RackRenderer from '../components/racks/RackRenderer';
@@ -681,9 +682,9 @@ function CellarRacks() {
   // Auto-arrange: the plan is computed AND applied server-side (the same
   // engine the MCP auto_arrange tool uses); the modal shows the returned
   // errors itself. Apply refreshes the rack from the response in one shot.
-  const handleArrangePreview = async (rackId, strategy, positionOrder) => {
+  const handleArrangePreview = async (rackId, strategy, positionOrder, corner) => {
     try {
-      const res = await previewArrange(apiFetch, rackId, { strategy, positionOrder });
+      const res = await previewArrange(apiFetch, rackId, { strategy, positionOrder, corner });
       const data = await res.json();
       if (!res.ok) return { ok: false, error: data?.error };
       return { ok: true, data };
@@ -730,9 +731,9 @@ function CellarRacks() {
       const reshaped = rows !== undefined;
       const res = await updateRack(apiFetch, rackId, { name, group, ...(typeConfig ? { typeConfig } : {}), ...(reshaped ? { rows, cols } : {}) });
       const data = await res.json();
-      if (!res.ok) return { ok: false, error: data.error };
-      // Adopt the changed fields only — the rack in state carries populated
-      // slot bottles the PUT response does not.
+      if (!res.ok) return { ok: false, error: messageForResponse(res, data, t('racks.editFailed', 'Could not save the rack.'), t) };
+      // Adopt the changed fields only; a reshape's answer carries the slots
+      // with their bottles and new numbers, a rename leaves them as they are.
       setRacks(prev => prev.map(r => r._id === rackId ? {
         ...r,
         name: data.rack.name,
@@ -740,6 +741,13 @@ function CellarRacks() {
         ...(typeConfig ? { typeConfig: data.rack.typeConfig || typeConfig } : {}),
         ...(reshaped ? { rows: data.rack.rows, cols: data.rack.cols, slots: data.rack.slots, disabledPositions: data.rack.disabledPositions, zones: data.rack.zones } : {}),
       } : r));
+      // New numbers (the server stamps them; a rename of a wall has none):
+      // nothing on the page may go on naming an old one.
+      if (data.rack.renumberedAt !== racks.find(r => r._id === rackId)?.renumberedAt) {
+        setMoving(m => (m?.rackId === rackId ? null : m));
+        setDrunkNotice(n => (n?.slot?.rackId === rackId ? { ...n, slot: null } : n));
+        clearArrangeRecord(rackId);
+      }
       return { ok: true };
     } catch {
       return { ok: false };
@@ -1393,7 +1401,7 @@ function CellarRacks() {
       {arrangeOpen && rack && (
         <ArrangeModal
           rack={rack}
-          onPreview={(strategy, positionOrder) => handleArrangePreview(rack._id, strategy, positionOrder)}
+          onPreview={(strategy, positionOrder, corner) => handleArrangePreview(rack._id, strategy, positionOrder, corner)}
           onApply={(target, before) => handleArrangeApply(rack._id, target, before)}
           onClose={() => setArrangeOpen(false)}
         />
