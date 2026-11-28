@@ -5,14 +5,11 @@ import { useFeature } from '../../utils/featureFlags';
 import WallDecor from './WallDecor';
 import './RackTypeSelector.css';
 
+// In the order the form shows them: the plain grid, then the two that are
+// built up from parts in the form (a wine cabinet's shelves, a wall's boxes),
+// then the single shapes.
 const RACK_TYPES = [
   { key: 'grid',     preview: { rows: 3, cols: 4 } },
-  { key: 'x-rack',   preview: { rows: 1, cols: 1, typeConfig: { bottlesPerSection: 6 } } },
-  { key: 'hex',      preview: { rows: 3, cols: 4 } },
-  { key: 'triangle', preview: { rows: 1, cols: 4 } },
-  { key: 'stack',    preview: { rows: 5, cols: 1 } },
-  { key: 'cube',     preview: { rows: 2, cols: 2, typeConfig: { moduleRows: 2, moduleCols: 2 } } },
-  { key: 'shelf',    preview: { rows: 3, cols: 2 } },
   { key: 'cabinet',  preview: { rows: 3, cols: 3, typeConfig: { shelfRows: [1, 2, 3], twoDeep: false } } },
   // One rack built from boxes. Offered while its flag is on for this user
   // (backend config/featureFlags 'wallRack').
@@ -32,6 +29,12 @@ const RACK_TYPES = [
       },
     },
   },
+  { key: 'x-rack',   preview: { rows: 1, cols: 1, typeConfig: { bottlesPerSection: 6 } } },
+  { key: 'hex',      preview: { rows: 3, cols: 4 } },
+  { key: 'triangle', preview: { rows: 1, cols: 4 } },
+  { key: 'stack',    preview: { rows: 5, cols: 1 } },
+  { key: 'cube',     preview: { rows: 2, cols: 2, typeConfig: { moduleRows: 2, moduleCols: 2 } } },
+  { key: 'shelf',    preview: { rows: 3, cols: 2 } },
 ];
 
 /** Dimension config: which inputs to show per type, with sensible defaults */
